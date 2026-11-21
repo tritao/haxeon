@@ -74,6 +74,12 @@ private class LambdaPath {
 		arguments.pop();
 	}
 
+	/** Drops the steps past the first `length`. */
+	public function truncate(length:Int):Void {
+		steps.resize(length);
+		arguments.resize(length);
+	}
+
 	public function copy():LambdaPath
 		return new LambdaPath(steps.copy(), arguments.copy());
 
@@ -96,14 +102,19 @@ private class LambdaPath {
 	}
 }
 
-/** Where to resume lambda numbering after a parse is thrown away. */
+/**
+ * Where to resume lambda numbering after a parse is thrown away. The stacks are pushed and popped in turn, so the entries a
+ * mark saw are still there when it is rewound to: it keeps each stack with its length and cuts it back, and the count maps'
+ * contents come back by undoing the journal. A parse that threw may have left other stacks current, so the mark's come back.
+ */
 private typedef LambdaMark = {
-	/** The stack of count maps, shallow: their contents come back by undoing the journal. */
 	final counts:Array<Map<String, Int>>;
-
+	final countsLength:Int;
 	final undo:Int;
 	final path:LambdaPath;
-	final paths:Int;
+	final pathLength:Int;
+	final paths:Array<LambdaPath>;
+	final pathsLength:Int;
 }
 
 /** Every lambda count `openLambda` changed, with the value it had (-1: none), so a rewind can undo back to a mark. */
@@ -773,18 +784,24 @@ class Parser {
 	/** A rewind point: parsing that is thrown away must not consume lambda numbers. */
 	function lambdaMark():LambdaMark
 		return {
-			counts: lambdaCounts.copy(),
+			counts: lambdaCounts,
+			countsLength: lambdaCounts.length,
 			undo: lambdaUndo.length,
-			path: lambdaPath.copy(),
-			paths: lambdaPaths.length
+			path: lambdaPath,
+			pathLength: lambdaPath.length,
+			paths: lambdaPaths,
+			pathsLength: lambdaPaths.length
 		};
 
 	/** Restores the numbering at `mark`; the same mark can be rewound to again after reparsing. */
 	function rewindLambdas(mark:LambdaMark):Void {
 		lambdaUndo.undoTo(mark.undo);
-		lambdaCounts = mark.counts.copy();
-		lambdaPaths.splice(mark.paths, lambdaPaths.length - mark.paths);
-		lambdaPath = mark.path.copy();
+		lambdaCounts = mark.counts;
+		lambdaCounts.resize(mark.countsLength);
+		lambdaPaths = mark.paths;
+		lambdaPaths.resize(mark.pathsLength);
+		lambdaPath = mark.path;
+		lambdaPath.truncate(mark.pathLength);
 	}
 
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false,
@@ -849,7 +866,7 @@ class Parser {
 			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 				var statementStart = position, statementLambdas = lambdaMark();
 				try
-					appendStatements(statements, parseStatements())
+					parseStatements(statements)
 				catch (error:CompileError) {
 					if (!recovering)
 						throw error;
@@ -864,7 +881,7 @@ class Parser {
 			missingFunctionBody();
 			end = spanOf(current());
 		} else {
-			appendStatements(statements, parseStatements());
+			parseStatements(statements);
 			end = statementSpan(statements[statements.length - 1]);
 		}
 		compiler.types.analysis.FinalLocalChecker.check(arguments, statements, finalLocals);
@@ -1430,7 +1447,7 @@ class Parser {
 				var statements = [];
 				while (!check(TokenKind.RightBrace) && !check(TokenKind.Case) && !check(TokenKind.Default)
 					&& !check(TokenKind.Eof))
-					appendStatements(statements, parseStatements());
+					parseStatements(statements);
 				var caseEnd = statements.length == 0
 					? expressionSpan(values[values.length - 1]) : statementSpan(statements[statements.length - 1]);
 				cases.push({
@@ -1444,7 +1461,7 @@ class Parser {
 			if (hasDefault) {
 				consume(TokenKind.Colon);
 				while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
-					appendStatements(defaultBranch, parseStatements());
+					parseStatements(defaultBranch);
 			}
 			var end = spanOf(consume(TokenKind.RightBrace));
 			if (match(TokenKind.Semicolon))
@@ -1595,7 +1612,8 @@ class Parser {
 		// following `catch` is optional.
 		tryBodyDepth++;
 		try {
-			var statements = parseStatements();
+			var statements = [];
+			parseStatements(statements);
 			tryBodyDepth--;
 			return statements;
 		} catch (error:CompileError) {
@@ -1745,18 +1763,23 @@ class Parser {
 		}
 	}
 
-	function parseStatements():Array<AstStatement> {
+	/** The statements of one source statement (a `var` of several names makes one per name), appended to `target` once all parsed. */
+	function parseStatements(target:Array<AstStatement>):Void {
 		// Parse metadata before deciding whether this is a declaration or block, while retaining private access for typing.
 		if (check(TokenKind.At)) {
-			var metadata = parseMetadata(), statements = parseStatements();
+			var metadata = parseMetadata(), first = target.length;
+			parseStatements(target);
 			for (entry in metadata)
 				if (entry.name == "privateAccess")
-					statements = [for (statement in statements)
-						PrivateAccessStatement(statement, entry.span.merge(statementSpan(statement)))];
-			return statements;
+					for (index in first...target.length)
+						target[index] = PrivateAccessStatement(target[index],
+							entry.span.merge(statementSpan(target[index])));
+			return;
 		}
-		if (!check(TokenKind.Var) && !check(TokenKind.Final))
-			return [parseStatement()];
+		if (!check(TokenKind.Var) && !check(TokenKind.Final)) {
+			target.push(parseStatement());
+			return;
+		}
 		var immutable = check(TokenKind.Final);
 		var start = spanOf(advance()), declarations = [];
 		do {
@@ -1790,12 +1813,9 @@ class Parser {
 				default:
 			}
 		}
-		return declarations;
+		for (declaration in declarations)
+			target.push(declaration);
 	}
-
-	static function appendStatements(target:Array<AstStatement>, statements:Array<AstStatement>):Void
-		for (statement in statements)
-			target.push(statement);
 
 	function parseExpression():AstExpression {
 		var expression = parseNullCoalesce();
@@ -2621,7 +2641,7 @@ class Parser {
 		var start = spanOf(previous()), statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
 			if (isStatementOnlyStart(kindOf(current()))) {
-				appendStatements(statements, parseStatements());
+				parseStatements(statements);
 				continue;
 			}
 			if (check(TokenKind.LeftBrace)
@@ -2644,7 +2664,7 @@ class Parser {
 			}
 			position = saved;
 			rewindLambdas(savedLambdas);
-			appendStatements(statements, parseStatements());
+			parseStatements(statements);
 		}
 		var trailing = trailingBlockResult(statements);
 		if (trailing != null) {
@@ -2870,7 +2890,7 @@ class Parser {
 					start.merge(end));
 			}
 			if (isStatementOnlyStart(kindOf(current()))) {
-				appendStatements(statements, parseStatements());
+				parseStatements(statements);
 				continue;
 			}
 			if (check(TokenKind.LeftBrace)
@@ -2892,7 +2912,7 @@ class Parser {
 						start.merge(expressionSpan(result)));
 				position = saved;
 				rewindLambdas(savedLambdas);
-				appendStatements(statements, parseStatements());
+				parseStatements(statements);
 				continue;
 			}
 			if (result != null && atSwitchBranchEnd())
@@ -2900,7 +2920,7 @@ class Parser {
 					start.merge(expressionSpan(result)));
 			position = saved;
 			rewindLambdas(savedLambdas);
-			appendStatements(statements, parseStatements());
+			parseStatements(statements);
 		}
 	}
 
@@ -3123,11 +3143,13 @@ class Parser {
 				fail(current(), "A defer statement requires an enclosing block");
 			if (check(TokenKind.Identifier) && textOf(current()) == "scoped" && peekKind(1) == TokenKind.Var)
 				fail(current(), "A scoped binding requires an enclosing block");
-			return parseStatements();
+			var statements = [];
+			parseStatements(statements);
+			return statements;
 		}
 		var statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
-			appendStatements(statements, parseStatements());
+			parseStatements(statements);
 		consume(TokenKind.RightBrace);
 		return statements;
 	}
