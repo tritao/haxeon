@@ -1,5 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler.CompileResult;
+import compiler.core.FileVersion;
 import compiler.hl.HlWriter;
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
@@ -298,10 +299,49 @@ class CompilerSessionMain {
 		shapeBuild("a comment edit");
 		expect(shapeMessages.indexOf("reusing compiler session") >= 0, "a comment edit must keep the compiler session");
 		Sys.putEnv(variable, previousPath);
+		checkReadGuard(root + "/Guarded.hx");
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
 		FileSystem.deleteDirectory(root);
-		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, generic invalidation, and typedef, enum and abstract shape edits");
+		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, generic invalidation, typedef, enum and abstract shape edits, and the source read guard");
+	}
+
+	/** A source read once is kept only when no write overlapped the read: the file's version must not move across it. */
+	static function checkReadGuard(path:String):Void {
+		File.saveContent(path, "class Guarded {}");
+		expect(FileVersion.readSource(path) == "class Guarded {}", "a source nothing writes is read once");
+		var writes = 0;
+		var settled = FileVersion.unchangedRead(path, file -> {
+			var text = File.getContent(file);
+			if (writes++ == 0)
+				File.saveContent(file, "class Guarded { static var edited = 1; }");
+			return text;
+		}, 4);
+		expect(writes == 2 && settled == "class Guarded { static var edited = 1; }",
+			"a source written during its read must be read again");
+		// The same size, written after the clock moved on: only a fine modification time tells the versions apart.
+		var sameSize = FileVersion.unchangedRead(path, file -> {
+			var text = File.getContent(file);
+			if (text == "class Guarded { static var edited = 1; }") {
+				Sys.sleep(0.02);
+				File.saveContent(file, "class Guarded { static var edited = 2; }");
+			}
+			return text;
+		}, 4);
+		expect(sameSize == "class Guarded { static var edited = 2; }",
+			"a same-size write during a read must be detected");
+		var always = FileVersion.unchangedRead(path, file -> {
+			var text = File.getContent(file);
+			File.saveContent(file, text + " ");
+			return text;
+		}, 4);
+		expect(always == null, "a source written during every read must be refused");
+		var refused = false;
+		try
+			FileVersion.readSource(path + ".missing")
+		catch (_:Dynamic)
+			refused = true;
+		expect(refused, "a missing source must fail its read");
 	}
 
 	static function expect(condition:Bool, message:String):Void {

@@ -219,6 +219,49 @@ HL_PRIM varray *HL_NAME(__sys_metadata)( vstring *path ) {
 	return result;
 }
 
+/* A file's version, for telling whether it was written between two looks: eight 32-bit integers written to `out`, the size
+   (low, high), the modification and status-change times (seconds, nanoseconds; on Windows the last write's FILETIME halves and
+   zeroes), the inode and the device. `path` is UTF-8 with a terminating zero. False when there is no file. */
+HL_PRIM bool HL_NAME(__sys_file_version)( vbyte *path, vbyte *out ) {
+	int values[8];
+	memset(values, 0, sizeof(values));
+#ifdef HL_WIN
+	int length = MultiByteToWideChar(CP_UTF8, 0, (const char *)path, -1, NULL, 0);
+	if( length <= 0 ) return false;
+	wchar_t *wide = (wchar_t *)malloc(sizeof(wchar_t) * length);
+	if( wide == NULL ) hl_error("Could not allocate path");
+	MultiByteToWideChar(CP_UTF8, 0, (const char *)path, -1, wide, length);
+	WIN32_FILE_ATTRIBUTE_DATA data;
+	BOOL found = GetFileAttributesExW(wide, GetFileExInfoStandard, &data);
+	free(wide);
+	if( !found ) return false;
+	values[0] = (int)data.nFileSizeLow;
+	values[1] = (int)data.nFileSizeHigh;
+	values[2] = (int)data.ftLastWriteTime.dwHighDateTime;
+	values[3] = (int)data.ftLastWriteTime.dwLowDateTime;
+#else
+	struct stat info;
+	if( stat((const char *)path, &info) != 0 ) return false;
+	values[0] = (int)((unsigned long long)info.st_size & 0xFFFFFFFFu);
+	values[1] = (int)((unsigned long long)info.st_size >> 32);
+#ifdef __APPLE__
+	values[2] = (int)info.st_mtimespec.tv_sec;
+	values[3] = (int)info.st_mtimespec.tv_nsec;
+	values[4] = (int)info.st_ctimespec.tv_sec;
+	values[5] = (int)info.st_ctimespec.tv_nsec;
+#else
+	values[2] = (int)info.st_mtim.tv_sec;
+	values[3] = (int)info.st_mtim.tv_nsec;
+	values[4] = (int)info.st_ctim.tv_sec;
+	values[5] = (int)info.st_ctim.tv_nsec;
+#endif
+	values[6] = (int)info.st_ino;
+	values[7] = (int)info.st_dev;
+#endif
+	memcpy(out, values, sizeof(values));
+	return true;
+}
+
 HL_PRIM void HL_NAME(__file_save_bytes)( vstring *path, realtime_bytes *bytes ) {
 #ifdef HL_WIN
 	FILE *file = _wfopen((const wchar_t *)realtime_string_data(path),L"wb");

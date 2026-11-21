@@ -3,6 +3,7 @@ package compiler.tools;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
+import compiler.core.FileVersion;
 import compiler.core.InternalError;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
 import compiler.ffi.FfiRegistry.FfiInterfaceSource;
@@ -360,17 +361,9 @@ class CompilerSession {
 		var cached = requestSources.get(key);
 		if (cached != null)
 			return cached;
-		// Compare bytes twice: timestamp resolution cannot detect rapid same-size edits reliably.
-		var text = File.getContent(key);
-		for (_ in 0...3) {
-			var confirmed = File.getContent(key);
-			if (text == confirmed) {
-				requestSources.set(key, text);
-				return text;
-			}
-			text = confirmed;
-		}
-		throw new InternalError('Source changed while being read: $path');
+		var text = FileVersion.readSource(key);
+		requestSources.set(key, text);
+		return text;
 	}
 
 	function readChanged(path:String):Null<String>

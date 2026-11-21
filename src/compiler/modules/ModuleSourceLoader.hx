@@ -1,9 +1,9 @@
 package compiler.modules;
 
+import compiler.core.FileVersion;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import sys.FileSystem;
-import sys.io.File;
 
 /** Lazily materializes source modules from configured filesystem roots. */
 class ModuleSourceLoader {
@@ -98,7 +98,7 @@ class ModuleSourceLoader {
 			}
 			if (path == null)
 				continue;
-			var text = File.getContent(path);
+			var text = FileVersion.readSource(path);
 			// A file is the module its package declaration names: under a package-scoped root, "Runner.hx" declaring
 			// `package app` is app.Runner, not a root-package Runner that a plain root would also reach.
 			if (declaresOther(text, packageOf(name)))
@@ -159,7 +159,7 @@ class ModuleSourceLoader {
 				var moduleName = packageName.length == 0 ? basename : packageName + "." + basename;
 				if (!modules.exists(moduleName)) {
 					var path = directory + "/" + entry,
-						text = File.getContent(path);
+						text = FileVersion.readSource(path);
 					if (declaresOther(text, packageName))
 						continue;
 					modules.set(moduleName,

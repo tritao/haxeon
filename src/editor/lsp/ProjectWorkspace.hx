@@ -5,6 +5,7 @@ import build.BuildEnvironment.BuildProfile;
 import build.HaxeonProjectBuild;
 import build.Target;
 import build.TargetLayout;
+import compiler.core.FileVersion;
 import compiler.core.InternalError;
 import compiler.service.LanguageService;
 import compiler.tools.SourceManifestLoader;
@@ -167,7 +168,7 @@ class ProjectWorkspace {
 		var normalized = normalize(path),
 			compilerPath = compilerPath(normalized);
 		if (FileSystem.exists(normalized) && !FileSystem.isDirectory(normalized)) {
-			var source = File.getContent(normalized);
+			var source = FileVersion.readSource(normalized);
 			diskSources.set(normalized, source);
 			compilerPathByDisk.set(normalized, compilerPath);
 			diskPathByCompiler.set(compilerPath, normalized);
@@ -568,7 +569,7 @@ class ProjectWorkspace {
 				else if (StringTools.endsWith(name, ".hx")) {
 					if (preferredSourceRoot(path) != root)
 						continue;
-					var source = File.getContent(path),
+					var source = FileVersion.readSource(path),
 						compilerPath = modulePath(root, path);
 					var existing = diskPathByCompiler.get(compilerPath);
 					if (existing != null && existing != path) {
