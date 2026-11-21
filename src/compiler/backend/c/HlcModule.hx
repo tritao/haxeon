@@ -359,6 +359,7 @@ class HlcModule {
 		buffer.add("extern hl_type *hlc_types;\nextern unsigned char *hlc_globals;\nextern void **hlc_slots;\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
 		buffer.add("extern hl_jit_alloc_data hlc_alloc_data[];\n");
+		buffer.add("typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;\n");
 		buffer.add("static inline double hlc_f64( unsigned int high, unsigned int low ) {\n");
 		buffer.add("\tunsigned long long bits = ((unsigned long long)high << 32) | low; double value;\n");
 		buffer.add("\tmemcpy(&value,&bits,sizeof(value)); return value;\n}\n\n");
@@ -450,6 +451,93 @@ class HlcModule {
 		buffer.add("\treturn a;\n}\n\n");
 	}
 
+	/** The C calling shape of a value of type `type`, one letter of a trampoline's key; `hlc_main.c` spells it the same. */
+	function shapeCode(type:Int):String
+		return switch types.kind(type) {
+			case Void: "v";
+			case Bool: "b";
+			case Ui8: "c";
+			case Ui16: "s";
+			case I32, EnumTag: "i";
+			case I64, Guid: "l";
+			case F32: "f";
+			case F64: "d";
+			default: "p";
+		};
+
+	static function shapeType(code:String):String
+		return switch code {
+			case "v": "void";
+			case "b": "bool";
+			case "c": "unsigned char";
+			case "s": "unsigned short";
+			case "i": "int";
+			case "l": "int64";
+			case "f": "float";
+			case "d": "double";
+			default: "void*";
+		};
+
+	/**
+	 * The trampolines the runtime calls compiled functions through, and wraps closures in, which the JIT would make
+	 * (`hl_setup.static_call`, `get_wrapper`): one pair per C calling shape of the program's function types, and of each with
+	 * its first argument bound, keyed by the result's shape and the arguments' (`hlc_signatures`, in key order).
+	 */
+	function trampolines(buffer:StringBuf):Void {
+		var keys:Map<String, Bool> = [];
+		for (index in 0...code.types.length)
+			switch types.kind(index) {
+				case Fun, Method:
+					var signature = types.signature(index),
+						shapes = [for (argument in signature.arguments) shapeCode(argument)];
+					keys.set(shapeCode(signature.result) + shapes.join(""), true);
+					if (shapes.length > 0)
+						keys.set(shapeCode(signature.result) + shapes.slice(1).join(""), true);
+				default:
+			}
+		var sorted = [for (key in keys.keys()) key];
+		sorted.sort(Reflect.compare);
+		for (key in sorted) {
+			var result = key.charAt(0), arguments = [for (index in 1...key.length) key.charAt(index)];
+			var parameters = [for (argument in arguments) shapeType(argument)];
+			var values = [
+				for (index in 0...arguments.length)
+					arguments[index] == "p" ? 'a[$index]' : arguments[index] == "b" || arguments[index] == "c"
+					|| arguments[index] == "s"
+					? '(${shapeType(arguments[index])})*(int*)a[$index]' : '*(${shapeType(arguments[index])}*)a[$index]'
+			];
+			var call =
+				'((${shapeType(result)} (*)(${parameters.length == 0 ? "void" : parameters.join(",")}))f)(${values.join(",")})';
+			buffer.add('static void *hlc_call_$key( void *f, void **a, vdynamic *out ) {\n\t');
+			buffer.add(switch result {
+				case "v": '$call;\n\treturn NULL;\n';
+				case "b", "c", "s", "i": 'out->v.i = (int)$call;\n\treturn &out->v.i;\n';
+				case "l": 'out->v.i64 = $call;\n\treturn &out->v.i64;\n';
+				case "f": 'out->v.f = $call;\n\treturn &out->v.f;\n';
+				case "d": 'out->v.d = $call;\n\treturn &out->v.d;\n';
+				default: 'return $call;\n';
+			});
+			buffer.add("}\n");
+			var declared = ["void *w"].concat([for (index in 0...arguments.length) '${parameters[index]} p$index']);
+			var packed = [for (index in 0...arguments.length) arguments[index] == "p" ? 'p$index' : '&p$index'];
+			buffer.add('static ${shapeType(result)} hlc_wrap_$key( ${declared.join(", ")} ) {\n');
+			buffer.add('\tvoid *args[] = {${packed.concat(["NULL"]).join(",")}};\n\tvdynamic ret;\n');
+			buffer.add(switch result {
+				case "v": '\thl_wrapper_call(w,args,&ret);\n';
+				case "b", "c", "s", "i": '\thl_wrapper_call(w,args,&ret);\n\treturn (${shapeType(result)})ret.v.i;\n';
+				case "l": '\thl_wrapper_call(w,args,&ret);\n\treturn ret.v.i64;\n';
+				case "f": '\thl_wrapper_call(w,args,&ret);\n\treturn ret.v.f;\n';
+				case "d": '\thl_wrapper_call(w,args,&ret);\n\treturn ret.v.d;\n';
+				default: '\treturn hl_wrapper_call(w,args,&ret);\n';
+			});
+			buffer.add("}\n");
+		}
+		buffer.add("const hlc_signature hlc_signatures[] = {\n");
+		for (key in sorted)
+			buffer.add('\t{"$key",hlc_call_$key,(void*)hlc_wrap_$key},\n');
+		buffer.add('\t{NULL,NULL,NULL}};\nconst int hlc_signature_count = ${sorted.length};\n\n');
+	}
+
 	/**
 	 * The module image: this module with every function body a stub, which the runtime decodes into its types, globals,
 	 * natives and constants (`hl_code_read`, `hl_module_init`) before the slots are pointed at the C functions; the slot table;
@@ -492,6 +580,7 @@ class HlcModule {
 			buffer.add((slot % 4 == 0 ? "\n\t" : " ")
 				+ (slotTypes[slot] >= 0 && !native[slot] ? '(void*)${cNames[slot]},' : "NULL,"));
 		buffer.add("\n\tNULL};\n\n");
+		trampolines(buffer);
 		buffer.add('const int hlc_alloc_count = ${allocationTypes.length};\n');
 		buffer.add('const int hlc_alloc_types[] = {${allocationTypes.concat([-1]).join(",")}};\n');
 		buffer.add('hl_jit_alloc_data hlc_alloc_data[${allocationTypes.length + 1}];\n\n');

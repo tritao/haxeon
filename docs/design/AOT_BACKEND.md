@@ -49,17 +49,20 @@ share these by calling the same helpers; once the C backend covers the IR, the d
 ## Runtime image and initialization
 
 The runtime builds its `hl_type`s from a module image: the assembled `HlCode` with every function body replaced by a
-one-instruction stub, encoded by `HlWriter` and embedded as a byte array. At startup the generated `main` reads it with
-`hl_code_read`, allocates and initializes the module with the fork's own `hl_module_alloc`/`hl_module_init` (types,
-enums, virtuals, enum tags, globals and their GC roots, natives, String constants), then overwrites every function slot
-(`functions_ptrs`) with the C function, before any object prototype is built. So the type descriptors, field offsets,
-natives resolution and constants are the fork's code, not a copy: the C backend cannot disagree with the JIT about a
-layout. Dynamic calls into C functions (`hl_dyn_call`, closures passed to natives) go through the JIT's `static_call`
-and wrappers, which call with the platform C ABI.
+one-instruction stub (and the function identities, which name stack frames), encoded by `HlWriter` and embedded as a byte
+array. At startup the generated `main` reads it with `hl_code_read`, allocates the module with the fork's own
+`hl_module_alloc` and initializes it with `hl_module_init_aot`, given the C functions as the module's code: the same
+initialization as the JIT's `hl_module_init` (types, enums, virtuals, enum tags, globals and their GC roots, natives,
+String constants, the module registry), sharing its code in the fork, with nothing compiled. So the type descriptors,
+field offsets, natives resolution and constants are the fork's code, not a copy: the C backend cannot disagree with the
+JIT about a layout, and the executable never starts the JIT.
 
-This keeps the JIT in the executable for the stubs. Milestone 4 replaces it with `hl_module_init_aot` in the fork (the
-same initialization without JIT, function pointers given) and static per-signature `static_call`/wrapper trampolines as
-`hl2c` generates, and may later emit the type tables as static C data to skip decoding.
+What the JIT would have provided the entry point sets itself: `hl_setup.static_call` (how `hl_dyn_call` calls a compiled
+function with its arguments in memory) and `get_wrapper` (the function a closure wrapped to another function type calls,
+which unpacks its arguments for `hl_wrapper_call`) are generated trampolines, one pair per C calling shape of the program's
+function types (and of each with its first argument bound), keyed by the result's and arguments' shapes (`hlc_signatures`
+in `image.c`, found by binary search); `resolve_symbol` and `capture_stack` are the stack traces below. The type tables could
+later be emitted as static C data to skip decoding.
 
 Layout checks: the generated code accesses object fields through C structs and globals at offsets computed by the backend
 (`hl_module_alloc`'s rule). At startup, before running anything, the entry point checks each struct's field offsets
@@ -95,9 +98,12 @@ builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>
 - **Direct calls.** A call whose target the IR knows is a C call to that function, which the C compiler may inline. A
   value-class method is a direct call. Virtual calls load the method from the type's prototype (`vobj_proto`), interface
   calls from the virtual's field table with the `hl_dyn_call_obj` fallback, as the JIT does.
-- **Natives** are called through the slot table the loader filled (`hl_module_init` resolves them as for the JIT, by
-  `hlp_` symbol: `std` from `libhl`, `haxeon_runtime` as `realtime_*`), one indirect call. Direct calls to natives need
-  declarations that do not conflict with `hl.h`'s; that is milestone 3.
+- **Natives** of the VM (`std`, `hl_*`) and of the Haxeon runtime (`haxeon_runtime`, `realtime_*`) are direct C calls, by
+  the convention of their libraries' `HL_NAME`: each is declared in `hlc.h` under a name of its own bound to the symbol
+  (`extern ... hlc_native_17(...) __asm__("hl_alloc_array")`), so its C types never meet `hl.h`'s declaration. The loader
+  still resolves every native by its `hlp_` symbol and checks its signature, as for the JIT. Natives of other libraries,
+  loaded at run time, and every native where the compiler has no asm labels, are called through the slot table the loader
+  filled.
 - **Closures** are `vclosure`s: static closures allocated once per site, instance closures with `hl_alloc_closure_ptr`;
   a call tests `hasValue` as `hl2c` does. Function values from natives and the JIT are the same structure.
 - **Dynamic values.** Scalars stay unboxed by their static type throughout; a value is boxed only where the IR says it
@@ -137,11 +143,21 @@ builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>
 
 ## Debug information
 
-Each C statement is preceded by `#line N "file.hx"` when its source position differs from the previous one, so DWARF and
-PDB line tables point at Haxe sources, and gdb, lldb, perf and sanitizers report Haxe lines. Haxe-level stack traces
-(`haxe.CallStack`, uncaught exceptions) need the runtime to turn return addresses into Haxe positions: `capture_stack`
-with the platform unwinder and `resolve_symbol` through the native symbol and line tables (`backtrace_symbols`, DbgHelp),
-as `hlc_main.c` does; milestone 3. The debugger and hot reload are JIT features and stay so.
+Each C line is preceded by `#line N "file.hx"` when its source position differs from the previous one, and every C line
+after the first of one IR row repeats it (a `#line` counts the lines after it), so DWARF and PDB line tables point at Haxe
+sources, and gdb, lldb, perf and sanitizers report Haxe lines. Rows of no source are line 1 of `<generated>`, as `HlLower`
+places them. Functions keep their Haxe names in C (`hx_Point_sum`), which is what perf shows.
+
+Haxe stack traces (`haxe.CallStack`, uncaught exceptions) are the JIT's, frame for frame (`native/aot/hlc_stack.c`): the
+generated functions are in a section of their own (`hlc_text`), so `capture_stack` (the platform unwinder, `backtrace`)
+keeps exactly the frames whose return address is in it, as the JIT keeps those in its code. `resolve_symbol` names a frame
+by the function's identity in the module image (the `FUNCTION_IDENTITIES` section is kept in the image) and the Haxe file
+and line of the call from the executable's own DWARF line table (`.debug_line`, read once, on the first resolve). For every
+frame to be there, the C compiler neither inlines generated functions into each other (`noinline`) nor turns calls into
+jumps (`-fno-optimize-sibling-calls`): the JIT does neither, and the IR's inliner has already inlined what it decided to.
+Letting the C compiler inline would need the inline records of DWARF (`.debug_info`) to restore the frames; it is a
+milestone 5 measurement. Implemented for Linux (ELF); elsewhere exceptions carry no frames yet (Windows has DbgHelp for
+lines, macOS the dSYM). The debugger and hot reload are JIT features and stay so.
 
 ## Driver and target selection
 
@@ -184,12 +200,11 @@ no IR or C text, so `CompileOptions.key` leaves them out.
 
 ### State
 
-Milestone 1 is done. `tests/aot/test-aot-programs.sh --all` passes 639 of the 643 programs of `tests/programs` with the
-JIT's exact exit code, stdout and stderr; `tests/aot/programs.txt` lists them and is the runner's default, and the `ci` suite
-`aot-programs` runs it. The four others differ only by Haxe stack traces, milestone 3 (`throw-string`, `try-rethrow`,
-`jit-stack-trace`, `defer-exception-stack`). No IR construct of the programs is unsupported.
+Milestones 1 to 4 are done. `tests/aot/test-aot-programs.sh --all` passes all 643 programs of `tests/programs` with the
+JIT's exact exit code, stdout and stderr, stack traces included; `tests/aot/programs.txt` lists them and is the runner's
+default, and the `ci` suite `aot-programs` runs it. No IR construct of the programs is unsupported.
 
-Milestone 2 is done but for nothing open: the C lowering writes what `HlLower` writes inline, from the same decisions
+Milestone 2: the C lowering writes what `HlLower` writes inline, from the same decisions
 (`HlLower`'s value array constants and read selection, `HlLower.cNativeInvocation`): the array push and byte read and write
 fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves the JIT start-up time, which C does not pay);
 value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
@@ -204,3 +219,14 @@ nbody 0.48, 0.50, 0.48 s; spectral-norm 0.41, 0.74, 0.31 s; fasta 0.90, 0.96, 0.
 lru 0.27, 0.28, 0.28 s. The array checks are what spectral-norm and fasta gain. binarytrees and merkletrees spend most of
 their time in the collector's marking threads, which the generated code does not change; inline allocation shows no gain
 there. nbody and lru are within noise.
+
+Milestone 3: Haxe stack traces as the JIT's, frame for frame (Linux; see Debug information), and direct calls of the VM's
+and the runtime's natives. Keeping every frame means no inlining between generated functions and no sibling calls; on the
+same benchmarks that costs nothing measurable but merkletrees (recursive small functions), about 0.88 to 0.95 s, within
+this machine's noise but worth the milestone 5 measurement of inlining with DWARF inline records.
+
+Milestone 4: the executable initializes its module with `hl_module_init_aot` and calls through generated trampolines; the
+JIT is never initialized (it is still linked, as part of `libhl.a`). Not done: a `libhl` without the JIT for platforms that
+forbid writable code (a build of the VM library that leaves the JIT out), and the type tables as static data.
+
+Next: milestone 5, the compiler built with `hlc`; stack traces on macOS and Windows; the inlining measurement above.
