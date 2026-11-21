@@ -43,8 +43,9 @@ function main():Int {
 		hex += StringTools.hex(vector.get(index), 2);
 	if (hex != "8101940101A9666978747572652F3191A472656164")
 		return 2;
-	var method = new RpcMethod<String, String>(100, Bytes.ofString, function(bytes:Bytes) return bytes.toString(),
-		Bytes.ofString,
+	var method = new RpcMethod<String, String>(100, text -> Bytes.ofString(text),
+		function(bytes:Bytes) return bytes.toString(),
+		text -> Bytes.ofString(text),
 		function(bytes:Bytes) return bytes.toString());
 	var service = server.connection;
 	var active = client.current();

@@ -22,13 +22,45 @@
 
 package haxe.io;
 
+@:hlNative("haxeon_runtime", "__bytes_of_string")
+extern function utf8Bytes(value:String):Bytes;
+
+/**
+ * The bytes of `s` in `encoding`, as Haxe's `Bytes.ofString` on HashLink: UTF-8 by default, and with `RawNative` the string's
+ * UTF-16 code units, little-endian. A module function of haxe.io.Bytes, so it is called as `Bytes.ofString(s)`, beside the natives
+ * the extern class binds.
+ */
+function ofString(s:String, ?encoding:Encoding):Bytes {
+	if (encoding != RawNative)
+		return utf8Bytes(s);
+	var bytes = Bytes.alloc(s.length << 1);
+	for (index in 0...s.length) {
+		var unit = (s.charCodeAt(index):Int);
+		bytes.set(index << 1, unit);
+		bytes.set((index << 1) + 1, unit >> 8);
+	}
+	return bytes;
+}
+
+/** The bytes a string of hexadecimal digits spells, as Haxe's `Bytes.ofHex`: a digit is read by its low bits, unchecked. */
+function ofHex(s:String):Bytes {
+	var length = s.length;
+	if ((length & 1) != 0)
+		throw "Not a hex string (odd number of digits)";
+	var bytes = Bytes.alloc(length >> 1);
+	for (index in 0...bytes.length) {
+		var high = (s.charCodeAt(index * 2):Int), low = (s.charCodeAt(index * 2 + 1):Int);
+		high = (high & 0xF) + ((high & 0x40) >> 6) * 9;
+		low = (low & 0xF) + ((low & 0x40) >> 6) * 9;
+		bytes.set(index, ((high << 4) | low) & 0xFF);
+	}
+	return bytes;
+}
+
 /** Supported byte-buffer constructors backed by the stable runtime ABI. */
 extern class Bytes {
 	@:hlNative("haxeon_runtime", "__bytes_alloc")
 	public static function alloc(length:Int):Bytes;
-
-	@:hlNative("haxeon_runtime", "__bytes_of_string")
-	public static function ofString(value:String):Bytes;
 
 	/** Returns a zero-copy view over a validated byte range. */
 	@:hlNative("haxeon_runtime", "__bytes_view")

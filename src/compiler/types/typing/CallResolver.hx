@@ -440,11 +440,14 @@ class CallResolver {
 			method:{arguments:Array<CompilerType>, result:CompilerType, nativeName:String},
 			arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope, name:String):TypedExpression {
-		var typed = typeCallArguments(arguments, method.arguments, scope, name);
 		var module = PlatformAbi.sourceModule(method.nativeName);
 		if (module != null)
 			session.runtimeDependencyTracker.record(session.currentContext.name, module);
-		var call = [receiver].concat(typed);
+		// A method written in Haxe is typed against its declaration once its module is loaded, which gives it optional arguments.
+		var declared = module == null ? null : session.signatures.get(method.nativeName);
+		var call = declared == null ? [receiver].concat(typeCallArguments(arguments, method.arguments, scope,
+			name)) : typeDeclaredCallArguments(arguments, declared, scope, method.nativeName, span, null, false,
+			receiver);
 		if (!PlatformAbi.signalsOutsideBounds(method.nativeName))
 			return new TypedExpression(TCall(method.nativeName, call), method.result, span);
 		// The check stays at the call site, so a write inside the bytes calls no Haxe function.
@@ -2315,14 +2318,6 @@ class CallResolver {
 				fail("E1008", 'Function "Math.floor" expects 1 argument, got ${arguments.length}', span);
 			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.floor value", "E1002");
 			return new TypedExpression(TCall("__math_floor", [value]), TInt, span);
-		}
-		if (name == "haxe.io.Bytes.ofString") {
-			if (arguments.length < 1 || arguments.length > 2)
-				fail("E1008", 'Function "haxe.io.Bytes.ofString" expects 1 or 2 arguments, got ${arguments.length}',
-					span);
-			var value = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, TString), TString,
-				"byte string", "E1002");
-			return new TypedExpression(TCall("haxe.io.Bytes.ofString", [value]), TBytes, span);
 		}
 		if (name == "Std.int" || name == "Std.stdIntFloat") {
 			if (arguments.length != 1)

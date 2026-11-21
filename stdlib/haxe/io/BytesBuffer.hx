@@ -51,8 +51,12 @@ class BytesBuffer {
 	public function add(src:Bytes):Void
 		addBytes(src, 0, src.length);
 
-	/** Adds `v` as UTF-8, the encoding of Haxeon strings. */
+	/** Adds `v` in `encoding`: UTF-8 by default, or its UTF-16 code units with `RawNative` (`Bytes.ofString`). */
 	public function addString(v:String, ?encoding:Encoding):Void {
+		if (encoding == RawNative) {
+			add(Bytes.ofString(v, RawNative));
+			return;
+		}
 		var size = stringUtf8Length(v);
 		bytesSetUtf8(room(size), pos, v);
 		pos += size;

@@ -2,7 +2,7 @@
 
 package haxe.io;
 
-/** How a String is stored as bytes. Strings are UTF-8 here, so both choices write the same bytes. */
+/** How a String is stored as bytes: UTF-8, or `RawNative`, HashLink's UTF-16 code units, little-endian, on every target. */
 enum Encoding {
 	UTF8;
 	RawNative;

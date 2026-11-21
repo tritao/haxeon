@@ -122,9 +122,9 @@ class Output {
 		}
 	}
 
-	/** Writes `s`; Haxeon strings are written as UTF-8. */
+	/** Writes `s` in `encoding`, UTF-8 by default (`Bytes.ofString`). */
 	public function writeString(s:String, ?encoding:Encoding):Void {
-		var bytes = Bytes.ofString(s);
+		var bytes = Bytes.ofString(s, encoding);
 		writeFullBytes(bytes, 0, bytes.length);
 	}
 }

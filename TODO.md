@@ -230,9 +230,11 @@ JIT. Heavier passes run in release builds only, written on IR bodies.
 The Haxe code Haxeon rejects or runs differently is listed in
 [LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported).
 
-- **`haxe.io.Bytes` members missing against Haxe on HashLink.**
-  `getString`/`ofString`'s encoding argument, `ofData`, `ofHex`, `fastGet`,
-  `readString`.
+- **`haxe.io.Bytes.ofData` and `fastGet`.** Both take Haxe's `BytesData`,
+  which Haxeon has no type for (`getData` returns the raw `hl.Bytes`). On
+  HashLink it is an object holding the pointer and the length; here it would
+  also have to keep the Bytes that owns the memory alive. Needs a decision on
+  the type and on `getData`'s result.
 - **The missing-member error's type spelling.** A nullable receiver prints
   unwrapped, a function type as `(Int)->Int` (Haxe: `(a : Int) -> Int`), a
   typedef'd structure by its fields instead of its name, and `Lib.Helper.no()`

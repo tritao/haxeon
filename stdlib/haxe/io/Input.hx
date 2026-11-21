@@ -131,10 +131,10 @@ class Input {
 			| (third << 16) | (fourth << 24);
 	}
 
-	/** `len` bytes as a String; Haxeon strings are read as UTF-8. */
+	/** `len` bytes as a String in `encoding`, UTF-8 by default (`Bytes.getString`). */
 	public function readString(len:Int, ?encoding:Encoding):String {
 		var bytes = Bytes.alloc(len);
 		readFullBytes(bytes, 0, len);
-		return bytes.getString(0, len);
+		return bytes.getString(0, len, encoding);
 	}
 }

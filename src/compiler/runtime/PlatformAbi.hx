@@ -153,6 +153,11 @@ class PlatformAbi {
 				result: CompilerType.TString,
 				nativeName: "haxe.io.BytesBounds.getString"
 			};
+			case "readString": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TString,
+				nativeName: "haxe.io.BytesBounds.readString"
+			};
 			// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
 			case "fill": {
 				arguments: [CompilerType.TInt, CompilerType.TInt, CompilerType.TInt],
