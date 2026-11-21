@@ -6,8 +6,8 @@ class Main {
 			absent:Null<Entity> = null,
 			present:Null<Entity> = entity,
 			readAbsent = function():Bool return absent == null,
-			readPresent = function():Bool return present != null && present.slot == cast - 9
-				&& present.generation == cast 214;
+			readPresent = function():Bool return present != null && present.slot == (cast - 9)
+				&& present.generation == (cast 214);
 		return sizeof<Transform>() == 24 && alignof<Transform>() == 8 && offsetof<Transform>("x") == 0
 			&& offsetof<Transform>("y") == 8
 			&& offsetof<Transform>("z") == 16 && sizeof<Entity>() == 8 && alignof<Entity>() == 4
