@@ -97,9 +97,8 @@ class ClosureEffects extends BindingWalker {
 	}
 
 	/** `local.member(...)` is a method call or a call of a function stored in a field; either may run a closure. */
-	override function memberCall(name:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
-		if (declaration != null || local(name, span, scope) != null || isPureCall != null
-			&& !isPureCall(name + "." + method))
+	override function memberCall(root:String, declaration:Null<String>, name:String, dot:Int, span:SourceSpan):Void {
+		if (declaration != null || local(root, span, scope) != null || isPureCall != null && !isPureCall(name))
 			unknown = true;
 	}
 

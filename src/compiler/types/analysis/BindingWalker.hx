@@ -141,8 +141,11 @@ class BindingWalker implements AstChildVisitor {
 	function callee(name:String, declaration:Null<String>, span:SourceSpan):Void
 		used(name, declaration, span);
 
-	/** A call of `local.method(...)` that the parser spelled as one dotted name. */
-	function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
+	/**
+	 * A call of `local.method(...)` that the parser spelled as one dotted name, `name`, whose method follows the dot at `dot`.
+	 * The method is cut out only by the hooks that read it.
+	 */
+	function memberCall(local:String, declaration:Null<String>, name:String, dot:Int, span:SourceSpan):Void
 		used(local, declaration, span);
 
 	/** An expression that is the target of a collection operation: a call receiver, an index, or a loop's iterable. */
@@ -275,9 +278,12 @@ class BindingWalker implements AstChildVisitor {
 				used(name, resolve(name), span);
 			case Call(name, arguments, span):
 				var dot = name.indexOf(".");
-				if (dot > 0)
-					memberCall(name.substring(0, dot), resolve(name), name.substring(dot + 1, name.length), span);
-				else
+				if (dot > 0) {
+					// A local's root is its binding's name, already made.
+					var declaration = resolve(name);
+					memberCall(declaration == null ? name.substring(0, dot) : bindingNames[resolvedIndex], declaration,
+						name, dot, span);
+				} else
 					callee(name, resolve(name), span);
 				for (argument in arguments)
 					expression(argument);

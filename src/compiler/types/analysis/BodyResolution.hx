@@ -409,8 +409,9 @@ private class BodyResolver extends BindingWalker {
 	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void
 		add(Callee, name, span);
 
-	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
-		add(MemberCall, local, span, method);
+	/** The method is kept only for a local's member call: what reads it (`MapEscapeAnalysis`) skips the others. */
+	override function memberCall(local:String, declaration:Null<String>, name:String, dot:Int, span:SourceSpan):Void
+		add(MemberCall, local, span, declaration == null ? null : name.substring(dot + 1, name.length));
 
 	override function statement(value:AstStatement):Void
 		switch value {

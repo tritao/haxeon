@@ -64,10 +64,10 @@ class ReceiverMutationInference extends BindingWalker {
 		super.callee(name, declaration, span);
 	}
 
-	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
-		if (local == "this") receiverCall(method);
+	override function memberCall(local:String, declaration:Null<String>, name:String, dot:Int, span:SourceSpan):Void {
+		if (local == "this") receiverCall(name.substring(dot + 1, name.length));
 		else if (declaration == null && fields.exists(local)) mutates = true;
-		super.memberCall(local, declaration, method, span);
+		super.memberCall(local, declaration, name, dot, span);
 	}
 
 	override function statement(value:AstStatement):Void {
