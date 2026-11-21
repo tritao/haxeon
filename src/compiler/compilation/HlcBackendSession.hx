@@ -51,7 +51,8 @@ class HlcBackendSession implements BackendSession {
 		var program = assembler.lastProgram;
 		if (program == null)
 			throw new compiler.core.InternalError("The HashLink assembly kept no program for the C backend");
-		var files = new HlcModule(assembly.module, assembler.symbols, program, assembly.functionIndices).emit();
+		var files = new HlcModule(assembly.module, assembler.symbols, program, assembly.functionIndices,
+			context.options.inlineAllocation).emit();
 		var builtAt = Sys.time() * 1000.0;
 		return {
 			artifact: HashLinkCBuild({files: files}),

@@ -60,8 +60,13 @@ class HlcModule {
 
 	final allocationIndices:Map<Int, Int> = [];
 
-	public function new(code:HlCode, symbols:HlSymbolTable, program:IrProgram, slots:Map<String, Int>) {
+	/** Whether objects are allocated inline (`CompileOptions.inlineAllocation`), else by `hl_alloc_obj`. */
+	public final inlineAllocation:Bool;
+
+	public function new(code:HlCode, symbols:HlSymbolTable, program:IrProgram, slots:Map<String, Int>,
+			inlineAllocation:Bool) {
 		this.code = code;
+		this.inlineAllocation = inlineAllocation;
 		this.symbols = symbols;
 		this.program = program;
 		this.slots = slots;
@@ -350,12 +355,14 @@ class HlcModule {
 		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n");
 		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-but-set-variable\"\n");
 		buffer.add("#endif\n\n");
-		// The program's functions are in a section of their own, which tells the stack capture its frames (`hlc_stack.c`), and
-		// are not inlined into each other by the C compiler, so a Haxe stack trace has every frame the JIT's has.
+		// The program's functions are in a section of their own, which tells the stack capture its frames (`hlc_stack.c`). A
+		// development build (HLC_EXACT_FRAMES, `HlcBuild`) does not let the C compiler inline them into each other, so a Haxe stack
+		// trace has the JIT's frames exactly; a release build does, and the stack capture restores the inlined frames from DWARF.
+		buffer.add("#if defined(HLC_EXACT_FRAMES) && defined(__GNUC__)\n#define HLC_NOINLINE __attribute__((noinline))\n");
+		buffer.add("#else\n#define HLC_NOINLINE\n#endif\n");
 		buffer.add("#if defined(__ELF__) && defined(__GNUC__)\n");
-		buffer.add("#define HLC_FUNCTION __attribute__((section(\"hlc_text\"), noinline))\n");
-		buffer.add("#elif defined(__GNUC__)\n#define HLC_FUNCTION __attribute__((noinline))\n");
-		buffer.add("#else\n#define HLC_FUNCTION\n#endif\n\n");
+		buffer.add("#define HLC_FUNCTION __attribute__((section(\"hlc_text\"))) HLC_NOINLINE\n");
+		buffer.add("#else\n#define HLC_FUNCTION HLC_NOINLINE\n#endif\n\n");
 		buffer.add("extern hl_type *hlc_types;\nextern unsigned char *hlc_globals;\nextern void **hlc_slots;\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
 		buffer.add("extern hl_jit_alloc_data hlc_alloc_data[];\n");
@@ -363,7 +370,8 @@ class HlcModule {
 		buffer.add("static inline double hlc_f64( unsigned int high, unsigned int low ) {\n");
 		buffer.add("\tunsigned long long bits = ((unsigned long long)high << 32) | low; double value;\n");
 		buffer.add("\tmemcpy(&value,&bits,sizeof(value)); return value;\n}\n\n");
-		buffer.add(ALLOCATION_HELPER);
+		if (inlineAllocation)
+			buffer.add(ALLOCATION_HELPER);
 		types.structDeclarations(buffer);
 		buffer.add("\n");
 		for (slot in 0...slotTypes.length)

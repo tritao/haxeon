@@ -378,6 +378,7 @@ native-type-info-nonflat
 native-type-info-wide-integer-default
 NativeU32RuntimeValues
 negation
+nested-call-stack
 nested-mutable-capture
 nested-value-scalar-replace
 non-null-facts

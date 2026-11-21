@@ -447,9 +447,9 @@ class HlcFunctionLower {
 			case IrOpcode.NewObject, IrOpcode.ValueInit:
 				var type = typeOf(output);
 				switch types.kind(type) {
-					case Obj: assign(row,
+					case Obj if (module.inlineAllocation): assign(row,
 						'hlc_new(&hlc_alloc_data[${module.allocationIndex(type)}],${typeAddress(type)})', module.dyn);
-					case Struct: assign(row, 'hl_alloc_obj(${typeAddress(type)})', module.dyn);
+					case Obj | Struct: assign(row, 'hl_alloc_obj(${typeAddress(type)})', module.dyn);
 					case Virtual: assign(row, 'hl_alloc_virtual(${typeAddress(type)})', module.dyn);
 					case DynObj: assign(row, 'hl_alloc_dynobj()', module.dyn);
 					default: throw unsupported('allocation of ${types.typeName(type)}');
@@ -716,6 +716,9 @@ class HlcFunctionLower {
 
 	function dynamicCast(expression:String, from:Int, to:Int):String {
 		var target = types.cType(to);
+		// `Null<T>` to `T` reads the box or takes 0, inline, as the JIT does (`emit_dyn_cast`). Every caller passes a local.
+		if (types.kind(from) == Null && types.kind(types.parameter(from)) == types.kind(to))
+			return '($expression ? *($target*)&$expression->v : 0)';
 		// The runtime reads the value through a pointer: a named copy gives it one.
 		var source = '(${types.cType(from)}[]){$expression}';
 		return switch types.kind(to) {

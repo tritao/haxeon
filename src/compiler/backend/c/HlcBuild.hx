@@ -30,10 +30,15 @@ class HlcBuild {
 		return changed;
 	}
 
-	/** Compiles the C files of `directory` and the SDK's runtime support, and links the executable `output`. Returns how many it compiled. */
-	public static function compile(files:Array<HlcFile>, directory:String, output:String, cCompiler:String,
-			sdk:String):Int {
-		var objects = directory + "/obj";
+	/**
+	 * Compiles the C files of `directory` and the SDK's runtime support, and links the executable `output`. Returns how many it
+	 * compiled. With `exactFrames` (a development build) the C compiler inlines no generated function into another, so stack
+	 * traces are the JIT's frame for frame; otherwise it inlines as it sees fit and the stack capture restores the inlined frames
+	 * from the DWARF inline records. Each kind has its own objects.
+	 */
+	public static function compile(files:Array<HlcFile>, directory:String, output:String, cCompiler:String, sdk:String,
+			exactFrames:Bool):Int {
+		var objects = directory + (exactFrames ? "/obj-development" : "/obj-release");
 		FileSystem.createDirectory(objects);
 		var header = directory + "/hlc.h", headerTime = modified(header);
 		var sources = [for (file in files) if (StringTools.endsWith(file.path, ".c")) directory + "/" + file.path];
@@ -49,13 +54,18 @@ class HlcBuild {
 		var failures:Array<Null<String>> = [for (_ in pending) null];
 		compiler.core.Parallel.forEach(pending.length, 8, function(item) {
 			var index = pending[item];
-			var result = ProcessOutputCapture.capture(cCompiler, [
-				// No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has.
+			// No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has, and a jump leaves no record to
+			// restore it from.
+			var arguments = [
 				"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-fno-optimize-sibling-calls", "-w",
-				'-I$directory', '-I$sdk/include',
-				"-c",
-				sources[index], "-o", outputs[index]
-			], ProcessOutputCapture.defaultDiagnosticLimit);
+				'-I$directory', '-I$sdk/include'
+			];
+			if (exactFrames)
+				arguments.push("-DHLC_EXACT_FRAMES");
+			for (argument in ["-c", sources[index], "-o", outputs[index]])
+				arguments.push(argument);
+			var result = ProcessOutputCapture.capture(cCompiler, arguments,
+				ProcessOutputCapture.defaultDiagnosticLimit);
 			if (result.exitCode != 0)
 				failures[item] = '${sources[index]}:\n${result.stderr}';
 		});

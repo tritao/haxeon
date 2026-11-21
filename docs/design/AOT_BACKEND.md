@@ -112,7 +112,7 @@ builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>
   from Dynamic-typed slots: `Null<Int>`, generic containers and type parameters, `Dynamic`, anonymous structures. The
   clean fix is not making the box: nullable scalars as flag and value pairs, generics specialized for scalars, which
   the IR does for every backend, so the JIT and Wasm gain as much. Tagged small Ints inside Dynamic would be a runtime
-  and ABI decision for the fork, not part of this backend. Casts go through `hl_dyn_cast*`, dynamic fields through
+  and ABI decision for the fork, not part of this backend. Casts go through `hl_dyn_cast*` (`Null<T>` to `T` inline, as the JIT), dynamic fields through
   `hl_dyn_get*`/`hl_dyn_set*`.
 
   The self-compile asks for about 4.8 million scalar boxes, of which the JIT's shared Bool and small-Int boxes serve
@@ -152,11 +152,21 @@ Haxe stack traces (`haxe.CallStack`, uncaught exceptions) are the JIT's, frame f
 generated functions are in a section of their own (`hlc_text`), so `capture_stack` (the platform unwinder, `backtrace`)
 keeps exactly the frames whose return address is in it, as the JIT keeps those in its code. `resolve_symbol` names a frame
 by the function's identity in the module image (the `FUNCTION_IDENTITIES` section is kept in the image) and the Haxe file
-and line of the call from the executable's own DWARF line table (`.debug_line`, read once, on the first resolve). For every
-frame to be there, the C compiler neither inlines generated functions into each other (`noinline`) nor turns calls into
-jumps (`-fno-optimize-sibling-calls`): the JIT does neither, and the IR's inliner has already inlined what it decided to.
-Letting the C compiler inline would need the inline records of DWARF (`.debug_info`) to restore the frames; it is a
-milestone 5 measurement. Implemented for Linux (ELF); elsewhere exceptions carry no frames yet (Windows has DbgHelp for
+and line of the call from the executable's own DWARF line table (`.debug_line`, read once, on the first resolve). The C
+compiler never turns calls into jumps (`-fno-optimize-sibling-calls`): a jump leaves no record a frame could be restored
+from. Whether it inlines generated functions into each other follows the build mode (`--build-mode`, on the request):
+
+- **development** compiles with `HLC_EXACT_FRAMES`: generated functions are `noinline`, so every frame is a real one, as
+  the JIT's are (the IR's inliner has already inlined what it decided to). The parity runner compiles in this mode.
+- **release** lets the C compiler inline. A return address can then lie in code inlined from other generated functions,
+  and the stack capture restores their frames from the DWARF inline records (`.debug_info`: each
+  `DW_TAG_inlined_subroutine` with its address ranges, abstract origin and call file and line), read on the first capture:
+  a physical frame becomes the chain of generated functions inlined at its call, innermost first, each named at the line
+  where its caller calls it. Inlined runtime helpers (`hl.h`, `hlc_new`) are not frames: the generated function around
+  them is named at the line of the helper's call. Clones the C compiler makes (`.part`, `.constprop`) are named by their
+  abstract origin.
+
+Each mode keeps its objects (`OUTPUT.c/obj-development`, `obj-release`); the C text is the same. Implemented for Linux (ELF); elsewhere exceptions carry no frames yet (Windows has DbgHelp for
 lines, macOS the dSYM). The debugger and hot reload are JIT features and stay so.
 
 ## Driver and target selection
@@ -166,7 +176,8 @@ the C sources into the directory `--output` names plus `.c` (`out/main.c/`). The
 request (`CompileOptions.cCompiler`, `--c-compiler=cc`), with the SDK it links against (`CompileOptions.cSdk`,
 `--c-sdk=DIR`: the native build's `hlc-sdk` directory, made by the `haxeon-hlc-sdk` target, with the runtime headers in
 `include/`, `libhl.a` and `libffi.a` in `lib/` and the entry point in `src/`); with both set, the driver compiles each C
-file that changed (in parallel, `-O2 -g -fwrapv -fno-strict-aliasing`: Haxe's `Int` wraps, and objects are read through
+file that changed (in parallel, `-O2 -g -fwrapv -fno-strict-aliasing -fno-optimize-sibling-calls`, plus `-DHLC_EXACT_FRAMES` in a
+development build: see Debug information; Haxe's `Int` wraps, and objects are read through
 each other's structs), links the executable at `--output` with the whole VM library (the loader resolves natives by
 their `hlp_` symbols in the executable itself), and reports the C compiler's diagnostics as a compile error. Neither is read from the environment or from defines. They change
 no IR or C text, so `CompileOptions.key` leaves them out.
@@ -210,8 +221,11 @@ fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves 
 value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
 table prologue of dispatch functions; ordinary C function calls (`CNativeCall`) through the runtime's dispatch. Array bounds
 checks are inline compares, dropped where an earlier check in the block still holds (`HlLower.keepsArrayBounds`) or the loop
-proves the index in range (`IrLoopBounds`). Objects are allocated by `hlc_new`, the JIT's inline allocation driven by the
-collector's own descriptor (`hl_jit_alloc_prepare`, filled at start-up); the JIT has it opt-in only.
+proves the index in range (`IrLoopBounds`). Objects are allocated by `hl_alloc_obj`, as the JIT allocates them by default. The JIT's inline
+allocation is opt-in on both: the JIT's with `HL_JIT_ALLOC_INLINE=1` in the VM, the C backend's with the typed option
+`CompileOptions.inlineAllocation` (`--inline-allocation`), which allocates by `hlc_new` from the collector's own descriptor
+(`hl_jit_alloc_prepare`, filled at start-up). A cast from `Null<T>` to `T` reads the box inline, as the JIT's
+`emit_dyn_cast` does, instead of calling `hl_dyn_casti`.
 
 Measured on the cross-language benchmarks (`benchmarks/cross-lang`, first bench input, median of 5 interleaved runs, wall time,
 machine loaded by other work at a load of about 5 to 7), JIT, milestone 1, milestone 2: binarytrees 2.40, 2.46, 2.52 s;
@@ -229,4 +243,14 @@ Milestone 4: the executable initializes its module with `hl_module_init_aot` and
 JIT is never initialized (it is still linked, as part of `libhl.a`). Not done: a `libhl` without the JIT for platforms that
 forbid writable code (a build of the VM library that leaves the JIT out), and the type tables as static data.
 
-Next: milestone 5, the compiler built with `hlc`; stack traces on macOS and Windows; the inlining measurement above.
+Release builds let the C compiler inline, with the frames restored from DWARF (see Debug information); development builds
+keep exact frames, and the parity runner uses them. In release the four stack programs (throw-string, try-rethrow,
+jit-stack-trace, defer-exception-stack) and `nested-call-stack` print the JIT's traces, also with `--no-inline` (where gcc
+and clang inline the chains the IR's inliner left). Measured in release (median of 5 interleaved runs, load about 4 to 6),
+JIT, C inlining, exact frames: binarytrees 2.42, 2.58, 2.31 s; nbody 0.48, 0.47, 0.47 s; spectral-norm 0.41, 0.31, 0.31 s;
+fasta 0.90, 0.84, 0.84 s; merkletrees 0.75, 0.78, 0.79 s; lru 0.27, 0.28, 0.28 s. Inlining by the C compiler gains nothing
+measurable: the IR's inliner already took the small calls. What closed merkletrees' gap (1.09 s against the JIT's 0.86 s
+before, under load) was the `Null<Int>` unboxing inline, which the JIT had and the C called `hl_dyn_casti` for; its
+remaining time is the collector and `hl_make_dyn`, which the JIT boxes through its shared small-Int table inline.
+
+Next: milestone 5, the compiler built with `hlc`; stack traces on macOS and Windows.

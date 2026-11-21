@@ -18,6 +18,7 @@ typedef CompileOptionsInit = {
 	final ?phaseCollections:Bool;
 	final ?cCompiler:String;
 	final ?cSdk:String;
+	final ?inlineAllocation:Bool;
 }
 
 /** Whether the typer types each class's methods in an arena of its own (`CompileOptions.typingArenas`). */
@@ -129,6 +130,12 @@ class CompileOptions {
 	/** The C SDK a `--target=hlc` build compiles against: a directory with `include/` and `lib/` (the native build's `hlc-sdk`). */
 	public final cSdk:Null<String>;
 
+	/**
+	 * Allocate objects in a `--target=hlc` build's C from the thread's allocation buffer inline, as the JIT does when the VM runs
+	 * with `HL_JIT_ALLOC_INLINE=1`. Off by default, as on the JIT: both allocate through `hl_alloc_obj` unless asked.
+	 */
+	public final inlineAllocation:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -146,6 +153,7 @@ class CompileOptions {
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
 		cCompiler = init == null ? null : init.cCompiler;
 		cSdk = init == null ? null : init.cSdk;
+		inlineAllocation = init != null && init.inlineAllocation == true;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -166,7 +174,8 @@ class CompileOptions {
 			typingArenas: typingArenas,
 			phaseCollections: phaseCollections,
 			cCompiler: cCompiler,
-			cSdk: cSdk
+			cSdk: cSdk,
+			inlineAllocation: inlineAllocation
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -210,6 +219,8 @@ class CompileOptions {
 			flags.push(C_COMPILER + cCompiler);
 		if (cSdk != null)
 			flags.push(C_SDK + cSdk);
+		if (inlineAllocation)
+			flags.push(INLINE_ALLOCATION);
 		return flags;
 	}
 
@@ -220,6 +231,9 @@ class CompileOptions {
 
 	/** The C SDK of a `--target=hlc` build (`cSdk`). */
 	public static inline final C_SDK = "--c-sdk=";
+
+	/** Allocates objects inline in a `--target=hlc` build (`inlineAllocation`). */
+	public static inline final INLINE_ALLOCATION = "--inline-allocation";
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 	public static inline final NO_VERIFY_IR = "--no-verify-ir";
 
@@ -264,7 +278,7 @@ class CompileOptions {
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, TYPING_ARENAS, TYPING_ARENAS_CHECK,
-				TYPING_ARENAS_STRICT, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS: true;
+				TYPING_ARENAS_STRICT, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS, INLINE_ALLOCATION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, C_COMPILER)
 				|| StringTools.startsWith(argument, C_SDK);
 		};
@@ -289,7 +303,8 @@ class CompileOptions {
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
 			cCompiler: lastValue(arguments, C_COMPILER),
-			cSdk: lastValue(arguments, C_SDK)
+			cSdk: lastValue(arguments, C_SDK),
+			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0
 		});
 
 	/** The value of the last `PREFIXvalue` among `arguments`, or null. */

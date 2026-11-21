@@ -284,7 +284,8 @@ class CompilerDriver {
 		if (cCompiler != null) {
 			if (sdk == null)
 				throw new InternalError("--c-compiler requires --c-sdk");
-			var compiled = HlcBuild.compile(files, directory, request.output, cCompiler, sdk);
+			var compiled = HlcBuild.compile(files, directory, request.output, cCompiler, sdk,
+				request.buildMode == "development");
 			report('compiled $compiled of ${files.length} C files');
 		}
 		var status = owner.publicationStatus();
