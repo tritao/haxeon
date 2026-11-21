@@ -4,7 +4,7 @@ package compiler.core;
  * Phase marks for finding what sets the compiler's peak memory (`scripts/peak-census.sh`), a no-op unless asked for.
  *
  * With `HAXEON_PEAK_MARKS` set, each mark prints `mark NAME SECONDS` to stderr, for a timeline of resident memory by phase.
- * With `HAXEON_PEAK_CENSUS` naming a mark (or `all`), that mark also runs the runtime's heap census (`hl_gc_census`, which
+ * With `HAXEON_PEAK_CENSUS` naming marks (comma-separated, or `all`), each also runs the runtime's heap census (`hl_gc_census`, which
  * collects first unless `HL_GC_CENSUS_NOGC` is set): live bytes by type, owner and root path, and pages by size class.
  */
 class PeakProbe {
@@ -26,7 +26,8 @@ class PeakProbe {
 		if (!on())
 			return;
 		Sys.stderr().writeString("mark " + name + " " + Std.string(Sys.time()) + "\n");
-		if (censusAt == name || censusAt == "all")
+		var at = censusAt;
+		if (at != null && (at == "all" || at.split(",").indexOf(name) >= 0))
 			census(name);
 	}
 

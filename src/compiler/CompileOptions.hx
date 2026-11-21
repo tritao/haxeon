@@ -15,6 +15,7 @@ typedef CompileOptionsInit = {
 	final ?verifyIr:Bool;
 	final ?checkIrBody:Bool;
 	final ?typingArenas:TypingArenas;
+	final ?phaseCollections:Bool;
 }
 
 /** Whether the typer types each class's methods in an arena of its own (`CompileOptions.typingArenas`). */
@@ -109,6 +110,14 @@ class CompileOptions {
 	 */
 	public final typingArenas:TypingArenas;
 
+	/**
+	 * Collect at the ends of the compile's phases once enough was allocated since the last collection (`PhaseCollections`), so
+	 * the peak is the live data at a boundary plus a phase's allocation, not wherever the byte trigger happens to fire. On by
+	 * default for a compile that keeps no session; a session's process keeps the byte trigger alone. Changes no output, so `key`
+	 * leaves it out.
+	 */
+	public final phaseCollections:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -123,6 +132,7 @@ class CompileOptions {
 		checkIrBody = init != null && init.checkIrBody == true;
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 		typingArenas = init == null || init.typingArenas == null ? Off : init.typingArenas;
+		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -140,7 +150,8 @@ class CompileOptions {
 			elaborateGenerics: elaborateGenerics,
 			verifyIr: verifyIr,
 			checkIrBody: checkIrBody,
-			typingArenas: typingArenas
+			typingArenas: typingArenas,
+			phaseCollections: phaseCollections
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -176,6 +187,10 @@ class CompileOptions {
 			flags.push(TYPING_ARENAS_CHECK);
 		if (typingArenas == Strict)
 			flags.push(TYPING_ARENAS_STRICT);
+		if (phaseCollections && keepSession)
+			flags.push(PHASE_COLLECTIONS);
+		if (!phaseCollections && !keepSession)
+			flags.push(NO_PHASE_COLLECTIONS);
 		return flags;
 	}
 
@@ -198,6 +213,12 @@ class CompileOptions {
 	/** The same, without evacuating releases. */
 	public static inline final TYPING_ARENAS_STRICT = "--typing-arenas=strict";
 
+	/** Collects at phase ends in a compile that keeps its session too (`phaseCollections`). */
+	public static inline final PHASE_COLLECTIONS = "--phase-collections";
+
+	/** Leaves collections to the byte trigger alone in a compile that keeps no session. */
+	public static inline final NO_PHASE_COLLECTIONS = "--no-phase-collections";
+
 	/**
 	 * One spelling of the options that change what a compile makes, for a session's identity and a cached result's key: their flags,
 	 * or "" for the defaults. How many threads parse is left out.
@@ -206,7 +227,8 @@ class CompileOptions {
 		return [
 			for (flag in arguments())
 				if (!StringTools.startsWith(flag, PARSE_THREADS) && flag != NO_KEEP_SESSION && flag != TYPING_ARENAS
-				&& flag != TYPING_ARENAS_CHECK && flag != TYPING_ARENAS_STRICT) flag
+				&& flag != TYPING_ARENAS_CHECK && flag != TYPING_ARENAS_STRICT && flag != PHASE_COLLECTIONS
+				&& flag != NO_PHASE_COLLECTIONS) flag
 		].join(" ");
 
 	/** Whether `argument` is one of the flags `arguments` writes. */
@@ -216,7 +238,7 @@ class CompileOptions {
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, TYPING_ARENAS, TYPING_ARENAS_CHECK,
-				TYPING_ARENAS_STRICT: true;
+				TYPING_ARENAS_STRICT, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
 
@@ -236,7 +258,9 @@ class CompileOptions {
 			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0,
 			checkIrBody: arguments.indexOf(CHECK_IR_BODY) >= 0,
 			typingArenas: arguments.indexOf(TYPING_ARENAS_STRICT) >= 0 ? Strict : arguments.indexOf(TYPING_ARENAS_CHECK)
-				>= 0 ? Check : arguments.indexOf(TYPING_ARENAS) >= 0 ? On : Off
+				>= 0 ? Check : arguments.indexOf(TYPING_ARENAS) >= 0 ? On : Off,
+			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
+				>= 0 ? false : null
 		});
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

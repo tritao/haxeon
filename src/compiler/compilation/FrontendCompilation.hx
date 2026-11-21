@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.core.PeakProbe;
+import compiler.core.PhaseCollections;
 import compiler.core.AllocationMeter;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
@@ -260,6 +261,7 @@ class FrontendCompilation {
 			}
 			runIrPipeline(build);
 			PeakProbe.mark("ir-done");
+			PhaseCollections.end("ir", context.options.phaseCollections);
 			selectChangedFunctions(build);
 			var irAssemblyDoneAt = now();
 			build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
@@ -336,6 +338,7 @@ class FrontendCompilation {
 			if (!context.livePatching)
 				context.state.semanticProgram = null;
 		}
+		PhaseCollections.end("tables", context.options.phaseCollections);
 		return {result: null, build: build, carried: null};
 	}
 

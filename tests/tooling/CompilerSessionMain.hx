@@ -300,10 +300,34 @@ class CompilerSessionMain {
 		expect(shapeMessages.indexOf("reusing compiler session") >= 0, "a comment edit must keep the compiler session");
 		Sys.putEnv(variable, previousPath);
 		checkReadGuard(root + "/Guarded.hx");
+		checkPhaseCollectionOptions();
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
 		FileSystem.deleteDirectory(root);
 		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, generic invalidation, typedef, enum and abstract shape edits, and the source read guard");
+	}
+
+	/** Phase-end collections are on for a compile that keeps no session, off for one that does, and either can be asked for. */
+	static function checkPhaseCollectionOptions():Void {
+		function options(flags:Array<String>)
+			return compiler.CompileOptions.fromArguments(flags);
+		expect(!options([]).phaseCollections, "a session keeps the byte trigger alone");
+		expect(options([compiler.CompileOptions.NO_KEEP_SESSION]).phaseCollections,
+			"a compile that keeps no session collects at phase ends");
+		expect(!options([compiler.CompileOptions.NO_KEEP_SESSION,
+			compiler.CompileOptions.NO_PHASE_COLLECTIONS]).phaseCollections,
+			"--no-phase-collections turns them off");
+		expect(options([compiler.CompileOptions.PHASE_COLLECTIONS]).phaseCollections,
+			"--phase-collections turns them on");
+		for (flags in [
+			[],
+			[compiler.CompileOptions.NO_KEEP_SESSION],
+			[compiler.CompileOptions.PHASE_COLLECTIONS],
+			[compiler.CompileOptions.NO_KEEP_SESSION, compiler.CompileOptions.NO_PHASE_COLLECTIONS]
+		])
+			expect(options(options(flags).arguments()).phaseCollections == options(flags).phaseCollections,
+				"the phase-collection flags round-trip");
+		expect(options([compiler.CompileOptions.PHASE_COLLECTIONS]).key() == "", "phase collections change no output");
 	}
 
 	/** A source read once is kept only when no write overlapped the read: the file's version must not move across it. */

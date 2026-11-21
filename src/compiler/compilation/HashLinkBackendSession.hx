@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.core.PeakProbe;
+import compiler.core.PhaseCollections;
 import compiler.core.AllocationMeter;
 import compiler.abi.LambdaAlignment;
 import compiler.abi.RetiredName;
@@ -210,6 +211,7 @@ class HashLinkBackendSession implements BackendSession {
 			reloadReasons.push(reason);
 		var assembledAt = Sys.time() * 1000.0;
 		PeakProbe.mark("backend-assembled");
+		PhaseCollections.end("backend", context.options.phaseCollections);
 		var allocationAfterAssembly = AllocationMeter.sample();
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
