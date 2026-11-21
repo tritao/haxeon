@@ -52,8 +52,8 @@ class IrPipeline {
 		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage("object-reflection", objectReflection),
-		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("encode-bodies", encodeBodies),
+		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
 		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
@@ -422,8 +422,9 @@ class IrPipeline {
 		var functions = assembly.functions, start = assembly.generatedStart;
 		if (functions.length > start) {
 			var existing = functions.slice(0, start);
-			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewrite(functions.slice(start), assembly.objects,
-				assembly.generator.profile.nativeReflectionDispatch, existing, true, true));
+			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies(functions.slice(start),
+				assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing, true, true,
+				bodyTypes(context), context.passScratch.bodyBuilder, context.options.keepSession));
 		}
 		return assembly;
 	}

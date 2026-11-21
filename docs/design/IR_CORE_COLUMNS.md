@@ -115,6 +115,8 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    surface reads bodies* (`IrProgramAssembler.finish`: the runtime calls, C native calls made in place, the concrete enums).
    *Nullable scalar fields read bodies*. *Optional field storage reads bodies*; the value methods it specializes to a field path
    are still cloned from their decoding, as the place methods are. The early prune's check reads bodies past the encode point.
+   *The reflection helpers' checked casts read bodies* (`IrCheckedDynamicCasts.rewriteBodies`; the earlier checked-dynamic-casts
+   stage and the Wasm module builders keep the object version).
    The encode point is now a stage of its own (`encode-bodies` in `IrPipeline.assembly`),
    which runs on every target whichever stages after it run, and moves up the list as stages are ported.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
