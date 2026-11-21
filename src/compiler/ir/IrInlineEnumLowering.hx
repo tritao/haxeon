@@ -44,16 +44,16 @@ class IrInlineEnumLowering {
 
 	/**
 	 * `program` with its selected enums lowered, reading the functions' bodies made with `types` (those of the functions' bodies
-	 * when not given) and encoding a function that has none: frozen when `retained`, as is a function it changes, else owned by
-	 * the next stage.
+	 * when not given) and encoding a function that has none; a function it changes or makes is owned by the next
+	 * stage.
 	 */
 	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
-			?reflectableObjects:Array<String>, ?types:IrTypeIds, ?builder:IrBodyBuilder, retained = true):IrProgram {
+			?reflectableObjects:Array<String>, ?types:IrTypeIds, ?builder:IrBodyBuilder):IrProgram {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
 			canonicalObjects);
-		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, types, builder, retained);
+		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, types, builder);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
 		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
@@ -184,7 +184,7 @@ class IrInlineEnumLowering {
 			[for (object in result.objects) if (object.isValue) object.name => true],
 			[for (entry in result.interfaces) entry.name => true], mapped, containsMapped);
 		for (fn in program.functions)
-			result.functions.push(lowering.lower(fn, fn.bodyIn(types, builder, retained), builder, retained));
+			result.functions.push(lowering.lower(fn, fn.bodyIn(types, builder), builder));
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names)
@@ -195,7 +195,7 @@ class IrInlineEnumLowering {
 		result.functions = result.functions.concat(IrInlineEnumEscapes.functions(result.enums, table, planner));
 		var calls:Map<String, Bool> = [];
 		for (fn in result.functions) {
-			var body = fn.bodyIn(types, builder, retained);
+			var body = fn.bodyIn(types, builder);
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
@@ -216,12 +216,12 @@ class IrInlineEnumLowering {
 		return "$inline-enum-global:" + name.length + ":" + name + ":" + field;
 
 	/** `fn` (whose body is `body`) lowered: itself when no position of it mentions a selected enum. */
-	function lower(fn:IrFunction, body:IrBody, builder:Null<IrBodyBuilder>, retained:Bool):IrFunction {
+	function lower(fn:IrFunction, body:IrBody, builder:Null<IrBodyBuilder>):IrFunction {
 		if (!mentionsSelected(body))
 			return fn;
 		var edited = body.forEditing(builder);
 		rewrite(edited);
-		return retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+		return IrFunction.ofOwnedBody(edited);
 	}
 
 	function mentionsId(id:Int):Bool {

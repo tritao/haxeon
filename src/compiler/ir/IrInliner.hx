@@ -756,9 +756,11 @@ class IrInliner {
 	 */
 	function sourceBody(fn:IrFunction):IrBody {
 		var known = fn.body;
-		if (known == null)
-			return fn.bodyIn(types, passScratch.bodyBuilder, memoizes);
-		return known.types == types ? known : IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
+		if (known != null && known.types != types)
+			return IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
+		var body = fn.bodyIn(types, passScratch.bodyBuilder);
+		// A session's cache keeps the source body (`originals`), so it is frozen; else the inliner owns it.
+		return memoizes ? fn.freezeBody(passScratch.bodyBuilder) : body;
 	}
 
 	/** The cached frozen source body of function `id`, when the cache has one for its source. */

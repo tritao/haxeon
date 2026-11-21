@@ -17,23 +17,20 @@ class IrValueConstructors {
 	/**
 	 * Expands `program`'s value constructor calls, on bodies made with `types` (those of the program's bodies when not given,
 	 * `IrTypeIds.ofFunctions`). A function that changes becomes its
-	 * edited body: a frozen copy when a session keeps the stage's functions (`retained`), else the body edited in place.
+	 * edited body, owned by the next stage: edited in place, or a copy when a cache holds the body.
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = true):Void {
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
-		new IrValueConstructors(scratch == null ? new IrPassScratch() : scratch).run(program, types, retained);
+		new IrValueConstructors(scratch == null ? new IrPassScratch() : scratch).run(program, types);
 	}
 
 	function new(scratch:IrPassScratch)
 		this.scratch = scratch;
 
-	function run(program:IrProgram, types:IrTypeIds, retained:Bool):Void {
+	function run(program:IrProgram, types:IrTypeIds):Void {
 		var builder = scratch.bodyBuilder;
-		var bodies = [for (fn in program.functions) fn.bodyIn(types, builder, retained)];
-		if (!retained)
-			for (fn in program.functions)
-				fn.releaseDecoded();
+		var bodies = [for (fn in program.functions) fn.bodyIn(types, builder)];
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		// Callees are frozen, or copies: the functions they were made from are edited in place below.
 		var constructors:Map<String, IrBody> = [],
@@ -80,8 +77,7 @@ class IrValueConstructors {
 		program.functions = [for (index in 0...bodies.length) {
 			var source = bodies[index],
 				body = expand(expandStraightLine(source, prepared, false), branches);
-			body == source ? program.functions[index] : retained ? IrFunction.ofBody(body.freeze(true,
-				builder)) : IrFunction.ofOwnedBody(body);
+			body == source ? program.functions[index] : IrFunction.ofOwnedBody(body);
 		}];
 	}
 

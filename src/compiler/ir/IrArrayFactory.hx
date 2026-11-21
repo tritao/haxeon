@@ -46,11 +46,11 @@ class IrArrayFactory {
 
 	/**
 	 * Emits the remaining allocation requests of `program`'s functions, on their bodies (made with `types`, those of the program's
-	 * bodies when not given). A function that changes becomes its edited body: a frozen copy when a session keeps the stage's
-	 * functions (`retained`), else the body edited in place. With a session's `cache`, a function given as the same object as last
-	 * compile is last compile's result: the lowering reads only the function.
+	 * bodies when not given). A function that changes becomes its edited body, owned by the next stage. With a session's `cache`,
+	 * a function given as the same object as last compile is last compile's result, which the cache keeps frozen: the lowering
+	 * reads only the function.
 	 */
-	public static function lower(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = true,
+	public static function lower(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch,
 			?cache:IrInlineCache):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
@@ -66,16 +66,21 @@ class IrArrayFactory {
 					typed = true;
 				continue;
 			}
-			var body = fn.bodyIn(types, builder, retained);
+			var body = fn.bodyIn(types, builder);
 			if (!requests(body, name))
 				continue;
+			// A session's cache keeps `fn` as its lowering's source, so the lowering is made on a copy.
+			if (cache != null)
+				body = fn.freezeBody(builder);
 			var edited = body.forEditing(builder), typedHere = emit(edited, name);
 			if (typedHere)
 				typed = true;
-			var result = retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+			var result = IrFunction.ofOwnedBody(edited);
 			functions[index] = result;
-			if (cache != null)
+			if (cache != null) {
+				result.freezeBody(builder);
 				next.set(fn.name, {source: fn, result: result, typed: typedHere});
+			}
 		}
 		if (cache != null)
 			cache.arrayFactories = next;

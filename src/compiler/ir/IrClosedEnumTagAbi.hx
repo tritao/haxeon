@@ -12,37 +12,32 @@ class IrClosedEnumTagAbi {
 	final closed:Map<String, Bool>;
 	final types:IrTypeIds;
 	final builder:IrBodyBuilder;
-	final retained:Bool;
 
 	/** By type id: 1 when the type changes, 0 when not, -1 when not yet known. */
 	final changing:Array<Int> = [];
 
-	function new(closed:Map<String, Bool>, types:IrTypeIds, builder:IrBodyBuilder, retained:Bool) {
+	function new(closed:Map<String, Bool>, types:IrTypeIds, builder:IrBodyBuilder) {
 		this.closed = closed;
 		this.types = types;
 		this.builder = builder;
-		this.retained = retained;
 	}
 
 	/**
 	 * `program` with the closed tags projected, read from the functions' bodies, made with `types` (those of the program's bodies
-	 * when not given). A function that changes becomes its edited body: a frozen copy when a session keeps the stage's functions
-	 * (`retained`), else the body edited in place.
+	 * when not given). A function that changes becomes its edited body: owned by the next stage: edited in
+	 * place, or a copy when a cache holds the body.
 	 */
 	public static function run(program:IrProgram, ?reflectableObjects:Array<String>, ?types:IrTypeIds,
-			?scratch:IrPassScratch, retained = true):IrProgram {
+			?scratch:IrPassScratch):IrProgram {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		var builder = scratch == null ? new IrBodyBuilder(types) : scratch.bodyBuilder;
 		for (fn in program.functions)
-			fn.bodyIn(types, builder, retained);
-		if (!retained)
-			for (fn in program.functions)
-				fn.releaseDecoded();
+			fn.bodyIn(types, builder);
 		var closed = select(program, types, builder, reflectableObjects);
 		if (!closed.keys().hasNext())
 			return program;
-		var pass = new IrClosedEnumTagAbi(closed, types, builder, retained);
+		var pass = new IrClosedEnumTagAbi(closed, types, builder);
 		return pass.project(program);
 	}
 
@@ -203,7 +198,7 @@ class IrClosedEnumTagAbi {
 		var result = new IrProgram(program.entryPoint);
 		result.natives = [for (native in program.natives) projectNative(native)];
 		result.cNatives = [for (native in program.cNatives) projectCNative(native)];
-		result.functions = [for (fn in program.functions) projectFunction(fn, fn.bodyIn(types, builder, retained))];
+		result.functions = [for (fn in program.functions) projectFunction(fn, fn.bodyIn(types, builder))];
 		// Only the selected tag carriers change; native placement and optional payload widths stay intact.
 		result.objects = [for (object in program.objects)
 			{
@@ -280,7 +275,7 @@ class IrClosedEnumTagAbi {
 			}
 		}
 		body.setResult(body.typeId(physical(types.type(body.result))));
-		return retained ? IrFunction.ofBody(body.freeze(true, builder)) : IrFunction.ofOwnedBody(body);
+		return IrFunction.ofOwnedBody(body);
 	}
 
 	function projectNative(native:IrNative):IrNative

@@ -688,10 +688,9 @@ class IrProgramAssembler {
 		if (cache == null)
 			throw new InternalError("The runtime surface reads bodies, whose type ids are the inline cache's");
 		var types = cache.types,
-			builder = context.passScratch.bodyBuilder,
-			retained = context.options.keepSession;
+			builder = context.passScratch.bodyBuilder;
 		for (index in 0...allFunctions.length) {
-			var body = allFunctions[index].bodyIn(types, builder, retained), callsCNatives = false;
+			var body = allFunctions[index].bodyIn(types, builder), callsCNatives = false;
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
@@ -763,7 +762,7 @@ class IrProgramAssembler {
 				// The function stops being the one the assembly holds, whose array may be a cache's.
 				if (allFunctions == assembly.functions)
 					allFunctions = allFunctions.copy();
-				allFunctions[index] = cNativeCalls(body, cNativeNames, builder, retained);
+				allFunctions[index] = cNativeCalls(body, cNativeNames, builder);
 			}
 		}
 		program.interfaces = interfaces == null ? [] : interfaces;
@@ -1103,9 +1102,8 @@ class IrProgramAssembler {
 		return program;
 	}
 
-	/** `body`'s function with its calls of C natives (`names`) made C native calls: a frozen copy when `retained`, else in place. */
-	static function cNativeCalls(body:IrBody, names:Map<String, Bool>, builder:IrBodyBuilder,
-			retained:Bool):IrFunction {
+	/** `body`'s function with its calls of C natives (`names`) made C native calls: in place, or on a copy when a cache holds the body. */
+	static function cNativeCalls(body:IrBody, names:Map<String, Bool>, builder:IrBodyBuilder):IrFunction {
 		var edited = body.forEditing(builder);
 		for (block in 0...edited.blockCount()) {
 			var row = edited.firstRow(block);
@@ -1115,7 +1113,7 @@ class IrProgramAssembler {
 				row = edited.nextRow(row);
 			}
 		}
-		return retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+		return IrFunction.ofOwnedBody(edited);
 	}
 
 	/** Add the concrete storage operations required by dynamic array views. */

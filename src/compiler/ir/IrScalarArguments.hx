@@ -45,7 +45,6 @@ class IrScalarArguments {
 	final resolution:IrMethodResolution;
 	final types:IrTypeIds;
 	final scratch:IrPassScratch;
-	final retained:Bool;
 	final argumentsOnly:Bool;
 	final byName:Map<String, IrFunction>;
 	final candidates:Map<String, IrBody> = [];
@@ -57,27 +56,25 @@ class IrScalarArguments {
 	/**
 	 * Splits value joins and rewrites `program`'s functions and calls for the scalar ABI, on bodies made with `types` (those of
 	 * the program's bodies when not given, `IrTypeIds.ofFunctions`), which this stage encodes when it is the pipeline's first over
-	 * bodies. A function that changes becomes its edited body: a frozen copy when a session keeps the stage's functions
-	 * (`retained`), else the body edited in place. With `argumentsOnly` (Wasm), no result slots and no receiver checks.
+	 * bodies. A function that changes becomes its edited body: owned by the next stage: edited in
+	 * place, or a copy when a cache holds the body. With `argumentsOnly` (Wasm), no result slots and no receiver checks.
 	 */
 	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false, ?types:IrTypeIds,
-			?scratch:IrPassScratch,
-			retained = true):Void {
+			?scratch:IrPassScratch):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		// Call rewriting judges value arguments by their uses, which a value join hides.
-		IrValuePhiScalarization.rewriteBodies(program, types, scratch, retained);
-		new IrScalarArguments(program, argumentsOnly, types, scratch, retained).run();
+		IrValuePhiScalarization.rewriteBodies(program, types, scratch);
+		new IrScalarArguments(program, argumentsOnly, types, scratch).run();
 	}
 
-	function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch, retained:Bool) {
+	function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch) {
 		this.program = program;
 		this.argumentsOnly = argumentsOnly;
 		this.types = types;
 		this.scratch = scratch;
-		this.retained = retained;
 		objects = [for (object in program.objects) object.name => object];
 		table = IrObjectTable.of(objects);
 		layouts = new IrInlineValueLayout(table);
@@ -86,10 +83,7 @@ class IrScalarArguments {
 	}
 
 	function run():Void {
-		var bodies = [for (fn in program.functions) fn.bodyIn(types, scratch.bodyBuilder, retained)];
-		if (!retained)
-			for (fn in program.functions)
-				fn.releaseDecoded();
+		var bodies = [for (fn in program.functions) fn.bodyIn(types, scratch.bodyBuilder)];
 		// Typed closure signatures are an ABI decision, including forwarding closures.
 		// Keep their scalar entry points available before IrScalarClosures rewrites
 		// indirect calls; judging those calls against the boxed ABI here creates a
@@ -257,7 +251,7 @@ class IrScalarArguments {
 			}
 		}
 		for (fn in rewritten)
-			discover(fn.bodyIn(types, scratch.bodyBuilder, retained));
+			discover(fn.bodyIn(types, scratch.bodyBuilder));
 		while (pending.length > 0) {
 			var name = pending.pop(), dependency = pinnedByName.get(name);
 			if (dependency == null)
@@ -323,7 +317,7 @@ class IrScalarArguments {
 
 	/** The function a clone this stage made is: frozen when a session keeps it. */
 	function publish(body:IrBody):IrFunction
-		return retained ? IrFunction.ofBody(body.freeze(true, scratch.bodyBuilder)) : IrFunction.ofOwnedBody(body);
+		return IrFunction.ofOwnedBody(body);
 
 	/** `fn`, whose body is `body`, with its direct calls to candidates redirected: `fn` itself when it has none. */
 	function rewriteFunction(fn:IrFunction, body:IrBody):IrFunction {
@@ -334,7 +328,7 @@ class IrScalarArguments {
 		if (edited != body)
 			plans = planCalls(edited);
 		applyCalls(edited, plans);
-		return retained ? IrFunction.ofBody(edited.freeze(true, scratch.bodyBuilder)) : IrFunction.ofOwnedBody(edited);
+		return IrFunction.ofOwnedBody(edited);
 	}
 
 	/** Redirects the direct calls of `body`, which this stage owns, in place. */

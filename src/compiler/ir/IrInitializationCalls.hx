@@ -20,12 +20,11 @@ class IrInitializationCalls {
 	final globals:Map<String, Array<String>> = [];
 	final returns:Map<String, Array<String>> = [];
 
-	/** `program` read as its bodies made with `types`, encoding a function that has none (frozen when `retained`). */
-	public function new(program:Array<IrFunction>, types:IrTypeIds, ?objects:Array<IrObject>, ?builder:IrBodyBuilder,
-			retained = true) {
+	/** `program` read as its bodies made with `types`, encoding a function that has none. */
+	public function new(program:Array<IrFunction>, types:IrTypeIds, ?objects:Array<IrObject>, ?builder:IrBodyBuilder) {
 		this.objects = objects == null ? [] : [for (object in objects) object.name => object];
 		objectList = objects == null ? [] : objects;
-		bodies = [for (fn in program) fn.name => fn.bodyIn(types, builder, retained)];
+		bodies = [for (fn in program) fn.name => fn.bodyIn(types, builder)];
 		for (fn in program) {
 			var dot = fn.name.lastIndexOf(".");
 			if (dot < 0)

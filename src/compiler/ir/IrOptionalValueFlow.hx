@@ -38,10 +38,10 @@ class IrOptionalValueFlow {
 	/**
 	 * `functions` followed by the copy, box and unbox helpers their calls name, built as functions. The calls are read from the
 	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none
-	 * (frozen when `retained`).
+	 *.
 	 */
 	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, ?types:IrTypeIds,
-			?builder:IrBodyBuilder, retained = true):Array<IrFunction> {
+			?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object];
@@ -49,7 +49,7 @@ class IrOptionalValueFlow {
 			boxes:Map<String, Bool> = [],
 			unboxes:Map<String, Bool> = [];
 		for (fn in functions) {
-			var body = fn.bodyIn(types, builder, retained);
+			var body = fn.bodyIn(types, builder);
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {

@@ -9,10 +9,10 @@ import compiler.ir.Ir;
 class IrValueArrayScalarLowering {
 	/**
 	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s. A function that
-	 * changes becomes its edited body: a frozen copy when a session keeps the stage's functions (`retained`), else edited in place.
+	 * changes becomes its edited body, edited in place when the stage owns it, else on a copy.
 	 */
 	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool, types:IrTypeIds,
-			scratch:IrPassScratch, retained:Bool):Void {
+			scratch:IrPassScratch):Void {
 		var builder = scratch.bodyBuilder;
 		// The helpers as they are before any expansion: a helper's own body may be expanded in place below.
 		var helpers:Map<String, IrBody> = [];
@@ -23,7 +23,7 @@ class IrValueArrayScalarLowering {
 				&& (expandAll
 				|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "optional-")
 				|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "iterator-next:"))) {
-				var body = fn.bodyIn(types, builder, retained);
+				var body = fn.bodyIn(types, builder);
 				helpers.set(fn.name, body.frozen ? body : IrBodyBuilder.copy(body, builder));
 			}
 		if (!helpers.keys().hasNext())
@@ -31,11 +31,10 @@ class IrValueArrayScalarLowering {
 		var functions = program.functions;
 		for (index in 0...functions.length) {
 			var fn = functions[index],
-				body = fn.bodyIn(types, builder, retained),
+				body = fn.bodyIn(types, builder),
 				edited = rewriteBody(body, helpers, scratch);
 			if (edited != body)
-				functions[index] = retained
-					? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+				functions[index] = IrFunction.ofOwnedBody(edited);
 		}
 	}
 

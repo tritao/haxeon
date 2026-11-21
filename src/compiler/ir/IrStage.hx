@@ -59,6 +59,18 @@ class IrStageHooks {
 			IrEntryPrune.watching(context.checkPrune ? new IrPruneWatch(context.pruned, context.prunedMethods) : null);
 		}
 	}
+
+	/**
+	 * After a stage that ran: in a compile that keeps no session, a function that has a body keeps only its body, the objects
+	 * the stage made it from or decoded to read it included. A session keeps them while a cache before the encode point reads them.
+	 */
+	public static function release(functions:Array<IrFunction>, context:IrPipelineContext):Void {
+		if (context.options.keepSession)
+			return;
+		for (fn in functions)
+			if (fn.body != null)
+				fn.releaseDecoded();
+	}
 }
 
 /** A stage of the program under assembly. */
@@ -110,6 +122,7 @@ class IrStageList {
 					meter.stop(stage.name, before);
 				} else
 					program = stage.run(program, context);
+				IrStageHooks.release(program.functions, context);
 			}
 		}
 		return program;
@@ -142,6 +155,7 @@ class IrAssemblyStageList {
 						meter.stop(stage.name, before);
 					} else
 						assembly = stage.run(assembly, context);
+					IrStageHooks.release(assembly.functions, context);
 				}
 				IrStageHooks.after(stage, assembly.functions, context);
 				watches = watches || stage.prunePoint;

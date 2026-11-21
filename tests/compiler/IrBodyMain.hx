@@ -565,8 +565,7 @@ class IrBodyMain {
 			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch, false, true));
 		sameStage("scalar replacement stage", construct,
 			compiler.ir.IrScalarReplacement.rewrite(construct, objects, false, true),
-			(fn, types, scratch) -> compiler.ir.IrScalarReplacement.rewriteBody(fn, objects, types, scratch, true,
-			false));
+			(fn, types, scratch) -> compiler.ir.IrScalarReplacement.rewriteBody(fn, objects, types, scratch, true));
 	}
 
 	/** A value copy passed to a callee that only reads it is replaced by its source, and the callee is consulted. */

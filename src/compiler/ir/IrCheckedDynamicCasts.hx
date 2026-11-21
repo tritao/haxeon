@@ -45,12 +45,11 @@ class IrCheckedDynamicCasts {
 
 	/**
 	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types`: a checked cast becomes a call of its
-	 * helper in place, on a copy of the body (a frozen copy when a session keeps the stage's functions, `retained`, else the body
-	 * itself). The helpers are built as functions and encoded.
+	 * helper in place, in the body itself, or a copy when a cache holds it. The helpers are built as functions and encoded.
 	 */
 	public static function rewriteBodies(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool,
 			existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool, checkFunctionCasts:Bool, types:IrTypeIds,
-			builder:IrBodyBuilder, retained:Bool):Array<IrFunction> {
+			builder:IrBodyBuilder):Array<IrFunction> {
 		var pass = new IrCheckedDynamicCasts(functions, objects, checkObjects, existingFunctions, checkValueObjects,
 			checkFunctionCasts);
 		var dyn = types.id(Dyn), rewritten:Array<IrFunction> = [];
@@ -59,7 +58,7 @@ class IrCheckedDynamicCasts {
 				&& body.valueTypeId(body.operand(row, 0)) == dyn
 				&& pass.target(body.valueType(body.output(row))) != null;
 		for (fn in functions) {
-			var body = fn.bodyIn(types, builder, retained), found = false;
+			var body = fn.bodyIn(types, builder), found = false;
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0 && !found) {
@@ -81,7 +80,7 @@ class IrCheckedDynamicCasts {
 					row = edited.nextRow(row);
 				}
 			}
-			rewritten.push(retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited));
+			rewritten.push(IrFunction.ofOwnedBody(edited));
 		}
 		return rewritten.concat(pass.generated);
 	}

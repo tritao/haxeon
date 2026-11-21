@@ -17,10 +17,10 @@ class IrNullableScalarFlow {
 	public static inline final CALL_PREFIX = "$nullable-scalar:arguments:";
 
 	/**
-	 * Rewrites `program`'s functions, reading them as bodies made with `types` (`IrTypeIds.ofFunctions` when not given): the
-	 * bodies are frozen and compacted when `retained` past this compile, else the next stage's own (`IrFunction.ofOwnedBody`).
+	 * Rewrites `program`'s functions, reading them as bodies made with `types` (`IrTypeIds.ofFunctions` when not given): a
+	 * function that changes becomes its edited body, owned by the next stage (`IrFunction.ofOwnedBody`).
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = false):Void {
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
@@ -42,15 +42,15 @@ class IrNullableScalarFlow {
 		while (changed) {
 			changed = false;
 			for (name in [for (name in candidates.keys()) name])
-				if (!flow.analyze(candidates.get(name).bodyIn(types, builder, retained), true)) {
+				if (!flow.analyze(candidates.get(name).bodyIn(types, builder), true)) {
 					candidates.remove(name);
 					changed = true;
 				}
 		}
-		program.functions = [for (fn in originals) rewritten(flow, fn, types, builder, retained, false)];
+		program.functions = [for (fn in originals) rewritten(flow, fn, types, builder, false)];
 		for (fn in originals)
 			if (candidates.exists(fn.name))
-				program.functions.push(rewritten(flow, fn, types, builder, retained, true));
+				program.functions.push(rewritten(flow, fn, types, builder, true));
 		var names = [for (name in checks.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -93,12 +93,12 @@ class IrNullableScalarFlow {
 
 	/** `fn` with its nullable scalars split, or its specialization (`clone`); `fn` itself when nothing changes. */
 	static function rewritten(flow:IrBodyNullableScalars, fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
-			retained:Bool, clone:Bool):IrFunction {
-		var body = fn.bodyIn(types, builder, retained);
+			clone:Bool):IrFunction {
+		var body = fn.bodyIn(types, builder);
 		if (!flow.analyze(body, clone) || !flow.splits())
 			return fn;
 		var built = flow.build(body, builder, clone);
-		return retained ? IrFunction.ofBody(built.freeze(true, builder)) : IrFunction.ofOwnedBody(built);
+		return IrFunction.ofOwnedBody(built);
 	}
 
 	/** Nullable argument expansion preserves an existing scalar result/stack-reference ABI. */

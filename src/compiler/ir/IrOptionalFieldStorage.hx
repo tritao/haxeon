@@ -103,12 +103,10 @@ class IrOptionalFieldStorage {
 	/**
 	 * Replace logical reads and writes, including generated reflection operations, with field-specific accessors. On IR bodies
 	 * (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the functions' bodies when not given): a function
-	 * that changes becomes its edited body, frozen when a session keeps the stage's functions (`retained`), else owned by the next
-	 * stage. The accessors and the value methods specialized to a field path (still cloned from their decoding) are built as
+	 * that changes becomes its edited body, owned by the next stage. The accessors and the value methods specialized to a field path (still cloned from their decoding) are built as
 	 * functions and encoded.
 	 */
-	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
-			retained = true):Array<IrFunction> {
+	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
 		var all = functions.copy();
@@ -140,7 +138,7 @@ class IrOptionalFieldStorage {
 			generated:Map<String, Bool> = [];
 		var index = 0;
 		while (index < all.length) {
-			var body = all[index++].bodyIn(types, builder, retained);
+			var body = all[index++].bodyIn(types, builder);
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
@@ -159,11 +157,11 @@ class IrOptionalFieldStorage {
 			}
 		}
 		return [for (fn in all) {
-			var body = fn.bodyIn(types, builder, retained);
+			var body = fn.bodyIn(types, builder);
 			if (needsRewrite(body)) {
 				var edited = body.forEditing(builder);
 				rewriteBody(edited);
-				retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+				IrFunction.ofOwnedBody(edited);
 			} else fn;
 		}];
 	}

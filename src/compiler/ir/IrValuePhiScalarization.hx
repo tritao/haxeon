@@ -6,18 +6,17 @@ import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 
 /** Split a value phi into scalar snapshots when every incoming value is known to exist. */
 class IrValuePhiScalarization {
-	/** `rewriteBodies` with the program's type ids (`IrTypeIds.ofFunctions`) and fresh scratch, keeping every function's body frozen. */
+	/** `rewriteBodies` with the program's type ids (`IrTypeIds.ofFunctions`) and fresh scratch, the result owned by the next stage. */
 	public static function rewrite(program:IrProgram):Void
-		rewriteBodies(program, IrTypeIds.ofFunctions(program.functions), new IrPassScratch(), true);
+		rewriteBodies(program, IrTypeIds.ofFunctions(program.functions), new IrPassScratch());
 
 	/**
 	 * Splits the value phis of `program`'s functions on bodies (docs/design/IR_CORE_COLUMNS.md, migration): each function is read as its body (`bodyIn` with `types`),
-	 * which this stage encodes when it is the pipeline's first over bodies. A function that changes becomes its edited body: a
-	 * frozen copy when a session keeps the stage's functions (`retained`), else the body edited in place; one nothing changes
+	 * which this stage encodes when it is the pipeline's first over bodies. A function that changes becomes its edited body: owned by
+	 * the next stage (edited in place, or a copy when a cache holds the body); one nothing changes
 	 * stays the same object.
 	 */
-	public static function rewriteBodies(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch,
-			retained:Bool):Void {
+	public static function rewriteBodies(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects),
 			layouts = new IrInlineValueLayout(table),
@@ -27,17 +26,15 @@ class IrValuePhiScalarization {
 			];
 		program.functions = [
 			for (fn in program.functions)
-				rewriteBody(fn, objects, table, layouts, packets, types, scratch, retained)
+				rewriteBody(fn, objects, table, layouts, packets, types, scratch)
 		];
 	}
 
 	/** `runBody` on `fn`'s body: `fn` itself when nothing changes. */
 	public static function rewriteBody(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable,
-			layouts:IrInlineValueLayout, alwaysPresent:Null<Map<String, Bool>>, types:IrTypeIds, scratch:IrPassScratch,
-			retained:Bool):IrFunction {
-		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder, retained);
-		if (!retained)
-			fn.releaseDecoded();
+			layouts:IrInlineValueLayout, alwaysPresent:Null<Map<String, Bool>>, types:IrTypeIds,
+			scratch:IrPassScratch):IrFunction {
+		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder);
 		if (!hasValuePhi(body, objects))
 			return fn;
 		var edited = body.forEditing(builder), before = edited.edits;
@@ -45,7 +42,7 @@ class IrValuePhiScalarization {
 		if (result == edited && edited.edits == before)
 			return fn;
 		result.keepNamedValues(scratch.namedValues);
-		return retained ? IrFunction.ofBody(result.freeze(true, builder)) : IrFunction.ofOwnedBody(result);
+		return IrFunction.ofOwnedBody(result);
 	}
 
 	/**

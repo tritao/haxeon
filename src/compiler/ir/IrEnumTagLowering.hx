@@ -322,29 +322,29 @@ class IrEnumTagLowering {
 				changedFunctions.push(rewrittenFunction);
 				rewrittenFunction;
 			}];
-		var retained:Map<String, Bool> = [];
-		retained.set(program.entryPoint, true);
+		var kept:Map<String, Bool> = [];
+		kept.set(program.entryPoint, true);
 		for (fn in program.functions.concat(generated)) {
 			if (fn.retention != Reachable)
-				retained.set(fn.name, true);
+				kept.set(fn.name, true);
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _):
-							retained.set(name.name, true);
+							kept.set(name.name, true);
 						default:
 					}
 		}
 		for (object in program.objects)
 			for (method in object.methods)
-				retained.set(method.functionName.name, true);
+				kept.set(method.functionName.name, true);
 		for (native in program.natives)
 			if (native.generatedFunctionDependencies != null)
 				for (name in native.generatedFunctionDependencies)
-					retained.set(name, true);
+					kept.set(name, true);
 		program.functions = [
 			for (fn in program.functions)
-				if (!tagEqualities.exists(fn.name) || retained.exists(fn.name)) fn
+				if (!tagEqualities.exists(fn.name) || kept.exists(fn.name)) fn
 		];
 		program.functions = program.functions.concat(generated);
 		// Only rewritten definitions can introduce tag escapes. Finish that representation transition
@@ -374,10 +374,10 @@ class IrEnumTagLowering {
 	/**
 	 * `escapes` on bodies, at the end of assembly (the conversion point, docs/design/IR_CORE_COLUMNS.md) and as the pipeline's
 	 * last check before the inliner: each function is read as its body (`bodyIn` with
-	 * `types`), and one that changes becomes its edited body: a frozen copy when a session keeps the stage's functions
-	 * (`retained`), else the body edited in place. A function nothing changes stays the same object.
+	 * `types`), and one that changes becomes its edited body: owned by the next stage: edited in
+	 * place, or a copy when a cache holds the body. A function nothing changes stays the same object.
 	 */
-	public static function escapeBodies(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder, retained:Bool):Void {
+	public static function escapeBodies(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder):Void {
 		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions),
 			adapterEnums:Map<String, String> = [];
 		var symbols = IrEnumTagStorage.adapterNames(program);
@@ -399,14 +399,13 @@ class IrEnumTagLowering {
 			unboxNames);
 		var functions = program.functions, result:Null<Array<IrFunction>> = null;
 		for (index in 0...functions.length) {
-			var fn = functions[index], body = fn.bodyIn(types, builder, retained);
+			var fn = functions[index], body = fn.bodyIn(types, builder);
 			if (walk.rewrite(body, false)) {
 				var edited = body.forEditing(builder);
 				walk.rewrite(edited, true);
 				if (result == null)
 					result = functions.copy();
-				var replacement = retained
-					? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+				var replacement = IrFunction.ofOwnedBody(edited);
 				result[index] = replacement;
 				existing.set(fn.name, replacement);
 			}

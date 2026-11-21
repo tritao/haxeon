@@ -90,9 +90,9 @@ enum IrFunctionKind {
  * and the blocks and debug bindings are decoded from it the first time something reads them, once. A function is never changed
  * once made, so a body a reader encodes for it (`bodyIn`) stays its own.
  *
- * Between the stages that read bodies, in a compile that keeps no session, no cache holds a function's body, so it is not
- * frozen (`ofOwnedBody`, `bodyIn` not `retained`): the stage after the one that made it owns it and edits it in place, and a
- * function made from the edited body replaces this one, which is not read again.
+ * Between the stages that read bodies a function's body is not frozen unless a cache holds the function (`freezeBody`): the
+ * stage after the one that made it owns it (`ofOwnedBody`, `bodyIn`) and edits it in place, and a function made from the edited
+ * body replaces this one, which is not read again. A stage given a frozen body edits a copy.
  */
 @:allow(compiler.ir.IrBody)
 class IrFunction {
@@ -154,19 +154,33 @@ class IrFunction {
 	}
 
 	/**
-	 * This function's body: the one it is, or else its encoding with `types`, kept, so it is made once: frozen when `retained`,
-	 * else owned by the stages over bodies, which edit it in place.
+	 * This function's body: the one it is, or else its encoding with `types`, kept, so it is made once. An encoding is owned by
+	 * the stages over bodies, which edit it in place, until a cache takes the function (`freezeBody`).
 	 */
-	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder, retained = true):IrBody {
+	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
 		var known = body;
 		// A body is read with its own table (`IrBody.types`), whichever `types` is asked for; splicing rows and comparing bodies
 		// across tables is checked where it happens (the inliner's sources, `IrFunctionStateEquality.sameBodies`).
 		if (known != null)
 			return known;
-		var encoded = IrBodyBuilder.encode(this, types, builder),
-			made = retained ? encoded.freeze(true) : encoded;
-		body = made;
-		return made;
+		var encoded = IrBodyBuilder.encode(this, types, builder);
+		body = encoded;
+		return encoded;
+	}
+
+	/**
+	 * Freezes this function's body, compacted when edits left garbage, for a cache that keeps the function past this compile: a
+	 * stage that is given it then edits a copy (`IrBody.forEditing`).
+	 */
+	public function freezeBody(?builder:IrBodyBuilder):IrBody {
+		var known = body;
+		if (known == null)
+			throw new InternalError('IR function $name has no body to freeze');
+		if (known.frozen)
+			return known;
+		var frozen = known.freeze(true, builder);
+		body = frozen;
+		return frozen;
 	}
 
 	/** Records `encoded`, a frozen body made from this function, as its body, unless it has one. */

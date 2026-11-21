@@ -362,8 +362,7 @@ class IrPipeline {
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var input = assembly.functions;
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
-			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder,
-			context.options.keepSession);
+			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder);
 		assembly.functions = stableChanged("inline-enum-lowering", input, enumOutput.functions, context);
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;
@@ -376,21 +375,19 @@ class IrPipeline {
 	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var objects = assembly.objects,
 			types = bodyTypes(context),
-			builder = context.passScratch.bodyBuilder,
-			retained = context.options.keepSession;
-		var functions = new IrOptionalScalarFlow(objects).rewrite(objects, assembly.functions, types, builder,
-			retained);
+			builder = context.passScratch.bodyBuilder;
+		var functions = new IrOptionalScalarFlow(objects).rewrite(objects, assembly.functions, types, builder);
 		// The copy, box and unbox helpers the rewritten calls name.
-		functions = IrOptionalValueFlow.addHelpers(functions, objects, types, builder, retained);
+		functions = IrOptionalValueFlow.addHelpers(functions, objects, types, builder);
 		assembly.functions = encodeMade("optional-scalar-flow", functions, context);
 		return assembly;
 	}
 
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var cache = context.inlineCache;
+		// The checked copies are kept, frozen, only in a session.
+		var cache = context.options.keepSession ? context.inlineCache : null;
 		assembly.functions = IrStaticNullChecks.run(assembly.functions, assembly.objects,
-			cache == null ? null : cache.staticChecks, bodyTypes(context), context.passScratch.bodyBuilder,
-			context.options.keepSession);
+			cache == null ? null : cache.staticChecks, bodyTypes(context), context.passScratch.bodyBuilder);
 		return assembly;
 	}
 
@@ -456,19 +453,24 @@ class IrPipeline {
 			return output;
 		}
 		var stable = cache.stableGenerated(stage, changed);
+		for (fn in stable)
+			fn.freezeBody(context.passScratch.bodyBuilder);
 		if (changed.length == 0)
 			return output;
 		var index = 0;
 		return [for (fn in output) given.get(fn.name) != fn ? stable[index++] : fn];
 	}
 
+	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
 		var types = bodyTypes(context),
 			builder = context.passScratch.bodyBuilder,
 			retained = context.options.keepSession;
 		for (fn in functions) {
-			fn.bodyIn(types, builder, retained);
-			if (!retained)
+			fn.bodyIn(types, builder);
+			if (retained)
+				fn.freezeBody(builder);
+			else
 				fn.releaseDecoded();
 		}
 	}
@@ -483,7 +485,7 @@ class IrPipeline {
 			var existing = functions.slice(0, start);
 			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies(functions.slice(start),
 				assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing, true, true,
-				bodyTypes(context), context.passScratch.bodyBuilder, context.options.keepSession));
+				bodyTypes(context), context.passScratch.bodyBuilder));
 		}
 		return assembly;
 	}
@@ -492,7 +494,7 @@ class IrPipeline {
 		var optionalStorage = new IrOptionalFieldStorage(assembly.objects);
 		if (optionalStorage.hasFields()) {
 			assembly.functions = optionalStorage.rewrite(assembly.functions, bodyTypes(context),
-				context.passScratch.bodyBuilder, context.options.keepSession);
+				context.passScratch.bodyBuilder);
 			assembly.objects = optionalStorage.physicalObjects(assembly.objects);
 		}
 		return assembly;
@@ -517,7 +519,7 @@ class IrPipeline {
 	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		assembly.functions = new IrNullableScalarFields(assembly.objects).rewrite(assembly.functions,
 			bodyTypes(context),
-			context.passScratch.bodyBuilder, context.options.keepSession);
+			context.passScratch.bodyBuilder);
 		return assembly;
 	}
 
@@ -530,23 +532,20 @@ class IrPipeline {
 		var program = assembly.program;
 		if (program == null)
 			throw new InternalError("The enum tag escapes run on the finished program");
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder,
-			context.options.keepSession);
+		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
 		return assembly;
 	}
 
 	// Target stages.
 
 	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram {
-		return IrClosedEnumTagAbi.run(program, context.reflectable, bodyTypes(context), context.passScratch,
-			context.options.keepSession);
+		return IrClosedEnumTagAbi.run(program, context.reflectable, bodyTypes(context), context.passScratch);
 	}
 
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
-		var retained = context.options.keepSession;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
-			bodyTypes(context), context.passScratch, retained, retained ? context.inlineCache : null);
+			bodyTypes(context), context.passScratch, context.options.keepSession ? context.inlineCache : null);
 		return program;
 	}
 
@@ -555,31 +554,30 @@ class IrPipeline {
 	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValueConstructors.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
+		IrValueConstructors.rewrite(program, bodyTypes(context), context.passScratch);
 		return program;
 	}
 
 	/** The last value phi scalarization before scalar replacement. */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch,
-			context.options.keepSession);
+		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch);
 		return program;
 	}
 
 	/** Wasm's scalar argument ABI, with value lanes. */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, true, bodyTypes(context), context.passScratch, context.options.keepSession);
+		IrScalarArguments.rewrite(program, true, bodyTypes(context), context.passScratch);
 		return program;
 	}
 
 	/** HashLink's scalar argument and result ABI. */
 	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, false, bodyTypes(context), context.passScratch, context.options.keepSession);
+		IrScalarArguments.rewrite(program, false, bodyTypes(context), context.passScratch);
 		return program;
 	}
 
 	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
+		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch);
 		return program;
 	}
 
@@ -591,24 +589,22 @@ class IrPipeline {
 	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var scalarObjects = context.scalarObjects,
 			hashLink = !context.isWasm(),
-			types = bodyTypes(context),
-			retained = context.options.keepSession;
+			types = bodyTypes(context);
 		program.functions = [
 			for (fn in program.functions)
-				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink, retained)
+				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink)
 		];
 		return program;
 	}
 
 	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrNullableScalarFlow.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
+		IrNullableScalarFlow.rewrite(program, bodyTypes(context), context.passScratch);
 		return program;
 	}
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
 	static function enumTagEscapes(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder,
-			context.options.keepSession);
+		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
 		return program;
 	}
 

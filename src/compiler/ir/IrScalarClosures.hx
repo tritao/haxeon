@@ -25,30 +25,28 @@ class IrScalarClosures {
 
 	final types:IrTypeIds;
 	final scratch:IrPassScratch;
-	final retained:Bool;
 
 	/** By value id, the type a `TypeValue` row of the function being rewritten names, before the rewrite. */
 	final typeValues:Map<Int, IrType> = [];
 
 	/**
 	 * Rewrites `program`'s functions as bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the
-	 * program's bodies when not given, `IrTypeIds.ofFunctions`). A function that changes becomes its edited body: a frozen copy
-	 * when a session keeps the stage's functions (`retained`), else the body edited in place.
+	 * program's bodies when not given, `IrTypeIds.ofFunctions`). A function that changes becomes its edited body: owned by the
+	 * next stage: edited in place, or a copy when a cache holds the body.
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = false):Void {
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
 		var pass = new IrScalarClosures(program, types == null ? IrTypeIds.ofFunctions(program.functions) : types,
-			scratch == null ? new IrPassScratch() : scratch, retained);
+			scratch == null ? new IrPassScratch() : scratch);
 		var bodies = [for (fn in program.functions) pass.bodyOf(fn)];
 		pass.discover(bodies);
 		if (pass.candidates.keys().hasNext())
 			pass.apply(bodies);
 	}
 
-	function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch, retained:Bool) {
+	function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch) {
 		this.program = program;
 		this.types = types;
 		this.scratch = scratch;
-		this.retained = retained;
 		objects = [for (object in program.objects) object.name => object];
 		for (declaration in program.enums)
 			if (declaration.inlineStorage != null)
@@ -59,9 +57,7 @@ class IrScalarClosures {
 
 	/** `fn`'s body, encoded when it has none; in a compile that keeps no session its objects go. */
 	function bodyOf(fn:IrFunction):IrBody {
-		var body = fn.bodyIn(types, scratch.bodyBuilder, retained);
-		if (!retained)
-			fn.releaseDecoded();
+		var body = fn.bodyIn(types, scratch.bodyBuilder);
 		return body;
 	}
 
@@ -417,7 +413,7 @@ class IrScalarClosures {
 		}
 		body.setResult(body.typeId(mapType(types.type(body.result))));
 		body.keepNamedValues(scratch.namedValues);
-		return retained ? IrFunction.ofBody(body.freeze(true, scratch.bodyBuilder)) : IrFunction.ofOwnedBody(body);
+		return IrFunction.ofOwnedBody(body);
 	}
 
 	/**

@@ -18,23 +18,21 @@ class IrNullableScalarFields {
 
 	/**
 	 * `functions` with their stores normalized, read as their bodies made with `types` (those of the functions' bodies when not
-	 * given): a function that changes becomes its edited body, frozen when a session keeps the stage's functions (`retained`),
-	 * else owned by the next stage; the normalizers come last.
+	 * given): a function that changes becomes its edited body, owned by the next stage; the normalizers come last.
 	 */
-	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
-			retained = true):Array<IrFunction> {
+	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
 		var rewritten:Array<IrFunction> = [];
 		for (fn in functions) {
-			var body = fn.bodyIn(types, builder, retained);
+			var body = fn.bodyIn(types, builder);
 			if (!needsRewrite(body)) {
 				rewritten.push(fn);
 				continue;
 			}
 			var edited = body.forEditing(builder);
 			rewriteBody(edited);
-			rewritten.push(retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited));
+			rewritten.push(IrFunction.ofOwnedBody(edited));
 		}
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);

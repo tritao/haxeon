@@ -18,7 +18,6 @@ private class ValueArrayFunctionIndex {
 	final none:Array<String> = [];
 
 	public final types:IrTypeIds;
-	public final retained:Bool;
 
 	final builder:IrBodyBuilder;
 	var summaries:Map<String, ValueArraySummary> = [];
@@ -33,10 +32,9 @@ private class ValueArrayFunctionIndex {
 	final enumKeys:Map<String, String> = [];
 	final tagKeys:Map<String, String> = [];
 
-	public function new(elements:Array<IrType>, types:IrTypeIds, builder:IrBodyBuilder, retained:Bool) {
+	public function new(elements:Array<IrType>, types:IrTypeIds, builder:IrBodyBuilder) {
 		this.types = types;
 		this.builder = builder;
-		this.retained = retained;
 		for (element in elements)
 			switch element {
 				case Obj(name):
@@ -53,7 +51,7 @@ private class ValueArrayFunctionIndex {
 
 	/** `fn`'s body: the one it is, or its encoding, kept. */
 	public inline function bodyOf(fn:IrFunction):IrBody
-		return fn.bodyIn(types, builder, retained);
+		return fn.bodyIn(types, builder);
 
 	public function originalFunctions(functions:Array<IrFunction>):Map<String, IrFunction> {
 		for (fn in functions)
@@ -155,21 +153,18 @@ class IrValueArrayProgramRewrite {
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. The functions' bodies are made
 	 * with `types` (those of the program's bodies when not given, `IrTypeIds.ofFunctions`); a function that changes becomes its
-	 * edited body, frozen when a session keeps the stage's functions (`retained`), else owned by the next stage. A session's
+	 * edited body, owned by the next stage. A session's
 	 * `cache` keeps the allocation lowering of the functions given as the same objects as last compile (`IrArrayFactory.lower`).
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget, ?types:IrTypeIds,
-			?scratch:IrPassScratch, retained = true, ?cache:IrInlineCache):Void {
+			?scratch:IrPassScratch, ?cache:IrInlineCache):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		var builder = scratch.bodyBuilder;
 		for (fn in program.functions)
-			fn.bodyIn(types, builder, retained);
-		if (!retained)
-			for (fn in program.functions)
-				fn.releaseDecoded();
+			fn.bodyIn(types, builder);
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			inlineEnums:Map<String, Bool> =
 				[for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
@@ -234,7 +229,7 @@ class IrValueArrayProgramRewrite {
 			visit(types.type(id));
 		}
 		for (fn in program.functions) {
-			var body = fn.bodyIn(types, builder, retained);
+			var body = fn.bodyIn(types, builder);
 			for (index in 0...body.argumentCount())
 				visitId(body.valueTypeId(body.argument(index)));
 			visitId(body.result);
@@ -252,29 +247,26 @@ class IrValueArrayProgramRewrite {
 		}
 		var keys = [for (key in elements.keys()) key];
 		keys.sort(Reflect.compare);
-		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)], types, builder, retained),
+		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)], types, builder),
 			slotNamespace = nextSlotNamespace(program);
 		for (key in keys)
 			rewriteIndexed(program, elements.get(key), pointerBits, target, index, slotNamespace++, scratch);
-		IrArrayFactory.lower(program, types, scratch, retained, cache);
+		IrArrayFactory.lower(program, types, scratch, cache);
 		IrVerifier.verifyValueArraysLowered(program, types);
 		encodeAll(program, index);
 	}
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
 		var types = IrTypeIds.ofFunctions(program.functions), scratch = new IrPassScratch();
-		var index = new ValueArrayFunctionIndex([element], types, scratch.bodyBuilder, true);
+		var index = new ValueArrayFunctionIndex([element], types, scratch.bodyBuilder);
 		rewriteIndexed(program, element, pointerBits, target, index, nextSlotNamespace(program), scratch);
 		encodeAll(program, index);
 	}
 
-	/** Every function has its body, the helpers generated here included; without a session, only the body. */
+	/** Every function has its body, the helpers generated here included. */
 	static function encodeAll(program:IrProgram, index:ValueArrayFunctionIndex):Void {
-		for (fn in program.functions) {
+		for (fn in program.functions)
 			index.bodyOf(fn);
-			if (!index.retained)
-				fn.releaseDecoded();
-		}
 	}
 
 	static function nextSlotNamespace(program:IrProgram):Int {
@@ -304,7 +296,6 @@ class IrValueArrayProgramRewrite {
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
 			originals = index.originalFunctions(program.functions),
 			builder = scratch.bodyBuilder,
-			retained = index.retained,
 			uses = scratch.firstInts,
 			rewritten:Null<Array<IrFunction>> = null;
 		switch element {
@@ -348,7 +339,7 @@ class IrValueArrayProgramRewrite {
 					changed = rewriteCasts(body, element, factory.retypeName()) || changed;
 				}
 				if (changed)
-					current = retained ? IrFunction.ofBody(body.freeze(true, builder)) : IrFunction.ofOwnedBody(body);
+					current = IrFunction.ofOwnedBody(body);
 			}
 			index.finish(current);
 			if (rewritten != null)
@@ -386,7 +377,7 @@ class IrValueArrayProgramRewrite {
 			if (slot.nullablePayload)
 				nullableScalars = true;
 		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars,
-			index.types, scratch, retained);
+			index.types, scratch);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
 		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives()))
 			if (!nativeNames.exists(native.name)) {

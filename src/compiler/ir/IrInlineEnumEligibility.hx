@@ -36,10 +36,10 @@ class IrInlineEnumEligibility {
 
 	/**
 	 * The enums of `program` that may be lowered to value packets, reading the functions' bodies made with `types` (those of the
-	 * functions' bodies when not given), encoding a function that has none (frozen when `retained`).
+	 * functions' bodies when not given), encoding a function that has none.
 	 */
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
-			?types:IrTypeIds, ?builder:IrBodyBuilder, retained = true) {
+			?types:IrTypeIds, ?builder:IrBodyBuilder) {
 		this.planner = planner;
 		var bodyTypes = types == null ? IrTypeIds.ofFunctions(program.functions) : types;
 		reflectionReach = new IrEnumEscapeReach(program);
@@ -157,7 +157,7 @@ class IrInlineEnumEligibility {
 			escape(native.result, "C native signature");
 		}
 		for (fn in program.functions)
-			scan(fn, fn.bodyIn(bodyTypes, builder, retained), program.entryPoint);
+			scan(fn, fn.bodyIn(bodyTypes, builder), program.entryPoint);
 		for (reason in escapeOrder)
 			for (name in reflectionReach.collect(escapeRoots.get(reason), supportsCallableEscape).keys()) block(name,
 				reason);

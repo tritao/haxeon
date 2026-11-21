@@ -141,7 +141,8 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 
 What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
 (the encode point is the assembly's `encode-bodies` stage, on every target). Every body a cache holds is
-frozen; a body no cache holds is the stages' own (`ofOwnedBody`) and exists only in a one-shot compile. Keys are function
+frozen, where the cache takes its function (`IrFunction.freezeBody`), the function a cache keeps as the source of an entry
+included; a body no cache holds is the stages' own (`ofOwnedBody`), in a session as in a one-shot compile. Keys are function
 names; reuse is by object identity of the `IrFunction` an entry was made from.
 
 - **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
@@ -155,7 +156,8 @@ names; reuse is by object identity of the `IrFunction` an entry was made from.
 - **Stages between the encode point and the inliner**: no cache of their own, but for the array factory's lowering in the
   value-array rewrite (`IrInlineCache.arrayFactories`, name → {source function, lowered function}): it edits every function
   that allocates an array, and reads only the function, so a function given as the same object is last build's result. A
-  function a stage changes is a frozen, compacted copy; one it leaves is the same object.
+  function a stage changes is its edited body, owned by the next stage (a copy when the stage was given a frozen one); one it
+  leaves is the same object.
 - **Inliner** (`IrInlineCache`): `sources` (name → the function it was given, deduplicated as above); `originals` (name →
   {source function, its frozen body}); `memo` (name → {source function, fingerprint, the functions and object prints it
   consulted, the inlined form as a frozen compacted body}); `cleaned` (name → {inlined form, cleaned function}); `published`
@@ -216,9 +218,9 @@ block ids (phi inputs, try blocks, branch targets) and two int arrays (`StaticDa
   the codec) is frozen; editing a frozen body is an internal error, and a pass that would change one changes a copy
   (`thaw`). The copy-on-write sharing of `IrFunctionRewrite` moves from blocks to functions: a thaw of a body no edit
   touched shares its columns until its first edit, so a pass that ends up changing nothing copies nothing. A body no cache
-  holds is not frozen: in a compile that keeps no session each stage hands the next its bodies unfrozen
-  (`IrFunction.ofOwnedBody`), and the next edits them in place (`forEditing`); the encode point lets go of the objects it
-  encoded. The inliner edits its sources in place unless one has a value copy (copy elision reads callees' source bodies),
+  holds is not frozen: each stage hands the next its bodies unfrozen (`IrFunction.ofOwnedBody`), in a session too, and the
+  next edits them in place (`forEditing`); a cache freezes what it takes (`IrFunction.freezeBody`). In a compile that keeps no
+  session the stage lists let go of the objects of every function that has a body after each stage (`IrStageHooks.release`). The inliner edits its sources in place unless one has a value copy (copy elision reads callees' source bodies),
   and cleans each function up once every function is inlined, so callers inline the form before cleanup without a copy.
 - **Compaction** rebuilds a body without unlinked rows or garbage runs, its rows in block order. It runs when a body is
   frozen and when the garbage passes half of its rows, never per edit.

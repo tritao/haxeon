@@ -11,15 +11,14 @@ import compiler.ir.Ir;
 class IrStaticNullChecks {
 	/**
 	 * `functions` read as their bodies made with `types` (those of the functions' bodies when not given): a function that gets
-	 * a check becomes its edited body, frozen when a session keeps the stage's functions (`retained`), else owned by the next
-	 * stage; the checks come last, encoded.
+	 * a check becomes its edited body, owned by the next stage; the checks come last, encoded.
 	 *
 	 * `cache` keeps each instrumented copy and helper alive between compiles, so a function that did not change comes out
 	 * as the same object; the inliner memoizes on function identity and would otherwise redo everything reachable from
 	 * initialization on every compile.
 	 */
 	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache,
-			?types:IrTypeIds, ?builder:IrBodyBuilder, retained = true):Array<IrFunction> {
+			?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
 		var helpers:Map<String, IrFunction> = [];
@@ -43,7 +42,7 @@ class IrStaticNullChecks {
 		var byName = new IrFunctionIndex("static-null-checks", functions),
 			reachable:Map<String, Bool> = [],
 			pending = ["__init"];
-		var execution = new IrInitializationCalls(functions, types, objects, builder, retained);
+		var execution = new IrInitializationCalls(functions, types, objects, builder);
 		while (pending.length > 0) {
 			var name = pending.pop();
 			if (reachable.exists(name) || !byName.exists(name))
@@ -62,9 +61,10 @@ class IrStaticNullChecks {
 					helpers.set(helperName, knownHelper);
 				else {
 					var created = check(helperName, name, valueType);
-					created.bodyIn(types, builder, retained);
-					if (!retained)
-						created.releaseDecoded();
+					created.bodyIn(types, builder);
+					// A session's cache keeps it.
+					if (cache != null)
+						created.freezeBody(builder);
 					helpers.set(helperName, created);
 					store.helpers.set(helperName, created);
 				}
@@ -84,7 +84,11 @@ class IrStaticNullChecks {
 				result.push(known.result);
 				continue;
 			}
-			var body = fn.bodyIn(types, builder, retained), origins = staticOrigins(body);
+			var body = fn.bodyIn(types, builder);
+			// A session's cache keeps `fn` as its copy's source, so the copy is made on a copy.
+			if (cache != null)
+				body = fn.freezeBody(builder);
+			var origins = staticOrigins(body);
 			var used:Map<String, Bool> = [], edited:Null<IrBody> = null, next = 0;
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
@@ -124,8 +128,9 @@ class IrStaticNullChecks {
 				}
 			}
 			// A function with no static receiver gets no check, and stays the frontend's own object.
-			var copied = edited == null ? fn : retained ? IrFunction.ofBody(edited.freeze(true,
-				builder)) : IrFunction.ofOwnedBody(edited);
+			var copied = edited == null ? fn : IrFunction.ofOwnedBody(edited);
+			if (cache != null && copied != fn)
+				copied.freezeBody(builder);
 			nextCopies.set(fn.name, {source: fn, result: copied, statics: [for (name in used.keys()) name]});
 			result.push(copied);
 		}

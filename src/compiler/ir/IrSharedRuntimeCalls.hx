@@ -87,7 +87,9 @@ class IrSharedRuntimeCalls {
 				result.functions.push(entry.result);
 				continue;
 			}
-			var body = fn.bodyIn(types, builder), calls:Array<SharedCall> = [];
+			// Frozen: a rewritten function shares its columns (`IrBody.withAuxes`).
+			fn.bodyIn(types, builder);
+			var body = fn.freezeBody(builder), calls:Array<SharedCall> = [];
 			rows.resize(0);
 			targets.resize(0);
 			for (block in 0...body.blockCount()) {
