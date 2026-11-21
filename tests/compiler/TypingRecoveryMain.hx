@@ -3,8 +3,8 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
- * Typing recovers from a failed body: it records the error, leaves the body out and types the next one, then fails with one error
- * per failed body, in the order the bodies were typed, and none caused by another failed body. A compiler that failed this way
+ * Typing recovers from a failed body: it records the error, leaves the body out and types the next one, then fails with the errors
+ * of each failed body (each statement's, as Haxe reports them), in the order the bodies were typed, and none caused by another failed body. A compiler that failed this way
  * builds the fixed program, warm or fresh.
  */
 class TypingRecoveryMain {
@@ -28,7 +28,8 @@ class TypingRecoveryMain {
 		'function usesFirst():Int return first() + identity(1);',
 		'function usesIdentity():Int return identity(2);',
 		'function readsC():Int { var c:Int = Box.c; return c + Box.d.length; }',
-		'function main():Int { var x:Bool = 5; return usesFirst() + usesIdentity() + readsC(); }'
+		'function main():Int { var x:Bool = 5; return usesFirst() + usesIdentity() + readsC(); }',
+		'function several(flag:Bool):Int { var p:Int = "a"; var q:String = p; if (flag) { var r:Bool = 1; } else { var t:Int = true; } return q.length; }'
 	].join("\n");
 
 	static final fixed = [
@@ -51,7 +52,8 @@ class TypingRecoveryMain {
 		'function usesFirst():Int return first() + identity(1);',
 		'function usesIdentity():Int return identity(2);',
 		'function readsC():Int { var c:Int = Box.c; return c + Box.d.length; }',
-		'function main():Int { var box = new Box(); return 27 + usesFirst() + usesIdentity() + readsC() + box.good() + box.bad() + Meters.parse("ab"); }'
+		'function main():Int { var box = new Box(); return 27 + usesFirst() + usesIdentity() + readsC() + box.good() + box.bad() + Meters.parse("ab") + several(true); }',
+		'function several(flag:Bool):Int { var p:Int = 1; var q:String = "p"; if (flag) { var r:Bool = true; } else { var t:Int = 1; } return q.length - 1; }'
 	].join("\n");
 
 	/**
@@ -67,6 +69,12 @@ class TypingRecoveryMain {
 		"15:E1005", // second
 		"16:E1003", // third: a map nothing fixes
 		"20:E1002", // main
+		// several: every statement's error, as Haxe reports them, and the else branch's after the then branch's; q keeps its
+		// declared String, so `q.length` reports nothing
+		"21:E1002",
+		"21:E1002",
+		"21:E1002",
+		"21:E1002",
 		"11:E1003" // Meters.parse
 	];
 

@@ -760,16 +760,113 @@ class BodyTyper implements BodyTyping {
 			validateDeferredExpression(child, loopDepth);
 	}
 
+	/**
+	 * Types `statements`, going on past one that fails, as Haxe reports every error of a body: the failed statement's typing is
+	 * undone (`TypingSession.rewind`), a local it declares is declared with its declared type, or Dynamic, so the statements
+	 * after it see it as Haxe does, and the block fails at its end with every error, in source order. Its output is then
+	 * dropped with the body's. A failure no statement can be skipped past (a declaration cycle, a statement that leaves the
+	 * scope incomplete) stops the block at once, with the errors before it.
+	 */
 	public function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement> {
-		var output:Array<TypedStatement> = [];
+		var output:Array<TypedStatement> = [],
+			failed:Null<Array<Diagnostic>> = null,
+			// Typing a statement leaves the session as it found it: a failed one is rewound to it.
+			mark = session.checkpoint();
 		for (statementIndex in 0...statements.length) {
-			var statement = statements[statementIndex];
+			var typedBefore = output.length;
 			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveSwitch(type, cases))) {
-				if (isNoReturnPlaceholder(output, statement))
+				if (isNoReturnPlaceholder(output, statements[statementIndex]))
 					continue;
-				fail("E1012", "Unreachable statement", statementSpan(statement));
+				// Every statement after it is unreachable too: the first is reported.
+				var unreachable = new Diagnostic("E1012", "Unreachable statement",
+					statementSpan(statements[statementIndex]));
+				throw failed == null ? new CompileError(unreachable) : new CompileError(failed[0],
+					failed.slice(1).concat([unreachable]));
 			}
+			try
+				typeStatementRange(statements, statementIndex, statementIndex + 1, scope, result, output)
+			catch (error:CompileError) {
+				var statement = statements[statementIndex];
+				var cycle = Std.isOfType(error, DeclarationTypeTable.DeclarationCycle);
+				if (cycle || !continuesAfterFailure(statement))
+					throw failed == null || cycle ? error : new CompileError(failed[0],
+						failed.slice(1).concat(error.diagnostics));
+				session.rewind(mark);
+				output.resize(typedBefore);
+				declareFailedLocal(statement, scope);
+				if (failed == null)
+					failed = [];
+				for (diagnostic in error.diagnostics)
+					failed.push(diagnostic);
+			}
+		}
+		if (failed != null)
+			throw new CompileError(failed[0], failed.slice(1));
+		return output;
+	}
+
+	/**
+	 * Whether the statements after `statement` can be typed when it failed: it declares nothing in its block, or only a local
+	 * `declareFailedLocal` declares in its place. A scoped binding, whose cleanup the block registers, stops it.
+	 */
+	static function continuesAfterFailure(statement:AstStatement):Bool
+		return switch statement {
+			case ScopedDeclaration(_, _, _, _): false;
+			case PrivateAccessStatement(inner, _): continuesAfterFailure(inner);
+			default: true;
+		};
+
+	/**
+	 * Declares the local the failed `statement` declares, unless its typing got as far as declaring it: with its declared type,
+	 * or Dynamic when it has none or that type is itself the error, so the statements after it report no error of their own
+	 * about it.
+	 */
+	function declareFailedLocal(statement:AstStatement, scope:Scope):Void {
+		var name:String,
+			declared:Null<AstType>,
+			span:SourceSpan,
+			temporary:Null<compiler.syntax.Ast.TemporaryLocal> = null,
+			initialized = true;
+		switch statement {
+			case VarDeclaration(local, type, _, at):
+				name = local;
+				declared = type;
+				span = at;
+			case TemporaryDeclaration(local, type, _, at):
+				name = local.name;
+				declared = type;
+				span = at;
+				temporary = local;
+			case UninitializedDeclaration(local, type, at):
+				name = local;
+				declared = type;
+				span = at;
+				initialized = false;
+			case PrivateAccessStatement(inner, _):
+				declareFailedLocal(inner, scope);
+				return;
+			default:
+				return;
+		}
+		if ((temporary != null ? scope.bindingOfTemporary(temporary) : scope.bindingOf(BindingWalker.key(name, span)))
+			!= null)
+			return;
+		var type:CompilerType = TDynamic;
+		if (declared != null && !declared.match(InferredType))
+			try
+				type = session.declarations.resolve(declared, span, context.typeSubstitutions)
+			catch (_:CompileError) {}
+		var binding = scope.define(name, type, span, initialized, null, false, null, null, temporary);
+		bindCell(binding, type);
+	}
+
+	/** Types `statements[from...to]` into `output`, stopping at the first error. */
+	function typeStatementRange(statements:Array<AstStatement>, from:Int, to:Int, scope:Scope,
+			result:Null<CompilerType>,
+			output:Array<TypedStatement>):Void {
+		for (statementIndex in from...to) {
+			var statement = statements[statementIndex];
 			var generatedWrite = statementTyper.typeGeneratedAssignment(statements[statementIndex], scope);
 			if (generatedWrite != null) {
 				output.push(generatedWrite);
@@ -902,7 +999,6 @@ class BodyTyper implements BodyTyping {
 					throw new InternalError("Simple statement was not dispatched");
 			}
 		}
-		return output;
 	}
 
 	static function isNoReturnPlaceholder(output:Array<TypedStatement>, statement:AstStatement):Bool {

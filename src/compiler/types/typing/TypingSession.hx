@@ -22,6 +22,11 @@ typedef TypingCheckpoint = {
 	final defaultArgumentDepth:Int;
 	final monomorphs:Int;
 	final lintFacts:compiler.types.typing.UnitRecords.LintFactCounts;
+	/** The body being typed, if any, and its counters, which typing that stops part way leaves raised. */
+	final context:Null<TypingContext>;
+	final loopDepth:Int;
+	final privateAccessDepth:Int;
+	final structureSwitches:Int;
 }
 
 /**
@@ -163,16 +168,25 @@ class TypingSession {
 	 */
 	public final recoveredErrors:Array<Diagnostic> = [];
 
-	/** Where typing stands between bodies, to come back to when the next one fails (`recover`). */
-	public function checkpoint():TypingCheckpoint
+	/**
+	 * Where typing stands, to come back to when what is typed next fails: between bodies (`recover`), or between the statements
+	 * of a body (`BodyTyper.typeStatements`).
+	 */
+	public function checkpoint():TypingCheckpoint {
+		var context = bodyContexts.length == 0 ? null : currentContext;
 		return {
 			contexts: bodyContexts.length,
 			outputs: outputs.length,
 			output: output,
 			defaultArgumentDepth: defaultArgumentDepth,
 			monomorphs: monomorphs.depth(),
-			lintFacts: output.records.lintFactCounts()
+			lintFacts: output.records.lintFactCounts(),
+			context: context,
+			loopDepth: context == null ? 0 : context.loopDepth,
+			privateAccessDepth: context == null ? 0 : context.privateAccessDepth,
+			structureSwitches: context == null ? 0 : context.structureSwitches.length
 		};
+	}
 
 	/**
 	 * Records the errors of a body whose typing failed and returns to `mark`, taken before it: the body contexts, outputs and
@@ -199,6 +213,14 @@ class TypingSession {
 		// A body typed in the output it returns to (a field initializer, in its class's) takes back the lint facts it recorded.
 		output.records.truncateLintFacts(mark.lintFacts);
 		defaultArgumentDepth = mark.defaultArgumentDepth;
+		var context = mark.context;
+		if (context != null) {
+			context.loopDepth = mark.loopDepth;
+			context.privateAccessDepth = mark.privateAccessDepth;
+			if (context.structureSwitches.length > mark.structureSwitches)
+				context.structureSwitches.splice(mark.structureSwitches,
+					context.structureSwitches.length - mark.structureSwitches);
+		}
 	}
 
 	function recordRecovered(diagnostic:Diagnostic):Void {

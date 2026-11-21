@@ -808,9 +808,27 @@ class StatementTyper {
 			fail("E1004", "If condition must be Bool", span);
 		var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
 			elseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false, session.isPureCall),
-			typedThen = bodyTyper.typeStatements(thenBranch, thenScope, result),
-			typedElse = bodyTyper.typeStatements(elseBranch, elseScope, result),
-			continuing:Array<Scope> = [];
+			mark = session.checkpoint(),
+			typedThen:Array<TypedStatement>,
+			thenFailure:Null<CompileError> = null;
+		// The else branch is typed though the then branch failed, as Haxe reports the errors of both.
+		try
+			typedThen = bodyTyper.typeStatements(thenBranch, thenScope, result)
+		catch (error:CompileError) {
+			if (Std.isOfType(error, DeclarationTypeTable.DeclarationCycle))
+				throw error;
+			session.rewind(mark);
+			thenFailure = error;
+			typedThen = [];
+		}
+		var typedElse = try bodyTyper.typeStatements(elseBranch, elseScope, result) catch (error:CompileError) {
+			if (thenFailure == null || Std.isOfType(error, DeclarationTypeTable.DeclarationCycle))
+				throw error;
+			throw new CompileError(thenFailure.diagnostic, thenFailure.diagnostics.slice(1).concat(error.diagnostics));
+		};
+		if (thenFailure != null)
+			throw thenFailure;
+		var continuing:Array<Scope> = [];
 		if (!alwaysExits(typedThen))
 			continuing.push(thenScope);
 		if (ControlFlow.elseCanRun(typedCondition)
