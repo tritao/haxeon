@@ -58,7 +58,7 @@ class IrCopyElision {
 		return false;
 	}
 
-	static function isValueCopyRow(body:IrBody, row:Int):Bool {
+	public static function isValueCopyRow(body:IrBody, row:Int):Bool {
 		if (body.opcode(row) != IrOpcode.ValueInit)
 			return false;
 		return switch body.provenance(row).origin {

@@ -89,6 +89,10 @@ enum IrFunctionKind {
  * A function the inliner stage made is its frozen body (`ofBody`, docs/design/IR_CORE_COLUMNS.md): the backends read the body,
  * and the blocks and debug bindings are decoded from it the first time something reads them, once. A function is never changed
  * once made, so a body a reader encodes for it (`bodyIn`) stays its own.
+ *
+ * Between the stages that read bodies, in a compile that keeps no session, no cache holds a function's body, so it is not
+ * frozen (`ofOwnedBody`, `bodyIn` not `retained`): the stage after the one that made it owns it and edits it in place, and a
+ * function made from the edited body replaces this one, which is not read again.
  */
 @:allow(compiler.ir.IrBody)
 class IrFunction {
@@ -98,7 +102,7 @@ class IrFunction {
 	public var blocks(get, never):Array<IrBlock>;
 	public var debugBindings(get, never):Array<IrDebugBinding>;
 
-	/** The frozen body this function is, when one was made: the one it was made from (`ofBody`), or one `bodyIn` encoded. */
+	/** The body this function is, when one was made: the one it was made from (`ofBody`), or one `bodyIn` encoded. */
 	public var body(default, null):Null<IrBody> = null;
 
 	/** The blocks and bindings, null until decoded from `body`. */
@@ -136,6 +140,11 @@ class IrFunction {
 	public static function ofBody(body:IrBody):IrFunction {
 		if (!body.frozen)
 			throw new InternalError('IR body ${body.name} is not frozen, so it is not a function yet');
+		return ofOwnedBody(body);
+	}
+
+	/** The function `body` is, which the stage after the one that made it owns and may edit in place (no cache holds it). */
+	public static function ofOwnedBody(body:IrBody):IrFunction {
 		var fn = new IrFunction(body.name, body.decodeArguments(), body.types.type(body.result), NOT_DECODED, body.kind,
 			NO_BINDINGS, body.inlineHint, body.retention);
 		fn.decodedBlocks = null;
@@ -144,12 +153,16 @@ class IrFunction {
 		return fn;
 	}
 
-	/** This function's body: the one it is, or else its encoding with `types`, frozen and kept, so it is made once. */
-	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
+	/**
+	 * This function's body: the one it is, or else its encoding with `types`, kept, so it is made once: frozen when `retained`,
+	 * else owned by the stages over bodies, which edit it in place.
+	 */
+	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder, retained = true):IrBody {
 		var known = body;
 		if (known != null)
 			return known;
-		var made = IrBodyBuilder.encode(this, types, builder).freeze(true);
+		var encoded = IrBodyBuilder.encode(this, types, builder),
+			made = retained ? encoded.freeze(true) : encoded;
 		body = made;
 		return made;
 	}

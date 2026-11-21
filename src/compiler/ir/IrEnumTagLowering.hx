@@ -373,8 +373,8 @@ class IrEnumTagLowering {
 
 	/**
 	 * `escapes` on bodies, for the pipeline's last check before the inliner: each function is read as its body (`bodyIn` with
-	 * `types`), and one that changes becomes its edited copy, frozen (`retained` past this compile when a session keeps it).
-	 * A function nothing changes stays the same object.
+	 * `types`), and one that changes becomes its edited body: a frozen copy when a session keeps the stage's functions
+	 * (`retained`), else the body edited in place. A function nothing changes stays the same object.
 	 */
 	public static function escapeBodies(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder, retained:Bool):Void {
 		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions),
@@ -398,13 +398,14 @@ class IrEnumTagLowering {
 			unboxNames);
 		var functions = program.functions, result:Null<Array<IrFunction>> = null;
 		for (index in 0...functions.length) {
-			var fn = functions[index], body = fn.bodyIn(types, builder);
+			var fn = functions[index], body = fn.bodyIn(types, builder, retained);
 			if (walk.rewrite(body, false)) {
-				var edited = body.thaw(builder);
+				var edited = body.forEditing(builder);
 				walk.rewrite(edited, true);
 				if (result == null)
 					result = functions.copy();
-				var replacement = IrFunction.ofBody(edited.freeze(retained, builder));
+				var replacement = retained
+					? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
 				result[index] = replacement;
 				existing.set(fn.name, replacement);
 			}

@@ -265,6 +265,15 @@ class IrInliner {
 	/** By function id, its source body as copy elision reads it, in a compile that keeps no session (else `IrInlineCache.originals`). */
 	final pristine:Array<Null<IrBody>> = [];
 
+	/** By function id, the instructions of its source body, for the screen of what may be inlined after the body is edited. */
+	final sourceSizes:Array<Int> = [];
+
+	/**
+	 * Whether the functions' inlining edits their source bodies in place: in a compile that keeps no session, when no source has a
+	 * value copy, so copy elision, which reads callees' source bodies, never runs; else each is edited on a copy.
+	 */
+	var ownsSources = false;
+
 	/** The tables of one splice or expansion: by callee value id its value here, by callee block id its block id here. */
 	final calleeValues:Array<Int> = [];
 
@@ -425,14 +434,17 @@ class IrInliner {
 
 	/** Tarjan's algorithm over the call edges of the original bodies, visiting functions in name order so the numbering is deterministic. */
 	function computeComponents():Void {
-		var count = functions.length, edges:Array<Array<Int>> = [];
+		var count = functions.length, edges:Array<Array<Int>> = [], copies = false;
 		for (id in 0...count) {
 			var targets:Array<Int> = [];
 			var body = sourceBody(functions[id]);
+			sourceSizes.push(body.instructionCount());
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
 					switch body.opcode(row) {
+						case IrOpcode.ValueInit if (!copies && IrCopyElision.isValueCopyRow(body, row)):
+							copies = true;
 						case IrOpcode.Call:
 							var target = functionId(body.aux(row));
 							if (target >= 0)
@@ -449,6 +461,7 @@ class IrInliner {
 			}
 			edges.push(targets);
 		}
+		ownsSources = !memoizes && !copies;
 		var order:Array<Int> = [for (_ in 0...count) -1],
 			low:Array<Int> = [for (_ in 0...count) 0],
 			onStack:Array<Bool> = [for (_ in 0...count) false],
@@ -566,8 +579,10 @@ class IrInliner {
 			cleaned:Map<String, {source:IrBody, result:IrFunction}> = [],
 			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
-		for (fn in program.functions) {
-			var inlined = inliner.inlinedVersionOf(fn.name), result:IrFunction;
+		// Every function is inlined before any is cleaned up: a caller inlines a callee's form before its cleanup, which edits it.
+		var inlinedForms = [for (fn in program.functions) inliner.inlinedVersionOf(fn.name)];
+		for (index in 0...program.functions.length) {
+			var fn = program.functions[index], inlined = inlinedForms[index], result:IrFunction;
 			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
 			var clean = cache.cleaned.get(fn.name);
@@ -674,15 +689,19 @@ class IrInliner {
 	 * nothing changed is its source, which keeps its body for the backends.
 	 */
 	function cleanUp(fn:IrFunction, inlined:IrBody):IrFunction {
-		var body = inlined.frozen ? inlined.thaw(passScratch.bodyBuilder) : inlined;
+		var body = inlined.frozen ? inlined.thaw(passScratch.bodyBuilder) : inlined, before = body.edits;
 		IrJumpThreading.threadConstantBranchesBody(body, passScratch);
 		IrScalarRefPromotion.runBody(body, passScratch);
 		IrDeadPureValues.runBody(body, passScratch);
 		IrReceiverCheckElision.runBody(body, passScratch);
 		IrJumpThreading.runBody(body, passScratch);
 		var id = ids.get(fn.name);
-		if (id != null && sourceBodies[id] == inlined && !body.edited) {
-			fn.keepBody(inlined.frozen ? inlined : inlined.freeze(memoizes, passScratch.bodyBuilder));
+		if (id != null && sourceBodies[id] == inlined && body.edits == before) {
+			var own = fn.body;
+			if (own == null)
+				fn.keepBody(inlined.frozen ? inlined : inlined.freeze(memoizes, passScratch.bodyBuilder));
+			else if (!own.frozen)
+				own.freeze(false);
 			return fn;
 		}
 		return IrFunction.ofBody(body.freeze(memoizes, passScratch.bodyBuilder));
@@ -709,7 +728,7 @@ class IrInliner {
 	function sourceBody(fn:IrFunction):IrBody {
 		var known = fn.body;
 		if (known == null)
-			return fn.bodyIn(types, passScratch.bodyBuilder);
+			return fn.bodyIn(types, passScratch.bodyBuilder, memoizes);
 		return known.types == types ? known : IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
 	}
 
@@ -730,9 +749,13 @@ class IrInliner {
 		cache.originals = kept;
 	}
 
-	/** The body function `id`'s inlining edits: its source's, encoded, which nothing else holds. */
-	function workingBody(id:Int):IrBody
-		return (memoizes ? originalBody(id) : sourceBody(functions[id])).thaw(passScratch.bodyBuilder);
+	/** The body function `id`'s inlining edits: its source's, when the inliner owns it (`ownsSources`), else a copy of it. */
+	function workingBody(id:Int):IrBody {
+		if (memoizes)
+			return originalBody(id).thaw(passScratch.bodyBuilder);
+		var source = sourceBody(functions[id]);
+		return ownsSources ? source.forEditing(passScratch.bodyBuilder) : source.thaw(passScratch.bodyBuilder);
+	}
 
 	/** The source body of the function named `name` (null for none), as copy elision reads its callees. */
 	function pristineBody(name:String):Null<IrBody> {
@@ -741,6 +764,8 @@ class IrInliner {
 			return null;
 		if (memoizes)
 			return originalBody(id);
+		if (ownsSources)
+			throw new InternalError('Copy elision read the source body of $name, which the inliner edits in place');
 		var known = pristine[id];
 		if (known == null) {
 			known = sourceBody(functions[id]);
@@ -797,7 +822,7 @@ class IrInliner {
 			objectFrames.push(consultedObjects);
 			table.consulted = consultedObjects;
 		}
-		var body = workingBody(id);
+		var body = workingBody(id), before = body.edits;
 		if (allowInline)
 			inlineCalls(body);
 		else if (profile.packedValueFields)
@@ -807,12 +832,13 @@ class IrInliner {
 		if (strengthReduction)
 			IrStrengthReduction.runBody(body);
 
-		// A cache or a caller that inlines it holds the result as it is; one only the final cleanup reads is cleaned in place.
+		// The memo holds the result as it is. Without one, callers inline the result as it is and the final cleanup, which runs
+		// once every function is inlined, edits it in place.
+		var unchanged = body.edits == before;
 		var result = if (memoizes)
-			body.edited ? body.freeze(memoizes, passScratch.bodyBuilder) : originalBody(id);
+			unchanged ? originalBody(id) : body.freeze(memoizes, passScratch.bodyBuilder);
 		else
-			looksInlinable(original) ? body.freeze(memoizes, passScratch.bodyBuilder) : body;
-		var unchanged = !body.edited;
+			body;
 
 		var isImpure = frameImpure.pop() == true;
 		frameIds.pop();
@@ -925,7 +951,7 @@ class IrInliner {
 		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name)
 			|| IrTypedInterfaceDispatch.isAdapterEntry(original.name)
 			|| original.arguments.length != count
-			|| !looksInlinable(original))
+			|| !looksInlinable(id))
 			return null;
 		for (index in 0...count)
 			if (!bindable(body.valueType(body.operand(row, index)), original.arguments[index].type))
@@ -967,11 +993,12 @@ class IrInliner {
 			? null : resolution.uniqueImplementation(typeName, method);
 	}
 
-	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
-	function looksInlinable(fn:IrFunction):Bool {
+	/** Cheap syntactic screen on function `id`'s original body, before the callee's own calls are inlined. */
+	function looksInlinable(id:Int):Bool {
+		var fn = functions[id];
 		if (StringTools.startsWith(fn.name, "__") || fn.name == entryPoint)
 			return false;
-		return sourceBody(fn).instructionCount() <= (fn.inlineHint ? HintBudget : SmallBudget) * 2;
+		return sourceSizes[id] <= (fn.inlineHint ? HintBudget : SmallBudget) * 2;
 	}
 
 	static function fits(fn:IrBody):Bool {

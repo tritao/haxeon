@@ -156,7 +156,11 @@ block ids (phi inputs, try blocks, branch targets) and two int arrays (`StaticDa
 - **Ownership.** A body reachable from a cache (the inliner's memo and its cleaned and published forms, HlLower's cache,
   the codec) is frozen; editing a frozen body is an internal error, and a pass that would change one changes a copy
   (`thaw`). The copy-on-write sharing of `IrFunctionRewrite` moves from blocks to functions: a thaw of a body no edit
-  touched shares its columns until its first edit, so a pass that ends up changing nothing copies nothing.
+  touched shares its columns until its first edit, so a pass that ends up changing nothing copies nothing. A body no cache
+  holds is not frozen: in a compile that keeps no session each stage hands the next its bodies unfrozen
+  (`IrFunction.ofOwnedBody`), and the next edits them in place (`forEditing`); the encode point lets go of the objects it
+  encoded. The inliner edits its sources in place unless one has a value copy (copy elision reads callees' source bodies),
+  and cleans each function up once every function is inlined, so callers inline the form before cleanup without a copy.
 - **Compaction** rebuilds a body without unlinked rows or garbage runs, its rows in block order. It runs when a body is
   frozen and when the garbage passes half of its rows, never per edit.
 - **Provenance** is an id into a per-body pool of `SourceProvenance` objects, consecutive rows with the same object

@@ -15,7 +15,7 @@ import compiler.ir.SourceProvenance.Located;
  * Passes edit a body in place. Rows never move: a removed row is unlinked, an added one appended and linked where it goes, and a
  * phi that gains inputs moves its runs to the end of the pools. So every walk follows the links (`firstRow`, `nextRow`), never a
  * range of row numbers. A body a cache holds is frozen (`freeze`): editing it is an internal error, and a pass that would change
- * it changes a copy (`thaw`).
+ * it changes a copy (`thaw`). One no cache holds is owned by the stage that has it, which edits it in place (`forEditing`).
  *
  * The auxiliary field by opcode: a constant (`ConstInt`, `ConstBool` 0 or 1, `MemoryStore` size, `MemoryLoad` size << 1 | signed,
  * `Jump` target); an index into the float or string pool (`ConstFloat`, `ConstString`); a type id (`TypeValue`, the intrinsics);
@@ -49,6 +49,9 @@ class IrBody {
 	 * from. An edit may leave unlinked rows or garbage runs, which a compaction drops.
 	 */
 	public var edited(default, null) = false;
+
+	/** The edits made to this body, counted: a pass that edits a body in place compares the count to know whether it changed it. */
+	public var edits(default, null) = 0;
 
 	// The columns. A thawed copy of a body no edit touched shares its source's until its first edit (`sharing`).
 	var opcodes:Array<Int>;
@@ -365,6 +368,10 @@ class IrBody {
 		return result;
 	}
 
+	/** The body a pass edits for this one: this one when no cache holds it (it is not frozen), else a copy (`thaw`). */
+	public inline function forEditing(?builder:IrBodyBuilder):IrBody
+		return frozen ? thaw(builder) : this;
+
 	/** A copy of this body that a pass may edit: compacted, or column for column when no edit left anything to drop. */
 	public function thaw(?builder:IrBodyBuilder):IrBody {
 		if (edited)
@@ -384,6 +391,7 @@ class IrBody {
 		if (sharing)
 			unshare();
 		edited = true;
+		edits++;
 	}
 
 	/** Copies the columns this body shares with the frozen body it was thawed from, before its first edit. */
@@ -795,6 +803,7 @@ class IrBody {
 	 * is an internal error. For a pass that only knows whether a change pays once it has made it.
 	 */
 	public function beginTrial(into:IrBodyTrial):Void {
+		into.edits = edits;
 		editing();
 		if (trial != null)
 			throw new InternalError('IR body $name has a trial open already');
@@ -852,6 +861,7 @@ class IrBody {
 		IrBodyTrial.save(aliases, saved.aliases);
 		rowOperandsFrom = operandPool.length;
 		edited = saved.edited;
+		edits = saved.edits;
 	}
 
 	/**
@@ -1140,6 +1150,7 @@ class IrBody {
 @:allow(compiler.ir.IrBody)
 class IrBodyTrial {
 	var edited = false;
+	var edits = 0;
 	var rows = 0;
 	var operands = 0;
 	var ints = 0;

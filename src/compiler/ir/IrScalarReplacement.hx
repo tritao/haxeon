@@ -86,18 +86,21 @@ class IrScalarReplacement {
 
 	/**
 	 * `rewrite` on `fn`'s body (`bodyIn` with `types`), for the pipeline's stage: `fn` itself when nothing changes, else its
-	 * edited copy, frozen (`retained` past this compile when a session keeps it), with the values its decoding would have.
+	 * edited body, with the values its decoding would have. When a session keeps the stage's functions (`retained`) the edit is
+	 * on a copy and the result frozen; else the body is the stages' own, edited in place, and the objects it was encoded from go.
 	 */
 	public static function rewriteBody(fn:IrFunction, objects:IrObjectTable, types:IrTypeIds, scratch:IrPassScratch,
 			constructFields:Bool, retained:Bool):IrFunction {
-		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder);
+		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder, retained);
+		if (!retained)
+			fn.releaseDecoded();
 		if (!hasCandidates(body, objects))
 			return fn;
-		var edited = body.thaw(builder);
-		if (!runBody(edited, objects, scratch, false, constructFields))
+		var edited = body.forEditing(builder), before = edited.edits;
+		if (!runBody(edited, objects, scratch, false, constructFields) || edited.edits == before)
 			return fn;
 		edited.keepNamedValues(scratch.namedValues);
-		return IrFunction.ofBody(edited.freeze(retained, builder));
+		return retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
 	}
 
 	/** Whether `body` allocates a value object, which both replacement and in-place construction need. */

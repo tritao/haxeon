@@ -273,8 +273,11 @@ class IrBodyMain {
 		if (expected == fn || result == fn)
 			throw 'IrBody: the $what test function must change';
 		var body = result.body;
-		if (body == null || !body.frozen || body.layoutDifference() != null)
-			throw 'IrBody: $what must give a function that is its frozen body';
+		if (body == null || body.layoutDifference() != null)
+			throw 'IrBody: $what must give a function that is its body';
+		// A body no cache holds is the stage's own: edited in place, not copied.
+		if (!body.frozen && fn.body != body)
+			throw 'IrBody: $what must edit the body it owns in place';
 		var difference = IrFunctionStateEquality.difference(expected, body.toFunction());
 		if (difference != null)
 			throw 'IrBody: $what on a body differs from its object version: $difference';
