@@ -575,6 +575,12 @@ class Scope {
 		return path == null ? null : resolveExpression(path);
 	}
 
+	/** Whether the place `access` reads had a null check or other refinement here that an assignment or call cleared. */
+	public function accessWasCleared(access:TypedExpression):Bool {
+		var path = FlowAnalysis.accessPath(access);
+		return path != null && facts.wasCleared('$' + 'expression:$path');
+	}
+
 	public function invalidateExpression(path:String):Void
 		facts.invalidatePrefix('$' + 'expression:$path');
 

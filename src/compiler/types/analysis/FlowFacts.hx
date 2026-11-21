@@ -15,6 +15,9 @@ private class FactTables {
 	public final erasedMentions:Array<String> = [];
 	public final invalidatedFields:Array<String> = [];
 
+	/** The keys whose refinement an invalidation removed from these tables, made with the first; for explaining a lost check. */
+	public var cleared:Null<Map<String, Bool>> = null;
+
 	public function new() {}
 }
 
@@ -136,8 +139,8 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.captureWrite(bindingId, null);
 		var facts = own();
-		facts.refinedTypes.remove(bindingId);
-		facts.stableRefinedTypes.remove(bindingId);
+		forgetRefined(facts, bindingId);
+		forgetStable(facts, bindingId);
 		facts.invalidated.set(bindingId, true);
 	}
 
@@ -286,11 +289,11 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (isUnder(bindingId, prefix))
-					facts.refinedTypes.remove(bindingId);
+					forgetRefined(facts, bindingId);
 		if (hasTypes(facts.stableRefinedTypes))
 			for (bindingId in facts.stableRefinedTypes.keys())
 				if (isUnder(bindingId, prefix))
-					facts.stableRefinedTypes.remove(bindingId);
+					forgetStable(facts, bindingId);
 		facts.invalidatedPrefixes.push(prefix);
 	}
 
@@ -301,7 +304,7 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (StringTools.startsWith(bindingId, prefix))
-					facts.refinedTypes.remove(bindingId);
+					forgetRefined(facts, bindingId);
 		// Every unknown call forgets the same namespace again; once recorded, it is recorded.
 		if (facts.invalidatedNamespaces.indexOf(prefix) < 0)
 			facts.invalidatedNamespaces.push(prefix);
@@ -315,11 +318,11 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (StringTools.startsWith(bindingId, prefix))
-					facts.refinedTypes.remove(bindingId);
+					forgetRefined(facts, bindingId);
 		if (hasTypes(facts.stableRefinedTypes))
 			for (bindingId in facts.stableRefinedTypes.keys())
 				if (StringTools.startsWith(bindingId, prefix))
-					facts.stableRefinedTypes.remove(bindingId);
+					forgetStable(facts, bindingId);
 		facts.erasedNamespaces.push(prefix);
 	}
 
@@ -331,11 +334,11 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
-					facts.refinedTypes.remove(bindingId);
+					forgetRefined(facts, bindingId);
 		if (hasTypes(facts.stableRefinedTypes))
 			for (bindingId in facts.stableRefinedTypes.keys())
 				if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
-					facts.stableRefinedTypes.remove(bindingId);
+					forgetStable(facts, bindingId);
 		facts.erasedMentions.push(fragment);
 	}
 
@@ -380,7 +383,7 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (mentionsField(bindingId, field))
-					facts.refinedTypes.remove(bindingId);
+					forgetRefined(facts, bindingId);
 		facts.invalidatedFields.push(field);
 	}
 
@@ -404,6 +407,43 @@ class FlowFacts {
 			}
 			from = at + 1;
 		}
+	}
+
+	/** Removes a refinement an assignment or call may have falsified, remembering that it was there. */
+	static function forgetRefined(facts:FactTables, bindingId:String):Void
+		if (facts.refinedTypes.remove(bindingId))
+			markCleared(facts, bindingId);
+
+	static function forgetStable(facts:FactTables, bindingId:String):Void
+		if (facts.stableRefinedTypes.remove(bindingId))
+			markCleared(facts, bindingId);
+
+	static function markCleared(facts:FactTables, bindingId:String):Void {
+		var cleared = facts.cleared;
+		if (cleared == null)
+			cleared = facts.cleared = [];
+		cleared.set(bindingId, true);
+	}
+
+	/**
+	 * Whether `bindingId`, which no longer resolves here, had a refinement that an assignment or call cleared: one this branch
+	 * or a branch it extends removed, or one a branch it extends still holds but a nearer invalidation hides. A path never
+	 * refined has neither.
+	 */
+	public function wasCleared(bindingId:String):Bool {
+		var current = this;
+		while (current != null) {
+			var facts = current.tables;
+			if (facts != null) {
+				var cleared = facts.cleared;
+				if (cleared != null && cleared.exists(bindingId))
+					return true;
+				if (facts.refinedTypes.exists(bindingId) || facts.stableRefinedTypes.exists(bindingId))
+					return true;
+			}
+			current = current.parent;
+		}
+		return false;
 	}
 
 	static function mentionsInvalidatedField(facts:FactTables, bindingId:String):Bool {

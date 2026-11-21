@@ -2186,7 +2186,7 @@ class BodyTyper implements BodyTyping {
 	/**
 	 * A null check only holds until something may change the value. Say which, instead of the bare "requires an object":
 	 * a local assigned by a closure loses its check at any call that may run an escaped closure, and a field loses it at
-	 * any assignment or call. Copying the checked value into a fresh local pins it.
+	 * any assignment or call. Copying the checked value into a fresh local pins it. A field never checked may just be null.
 	 */
 	function explainNullableReceiver(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):Void {
 		switch object.type {
@@ -2200,7 +2200,11 @@ class BodyTyper implements BodyTyping {
 				var local = sourceName(id);
 				'"$local" is assigned by a closure, so a call that may run an escaped closure clears its null check';
 			case TField(_, _):
-				var described = describeAccess(unwrappedCast(object));
+				var access = unwrappedCast(object), described = describeAccess(access);
+				if (described != null && !scope.accessWasCleared(access))
+					fail("E1005",
+						'Field "$name" requires an object: "$described" may be null. Check it first ("if (value != null) ...").',
+						span);
 				described == null ? null
 					: 'the null check on "$described" no longer holds after an assignment or call that may have changed it';
 			default:
