@@ -17,19 +17,28 @@ jobs:
 
       - uses: ./.github/actions/setup-host
 
-      - name: Bootstrap, and the failed command under cdb
+      # As the CI job runs it: PowerShell, TEST_JOBS=4, output not piped.
+      - name: Bootstrap as CI runs it
+        id: bootstrap
+        continue-on-error: true
+        shell: pwsh
+        env:
+          TEST_JOBS: 4
+        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
+
+      # The seed compiling stage 1, the command that crashes, three times under cdb: the first exception stops it.
+      - name: Stage 1 under cdb
         shell: bash
+        env:
+          TEST_JOBS: 4
         run: |
-          set +e
-          ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap 2>&1 | tee bootstrap.log
-          status=${PIPESTATUS[0]}
-          echo "bootstrap exited with $status"
-          [ "$status" = 0 ] && exit 0
-          failed=$(sed -n 's/^\[\(build-command-[0-9]*\)\] failed:.*/\1/p' bootstrap.log | head -1)
-          command=$(grep -F "[$failed] " bootstrap.log | grep -v "failed:" | head -1 | sed "s/^\[$failed\] //")
-          echo "rerunning $failed under cdb: $command"
+          echo "bootstrap: ${{ steps.bootstrap.outcome }}"
           cdb="/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe"
-          if [ ! -x "$cdb" ]; then ls "/c/Program Files (x86)/Windows Kits/10/" ; exit 1; fi
-          # Break on the first exception of any kind, print it and the stacks, and quit.
-          "$cdb" -lines -c "sxe av; sxe sov; g; .lastevent; .exr -1; r; kn 80; ~*kn 30; q" $command 2>&1 | tail -400
-          exit 1
+          for attempt in 1 2 3; do
+            echo "== attempt $attempt"
+            "$cdb" -lines -c "sxe av; sxe sov; g; .lastevent; .exr -1; r; kn 80; ~*kn 30; q" \
+              out/cmake/windows-msvc/hashlink-runtime/hl.exe out/bootstrap/compiler-seed.hl \
+              --output=out/bootstrap/probe-stage-1.hl --build-mode=release --entry=compiler.tools.HaxeonCompiler \
+              --root=src --root=stdlib --sources-file=out/bootstrap/compiler-sources.txt 2>&1 \
+              | grep -v "ModLoad\|W1001" | tail -150
+          done
