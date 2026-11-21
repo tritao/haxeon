@@ -235,10 +235,19 @@ The Haxe code Haxeon rejects or runs differently is listed in
   HashLink it is an object holding the pointer and the length; here it would
   also have to keep the Bytes that owns the memory alive. Needs a decision on
   the type and on `getData`'s result.
-- **The missing-member error's type spelling.** A nullable receiver prints
-  unwrapped, a function type as `(Int)->Int` (Haxe: `(a : Int) -> Int`), a
-  typedef'd structure by its fields instead of its name, and `Lib.Helper.no()`
-  on a sub-type of another module still says `Unknown static field`.
+- **Type names Haxe keeps and Haxeon's types drop.** A missing-member error
+  spells a function type without its argument names (`Int -> Int`; Haxe:
+  `(a : Int) -> Int` when the type has them) and a typedef'd structure by its
+  fields instead of its name (`Point`): `TFunction` carries no argument names
+  and a typedef resolves to its structure. Needs a decision on carrying
+  display names in `CompilerType`.
+- **Function type syntax.** The parser rejects Haxe's `?Int->Int` (an
+  optional argument in the old syntax) and a parenthesized result
+  (`Int->(Int->Int)`).
+- **Lone surrogates.** Printing a String with a lone high surrogate swallows
+  the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
+  conversion takes it as the pair's low half. `String.fromCharCode` of a code
+  point above 0xFFFF keeps only its low 16 bits where Haxe writes the pair.
 
 ## Generated code, HashLink and Wasm (haxeon-e4's lane)
 

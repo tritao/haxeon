@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.core.Diagnostic;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
+import compiler.types.FunctionTypes;
 import compiler.types.Monomorphs;
 import compiler.types.Type.CompilerType;
 
@@ -29,7 +30,10 @@ class MissingMember extends CompileError {
 		return new MissingMember("E1005", '$owner has no field $name', span,
 			AbstractProperties.nameSpan(span, name, true));
 
-	/** `type` as Haxe spells it in that error: platform types by their Haxe paths, a structure by its fields. */
+	/**
+	 * `type` as Haxe spells it in that error: platform types by their Haxe paths, a structure by its fields, a function type as
+	 * `Int -> Int` or `(Int, String) -> Void`.
+	 */
 	public static function haxeType(type:CompilerType):String
 		return switch Monomorphs.follow(type) {
 			case TBytes: "haxe.io.Bytes";
@@ -42,6 +46,19 @@ class MissingMember extends CompileError {
 			case TAnonymous(_, fields) if (fields.length == 0): "{ }";
 			case TAnonymous(_, fields):
 				'{ ${[for (field in fields) (field.optional ? "?" : "") + field.name + " : " + haxeType(field.type)].join(", ")} }';
+			case TFunction(arguments, result, optional):
+				var spelled = [
+					for (index in 0...arguments.length)
+						(FunctionTypes.isOptional(optional, index) ? "?" : "") + functionPart(arguments[index])
+				];
+				(arguments.length == 1 ? spelled[0] : '(${spelled.join(", ")})') + " -> " + functionPart(result);
 			case followed: SemanticSignature.display(followed);
+		};
+
+	/** A function type's argument or result, parenthesized when it is a function type itself. */
+	static function functionPart(type:CompilerType):String
+		return switch Monomorphs.follow(type) {
+			case TFunction(_, _, _): '(${haxeType(type)})';
+			default: haxeType(type);
 		};
 }

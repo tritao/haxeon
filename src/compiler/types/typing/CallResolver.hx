@@ -224,9 +224,12 @@ class CallResolver {
 			var extension = typeStaticExtensionCall(declaredReceiver == null ? receiver : declaredReceiver, receiver,
 				name,
 				arguments, span, scope, expectedType);
-			if (extension == null)
+			if (extension != null)
+				return extension;
+			// Haxe names the receiver's type as declared, nullable included (`Null<Box<Int>> has no field get`).
+			if (declaredReceiver == null)
 				throw missing;
-			return extension;
+			throw MissingMember.field(MissingMember.haxeType(declaredReceiver.type), name, span);
 		}
 	}
 
@@ -1741,6 +1744,10 @@ class CallResolver {
 					firstMember = 1;
 				receiverName = firstDot < 0 ? source : source.substring(0, firstDot);
 				receiver = bodyTyper.resolveReceiver(receiverName, span, scope);
+				// A type is no value: the resolved name's longest type prefix names the receiver, which can be a sub-type of the
+				// module the first part names (`Lib.Helper.no()`).
+				if (receiver != null && receiver.expression.match(TClassRef(_)))
+					receiver = null;
 				if (receiver != null)
 					path = source;
 				// The first `prefixLength` parts of `name` end at `cut`, the dot after them.
@@ -1766,6 +1773,7 @@ class CallResolver {
 				}
 			}
 		}
+		var declaredReceiver = receiver;
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
 		var expectedEnumName = enumName(expectedType);
@@ -1784,7 +1792,8 @@ class CallResolver {
 			if (isEnumMatch(receiver, methodName, arguments))
 				return typeEnumMatch(Variable(name.substring(0, name.lastIndexOf(".")), span), arguments[0], span,
 					scope);
-			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, false);
+			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, false,
+				declaredReceiver == receiver ? null : declaredReceiver);
 		}
 		// Nothing else names the receiver: a constructor without arguments can ("Color.Red.getIndex()", "Red.getIndex()"), and
 		// so can an enum abstract value ("Color.Blue.label()", "Blue.label()").

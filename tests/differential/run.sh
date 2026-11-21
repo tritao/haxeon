@@ -156,7 +156,7 @@ run_warning_case() {
 
 # A compile error: the line, column and message of the first error each compiler reports. Haxe prints
 # `Main.hx:12: characters 11-16 : Counter has no field reset`, Haxeon `.../Main.hx:12:11: E1005: Counter has no field reset`; both
-# compile the case as Main.hx, so the types of its module are named alike.
+# compile the case as Main.hx, so the types of its module are named alike. The modules in `name.modules/`, if any, are beside it.
 run_error_case() {
 	local name=$1
 	local official_dir realtime_source
@@ -164,6 +164,10 @@ run_error_case() {
 	official_dir=$(mktemp -d "$out_dir/official-error.XXXXXX")
 	trap 'rm -rf "$official_dir"' RETURN
 	cp "$root_dir/tests/differential/$name.official.hx" "$official_dir/Main.hx"
+	if [[ -d "$root_dir/tests/differential/$name.modules" ]]; then
+		cp "$root_dir/tests/differential/$name.modules/"*.hx "$official_dir/"
+		cp "$root_dir/tests/differential/$name.modules/"*.hx "$(dirname "$realtime_source")/"
+	fi
 	# Both compilers fail, so their status is not checked here (pipefail).
 	local official_error realtime_error
 	official_error=$(cd "$official_dir" && "$haxe" -cp . -main Main -hl "$out_dir/$name.error.official.hl" 2>&1 |
@@ -300,6 +304,9 @@ in_background run_error_case missing-field-call-static
 in_background run_error_case missing-field-call-abstract
 in_background run_error_case missing-field-call-abstract-static
 in_background run_error_case missing-field-call-bytes
+in_background run_error_case missing-field-call-nullable
+in_background run_error_case missing-field-call-function
+in_background run_error_case missing-field-call-subtype
 in_background run_compile_failure generic-field-own-parameters-error
 in_background run_case generic-nullable-parameter-read 0
 in_background run_case generic-nullable-element-inference 0
