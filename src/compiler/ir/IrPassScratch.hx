@@ -35,6 +35,9 @@ class IrPassScratch {
 	/** The tables of `IrLoadStoreForwarding`. */
 	public final loadStore = new IrLoadStoreForwarding.IrLoadStoreScratch();
 
+	/** The tables of `IrBodyLoadStoreForwarding`. */
+	public final bodyLoadStore = new IrLoadStoreForwarding.IrBodyLoadStoreScratch();
+
 	/** A third table of Ints by value or block id, and a list of block ids, for the passes over bodies. */
 	public final thirdInts:Array<Int> = [];
 

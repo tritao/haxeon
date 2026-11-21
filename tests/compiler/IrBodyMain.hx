@@ -360,6 +360,16 @@ class IrBodyMain {
 			block(1, [Call(secondCheck, check, [receiver])], Return(x))
 		], Ordinary), fn -> compiler.ir.IrReceiverCheckElision.run(fn),
 			(body, scratch) -> compiler.ir.IrReceiverCheckElision.runBody(body, scratch));
+		var point = value("point", Obj("Point")), reloaded = value("reloaded", I32);
+		samePass("load-store forwarding", new IrFunction("Main.fields", [condition, x, point], I32, [
+			block(0, [FieldSet(point, "x", x), FieldGet(reloaded, point, "x")], Return(reloaded))
+		], Ordinary), fn -> compiler.ir.IrLoadStoreForwarding.run(fn),
+			(body, scratch) -> compiler.ir.IrLoadStoreForwarding.runBody(body, null, scratch));
+		var real = value("real", F64), two = value("two", F64), half = value("half", F64);
+		samePass("strength reduction", new IrFunction("Main.halve", [real], F64, [
+			block(0, [ConstFloat(two, 2.0), Div(half, real, two)], Return(half))
+		], Ordinary), fn -> compiler.ir.IrStrengthReduction.run(fn),
+			(body, scratch) -> compiler.ir.IrStrengthReduction.runBody(body));
 	}
 
 	static function check(fn:IrFunction, types:IrTypeIds):Void {

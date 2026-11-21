@@ -436,54 +436,56 @@ class IrBody {
 	 */
 	public function copyRow(source:IrBody, row:Int, values:Array<Int>, ?blocks:Array<Int>):Int {
 		beginRow();
-		inline function value(id:Int):IrValueId
-			return IrValueId.of(id >= 0 && id < values.length && values[id] >= 0 ? values[id] : id);
-		inline function block(id:Int):Int
-			return blocks == null ? id : blocks[id];
 		for (index in source.operandStarts[row]...source.operandEnds[row])
-			operandPool.push(value(source.operandPool[index]));
-		var aux = source.auxes[row];
-		inline function copyInts(count:Int):Int {
-			var start = ints.length;
-			for (index in aux...aux + count)
-				ints.push(source.ints[index]);
-			return start;
-		}
-		var opcode = source.opcode(row);
+			operandPool.push(renamed(source.operandPool[index], values));
+		var aux = source.auxes[row], opcode = source.opcode(row);
 		var copied = switch opcode {
 			case IrOpcode.ConstFloat: addFloat(source.floats[aux]);
 			case IrOpcode.ConstString: addString(source.strings[aux]);
-			case IrOpcode.StaticDataAddress: copyInts(1 + source.ints[aux]);
-			case IrOpcode.MakeEnum, IrOpcode.EnumField: copyInts(2);
+			case IrOpcode.StaticDataAddress: copyInts(source, aux, 1 + source.ints[aux]);
+			case IrOpcode.MakeEnum, IrOpcode.EnumField: copyInts(source, aux, 2);
 			case IrOpcode.Phi:
 				var start = ints.length;
 				for (index in 0...source.operandCount(row))
-					ints.push(block(source.ints[aux + index]));
+					ints.push(renamedBlock(source.ints[aux + index], blocks));
 				start;
 			case IrOpcode.BeginTry:
-				var start = pushInt(block(source.ints[aux]));
-				ints.push(block(source.ints[aux + 1]));
+				var start = pushInt(renamedBlock(source.ints[aux], blocks));
+				ints.push(renamedBlock(source.ints[aux + 1], blocks));
 				ints.push(source.ints[aux + 2]);
 				start;
 			case IrOpcode.EndTry:
-				var start = pushInt(block(source.ints[aux]));
+				var start = pushInt(renamedBlock(source.ints[aux], blocks));
 				ints.push(source.ints[aux + 1]);
 				start;
-			case IrOpcode.Jump: block(aux);
+			case IrOpcode.Jump: renamedBlock(aux, blocks);
 			case IrOpcode.Branch:
-				var start = pushInt(block(source.ints[aux]));
-				ints.push(block(source.ints[aux + 1]));
+				var start = pushInt(renamedBlock(source.ints[aux], blocks));
+				ints.push(renamedBlock(source.ints[aux + 1], blocks));
 				start;
 			case IrOpcode.Switch:
-				var start = pushInt(block(source.ints[aux])), count = source.ints[aux + 1];
+				var start = pushInt(renamedBlock(source.ints[aux], blocks)), count = source.ints[aux + 1];
 				ints.push(count);
 				for (index in 0...count)
-					ints.push(block(source.ints[aux + 2 + index]));
+					ints.push(renamedBlock(source.ints[aux + 2 + index], blocks));
 				start;
 			default: aux;
 		};
 		var out = source.outputs[row];
-		return endRow(opcode, out >= 0 ? value(out) : IrValueId.of(-1), copied, source.provenance(row));
+		return endRow(opcode, IrValueId.of(out >= 0 ? renamed(out, values) : -1), copied, source.provenance(row));
+	}
+
+	static inline function renamed(id:Int, values:Array<Int>):Int
+		return id >= 0 && id < values.length && values[id] >= 0 ? values[id] : id;
+
+	static inline function renamedBlock(id:Int, blocks:Null<Array<Int>>):Int
+		return blocks == null ? id : blocks[id];
+
+	function copyInts(source:IrBody, start:Int, count:Int):Int {
+		var result = ints.length;
+		for (index in start...start + count)
+			ints.push(source.ints[index]);
+		return result;
 	}
 
 	/** Links `row`, made by `endRow` or `copyRow`, into block `block` (an index) after `after`, or first when `after` is -1. */
