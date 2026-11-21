@@ -201,8 +201,9 @@ patch applies when no stored closure still holds it (see "Stored closures").
 `haxeon run --watch --live --strict-live` refuses an edit that cannot patch
 instead of reloading. The host records the refusal in `<module>.live.refused`
 (`<identity>:<running revision>:<refused revision>`), and before the next build
-the compiler takes the refused publications back (it keeps the last three,
-`CompilerPublication.RETRACTABLE`), so that build patches the revision the app
+the compiler takes the refused publications back (a live session keeps the last
+three, `CompilerPublication.RETRACTABLE`; a build that is not live keeps none),
+so that build patches the revision the app
 runs, with the refused edits in it. Patches name the revision they apply to
 (`baseRevision`). A build that needs a fresh layout keeps numbering the
 module's revisions, and the host treats a same-identity revision that goes

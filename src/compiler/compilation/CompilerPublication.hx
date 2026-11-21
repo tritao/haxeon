@@ -109,9 +109,17 @@ class CompilerPublication {
 				throw new InternalError('Publication revision ${candidate.revision} is still pending');
 		}
 
-	public function acknowledge(revision:Int):Void {
+	/**
+	 * `retractable` keeps the publication, with the state it was built from, to be taken back (`retract`): only a live host can
+	 * refuse one, so a build that publishes to none keeps no history, and drops what live builds kept.
+	 */
+	public function acknowledge(revision:Int, retractable:Bool):Void {
 		var candidate = requirePending(revision);
 		state = Ready({revision: revision, abi: candidate.abi, backendAvailable: true});
+		if (!retractable) {
+			acknowledged.resize(0);
+			return;
+		}
 		acknowledged.push(candidate);
 		if (acknowledged.length > RETRACTABLE)
 			acknowledged.shift();

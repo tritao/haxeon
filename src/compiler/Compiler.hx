@@ -343,7 +343,7 @@ class Compiler {
 	}
 
 	public function acknowledgePublication(revision:Int):Void
-		publication.acknowledge(revision);
+		publication.acknowledge(revision, livePatching);
 
 	public function rejectPublication(revision:Int):Void {
 		state = publication.reject(revision).snapshot;
