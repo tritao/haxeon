@@ -139,17 +139,25 @@ def hl_env(*extra):
 PIN = []  # a taskset prefix for timed runs, set from --cpu / --no-pin
 
 
+# /usr/bin/time reports the child's own peak RSS; wait4's ru_maxrss would inherit ours. GNU time (Linux) prints it in KB
+# as asked; BSD time (macOS) has no format option, and -l prints it among its counts, in bytes.
+BSD_TIME = sys.platform == "darwin"
+
+
 def run_once(cmd, args, env):
     t0 = time.perf_counter()
-    # /usr/bin/time reports the child's own peak RSS; wait4's ru_maxrss would inherit ours.
-    r = subprocess.run(["/usr/bin/time", "-f", "\n%M KB", *PIN, *cmd, *args.split()], env=env,
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    timer = ["/usr/bin/time", "-l"] if BSD_TIME else ["/usr/bin/time", "-f", "\n%M KB"]
+    r = subprocess.run([*timer, *PIN, *cmd, *args.split()], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     dt = time.perf_counter() - t0
     err = r.stderr.decode(errors="replace").rstrip()
-    body, _, rss = err.rpartition("\n")
     if r.returncode:
         raise RuntimeError(f"exit status {r.returncode}: {err[-300:]}")
-    return r.stdout.decode(errors="replace"), dt, int(rss.split()[0]) / 1024
+    if BSD_TIME:
+        rss = next(line for line in err.splitlines() if line.strip().endswith("maximum resident set size"))
+        mib = int(rss.split()[0]) / 1048576
+    else:
+        mib = int(err.rpartition("\n")[2].split()[0]) / 1024
+    return r.stdout.decode(errors="replace"), dt, mib
 
 
 def main():
