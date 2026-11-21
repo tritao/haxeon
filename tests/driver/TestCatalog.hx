@@ -62,6 +62,7 @@ class TestCatalog {
 		"AbstractTypeDependencyMain",
 		"TestMain",
 		"AuditVerifierMain",
+		"IrReducibilityMain",
 		"FrontendRestartMain",
 		"ReachabilityPruneMain",
 		"TypedMetadataMergeMain",

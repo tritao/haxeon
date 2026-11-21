@@ -169,12 +169,6 @@ From [DIRECT_SSA.md](docs/design/DIRECT_SSA.md)'s trade-offs: the generator
 builds SSA as it emits, so there is no form over mutable locals to rebuild
 SSA from.
 
-- **Flag irreducible control flow.** Braun et al.'s construction is minimal
-  only for reducible graphs; for irreducible ones it can leave redundant phi
-  cycles (extra phis, not wrong code), and `IrSsaVariables` does not run the
-  paper's SCC minimization. Haxe's structured control flow never makes one, so
-  have `IrVerifier` report an irreducible graph, and add the minimization only
-  if a lowering ever needs one (generators, state machines, labeled jumps).
 - **One SSA builder.** `IrLocalsBuilder` (locals) and `IrBuilder` (explicit
   phis, used by the passes) are separate. Merge them, locals as an option, so
   passes that restructure control flow repair SSA through the same machinery

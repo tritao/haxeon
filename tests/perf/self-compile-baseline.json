@@ -2,7 +2,7 @@
 	"about": "scripts/perf-guard.py: the compiler, built in release mode from the checkout, compiling the checkout's own sources. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2206099872,
+			"value": 2152778312,
 			"tolerance": 0.02,
 			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
 		},
@@ -12,27 +12,27 @@
 			"why": "Phase-end collections (CompileOptions.phaseCollections) plus the byte trigger as a safety net; one extra collection can come from crossing a trigger boundary."
 		},
 		"live_bytes_tables": {
-			"value": 243374490,
+			"value": 243584205,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_ir": {
-			"value": 304821043,
+			"value": 304925901,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_backend": {
-			"value": 267386880,
+			"value": 267596595,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"peak_rss_bytes": {
-			"value": 1356365824,
+			"value": 1338003456,
 			"tolerance": 0.08,
 			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly."
 		},
 		"main_thread_instructions": {
-			"value": 52476824892,
+			"value": 51576641973,
 			"tolerance": 0.03,
 			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed."
 		}

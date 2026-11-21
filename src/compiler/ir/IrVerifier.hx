@@ -629,6 +629,7 @@ class IrVerifier {
 				&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name) == true))
 				throw new InternalError("A value lane reference cannot cross an ordinary function boundary");
 		var graph = new IrGraph(fn), values = scratchValues;
+		IrReducibility.verify(fn, graph);
 		values.reset();
 		// Lane and scalar stack references are rare. A function whose arguments and outputs have none of those types has no operand of
 		// those types either (an operand has the type of its definition, checked below), so the operand scans for them are skipped.
