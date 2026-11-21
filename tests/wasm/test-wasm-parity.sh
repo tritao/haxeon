@@ -41,6 +41,7 @@ inline_cases=(
 	reactive-write-scope
 	reactive-thread-isolation
 	dead-pure-values
+	closure-signature-adapters
 	receiver-check-elision
 	non-null-facts
 	field-forwarding-blocks

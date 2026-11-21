@@ -21,16 +21,19 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 /**
  * Casts linear-memory closures by semantic signature. Static closures refer to immutable module
  * descriptors; bound closures keep their signature in the existing header. A Dynamic cast to a
- * different signature creates an adapter, as on the other runtimes.
+ * different signature creates an adapter, as on the other runtimes (see `generate` for its shape).
  */
 class WasmLinearClosureAdapters {
 	public static inline final SIGNATURE_FUNCTION = "__haxeon_closure_signature";
+	static inline final ARITY_FUNCTION = "__haxeon_closure_arity";
 
 	public static function staticDescriptorKey(name:String, type:IrType):String
 		return haxe.Json.stringify([name, IrTypeIdentity.text(type)]);
 
 	final program:IrProgram;
 	final signatureIds:Map<String, Int> = [];
+	/** Signature ids run from 1 to this count. */
+	var signatureCount = 0;
 	final inlineEnums:Map<String, String> = [];
 
 	function new(program:IrProgram) {
@@ -50,8 +53,15 @@ class WasmLinearClosureAdapters {
 	public function castName(type:IrType):String
 		return '__haxeon_closure_cast_${signatureId(type)}';
 
-	static function adapterName(source:Int, target:Int):String
-		return '__haxeon_closure_adapter_${source}_$target';
+	/** The one adapter of a target signature, whatever the source. */
+	static function adapterName(target:Int):String
+		return '__haxeon_closure_adapter_$target';
+
+	static function invokerName(source:Int):String
+		return '__haxeon_closure_invoker_$source';
+
+	static function dispatcherName(arity:Int):String
+		return '__haxeon_closure_invoke_$arity';
 
 	static function closureKey(type:IrType):String
 		return IrTypeIdentity.text(type);
@@ -68,14 +78,33 @@ class WasmLinearClosureAdapters {
 			default: Void;
 		};
 
-	/** Generate adapters for each semantic source and target of the same arity. */
+	/**
+	 * Plans the closure casts of a program, in code linear in its closure signatures rather than in their pairs.
+	 *
+	 * A cast to a target signature T returns a closure that already has T, wraps the varargs closure in T's varargs
+	 * adapter, and wraps any other closure whose signature has T's arity in T's ONE adapter. That adapter boxes T's
+	 * arguments to Dynamic and calls `__haxeon_closure_invoke_<arity>`, which switches on the closure's runtime
+	 * signature to that source signature's invoker; the invoker unboxes the arguments to the source's types, calls the
+	 * closure at its own signature and boxes the result, which the adapter converts to T's result. Each signature thus
+	 * costs one cast, one adapter and one invoker, instead of one adapter per (source, target) pair of the same arity,
+	 * which grew to over a million functions for ~2,000 signatures.
+	 *
+	 * Why every cast still finds its adapter: a closure's runtime signature is written only where the closure is made.
+	 * That is a StaticClosure or InstanceClosure in a reachable function (collected below), an adapter made by a cast
+	 * function here (its signature is that cast's target, and every target is planned as a source), or the varargs
+	 * closure (-1, which the cast handles itself). Generated bodies that cast again (an invoker casting its receiver or
+	 * a nested function argument, an adapter its result) add their targets, and the loop below runs until no body adds
+	 * one. So every signature a cast can observe has an invoker and an arity entry, and every target has an adapter: the
+	 * cast accepts exactly the (source, target) pairs of equal arity that the per-pair adapters accepted, without
+	 * enumerating them. Any other signature (0 for a value that is not a closure) throws "Cannot cast" as before.
+	 */
 	public static function generate(program:IrProgram, scalarClosures:Map<String, Bool>, entry:String,
 			roots:Array<String>):WasmLinearClosureAdapters {
 		var adapters = new WasmLinearClosureAdapters(program);
 		if (Lambda.exists(program.functions, fn -> fn.name == SIGNATURE_FUNCTION))
 			throw new InternalError("Linear Wasm closure adapters were generated twice for one program");
-		var targetTypes:Map<String, IrType> = [],
-			sourceTypes:Map<String, IrType> = [];
+		// Every semantic signature a closure may have at runtime, which is also every signature cast to.
+		var planned:Map<String, IrType> = [];
 		var signatureTypes:Map<String, Bool> = [];
 		function noteType(type:IrType):Void {
 			switch type {
@@ -101,13 +130,12 @@ class WasmLinearClosureAdapters {
 						case StaticClosure(output, _) | InstanceClosure(output, _, _):
 							noteType(output.type);
 							if (reachable.exists(fn.name) && !scalarClosures.exists(IrTypeIdentity.text(output.type)))
-								sourceTypes.set(closureKey(output.type), output.type);
+								planned.set(closureKey(output.type), output.type);
 						case SafeCast(output, _):
 							switch output.type {
 								case Function(_, _):
 									noteType(output.type);
-									if (reachable.exists(fn.name)) targetTypes.set(closureKey(output.type),
-										output.type);
+									if (reachable.exists(fn.name)) planned.set(closureKey(output.type), output.type);
 								default:
 							}
 						case TypeValue(_, type):
@@ -121,69 +149,70 @@ class WasmLinearClosureAdapters {
 		orderedSignatures.sort(Reflect.compare);
 		for (index in 0...orderedSignatures.length)
 			adapters.signatureIds.set(orderedSignatures[index], index + 1);
-		// Every generated adapter may cast nested function arguments or results, as well as
-		// its original closure. Those casts require their own dispatchers and adapters.
+		adapters.signatureCount = orderedSignatures.length;
+		// Generated bodies cast nested function arguments and results, and an invoker casts its receiver: those
+		// targets need their own cast, adapter and invoker. Each round builds only the signatures added since the last.
+		var invokers:Map<String, IrFunction> = [], targetAdapters:Map<String, IrFunction> = [];
+		function noteCasts(fn:IrFunction):Bool {
+			var added = false;
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case SafeCast(output, _):
+							switch output.type {
+								case Function(_, _):
+									var key = closureKey(output.type);
+									if (!planned.exists(key)) {
+										planned.set(key, output.type);
+										added = true;
+									}
+								default:
+							}
+						default:
+					}
+			return added;
+		}
 		var changed = true;
 		while (changed) {
 			changed = false;
-			for (key => type in targetTypes)
-				if (!sourceTypes.exists(key)) {
-					sourceTypes.set(key, type);
-					changed = true;
+			var keys = [for (key in planned.keys()) key];
+			keys.sort(Reflect.compare);
+			for (key in keys) {
+				if (!invokers.exists(key)) {
+					var fn = adapters.invoker(planned.get(key));
+					invokers.set(key, fn);
+					if (noteCasts(fn))
+						changed = true;
 				}
-			var targetsNow = [for (key in targetTypes.keys()) key],
-				sourcesNow = [for (key in sourceTypes.keys()) key];
-			for (target in targetsNow)
-				for (source in sourcesNow)
-					if (source != target
-						&& arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) {
-						var fn = adapters.adapter(sourceTypes.get(source), targetTypes.get(target));
-						for (block in fn.blocks)
-							for (located in block.instructions)
-								switch located.value {
-									case SafeCast(output, _):
-										switch output.type {
-											case Function(_, _):
-												var key = closureKey(output.type);
-												if (!targetTypes.exists(key)) {
-													targetTypes.set(key, output.type);
-													changed = true;
-												}
-											default:
-										}
-									default:
-								}
-					}
+				if (!targetAdapters.exists(key)) {
+					var fn = adapters.adapter(planned.get(key));
+					targetAdapters.set(key, fn);
+					if (noteCasts(fn))
+						changed = true;
+				}
+			}
 		}
-		var targets = [for (key in targetTypes.keys()) key],
-			sources = [for (key in sourceTypes.keys()) key];
-		targets.sort(Reflect.compare);
-		sources.sort(Reflect.compare);
-		if (reachable.exists(WasmDynamicCalls.VARARGS_TARGET)) {
-			sources.push("varargs");
-			sourceTypes.set("varargs", WasmDynamicCalls.callbackType());
+		var keys = [for (key in planned.keys()) key];
+		keys.sort(Reflect.compare);
+		var varargs = reachable.exists(WasmDynamicCalls.VARARGS_TARGET),
+			byArity:Map<Int, Array<IrType>> = [];
+		for (key in keys) {
+			var type = planned.get(key), arity = arguments(type).length;
+			if (!byArity.exists(arity))
+				byArity.set(arity, []);
+			byArity.get(arity).push(type);
 		}
-		var pairs = [for (target in targets)
-			{
-				target:target,
-					sources:[
-						for (source in sources)
-							if (source != target
-							&& (source == "varargs"
-							|| arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length))
-							source
-					]
-			}];
+		var arities = [for (arity in byArity.keys()) arity];
+		arities.sort((left, right) -> left - right);
 		program.functions.push(adapters.signatureQuery());
 		adapters.rewriteSignatureChecks();
-		for (pair in pairs) {
-			var targetType = targetTypes.get(pair.target);
-			for (source in pair.sources)
-				if (source != "varargs")
-					program.functions.push(adapters.adapter(sourceTypes.get(source), targetType));
-			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {
-				key:source, type:sourceTypes.get(source)
-			}]));
+		program.functions.push(adapters.arityQuery(arities, byArity));
+		for (arity in arities)
+			program.functions.push(adapters.dispatcher(arity, byArity.get(arity)));
+		for (key in keys) {
+			program.functions.push(invokers.get(key));
+			program.functions.push(targetAdapters.get(key));
+			program.functions.push(adapters.castFunction(planned.get(key), varargs));
 		}
 		return adapters;
 	}
@@ -282,8 +311,8 @@ class WasmLinearClosureAdapters {
 		module.setFunction(index, new WasmFunction(SIGNATURE_FUNCTION, module.functionType(index), [], body));
 	}
 
-	/** Return an already matching closure; adapt a different semantic signature at the cast. */
-	function castFunction(targetType:IrType, sources:Array<{key:String, type:IrType}>):IrFunction {
+	/** Return an already matching closure; adapt one of another signature with the same arity at the cast. */
+	function castFunction(targetType:IrType, varargs:Bool):IrFunction {
 		var builder = new IrBuilder(),
 			closure = builder.argument("closure", Dyn),
 			signature = builder.call(SIGNATURE_FUNCTION, [closure], I32);
@@ -292,57 +321,146 @@ class WasmLinearClosureAdapters {
 		builder.select(missing);
 		builder.returnValue(closure);
 		builder.select(present);
-		function when(value:Int, body:Void->Void):Void {
+		function when(condition:IrValue, body:Void->Void):Void {
 			var matched = builder.createBlock(), next = builder.createBlock();
-			builder.branch(builder.equal(signature, builder.constInt(value)), matched, next);
+			builder.branch(condition, matched, next);
 			builder.select(matched);
 			body();
 			builder.select(next);
 		}
-		when(signatureId(targetType), () -> builder.returnValue(closure));
-		for (source in sources)
-			when(source.key == "varargs" ? -1 : signatureId(source.type),
-				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs"
-				? WasmDynamicCalls.varargsAdapterName(targetType) : adapterName(signatureId(source.type),
-				signatureId(targetType)),
+		when(builder.equal(signature, builder.constInt(signatureId(targetType))), () -> builder.returnValue(closure));
+		if (varargs)
+			when(builder.equal(signature, builder.constInt(-1)),
+				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(WasmDynamicCalls.varargsAdapterName(targetType),
 				closure, targetType))));
+		var arity = builder.call(ARITY_FUNCTION, [signature], I32);
+		when(builder.equal(arity, builder.constInt(arguments(targetType).length)),
+			() -> builder.returnValue(builder.toDyn(builder.instanceClosure(adapterName(signatureId(targetType)),
+			closure,
+			targetType))));
 		builder.throwValue(builder.toDyn(builder.constString('Cannot cast to ${Std.string(targetType)}')));
 		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, ClosureCast(targetType),
 			null, false, Reachable);
 	}
 
-	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
-	function adapter(sourceType:IrType, targetType:IrType):IrFunction {
+	/** The arity of each planned source signature, or -1 for any other signature (and for 0, not a closure). */
+	function arityQuery(arities:Array<Int>, byArity:Map<Int, Array<IrType>>):IrFunction {
+		var builder = new IrBuilder(),
+			signature = builder.argument("signature", I32),
+			start = builder.currentBlock(),
+			otherwise = builder.createBlock();
+		builder.select(otherwise);
+		builder.returnValue(builder.constInt(-1));
+		var targets = [for (_ in 0...signatureCount + 1) otherwise.id];
+		for (arity in arities) {
+			var block = builder.createBlock();
+			builder.select(block);
+			builder.returnValue(builder.constInt(arity));
+			for (type in byArity.get(arity))
+				targets[signatureId(type)] = block.id;
+		}
+		builder.select(start);
+		builder.terminate(Switch(signature, targets, otherwise.id));
+		return new IrFunction(ARITY_FUNCTION, builder.arguments, I32, builder.blocks, GeneratedHelper, null, false,
+			Reachable);
+	}
+
+	/** Calls a closure with boxed arguments through the invoker of its runtime signature. */
+	function dispatcher(arity:Int, sources:Array<IrType>):IrFunction {
+		var builder = new IrBuilder(),
+			closure = builder.argument("closure", Dyn),
+			boxed = [for (index in 0...arity) builder.argument('argument$index', Dyn)],
+			signature = builder.call(SIGNATURE_FUNCTION, [closure], I32),
+			start = builder.currentBlock(),
+			otherwise = builder.createBlock();
+		builder.select(otherwise);
+		// Unreachable for planned closures: a cast adapts only signatures the arity query lists for this arity.
+		builder.throwValue(builder.toDyn(builder.constString('Cannot call a closure of unplanned signature with $arity arguments')));
+		var targets = [for (_ in 0...signatureCount + 1) otherwise.id];
+		for (type in sources) {
+			var block = builder.createBlock();
+			builder.select(block);
+			builder.returnValue(builder.call(invokerName(signatureId(type)), [closure].concat(boxed), Dyn));
+			targets[signatureId(type)] = block.id;
+		}
+		builder.select(start);
+		builder.terminate(Switch(signature, targets, otherwise.id));
+		return new IrFunction(dispatcherName(arity), builder.arguments, Dyn, builder.blocks, GeneratedHelper, null,
+			false,
+			Reachable);
+	}
+
+	/** Unboxes the arguments to the source signature, calls the closure at it and boxes the result (null for Void). */
+	function invoker(sourceType:IrType):IrFunction {
 		var builder = new IrBuilder(),
 			original = builder.argument("closure", Dyn),
-			targetTypes = arguments(targetType),
-			targetArguments = [
-				for (index in 0...targetTypes.length)
-					builder.argument('argument$index', targetTypes[index])
-			],
 			sourceArguments = arguments(sourceType),
+			boxed = [
+				for (index in 0...sourceArguments.length)
+					builder.argument('argument$index', Dyn)
+			],
 			callee = builder.safeCast(original, sourceType),
 			converted = [
 				for (index in 0...sourceArguments.length)
-					convert(builder, targetArguments[index], sourceArguments[index])
+					unbox(builder, boxed[index], sourceArguments[index])
 			],
 			sourceResult = result(sourceType),
-			targetResult = result(targetType),
 			value = builder.callClosure(callee, converted, sourceResult);
-		builder.returnValue((switch (targetResult) {
-			case Void: true;
-			default: false;
-		}) ? ((switch (sourceResult) {
-			case Void: true;
-			default: false;
-		}) ? value : builder.constVoid()) : (switch (sourceResult) {
-			case Void: true;
-			default: false;
-		}) ? zero(builder, targetResult) : convert(builder, value, targetResult));
-		return new IrFunction(adapterName(signatureId(sourceType), signatureId(targetType)), builder.arguments,
-			targetResult, builder.blocks,
-			ClosureAdapter(sourceType, targetType), null, false, Reachable);
+		builder.returnValue(isVoid(sourceResult) ? builder.constNull(Dyn) : convert(builder, value, Dyn));
+		return new IrFunction(invokerName(signatureId(sourceType)), builder.arguments, Dyn, builder.blocks,
+			ClosureAdapter(sourceType, Function([for (_ in sourceArguments) Dyn], Dyn)), null, false, Reachable);
 	}
+
+	/** Receives the original closure and the target's arguments; calls it through the dispatcher with them boxed. */
+	function adapter(targetType:IrType):IrFunction {
+		var builder = new IrBuilder(),
+			original = builder.argument("closure", Dyn),
+			targetArguments = arguments(targetType),
+			values = [
+				for (index in 0...targetArguments.length)
+					builder.argument('argument$index', targetArguments[index])
+			],
+			boxed = [for (value in values) convert(builder, value, Dyn)],
+			targetResult = result(targetType),
+			value = builder.call(dispatcherName(targetArguments.length), [original].concat(boxed), Dyn);
+		switch targetResult {
+			case Void:
+				builder.returnValue(builder.constVoid());
+			case Dyn:
+				builder.returnValue(value);
+			case I64 | F32 | EnumTag(_):
+				// A Void source gives null, which these do not unbox: the target's zero, as the per-pair adapters gave.
+				var missing = builder.createBlock(), present = builder.createBlock();
+				builder.branch(builder.equal(value, builder.constNull(Dyn)), missing, present);
+				builder.select(missing);
+				builder.returnValue(zero(builder, targetResult));
+				builder.select(present);
+				builder.returnValue(unbox(builder, value, targetResult));
+			default:
+				// Int and Float unbox null to 0, Bool (below) to false and references to null.
+				builder.returnValue(unbox(builder, value, targetResult));
+		}
+		return new IrFunction(adapterName(signatureId(targetType)), builder.arguments, targetResult, builder.blocks,
+			ClosureVarargs(targetType), null, false, Reachable);
+	}
+
+	/**
+	 * Converts a boxed value to a typed one. Bool goes through Int, which accepts Bool, Int and Float boxes and null:
+	 * a per-pair adapter converted an Int argument or result to Bool by comparing it with 0, which this keeps.
+	 */
+	function unbox(builder:IrBuilder, value:IrValue, type:IrType):IrValue
+		return switch type {
+			case Dyn: value;
+			case Bool: builder.equal(builder.equal(builder.safeCast(value, I32), builder.constInt(0)),
+				builder.constBool(false));
+			default: fromDynamic(builder, value, type);
+		};
+
+	static function isVoid(type:IrType):Bool
+		return switch type {
+			case Void: true;
+			default: false;
+		};
 
 	function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		if (Type.enumEq(value.type, type))

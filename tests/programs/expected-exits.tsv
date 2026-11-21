@@ -416,6 +416,7 @@ float-div-pow2	42
 native-float32-casts	42
 counted-array-loops	42
 dead-pure-values	42
+closure-signature-adapters	42
 receiver-check-elision	42
 non-null-facts	42
 field-forwarding-blocks	42
