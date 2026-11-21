@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
+import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 
 /** What a function's body says about value arrays: the element keys its types name, and whether it has dynamic views. */
@@ -155,10 +156,11 @@ class IrValueArrayProgramRewrite {
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. The functions' bodies are made
 	 * with `types` (those of the program's bodies when not given, `IrTypeIds.ofFunctions`); a function that changes becomes its
-	 * edited body, frozen when a session keeps the stage's functions (`retained`), else owned by the next stage.
+	 * edited body, frozen when a session keeps the stage's functions (`retained`), else owned by the next stage. A session's
+	 * `cache` keeps the allocation lowering of the functions given as the same objects as last compile (`IrArrayFactory.lower`).
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget, ?types:IrTypeIds,
-			?scratch:IrPassScratch, retained = true):Void {
+			?scratch:IrPassScratch, retained = true, ?cache:IrInlineCache):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
@@ -255,7 +257,7 @@ class IrValueArrayProgramRewrite {
 			slotNamespace = nextSlotNamespace(program);
 		for (key in keys)
 			rewriteIndexed(program, elements.get(key), pointerBits, target, index, slotNamespace++, scratch);
-		IrArrayFactory.lower(program, types, scratch, retained);
+		IrArrayFactory.lower(program, types, scratch, retained, cache);
 		IrVerifier.verifyValueArraysLowered(program, types);
 		encodeAll(program, index);
 	}

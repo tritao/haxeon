@@ -130,8 +130,10 @@ names; reuse is by object identity of the `IrFunction` an entry was made from.
 - **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
   has its objects (the stages before still read them) and its frozen encoding. A rebuilt function equal to it
   (`IrFunctionStateEquality.same`) is replaced by it, so the stages after see the same object and reuse by identity.
-- **Stages between the encode point and the inliner**: no cache of their own. A function a stage changes is a frozen,
-  compacted copy; one it leaves is the same object.
+- **Stages between the encode point and the inliner**: no cache of their own, but for the array factory's lowering in the
+  value-array rewrite (`IrInlineCache.arrayFactories`, name → {source function, lowered function}): it edits every function
+  that allocates an array, and reads only the function, so a function given as the same object is last build's result. A
+  function a stage changes is a frozen, compacted copy; one it leaves is the same object.
 - **Inliner** (`IrInlineCache`): `sources` (name → the function it was given, deduplicated as above); `originals` (name →
   {source function, its frozen body}); `memo` (name → {source function, fingerprint, the functions and object prints it
   consulted, the inlined form as a frozen compacted body}); `cleaned` (name → {inlined form, cleaned function}); `published`

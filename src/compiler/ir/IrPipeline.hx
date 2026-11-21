@@ -466,8 +466,9 @@ class IrPipeline {
 		var laneTarget = context.laneTarget;
 		if (!closesEnumTags(program, context))
 			stableBodySources(program, context);
+		var retained = context.options.keepSession;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
-			bodyTypes(context), context.passScratch, context.options.keepSession);
+			bodyTypes(context), context.passScratch, retained, retained ? context.inlineCache : null);
 		return program;
 	}
 

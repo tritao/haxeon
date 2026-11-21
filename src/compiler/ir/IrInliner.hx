@@ -71,6 +71,12 @@ class IrInlineCache {
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 
+	/**
+	 * By name, the array factory lowering of each function that calls the factory (`IrArrayFactory.lower`), kept while the function
+	 * is the same object; each compile replaces the map.
+	 */
+	public var arrayFactories:Map<String, IrArrayFactory.IrArrayFactoryLowering> = [];
+
 	/** Functions the last run found unchanged except for where they sit in their file: lowered again, never patched. */
 	public var relocated:Array<String> = [];
 
@@ -180,6 +186,7 @@ class IrInlineCache {
 	public function forgetSources():Void {
 		sources = [];
 		bodySources = [];
+		arrayFactories = [];
 		staticChecks.copies = [];
 		staticChecks.helpers = [];
 	}
@@ -188,6 +195,7 @@ class IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
 		result.bodySources = bodySources;
+		result.arrayFactories = arrayFactories;
 		result.types = types;
 		for (name => entry in originals)
 			result.originals.set(name, entry);
