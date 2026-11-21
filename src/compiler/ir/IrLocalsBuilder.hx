@@ -109,7 +109,7 @@ class IrLocalsBuilder {
 
 	/** Select the source context inherited by subsequently emitted operations. */
 	public function at(span:SourceSpan):Void
-		provenance = SourceProvenance.user(span);
+		provenance = userProvenance(span);
 
 	/** Select an explicit compiler-generated context, optionally anchored in source. */
 	public function generated(reason:String, ?anchor:SourceSpan):Void
@@ -125,8 +125,21 @@ class IrLocalsBuilder {
 	/** Enter a nested source context and return the token needed to restore it. */
 	public function enterSource(span:SourceSpan):SourceProvenance {
 		var previous = provenance;
-		provenance = SourceProvenance.user(span);
+		provenance = userProvenance(span);
 		return previous;
+	}
+
+	/** `SourceProvenance.user(span)`, or the current provenance when it already names that place: nested syntax often shares a span. */
+	function userProvenance(span:SourceSpan):SourceProvenance {
+		var current = provenance, location = current.location;
+		if (location != null && span.generatedReason == null && location.start == span.start && location.end == span.end
+			&& location.path == span.file.path && location.sourceHash == span.file.contentHash())
+			switch current.origin {
+				case UserSource:
+					return current;
+				case CompilerGenerated(_):
+			}
+		return SourceProvenance.user(span);
 	}
 
 	/** Restore a context returned by {@link enterSource}. */
