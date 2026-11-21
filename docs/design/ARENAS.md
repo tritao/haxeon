@@ -50,6 +50,35 @@ Arenas nest. Each unit names where its outputs go: the enclosing unit's arena, a
 or the global one. "Outside" is always an explicit target, never "the parent", because the inliner's units are recursive
 (a callee's inlined form is computed inside its caller's unit but belongs to the stage).
 
+## Long-term goal: no collections in a one-shot compile
+
+A one-shot compile should end without a collection: every piece of memory has a known release point (global and
+session data at exit, build data at the end of the build, phase data at the end of its phase, unit data at the end of
+its unit), and the collector is a safety net, not the mechanism. A collection in a normal one-shot compile then means
+something escaped, and the diagnostics name it; the compile server and language service still collect, since their
+session data changes over time.
+
+Why not by allocating less alone: with a byte-count trigger the peak is the last collection's survivors plus up to a
+trigger's worth of allocation, and where the trigger fires relative to the phases decides it. Crossing below a trigger
+step removed a collection that ran mid-backend and raised the peak, because the later phases had been reusing what it
+freed. Allocating less is always right; the schedule must be deliberate.
+
+The path, each step useful alone:
+
+1. **Collections at phase boundaries.** At the end of a phase its data is dead and the live set is smallest, so a
+   collection there is cheapest and frees the most. A one-shot compile collects at a boundary when enough was allocated
+   since the last collection (not more often than the trigger would), the byte trigger stays as a safety net for large
+   inputs, and the peak becomes predictable: live data at a boundary plus the largest phase's allocation.
+2. **Ownership by lifetime.** Each phase owns its data and drops it when it ends; the one-shot special cases fold into
+   that (`TODO.md`).
+3. **Flat structures in native arenas per phase** (the token table, IR columns, HL output): each replaces part of a
+   boundary collection with a reset.
+4. **Checked arenas for the object graphs left,** with the escape check in CI.
+5. **Zero collections** in a one-shot compile, held by the performance guard.
+
+Measured by deterministic numbers: allocation and live data at the phase boundaries gate; resident peak, an outcome of
+the schedule, is reported and gated loosely.
+
 ## The design in layers
 
 Arenas are the third of four layers, each taking what the one above leaves, in the order they pay:
