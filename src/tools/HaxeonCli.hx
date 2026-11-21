@@ -14,6 +14,8 @@ import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
 import compiler.core.InternalError;
+import compiler.tools.DiagnosticPrinter.DiagnosticFormat;
+import compiler.tools.ReportStyle;
 import compiler.tools.Verbosity;
 import compiler.formatter.Formatter;
 import compiler.formatter.ProjectFormat;
@@ -48,6 +50,12 @@ private typedef BuildOptions = {
 
 	/** `-v`/`--verbosity LEVEL`: what the build prints, `minimal` (a line before and after it) by default. */
 	final verbosity:Verbosity;
+
+	/**
+	 * How the compiler reports: this verbosity, and diagnostics in the full format (`--diagnostic-format=full|short`), coloured on
+	 * a terminal (`--color=auto|always|never`; auto honours NO_COLOR), with paths relative to where the command was run.
+	 */
+	final style:ReportStyle;
 
 	/** `--quiet`: keep the build's progress, and print it (to standard error) only if the build fails. */
 	final quiet:Bool;
@@ -753,7 +761,7 @@ class HaxeonCli {
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
-				options.buildMode == "development", null, null, options.verbosity) catch (error:haxe.Exception) {
+				options.buildMode == "development", null, null, options.style) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
@@ -795,7 +803,7 @@ class HaxeonCli {
 					if (swapPath)
 						Sys.putEnv("PATH", buildPath);
 					try
-						liveHost = buildLiveHost(home, options.jobs, instrument, session, options.verbosity)
+						liveHost = buildLiveHost(home, options.jobs, instrument, session, options.style)
 					catch (error:haxe.Exception) {
 						if (swapPath)
 							Sys.putEnv("PATH", runPath);
@@ -837,7 +845,7 @@ class HaxeonCli {
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines,
 								options.jobs, false, false, false, 0.0,
 								options.selfHosted, change.compilerOnly, options.live, instrument, session,
-								options.buildMode == "development", null, null, options.verbosity);
+								options.buildMode == "development", null, null, options.style);
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							return status == 0 ? candidate : null;
@@ -883,7 +891,7 @@ class HaxeonCli {
 				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
 				false,
 				false, null, options.buildMode == "development",
-				targetInfo, null, options.verbosity) catch (error:haxe.Exception) {
+				targetInfo, null, options.style) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
@@ -907,7 +915,7 @@ class HaxeonCli {
 		var started = announceBuild(options, project, "android", "development");
 		var buildStatus = try HaxeonProjectBuild.build(project, home, module, options.defines, options.jobs,
 			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
-			false, false, session, true, targetInfo, null, options.verbosity) catch (error:haxe.Exception) {
+			false, false, session, true, targetInfo, null, options.style) catch (error:haxe.Exception) {
 				releaseQuietOutput(options, true);
 				throw error;
 			}
@@ -962,7 +970,7 @@ class HaxeonCli {
 	 * the instrumented flavor, so a capture shows the host's polling and patching beside the app's calls.
 	 */
 	static function buildLiveHost(home:String, jobs:Int, instrument:Bool, ?session:BuildSession,
-			?verbosity:Verbosity):String {
+			?style:ReportStyle):String {
 		var root = Path.join([home, "out", "live-host"]),
 			manifestPath = Path.join([root, "haxeon.json"]);
 		FileSystem.createDirectory(root);
@@ -980,7 +988,7 @@ class HaxeonCli {
 		var project = discoverProject(manifestPath),
 			output = Path.join([HaxeonProjectBuild.outputDirectory(project, instrument), "host", "live-host.hl"]);
 		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, false, false,
-			instrument, session, true, null, null, verbosity) != 0)
+			instrument, session, true, null, null, style) != 0)
 			throw new InternalError("Could not build the live development host");
 		return output;
 	}
@@ -1196,6 +1204,8 @@ class HaxeonCli {
 			explain = false,
 			timings = false,
 			verbosity = Verbosity.Minimal,
+			diagnosticFormat = DiagnosticFormat.Full,
+			color = "auto",
 			quiet = false,
 			compilerOnly = false,
 			gradleInputs:Null<String> = null,
@@ -1253,6 +1263,17 @@ class HaxeonCli {
 				verbosity = parseVerbosity(arguments[index++]);
 			} else if (StringTools.startsWith(argument, "--verbosity="))
 				verbosity = parseVerbosity(argument.substr("--verbosity=".length));
+			else if (argument == "--color" || argument == "--diagnostic-format") {
+				if (index >= arguments.length)
+					throw new InternalError('Option "$argument" requires a value');
+				if (argument == "--color")
+					color = parseColor(arguments[index++]);
+				else
+					diagnosticFormat = parseDiagnosticFormat(arguments[index++]);
+			} else if (StringTools.startsWith(argument, "--color="))
+				color = parseColor(argument.substr("--color=".length));
+			else if (StringTools.startsWith(argument, "--diagnostic-format="))
+				diagnosticFormat = parseDiagnosticFormat(argument.substr("--diagnostic-format=".length));
 			else if (argument == "--project" || argument == "--target" || argument == "--build-mode"
 				|| argument == "--output" || argument == "--define"
 				|| argument == "--device" || argument == "--jobs" || argument == "--gradle-inputs") {
@@ -1342,6 +1363,7 @@ class HaxeonCli {
 			explain: explain,
 			timings: timings,
 			verbosity: verbosity,
+			style: new ReportStyle(verbosity, diagnosticFormat, colorDiagnostics(color), invokedFrom),
 			quiet: quiet,
 			compilerOnly: compilerOnly,
 			gradleInputs: gradleInputs,
@@ -1368,6 +1390,31 @@ class HaxeonCli {
 		if (level == null)
 			throw new InternalError('Unknown verbosity "$value". Valid: ${Verbosity.NAMES.join(", ")}');
 		return level;
+	}
+
+	static function parseColor(value:String):String {
+		if (value != "auto" && value != "always" && value != "never")
+			throw new InternalError('Unknown color mode "$value". Valid: auto, always, never');
+		return value;
+	}
+
+	static function parseDiagnosticFormat(value:String):DiagnosticFormat {
+		var format = DiagnosticFormat.parse(value);
+		if (format == null)
+			throw new InternalError('Unknown diagnostic format "$value". Valid: ${DiagnosticFormat.NAMES.join(", ")}');
+		return format;
+	}
+
+	/**
+	 * Whether diagnostics are coloured: `auto` colours them only for a terminal (the haxeon launcher says whether standard error
+	 * is one, in HAXEON_STDERR_TERMINAL) and not when NO_COLOR is set or TERM is dumb.
+	 */
+	static function colorDiagnostics(mode:String):Bool {
+		if (mode != "auto")
+			return mode == "always";
+		var noColor = Sys.getEnv("NO_COLOR");
+		return (noColor == null || noColor == "") && Sys.getEnv("TERM") != "dumb"
+			&& Sys.getEnv("HAXEON_STDERR_TERMINAL") == "1";
 	}
 
 	static function parsePackageOptions(arguments:Array<String>, allowLocked:Bool, command:String):PackageOptions {

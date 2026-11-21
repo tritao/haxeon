@@ -137,6 +137,8 @@ class CompilerClient {
 				switch CompilerServerProtocol.readResponse(socket.input) {
 					case Message(text):
 						build.BuildOutput.line(text);
+					case Diagnostics(text):
+						build.BuildOutput.error(text);
 					case Status(code):
 						socket.close();
 						markUsed(statePath);

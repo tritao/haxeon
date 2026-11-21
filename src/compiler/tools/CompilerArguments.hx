@@ -5,6 +5,7 @@ import compiler.backend.BackendTargets;
 import compiler.core.InternalError;
 import compiler.tools.CompilerRequest.CompileSessionMode;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
+import compiler.tools.DiagnosticPrinter.DiagnosticFormat;
 import sys.io.File;
 
 /** Parses and validates the stable command-line build interface. */
@@ -41,7 +42,10 @@ class CompilerArguments {
 			paths:Array<String> = [],
 			optionFlags:Array<String> = [],
 			session = CompileSessionMode.Reuse,
-			verbosity = Verbosity.Normal;
+			verbosity = Verbosity.Normal,
+			diagnosticFormat = DiagnosticFormat.Short,
+			color = false,
+			diagnosticDirectory:Null<String> = null;
 		var packageRoots:Array<PackageSourceRoot> = [];
 		var index = 0;
 		while (index < arguments.length) {
@@ -111,7 +115,20 @@ class CompilerArguments {
 				if (level == null)
 					throw new InternalError('Compiler option "--verbosity=" takes ${Verbosity.NAMES.join(", ")}, not "${value(argument, "--verbosity=")}"');
 				verbosity = level;
-			} else if (argument == "--live")
+			} else if (StringTools.startsWith(argument, "--diagnostic-format=")) {
+				var format = DiagnosticFormat.parse(value(argument, "--diagnostic-format="));
+				if (format == null)
+					throw new InternalError('Compiler option "--diagnostic-format=" takes ${DiagnosticFormat.NAMES.join(", ")}, not "${value(argument, "--diagnostic-format=")}"');
+				diagnosticFormat = format;
+			} else if (StringTools.startsWith(argument, "--color="))
+				color = switch value(argument, "--color=") {
+					case "always": true;
+					case "never": false;
+					case other: throw new InternalError('Compiler option "--color=" takes always, never, not "$other"');
+				};
+			else if (StringTools.startsWith(argument, "--diagnostic-directory="))
+				diagnosticDirectory = value(argument, "--diagnostic-directory=");
+			else if (argument == "--live")
 				live = true;
 			else if (argument == "--wasm-shared-memory")
 				sharedMemory = true;
@@ -203,6 +220,9 @@ class CompilerArguments {
 			options: compiler.CompileOptions.fromArguments(optionFlags),
 			session: session,
 			verbosity: verbosity,
+			diagnosticFormat: diagnosticFormat,
+			color: color,
+			diagnosticDirectory: diagnosticDirectory,
 			live: live,
 			exports: exports,
 			ffiHeader: ffiHeader,

@@ -105,7 +105,7 @@ class CompilerProvider {
 			for (path in paths)
 				inputs.push(path);
 		// Presentation, added as the compile runs; the committed bootstrap compiler predates it, so a self-hosted compile goes without.
-		var reported = arguments.concat(["--verbosity=" + context.compilerVerbosity.name()]);
+		var reported = arguments.concat(context.reportStyle.arguments());
 		var session = context.session;
 		if (context.live && !context.selfHosted && session != null)
 			session.liveWarmup = function():Int {

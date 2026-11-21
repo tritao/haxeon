@@ -74,6 +74,8 @@ class CompilerServer {
 					continue;
 				}
 				var client = listener.accept(), answered = false;
+				// The request being served, once its arguments parsed: its diagnostics are printed as it asks.
+				var request:Null<CompilerRequest> = null;
 				client.setTimeout(600);
 				try {
 					switch CompilerServerProtocol.readRequest(client.input, token) {
@@ -92,24 +94,26 @@ class CompilerServer {
 							client.close();
 							answered = true;
 							var started = Sys.time();
-							var result = compileConnected(null, arguments, session);
+							var result = compileConnected(null, CompilerArguments.parse(arguments), session);
 							recordLiveState(session);
-							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.compiled.metrics.retypedFunctions} functions retyped');
+							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped');
 						case Compile(arguments):
 							var started = Sys.time();
 							#if (hl && !haxeon)
 							var memoryBefore = hl.Gc.stats();
 							#end
-							var result = compileConnected(client, arguments, session);
+							var parsed = CompilerArguments.parse(arguments);
+							request = parsed;
+							var result = compileConnected(client, parsed, session);
 							// The worker's costs, at `detailed`.
-							if (result.verbosity.atLeast(Verbosity.Detailed)) {
+							if (parsed.verbosity.atLeast(Verbosity.Detailed)) {
 								#if (hl && !haxeon)
 								var memoryAfter = hl.Gc.stats();
 								send(client,
 									Message('worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'));
 								#end
 								send(client,
-									Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.compiled.metrics.retypedFunctions} functions retyped'));
+									Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'));
 							}
 					}
 					if (!answered)
@@ -120,12 +124,12 @@ class CompilerServer {
 						Sys.println("background compile failed: " + Std.string(error));
 					else
 						try {
-							var message = Std.string(error);
-							if (Std.isOfType(error, CompileError)) {
+							var failed = request;
+							if (Std.isOfType(error, CompileError) && failed != null) {
 								var failure:CompileError = cast error;
-								message = failure.formatAll();
-							}
-							send(client, Message(message));
+								send(client, Diagnostics(new DiagnosticPrinter(failed).errors(failure.diagnostics)));
+							} else
+								send(client, Message(Std.string(error)));
 							send(client, Status(1));
 						} catch (_:Dynamic) {}
 				}
@@ -146,15 +150,11 @@ class CompilerServer {
 	}
 
 	/** A disconnected requester cancels only its own transaction, before the next request is accepted. */
-	static function compileConnected(client:Null<Socket>, arguments:Array<String>,
-			session:CompilerSession):{
-				compiled:compiler.Compiler.CompileResult,
-				verbosity:Verbosity
-			} {
+	static function compileConnected(client:Null<Socket>, request:CompilerRequest,
+			session:CompilerSession):compiler.Compiler.CompileResult {
 		var cancellation = new CancellationToken(), done = new Lock();
 		var result:compiler.Compiler.CompileResult = null;
 		var failure:Null<haxe.Exception> = null;
-		var request = CompilerArguments.parse(arguments);
 		// Stage every artifact so cancellation preserves the previous successful publication.
 		var staged:Dynamic = Reflect.copy(request);
 		var outputs:Array<{temporary:String, destination:String}> = [];
@@ -219,9 +219,13 @@ class CompilerServer {
 					var requester = client;
 					if (requester != null)
 						send(requester, Message(message));
-				}, session, cancellation, publishEarly)
-					catch (error:haxe.Exception)
-					failure = error;
+				}, session, cancellation, publishEarly, message -> {
+				var requester = client;
+				if (requester != null)
+					send(requester, Diagnostics(message));
+			})
+				catch (error:haxe.Exception)
+				failure = error;
 			if (counting)
 				AllocationCensus.end();
 			done.release();
@@ -282,7 +286,7 @@ class CompilerServer {
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
 				FileSystem.deleteFile(output.destination);
 		}
-		return {compiled: result, verbosity: request.verbosity};
+		return result;
 	}
 
 	/** How long a live publication waits for a following request before its history is recorded. */

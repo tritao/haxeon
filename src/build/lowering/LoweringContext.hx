@@ -37,15 +37,15 @@ class LoweringContext {
 	/** What a watching process keeps between rebuilds; null for one-shot builds. */
 	public final session:Null<BuildSession>;
 
-	/** What the compiler reports (`--verbosity=`): given when the compile runs, so it never enters the action's fingerprint. */
-	public final compilerVerbosity:compiler.tools.Verbosity;
+	/** How the compiler reports (`--verbosity=`, diagnostics): given when the compile runs, so it never enters the action's fingerprint. */
+	public final reportStyle:compiler.tools.ReportStyle;
 
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
-			developmentMetadata:Bool = true, ?baseline:String, ?compilerVerbosity:compiler.tools.Verbosity) {
-		this.compilerVerbosity = compilerVerbosity == null ? compiler.tools.Verbosity.Normal : compilerVerbosity;
+			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle) {
+		this.reportStyle = reportStyle == null ? compiler.tools.ReportStyle.DEFAULT : reportStyle;
 		this.developmentMetadata = developmentMetadata;
 		this.baseline = baseline;
 		this.nativeCache = nativeCache;

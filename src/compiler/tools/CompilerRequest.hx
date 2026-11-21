@@ -47,6 +47,15 @@ typedef CompilerRequest = {
 	 */
 	final verbosity:Verbosity;
 
+	/** How diagnostics are printed (`--diagnostic-format=short|full`, default short): presentation, like `verbosity`. */
+	final diagnosticFormat:DiagnosticPrinter.DiagnosticFormat;
+
+	/** Whether the full format is coloured (`--color=always|never`, default never); the caller knows whether a terminal reads it. */
+	final color:Bool;
+
+	/** The directory the full format gives paths relative to (`--diagnostic-directory=`): where the user ran the command. */
+	final diagnosticDirectory:Null<String>;
+
 	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be
 	 * patched (`haxeon run --watch --live`). Without it every compile assembles from scratch and its bytes are a

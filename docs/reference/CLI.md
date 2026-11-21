@@ -324,6 +324,25 @@ The compiler takes the same levels as `--verbosity=LEVEL` (default `normal`); sc
 read its reports pass `--verbosity=diagnostic`. A self-hosted build (`--self-hosted`)
 runs the committed bootstrap compiler, which prints what it always printed.
 
+Diagnostics go to standard error, each with its file relative to the directory the
+command was run from, the line it concerns and a caret under the code, and end with
+how many errors there were:
+
+```text
+src/Main.hx:2:14: error[E1002]: Type mismatch for local "x": expected Int, got String
+ 2 |     var x:Int = "a";
+   |                 ^^^
+
+1 error
+```
+
+They are coloured on a terminal: `--color=auto|always|never` (default `auto`, which
+also honours `NO_COLOR` and `TERM=dumb`). `--diagnostic-format=short` prints the one
+line each that tools and tests read instead, `Main.hx:2:14: E1002: ...`, with the path
+under its source root. That is the compiler's own default (`--diagnostic-format=`,
+`--color=` and `--diagnostic-directory=` select the full format there); the language
+server reports diagnostics through the protocol, unchanged.
+
 `haxeon build --plan` prints the deterministic artifact and action plans.
 Add `--explain` to show why each artifact is present, and `--timings` to print
 resolution, planning/lowering, and execution wall-clock measurements, and the

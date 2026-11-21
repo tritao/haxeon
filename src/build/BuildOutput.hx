@@ -26,7 +26,8 @@ class BuildOutput {
 			Sys.stdout().flush();
 			Sys.stderr().writeString(text + "\n");
 		}
-		build.execution.OutputCapture.record(text + "\n");
+		// Listeners (a watch's events file) get the text without the terminal's colours.
+		build.execution.OutputCapture.record(~/\x1b\[[0-9;]*m/g.replace(text, "") + "\n");
 	}
 
 	/** Keeps the lines from now on instead of printing them. */

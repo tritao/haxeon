@@ -72,7 +72,7 @@ class CompileWorker {
 		try {
 			while (true)
 				switch CompilerServerProtocol.readResponse(socket.input) {
-					case Message(text):
+					case Message(text) | Diagnostics(text):
 						output.add(text + "\n");
 					case Status(code):
 						socket.close();

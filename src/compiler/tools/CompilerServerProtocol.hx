@@ -48,6 +48,9 @@ enum CompilerServerRequest {
 enum CompilerServerResponse {
 	Message(text:String);
 
+	/** Diagnostics, as the request asked them printed: a client shows them on standard error. */
+	Diagnostics(text:String);
+
 	/** The status a one-shot compile would have exited with. */
 	Status(code:Int);
 }
@@ -126,6 +129,7 @@ class CompilerServerProtocol {
 	public static function writeResponse(output:Output, response:CompilerServerResponse):Void {
 		output.writeString(Json.stringify(switch response {
 			case Message(text): {message: text};
+			case Diagnostics(text): {diagnostics: text};
 			case Status(code): {status: code};
 		}) + "\n");
 		output.flush();
@@ -138,6 +142,8 @@ class CompilerServerProtocol {
 			return Status(value.status);
 		if (value.message != null)
 			return Message(Std.string(value.message));
+		if (value.diagnostics != null)
+			return Diagnostics(Std.string(value.diagnostics));
 		throw new InternalError("Invalid compiler response");
 	}
 }

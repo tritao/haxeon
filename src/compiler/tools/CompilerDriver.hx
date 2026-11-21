@@ -26,7 +26,7 @@ import sys.io.File;
 class CompilerDriver {
 	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession,
 			?cancellation:CancellationToken,
-			?published:() -> Void):CompileResult {
+			?published:() -> Void, ?diagnostics:String->Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
 		var report = progress == null ? function(message:String) {} : progress,
@@ -64,8 +64,9 @@ class CompilerDriver {
 		var allocationAfterPrepare = AllocationMeter.sample();
 		progressReport("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, cancellation, false);
+		var printer = new DiagnosticPrinter(request), warned = diagnostics == null ? report : diagnostics;
 		for (warning in compiler.warnings(result.moduleNames))
-			report(warning.format());
+			warned(printer.warning(warning));
 		try {
 			// Checked before anything is written: a module its host cannot call is not published.
 			var entryIdOutput = request.entryIdOutput,

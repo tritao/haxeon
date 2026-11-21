@@ -33,6 +33,14 @@ int wmain( int argc, wchar_t *argv[] ) {
 	if( cli == NULL || arguments == NULL ) return 1;
 	_putenv_s("HAXEON_HOME",HAXEON_SOURCE_DIR);
 	_putenv_s("HAXEON_HASHLINK_DIR",HAXEON_HASHLINK_DIR);
+	{
+		/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about; a console also needs ANSI turned on. */
+		HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
+		DWORD mode = 0;
+		int terminal = _isatty(_fileno(stderr)) && GetConsoleMode(error,&mode)
+			&& SetConsoleMode(error,mode | 0x0004 /* ENABLE_VIRTUAL_TERMINAL_PROCESSING */);
+		_putenv_s("HAXEON_STDERR_TERMINAL",terminal ? "1" : "0");
+	}
 	if( _waccess(cli,0) != 0 ) {
 		fwprintf(stderr,L"Missing the Haxeon CLI bytecode %ls; build the native runtime (scripts\\build-native.ps1)\n",cli);
 		return 1;
@@ -55,6 +63,8 @@ int main( int argc, char *argv[] ) {
 	if( arguments == NULL ) return 1;
 	setenv("HAXEON_HOME",HAXEON_SOURCE_DIR,1);
 	setenv("HAXEON_HASHLINK_DIR",HAXEON_HASHLINK_DIR,1);
+	/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about. */
+	setenv("HAXEON_STDERR_TERMINAL",isatty(STDERR_FILENO) ? "1" : "0",1);
 	if( access(cli,R_OK) != 0 ) {
 		fprintf(stderr,"Missing the Haxeon CLI bytecode %s; build the native runtime (scripts/build-native.sh)\n",cli);
 		return 1;
