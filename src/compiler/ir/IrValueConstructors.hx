@@ -16,7 +16,7 @@ class IrValueConstructors {
 
 	/**
 	 * Expands `program`'s value constructor calls, on bodies made with `types` (those of the program's bodies when not given,
-	 * `IrTypeIds.ofFunctions`), which this stage encodes as the pipeline's first over bodies. A function that changes becomes its
+	 * `IrTypeIds.ofFunctions`). A function that changes becomes its
 	 * edited body: a frozen copy when a session keeps the stage's functions (`retained`), else the body edited in place.
 	 */
 	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = true):Void {

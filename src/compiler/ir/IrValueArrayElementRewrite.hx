@@ -2,214 +2,188 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
-import compiler.ir.SourceProvenance.Located;
 
-/** Lower plain array element reads and writes after element-place operations have been separated. */
+/** Lower plain array element reads and writes after element-place operations have been separated, on a body edited in place. */
 class IrValueArrayElementRewrite {
+	/** `fn` rewritten on a copy, or `fn` when nothing changes: for a pass run on its own (a test). */
 	public static function rewrite(fn:IrFunction, element:IrType, helpers:IrValueArrayElements,
 			tagUnboxes:Map<String, IrType>):IrFunction {
-		fn = rewriteCheckedSplice(fn, element, helpers, tagUnboxes);
-		var arrayType:IrType = Array(element), next = fn.nextValueId(), changed = false;
-		var blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var target = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var instruction = located.value;
-				switch instruction {
-					case IteratorNew(out, array) if (Type.enumEq(array.type, arrayType)):
-						helpers.useIterator();
-						instruction = Call(out, IrSymbol.of(helpers.iteratorNewName()), [array]);
-						changed = true;
-					case IteratorNext(out, iterator) if (Type.enumEq(iterator.type, Iterator(element))):
-						if (!Type.enumEq(out.type, helpers.storage))
-							throw new InternalError('Wrong inline array iterator type ${out.type}');
-						helpers.useIterator();
-						instruction = Call(out, IrSymbol.of(helpers.iteratorNextName()), [iterator]);
-						changed = true;
-					case ArrayGet(out, array, index) if (Type.enumEq(array.type, arrayType)):
-						if (!Type.enumEq(out.type, helpers.storage))
-							throw new InternalError('Wrong inline array read type ${out.type}');
-						instruction = Call(out, IrSymbol.of(helpers.getName()), [array, index]);
-						changed = true;
-					case ArraySet(array, index, value) if (Type.enumEq(array.type, arrayType)):
-						if (!Type.enumEq(value.type, helpers.storage))
-							throw new InternalError('Wrong inline array write type ${value.type}');
-						instruction = Call(new IrValue(next++, "$array-element-write", Void),
-							IrSymbol.of(helpers.setName()), [
-								array,
-								index,
-								value
-							]);
-						changed = true;
-					case Call(out, callTarget,
-						arguments) if (callTarget.name == "__array_push_ref" && arguments.length == 2
-						&& Type.enumEq(arguments[0].type, arrayType)):
-						if (!Type.enumEq(arguments[1].type, helpers.storage) || (switch (out.type) {
-							case I32: false;
-							default: true;
-						})) throw new InternalError("Wrong inline array push type");
-						instruction = Call(out, IrSymbol.of(helpers.pushName()), arguments);
-						changed = true;
-					case Call(out, callTarget,
-						arguments) if (callTarget.name == "__array_unshift_ref" && arguments.length == 2
-						&& Type.enumEq(arguments[0].type, arrayType)):
-						if (!Type.enumEq(arguments[1].type, helpers.storage) || (switch (out.type) {
-							case I32: false;
-							default: true;
-						})) throw new InternalError("Wrong inline array unshift type");
-						instruction = Call(out, IrSymbol.of(helpers.unshiftName()), arguments);
-						changed = true;
-					case Call(out, name,
-						arguments) if ((name.name == "__array_pop_ref" || name.name == "__array_shift_ref")
-						&& arguments.length == 1 && Type.enumEq(arguments[0].type, arrayType)
-						&& Type.enumEq(out.type, helpers.storage)):
-						instruction = Call(out,
-							IrSymbol.of(name.name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName()),
-							arguments);
-						changed = true;
-					case Call(out, callTarget,
-						arguments) if (callTarget.name == "__array_insert_ref" && arguments.length == 3
-						&& Type.enumEq(arguments[0].type, arrayType)):
-						if (!Type.enumEq(arguments[2].type, helpers.storage) || (switch (arguments[1].type) {
-							case I32: false;
-							default: true;
-						}) || (switch (out.type) {
-							case Void: false;
-							default: true;
-						}))
-							throw new InternalError("Wrong inline array insert type");
-						instruction = Call(out, IrSymbol.of(helpers.insertName()), arguments);
-						changed = true;
-					case Call(out, callTarget,
-						arguments) if ((callTarget.name == "__array_resize_ref" || callTarget.name
-						== "__array_resize_any") && arguments.length == 2 && Type.enumEq(arguments[0].type, arrayType)):
-						if ((switch (arguments[1].type) {
-							case I32: false;
-							default: true;
-						}) || (switch (out.type) {
-							case Void: false;
-							default: true;
-						})) throw new InternalError("Wrong inline array resize type");
-						instruction = Call(out, IrSymbol.of("__value_array_resize"), arguments);
-						changed = true;
-					case Call(out, callTarget,
-						arguments)
-						if ((callTarget.name == "__array_reverse_ref" || callTarget.name == "__array_reverse_any")
-						&& arguments.length == 1 && Type.enumEq(arguments[0].type, arrayType)):
-						if ((switch (out.type) {
-							case Void: false;
-							default: true;
-						})) throw new InternalError("Wrong inline array reverse type");
-						instruction = Call(out, IrSymbol.of("__value_array_reverse"), arguments);
-						changed = true;
-					case Call(out, callTarget,
-						arguments) if (callTarget.name == "__array_splice_ref" && arguments.length == 3
-						&& Type.enumEq(arguments[0].type, arrayType)):
-						if ((switch (arguments[1].type) {
-							case I32: false;
-							default: true;
-						}) || (switch (arguments[2].type) {
-							case I32: false;
-							default: true;
-						}) || !Type.enumEq(out.type, arrayType))
-							throw new InternalError("Wrong inline array splice type");
-						instruction = Call(out, IrSymbol.of(IrValueArrayElements.spliceNativeName(element)), arguments);
-						changed = true;
-					default:
-				}
-				target.instructions.push(new Located(instruction, located.provenance));
-			}
-			target.terminator = block.terminator;
-			blocks.push(target);
-		}
-		return changed ? fn.withBlocks(blocks) : fn;
+		var body = IrValueArrayRows.standaloneBody(fn);
+		return rewriteBody(body, element, helpers, tagUnboxes, []) ? body.toFunction() : fn;
 	}
 
-	static function rewriteCheckedSplice(fn:IrFunction, element:IrType, helpers:IrValueArrayElements,
-			tagUnboxes:Map<String, IrType>):IrFunction {
-		var arrayType:IrType = Array(element), uses:Map<Int, Int> = [], removed:Map<Int, Bool> = [], changed = false;
-		function use(value:IrValue):Void uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
-		for (block in fn.blocks) {
-			for (located in block.instructions) {
-				for (input in IrOperands.inputs(located.value)) use(input);
-				switch located.value {
-					case Phi(_, inputs): for (input in inputs) use(input.value);
-					default:
-				}
-			}
-			if (block.terminator != null) switch block.terminator.value {
-				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _): use(value);
-				default:
-			}
-		}
-		var blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var target = new IrBlock(block.id), position = 0;
-			while (position < block.instructions.length) {
-				var located = block.instructions[position], instruction = located.value;
-				switch instruction {
-					case Call(raw, name, args) if ((name.name == "__array_pop_ref" || name.name == "__array_shift_ref")
-						&& args.length == 1 && Type.enumEq(args[0].type, arrayType) && (switch (raw.type) {
-							case Dyn: true;
-							default: false;
-						})):
-							if (position + 1 >= block.instructions.length)
-							throw new InternalError("Missing checked value array removal conversion");
-					switch block.instructions[position + 1].value {
-						case SafeCast(out, source) if (source.id == raw.id && Type.enumEq(out.type, helpers.storage)
-							&& uses.get(raw.id) == 1):
-							instruction = Call(out,
-								IrSymbol.of(name.name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName()),
-								args);
-							removed.set(raw.id, true);
-							position++;
+	/** Whether `body` changed; `uses` is a table this reuses. */
+	public static function rewriteBody(body:IrBody, element:IrType, helpers:IrValueArrayElements,
+			tagUnboxes:Map<String, IrType>, uses:Array<Int>):Bool {
+		var changed = rewriteCheckedSplice(body, element, helpers, tagUnboxes, uses);
+		var arrayType = body.typeId(Array(element)),
+			iteratorType = body.typeId(Iterator(element)),
+			storage = body.typeId(helpers.storage),
+			i32 = body.typeId(I32),
+			voidType = body.typeId(Void),
+			next = -1;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var following = body.nextRow(row), out = body.output(row);
+				switch body.opcode(row) {
+					case IrOpcode.IteratorNew if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)):
+						helpers.useIterator();
+						IrValueArrayRows.replaceByCall(body, block, row, out, helpers.iteratorNewName());
+						changed = true;
+					case IrOpcode.IteratorNext if (IrValueArrayRows.typed(body, body.operand(row, 0), iteratorType)):
+						if (!IrValueArrayRows.typed(body, out, storage))
+							throw new InternalError('Wrong inline array iterator type ${body.valueType(out)}');
+						helpers.useIterator();
+						IrValueArrayRows.replaceByCall(body, block, row, out, helpers.iteratorNextName());
+						changed = true;
+					case IrOpcode.ArrayGet if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)):
+						if (!IrValueArrayRows.typed(body, out, storage))
+							throw new InternalError('Wrong inline array read type ${body.valueType(out)}');
+						IrValueArrayRows.replaceByCall(body, block, row, out, helpers.getName());
+						changed = true;
+					case IrOpcode.ArraySet if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)):
+						if (!IrValueArrayRows.typed(body, body.operand(row, 2), storage))
+							throw new InternalError('Wrong inline array write type ${body.valueType(body.operand(row, 2))}');
+						if (next < 0)
+							next = body.presentValueLimit();
+						IrValueArrayRows.replaceByCall(body, block, row,
+							body.newValueAt(next++, "$array-element-write", voidType),
+							helpers.setName());
+						changed = true;
+					case IrOpcode.Call if (body.operandCount(row) > 0
+						&& IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)):
+						var name = rename(body, row, element, helpers, storage, i32, voidType, arrayType);
+						if (name != null) {
+							body.setAux(row, IrSymbol.of(name).id);
 							changed = true;
-						case Call(out, conversion, [source]) if (source.id == raw.id
-							&& Type.enumEq(out.type, helpers.storage) && uses.get(raw.id) == 1
-							&& (StringTools.startsWith(conversion.name, IrCheckedDynamicCasts.PREFIX)
-							|| StringTools.startsWith(conversion.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
-							|| (tagUnboxes.exists(conversion.name)
-							&& IrVerifier.sameType(element, tagUnboxes.get(conversion.name))))):
-							instruction = Call(out,
-								IrSymbol.of(name.name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName()),
-								args);
-							removed.set(raw.id, true);
-							position++;
-							changed = true;
-						default: throw new InternalError('Invalid checked value array removal conversion in ${fn.name}: ${block.instructions[position + 1].value}');
-					}
-					case Call(raw, callTarget,
-						args) if (callTarget.name == "__array_splice_any" && args.length == 3
-						&& Type.enumEq(args[0].type, arrayType)):
-						if (position + 2 >= block.instructions.length)
-							throw new InternalError("Missing checked nullable array splice conversion");
-						switch [block.instructions[position + 1].value, block.instructions[position + 2].value] {
-							case [ToDyn(boxed, source), SafeCast(out, input)]
-								if (source.id == raw.id && input.id == boxed.id && Type.enumEq(out.type, arrayType)
-								&& (switch (args[1].type) {
-									case I32: true;
-									default: false;
-								}) && (switch (args[2].type) {
-								case I32: true;
-								default: false;
-							}) && uses.get(raw.id) == 1 && uses.get(boxed.id) == 1): instruction = Call(out,
-								IrSymbol.of(IrValueArrayElements.spliceNativeName(element)), args);
-							removed.set(raw.id, true);
-							removed.set(boxed.id, true);
-							position += 2;
-							changed = true;
-							default: throw new InternalError("Invalid checked nullable array splice conversion");
 						}
 					default:
 				}
-				target.instructions.push(new Located(instruction, located.provenance));
-				position++;
+				row = following;
 			}
-			target.terminator = block.terminator;
-			blocks.push(target);
 		}
-		if (!changed) return fn;
-		var debug = [for (binding in fn.debugBindings) if (!removed.exists(binding.value.id)) binding];
-		return fn.withBlocks(blocks, debug);
+		return changed;
+	}
+
+	/** The element helper or native array call `row` (on a value array) becomes, or null when it stays. */
+	static function rename(body:IrBody, row:Int, element:IrType, helpers:IrValueArrayElements, storage:Int, i32:Int,
+			voidType:Int, arrayType:Int):Null<String> {
+		var count = body.operandCount(row), out = body.output(row);
+		inline function typed(value:IrValueId, type:Int):Bool
+			return IrValueArrayRows.typed(body, value, type);
+		return switch body.symbol(row).name {
+			case "__array_push_ref" if (count == 2):
+				if (!typed(body.operand(row, 1), storage) || !typed(out, i32))
+					throw new InternalError("Wrong inline array push type");
+				helpers.pushName();
+			case "__array_unshift_ref" if (count == 2):
+				if (!typed(body.operand(row, 1), storage) || !typed(out, i32))
+					throw new InternalError("Wrong inline array unshift type");
+				helpers.unshiftName();
+			case "__array_pop_ref" if (count == 1 && typed(out, storage)): helpers.popName();
+			case "__array_shift_ref" if (count == 1 && typed(out, storage)): helpers.shiftName();
+			case "__array_insert_ref" if (count == 3):
+				if (!typed(body.operand(row, 2), storage) || !typed(body.operand(row, 1), i32) || !typed(out, voidType))
+					throw new InternalError("Wrong inline array insert type");
+				helpers.insertName();
+			case "__array_resize_ref" | "__array_resize_any" if (count == 2):
+				if (!typed(body.operand(row, 1), i32) || !typed(out, voidType))
+					throw new InternalError("Wrong inline array resize type");
+				"__value_array_resize";
+			case "__array_reverse_ref" | "__array_reverse_any" if (count == 1):
+				if (!typed(out, voidType))
+					throw new InternalError("Wrong inline array reverse type");
+				"__value_array_reverse";
+			case "__array_splice_ref" if (count == 3):
+				if (!typed(body.operand(row, 1), i32) || !typed(body.operand(row, 2), i32) || !typed(out, arrayType))
+					throw new InternalError("Wrong inline array splice type");
+				IrValueArrayElements.spliceNativeName(element);
+			default: null;
+		};
+	}
+
+	/** Checked removals and splices: a dynamic result converted back at once becomes the element helper's typed result. */
+	static function rewriteCheckedSplice(body:IrBody, element:IrType, helpers:IrValueArrayElements,
+			tagUnboxes:Map<String, IrType>, uses:Array<Int>):Bool {
+		var arrayType = body.typeId(Array(element)),
+			storage = body.typeId(helpers.storage),
+			dynType = body.typeId(Dyn),
+			i32 = body.typeId(I32),
+			counted = false,
+			removed:Null<Map<Int, Bool>> = null;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var following = body.nextRow(row);
+				if (body.opcode(row) == IrOpcode.Call && body.operandCount(row) > 0
+					&& IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)) {
+					var name = body.symbol(row).name, raw = body.output(row);
+					if ((name == "__array_pop_ref" || name == "__array_shift_ref") && body.operandCount(row) == 1
+						&& IrValueArrayRows.typed(body, raw, dynType)) {
+						var conversion = IrValueArrayRows.nextInstruction(body, row);
+						if (conversion < 0)
+							throw new InternalError("Missing checked value array removal conversion");
+						if (!counted) {
+							IrValueArrayRows.countUses(body, uses);
+							counted = true;
+						}
+						var out = body.output(conversion);
+						var matches = body.operandCount(conversion) == 1 && body.operand(conversion, 0) == raw
+							&& IrValueArrayRows.typed(body, out, storage) && uses[raw] == 1
+							&& switch body.opcode(conversion) {
+								case IrOpcode.SafeCast: true;
+								case IrOpcode.Call:
+									var converter = body.symbol(conversion).name;
+									StringTools.startsWith(converter, IrCheckedDynamicCasts.PREFIX)
+										|| StringTools.startsWith(converter, IrValueInterfaceBoxes.UNBOX_PREFIX)
+										|| (tagUnboxes.exists(converter)
+										&& IrVerifier.sameType(element, tagUnboxes.get(converter)));
+								default: false;
+							};
+						if (!matches)
+							throw new InternalError('Invalid checked value array removal conversion in ${body.name}: row $conversion');
+						following = body.nextRow(conversion);
+						body.removeRow(block, conversion);
+						IrValueArrayRows.replaceByCall(body, block, row, out,
+							name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName());
+						if (removed == null)
+							removed = [];
+						removed.set(raw, true);
+					} else if (name == "__array_splice_any" && body.operandCount(row) == 3) {
+						var boxing = IrValueArrayRows.nextInstruction(body, row),
+							castRow = boxing < 0 ? -1 : IrValueArrayRows.nextInstruction(body, boxing);
+						if (castRow < 0)
+							throw new InternalError("Missing checked nullable array splice conversion");
+						if (!counted) {
+							IrValueArrayRows.countUses(body, uses);
+							counted = true;
+						}
+						var boxed = body.output(boxing), out = body.output(castRow);
+						if (body.opcode(boxing) != IrOpcode.ToDyn || body.opcode(castRow) != IrOpcode.SafeCast
+							|| body.operand(boxing, 0) != raw || body.operand(castRow, 0) != boxed
+							|| !IrValueArrayRows.typed(body, out, arrayType)
+							|| !IrValueArrayRows.typed(body, body.operand(row, 1), i32)
+							|| !IrValueArrayRows.typed(body, body.operand(row, 2), i32) || uses[raw] != 1
+							|| uses[boxed] != 1)
+							throw new InternalError("Invalid checked nullable array splice conversion");
+						following = body.nextRow(castRow);
+						body.removeRow(block, castRow);
+						body.removeRow(block, boxing);
+						IrValueArrayRows.replaceByCall(body, block, row, out,
+							IrValueArrayElements.spliceNativeName(element));
+						if (removed == null)
+							removed = [];
+						removed.set(raw, true);
+						removed.set(boxed, true);
+					}
+				}
+				row = following;
+			}
+		}
+		if (removed == null)
+			return false;
+		IrValueArrayRows.removeBindings(body, value -> removed.exists(value));
+		return true;
 	}
 }

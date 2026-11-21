@@ -2,40 +2,58 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
-import compiler.ir.SourceProvenance.Located;
 
 private typedef OptionalArrayAccess = {
 	final block:Int;
 	final position:Int;
-	final array:IrValue;
-	final index:Null<IrValue>;
+	final array:IrValueId;
+	final index:IrValueId;
 	final operation:String;
 }
+
 private typedef OptionalBox = {
 	final block:Int;
 	final position:Int;
-	final wrapper:IrValue;
+	final wrapper:IrValueId;
 }
 
-/** Keep optional-scalar wrappers in components when they cross a typed array boundary. */
+/** Keep optional-scalar wrappers in components when they cross a typed array boundary, on a body edited in place. */
 class IrValueArrayOptionalRewrite {
+	/** Whether `body` changed; `uses` is a table this reuses. Positions are rows' places in their blocks, blocks their indices. */
+	/** `fn` rewritten on a copy, or `fn` when nothing changes: for a pass run on its own (a test). */
 	public static function rewrite(fn:IrFunction, element:IrType,
 			components:IrValueArrayOptionalComponents):IrFunction {
+		var body = IrValueArrayRows.standaloneBody(fn);
+		return rewriteBody(body, element, components, []) ? body.toFunction() : fn;
+	}
+
+	public static function rewriteBody(body:IrBody, element:IrType, components:IrValueArrayOptionalComponents,
+			uses:Array<Int>):Bool {
 		var name = switch element {
 			case Nullable(Obj(value)): value;
 			default: throw new InternalError("Expected a nullable struct element");
-		}, arrayType:IrType = Array(element), wrapperType = components.wrapperType(),
-			reads:Map<Int, OptionalArrayAccess> = [], boxes:Map<Int, OptionalBox> = [],
-			unboxes:Map<Int, IrValue> = [], writes:Map<Int, IrValue> = [], anyReads:Map<Int, OptionalArrayAccess> = [],
+		},
+			arrayType = body.typeId(Array(element)),
+			elementType = body.typeId(element),
+			wrapperType = body.typeId(components.wrapperType()),
+			dynType = body.typeId(Dyn),
+			boxName = IrOptionalValueFlow.boxName(name),
+			unboxName = IrOptionalValueFlow.unboxName(name),
+			reads:Map<Int, OptionalArrayAccess> = [],
+			boxes:Map<Int, OptionalBox> = [],
+			unboxes:Map<Int, IrValueId> = [],
+			writes:Map<Int, IrValueId> = [],
+			anyReads:Map<Int, OptionalArrayAccess> = [],
 			castSources:Map<Int, Int> = [],
-			rawReads:Map<Int, Int> = [], dynamicValues:Map<Int, {
+			rawReads:Map<Int, Int> = [],
+			dynamicValues:Map<Int, {
 				boxed:Int,
 				block:Int,
 				position:Int
-			}> = [], dynamicWrites:Map<Int, IrValue> = [], dynamicBoxes:Map<Int, Bool> = [], uses:Map<Int, Int> = [],
-			next = fn.nextValueId();
-		function use(value:IrValue):Void
-			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
+			}> = [],
+			dynamicWrites:Map<Int, IrValueId> = [],
+			dynamicBoxes:Map<Int, Bool> = [];
+		IrValueArrayRows.countUses(body, uses);
 		function readAt(id:Int):OptionalArrayAccess {
 			var value = reads.get(id);
 			if (value == null)
@@ -48,289 +66,256 @@ class IrValueArrayOptionalRewrite {
 				throw new InternalError('Missing optional array box $id');
 			return value;
 		}
-		function unboxed(id:Int):IrValue {
+		function unboxed(id:Int):IrValueId {
 			var value = unboxes.get(id);
 			if (value == null)
 				throw new InternalError('Missing optional array unbox $id');
 			return value;
 		}
-		for (block in fn.blocks) {
-			for (position in 0...block.instructions.length) {
-				var instruction = block.instructions[position].value,
-					out = IrOperands.output(instruction);
-				for (input in IrOperands.inputs(instruction))
-					use(input);
-				switch instruction {
-					case Phi(_, inputs):
-						for (input in inputs)
-							use(input.value);
-					case ArrayGet(value, array,
-						index) if (Type.enumEq(array.type, arrayType) && Type.enumEq(value.type, element)):
-						reads.set(value.id, {
-							block: block.id,
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), position = 0;
+			while (row >= 0) {
+				var value = body.output(row);
+				switch body.opcode(row) {
+					case IrOpcode.ArrayGet if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)
+						&& IrValueArrayRows.typed(body, value, elementType)):
+						reads.set(value, {
+							block: block,
 							position: position,
-							array: array,
-							index: index,
+							array: body.operand(row, 0),
+							index: body.operand(row, 1),
 							operation: "get"
 						});
-					case Call(value, callTarget,
-						args) if (callTarget.name == "__array_get_any" && args.length == 2
-						&& Type.enumEq(args[0].type, arrayType)):
-						anyReads.set(value.id, {
-							block: block.id,
-							position: position,
-							array: args[0],
-							index: args[1],
-							operation: "get"
-						});
-					case Call(value, nativeName, args)
-						if ((nativeName.name == "__array_pop_ref" || nativeName.name == "__array_shift_ref"
-						|| nativeName.name == "__array_pop_any"
-						|| nativeName.name == "__array_shift_any")
-						&& args.length == 1
-						&& Type.enumEq(args[0].type, arrayType)):
-						var read:OptionalArrayAccess = {
-							block: block.id,
-							position: position,
-							array: args[0],
-							index: null,
-							operation: nativeName.name.indexOf("pop") >= 0 ? "pop" : "shift"
-						};
-						if (Type.enumEq(value.type, element))
-							reads.set(value.id, read);
-						else
-							anyReads.set(value.id, read);
-					case Call(value, helper, args)
-						if (helper.name == IrOptionalValueFlow.boxName(name)
-						&& args.length == 1
-						&& Type.enumEq(value.type, element)
-						&& Type.enumEq(args[0].type, wrapperType)):
-						boxes.set(value.id, {block: block.id, position: position, wrapper: args[0]});
-					case ToDyn(out, value) if (Type.enumEq(value.type, element) && (switch (out.type) {
-						case Dyn: true;
-						default: false;
-					})): dynamicValues.set(out.id, {boxed: value.id, block: block.id, position: position});
+					case IrOpcode.Call:
+						var callee = body.symbol(row).name;
+						if (callee == "__array_get_any" && body.operandCount(row) == 2
+							&& IrValueArrayRows.typed(body, body.operand(row, 0), arrayType))
+							anyReads.set(value, {
+								block: block,
+								position: position,
+								array: body.operand(row, 0),
+								index: body.operand(row, 1),
+								operation: "get"
+							});
+						else if ((callee == "__array_pop_ref" || callee == "__array_shift_ref"
+							|| callee == "__array_pop_any"
+							|| callee == "__array_shift_any")
+							&& body.operandCount(row) == 1
+							&& IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)) {
+							var read:OptionalArrayAccess = {
+								block: block,
+								position: position,
+								array: body.operand(row, 0),
+								index: IrValueId.of(-1),
+								operation: callee.indexOf("pop") >= 0 ? "pop" : "shift"
+							};
+							if (IrValueArrayRows.typed(body, value, elementType))
+								reads.set(value, read);
+							else
+								anyReads.set(value, read);
+						} else if (callee == boxName && body.operandCount(row) == 1
+							&& IrValueArrayRows.typed(body, value, elementType)
+							&& IrValueArrayRows.typed(body, body.operand(row, 0), wrapperType))
+							boxes.set(value, {block: block, position: position, wrapper: body.operand(row, 0)});
+					case IrOpcode.ToDyn if (IrValueArrayRows.typed(body, body.operand(row, 0), elementType)
+						&& IrValueArrayRows.typed(body, value, dynType)):
+						dynamicValues.set(value, {boxed: body.operand(row, 0), block: block, position: position});
 					default:
 				}
+				row = body.nextRow(row);
+				position++;
 			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
-						use(value);
-					default:
-				}
 		}
-		for (block in fn.blocks)
-			for (position in 0...block.instructions.length)
-				switch block.instructions[position].value {
-					case SafeCast(out, value) if (Type.enumEq(out.type, element) && anyReads.exists(value.id)
-						&& uses.get(value.id) == 1):
-						var read = anyReads.get(value.id);
-						if (read.block == block.id && read.position < position) {
-							reads.set(out.id, read);
-							castSources.set(out.id, value.id);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), position = 0;
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.SafeCast) {
+					var out = body.output(row), value = body.operand(row, 0);
+					if (IrValueArrayRows.typed(body, out, elementType) && anyReads.exists(value) && uses[value] == 1) {
+						var read = anyReads.get(value);
+						if (read.block == block && read.position < position) {
+							reads.set(out, read);
+							castSources.set(out, value);
 						}
-					default:
+					}
 				}
-		for (block in fn.blocks)
-			for (position in 0...block.instructions.length)
-				switch block.instructions[position].value {
-					case Call(out, helper, args)
-						if (helper.name == IrOptionalValueFlow.unboxName(name)
-						&& args.length == 1
-						&& reads.exists(args[0].id)
-						&& Type.enumEq(out.type, wrapperType)
-						&& uses.get(args[0].id) == 1):
-						var read = readAt(args[0].id);
-						if (read.block == block.id && read.position < position) {
-							unboxes.set(args[0].id, out);
-							if (castSources.exists(args[0].id))
-								rawReads.set(castSources.get(args[0].id), args[0].id);
+				row = body.nextRow(row);
+				position++;
+			}
+		}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), position = 0;
+			while (row >= 0) {
+				var out = body.output(row), count = body.operandCount(row);
+				switch body.opcode(row) {
+					case IrOpcode.Call if (body.symbol(row).name == unboxName && count == 1
+						&& reads.exists(body.operand(row, 0))
+						&& IrValueArrayRows.typed(body, out, wrapperType) && uses[body.operand(row, 0)] == 1):
+						var source = body.operand(row, 0), read = readAt(source);
+						if (read.block == block && read.position < position) {
+							unboxes.set(source, out);
+							if (castSources.exists(source))
+								rawReads.set(castSources.get(source), source);
 						}
-					case ArraySet(array, _, value) if (Type.enumEq(array.type, arrayType) && boxes.exists(value.id)
-						&& uses.get(value.id) == 1):
-						var box = boxAt(value.id);
-						if (box.block == block.id
+					case IrOpcode.ArraySet if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)
+						&& boxes.exists(body.operand(row, 2)) && uses[body.operand(row, 2)] == 1):
+						var value = body.operand(row, 2), box = boxAt(value);
+						if (box.block == block
 							&& box.position < position
-							&& privateWrapper(fn, box.wrapper, block.id, box.position, value.id))
-							writes.set(value.id, box.wrapper);
-					case Call(out, nativeName, args)
-						if (mutation(nativeName.name, args, out, arrayType) != null
-						&& boxes.exists(args[args.length - 1].id)
-						&& uses.get(args[args.length - 1].id) == 1):
-						var value = args[args.length - 1],
-							box = boxAt(value.id);
-						if (box.block == block.id
+							&& privateWrapper(body, box.wrapper, block, box.position, value))
+							writes.set(value, box.wrapper);
+					case IrOpcode.Call if (mutation(body, row, arrayType) != null
+						&& boxes.exists(body.operand(row, count - 1))
+						&& uses[body.operand(row, count - 1)] == 1):
+						var value = body.operand(row, count - 1), box = boxAt(value);
+						if (box.block == block
 							&& box.position < position
-							&& privateWrapper(fn, box.wrapper, block.id, box.position, value.id))
-							writes.set(value.id, box.wrapper);
-					case Call(out, nativeName, args)
-						if (mutation(nativeName.name, args, out, arrayType) != null
-						&& dynamicValues.exists(args[args.length - 1].id)
-						&& uses.get(args[args.length - 1].id) == 1):
-						var conversion = dynamicValues.get(args[args.length - 1].id);
+							&& privateWrapper(body, box.wrapper, block, box.position, value))
+							writes.set(value, box.wrapper);
+					case IrOpcode.Call if (mutation(body, row, arrayType) != null
+						&& dynamicValues.exists(body.operand(row, count - 1))
+						&& uses[body.operand(row, count - 1)] == 1):
+						var conversion = dynamicValues.get(body.operand(row, count - 1));
 						if (conversion == null)
 							throw new InternalError("Missing optional dynamic array conversion");
 						var box = boxes.get(conversion.boxed);
 						if (box != null
-							&& uses.get(conversion.boxed) == 1
-							&& box.block == block.id
-							&& conversion.block == block.id
+							&& uses[conversion.boxed] == 1
+							&& box.block == block
+							&& conversion.block == block
 							&& box.position < conversion.position
 							&& conversion.position < position
-							&& privateWrapper(fn, box.wrapper, block.id, box.position, conversion.boxed)) {
-							dynamicWrites.set(args[args.length - 1].id, box.wrapper);
+							&& privateWrapper(body, box.wrapper, block, box.position, conversion.boxed)) {
+							dynamicWrites.set(body.operand(row, count - 1), box.wrapper);
 							dynamicBoxes.set(conversion.boxed, true);
 						}
 					default:
 				}
+				row = body.nextRow(row);
+				position++;
+			}
+		}
 		if (!unboxes.keys().hasNext() && !writes.keys().hasNext() && !dynamicWrites.keys().hasNext())
-			return fn;
-		var blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var target = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var instruction = located.value, omit = false;
-				switch instruction {
-					case ArrayGet(out, array, index) if (unboxes.exists(out.id)):
-						instruction = Call(unboxed(out.id), IrSymbol.of(components.getName()), [array, index]);
-					case Call(out, nativeName, args)
-						if ((rawReads.exists(out.id) || unboxes.exists(out.id))
-						&& (nativeName.name == "__array_get_any" || nativeName.name == "__array_pop_ref"
-						|| nativeName.name == "__array_shift_ref"
-						|| nativeName.name == "__array_pop_any" || nativeName.name == "__array_shift_any")):
-						var id = out.id;
-						if (rawReads.exists(out.id)) {
-							var source = rawReads.get(out.id);
-							if (source == null)
-								throw new InternalError("Missing raw optional array read");
-							id = source;
+			return false;
+		var next = body.presentValueLimit(), voidType = body.typeId(Void);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var following = body.nextRow(row), out = body.output(row), count = body.operandCount(row);
+				switch body.opcode(row) {
+					case IrOpcode.ArrayGet if (unboxes.exists(out)):
+						IrValueArrayRows.replaceByCall(body, block, row, unboxed(out), components.getName());
+					case IrOpcode.Call:
+						var callee = body.symbol(row).name;
+						if ((rawReads.exists(out) || unboxes.exists(out))
+							&& (callee == "__array_get_any" || callee == "__array_pop_ref"
+							|| callee == "__array_shift_ref"
+							|| callee == "__array_pop_any" || callee == "__array_shift_any")) {
+							var id:Int = out;
+							if (rawReads.exists(out)) {
+								var source = rawReads.get(out);
+								if (source == null)
+									throw new InternalError("Missing raw optional array read");
+								id = source;
+							}
+							var helper = switch readAt(id).operation {
+								case "get": components.getName();
+								case "pop": components.popName();
+								case "shift": components.shiftName();
+								default: throw new InternalError("Invalid optional array read");
+							};
+							IrValueArrayRows.replaceByCall(body, block, row, unboxed(id), helper);
+						} else if (callee == unboxName && count == 1 && unboxes.exists(body.operand(row, 0))) {
+							body.removeRow(block, row);
+						} else if (callee == boxName && (writes.exists(out) || dynamicBoxes.exists(out))) {
+							body.removeRow(block, row);
+						} else if (mutation(body, row, arrayType) != null
+							&& (writes.exists(body.operand(row, count - 1))
+							|| dynamicWrites.exists(body.operand(row, count - 1)))) {
+							var kind = mutation(body, row, arrayType),
+								value = body.operand(row, count - 1),
+								wrapper = writes.exists(value) ? writes.get(value) : dynamicWrites.get(value);
+							if (wrapper == null)
+								throw new InternalError("Missing optional array wrapper");
+							var helper = switch kind {
+								case "set": components.setName();
+								case "push": components.pushName();
+								case "insert": components.insertName();
+								case "unshift": components.unshiftName();
+								default: throw new InternalError("Invalid nullable array operation");
+							};
+							body.setOperation(row, IrOpcode.Call, IrSymbol.of(helper).id);
+							body.setOperand(row, count - 1, wrapper);
 						}
-						var read = readAt(id);
-						var helper = switch read.operation {
-							case "get": components.getName();
-							case "pop": components.popName();
-							case "shift": components.shiftName();
-							default: throw new InternalError("Invalid optional array read");
-						};
-						instruction = Call(unboxed(id), IrSymbol.of(helper), args);
-					case SafeCast(out, _) if (unboxes.exists(out.id) && castSources.exists(out.id)):
-						omit = true;
-					case Call(_, helper, args) if (helper.name == IrOptionalValueFlow.unboxName(name)
-						&& args.length == 1
-						&& unboxes.exists(args[0].id)):
-						omit = true;
-					case Call(out, helper, _) if (helper.name == IrOptionalValueFlow.boxName(name)
-						&& (writes.exists(out.id) || dynamicBoxes.exists(out.id))):
-						omit = true;
-					case ToDyn(out, _) if (dynamicWrites.exists(out.id)):
-						omit = true;
-					case ArraySet(array, index, value) if (writes.exists(value.id)):
-						instruction = Call(new IrValue(next++, "$optional-array-write", Void),
-							IrSymbol.of(components.setName()), [
-								array,
-								index,
-								writes.get(value.id)
-							]);
-					case Call(out, nativeName, args)
-						if (mutation(nativeName.name, args, out, arrayType) != null
-						&& (writes.exists(args[args.length - 1].id) || dynamicWrites.exists(args[args.length - 1].id))):
-						var kind = mutation(nativeName.name, args, out, arrayType),
-							value = args[args.length - 1],
-							wrapper = writes.exists(value.id) ? writes.get(value.id) : dynamicWrites.get(value.id),
-							arguments = args.slice(0, args.length - 1).concat([wrapper]);
-						var helper = switch kind {
-							case "set": components.setName();
-							case "push": components.pushName();
-							case "insert": components.insertName();
-							case "unshift": components.unshiftName();
-							default: throw new InternalError("Invalid nullable array operation");
-						};
-						instruction = Call(out, IrSymbol.of(helper), arguments);
+					case IrOpcode.SafeCast if (unboxes.exists(out) && castSources.exists(out)):
+						body.removeRow(block, row);
+					case IrOpcode.ToDyn if (dynamicWrites.exists(out)):
+						body.removeRow(block, row);
+					case IrOpcode.ArraySet if (writes.exists(body.operand(row, 2))):
+						var wrapper = writes.get(body.operand(row, 2));
+						if (wrapper == null)
+							throw new InternalError("Missing optional array wrapper");
+						IrValueArrayRows.call3(body, block, row,
+							body.newValueAt(next++, "$optional-array-write", voidType),
+							components.setName(), body.operand(row, 0), body.operand(row, 1), wrapper,
+							body.provenance(row));
+						body.removeRow(block, row);
 					default:
 				}
-				if (!omit)
-					target.instructions.push(new Located(instruction, located.provenance));
+				row = following;
 			}
-			target.terminator = block.terminator;
-			blocks.push(target);
 		}
-		var debug = [
-			for (binding in fn.debugBindings)
-				if (!unboxes.exists(binding.value.id)
-				&& !writes.exists(binding.value.id)
-				&& !rawReads.exists(binding.value.id)
-				&& !dynamicWrites.exists(binding.value.id)
-				&& !dynamicBoxes.exists(binding.value.id)) binding
-		];
-		return fn.withBlocks(blocks, debug);
+		IrValueArrayRows.removeBindings(body,
+			value -> unboxes.exists(value) || writes.exists(value) || rawReads.exists(value)
+			|| dynamicWrites.exists(value) || dynamicBoxes.exists(value));
+		return true;
 	}
 
-	static function mutation(name:String, args:Array<IrValue>, output:IrValue, arrayType:IrType):Null<String> {
-		if (args.length == 0 || !Type.enumEq(args[0].type, arrayType))
+	/** The array operation call `row` makes with a value as its last operand, when it is one, else null. */
+	static function mutation(body:IrBody, row:Int, arrayType:Int):Null<String> {
+		var count = body.operandCount(row);
+		if (count == 0 || !IrValueArrayRows.typed(body, body.operand(row, 0), arrayType))
 			return null;
+		var name = body.symbol(row).name;
+		var output = body.valueType(body.output(row));
 		return switch name {
-			case "__array_set_any" if (args.length == 3 && (switch (args[1].type) {
-				case I32: true;
-				default: false;
-			}) && (switch (output.type) {
-				case Void: true;
-				default: false;
-			})): "set";
-			case "__array_push_ref" | "__array_push_any" if (args.length == 2 && (switch (output.type) {
-				case I32: true;
-				default: false;
-			})): "push";
-			case "__array_unshift_ref" | "__array_unshift_any" if (args.length == 2 && (switch (output.type) {
-				case I32: true;
-				default: false;
-			})): "unshift";
-			case "__array_insert_ref" | "__array_insert_any" if (args.length == 3 && (switch (args[1].type) {
-				case I32: true;
-				default: false;
-			}) && (switch (output.type) {
-				case Void: true;
-				default: false;
-			})): "insert";
+			case "__array_set_any" if (count == 3 && body.valueType(body.operand(row, 1)).match(I32)
+				&& output.match(Void)): "set";
+			case "__array_push_ref" | "__array_push_any" if (count == 2 && output.match(I32)): "push";
+			case "__array_unshift_ref" | "__array_unshift_any" if (count == 2 && output.match(I32)): "unshift";
+			case "__array_insert_ref"
+				| "__array_insert_any" if (count == 3 && body.valueType(body.operand(row, 1)).match(I32)
+				&& output.match(Void)): "insert";
 			default: null;
 		};
 	}
 
-	static function privateWrapper(fn:IrFunction, wrapper:IrValue, blockId:Int, boxPosition:Int, boxValue:Int):Bool {
+	/** Whether `wrapper` is made in block `block` before the box at `boxPosition` and only filled in and boxed there. */
+	static function privateWrapper(body:IrBody, wrapper:IrValueId, block:Int, boxPosition:Int, boxValue:Int):Bool {
 		var allocated = false;
-		for (block in fn.blocks) {
-			for (position in 0...block.instructions.length) {
-				var instruction = block.instructions[position].value;
-				switch instruction {
-					case ValueInit(out) if (out.id == wrapper.id):
-						if (block.id != blockId || position >= boxPosition)
-							return false;
-						allocated = true;
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (input.value.id == wrapper.id)
-								return false;
-					default:
+		for (current in 0...body.blockCount()) {
+			var row = body.firstRow(current), position = 0;
+			while (row >= 0) {
+				var opcode = body.opcode(row);
+				if (opcode == IrOpcode.ValueInit && body.output(row) == wrapper) {
+					if (current != block || position >= boxPosition)
+						return false;
+					allocated = true;
 				}
-				for (input in IrOperands.inputs(instruction))
-					if (input.id == wrapper.id) {
-						var allowed = block.id == blockId && (switch instruction {
-							case FieldSet(owner, _, value) if (owner.id == wrapper.id && value.id != wrapper.id
-								&& position < boxPosition): true;
-							case Call(out, _, _) if (out.id == boxValue && position == boxPosition): true;
+				for (index in 0...body.operandCount(row))
+					if (body.operand(row, index) == wrapper) {
+						var allowed = current == block && switch opcode {
+							case IrOpcode.FieldSet: index == 0 && body.operand(row, 1) != wrapper
+								&& position < boxPosition;
+							case IrOpcode.Call: body.output(row) == boxValue && position == boxPosition;
 							default: false;
-						});
+						};
 						if (!allowed)
 							return false;
 					}
+				row = body.nextRow(row);
+				position++;
 			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
-						Switch(value, _, _) if (value.id == wrapper.id):
-						return false;
-					default:
-				}
 		}
 		return allocated;
 	}

@@ -454,19 +454,23 @@ class IrPipeline {
 	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram
 		return IrClosedEnumTagAbi.run(program, context.reflectable);
 
+	/**
+	 * The first stage over bodies on every target: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each
+	 * function is encoded.
+	 */
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
-		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget);
+		stableBodySources(program, context);
+		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
+			bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}
 
 	/**
-	 * The first stage over bodies on every target: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each
-	 * function is encoded. Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen; its
-	 * call rewrite can introduce further value joins, so `value-phi-scalarization` runs again after it.
+	 * Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen; its call rewrite can
+	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrProgram {
-		stableBodySources(program, context);
 		IrValueConstructors.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}

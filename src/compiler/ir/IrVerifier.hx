@@ -10,7 +10,10 @@ import compiler.ir.IrFunction.IrFunctionKind;
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
-	public static function verifyValueArraysLowered(program:IrProgram):Void {
+	/** No ordinary array operation reads inline value lanes, on the functions' bodies (`types`, the program's when not given). */
+	public static function verifyValueArraysLowered(program:IrProgram, ?types:IrTypeIds):Void {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(program.functions);
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			valueEnums:Map<String, Bool> = [
 				for (declaration in program.enums)
@@ -22,31 +25,50 @@ class IrVerifier {
 		for (native in program.natives)
 			if (ordinaryRef(native.symbol))
 				ordinaryRefNatives.set(native.name, true);
-		function laneArray(type:IrType):Bool
-			return switch type {
-				case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name);
-				case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name);
-				case Array(EnumTag(_)): true;
-				default: false;
-			};
-		for (fn in program.functions)
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var invalid = switch located.value {
-						case ArrayGet(_, array, _) | ArraySet(array, _, _) | IteratorNew(_,
-							array): laneArray(array.type);
-						case Call(_, name,
-							arguments) if (ordinaryRef(name.name) || ordinaryRefNatives.exists(name.name)):
-							var found = false;
-							for (argument in arguments)
-								if (laneArray(argument.type))
-									found = true;
+		// By type id: 1 when a lane array, 0 when not, unset when not yet seen.
+		var lanes:Array<Int> = [];
+		function laneArray(body:IrBody, value:IrValueId):Bool {
+			// A body made with other ids (a test's) is not cached.
+			var shared = body.types == types,
+				id = body.valueTypeId(value),
+				known = shared && id < lanes.length ? lanes[id] : -1;
+			if (known < 0) {
+				known = switch body.valueType(value) {
+					case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name) ? 1 : 0;
+					case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name) ? 1 : 0;
+					case Array(EnumTag(_)): 1;
+					default: 0;
+				};
+				while (shared && lanes.length <= id)
+					lanes.push(-1);
+				if (shared)
+					lanes[id] = known;
+			}
+			return known == 1;
+		}
+		for (fn in program.functions) {
+			var body = fn.bodyIn(types);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					var invalid = switch body.opcode(row) {
+						case IrOpcode.ArrayGet | IrOpcode.ArraySet | IrOpcode.IteratorNew: laneArray(body,
+							body.operand(row, 0));
+						case IrOpcode.Call:
+							var name = body.symbol(row).name, found = false;
+							if (ordinaryRef(name) || ordinaryRefNatives.exists(name))
+								for (index in 0...body.operandCount(row))
+									if (laneArray(body, body.operand(row, index)))
+										found = true;
 							found;
 						default: false;
 					};
 					if (invalid)
 						throw new InternalError('IR verification failed for ${fn.name}: ordinary array operation on inline value lanes');
+					row = body.nextRow(row);
 				}
+			}
+		}
 	}
 
 	/** A producer boundary must not pass typed enum conversions to a backend without resolution. */
