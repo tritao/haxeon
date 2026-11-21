@@ -223,6 +223,17 @@ Design debt and levers left once the peak work lands:
 The Haxe code Haxeon rejects or runs differently is listed in
 [LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported).
 
+- **`haxe.io.Bytes` against Haxe on HashLink.** Built-in `get`/`getInt32`
+  out of range fail with a native error where Haxe returns 0, and
+  `set`/`blit`/`sub`/`getString` should throw the catchable
+  `haxe.io.Error.OutsideBounds` (a runtime change on HashLink and both Wasm
+  targets). Missing members: `getString`/`ofString`'s encoding argument,
+  `ofData`, `ofHex`, `fastGet`, `readString`.
+- **The missing-member error's type spelling.** A nullable receiver prints
+  unwrapped, a function type as `(Int)->Int` (Haxe: `(a : Int) -> Int`), a
+  typedef'd structure by its fields instead of its name, and `Lib.Helper.no()`
+  on a sub-type of another module still says `Unknown static field`.
+
 ## Generated code, HashLink and Wasm (haxeon-e4's lane)
 
 Planned in this order unless noted. Timings so far were taken on a loaded

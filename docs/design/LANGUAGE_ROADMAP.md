@@ -137,6 +137,27 @@ element types qualify. Data that native code or the GPU reads every frame, or la
 from the start instead; that is the default for frame data. The borrow is implemented with the node-store prototype
 (ADR 0002 stage 2) only when a concrete caller needs it.
 
+### Byte views with explicit byte order
+
+`haxe.io.Bytes` stays exactly as Haxe has it (compatibility), but it is a weak design: signedness and width are not in
+the names (`get` is unsigned, `getUInt16` has no signed twin, `getInt32` no unsigned one), every multi-byte accessor is
+little-endian with no big-endian form, `sub` copies, and what an out-of-range access does differs by method and target.
+Newer platforms converged on one shape:
+
+| | View without a copy | Byte order | Out of range | Typed record at an offset |
+|---|---|---|---|---|
+| C# | `Span<byte>` over `byte[]` or native memory | `BinaryPrimitives.ReadUInt16BigEndian` | always throws | `MemoryMarshal.Read<T>` |
+| Dart | `ByteData`/`Uint8List` views of a buffer | `getUint16(offset, Endian.little)` | always throws | no |
+| Go | slices (`b[i:j]`) | `binary.BigEndian.Uint16(b)` | always panics | `encoding/binary.Read`, `unsafe` |
+| Swift | `Span`/`RawSpan`, `Data` slices | `UInt16(bigEndian:)` | always traps | `load(fromByteOffset:as:)` |
+| Haxe | none (`sub` copies) | little-endian only | per method and target | no |
+
+A Haxeon byte view would follow it, closest to C#'s since `NativeSpan<T>` already has the model: an owner (`Bytes`) and
+a view (bytes, offset, length) made without a copy; accessors that name signedness, width and byte order
+(`readU16be`, `readI32le`, `writeF64le`); one catchable out-of-range error on every target; and reads and writes of a
+`T:Flat` record at an offset. It is built when a concrete caller needs it (the compiler's HashLink writer, binary
+format packages, networking), not ahead of one.
+
 ### Optional flat values in native layout
 
 `Null<S>` is not Flat today, so an optional value cannot appear in an FFI record, `RawPtr`/`NativeSpan` memory or a
