@@ -157,6 +157,12 @@ class IrInlineCache {
 	 */
 	var bodySources:Map<String, IrFunction> = [];
 
+	/**
+	 * The same for the functions a stage past the conversion point generates as objects, by stage: each build makes them anew,
+	 * so one generated the same as last time is then last time's object, with its body.
+	 */
+	var generatedSources:Map<String, Map<String, IrFunction>> = [];
+
 	public function stableSources(functions:Array<IrFunction>):Array<IrFunction> {
 		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next);
 		sources = next;
@@ -166,6 +172,13 @@ class IrInlineCache {
 	public function stableBodySources(functions:Array<IrFunction>):Array<IrFunction> {
 		var next:Map<String, IrFunction> = [], result = stable(functions, bodySources, next);
 		bodySources = next;
+		return result;
+	}
+
+	public function stableGenerated(stage:String, functions:Array<IrFunction>):Array<IrFunction> {
+		var previous = generatedSources.get(stage), next:Map<String, IrFunction> = [];
+		var result = stable(functions, previous == null ? [] : previous, next);
+		generatedSources.set(stage, next);
 		return result;
 	}
 
@@ -186,6 +199,7 @@ class IrInlineCache {
 	public function forgetSources():Void {
 		sources = [];
 		bodySources = [];
+		generatedSources = [];
 		arrayFactories = [];
 		staticChecks.copies = [];
 		staticChecks.helpers = [];
@@ -195,6 +209,7 @@ class IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
 		result.bodySources = bodySources;
+		result.generatedSources = generatedSources.copy();
 		result.arrayFactories = arrayFactories;
 		result.types = types;
 		for (name => entry in originals)

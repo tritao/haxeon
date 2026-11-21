@@ -117,6 +117,10 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    are still cloned from their decoding, as the place methods are. The early prune's check reads bodies past the encode point.
    *The reflection helpers' checked casts read bodies* (`IrCheckedDynamicCasts.rewriteBodies`; the earlier checked-dynamic-casts
    stage and the Wasm module builders keep the object version).
+   The reflection helpers (`object-reflection`) are built as functions and encoded where they are made, which also takes,
+   in a session, last build's helper for one generated the same (`IrInlineCache.stableGenerated`). *The static null checks
+   read bodies*, as does the walk of what initialization calls (`IrInitializationCalls`); a check is linked in place before a
+   dereference of a static, on a copy in a session.
    The encode point is now a stage of its own (`encode-bodies` in `IrPipeline.assembly`),
    which runs on every target whichever stages after it run, and moves up the list as stages are ported.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
@@ -136,6 +140,11 @@ names; reuse is by object identity of the `IrFunction` an entry was made from.
 - **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
   has its objects (the stages before still read them) and its frozen encoding. A rebuilt function equal to it
   (`IrFunctionStateEquality.same`) is replaced by it, so the stages after see the same object and reuse by identity.
+- **Generated functions past the encode point** (`IrInlineCache.generatedSources`, stage → name → `IrFunction`): a stage that
+  builds functions as objects each build (the reflection helpers) takes last build's for one generated the same, as the
+  encode point does, so it is encoded once.
+- **Static null checks** (`IrInlineCache.staticChecks`): name → {source function, its checked copy}, reused while the source
+  is the same object, and the checks by name, made once.
 - **Stages between the encode point and the inliner**: no cache of their own, but for the array factory's lowering in the
   value-array rewrite (`IrInlineCache.arrayFactories`, name → {source function, lowered function}): it edits every function
   that allocates an array, and reads only the function, so a function given as the same object is last build's result. A

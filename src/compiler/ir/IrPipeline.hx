@@ -49,10 +49,10 @@ class IrPipeline {
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
 		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects),
 		new IrAssemblyStage("optional-value-helpers", optionalHelpers).when(hasObjects).checksPrune(OPTIONAL),
+		new IrAssemblyStage("encode-bodies", encodeBodies),
 		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage("object-reflection", objectReflection),
-		new IrAssemblyStage("encode-bodies", encodeBodies),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
 		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
@@ -384,7 +384,8 @@ class IrPipeline {
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var cache = context.inlineCache;
 		assembly.functions = IrStaticNullChecks.run(assembly.functions, assembly.objects,
-			cache == null ? null : cache.staticChecks);
+			cache == null ? null : cache.staticChecks, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.options.keepSession);
 		return assembly;
 	}
 
@@ -411,7 +412,35 @@ class IrPipeline {
 		assembly.natives = ObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
 			assembly.reachedNatives, context.options.checkReuse);
+		encodeGenerated("object-reflection", assembly, context);
 		return assembly;
+	}
+
+	/**
+	 * Encodes the functions a stage past the conversion point generated as objects, from `assembly.generatedStart`: in a session,
+	 * one generated the same as last build is last build's object, which has its body.
+	 */
+	static function encodeGenerated(stage:String, assembly:IrAssembly, context:IrPipelineContext):Void {
+		var functions = assembly.functions, start = assembly.generatedStart;
+		if (functions.length == start)
+			return;
+		var generated = functions.slice(start), cache = context.inlineCache, retained = context.options.keepSession;
+		if (retained && cache != null) {
+			generated = cache.stableGenerated(stage, generated);
+			assembly.functions = functions.slice(0, start).concat(generated);
+		}
+		encodeAll(generated, context);
+	}
+
+	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
+		var types = bodyTypes(context),
+			builder = context.passScratch.bodyBuilder,
+			retained = context.options.keepSession;
+		for (fn in functions) {
+			fn.bodyIn(types, builder, retained);
+			if (!retained)
+				fn.releaseDecoded();
+		}
 	}
 
 	/**
@@ -448,12 +477,7 @@ class IrPipeline {
 		var cache = context.inlineCache, retained = context.options.keepSession;
 		if (retained && cache != null)
 			assembly.functions = cache.stableBodySources(assembly.functions);
-		var types = bodyTypes(context), builder = context.passScratch.bodyBuilder;
-		for (fn in assembly.functions) {
-			fn.bodyIn(types, builder, retained);
-			if (!retained)
-				fn.releaseDecoded();
-		}
+		encodeAll(assembly.functions, context);
 		return assembly;
 	}
 
