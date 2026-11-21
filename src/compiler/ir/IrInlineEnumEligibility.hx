@@ -215,7 +215,7 @@ class IrInlineEnumEligibility {
 									// a direct enum or value struct still needs its nominal boxed representation here.
 									escapeMapReference(arguments[arguments.length - 1].type,
 										"native reference map storage");
-								case "get" | "values":
+								case "get" | "values" | "handles":
 									escapeMapReference(out.type, "native reference map storage");
 								default:
 							}

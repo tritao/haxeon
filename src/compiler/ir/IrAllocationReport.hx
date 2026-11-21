@@ -91,7 +91,7 @@ class IrAllocationReport {
 		var map = ~/^map_([a-z0-9]+)_([a-z0-9]+)_([a-z]+)$/;
 		if (map.match(body))
 			return switch map.matched(3) {
-				case "alloc", "copy", "keys", "values": {kind: Alloc, what: name};
+				case "alloc", "copy", "keys", "values", "handles": {kind: Alloc, what: name};
 				case "set": {kind: Grow, what: name};
 				// A map of references or Strings returns what it stores. Compiled code reads a scalar map through `index` and
 				// `value`; its `get`, kept for bytecode built before them, boxes the value.

@@ -34,9 +34,15 @@ class TargetProfile {
 	 */
 	public final nativeReflectionDispatch:Bool;
 
+	/**
+	 * A reference map holds a native handle (a map in a map) as it is. HashLink boxes a handle to make it Dynamic, so a map
+	 * that kept its values as Dynamic would box every handle it stores (HashLink).
+	 */
+	public final referenceMapHandles:Bool;
+
 	function new(kind:TargetKind, packedValueFields:Bool, headerlessValueClasses:Bool, dynamicObjectLiterals:Bool,
 			nativeArrayChecks:Bool,
-			nativeStringFastPaths:Bool, nativeReflectionDispatch:Bool) {
+			nativeStringFastPaths:Bool, nativeReflectionDispatch:Bool, referenceMapHandles:Bool) {
 		this.kind = kind;
 		this.packedValueFields = packedValueFields;
 		this.headerlessValueClasses = headerlessValueClasses;
@@ -44,11 +50,13 @@ class TargetProfile {
 		this.nativeArrayChecks = nativeArrayChecks;
 		this.nativeStringFastPaths = nativeStringFastPaths;
 		this.nativeReflectionDispatch = nativeReflectionDispatch;
+		this.referenceMapHandles = referenceMapHandles;
 	}
 
 	public static final hashLink:TargetProfile = new TargetProfile(TargetKind.HashLink, true, true, true, true, true,
+		false, true);
+	public static final wasm:TargetProfile = new TargetProfile(TargetKind.Wasm, false, false, false, true, false, true,
 		false);
-	public static final wasm:TargetProfile = new TargetProfile(TargetKind.Wasm, false, false, false, true, false, true);
 
 	/** The portable IR `Frontend.compile` builds for tests that run no backend: HashLink's layout, with the runtime-specific fast paths off. */
 	public static final portable:TargetProfile = hashLink.withNativeArrayChecks(false).withNativeStringFastPaths(false);
@@ -56,11 +64,11 @@ class TargetProfile {
 	public function withNativeArrayChecks(enabled:Bool):TargetProfile
 		return new TargetProfile(kind, packedValueFields, headerlessValueClasses, dynamicObjectLiterals, enabled,
 			nativeStringFastPaths,
-			nativeReflectionDispatch);
+			nativeReflectionDispatch, referenceMapHandles);
 
 	public function withNativeStringFastPaths(enabled:Bool):TargetProfile
 		return new TargetProfile(kind, packedValueFields, headerlessValueClasses, dynamicObjectLiterals,
-			nativeArrayChecks, enabled, nativeReflectionDispatch);
+			nativeArrayChecks, enabled, nativeReflectionDispatch, referenceMapHandles);
 
 	/** Every value of the profile as comparable text (part of what a cached result depends on). */
 	public function key():String
@@ -70,6 +78,7 @@ class TargetProfile {
 			dynamicObjectLiterals,
 			nativeArrayChecks,
 			nativeStringFastPaths,
-			nativeReflectionDispatch
+			nativeReflectionDispatch,
+			referenceMapHandles
 		].map(flag -> flag ? "1" : "0").join("");
 }

@@ -676,7 +676,8 @@ class IrProgramAssembler {
 			needsDynamicObjectTypeId = false,
 			needsDynamicObjectRuntime = false,
 			needsInt64ToInt = false,
-			mapRuntimeNames:Map<String, Bool> = [];
+			mapRuntimeNames:Map<String, Bool> = [],
+			mapHandleListings:Map<String, Bool> = [];
 		for (fn in allFunctions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
@@ -724,8 +725,11 @@ class IrProgramAssembler {
 								stringFastPathNames.set(name.name, true);
 							if (StringTools.startsWith(name.name, "__map_")) {
 								var operationStart = lastSeparatorCode(name.name, 95);
-								if (operationStart > 0)
+								if (operationStart > 0) {
 									mapRuntimeNames.set(name.name.substring(2, operationStart), true);
+									if (name.name.substring(operationStart + 1) == "handles")
+										mapHandleListings.set(name.name.substring(2, operationStart), true);
+								}
 							}
 						// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
 						case IteratorNext(output, _) if (IrTypeTools.isDynamic(output.type)):
@@ -958,6 +962,15 @@ class IrProgramAssembler {
 				arguments: [mapType],
 				result: Array(valueIrType)
 			});
+			// Only a target whose reference maps hold native handles lists them (`IrGenerator.mapHoldsHandle`).
+			if (mapHandleListings.exists(mapName))
+				program.natives.push({
+					name: '__${mapName}_handles',
+					library: "haxeon_runtime",
+					symbol: '__${mapName}_handles',
+					arguments: [mapType, TypeRef],
+					result: Array(Dyn)
+				});
 			program.natives.push({
 				name: '__${mapName}_remove',
 				library: "haxeon_runtime",

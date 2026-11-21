@@ -425,7 +425,7 @@ class IrInterpreter {
 					result.entries.push({key: entry.key, value: entry.value});
 				result;
 			case "keys": new InterpArray([for (entry in map.entries) entry.key], map.entries.length, Bytes);
-			case "values": new InterpArray([for (entry in map.entries) entry.value], map.entries.length,
+			case "values", "handles": new InterpArray([for (entry in map.entries) entry.value], map.entries.length,
 				map.elementType);
 			default: throw 'Unsupported String map operation "${parts[1]}"';
 		};

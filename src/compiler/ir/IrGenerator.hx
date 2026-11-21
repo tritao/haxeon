@@ -1326,6 +1326,11 @@ class IrGenerator {
 			target = lowerType(resultType == null ? valueType : resultType);
 		if (RuntimeType.hasScalarValues(name))
 			return lowerScalarMapGet(builder, localTypes, name, map, lowerMapKey(builder, key, keyType), target);
+		var handle = lowerType(valueType);
+		if (mapHoldsHandle(name, handle))
+			return abiBoundaryCast(builder,
+				builder.call('__${name}_get', [map, lowerMapKey(builder, key, keyType)], handle),
+				target);
 		var value = builder.call('__${name}_get', [map, lowerMapKey(builder, key, keyType)], Dyn);
 		var box = mapValueBox(valueType);
 		if (box == null)
@@ -1349,6 +1354,16 @@ class IrGenerator {
 		builder.select(afterBlock);
 		return builder.load(resultName, target);
 	}
+
+	/**
+	 * Whether the reference map `name` holds its values of type `type`, native handles, as they are (`TargetProfile.referenceMapHandles`).
+	 * Its `get` then gives the handle, and its values are listed by `handles`, which types the listing as the handles' array.
+	 */
+	function mapHoldsHandle(name:String, type:IrType):Bool
+		return profile.referenceMapHandles && StringTools.endsWith(name, "_ref") && (switch type {
+			case Abstract(_): true;
+			default: false;
+		});
 
 	/**
 	 * A lookup in a map of scalar values: the entry holding the key, then its value, so nothing is boxed. A missing key
@@ -1388,10 +1403,13 @@ class IrGenerator {
 		if (isSpecializedMap(keyType, valueType))
 			return lowerSpecializedMapCall(builder, map, "set", [lowerMapKey(builder, key, keyType), value], keyType,
 				valueType, Void);
-		var name = RuntimeType.requireMapName(keyType, valueType);
+		var name = RuntimeType.requireMapName(keyType, valueType),
+			handle = lowerType(valueType);
 		var stored = value;
 		if (mapValueBox(valueType) != null)
 			stored = boxMapValue(builder, value, valueType);
+		else if (mapHoldsHandle(name, handle))
+			stored = abiBoundaryCast(builder, value, handle);
 		else if (StringTools.endsWith(name, "_ref") && requiresDynamicBox(value.type))
 			stored = abiBoundaryCast(builder, value, Dyn);
 		return builder.call('__${name}_set', [map, lowerMapKey(builder, key, keyType), stored], Void);
@@ -2673,6 +2691,13 @@ class IrGenerator {
 						lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys"):
 						lowerMapKeys(builder, localTypes, lowered[0], key, value);
+					case TMap(key, value)
+						if (operation == "values"
+						&& !customMap
+						&& mapHoldsHandle(RuntimeType.requireMapName(key, value), lowerType(value))):
+						var element = lowerType(value);
+						builder.call('__${RuntimeType.requireMapName(key, value)}_handles',
+							[lowered[0], builder.typeValue(element)], Array(element));
 					case TMap(key, value)
 						if (operation == "values"
 						&& !customMap

@@ -1867,7 +1867,7 @@ class IrVerifier {
 		return (StringTools.startsWith(name, "__array_")
 			&& StringTools.endsWith(name, "_ref")
 			|| StringTools.startsWith(name, "__map_")
-			&& name.indexOf("_ref_values") >= 0)
+			&& (name.indexOf("_ref_values") >= 0 || name.indexOf("_ref_handles") >= 0 || name.indexOf("_ref_get") >= 0))
 			&& abiCompatible(actual, expected);
 
 	public static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>,
