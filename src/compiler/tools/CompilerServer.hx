@@ -94,20 +94,23 @@ class CompilerServer {
 							var started = Sys.time();
 							var result = compileConnected(null, arguments, session);
 							recordLiveState(session);
-							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped');
+							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.compiled.metrics.retypedFunctions} functions retyped');
 						case Compile(arguments):
 							var started = Sys.time();
 							#if (hl && !haxeon)
 							var memoryBefore = hl.Gc.stats();
 							#end
 							var result = compileConnected(client, arguments, session);
-							#if (hl && !haxeon)
-							var memoryAfter = hl.Gc.stats();
-							send(client,
-								Message('worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'));
-							#end
-							send(client,
-								Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'));
+							// The worker's costs, at `detailed`.
+							if (result.verbosity.atLeast(Verbosity.Detailed)) {
+								#if (hl && !haxeon)
+								var memoryAfter = hl.Gc.stats();
+								send(client,
+									Message('worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'));
+								#end
+								send(client,
+									Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.compiled.metrics.retypedFunctions} functions retyped'));
+							}
 					}
 					if (!answered)
 						send(client, Status(0));
@@ -144,7 +147,10 @@ class CompilerServer {
 
 	/** A disconnected requester cancels only its own transaction, before the next request is accepted. */
 	static function compileConnected(client:Null<Socket>, arguments:Array<String>,
-			session:CompilerSession):compiler.Compiler.CompileResult {
+			session:CompilerSession):{
+				compiled:compiler.Compiler.CompileResult,
+				verbosity:Verbosity
+			} {
 		var cancellation = new CancellationToken(), done = new Lock();
 		var result:compiler.Compiler.CompileResult = null;
 		var failure:Null<haxe.Exception> = null;
@@ -276,7 +282,7 @@ class CompilerServer {
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
 				FileSystem.deleteFile(output.destination);
 		}
-		return result;
+		return {compiled: result, verbosity: request.verbosity};
 	}
 
 	/** How long a live publication waits for a following request before its history is recorded. */

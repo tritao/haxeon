@@ -4,6 +4,7 @@ import build.BuildEnvironment;
 import build.execution.ActionResult.ExecutionResult;
 import build.execution.ExecutionAction.ActionKind;
 import compiler.core.InternalError;
+import compiler.tools.Verbosity;
 #if (target.threaded && !eval)
 import sys.thread.Lock;
 import sys.thread.Mutex;
@@ -22,8 +23,12 @@ class Executor implements ExecutionBackend {
 	/** Actions whose fingerprint another action consumes; see `fingerprintFor`. */
 	var dependedOn:Map<String, Bool> = [];
 
+	/** Which lines it prints: each action from `normal` up; below, only a failure the compiler's diagnostics do not explain. */
+	final verbosity:Verbosity;
+
 	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void,
-			?sharedDigests:ContentDigestCache) {
+			?sharedDigests:ContentDigestCache, ?verbosity:Verbosity) {
+		this.verbosity = verbosity == null ? Verbosity.Normal : verbosity;
 		this.sharedDigests = sharedDigests;
 		this.environment = environment;
 		this.workerCount = workerCount < 1 ? 1 : workerCount;
@@ -82,7 +87,7 @@ class Executor implements ExecutionBackend {
 			var wave = ready.slice(0, workerCount),
 				waveResults = new Map<String, ActionResult>();
 			for (action in wave)
-				print('[${action.id}] ${action.description}');
+				announce(action);
 			var processActions:Array<{action:ExecutionAction, fingerprint:String}> = [],
 				processTasks:Array<{
 					command:String,
@@ -162,13 +167,24 @@ class Executor implements ExecutionBackend {
 				pending.remove(action.id.key());
 				if (result.fingerprint != null)
 					fingerprints.set(action.id.key(), result.fingerprint);
-				if (result.skipped)
-					print('[${result.id}] clean (fingerprint match)');
-				else if (!result.succeeded() && !result.blocked)
-					print('[${result.id}] failed: ${result.message}');
+				finishedLine(action, result);
 			}
 		}
 		return new ExecutionResult(results, Sys.time() * 1000.0 - started);
+	}
+
+	function announce(action:ExecutionAction):Void
+		if (verbosity.atLeast(Verbosity.Normal))
+			print('[${action.id}] ${action.description}');
+
+	function finishedLine(action:ExecutionAction, result:ActionResult):Void {
+		if (verbosity.atLeast(Verbosity.Normal)) {
+			if (result.skipped)
+				print('[${result.id}] clean (fingerprint match)');
+			else if (!result.succeeded() && !result.blocked)
+				print('[${result.id}] failed: ${result.message}');
+		} else if (!result.succeeded() && !result.blocked && !isCompiler(action))
+			print('${action.description} failed: ${result.message}');
 	}
 
 	/** Upper bound on simultaneous compiler actions, each of which holds a compiler heap. 0 means no limit. */
@@ -237,7 +253,7 @@ class Executor implements ExecutionBackend {
 				running++;
 				if (compiler)
 					runningCompilers++;
-				print('[${action.id}] ${action.description}');
+				announce(action);
 				var currentAction = action,
 					dependencyFingerprints =
 						[for (dependency in action.dependencies) fingerprints.get(dependency.key())];
@@ -280,10 +296,7 @@ class Executor implements ExecutionBackend {
 				results.push(result);
 				if (result.fingerprint != null)
 					fingerprints.set(item.action.id.key(), result.fingerprint);
-				if (result.skipped)
-					print('[${result.id}] clean (fingerprint match)');
-				else if (!result.succeeded() && !result.blocked)
-					print('[${result.id}] failed: ${result.message}');
+				finishedLine(item.action, result);
 			}
 		}
 		return new ExecutionResult(results, Sys.time() * 1000.0 - started);

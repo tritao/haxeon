@@ -29,11 +29,14 @@ class CompilerDriver {
 			?published:() -> Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
-		var report = progress == null ? function(message:String) {} : progress;
+		var report = progress == null ? function(message:String) {} : progress,
+			verbosity = request.verbosity;
+		// Progress at `normal`; the phase, pass and allocation reports, which tools parse, at `diagnostic`.
+		var progressReport = verbosity.atLeast(Verbosity.Normal) ? report : function(message:String) {};
 		var requestStartedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
-		report("loading " + Std.string(request.paths.length) + " sources");
+		progressReport("loading " + Std.string(request.paths.length) + " sources");
 		var compilerSession = session == null ? new CompilerSession() : session,
 			compiler = compilerSession.prepare(request, report);
 		// A persistent session serves interactive and batch requests alike, so the mode is set per request.
@@ -59,7 +62,7 @@ class CompilerDriver {
 		} : null;
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
-		report("compiling entry " + request.entry);
+		progressReport("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, cancellation, false);
 		for (warning in compiler.warnings(result.moduleNames))
 			report(warning.format());
@@ -200,31 +203,15 @@ class CompilerDriver {
 					File.getContent(request.output + ".live.full"));
 			var artifactsWrittenAt = Sys.time() * 1000.0;
 			var allocationAfterWrite = AllocationMeter.sample();
-			report("driver phases (ms): prepare="
-				+ milliseconds(preparedAt - requestStartedAt)
-				+ " compile="
-				+ milliseconds(compiledAt - preparedAt)
-				+ " encode="
-				+ milliseconds(backendDoneAt - backendStartedAt)
-				+ " write="
-				+ milliseconds(artifactsWrittenAt - backendDoneAt)
-				+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt)
-				+ (deferFullModule ? " (patch first)" : "")));
-			report(phaseReport(result, backendDoneAt - backendStartedAt));
-			for (line in result.metrics.frontendPassReports)
-				report("frontend " + line);
-			report("ir passes (ms/MB/k objects): "
-				+ [for (entry in result.metrics.irPassCosts) entry.name + "=" + Math.round(entry.milliseconds) + "/"
-				+ Math.round(entry.bytes / 1048576.0) + "/"
-				+ Math.round(entry.count / 1000.0)].join(" "));
-			report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
-			report(allocationReport("driver allocation phases:", [
-				AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),
-				AllocationMeter.delta("compile", allocationAfterPrepare, allocationAfterCompile),
-				AllocationMeter.delta("encode", allocationAfterCompile, allocationAfterEncode),
-				AllocationMeter.delta("write", allocationAfterEncode, allocationAfterWrite)
-			]));
-			report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
+			if (verbosity.atLeast(Verbosity.Diagnostic))
+				reportCosts(report, result, requestStartedAt, preparedAt, compiledAt, backendStartedAt, backendDoneAt,
+					artifactsWrittenAt, stampedAt, deferFullModule, [
+						AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),
+						AllocationMeter.delta("compile", allocationAfterPrepare, allocationAfterCompile),
+						AllocationMeter.delta("encode", allocationAfterCompile, allocationAfterEncode),
+						AllocationMeter.delta("write", allocationAfterEncode, allocationAfterWrite)
+					]);
+			progressReport("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
 			return result;
 		} catch (error:haxe.Exception) {
 			var status = compiler.publicationStatus();
@@ -232,6 +219,31 @@ class CompilerDriver {
 				compiler.rejectPublication(result.revision);
 			throw error;
 		}
+	}
+
+	/** The `diagnostic` reports: where the request's time and allocations went, phase by phase and pass by pass. */
+	static function reportCosts(report:String->Void, result:CompileResult, requestStartedAt:Float, preparedAt:Float,
+			compiledAt:Float, backendStartedAt:Float, backendDoneAt:Float, artifactsWrittenAt:Float, stampedAt:Float,
+			deferFullModule:Bool, driverAllocations:Array<PhaseAllocation>):Void {
+		report("driver phases (ms): prepare="
+			+ milliseconds(preparedAt - requestStartedAt)
+			+ " compile="
+			+ milliseconds(compiledAt - preparedAt)
+			+ " encode="
+			+ milliseconds(backendDoneAt - backendStartedAt)
+			+ " write="
+			+ milliseconds(artifactsWrittenAt - backendDoneAt)
+			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt)
+			+ (deferFullModule ? " (patch first)" : "")));
+		report(phaseReport(result, backendDoneAt - backendStartedAt));
+		for (line in result.metrics.frontendPassReports)
+			report("frontend " + line);
+		report("ir passes (ms/MB/k objects): "
+			+ [for (entry in result.metrics.irPassCosts) entry.name + "=" + Math.round(entry.milliseconds) + "/"
+			+ Math.round(entry.bytes / 1048576.0) + "/"
+			+ Math.round(entry.count / 1000.0)].join(" "));
+		report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
+		report(allocationReport("driver allocation phases:", driverAllocations));
 	}
 
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */

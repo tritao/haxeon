@@ -142,7 +142,7 @@ run_cli() {
 	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
-if ! first_output=$(run_cli build --project "$project_dir/app/haxeon.json"); then
+if ! first_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json"); then
 	echo "CMake-backed project build failed; captured output:" >&2
 	printf '%s\n' "$first_output" >&2
 	echo "Produced native files:" >&2
@@ -173,7 +173,7 @@ grep -q '__cxx_cxxthunk__set_handler(callback: __cxx_cxxthunk__BinaryCallback @r
 grep -q 'return OwnedManagedWidget.adopt' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/CxxCmakeThunkProjectFunctions.hx"
 
 set +e
-run_cli run --project "$project_dir/app/haxeon.json"
+run_cli run --verbosity normal --project "$project_dir/app/haxeon.json"
 run_status=$?
 set -e
 if [[ $run_status -ne 42 ]]; then
@@ -181,12 +181,12 @@ if [[ $run_status -ne 42 ]]; then
 	exit 1
 fi
 
-second_output=$(run_cli build --project "$project_dir/app/haxeon.json")
+second_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
 [[ "$second_output" == *"native-cmake-build:foo"*"clean (fingerprint match)"* ]]
 [[ "$second_output" == *"native-link:foo:FfiNativeSharedLibrary"*"clean (fingerprint match)"* ]]
 
 printf '\n// invalidate the CMake-backed C++ thunk import\n' >> "$project_dir/foo/native/cxx_thunk_fixture.hpp"
-changed_output=$(run_cli build --project "$project_dir/app/haxeon.json")
+changed_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
 [[ "$changed_output" == *"Import c++ FFI cxx-cmake-thunk-project"* ]]
 [[ "$changed_output" == *"Compile C++"* ]]
 [[ "$changed_output" == *"Link shared library foo FFI cxx-cmake-thunk-project"* ]]

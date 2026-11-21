@@ -30,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
     def source(value):
         main.write_text('class Main { public static function main():Int { return ' + value + '; } }\n')
     def build(success=True, extra=(), environment=env):
-        p = subprocess.run([str(repo / 'scripts/haxeon'), 'build', '--project', str(manifest), *extra], env=environment,
+        p = subprocess.run([str(repo / 'scripts/haxeon'), 'build', '--verbosity=normal', '--project', str(manifest), *extra], env=environment,
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
         assert (p.returncode == 0) == success, p.stdout
         if success:

@@ -14,6 +14,7 @@ import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
 import compiler.core.InternalError;
+import compiler.tools.Verbosity;
 import compiler.formatter.Formatter;
 import compiler.formatter.ProjectFormat;
 import haxe.Json;
@@ -44,6 +45,9 @@ private typedef BuildOptions = {
 	final plan:Bool;
 	final explain:Bool;
 	final timings:Bool;
+
+	/** `-v`/`--verbosity LEVEL`: what the build prints, `minimal` (a line before and after it) by default. */
+	final verbosity:Verbosity;
 
 	/** `--quiet`: keep the build's progress, and print it (to standard error) only if the build fails. */
 	final quiet:Bool;
@@ -644,6 +648,34 @@ class HaxeonCli {
 				Sys.stderr().writeString(line + "\n");
 	}
 
+	/**
+	 * The line a `minimal` build starts with, `Building NAME (TARGET, MODE)…`; none for a plan or a `--quiet` build. Returns when
+	 * the build started.
+	 */
+	static function announceBuild(options:BuildOptions, project:ResolvedProject, target:String, mode:String):Float {
+		if (!options.plan && !options.quiet && options.verbosity.atLeast(Verbosity.Minimal))
+			BuildOutput.line('Building ${project.rootPackage.name} ($target, $mode)\u2026');
+		return Sys.time();
+	}
+
+	/** The line a `minimal` build ends with: what it wrote and how long it took, or that it failed. */
+	static function reportBuilt(options:BuildOptions, output:Null<String>, status:Int, started:Float):Void {
+		if (options.plan || options.quiet || !options.verbosity.atLeast(Verbosity.Minimal))
+			return;
+		var tenths = Math.round((Sys.time() - started) * 10),
+			seconds = ' (${Std.int(tenths / 10)}.${tenths % 10} s)';
+		if (status != 0)
+			BuildOutput.error('\u2718 Build failed$seconds');
+		else if (output != null)
+			BuildOutput.line('\u2714 ${displayPath(output)}$seconds');
+	}
+
+	/** `path` as the user would type it: relative to the directory the command was run from when it lies below it. */
+	static function displayPath(path:String):String {
+		var normalized = Path.normalize(path), base = Path.normalize(invokedFrom);
+		return StringTools.startsWith(normalized, base + "/") ? normalized.substr(base.length + 1) : normalized;
+	}
+
 	static function build(arguments:Array<String>, launch:Bool):Int {
 		var options = parseBuildOptions(arguments),
 			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
@@ -717,13 +749,15 @@ class HaxeonCli {
 			var session = options.watch ? new BuildSession() : null;
 			if (options.quiet)
 				BuildOutput.capture();
+			var started = announceBuild(options, project, "host", options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
-				options.buildMode == "development") catch (error:haxe.Exception) {
+				options.buildMode == "development", null, null, options.verbosity) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
+			reportBuilt(options, output, buildStatus, started);
 			releaseQuietOutput(options, buildStatus != 0);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
@@ -761,7 +795,7 @@ class HaxeonCli {
 					if (swapPath)
 						Sys.putEnv("PATH", buildPath);
 					try
-						liveHost = buildLiveHost(home, options.jobs, instrument, session)
+						liveHost = buildLiveHost(home, options.jobs, instrument, session, options.verbosity)
 					catch (error:haxe.Exception) {
 						if (swapPath)
 							Sys.putEnv("PATH", runPath);
@@ -803,7 +837,7 @@ class HaxeonCli {
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines,
 								options.jobs, false, false, false, 0.0,
 								options.selfHosted, change.compilerOnly, options.live, instrument, session,
-								options.buildMode == "development");
+								options.buildMode == "development", null, null, options.verbosity);
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							return status == 0 ? candidate : null;
@@ -826,7 +860,7 @@ class HaxeonCli {
 				return runProfiled(home, output, options.runtimeArguments, project.root, capture,
 					project.manifest.entry, options.profileSources);
 			}
-			if (!options.quiet)
+			if (!options.quiet && options.verbosity.atLeast(Verbosity.Normal))
 				Sys.println('Launching $output');
 			// A script runs where it was invoked; a project in its root.
 			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments),
@@ -844,17 +878,17 @@ class HaxeonCli {
 			]) : resolvePath(options.output, project.root);
 			if (options.quiet)
 				BuildOutput.capture();
+			var started = announceBuild(options, project, "wasm32", options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
 				false,
 				false, null, options.buildMode == "development",
-				targetInfo) catch (error:haxe.Exception) {
+				targetInfo, null, options.verbosity) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
+			reportBuilt(options, output, buildStatus, started);
 			releaseQuietOutput(options, buildStatus != 0);
-			if (buildStatus == 0 && !options.plan && !options.quiet)
-				Sys.println('Built wasm32 -> $output');
 			return buildStatus;
 		}
 		if (!targetInfo.isAndroid())
@@ -870,12 +904,15 @@ class HaxeonCli {
 			session = options.watch ? new BuildSession() : null;
 		if (options.quiet)
 			BuildOutput.capture();
+		var started = announceBuild(options, project, "android", "development");
 		var buildStatus = try HaxeonProjectBuild.build(project, home, module, options.defines, options.jobs,
 			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
-			false, false, session, true, targetInfo) catch (error:haxe.Exception) {
+			false, false, session, true, targetInfo, null, options.verbosity) catch (error:haxe.Exception) {
 				releaseQuietOutput(options, true);
 				throw error;
 			}
+		// Gradle packages the module next, and says so itself.
+		reportBuilt(options, options.compilerOnly ? module : null, buildStatus, started);
 		releaseQuietOutput(options, buildStatus != 0);
 		if (buildStatus != 0 || options.plan || options.compilerOnly)
 			return buildStatus;
@@ -924,7 +961,8 @@ class HaxeonCli {
 	 * Builds the live development host with Haxeon, as a project of its own under `out/live-host`. Under `--profile` it is
 	 * the instrumented flavor, so a capture shows the host's polling and patching beside the app's calls.
 	 */
-	static function buildLiveHost(home:String, jobs:Int, instrument:Bool, ?session:BuildSession):String {
+	static function buildLiveHost(home:String, jobs:Int, instrument:Bool, ?session:BuildSession,
+			?verbosity:Verbosity):String {
 		var root = Path.join([home, "out", "live-host"]),
 			manifestPath = Path.join([root, "haxeon.json"]);
 		FileSystem.createDirectory(root);
@@ -942,7 +980,7 @@ class HaxeonCli {
 		var project = discoverProject(manifestPath),
 			output = Path.join([HaxeonProjectBuild.outputDirectory(project, instrument), "host", "live-host.hl"]);
 		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, false, false,
-			instrument, session) != 0)
+			instrument, session, true, null, null, verbosity) != 0)
 			throw new InternalError("Could not build the live development host");
 		return output;
 	}
@@ -1157,6 +1195,7 @@ class HaxeonCli {
 			plan = false,
 			explain = false,
 			timings = false,
+			verbosity = Verbosity.Minimal,
 			quiet = false,
 			compilerOnly = false,
 			gradleInputs:Null<String> = null,
@@ -1208,7 +1247,13 @@ class HaxeonCli {
 					throw new InternalError('Option "--profile-output" requires a value');
 				profileOutput = arguments[index++];
 				profile = true;
-			} else if (argument == "--project" || argument == "--target" || argument == "--build-mode"
+			} else if (argument == "-v" || argument == "--verbosity") {
+				if (index >= arguments.length)
+					throw new InternalError('Option "$argument" requires a value');
+				verbosity = parseVerbosity(arguments[index++]);
+			} else if (StringTools.startsWith(argument, "--verbosity="))
+				verbosity = parseVerbosity(argument.substr("--verbosity=".length));
+			else if (argument == "--project" || argument == "--target" || argument == "--build-mode"
 				|| argument == "--output" || argument == "--define"
 				|| argument == "--device" || argument == "--jobs" || argument == "--gradle-inputs") {
 				if (index >= arguments.length)
@@ -1296,6 +1341,7 @@ class HaxeonCli {
 			plan: plan,
 			explain: explain,
 			timings: timings,
+			verbosity: verbosity,
 			quiet: quiet,
 			compilerOnly: compilerOnly,
 			gradleInputs: gradleInputs,
@@ -1315,6 +1361,13 @@ class HaxeonCli {
 			},
 			profileOutput: profileOutput
 		};
+	}
+
+	static function parseVerbosity(value:String):Verbosity {
+		var level = Verbosity.parse(value);
+		if (level == null)
+			throw new InternalError('Unknown verbosity "$value". Valid: ${Verbosity.NAMES.join(", ")}');
+		return level;
 	}
 
 	static function parsePackageOptions(arguments:Array<String>, allowLocked:Bool, command:String):PackageOptions {
@@ -1564,7 +1617,7 @@ class HaxeonCli {
 		Sys.println("                                    RULE is unused-imports or import-order; opt-in: unbound-local,");
 		Sys.println("                                    module-namespace, throw-non-exception");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
-		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
+		Sys.println("       [-v quiet|minimal|normal|detailed|diagnostic] [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("       [--build-mode release|development]  Select artifact build mode");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");

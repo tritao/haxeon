@@ -183,11 +183,13 @@ class CompilerSession {
 			compiler.options = request.options;
 			if (resumed == null) {
 				for (source in projections) {
-					report("loading FFI projection " + source.path);
+					if (request.verbosity.atLeast(Verbosity.Detailed))
+						report("loading FFI projection " + source.path);
 					compiler.addFfiProjection(source.path, source.text);
 				}
 				for (source in HxiInterfaceOrder.dependenciesFirst(interfaces)) {
-					report("loading FFI interface " + source.path);
+					if (request.verbosity.atLeast(Verbosity.Detailed))
+						report("loading FFI interface " + source.path);
 					compiler.addFfiInterface(source.path, source.text);
 				}
 			}
@@ -198,7 +200,8 @@ class CompilerSession {
 				compiler.addPackageSourceRoot(root.packageName, root.path);
 			configuration = identity;
 		} else {
-			report("reusing compiler session");
+			if (request.verbosity.atLeast(Verbosity.Normal))
+				report("reusing compiler session");
 			for (name => state in existing.modules) {
 				var path = state.source.path;
 				if (Path.isAbsolute(path)) {

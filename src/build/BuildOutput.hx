@@ -17,6 +17,18 @@ class BuildOutput {
 		build.execution.OutputCapture.record(text + "\n");
 	}
 
+	/** A line for standard error: a diagnostic or a failure. */
+	public static function error(text:String):Void {
+		if (captured != null)
+			captured.push(text);
+		else {
+			// What standard output holds goes first, so the two read in order when they share a pipe.
+			Sys.stdout().flush();
+			Sys.stderr().writeString(text + "\n");
+		}
+		build.execution.OutputCapture.record(text + "\n");
+	}
+
 	/** Keeps the lines from now on instead of printing them. */
 	public static function capture():Void
 		captured = [];

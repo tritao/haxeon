@@ -59,7 +59,7 @@ HX
 run_expected() {
   local expected=$1
   set +e
-  "$repo_dir/scripts/haxeon" run --project="$fixture/app/haxeon.json" >"$fixture/run.log" 2>&1
+  "$repo_dir/scripts/haxeon" run --verbosity=normal --project="$fixture/app/haxeon.json" >"$fixture/run.log" 2>&1
   local status=$?
   set -e
   if [[ $status -ne $expected ]]; then
@@ -74,7 +74,7 @@ output="$fixture/app/build/host/native/tiny"
 test -s "$output/$(haxeon_shared_library tiny_alpha)"
 test -s "$output/$(haxeon_shared_library tiny_beta)"
 test ! -e "$output/tiny.hdll"
-"$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixture/rebuild.log" 2>&1
+"$repo_dir/scripts/haxeon" build --verbosity=normal --project="$fixture/app/haxeon.json" >"$fixture/rebuild.log" 2>&1
 if ! grep -q 'native-cmake-configure:tiny.*clean (fingerprint match)' "$fixture/rebuild.log" ||
     ! grep -q 'compile-project:tiny-app.*clean (fingerprint match)' "$fixture/rebuild.log"; then
   cat "$fixture/rebuild.log" >&2
@@ -95,7 +95,7 @@ grep -q 'compile-project:tiny-app.*clean (fingerprint match)' "$fixture/run.log"
 # A target that succeeds without producing a promised library is a failed build.
 # perl, not sed -i: macOS's sed takes the next argument as a backup suffix.
 perl -pi -e 's/"tiny_alpha", "tiny_beta"/"tiny_alpha", "tiny_beta", "never_built"/' "$fixture/tiny/haxeon.json"
-if "$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixture/missing.log" 2>&1; then
+if "$repo_dir/scripts/haxeon" build --verbosity=normal --project="$fixture/app/haxeon.json" >"$fixture/missing.log" 2>&1; then
   echo "expected a missing declared library to fail the build" >&2
   exit 1
 fi

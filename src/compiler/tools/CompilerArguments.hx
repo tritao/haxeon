@@ -40,7 +40,8 @@ class CompilerArguments {
 			defines:Array<String> = [],
 			paths:Array<String> = [],
 			optionFlags:Array<String> = [],
-			session = CompileSessionMode.Reuse;
+			session = CompileSessionMode.Reuse,
+			verbosity = Verbosity.Normal;
 		var packageRoots:Array<PackageSourceRoot> = [];
 		var index = 0;
 		while (index < arguments.length) {
@@ -105,7 +106,12 @@ class CompilerArguments {
 					case "fresh": CompileSessionMode.Fresh;
 					case other: throw new InternalError('Compiler option "--session=" takes reuse or fresh, not "$other"');
 				};
-			else if (argument == "--live")
+			else if (StringTools.startsWith(argument, "--verbosity=")) {
+				var level = Verbosity.parse(value(argument, "--verbosity="));
+				if (level == null)
+					throw new InternalError('Compiler option "--verbosity=" takes ${Verbosity.NAMES.join(", ")}, not "${value(argument, "--verbosity=")}"');
+				verbosity = level;
+			} else if (argument == "--live")
 				live = true;
 			else if (argument == "--wasm-shared-memory")
 				sharedMemory = true;
@@ -196,6 +202,7 @@ class CompilerArguments {
 			wasmRuntimeNeutral: wasmRuntimeNeutral,
 			options: compiler.CompileOptions.fromArguments(optionFlags),
 			session: session,
+			verbosity: verbosity,
 			live: live,
 			exports: exports,
 			ffiHeader: ffiHeader,

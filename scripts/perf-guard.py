@@ -58,7 +58,8 @@ def hashlink():
 
 
 def compile_arguments(sources, output, entry=ENTRY):
-    return ["--build-mode=release", f"--entry={entry}"] + [f"--root={root}" for root in SOURCE_ROOTS] + [
+    # The reports this reads (driver allocation phases) come at the diagnostic verbosity.
+    return ["--build-mode=release", "--verbosity=diagnostic", f"--entry={entry}"] + [f"--root={root}" for root in SOURCE_ROOTS] + [
         f"--sources-file={sources}", f"--output={output}"]
 
 

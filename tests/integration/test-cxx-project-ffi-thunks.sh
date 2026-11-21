@@ -83,7 +83,7 @@ run_cli() {
 	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
-first_output=$(run_cli build --project "$project_dir/haxeon.json")
+first_output=$(run_cli build --verbosity normal --project "$project_dir/haxeon.json")
 [[ "$first_output" == *"Import c++ FFI cxx-thunk-project"* ]]
 [[ "$first_output" == *"Compile C++"* ]]
 [[ "$first_output" == *"Link shared library app"* ]]
@@ -97,7 +97,7 @@ test -s "$project_dir/build/host/native/app/ffi/cxx-thunk-project/projection/Cxx
 grep -q 'haxeon_cxx_thunk_last_error' "$project_dir/build/host/native/app/ffi/cxx-thunk-project/cxx-thunk-project-thunks.cpp"
 
 set +e
-run_cli run --project "$project_dir/haxeon.json"
+run_cli run --verbosity normal --project "$project_dir/haxeon.json"
 run_status=$?
 set -e
 if [[ $run_status -ne 42 ]]; then
@@ -105,13 +105,13 @@ if [[ $run_status -ne 42 ]]; then
 	exit 1
 fi
 
-second_output=$(run_cli build --project "$project_dir/haxeon.json")
+second_output=$(run_cli build --verbosity normal --project "$project_dir/haxeon.json")
 [[ "$second_output" == *"ffi-import:"*"clean (fingerprint match)"* ]]
 [[ "$second_output" == *"native-compile:"*"clean (fingerprint match)"* ]]
 [[ "$second_output" == *"native-link:"*"clean (fingerprint match)"* ]]
 
 printf '\n// invalidate the project C++ thunk import\n' >> "$project_dir/ffi/cxx_thunk_fixture.hpp"
-changed_output=$(run_cli build --project "$project_dir/haxeon.json")
+changed_output=$(run_cli build --verbosity normal --project "$project_dir/haxeon.json")
 [[ "$changed_output" == *"Import c++ FFI cxx-thunk-project"* ]]
 [[ "$changed_output" == *"Compile C++"* ]]
 [[ "$changed_output" == *"Link shared library app"* ]]

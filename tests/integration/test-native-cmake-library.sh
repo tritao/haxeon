@@ -50,7 +50,7 @@ class Main {
 HX
 
 set +e
-"$repo_dir/scripts/haxeon" run --project="$fixture/app/haxeon.json" >"$fixture/run.log" 2>&1
+"$repo_dir/scripts/haxeon" run --verbosity=normal --project="$fixture/app/haxeon.json" >"$fixture/run.log" 2>&1
 status=$?
 set -e
 if [[ $status -ne 42 ]]; then
@@ -59,7 +59,7 @@ if [[ $status -ne 42 ]]; then
   exit 1
 fi
 test -s "$fixture/app/build/host/native/tiny/$(haxeon_shared_library tiny_core)"
-"$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixture/rebuild.log" 2>&1
+"$repo_dir/scripts/haxeon" build --verbosity=normal --project="$fixture/app/haxeon.json" >"$fixture/rebuild.log" 2>&1
 if ! grep -q 'native-cmake-configure:tiny.*clean (fingerprint match)' "$fixture/rebuild.log" ||
     ! grep -q 'compile-project:tiny-app.*clean (fingerprint match)' "$fixture/rebuild.log"; then
   cat "$fixture/rebuild.log" >&2

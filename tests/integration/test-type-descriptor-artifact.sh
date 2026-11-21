@@ -159,7 +159,7 @@ with tempfile.TemporaryDirectory(prefix='descriptor-invalidation-', dir=outputs)
     artifact = root / 'build/host/main.hl.descriptors.json'
 
     def build(reuse):
-        result = subprocess.run([str(repo / 'scripts/haxeon'), 'build', '--project', str(manifest)], env=env,
+        result = subprocess.run([str(repo / 'scripts/haxeon'), 'build', '--verbosity=normal', '--project', str(manifest)], env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=120)
         # A failure shows the compiler workers' own logs too: whether a session was reused is decided there.
         workers = ''.join(f'\n--- {log.name}\n{log.read_text(errors="replace")}' for log in sorted(session_dir.glob('*.log')))

@@ -104,13 +104,15 @@ class CompilerProvider {
 		for (paths in [compilerInputs.sources, compilerInputs.ffiProjections, compilerInputs.ffiInterfaces])
 			for (path in paths)
 				inputs.push(path);
+		// Presentation, added as the compile runs; the committed bootstrap compiler predates it, so a self-hosted compile goes without.
+		var reported = arguments.concat(["--verbosity=" + context.compilerVerbosity.name()]);
 		var session = context.session;
 		if (context.live && !context.selfHosted && session != null)
 			session.liveWarmup = function():Int {
 				Directories.ensure(haxe.io.Path.directory(sourceManifest));
 				File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 				// Only a resident worker can keep what it compiles; with none there is nothing to warm.
-				return CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome,
+				return CompilerClient.run(command, compilerSourcePath, reported, context.compilerHome,
 					context.environment.buildRoot, project.root, () -> 0,
 					session, true);
 			};
@@ -121,7 +123,7 @@ class CompilerProvider {
 			Directories.ensure(haxe.io.Path.directory(sourceManifest));
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
-				environment) : CompilerClient.compile(command, compilerSourcePath, arguments, context.compilerHome,
+				environment) : CompilerClient.compile(command, compilerSourcePath, reported, context.compilerHome,
 				context.environment.buildRoot, project.root, context.session);
 		};
 		var outputs = [

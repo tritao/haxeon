@@ -42,6 +42,12 @@ typedef CompilerRequest = {
 	final session:CompileSessionMode;
 
 	/**
+	 * What the compile reports besides its diagnostics (`--verbosity=`, default `normal`): presentation only, so it is no part of
+	 * a session's identity or of a build action's fingerprint.
+	 */
+	final verbosity:Verbosity;
+
+	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be
 	 * patched (`haxeon run --watch --live`). Without it every compile assembles from scratch and its bytes are a
 	 * function of the source alone, whatever the session compiled before.

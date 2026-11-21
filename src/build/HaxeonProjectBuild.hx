@@ -8,6 +8,7 @@ import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCache;
 import compiler.core.InternalError;
+import compiler.tools.Verbosity;
 import haxe.io.Path;
 import project.ResolvedProject;
 
@@ -50,7 +51,9 @@ class HaxeonProjectBuild {
 			planOnly:Bool, explain:Bool,
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false,
 			live:Bool = false, instrument:Bool = false,
-			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String):Int {
+			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
+			?verbosity:Verbosity):Int {
+		var shown = verbosity == null ? Verbosity.Normal : verbosity;
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
 			throw new InternalError('The structured build supports the host, wasm32 and android targets, not "$buildTarget"');
@@ -78,7 +81,9 @@ class HaxeonProjectBuild {
 					// Android packages build their own trees, publishing into jniLibs, as Gradle packages them.
 					buildTarget.isAndroid() ? null : NativeCache.root(home, environment),
 					developmentMetadata,
-					baseline
+					baseline,
+					// `--timings` asks for the compiler's reports too: the scripts that measure builds read them.
+					timingsEnabled ? Verbosity.Diagnostic : shown
 				));
 		if (compilerOnly)
 			execution = compilerExecution(execution);
@@ -94,7 +99,7 @@ class HaxeonProjectBuild {
 				Sys.print(timings.toString());
 			return 0;
 		}
-		var result = ExecutionBackendFactory.create(environment, jobs, null, session).execute(execution);
+		var result = ExecutionBackendFactory.create(environment, jobs, null, session, shown).execute(execution);
 		timings.add("execute", result.elapsedMs);
 		if (explain)
 			Sys.print(plan.toExplainString());

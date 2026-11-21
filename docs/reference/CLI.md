@@ -301,9 +301,33 @@ C++ sources. It is separate from the `std` value in an FFI recipe, which
 controls Clang's header import and generated thunk compilation. CMake-backed
 packages continue to declare their language standard in `CMakeLists.txt`.
 
+A build says little by default: a line when it starts, its diagnostics, and a line
+when it ends.
+
+```text
+Building my-app (host, development)…
+✔ build/host/main.hl (0.4 s)
+```
+
+`-v LEVEL` (`--verbosity LEVEL`) chooses how much `build` and `run` print. Each level
+prints what the ones before it print, and more:
+
+| Level | Prints |
+|---|---|
+| `quiet` (`q`) | diagnostics only |
+| `minimal` (`m`) | the default: the first and last line above |
+| `normal` (`n`) | each action as it starts or is found up to date (`[id] clean (fingerprint match)`), and the compiler's progress (`reusing compiler session`, `compiled N source files -> PATH`) |
+| `detailed` (`d`) | the compiler worker's costs (`compiler: 12 ms, 3 functions retyped`, `worker allocations: ...`) and the FFI files it loads |
+| `diagnostic` (`diag`) | the compiler's phase, IR pass and allocation reports |
+
+The compiler takes the same levels as `--verbosity=LEVEL` (default `normal`); scripts that
+read its reports pass `--verbosity=diagnostic`. A self-hosted build (`--self-hosted`)
+runs the committed bootstrap compiler, which prints what it always printed.
+
 `haxeon build --plan` prints the deterministic artifact and action plans.
 Add `--explain` to show why each artifact is present, and `--timings` to print
-resolution, planning/lowering, and execution wall-clock measurements.
+resolution, planning/lowering, and execution wall-clock measurements, and the
+compiler's `diagnostic` reports whatever the verbosity.
 `--jobs COUNT` controls the number of independent ready actions the executor
 may run at once. Native outputs and action fingerprints live below the
 application's `outputDir`; unchanged native source actions are skipped on later builds.
