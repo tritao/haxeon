@@ -64,6 +64,9 @@ class IrBodyBuilder {
 	/** By value id, whether the body being finished names it (`finishNamed`). */
 	final named:Array<Bool> = [];
 
+	/** By value id of the body being renumbered, its new id or -1 (`renumbered`). */
+	final renumbering:Array<Int> = [];
+
 	public function new(types:IrTypeIds)
 		this.types = types;
 
@@ -291,6 +294,57 @@ class IrBodyBuilder {
 		for (index in 0...source.bindingCount())
 			builder.copyBinding(source, index, source.bindingValue(index));
 		return builder.finishFrom(source);
+	}
+
+	/**
+	 * `source` compacted, with its values numbered in the order they first appear: the arguments, then each row's output in
+	 * block and row order, then the values only operands or bindings name. A reader that orders anything by value id then
+	 * depends on the code alone, not on the ids the passes gave the values they made.
+	 */
+	public static function renumbered(source:IrBody, ?builder:IrBodyBuilder):IrBody {
+		if (builder == null)
+			builder = new IrBodyBuilder(source.types);
+		builder.reset(source.types);
+		var ids = IrPassScratch.filledInts(builder.renumbering, source.valueLimit(), -1);
+		for (index in 0...source.argumentCount())
+			builder.argumentIds.push(builder.renumber(source, ids, source.argument(index)));
+		for (block in 0...source.blockCount()) {
+			var row = source.firstRow(block);
+			while (row >= 0) {
+				var output = source.output(row);
+				if (output.exists())
+					builder.renumber(source, ids, output);
+				row = source.nextRow(row);
+			}
+		}
+		for (block in 0...source.blockCount()) {
+			builder.beginBlock(source.blockId(block));
+			var row = source.firstRow(block);
+			while (row >= 0) {
+				for (index in 0...source.operandCount(row))
+					builder.operands.push(builder.renumber(source, ids, source.operand(row, index)));
+				var output = source.output(row);
+				builder.row(source.opcode(row), output.exists() ? ids[output] : -1, builder.copyAux(source, row),
+					source.provenance(row));
+				row = source.nextRow(row);
+			}
+		}
+		for (index in 0...source.bindingCount())
+			builder.copyBinding(source, index, IrValueId.of(builder.renumber(source, ids, source.bindingValue(index))));
+		return builder.finishFrom(source);
+	}
+
+	/** The new id of `source`'s value `id` (`renumbered`), the next one when it has none yet. */
+	function renumber(source:IrBody, ids:Array<Int>, id:Int):Int {
+		var known = ids[id];
+		if (known >= 0)
+			return known;
+		var result = valueTypes.length;
+		ids[id] = result;
+		valueTypes.push(source.valueTypes[id]);
+		valueNames.push(source.valueNames[id]);
+		valueRows.push(-1);
+		return result;
 	}
 
 	/** A copy of `source` column for column, for a body no edit touched: the same rows, runs and pools where they were. */

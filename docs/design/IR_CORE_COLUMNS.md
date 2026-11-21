@@ -209,6 +209,9 @@ block ids (phi inputs, try blocks, branch targets) and two int arrays (`StaticDa
 - **Blocks** have ids independent of position, a first and a last row, and an order (the layout), edited by splicing:
   removing a block unlinks it from the order and its rows from the body.
 - **Values** are `IrValueId`s, an abstract over `Int`, dense and never reused: a value a pass adds takes `valueLimit()`.
+  No output depends on the ids themselves: HlLower allocates registers in row order, and the Wasm backends take each body
+  renumbered in the order its values first appear (the `canonical-values` stage, `IrBodyBuilder.renumbered`), since their
+  lowerings order locals, root slots and the values they add by id.
   Columns by value id: type id (-1 for an id no value has), name, and defining row (-1 for arguments). The arguments are
   a column of value ids; the header (name, kind, result type id, inline hint, retention) stays as fields.
 - **Replacing all uses** of a value goes through an alias column: `alias(v) = w`, and reads of operands resolve through

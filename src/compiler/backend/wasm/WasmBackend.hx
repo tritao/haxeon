@@ -5,6 +5,8 @@ import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.IrBodyBuilder;
+import compiler.ir.IrFunction;
 import compiler.ir.IrNullableErasure;
 import compiler.ir.IrPipelineContext;
 import compiler.ir.IrStage;
@@ -26,6 +28,7 @@ class WasmBackend implements Backend {
 	 * the module they build, since those passes hand state (scalar ABI, adapters, field lowering) to the builder.
 	 */
 	public static final logical:IrStageList = new IrStageList("wasm-logical", [
+		new IrStage("canonical-values", canonicalValues),
 		new IrStage("exact-object-tests", exactObjectTests),
 		new IrStage("array-factory", arrayFactory),
 		new IrStage("strip-instrumentation", stripInstrumentation)
@@ -36,6 +39,23 @@ class WasmBackend implements Backend {
 		new IrStage("nullable-erasure", nullableErasure),
 		new IrStage("dynamic-calls", dynamicCalls)
 	]);
+
+	/**
+	 * Every function with a body renumbered in the order its values first appear (`IrBodyBuilder.renumbered`): the Wasm passes
+	 * order locals, root slots and the values they add by id, so their output then follows the code alone.
+	 */
+	static function canonicalValues(program:IrProgram, context:IrPipelineContext):IrProgram {
+		var result = program.copy(), builder:Null<IrBodyBuilder> = null;
+		for (index in 0...result.functions.length) {
+			var body = result.functions[index].body;
+			if (body == null)
+				continue;
+			if (builder == null)
+				builder = new IrBodyBuilder(body.types);
+			result.functions[index] = IrFunction.ofBody(IrBodyBuilder.renumbered(body, builder).freeze(false));
+		}
+		return result;
+	}
 
 	/** Wasm has no virtuals: the exact object test is its runtime's exact type test. */
 	static function exactObjectTests(program:IrProgram, context:IrPipelineContext):IrProgram

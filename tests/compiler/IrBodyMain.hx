@@ -380,6 +380,38 @@ class IrBodyMain {
 			&& changed.opcode(row) == shared.opcode(row), "a body that shares columns but for its auxiliary fields");
 		var unedited = source.thaw();
 		expect(unedited.freeze(true) == unedited, "freezing an unedited body keeps it");
+		renumbering(source.thaw());
+	}
+
+	/** A body renumbered (`IrBodyBuilder.renumbered`) names its arguments first, then each row's output in row order. */
+	static function renumbering(body:IrBody):Void {
+		// A value made now takes the next id, above every other, though its row goes first.
+		var first = body.firstRow(0);
+		while (body.opcode(first) == compiler.ir.IrOpcode.Phi)
+			first = body.nextRow(first);
+		var made = body.newValue("made", body.typeId(I32));
+		body.beginRow();
+		body.linkBefore(0, first, body.endRow(compiler.ir.IrOpcode.ConstInt, made, 3, body.provenance(first)));
+		var renumbered = IrBodyBuilder.renumbered(body), next = 0, ordered = true, named = false;
+		for (index in 0...renumbered.argumentCount())
+			ordered = ordered && (renumbered.argument(index):Int) == next++;
+		for (block in 0...renumbered.blockCount()) {
+			var row = renumbered.firstRow(block);
+			while (row >= 0) {
+				var output = renumbered.output(row);
+				if (output.exists() && (output:Int) >= renumbered.argumentCount()) {
+					ordered = ordered && (output:Int) == next++;
+					named = named || renumbered.valueName(output) == "made"
+						&& (output:Int) < renumbered.valueLimit() - 1;
+				}
+				row = renumbered.nextRow(row);
+			}
+		}
+		expect(ordered && named && renumbered.layoutDifference() == null,
+			"renumbering names values in the order they first appear");
+		expect(renumbered.instructionCount() == body.instructionCount()
+			&& IrFunctionStateEquality.sameBodies(renumbered, IrBodyBuilder.renumbered(renumbered)),
+			"renumbering keeps every row and is stable");
 	}
 
 	static function bodyPasses():Void {
