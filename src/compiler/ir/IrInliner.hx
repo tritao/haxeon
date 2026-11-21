@@ -514,9 +514,12 @@ class IrInliner {
 				if (resultBytes != null && previousEntry.bytes.compare(resultBytes) == 0) {
 					// The same code on the same lines. One that only moved within its file keeps its new positions, so its
 					// debug information names the snapshot this build carries; it is lowered again but needs no patch.
-					if (IrFunctionStateCodec.samePlacement(previous, result))
+					if (IrFunctionStateCodec.samePlacement(previous, result)) {
 						result = previous;
-					else {
+						// The next compile then finds the published form itself and compares nothing.
+						if (instrument == null)
+							cleaned.set(fn.name, {source: clean.source, result: previous});
+					} else {
 						relocated.push(fn.name);
 						previousEntry = {fn: result, bytes: resultBytes};
 					}

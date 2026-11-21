@@ -17,10 +17,11 @@ which carries the checkout's own code generation, compiles the same sources agai
 
 The incremental part (tests/perf/incremental-baseline.json) runs that build's compile server (CompilerServer, which keeps its
 session) on a copy of the same sources, through a scripted series of builds: cold, two no-op rebuilds, a body-only edit of the
-entry module made and taken back a few times, then an edit to a widely used constructor's signature. Per build it reads allocated bytes
-(the driver's allocation phases), functions retyped, artifacts invalidated and functions regenerated (deterministic), and wall
-(reported). A heap census after each build (live data at its end, pages only) gives the session's live bytes after the last body
-edit and their growth over the last body edits, which stays near zero unless the session keeps something from every build.
+entry module made and taken back a few times, an edit to a widely used constructor's signature, then the body edit again. Per
+build it reads allocated bytes (the driver's allocation phases), functions retyped, artifacts invalidated and functions
+regenerated (deterministic), and wall (reported). A heap census after each build (live data at its end, pages only) gives the
+session's live bytes after the last body edit before the signature edit and their growth over the last of those, which stays
+near zero unless the session keeps something from every build.
 
 Measures on Linux x86-64 only, where the baseline was taken; elsewhere it says so and passes. A metric beyond its tolerance
 below the baseline passes and asks for the baseline to be updated, so gains are locked in.
@@ -158,6 +159,9 @@ SIGNATURE_EDIT = ("src/compiler/core/InternalError.hx", "?previous:haxe.Exceptio
 # first few, and their growth is read over the last GROWTH_BUILDS, an even count so both ends build the same sources.
 BODY_EDITS = 6
 GROWTH_BUILDS = 2
+# After the signature edit, the body edit again: the session now holds the rewrites of the constructor's many callers, which a
+# body edit must reuse rather than redo. The second is measured, once the edit has settled.
+LATE_BODY_EDITS = 2
 
 
 class CompileServer:
@@ -199,6 +203,9 @@ class CompileServer:
         responses = self.request({"arguments": compile_arguments("sources.txt", "out.hl")})
         wall = time.monotonic() - started
         messages = [response["message"] for response in responses if "message" in response]
+        # The build's own report (phases, IR passes), kept for reading a change in the metrics.
+        with open(os.path.join(os.path.dirname(self.log_path), "server-messages.log"), "a") as report:
+            report.write(f"== {label}\n" + "\n".join(messages) + "\n")
         with open(self.log_path) as source:
             source.seek(self.offset)
             log = source.read()
@@ -265,6 +272,7 @@ def measure_incremental(hl, compiler, out):
     for root in SOURCE_ROOTS:
         shutil.copytree(os.path.join(ROOT, root), os.path.join(tree, root))
     shutil.copyfile(os.path.join(out, "sources.txt"), os.path.join(tree, "sources.txt"))
+    open(os.path.join(out, "server-messages.log"), "w").close()
     session = CompileServer(hl, server, tree, os.path.join(out, "server.log"))
     try:
         builds = [session.compile("cold"), session.compile("first no-op"), session.compile("no-op")]
@@ -274,6 +282,9 @@ def measure_incremental(hl, compiler, out):
         settled = builds[-1 - GROWTH_BUILDS:]
         edit(tree, SIGNATURE_EDIT)
         builds.append(session.compile("signature edit"))
+        for index in range(LATE_BODY_EDITS):
+            edit(tree, BODY_EDIT, forward=index % 2 == 0)
+            builds.append(session.compile(f"late body edit {index + 1}"))
     finally:
         session.stop()
     for build in builds:
@@ -283,7 +294,7 @@ def measure_incremental(hl, compiler, out):
     named = {build["label"]: build for build in builds}
     metrics = {"cold_allocated_bytes": named["cold"]["allocated_bytes"]}
     for label, prefix in (("first no-op", "first_noop"), ("no-op", "noop"), ("body edit", "body_edit"),
-                          ("signature edit", "signature_edit")):
+                          ("signature edit", "signature_edit"), (f"late body edit {LATE_BODY_EDITS}", "late_body_edit")):
         for name in ("allocated_bytes", "retyped_functions", "invalidated_artifacts", "regenerated_functions"):
             metrics[f"{prefix}_{name}"] = named[label][name]
     metrics["server_live_bytes"] = settled[-1]["live_bytes"]
