@@ -47,9 +47,8 @@ class IrPipeline {
 		new IrAssemblyStage("enum-specializations", enumSpecializations).when(lowersEnums),
 		new IrAssemblyStage("enum-tag-lowering", enumTagLowering).when(lowersEnums),
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
-		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects),
-		new IrAssemblyStage("optional-value-helpers", optionalHelpers).when(hasObjects).checksPrune(OPTIONAL),
 		new IrAssemblyStage("encode-bodies", encodeBodies),
+		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage("object-reflection", objectReflection),
@@ -88,8 +87,6 @@ class IrPipeline {
 	]);
 
 	/** The names the prune check of a stage reports when it covers more than the stage. */
-	static inline final OPTIONAL = "optional-scalar-flow";
-
 	static inline final REFLECTION = "object-reflection and nullable-scalar-fields";
 
 	// Predicates.
@@ -371,13 +368,15 @@ class IrPipeline {
 	}
 
 	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var objects = assembly.objects;
-		assembly.functions = new IrOptionalScalarFlow(objects).rewrite(objects, assembly.functions);
-		return assembly;
-	}
-
-	static function optionalHelpers(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = IrOptionalValueFlow.addHelpers(assembly.functions, assembly.objects);
+		var objects = assembly.objects,
+			types = bodyTypes(context),
+			builder = context.passScratch.bodyBuilder,
+			retained = context.options.keepSession;
+		var functions = new IrOptionalScalarFlow(objects).rewrite(objects, assembly.functions, types, builder,
+			retained);
+		// The copy, box and unbox helpers the rewritten calls name.
+		functions = IrOptionalValueFlow.addHelpers(functions, objects, types, builder, retained);
+		assembly.functions = encodeMade("optional-scalar-flow", functions, context);
 		return assembly;
 	}
 
@@ -412,24 +411,27 @@ class IrPipeline {
 		assembly.natives = ObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
 			assembly.reachedNatives, context.options.checkReuse);
-		encodeGenerated("object-reflection", assembly, context);
+		assembly.functions = encodeMade("object-reflection", assembly.functions, context);
 		return assembly;
 	}
 
 	/**
-	 * Encodes the functions a stage past the conversion point generated as objects, from `assembly.generatedStart`: in a session,
-	 * one generated the same as last build is last build's object, which has its body.
+	 * `functions` with those a stage past the conversion point made as objects (those without a body) encoded: in a session, one
+	 * made the same as last build is last build's object, which has its body. A one-shot compile lets every function's objects go,
+	 * the ones the stage decoded to read included.
 	 */
-	static function encodeGenerated(stage:String, assembly:IrAssembly, context:IrPipelineContext):Void {
-		var functions = assembly.functions, start = assembly.generatedStart;
-		if (functions.length == start)
-			return;
-		var generated = functions.slice(start), cache = context.inlineCache, retained = context.options.keepSession;
+	static function encodeMade(stage:String, functions:Array<IrFunction>, context:IrPipelineContext):Array<IrFunction> {
+		var cache = context.inlineCache, retained = context.options.keepSession;
+		var made = [for (fn in functions) if (fn.body == null) fn];
 		if (retained && cache != null) {
-			generated = cache.stableGenerated(stage, generated);
-			assembly.functions = functions.slice(0, start).concat(generated);
+			var stable = cache.stableGenerated(stage, made);
+			if (made.length > 0) {
+				var index = 0;
+				functions = [for (fn in functions) fn.body == null ? stable[index++] : fn];
+			}
 		}
-		encodeAll(generated, context);
+		encodeAll(functions, context);
+		return functions;
 	}
 
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {

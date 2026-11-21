@@ -35,23 +35,37 @@ class IrOptionalValueFlow {
 		return true;
 	}
 
-	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction> {
+	/**
+	 * `functions` followed by the copy, box and unbox helpers their calls name, built as functions. The calls are read from the
+	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none
+	 * (frozen when `retained`).
+	 */
+	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, ?types:IrTypeIds,
+			?builder:IrBodyBuilder, retained = true):Array<IrFunction> {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(functions);
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object];
 		var needed:Map<String, Bool> = [],
 			boxes:Map<String, Bool> = [],
 			unboxes:Map<String, Bool> = [];
-		for (fn in functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, name, _) if (StringTools.startsWith(name.name, COPY_PREFIX)):
-							needed.set(name.name.substr(COPY_PREFIX.length), true);
-						case Call(_, name, _) if (StringTools.startsWith(name.name, BOX_PREFIX)):
-							boxes.set(name.name.substr(BOX_PREFIX.length), true);
-						case Call(_, name, _) if (StringTools.startsWith(name.name, UNBOX_PREFIX)):
-							unboxes.set(name.name.substr(UNBOX_PREFIX.length), true);
-						default:
+		for (fn in functions) {
+			var body = fn.bodyIn(types, builder, retained);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.Call) {
+						var name = body.symbol(row).name;
+						if (StringTools.startsWith(name, COPY_PREFIX))
+							needed.set(name.substr(COPY_PREFIX.length), true);
+						else if (StringTools.startsWith(name, BOX_PREFIX))
+							boxes.set(name.substr(BOX_PREFIX.length), true);
+						else if (StringTools.startsWith(name, UNBOX_PREFIX))
+							unboxes.set(name.substr(UNBOX_PREFIX.length), true);
 					}
+					row = body.nextRow(row);
+				}
+			}
+		}
 		var names = [for (name in needed.keys()) name];
 		names.sort(Reflect.compare);
 		var result = functions.copy();

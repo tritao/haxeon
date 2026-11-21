@@ -29,13 +29,29 @@ class IrOptionalScalarFlow {
 	final receiverChecks:Map<String, IrFunction> = [];
 	final resolution:IrMethodResolution;
 
+	// What `rewrite` reads the functions' bodies with.
+	var types:Null<IrTypeIds> = null;
+	var builder:Null<IrBodyBuilder> = null;
+	var retained = true;
+
 	public function new(declarations:Array<IrObject>) {
 		objects = [for (object in declarations) object.name => object];
 		resolution = IrMethodResolution.over(declarations);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
 	}
 
-	public function rewrite(declarations:Array<IrObject>, originals:Array<IrFunction>):Array<IrFunction> {
+	/**
+	 * `originals` with their optional values in scalar slots, read as their bodies made with `types` (those of the functions'
+	 * bodies when not given), encoding a function that has none (frozen when `retained`). A function that has an optional value
+	 * is read as its objects, decoded from its body, and one it changes or adds is a function without a body.
+	 */
+	public function rewrite(declarations:Array<IrObject>, originals:Array<IrFunction>, ?types:IrTypeIds,
+			?builder:IrBodyBuilder, retained = true):Array<IrFunction> {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(originals);
+		this.types = types;
+		this.builder = builder;
+		this.retained = retained;
 		for (fn in originals)
 			functions.set(fn.name, fn);
 		for (fn in originals) {
@@ -87,12 +103,16 @@ class IrOptionalScalarFlow {
 		for (arg in fn.arguments)
 			if (optional(arg.type) != null)
 				return true;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var out = IrOperands.output(located.value);
-				if (out != null && optional(out.type) != null)
+		var body = fn.bodyIn(types, builder, retained);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var out = body.output(row);
+				if (out.exists() && optional(body.valueType(out)) != null)
 					return true;
+				row = body.nextRow(row);
 			}
+		}
 		return optional(fn.result) != null;
 	}
 
