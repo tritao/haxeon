@@ -43,6 +43,9 @@ class IrFunctionStateCodec {
 	 * stand in for the other in a build: its debug information then names a source snapshot the build carries.
 	 */
 	public static function samePlacement(left:IrFunction, right:IrFunction):Bool {
+		var leftBody = left.body, rightBody = right.body;
+		if (leftBody != null && rightBody != null)
+			return sameBodyPlacement(leftBody, rightBody);
 		for (index in 0...left.debugBindings.length) {
 			var a = left.debugBindings[index], b = right.debugBindings[index];
 			if (a.scopeStart != b.scopeStart || a.scopeEnd != b.scopeEnd)
@@ -57,6 +60,24 @@ class IrFunctionStateCodec {
 			if (leftTerminator != null && rightTerminator != null
 				&& !samePlace(leftTerminator.provenance, rightTerminator.provenance))
 				return false;
+		}
+		return true;
+	}
+
+	/** `samePlacement` on two bodies, read as rows. */
+	static function sameBodyPlacement(left:compiler.ir.IrBody, right:compiler.ir.IrBody):Bool {
+		for (index in 0...left.bindingCount())
+			if (left.bindingScopeStart(index) != right.bindingScopeStart(index)
+				|| left.bindingScopeEnd(index) != right.bindingScopeEnd(index))
+				return false;
+		for (block in 0...left.blockCount()) {
+			var x = left.firstRow(block), y = right.firstRow(block);
+			while (x >= 0 && y >= 0) {
+				if (!samePlace(left.provenance(x), right.provenance(y)))
+					return false;
+				x = left.nextRow(x);
+				y = right.nextRow(y);
+			}
 		}
 		return true;
 	}

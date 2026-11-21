@@ -83,7 +83,8 @@ class IrScalarValuePlaces {
 		return false;
 	}
 
-	static function scalarFields(object:IrObject, lookup:String->Null<IrObject>):Bool {
+	/** Whether every field of `object`, a value class, keeps its representation in a register. */
+	public static function scalarFields(object:IrObject, lookup:String->Null<IrObject>):Bool {
 		if (!object.isValue)
 			return false;
 		for (field in object.fields) {

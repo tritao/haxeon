@@ -100,7 +100,16 @@ class IrReachability {
 	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk):Void {
 		// An `Unreachable` terminator lowers to a call of the fatal native, which no `Call` instruction names.
 		var fatal = false;
-		for (fn in program.functions)
+		for (fn in program.functions) {
+			var body = fn.body;
+			if (body != null) {
+				for (block in 0...body.blockCount()) {
+					var terminator = body.terminatorRow(block);
+					if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Unreachable)
+						fatal = true;
+				}
+				continue;
+			}
 			for (block in fn.blocks)
 				if (block.terminator != null)
 					switch block.terminator.value {
@@ -108,12 +117,26 @@ class IrReachability {
 							fatal = true;
 						default:
 					}
+		}
 		program.natives = [
 			for (native in program.natives)
 				if (walk.used.exists(native.name) || (fatal && native.name == "__unreachable")) native
 		];
 		var globals:Map<String, Bool> = [];
-		for (fn in program.functions)
+		for (fn in program.functions) {
+			var body = fn.body;
+			if (body != null) {
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block);
+					while (row >= 0) {
+						var opcode = body.opcode(row);
+						if (opcode == IrOpcode.GlobalGet || opcode == IrOpcode.GlobalSet)
+							globals.set(body.symbol(row).name, true);
+						row = body.nextRow(row);
+					}
+				}
+				continue;
+			}
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
@@ -121,6 +144,7 @@ class IrReachability {
 							globals.set(name, true);
 						default:
 					}
+		}
 		program.staticFields = [for (field in program.staticFields) if (globals.exists(field.name)) field];
 		// The classes the written program names, and what those classes hold: `namedTypes` is the one list of where a program names a type, shared with
 		// `checkTables`, so what the trim keeps and what the check demands cannot drift apart.
@@ -162,6 +186,26 @@ class IrReachability {
 			visit(fn.name, fn.result);
 			for (argument in fn.arguments)
 				visit(fn.name, argument.type);
+			var body = fn.body;
+			if (body != null) {
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block), terminator = body.terminatorRow(block);
+					while (row >= 0 && row != terminator) {
+						var output = body.output(row);
+						if (output.exists())
+							visit(fn.name, body.valueType(output));
+						switch body.opcode(row) {
+							case IrOpcode.TypeValue, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView,
+								IrOpcode.EnumTagBox,
+								IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
+								visit(fn.name, body.typeOperand(row));
+							default:
+						}
+						row = body.nextRow(row);
+					}
+				}
+				continue;
+			}
 			for (block in fn.blocks)
 				for (located in block.instructions) {
 					var output = IrOperands.output(located.value);
@@ -309,6 +353,11 @@ class IrReachabilityWalk {
 				for (argument in fn.arguments)
 					mention(argument.type, pending);
 			}
+			var body = fn.body;
+			if (body != null) {
+				visitBody(body, pending);
+				continue;
+			}
 			for (block in fn.blocks)
 				for (located in block.instructions) {
 					if (keepLiveClasses) {
@@ -350,6 +399,48 @@ class IrReachabilityWalk {
 				}
 		}
 	}
+
+	/** `visit`'s walk of a reached function that is its body (the inliner's output): what its rows call, make and mention. */
+	function visitBody(body:IrBody, pending:Array<String>):Void
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var output = body.output(row), opcode = body.opcode(row);
+				if (keepLiveClasses && output.exists())
+					mention(body.valueType(output), pending);
+				switch opcode {
+					case IrOpcode.NewObject:
+						construct(body.symbol(row).name, pending);
+					case IrOpcode.Call:
+						var target = body.symbol(row).name, made = nativeResults.get(target);
+						if (made != null)
+							construct(made, pending);
+						used.set(target, true);
+						pending.push(target);
+					case IrOpcode.StaticClosure:
+						var target = body.symbol(row).name;
+						used.set(target, true);
+						pending.push(target);
+					case IrOpcode.InstanceClosure:
+						pending.push(body.symbol(row).name);
+					// Dynamic iterators read through the Array<Dynamic> element reader.
+					case IrOpcode.IteratorNext if ((switch (body.valueType(output)) {
+						case Dyn: true;
+						default: false;
+					})): used.set("__array_get_any", true);
+					case IrOpcode.MethodCall if (!keepLiveClasses):
+						switch body.valueType(body.operand(row, 0)) {
+							case Obj(typeName):
+								dispatch(typeName, false, body.symbol(row).name, pending);
+							case Virtual(interfaceName):
+								dispatch(interfaceName, true, body.symbol(row).name, pending);
+							default:
+						}
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
 
 	function dispatch(typeName:String, isInterface:Bool, method:String, pending:Array<String>):Void {
 		var key = typeName + (isInterface ? "\u0002" : "\u0001") + method;

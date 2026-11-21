@@ -16,42 +16,84 @@ import compiler.ir.SourceProvenance.Located;
 class IrExactTypeFacts {
 	public static inline final TEST = "__object_has_exact_type";
 
-	final graph:Null<IrGraph>;
-	final facts:Array<{block:Int, value:Int, type:String}> = [];
+	/** The body's graph, while it has facts. */
+	var graph:Null<IrBodyGraph> = null;
 
-	/** `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function. */
-	public function new(fn:IrFunction, ?graph:IrGraph) {
+	/** The facts: in block `factBlocks[i]` and those it dominates, value `factValues[i]` is an object of class `factTypes[i]`. */
+	final factBlocks:Array<Int> = [];
+
+	final factValues:Array<Int> = [];
+	final factTypes:Array<String> = [];
+
+	/** The rows of the body that test a class, and that name a class (`TypeValue` of an object type). */
+	final testRows:Array<Int> = [];
+
+	final classRows:Array<Int> = [];
+
+	/** Empty: `reset` makes it the facts of one body after another. */
+	public function new() {}
+
+	/** Makes these the facts of `body`, whose graph is `graph` (shared with other analyses of the same body). */
+	public function reset(body:IrBody, graph:IrBodyGraph):IrExactTypeFacts {
+		this.graph = null;
+		factBlocks.resize(0);
+		factValues.resize(0);
+		factTypes.resize(0);
+		testRows.resize(0);
+		classRows.resize(0);
 		// Only tests and the classes they name matter; most functions have no test, and then nothing else is looked at.
-		var tests:Null<Map<Int, Array<IrValue>>> = null, classes:Null<Map<Int, String>> = null;
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case Call(output, name, arguments) if (name.name == TEST && arguments.length == 2):
-						if (tests == null)
-							tests = [];
-						tests.set(output.id, arguments);
-					case TypeValue(output, Obj(type)):
-						if (classes == null)
-							classes = [];
-						classes.set(output.id, type);
+		var test = IrSymbol.of(TEST).id;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.Call if (body.aux(row) == test && body.operandCount(row) == 2):
+						testRows.push(row);
+					case IrOpcode.TypeValue if (namesClass(body.typeOperand(row))):
+						classRows.push(row);
 					default:
 				}
-		if (tests == null || classes == null) {
-			this.graph = graph;
-			return;
+				row = body.nextRow(row);
+			}
 		}
-		var known = graph ?? new IrGraph(fn);
-		this.graph = known;
-		for (block in fn.blocks)
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Branch(condition, yes, no) if (yes != no):
-						var arguments = tests.get(condition.id),
-							type = arguments == null ? null : classes.get(arguments[1].id);
-						if (type != null && known.predecessorCount(yes) == 1)
-							facts.push({block: yes, value: arguments[0].id, type: type});
+		if (testRows.length == 0 || classRows.length == 0)
+			return this;
+		this.graph = graph;
+		for (block in 0...body.blockCount()) {
+			var terminator = body.terminatorRow(block);
+			if (terminator < 0 || body.opcode(terminator) != IrOpcode.Branch)
+				continue;
+			var yes = body.auxInt(terminator, 0), no = body.auxInt(terminator, 1);
+			if (yes == no)
+				continue;
+			var test = definedBy(body, testRows, body.operand(terminator, 0));
+			if (test < 0)
+				continue;
+			var named = definedBy(body, classRows, body.operand(test, 1));
+			if (named >= 0 && graph.predecessorCount(yes) == 1)
+				switch body.typeOperand(named) {
+					case Obj(type):
+						factBlocks.push(yes);
+						factValues.push(body.operand(test, 0));
+						factTypes.push(type);
 					default:
 				}
+		}
+		return this;
+	}
+
+	static function namesClass(type:IrType):Bool
+		return switch type {
+			case Obj(_): true;
+			default: false;
+		};
+
+	/** The one of `rows` that defines `value`, or -1. */
+	static function definedBy(body:IrBody, rows:Array<Int>, value:IrValueId):Int {
+		for (row in rows)
+			if ((body.output(row):Int) == (value:Int))
+				return row;
+		return -1;
 	}
 
 	/**
@@ -111,9 +153,9 @@ class IrExactTypeFacts {
 	public function exactType(block:Int, value:Int):Null<String> {
 		var known = graph;
 		if (known != null)
-			for (fact in facts)
-				if (fact.value == value && known.dominates(fact.block, block))
-					return fact.type;
+			for (index in 0...factBlocks.length)
+				if (factValues[index] == value && known.dominates(factBlocks[index], block))
+					return factTypes[index];
 		return null;
 	}
 }

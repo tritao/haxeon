@@ -1,8 +1,11 @@
 package compiler.ir.codec;
 
 import compiler.ir.Ir;
+import compiler.ir.IrBody;
 import compiler.ir.IrFunction;
 import compiler.ir.IrFunction.IrValueArraySlotOperation;
+import compiler.ir.IrOpcode;
+import compiler.ir.IrValueId;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.SourceOrigin;
@@ -12,6 +15,9 @@ class IrFunctionStateEquality {
 	public static function same(left:IrFunction, right:IrFunction):Bool {
 		if (left == right)
 			return true;
+		var leftBody = left.body, rightBody = right.body;
+		if (leftBody != null && rightBody != null)
+			return sameBodies(leftBody, rightBody);
 		if (left.name != right.name
 			|| !sameKind(left.kind, right.kind)
 			|| left.inlineHint != right.inlineHint
@@ -47,6 +53,81 @@ class IrFunctionStateEquality {
 				&& (x == null || y == null || !provenance(x.provenance, y.provenance) || !terminator(x.value, y.value)))
 				return false;
 		}
+		return true;
+	}
+
+	/** `same` on two functions that are bodies (`IrFunction.ofBody`), read as rows, so neither is decoded. */
+	public static function sameBodies(left:IrBody, right:IrBody):Bool {
+		if (left == right)
+			return true;
+		if (left.name != right.name
+			|| !sameKind(left.kind, right.kind)
+			|| left.inlineHint != right.inlineHint
+			|| left.retention != right.retention
+			|| !IrVerifier.sameType(left.types.type(left.result), right.types.type(right.result))
+			|| left.argumentCount() != right.argumentCount()
+			|| left.blockCount() != right.blockCount()
+			|| left.bindingCount() != right.bindingCount())
+			return false;
+		for (i in 0...left.argumentCount())
+			if (!bodyValue(left, left.argument(i), right, right.argument(i)))
+				return false;
+		for (i in 0...left.bindingCount())
+			if (left.bindingIdentity(i) != right.bindingIdentity(i)
+				|| left.bindingName(i) != right.bindingName(i)
+				|| left.bindingPath(i) != right.bindingPath(i)
+				|| left.bindingScopeStart(i) != right.bindingScopeStart(i)
+				|| left.bindingScopeEnd(i) != right.bindingScopeEnd(i)
+				|| !bodyValue(left, left.bindingValue(i), right, right.bindingValue(i)))
+				return false;
+		for (block in 0...left.blockCount()) {
+			if (left.blockId(block) != right.blockId(block))
+				return false;
+			var x = left.firstRow(block), y = right.firstRow(block);
+			while (x >= 0 || y >= 0) {
+				if (x < 0 || y < 0 || !sameRow(left, x, right, y))
+					return false;
+				x = left.nextRow(x);
+				y = right.nextRow(y);
+			}
+		}
+		return true;
+	}
+
+	static function bodyValue(left:IrBody, a:IrValueId, right:IrBody, b:IrValueId):Bool
+		return (a:Int) == (b:Int) && left.valueName(a) == right.valueName(b)
+			&& IrVerifier.sameType(left.valueType(a), right.valueType(b));
+
+	/** Whether row `x` of `left` and row `y` of `right` are the same instruction or terminator, from the same place. */
+	static function sameRow(left:IrBody, x:Int, right:IrBody, y:Int):Bool {
+		var opcode = left.opcode(x);
+		if (opcode != right.opcode(y) || !provenance(left.provenance(x), right.provenance(y)))
+			return false;
+		var a = left.output(x), b = right.output(y);
+		if (a.exists() != b.exists() || a.exists() && !bodyValue(left, a, right, b))
+			return false;
+		var count = left.operandCount(x);
+		if (count != right.operandCount(y))
+			return false;
+		for (index in 0...count)
+			if (!bodyValue(left, left.operand(x, index), right, right.operand(y, index)))
+				return false;
+		var ints = switch opcode {
+			case IrOpcode.ConstFloat: return sameFloat(left.float(x), right.float(y));
+			case IrOpcode.ConstString: return left.string(x) == right.string(y);
+			case IrOpcode.TypeValue, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView, IrOpcode.EnumTagBox,
+				IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
+				return IrVerifier.sameType(left.typeOperand(x), right.typeOperand(y));
+			case IrOpcode.Phi: count;
+			case IrOpcode.StaticDataAddress: 1 + left.auxInt(x, 0);
+			case IrOpcode.BeginTry: 3;
+			case IrOpcode.EndTry, IrOpcode.MakeEnum, IrOpcode.EnumField, IrOpcode.Branch: 2;
+			case IrOpcode.Switch: 2 + left.auxInt(x, 1);
+			default: return left.aux(x) == right.aux(y);
+		};
+		for (index in 0...ints)
+			if (left.auxInt(x, index) != right.auxInt(y, index))
+				return false;
 		return true;
 	}
 

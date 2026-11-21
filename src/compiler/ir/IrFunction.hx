@@ -83,13 +83,34 @@ enum IrFunctionKind {
 	ClosureVarargs(target:IrType);
 }
 
-/** Verified SSA function with explicit arguments, blocks, and result type. */
+/**
+ * Verified SSA function with explicit arguments, blocks, and result type.
+ *
+ * A function the inliner stage made is its frozen body (`ofBody`, docs/design/IR_CORE_COLUMNS.md): the backends read the body,
+ * and the blocks and debug bindings are decoded from it the first time something reads them, once. A function is never changed
+ * once made, so a body a reader encodes for it (`bodyIn`) stays its own.
+ */
+@:allow(compiler.ir.IrBody)
 class IrFunction {
 	public final name:String;
 	public final arguments:Array<IrValue>;
 	public final result:IrType;
-	public final blocks:Array<IrBlock>;
-	public final debugBindings:Array<IrDebugBinding>;
+	public var blocks(get, never):Array<IrBlock>;
+	public var debugBindings(get, never):Array<IrDebugBinding>;
+
+	/** The frozen body this function is, when one was made: the one it was made from (`ofBody`), or one `bodyIn` encoded. */
+	public var body(default, null):Null<IrBody> = null;
+
+	/** The blocks and bindings, null until decoded from `body`. */
+	var decodedBlocks:Null<Array<IrBlock>>;
+
+	var decodedBindings:Null<Array<IrDebugBinding>>;
+
+	@:processWide("a placeholder for blocks not decoded yet, replaced at once and never read or added to")
+	static final NOT_DECODED:Array<IrBlock> = [];
+
+	@:processWide("a placeholder for bindings not decoded yet, replaced at once and never read or added to")
+	static final NO_BINDINGS:Array<IrDebugBinding> = [];
 
 	/** Declared `inline` in source; the inliner allows a larger body for such a function. */
 	public final inlineHint:Bool;
@@ -104,11 +125,61 @@ class IrFunction {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
-		this.blocks = blocks;
-		this.debugBindings = debugBindings == null ? [] : debugBindings;
+		this.decodedBlocks = blocks;
+		this.decodedBindings = debugBindings == null ? [] : debugBindings;
 		this.inlineHint = inlineHint;
 		this.retention = retention;
 		this.kind = kind;
+	}
+
+	/** The function `body` is, which must be frozen: its arguments decoded now, its blocks and bindings when first read. */
+	public static function ofBody(body:IrBody):IrFunction {
+		if (!body.frozen)
+			throw new InternalError('IR body ${body.name} is not frozen, so it is not a function yet');
+		var fn = new IrFunction(body.name, body.decodeArguments(), body.types.type(body.result), NOT_DECODED, body.kind,
+			NO_BINDINGS, body.inlineHint, body.retention);
+		fn.decodedBlocks = null;
+		fn.decodedBindings = null;
+		fn.body = body;
+		return fn;
+	}
+
+	/** This function's body: the one it is, or else its encoding with `types`, frozen and kept, so it is made once. */
+	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
+		var known = body;
+		if (known != null)
+			return known;
+		var made = IrBodyBuilder.encode(this, types, builder).freeze();
+		body = made;
+		return made;
+	}
+
+	/** Records `encoded`, a frozen body made from this function, as its body, unless it has one. */
+	public function keepBody(encoded:IrBody):Void {
+		if (!encoded.frozen)
+			throw new InternalError('IR body ${encoded.name} is not frozen');
+		if (body == null)
+			body = encoded;
+	}
+
+	inline function get_blocks():Array<IrBlock> {
+		var known = decodedBlocks;
+		return known != null ? known : decode().blocks;
+	}
+
+	inline function get_debugBindings():Array<IrDebugBinding> {
+		var known = decodedBindings;
+		return known != null ? known : decode().bindings;
+	}
+
+	function decode():{blocks:Array<IrBlock>, bindings:Array<IrDebugBinding>} {
+		var source = body;
+		if (source == null)
+			throw new InternalError('IR function $name has neither blocks nor a body');
+		var decoded = source.decodeRest(arguments);
+		decodedBlocks = decoded.blocks;
+		decodedBindings = decoded.bindings;
+		return decoded;
 	}
 
 	/**

@@ -4,8 +4,10 @@ import compiler.core.PeakProbe;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
+import compiler.ir.IrBody;
 import compiler.ir.IrFunction;
-import compiler.ir.PhiEdges;
+import compiler.ir.IrOpcode;
+import compiler.ir.IrValueId;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
@@ -16,9 +18,6 @@ import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolTable;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
@@ -26,7 +25,6 @@ import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.IrVerifier;
-import compiler.hl.lower.HlScalarValueLocals.HlScalarValueLocal;
 import compiler.hl.incremental.HlSymbolRequest;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.ir.SourceProvenance;
@@ -77,6 +75,15 @@ class HlLower {
 
 	/** The tables of the function being lowered, their storage kept from one function to the next. */
 	final scratch = new HlLowerScratch();
+
+	/** The body of the function being lowered (`lowerFunction`). */
+	var body:IrBody;
+
+	/** The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`). */
+	final bodyTypes = new compiler.ir.IrTypeIds();
+
+	/** `allocateTemporary`, made once: the scalar locals of each function take their registers through it. */
+	final allocateRegister:IrType->Int;
 
 	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
 	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
@@ -216,6 +223,7 @@ class HlLower {
 			?frozen:String->Bool, checkReuse:Bool = false) {
 		this.frozen = frozen;
 		this.symbols = symbols;
+		allocateRegister = allocateTemporary;
 		// A compile that checks its reuse lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = !trustCache && checkReuse;
 		this.loweredCache = loweredCache;
@@ -334,42 +342,51 @@ class HlLower {
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
+		var types = new compiler.ir.IrTypeIds(), valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
 		for (fn in program.functions)
-			if (selected == null || selectedNames.exists(fn.name))
-				for (block in fn.blocks)
-					for (located in block.instructions)
-						switch located.value {
-							case CallClosure(_, closure, _) if ((switch (closure.type) {
-								case IrType.Dyn: true;
-								default: false;
-							})): ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
-							ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32],
-								IrType.Bytes);
-							case PointerOffset(_, _, _):
-								ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32],
-									IrType.RawPtr, "std", "bytes_offset");
-							case IteratorNew(_, _):
-								ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn],
-									IrType.Abstract("realtime_iterator"));
-							case IteratorHasNext(_, _):
-								ensureNative(runtimeNatives, "__iterator_has_next",
-									[IrType.Abstract("realtime_iterator")], IrType.Bool);
-							case Call(_, name, arguments) if (name.name == VALUE_ARRAY_READ_I32 && arguments.length == 5
-								&& readsInline(arguments[0].type)):
-								ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
-								ensureNative(runtimeNatives, VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
-							case ArrayGet(_, array, _):
-								ensureRawArrayNative(runtimeNatives, array.type, "check");
-							case ArraySet(array, _, _):
-								ensureRawArrayNative(runtimeNatives, array.type, "ensure");
-							case IteratorNext(output, _):
-								var nextNative = iteratorNextNative(output.type);
-								ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")],
-									nextNative.result);
-							default:
-						}
+			if (selected == null || selectedNames.exists(fn.name)) {
+				var body = fn.bodyIn(types);
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block), terminator = body.terminatorRow(block);
+					while (row >= 0 && row != terminator) {
+						discoverRowNatives(runtimeNatives, body, row, valueArrayRead);
+						row = body.nextRow(row);
+					}
+				}
+			}
 		return runtimeNatives;
 	}
+
+	/** The runtime natives lowering row `row` of `body` calls, added to `runtimeNatives`. */
+	static function discoverRowNatives(runtimeNatives:Array<IrNative>, body:IrBody, row:Int, valueArrayRead:Int):Void
+		switch body.opcode(row) {
+			case IrOpcode.CallClosure if ((switch (body.valueType(body.operand(row, 0))) {
+				case IrType.Dyn: true;
+				default: false;
+			})): ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
+			ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32], IrType.Bytes);
+			case IrOpcode.PointerOffset:
+				ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32], IrType.RawPtr, "std",
+					"bytes_offset");
+			case IrOpcode.IteratorNew:
+				ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
+			case IrOpcode.IteratorHasNext:
+				ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")],
+					IrType.Bool);
+			case IrOpcode.Call if (body.aux(row) == valueArrayRead && body.operandCount(row) == 5
+				&& readsInline(body.valueType(body.operand(row, 0)))):
+				ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
+				ensureNative(runtimeNatives, VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
+			case IrOpcode.ArrayGet:
+				ensureRawArrayNative(runtimeNatives, body.valueType(body.operand(row, 0)), "check");
+			case IrOpcode.ArraySet:
+				ensureRawArrayNative(runtimeNatives, body.valueType(body.operand(row, 0)), "ensure");
+			case IrOpcode.IteratorNext:
+				var nextNative = iteratorNextNative(body.valueType(body.output(row)));
+				ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")],
+					nextNative.result);
+			default:
+		}
 
 	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Void {
 		var startedAt = Sys.time() * 1000.0;
@@ -514,7 +531,7 @@ class HlLower {
 						requests = [];
 						view.beginFunction();
 					}
-					var lowered = lowerFunction(PhiEdges.split(fn));
+					var lowered = lowerFunction(loweringBody(fn));
 					code.functions.push(lowered);
 					if (trustCache) {
 						entries.set(fn.name,
@@ -657,7 +674,7 @@ class HlLower {
 		var before = sizes();
 		var fresh:HlFunction;
 		try
-			fresh = lowerFunction(PhiEdges.split(fn))
+			fresh = lowerFunction(loweringBody(fn))
 		catch (missing:HlMissingEntity) {
 			// Only an object type or field the program no longer holds excuses it: a removed lambda whose code stored closures still run
 			// keeps its old code on purpose, and there is nothing to compare it with. Lowering must have added nothing before it failed.
@@ -684,10 +701,17 @@ class HlLower {
 	}
 
 	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
-		var functionIndex = requireFunction(fn.name), sourcePath = "", start = -1, end = -1, line = 0;
-		for (block in fn.blocks)
-			for (instruction in block.instructions) {
-				var location = instruction.provenance.location;
+		var functionIndex = requireFunction(fn.name),
+			sourcePath = "",
+			start = -1,
+			end = -1,
+			line = 0,
+			body = fn.bodyIn(bodyTypes, scratch.bodyBuilder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var location = body.provenance(row).location;
+				row = body.nextRow(row);
 				if (location == null)
 					continue;
 				if (sourcePath == "")
@@ -699,6 +723,7 @@ class HlLower {
 				if (line == 0 || location.line < line)
 					line = location.line;
 			}
+		}
 		var parts = fn.name.split(".");
 		return {
 			stableId: stableIds != null && stableIds.exists(fn.name) ? stableIds.get(fn.name) : functionIndex,
@@ -736,23 +761,27 @@ class HlLower {
 	 * Whether a scalar read of the same element as the read at `position`, whose value is used, is beside it, with nothing
 	 * but constants and reads of that element between: that read checks the element (in range, present) as this one would.
 	 */
-	static function usedReadNearby(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>,
-			position:Int,
-			read:Array<IrValue>, uses:Array<Int>):Bool {
-		for (direction in [-1, 1]) {
-			var at = position + direction;
-			while (at >= 0 && at < instructions.length) {
-				switch instructions[at].value {
-					case ConstInt(_, _), ConstBool(_, _):
-					case Call(output, name, arguments) if (StringTools.startsWith(name.name, VALUE_ARRAY_READ)
-						&& arguments.length >= 2 && arguments[0].id == read[0].id && arguments[1].id == read[1].id):
-						if (output.id < uses.length && uses[output.id] > 0)
-							return true;
-					default:
-						break;
-				}
-				at += direction;
+	function usedReadNearby(row:Int, uses:Array<Int>):Bool {
+		return usedReadBeside(row, uses, true) || usedReadBeside(row, uses, false);
+	}
+
+	/** `usedReadNearby` on one side of `row`: the rows before it, or those after it. */
+	function usedReadBeside(row:Int, uses:Array<Int>, before:Bool):Bool {
+		var array = body.operand(row, 0),
+			index = body.operand(row, 1),
+			at = before ? body.previousRow(row) : body.nextRow(row);
+		while (at >= 0) {
+			switch body.opcode(at) {
+				case IrOpcode.ConstInt, IrOpcode.ConstBool:
+				case IrOpcode.Call if (StringTools.startsWith(body.symbol(at).name, VALUE_ARRAY_READ)
+					&& body.operandCount(at) >= 2 && (body.operand(at, 0):Int) == (array:Int)
+					&& (body.operand(at, 1):Int) == (index:Int)):
+					if (uses[body.output(at)] > 0)
+						return true;
+				default:
+					break;
 			}
+			at = before ? body.previousRow(at) : body.nextRow(at);
 		}
 		return false;
 	}
@@ -778,18 +807,19 @@ class HlLower {
 	static inline final CONSTANT_LOOKBACK = 8;
 
 	/** The Int or Bool constant (a Bool as 0 or 1) `value` is, when its definition is just before `index`; else -1. */
-	static function constantBefore(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>, index:Int,
-			value:IrValue):Int {
-		var position = index - 1, limit = index - CONSTANT_LOOKBACK;
-		while (position >= 0 && position >= limit) {
-			switch instructions[position].value {
-				case ConstInt(output, number) if (output.id == value.id):
-					return number;
-				case ConstBool(output, flag) if (output.id == value.id):
-					return flag ? 1 : 0;
-				default:
-			}
-			position--;
+	function constantBefore(row:Int, value:IrValueId):Int {
+		var position = body.previousRow(row), remaining = CONSTANT_LOOKBACK;
+		while (position >= 0 && remaining > 0) {
+			if ((body.output(position):Int) == (value:Int))
+				switch body.opcode(position) {
+					case IrOpcode.ConstInt:
+						return body.aux(position);
+					case IrOpcode.ConstBool:
+						return body.aux(position) == 1 ? 1 : 0;
+					default:
+				}
+			position = body.previousRow(position);
+			remaining--;
 		}
 		return -1;
 	}
@@ -815,14 +845,12 @@ class HlLower {
 	 * The slot `__value_array_read_i32` at `index` of `instructions` reads, as constants, when it is read inline
 	 * (`lowerValueArrayRead`); null otherwise.
 	 */
-	static function inlineValueArraySlot(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>,
-			index:Int,
-			arguments:Array<IrValue>):Null<InlineValueSlot> {
-		if (arguments.length != 5 || !readsInline(arguments[0].type))
+	function inlineValueArraySlot(row:Int):Null<InlineValueSlot> {
+		if (body.operandCount(row) != 5 || !readsInline(body.valueType(body.operand(row, 0))))
 			return null;
-		var offset = constantBefore(instructions, index, arguments[2]),
-			width = constantBefore(instructions, index, arguments[3]),
-			signed = constantBefore(instructions, index, arguments[4]);
+		var offset = constantBefore(row, body.operand(row, 2)),
+			width = constantBefore(row, body.operand(row, 3)),
+			signed = constantBefore(row, body.operand(row, 4));
 		return offset >= 0 && offset % 8 == 0 && signed >= 0 && (width == 8 || width == 16 || width == 32)
 			? {offset: offset, width: width, signed: signed == 1} : null;
 	}
@@ -833,12 +861,14 @@ class HlLower {
 	 * slot from the scalar lane, `index * stride + offset`; anything else calls the native, which raises its errors as
 	 * before.
 	 */
-	function lowerValueArrayRead(output:IrValue, arguments:Array<IrValue>, slot:InlineValueSlot, block:Int,
+	function lowerValueArrayRead(row:Int, output:IrValueId, slot:InlineValueSlot, block:Int,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
-		var array = requireRegister(arguments[0], registers),
-			index = requireRegister(arguments[1], registers),
+		var arrayValue = body.operand(row, 0),
+			indexValue = body.operand(row, 1),
+			array = requireRegister(arrayValue, registers),
+			index = requireRegister(indexValue, registers),
 			destination = defineRegister(output, registers, registerTypes),
-			view = valueArrayView(arguments[0], instructions, registers, registerTypes),
+			view = valueArrayView(arrayValue, instructions, registers, registerTypes),
 			slow = freshLabel(),
 			done = freshLabel(),
 			size = temporaryRegister(IrType.I32, registerTypes),
@@ -846,13 +876,13 @@ class HlLower {
 			position = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.JumpNull(view.array, slow));
 		// A loop that runs the index up to the array's length, and resizes nothing, proved it in range.
-		if (!provenByLoop(arguments[0], arguments[1], block)) {
+		if (!provenByLoop(arrayValue, indexValue, block)) {
 			instructions.push(HlInstruction.GetMem(size, view.array,
 				constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
 		}
 		// An element of an array with validity bits is read only once it was written; else the native raises its error.
-		if (hasValidity(arguments[0].type)) {
+		if (hasValidity(body.valueType(arrayValue))) {
 			var bits = temporaryRegister(IrType.Bytes, registerTypes),
 				byte = temporaryRegister(IrType.I32, registerTypes),
 				byteIndex = temporaryRegister(IrType.I32, registerTypes),
@@ -888,7 +918,7 @@ class HlLower {
 		instructions.push(HlInstruction.Jump(done));
 		instructions.push(HlInstruction.Label(slow));
 		instructions.push(HlInstruction.CallN(destination, requireFunction(VALUE_ARRAY_READ_I32),
-			[for (argument in arguments) requireRegister(argument, registers)]));
+			operandRegisters(row, 0, registers)));
 		instructions.push(HlInstruction.Label(done));
 	}
 
@@ -905,13 +935,13 @@ class HlLower {
 	 * resolved once per array value within a block (`valueArrayViews`): the value array itself, or a forwarding header's
 	 * data (`__value_array_retype`).
 	 */
-	function valueArrayView(array:IrValue, instructions:Array<HlInstruction>, registers:Array<Int>,
+	function valueArrayView(array:IrValueId, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):ValueArrayView {
-		var known = definedViews.get(array.id) ?? valueArrayViews.get(array.id);
+		var known = definedViews.get(array) ?? valueArrayViews.get(array);
 		if (known != null)
 			return known;
 		var view = resolveValueArrayView(array, instructions, registers, registerTypes);
-		valueArrayViews.set(array.id, view);
+		valueArrayViews.set(array, view);
 		return view;
 	}
 
@@ -919,12 +949,12 @@ class HlLower {
 	 * Resolves `array`'s view where the array value is defined (an argument or phi at its block's start, any other value
 	 * right after its instruction), so it dominates every read of the value (`definedViews`).
 	 */
-	function defineValueArrayView(array:IrValue, instructions:Array<HlInstruction>, registers:Array<Int>,
+	function defineValueArrayView(array:IrValueId, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Void
-		if (hasViewedArrays && viewedArrays.exists(array.id) && !definedViews.exists(array.id))
-			definedViews.set(array.id, resolveValueArrayView(array, instructions, registers, registerTypes));
+		if (hasViewedArrays && viewedArrays.exists(array) && !definedViews.exists(array))
+			definedViews.set(array, resolveValueArrayView(array, instructions, registers, registerTypes));
 
-	function resolveValueArrayView(array:IrValue, instructions:Array<HlInstruction>, registers:Array<Int>,
+	function resolveValueArrayView(array:IrValueId, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):ValueArrayView {
 		var header = requireRegister(array, registers),
 			view:ValueArrayView = {
@@ -985,19 +1015,22 @@ class HlLower {
 	 * The HashLink runtime's scalar reads validate their element as `__value_array_validate` does, with the same errors, so
 	 * a validation right before one adds nothing: a payload-free enum element is read as exactly that pair.
 	 */
-	static function scalarReadFollows(instructions:Array<compiler.ir.SourceProvenance.Located<compiler.ir.Ir.IrInstruction>>,
-			start:Int, validate:Array<IrValue>):Bool {
-		if (validate.length != 2)
+	function scalarReadFollows(row:Int):Bool {
+		if (body.operandCount(row) != 2)
 			return false;
-		for (position in start...instructions.length)
-			switch instructions[position].value {
-				case ConstInt(_, _), ConstBool(_, _):
-				case Call(_, name, arguments):
-					return StringTools.startsWith(name.name, "__value_array_read_") && arguments.length >= 2
-						&& arguments[0].id == validate[0].id && arguments[1].id == validate[1].id;
+		var array = body.operand(row, 0), index = body.operand(row, 1), position = body.nextRow(row);
+		while (position >= 0) {
+			switch body.opcode(position) {
+				case IrOpcode.ConstInt, IrOpcode.ConstBool:
+				case IrOpcode.Call:
+					return StringTools.startsWith(body.symbol(position).name, "__value_array_read_")
+						&& body.operandCount(position) >= 2 && (body.operand(position, 0):Int) == (array:Int)
+						&& (body.operand(position, 1):Int) == (index:Int);
 				default:
 					return false;
 			}
+			position = body.nextRow(position);
+		}
 		return false;
 	}
 
@@ -1068,746 +1101,225 @@ class HlLower {
 		});
 	}
 
-	function lowerFunction(fn:IrFunction):HlFunction {
+	/** The body `fn` is lowered from: its own (`IrFunction.bodyIn`), with an edge block on each branch into a block with phis. */
+	function loweringBody(fn:IrFunction):IrBody
+		return scratch.phiEdges.splitBody(fn.bodyIn(bodyTypes, scratch.bodyBuilder), scratch.bodyBuilder);
+
+	function lowerFunction(source:IrBody):HlFunction {
+		body = source;
 		nextLabel = 0;
-		for (block in fn.blocks)
-			if (block.id >= nextLabel)
-				nextLabel = block.id + 1;
-		// Both read the function as it is, so they share its graph.
-		var graph = scratch.graph.reset(fn),
-			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph, scratch.nonNull),
-			exactTypes = new compiler.ir.IrExactTypeFacts(fn, graph);
+		for (block in 0...body.blockCount())
+			if (body.blockId(block) >= nextLabel)
+				nextLabel = body.blockId(block) + 1;
+		// The analyses read the body as it is, so they share its graph.
+		var graph = scratch.graph.reset(body),
+			nonNull = compiler.ir.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull),
+			exactTypes = scratch.exactTypes.reset(body, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
-		var registers = scratch.registers;
-		registers.resize(0);
+		var valueLimit = body.valueLimit();
+		var registers = compiler.ir.IrPassScratch.filledInts(scratch.registers, valueLimit, -1);
 		var registerTypes = scratch.registerTypes;
 		registerTypes.resize(0);
-		var catchValues:Map<Int, IrValue> = [];
-		var nullValues = scratch.nullValues;
-		nullValues.resize(0);
+		var nullValues = compiler.ir.IrPassScratch.filledBools(scratch.nullValues, valueLimit, false);
 		var hasPointerOffsets = false;
-		for (argument in fn.arguments)
-			defineRegister(argument, registers, registerTypes);
-		for (block in fn.blocks)
-			for (instruction in block.instructions) {
-				var output = instructionOutput(instruction.value);
-				if (output != null)
+		hasFoldedAddresses = false;
+		for (index in 0...body.argumentCount())
+			defineRegister(body.argument(index), registers, registerTypes);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var output = body.output(row);
+				if (output.exists())
 					defineRegister(output, registers, registerTypes);
-				switch instruction.value {
-					case ConstNull(value):
-						while (nullValues.length <= value.id)
-							nullValues.push(false);
-						nullValues[value.id] = true;
-					case PointerOffset(_, _, _):
+				switch body.opcode(row) {
+					case IrOpcode.ConstNull:
+						nullValues[output] = true;
+					case IrOpcode.PointerOffset:
 						hasPointerOffsets = true;
-					case _:
-				}
-			}
-		var scalarOptionals = new HlScalarValueLocals(fn, view, type -> temporaryRegister(type, registerTypes));
-		var uses = scratch.uses;
-		uses.resize(0);
-		function countUse(value:IrValue):Void {
-			while (uses.length <= value.id)
-				uses.push(0);
-			uses[value.id]++;
-		}
-		function usedOnce(value:IrValue):Bool
-			return value.id < uses.length && uses[value.id] == 1;
-		function isNullConstant(value:IrValue):Bool
-			return value.id < nullValues.length && nullValues[value.id];
-		for (block in fn.blocks) {
-			for (instruction in block.instructions) {
-				for (inputIndex in 0...compiler.ir.IrOperands.count(instruction.value)) {
-					var input = compiler.ir.IrOperands.at(instruction.value, inputIndex);
-					countUse(input);
-				}
-				switch instruction.value {
-					case Phi(_, inputs):
-						for (input in inputs)
-							countUse(input.value);
 					default:
 				}
+				row = body.nextRow(row);
 			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
-						countUse(value);
-					case Jump(_), Unreachable:
-				}
 		}
-		var foldedAddresses = hasPointerOffsets ? foldedPointerOffsets(fn, uses) : null;
-		function memoryAddress(pointer:IrValue, instructions:Array<HlInstruction>):{base:Int, offset:Int} {
-			var folded = foldedAddresses == null ? null : foldedAddresses.get(pointer.id);
-			if (folded != null)
-				return {
-					base: requireRegister(folded.pointer, registers),
-					offset: requireRegister(folded.byteOffset, registers)
-				};
-			var zeroOffset = temporaryRegister(IrType.I32, registerTypes);
-			instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
-			return {base: requireRegister(pointer, registers), offset: zeroOffset};
+		var scalarOptionals = scratch.scalarLocals;
+		scalarOptionals.reset(body, view, allocateRegister);
+		var uses = compiler.ir.IrPassScratch.filledInts(scratch.uses, valueLimit, 0);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				for (operand in 0...body.operandCount(row))
+					uses[body.operand(row, operand)]++;
+				row = body.nextRow(row);
+			}
 		}
+		if (hasPointerOffsets)
+			foldPointerOffsets(uses);
 		// An array boxed only to be cast back to an array, as a coercion between array types does, is the same HashLink array
 		// (`HlType.Array` carries no element type): the cast takes the array itself unchecked, and the box is not made.
-		var arrayRecasts:Map<Int, IrValue> = [], unboxedArrays:Map<Int, Bool> = [];
-		for (block in fn.blocks)
-			for (index in 0...block.instructions.length - 1)
-				switch block.instructions[index].value {
-					case ToDyn(boxed, value) if (isArray(value.type) && usedOnce(boxed)):
-						switch block.instructions[index + 1].value {
-							case SafeCast(output, source) if (source.id == boxed.id && isArray(output.type)):
-								arrayRecasts.set(output.id, value);
-								unboxedArrays.set(boxed.id, true);
-							default:
-						}
-					default:
+		var arrayRecasts = compiler.ir.IrPassScratch.filledInts(scratch.arrayRecasts, valueLimit, -1),
+			unboxedArrays = scratch.unboxedArrays;
+		unboxedArrays.clear();
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var next = body.nextRow(row);
+				if (next < 0 || next == terminator)
+					break;
+				if (body.opcode(row) == IrOpcode.ToDyn) {
+					var boxed = body.output(row), value = body.operand(row, 0);
+					if (isArray(body.valueType(value)) && uses[boxed] == 1 && body.opcode(next) == IrOpcode.SafeCast
+						&& (body.operand(next, 0):Int) == (boxed:Int) && isArray(body.valueType(body.output(next)))) {
+						arrayRecasts[body.output(next)] = value;
+						unboxedArrays.add(boxed);
+					}
 				}
-		for (block in fn.blocks)
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case Phi(output, _):
-						defineRegister(output, registers, registerTypes);
-					case Catch(output):
-						catchValues.set(block.id, output);
-						defineRegister(output, registers, registerTypes);
-					default:
-				}
-		groupPhiMoves(fn);
-
-		var bindingsByValue:Map<Int, Array<compiler.ir.IrFunction.IrDebugBinding>> = [];
-		for (binding in fn.debugBindings) {
-			var bindings = bindingsByValue.get(binding.value.id);
-			if (bindings == null) {
-				bindings = [];
-				bindingsByValue.set(binding.value.id, bindings);
+				row = next;
 			}
-			bindings.push(binding);
 		}
-		var debugAssignments:Array<HlDebugAssignment> = [],
-			assignmentBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [],
-			seenAssignments:Map<String, Bool> = [];
-		for (argument in fn.arguments) {
-			var bindings = bindingsByValue.get(argument.id);
-			if (bindings != null)
-				for (binding in bindings) {
-					debugAssignments.push({name: internString(binding.name), position: -1, scopeEnd: -1});
-					assignmentBindings.push(binding);
+		var catchValues = compiler.ir.IrPassScratch.filledInts(scratch.catchValues, nextLabel, -1);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				switch body.opcode(row) {
+					case IrOpcode.Phi:
+						defineRegister(body.output(row), registers, registerTypes);
+					case IrOpcode.Catch:
+						catchValues[body.blockId(block)] = body.output(row);
+						defineRegister(body.output(row), registers, registerTypes);
+					default:
 				}
+				row = body.nextRow(row);
+			}
+		}
+		groupPhiMoves();
+
+		// Each value's debug bindings, in the order the body has them: the first, and from each the next for the same value.
+		var firstBinding = compiler.ir.IrPassScratch.filledInts(scratch.firstBinding, valueLimit, -1),
+			nextBinding = compiler.ir.IrPassScratch.filledInts(scratch.nextBinding, body.bindingCount(), -1),
+			index = body.bindingCount();
+		while (index > 0) {
+			index--;
+			var value = body.bindingValue(index);
+			nextBinding[index] = firstBinding[value];
+			firstBinding[value] = index;
+		}
+		var debugAssignments = scratch.debugAssignments, assignmentBindings = scratch.assignmentBindings;
+		debugAssignments.resize(0);
+		assignmentBindings.resize(0);
+		for (argument in 0...body.argumentCount()) {
+			var binding = firstBinding[body.argument(argument)];
+			while (binding >= 0) {
+				debugAssignments.push({name: internString(body.bindingName(binding)), position: -1, scopeEnd: -1});
+				assignmentBindings.push(binding);
+				binding = nextBinding[binding];
+			}
 		}
 		// The array values read inline get their value array view where they are defined (`defineValueArrayView`).
 		viewedArrays.clear();
 		definedViews.clear();
 		hasViewedArrays = false;
-		loweringFunction = fn;
 		loopBounds = null;
-		for (block in fn.blocks)
-			for (index in 0...block.instructions.length)
-				switch block.instructions[index].value {
-					case Call(_, name, arguments) if (name.name == VALUE_ARRAY_READ_I32
-						&& inlineValueArraySlot(block.instructions, index, arguments) != null):
-						viewedArrays.set(arguments[0].id, true);
-						hasViewedArrays = true;
-					default:
+		var valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call && body.aux(row) == valueArrayRead
+					&& inlineValueArraySlot(row) != null) {
+					viewedArrays.set(body.operand(row, 0), true);
+					hasViewedArrays = true;
 				}
+				row = body.nextRow(row);
+			}
+		}
 		var instructions = scratch.instructions, debugLocations = scratch.debugLocations;
 		instructions.resize(0);
 		debugLocations.resize(0);
 		// A jump to the block written next is left out: control falls through to it.
-		var emitted = layOut(fn), layoutPositions = scratch.layoutPositions;
+		var emitted = layOut(), layoutPositions = scratch.layoutPositions;
 		for (layoutIndex in 0...emitted.length) {
 			var block = emitted[layoutIndex],
-				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
-			instructions.push(HlInstruction.Label(block.id));
-			debugLocations.push(debugLocation(blockProvenance(block)));
+				id = body.blockId(block),
+				fallsThroughTo = layoutIndex + 1 < emitted.length ? body.blockId(emitted[layoutIndex + 1]) : -1,
+				terminator = body.terminatorRow(block),
+				last = body.lastRow(block);
+			if (last == terminator)
+				last = terminator >= 0 ? body.previousRow(terminator) : -1;
+			instructions.push(HlInstruction.Label(id));
+			debugLocations.push(debugLocation(blockProvenance(body, block)));
 			// Arguments and phis are defined when the block starts: their value array views are resolved here.
 			if (hasViewedArrays) {
 				var viewStart = instructions.length;
-				if (block == fn.blocks[0])
-					for (argument in fn.arguments)
-						defineValueArrayView(argument, instructions, registers, registerTypes);
-				for (located in block.instructions)
-					switch located.value {
-						case Phi(output, _): defineValueArrayView(output, instructions, registers, registerTypes);
-						default:
-					}
-				appendDebugLocations(debugLocations, instructions.length - viewStart, blockProvenance(block));
+				if (block == 0)
+					for (argument in 0...body.argumentCount())
+						defineValueArrayView(body.argument(argument), instructions, registers, registerTypes);
+				var row = body.firstRow(block);
+				while (row >= 0 && row != terminator) {
+					if (body.opcode(row) == IrOpcode.Phi)
+						defineValueArrayView(body.output(row), instructions, registers, registerTypes);
+					row = body.nextRow(row);
+				}
+				appendDebugLocations(debugLocations, instructions.length - viewStart, blockProvenance(body, block));
 			}
 			// A comparison that ends its block and feeds only that block's branch becomes the branch itself, with
 			// no Bool in between: the loop test then costs one compare-and-jump instead of a compare, two moves and a test.
-			var fusedCondition:Null<Int> = null,
+			var fusedCondition = -1,
 				fusedComparison:Null<HlInstruction> = null,
 				fusedFloat = false;
-			if (block.terminator != null && block.instructions.length > 0)
-				switch block.terminator.value {
-					case Branch(condition, _,
-						_) if (usedOnce(condition) && !bindingsByValue.exists(condition.id)):
-						switch block.instructions[block.instructions.length - 1].value {
-							case Less(output, _, _), LessEqual(output, _, _),
-								Equal(output, _, _) if (output.id == condition.id):
-								fusedCondition = condition.id;
-							case Call(output, name, arguments) if (output.id == condition.id && arguments.length == 2
-								&& (name.name == compiler.ir.IrExactTypeFacts.TEST
-								|| name.name == compiler.ir.IrReferenceIdentity.NAME)):
-								fusedCondition = condition.id;
-							default:
-						}
-					default:
-				}
+			if (terminator >= 0 && last >= 0 && body.opcode(terminator) == IrOpcode.Branch) {
+				var condition = body.operand(terminator, 0);
+				if (uses[condition] == 1 && firstBinding[condition] < 0
+					&& (body.output(last):Int) == (condition:Int))
+					switch body.opcode(last) {
+						case IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal:
+							fusedCondition = condition;
+						case IrOpcode.Call if (body.operandCount(last) == 2
+							&& (body.symbol(last).name == compiler.ir.IrExactTypeFacts.TEST
+							|| body.symbol(last).name == compiler.ir.IrReferenceIdentity.NAME)):
+							fusedCondition = condition;
+						default:
+					}
+			}
 			provenInRange.clear();
 			elementOffsets.clear();
 			valueArrayViews.clear();
 			validatedArrayAccesses.clear();
-			for (instructionIndex in 0...block.instructions.length) {
-				var instruction = block.instructions[instructionIndex];
-				var instructionStart = instructions.length;
-				if (!keepsArrayBounds(instruction.value))
+			var row = body.firstRow(block);
+			while (row >= 0 && row != terminator) {
+				var instructionStart = instructions.length, opcode = body.opcode(row);
+				if (!keepsArrayBounds(opcode))
 					provenInRange.clear();
-				var output = instructionOutput(instruction.value);
+				var output = body.output(row);
 				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
 				// Emit an explicit check so the active handler works on every thread.
-				var receiver:Null<IrValue> = switch instruction.value {
-					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _, _),
-						InstanceClosure(_, _, value), ArrayGet(_, value, _),
-						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value),
-						IteratorNext(_, value),
-						EnumIndex(_, value), EnumField(_, value, _, _): value;
-					case _: null;
+				var receiver = switch opcode {
+					case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure,
+						IrOpcode.ArrayGet, IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew,
+						IrOpcode.IteratorHasNext, IrOpcode.IteratorNext, IrOpcode.EnumIndex, IrOpcode.EnumField:
+						body.operand(row, 0);
+					default: IrValueId.of(-1);
 				};
-				if (receiver != null && scalarOptionals.get(receiver) == null
-					&& !nonNull.has(block.id, instructionIndex))
+				if (receiver.exists() && scalarOptionals.get(receiver) == null && !nonNull.has(row))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
-				switch instruction.value {
-					case Phi(_, _):
-					case ClassId(_, _):
-						throw new InternalError('internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which HashLink does not have yet');
-					case ConstVoid(output):
-						defineRegister(output, registers, registerTypes);
-					case ConstInt(output, value):
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
-							internInt(value)));
-					case ConstFloat(output, value):
-						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes),
-							internFloat(value)));
-					case ConstString(output, value):
-						lowerStringLiteral(defineRegister(output, registers, registerTypes), value, registerTypes,
-							instructions);
-					case StaticDataAddress(output, _):
-						// RuntimeData is a Wasm-only intrinsic. The HashLink shadow module is
-						// still assembled for a Wasm compilation, but never executes this path.
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
-							internInt(0)));
-					case PointerOffset(output, _, _) if (foldedAddresses != null && foldedAddresses.exists(output.id)):
-					case PointerOffset(output, pointer, byteOffset):
-						instructions.push(HlInstruction.Call2(defineRegister(output, registers, registerTypes),
-							requireFunction("__hl_bytes_offset"),
-							requireRegister(pointer, registers), requireRegister(byteOffset, registers)));
-					case MemoryLoad(output, pointer, size, signed):
-						var destination = defineRegister(output, registers, registerTypes),
-							address = memoryAddress(pointer, instructions);
-						if (size == 1)
-							instructions.push(HlInstruction.GetI8(destination, address.base, address.offset));
-						else if (size == 2)
-							instructions.push(HlInstruction.GetI16(destination, address.base, address.offset));
-						else
-							instructions.push(HlInstruction.GetMem(destination, address.base, address.offset));
-						if (signed && size < 4) {
-							var shift = temporaryRegister(IrType.I32, registerTypes),
-								shiftCount = internInt(size == 1 ? 24 : 16);
-							instructions.push(HlInstruction.LoadInt(shift, shiftCount));
-							instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
-							instructions.push(HlInstruction.ShiftRight(destination, destination, shift));
-						}
-					case MemoryStore(pointer, value, size):
-						var address = memoryAddress(pointer, instructions);
-						if (size == 1)
-							instructions.push(HlInstruction.SetI8(address.base, address.offset,
-								requireRegister(value, registers)));
-						else if (size == 2)
-							instructions.push(HlInstruction.SetI16(address.base, address.offset,
-								requireRegister(value, registers)));
-						else
-							instructions.push(HlInstruction.SetMem(address.base, address.offset,
-								requireRegister(value, registers)));
-					case ConstBool(output, value):
-						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes),
-							value));
-					case ConstNull(output):
-						switch output.type {
-							case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers,
-								registerTypes), internInt(0)));
-							default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers,
-								registerTypes)));
-						}
-					case TypeValue(output, type):
-						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes),
-							internType(type)));
-					case ToDyn(output, _) if (unboxedArrays.exists(output.id) && !bindingsByValue.exists(output.id)):
-					case ToDyn(output, value):
-						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case IntToFloat(output, value):
-						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case IntToInt64(output, value):
-						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case FloatToInt(output, value):
-						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case FloatToFloat(output, value):
-						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case SafeCast(output, value):
-						var array = arrayRecasts.get(output.id);
-						if (array != null && !bindingsByValue.exists(value.id))
-							instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-								requireRegister(array, registers)));
-						else if (switch output.type {
-							case Obj(name): exactTypes.exactType(block.id, value.id) == name;
-							default: false;
-						})
-							// A dominating exact-class test proved the value an object of exactly this class.
-							instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-						else
-							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
-								requireRegister(value, registers)));
-					case BeginTry(catchBlock, _, preserveExceptionStack):
-						if (!catchValues.exists(catchBlock))
-							throw new InternalError('Try block $block.id has no catch value in block $catchBlock');
-						var handlerValue = catchValues.get(catchBlock);
-						var handlerRegister = requireRegister(handlerValue, registers);
-						instructions.push(HlInstruction.Trap(handlerRegister, catchBlock,
-							preserveExceptionStack));
-					case EndTry(catchBlock, preserveExceptionStack):
-						if (!catchValues.exists(catchBlock))
-							throw new InternalError('Try block $block.id ends with unknown handler block $catchBlock');
-						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers),
-							preserveExceptionStack));
-					case Catch(_):
-					case GlobalGet(output, name):
-						var global = requireGlobal(name);
-						instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes),
-							global));
-					case GlobalSet(name, source):
-						var global = requireGlobal(name);
-						instructions.push(HlInstruction.GlobalSet(global, requireRegister(source, registers)));
-					case Add(output, left, right):
-						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case Sub(output, left, right):
-						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case Mul(output, left, right):
-						instructions.push(HlInstruction.Mul(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case Div(output, left, right):
-						instructions.push(HlInstruction.Div(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case Mod(output, left, right):
-						instructions.push(HlInstruction.Mod(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case BitAnd(output, left, right):
-						instructions.push(HlInstruction.BitAnd(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case BitXor(output, left, right):
-						instructions.push(HlInstruction.BitXor(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case BitOr(output, left, right):
-						instructions.push(HlInstruction.BitOr(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case ShiftLeft(output, left, right):
-						instructions.push(HlInstruction.ShiftLeft(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case ShiftRight(output, left, right):
-						instructions.push(HlInstruction.ShiftRight(defineRegister(output, registers, registerTypes),
-							requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case UnsignedShiftRight(output, left, right):
-						instructions.push(HlInstruction.UnsignedShiftRight(defineRegister(output, registers,
-							registerTypes), requireRegister(left, registers),
-							requireRegister(right, registers)));
-					case Less(output, left, right) if (output.id == fusedCondition):
-						fusedFloat = isFloat(left.type) || isFloat(right.type);
-						fusedComparison = comparisonJump(0, false, false, requireRegister(left, registers),
-							requireRegister(right, registers), -1);
-					case LessEqual(output, left, right) if (output.id == fusedCondition):
-						fusedFloat = isFloat(left.type) || isFloat(right.type);
-						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers),
-							requireRegister(right, registers), -1);
-					case Equal(output, left, right) if (output.id == fusedCondition):
-						fusedComparison = comparisonJump(2, isNullConstant(left), isNullConstant(right),
-							requireRegister(left, registers),
-							requireRegister(right, registers), -1);
-					case Less(output, left, right):
-						lowerComparison(output, left, right, 0, false, false, registers, registerTypes, instructions);
-					case LessEqual(output, left, right):
-						lowerComparison(output, left, right, 1, false, false, registers, registerTypes, instructions);
-					case Equal(output, left, right):
-						lowerComparison(output, left, right, 2, isNullConstant(left), isNullConstant(right),
-							registers, registerTypes,
-							instructions);
-					case Intrinsic(_, _, _):
-						throw new InternalError("Unlowered IR intrinsic reached HashLink");
-					case Call(output, functionName, arguments) if (output.id == fusedCondition
-						&& functionName.name == compiler.ir.IrReferenceIdentity.NAME):
-						// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
-						var pointers = identityPointers(arguments, instructions, registers, registerTypes);
-						fusedComparison = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
-					case Call(output, functionName, arguments) if (output.id == fusedCondition):
-						// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
-						var actual = temporaryRegister(IrType.TypeRef, registerTypes);
-						instructions.push(HlInstruction.GetType(actual, requireRegister(arguments[0], registers)));
-						fusedComparison = comparisonJump(2, false, false, actual,
-							requireRegister(arguments[1], registers), -1);
-					case Call(output, functionName, arguments):
-						var inlineSlot = functionName.name == VALUE_ARRAY_READ_I32
-							? inlineValueArraySlot(block.instructions, instructionIndex, arguments) : null;
-						if (functionName.name == compiler.ir.IrReceiverCheck.NAME
-							&& nonNull.has(block.id, instructionIndex)) {
-							// A previous successful dereference or check already proved this SSA receiver non-null.
-						} else if (StringTools.startsWith(functionName.name, VALUE_ARRAY_READ)
-							&& (output.id >= uses.length || uses[output.id] == 0) && !bindingsByValue.exists(output.id)
-							&& usedReadNearby(block.instructions, instructionIndex, arguments, uses)) {
-							// A field of the element nothing reads; the read beside it checks the element the same way.
-						} else if (functionName.name == VALUE_ARRAY_VALIDATE
-							&& scalarReadFollows(block.instructions, instructionIndex + 1, arguments)) {
-							// The read checks the same element the same way (`realtime_value_array_check_read`).
-						} else if (inlineSlot != null) {
-							lowerValueArrayRead(output, arguments, inlineSlot, block.id, instructions, registers,
-								registerTypes);
-						} else if (!lowerRuntimeFastPath(output, functionName.name, arguments, instructions, registers,
-							registerTypes)) {
-							var destination = defineRegister(output, registers, registerTypes);
-							var functionIndex = requireFunction(functionName.name);
-							var args = [for (argument in arguments) requireRegister(argument, registers)];
-							if (StringTools.startsWith(functionName.name, "$scalar-closure:receiver:"))
-								for (index in 0...arguments.length)
-									switch arguments[index].type {
-										case Function(_, _):
-											var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
-											instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
-											args[index] = dynamicClosure;
-										default:
-									}
-							switch args.length {
-								case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
-								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
-								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0],
-									args[1]));
-								default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
-							}
-						}
-					case IteratorNew(output, array):
-						var destination = defineRegister(output, registers, registerTypes),
-							boxedArray = temporaryRegister(IrType.Dyn, registerTypes);
-						instructions.push(HlInstruction.ToDyn(boxedArray, requireRegister(array, registers)));
-						instructions.push(HlInstruction.Call1(destination, requireFunction("__iterator_new"),
-							boxedArray));
-					case IteratorHasNext(output, iterator):
-						instructions.push(HlInstruction.Call1(defineRegister(output, registers, registerTypes),
-							requireFunction("__iterator_has_next"),
-							requireRegister(iterator, registers)));
-					case IteratorNext(output, iterator):
-						var destination = defineRegister(output, registers, registerTypes),
-							nextNative = iteratorNextNative(output.type);
-						if ((switch (nextNative.result) {
-							case IrType.Dyn: true;
-							default: false;
-						})) {
-							var dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
-							instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name),
-								requireRegister(iterator, registers)));
-							instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
-						} else
-							instructions.push(HlInstruction.Call1(destination, requireFunction(nextNative.name),
-								requireRegister(iterator, registers)));
-					case CNativeCall(output, functionName, arguments):
-						var native = cNatives.get(functionName);
-						if (native == null)
-							throw new InternalError('Unknown ordinary C function "$functionName"');
-						for (type in native.arguments)
-							if (unsupportedCDispatchArgument(type))
-								throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
-						if ((switch (native.result) {
-							case Void: false;
-							default: true;
-						}) && unsupportedCDispatchResult(native.result))
-							throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
-						var callArguments = [
-							temporaryRegister(IrType.RawPtr, registerTypes),
-							temporaryRegister(IrType.RawPtr, registerTypes),
-							temporaryRegister(IrType.RawPtr, registerTypes)
-						];
-						instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
-						instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
-						instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
-						var pointerResult = isNativePointer(native.result),
-							bytesResult = isManagedPointerBytes(native),
-							aggregateResult = isAggregateResult(native),
-							utf8Result = isUtf8Result(native);
-						if (pointerResult || bytesResult || utf8Result) {
-							var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
-								release = temporaryRegister(IrType.RawPtr, registerTypes),
-								nullable = temporaryRegister(IrType.Bool, registerTypes);
-							instructions.push(HlInstruction.LoadString(ownership,
-								internString(native.pointerOwnership)));
-							instructions.push(HlInstruction.LoadString(release,
-								internString(native.pointerRelease == null ? "" : native.pointerRelease)));
-							instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
-							callArguments.push(ownership);
-							callArguments.push(release);
-							if (bytesResult) {
-								var length = temporaryRegister(IrType.RawPtr, registerTypes);
-								instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
-								callArguments.push(length);
-							}
-							callArguments.push(nullable);
-						}
-						for (argument in arguments) {
-							var boxed = temporaryRegister(IrType.Dyn, registerTypes);
-							if (isNullConstant(argument))
-								instructions.push(HlInstruction.LoadNull(boxed));
-							else
-								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
-							callArguments.push(boxed);
-						}
-						var dynamicResult = temporaryRegister(pointerResult
-							? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
-							? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
-							registerTypes);
-						instructions.push(HlInstruction.CallN(dynamicResult,
-							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}'
-							: bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult
-							? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result
-							? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
-							callArguments));
-						if ((switch (native.result) {
-							case Void: true;
-							default: false;
-						}))
-							defineRegister(output, registers, registerTypes);
-						else if (pointerResult || bytesResult || aggregateResult || utf8Result)
-							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes),
-								dynamicResult));
-						else
-							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
-								dynamicResult));
-					case StaticClosure(output, functionName):
-						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes),
-							requireFunction(functionName.name)));
-					case InstanceClosure(output, functionName, receiver):
-						instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers,
-							registerTypes), requireFunction(functionName.name),
-							requireRegister(receiver, registers)));
-					case CallClosure(output, closure, arguments):
-						instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));
-						if ((switch (closure.type) {
-							case IrType.Dyn: true;
-							default: false;
-						})) {
-							var callable = temporaryRegister(IrType.Bool, registerTypes),
-								error = temporaryRegister(IrType.Bytes, registerTypes),
-								valid = freshLabel();
-							instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"),
-								requireRegister(closure, registers)));
-							instructions.push(HlInstruction.JumpTrue(callable, valid));
-							lowerStringLiteral(error, "Cannot call a non-function value", registerTypes, instructions);
-							instructions.push(HlInstruction.Throw(error));
-							instructions.push(HlInstruction.Label(valid));
-						}
-						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes),
-							requireRegister(closure, registers),
-							[for (argument in arguments) requireRegister(argument, registers)]));
-					case Upcast(output, value):
-						// HashLink accepts a subclass register wherever its base class is expected.
-						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case ToVirtual(output, value):
-						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case MethodCall(output, object, methodName, arguments, _):
-						var receiver = requireRegister(object, registers),
-							methodArguments =
-								[receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
-							valueMethod = valueMethodFunction(object, methodName);
-						if (valueMethod == null)
-							valueMethod = addedMethodFunction(object, methodName);
-						if (valueMethod != null) {
-							// A value class has no prototype to dispatch through and cannot be subclassed, so its methods are direct calls,
-							// as are methods a live patch added.
-							var destination = defineRegister(output, registers, registerTypes),
-								functionIndex = requireFunction(valueMethod);
-							switch methodArguments.length {
-								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex,
-									methodArguments[0]));
-								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex,
-									methodArguments[0], methodArguments[1]));
-								default: instructions.push(HlInstruction.CallN(destination, functionIndex,
-									methodArguments));
-							}
-						} else
-							instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
-								requireObjectMethod(object, methodName), methodArguments));
-					case ValueInit(output) if (scalarOptionals.get(output) != null):
-						var local:HlScalarValueLocal = cast scalarOptionals.get(output);
-						for (field in local.declarations) {
-							var target:Int = cast local.fields.get(field.name);
-							switch field.type {
-								case Bool: instructions.push(HlInstruction.LoadBool(target, false));
-								case I32, I64: instructions.push(HlInstruction.LoadInt(target, internInt(0)));
-								case F32, F64: instructions.push(HlInstruction.LoadFloat(target, internFloat(0.0)));
-								default: instructions.push(HlInstruction.LoadNull(target));
-							}
-						}
-					case NewObject(output, typeName):
-						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
-							requireObjectType(typeName), 0));
-					case ValueInit(output):
-						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
-							requireObjectType(compiler.ir.IrTypeTools.valueObjectName(output.type)), 0));
-					case FieldGet(output, object, fieldName) if (scalarOptionals.get(object) != null):
-						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
-						var source:Int = cast local.fields.get(fieldName);
-						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), source));
-					case FieldGet(output, object, fieldName):
-						var destination = defineRegister(output, registers, registerTypes),
-							nativeLayout = objectFieldNativeLayout(object, fieldName),
-							storageType = internNativeStorage(output.type, nativeLayout);
-						if ((switch (output.type) {
-							case I64: true;
-							default: false;
-						}) && storageType != null) {
-							var stored = temporaryRegisterType(storageType, registerTypes);
-							instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers),
-								requireObjectField(object, fieldName)));
-							instructions.push(HlInstruction.ToInt(destination, stored));
-							if (nativeLayout != null && !nativeLayout.signed) {
-								var shift = temporaryRegister(IrType.I32, registerTypes);
-								instructions.push(HlInstruction.LoadInt(shift, internInt(32)));
-								instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
-								instructions.push(HlInstruction.UnsignedShiftRight(destination, destination, shift));
-							}
-						} else
-							instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers),
-								requireObjectField(object, fieldName)));
-						// Inline records produce an HSTRUCT pointer into their owner. Only scalar
-						// narrow fields need sign or zero extension after the field load.
-						if (nativeLayout != null && nativeLayout.size < 4) {
-							var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
-								bits = nativeLayout.size * 8;
-							instructions.push(HlInstruction.LoadInt(maskOrShift,
-								internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
-							if (nativeLayout.signed) {
-								instructions.push(HlInstruction.ShiftLeft(destination, destination, maskOrShift));
-								instructions.push(HlInstruction.ShiftRight(destination, destination, maskOrShift));
-							} else
-								instructions.push(HlInstruction.BitAnd(destination, destination, maskOrShift));
-						}
-					case FieldSet(object, fieldName, value) if (scalarOptionals.get(object) != null):
-						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
-						var destination:Int = cast local.fields.get(fieldName);
-						instructions.push(HlInstruction.Move(destination, requireRegister(value, registers)));
-					case FieldSet(object, fieldName, value):
-						var receiver = requireRegister(object, registers),
-							field = requireObjectField(object, fieldName),
-							source = requireRegister(value, registers),
-							nativeStorageType = internNativeStorage(value.type,
-								objectFieldNativeLayout(object, fieldName));
-						if (nativeStorageType != null) {
-							var storageSource = temporaryRegisterType(nativeStorageType, registerTypes);
-							instructions.push(HlInstruction.ToInt(storageSource, source));
-							source = storageSource;
-						}
-						instructions.push(HlInstruction.FieldSet(receiver, field, source));
-					case ArrayGet(output, array, index) if (rawArrayShift(array.type) != null):
-						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
-							requireRegister(array, registers),
-							requireRegister(index, registers)));
-						var key = '${array.id}:${index.id}';
-						provenInRange.set(key, true);
-						validatedArrayAccesses.set(key, true);
-					case ArraySet(array, index, value) if (rawArrayShift(array.type) != null):
-						var source = requireRegister(value, registers);
-						lowerRawArrayAccess(array, index, "ensure", true, instructions, registers, registerTypes,
-							(data, offset) -> HlInstruction.SetMem(data, offset, source));
-					case ArrayGet(output, array, index):
-						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
-							requireRegister(array, registers),
-							requireRegister(index, registers)));
-					case ArraySet(array, index, value):
-						instructions.push(HlInstruction.ArraySet(requireRegister(array, registers),
-							requireRegister(index, registers),
-							requireRegister(value, registers)));
-					case ArraySize(output, array):
-						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes),
-							requireRegister(array, registers)));
-					case MakeEnum(output, _, constructor, _) if (switch output.type {
-						case EnumTag(_): true;
-						default: false;
-					}): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
-						internInt(constructor + 1)));
-					case MakeEnum(output, typeName, constructor, arguments):
-						var destination = defineRegister(output, registers, registerTypes),
-							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
-							args = [for (argument in arguments) requireRegister(argument, registers)];
-						if (args.length == 0)
-							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
-						else
-							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
-					case EnumIndex(output, value) if (switch value.type {
-						case EnumTag(_): true;
-						default: false;
-					}): var one = temporaryRegister(IrType.I32, registerTypes);
-					instructions.push(HlInstruction.LoadInt(one, internInt(1)));
-					instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
-						requireRegister(value, registers), one));
-					case EnumIndex(output, value):
-						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-					case EnumField(output, value, constructor, field):
-						instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers),
-							constructor, field));
+				lowerRow(row, opcode, output, id, fusedCondition, registers, registerTypes, instructions, uses,
+					nonNull, exactTypes, firstBinding, arrayRecasts, catchValues);
+				if (fusedCondition >= 0 && (output:Int) == fusedCondition && fusedPending != null) {
+					fusedComparison = fusedPending;
+					fusedFloat = fusedPendingFloat;
+					fusedPending = null;
 				}
-				if (output != null)
+				if (output.exists())
 					defineValueArrayView(output, instructions, registers, registerTypes);
-				appendDebugLocations(debugLocations, instructions.length - instructionStart, instruction.provenance);
-				if (output != null && instructions.length > instructionStart) {
-					var bindings = bindingsByValue.get(output.id);
-					if (bindings != null) {
-						var position = instructionStart;
-						for (binding in bindings) {
-							var key = binding.identity + "@" + position;
-							if (!seenAssignments.exists(key)) {
-								seenAssignments.set(key, true);
-								debugAssignments.push({
-									name: internString(binding.name),
-									position: position,
-									scopeEnd: -1
-								});
-								assignmentBindings.push(binding);
-							}
-						}
-					}
-				}
+				appendDebugLocations(debugLocations, instructions.length - instructionStart, body.provenance(row));
+				if (output.exists() && instructions.length > instructionStart)
+					assignBindings(firstBinding[output], nextBinding, instructionStart);
+				row = body.nextRow(row);
 			}
-			var terminator = block.terminator;
-			if (terminator == null)
-				throw new InternalError('Reachable IR block ${block.id} has no terminator');
+			if (terminator < 0)
+				throw new InternalError('Reachable IR block $id has no terminator');
 			var terminatorStart = instructions.length;
-			switch terminator.value {
-				case Unreachable:
+			switch body.opcode(terminator) {
+				case IrOpcode.Unreachable:
 					// The fatal runtime native aborts the process and is not an exception, so no Haxe code can catch it. The block still needs an
 					// ending the bytecode accepts: a throw of null that is never reached.
 					instructions.push(HlInstruction.Call0(temporaryRegister(IrType.Void, registerTypes),
@@ -1815,97 +1327,94 @@ class HlLower {
 					var neverThrown = temporaryRegister(IrType.Dyn, registerTypes);
 					instructions.push(HlInstruction.LoadNull(neverThrown));
 					instructions.push(HlInstruction.Throw(neverThrown));
-				case Return(value):
-					instructions.push(HlInstruction.Return(requireRegister(value, registers)));
-				case Throw(value):
-					instructions.push(HlInstruction.Throw(requireRegister(value, registers)));
-				case Rethrow(value):
-					instructions.push(HlInstruction.Rethrow(requireRegister(value, registers)));
-				case Jump(target):
-					if (hasPhiMoves(block.id, target)) {
-						emitPhiMoves(block.id, registers, registerTypes, instructions);
-						for (write in 0...scratch.writtenValues.length) {
-							var position = scratch.writtenPositions[write],
-								bindings = bindingsByValue.get(scratch.writtenValues[write].id);
-							if (bindings != null)
-								for (binding in bindings) {
-									var assignmentKey = binding.identity + "@" + position;
-									if (!seenAssignments.exists(assignmentKey)) {
-										seenAssignments.set(assignmentKey, true);
-										debugAssignments.push({
-											name: internString(binding.name),
-											position: position,
-											scopeEnd: -1
-										});
-										assignmentBindings.push(binding);
-									}
-								}
-						}
+				case IrOpcode.Return:
+					instructions.push(HlInstruction.Return(requireRegister(body.operand(terminator, 0), registers)));
+				case IrOpcode.Throw:
+					instructions.push(HlInstruction.Throw(requireRegister(body.operand(terminator, 0), registers)));
+				case IrOpcode.Rethrow:
+					instructions.push(HlInstruction.Rethrow(requireRegister(body.operand(terminator, 0), registers)));
+				case IrOpcode.Jump:
+					var target = body.aux(terminator);
+					if (hasPhiMoves(id, target)) {
+						emitPhiMoves(id, registers, registerTypes, instructions);
+						for (write in 0...scratch.writtenValues.length)
+							assignBindings(firstBinding[scratch.writtenValues[write]], nextBinding,
+								scratch.writtenPositions[write]);
 					}
 					if (target != fallsThroughTo)
 						instructions.push(HlInstruction.Jump(target));
-				case Branch(condition, yes, no):
-					if (hasPhiMoves(block.id, yes) || hasPhiMoves(block.id, no))
+				case IrOpcode.Branch:
+					var condition = body.operand(terminator, 0),
+						yes = body.auxInt(terminator, 0),
+						no = body.auxInt(terminator, 1);
+					if (hasPhiMoves(id, yes) || hasPhiMoves(id, no))
 						throw new InternalError("Phi elimination requires split critical edges");
 					if (yes == fallsThroughTo && no != fallsThroughTo)
 						// The taken side is written next: jump to the other side on the complement, and fall through.
 						instructions.push(fusedComparison != null ? complementJump(fusedComparison, no,
-							fusedFloat) : HlInstruction.JumpFalse(requireRegister(condition, registers),
-							no));
+							fusedFloat) : HlInstruction.JumpFalse(requireRegister(condition, registers), no));
 					else {
 						if (fusedComparison != null)
 							instructions.push(withJumpTarget(fusedComparison, yes));
 						else
-							instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers),
-								yes));
+							instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), yes));
 						if (no != fallsThroughTo)
 							instructions.push(HlInstruction.Jump(no));
 					}
-				case Switch(value, targets, otherwise):
-					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
-						if (hasPhiMoves(block.id, target))
+				case IrOpcode.Switch:
+					var count = body.successorCount(terminator), otherwise = body.auxInt(terminator, 0);
+					for (index in 0...count)
+						if (hasPhiMoves(id, body.successor(terminator, index)))
 							throw new InternalError("Phi elimination requires split critical edges");
 					// HashLink's jump table takes only forward offsets: a target laid out before this block is reached through a
 					// jump placed after the table. Values outside it fall through to the jump to `otherwise`.
-					var stubs:Array<{label:Int, target:Int}> = [], entries:Array<Int> = [];
-					for (target in targets)
+					var stubLabels = scratch.stubLabels, stubTargets = scratch.stubTargets, entries:Array<Int> = [];
+					stubLabels.resize(0);
+					stubTargets.resize(0);
+					for (index in 0...count - 1) {
+						var target = body.auxInt(terminator, 2 + index);
 						if (layoutPositions[target] > layoutIndex)
 							entries.push(target);
 						else {
-							var stub = null;
-							for (existing in stubs)
-								if (existing.target == target)
-									stub = existing.label;
-							if (stub == null) {
+							var stub = -1;
+							for (existing in 0...stubTargets.length)
+								if (stubTargets[existing] == target)
+									stub = stubLabels[existing];
+							if (stub < 0) {
 								stub = freshLabel();
-								stubs.push({label: stub, target: target});
+								stubLabels.push(stub);
+								stubTargets.push(target);
 							}
 							entries.push(stub);
 						}
-					instructions.push(HlInstruction.Switch(requireRegister(value, registers), entries));
-					if (otherwise != fallsThroughTo || stubs.length > 0)
-						instructions.push(HlInstruction.Jump(otherwise));
-					for (stub in stubs) {
-						instructions.push(HlInstruction.Label(stub.label));
-						instructions.push(HlInstruction.Jump(stub.target));
 					}
+					instructions.push(HlInstruction.Switch(requireRegister(body.operand(terminator, 0), registers),
+						entries));
+					if (otherwise != fallsThroughTo || stubLabels.length > 0)
+						instructions.push(HlInstruction.Jump(otherwise));
+					for (stub in 0...stubLabels.length) {
+						instructions.push(HlInstruction.Label(stubLabels[stub]));
+						instructions.push(HlInstruction.Jump(stubTargets[stub]));
+					}
+				default:
+					throw new InternalError('IR body row $terminator is not a terminator');
 			}
-			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
+			appendDebugLocations(debugLocations, instructions.length - terminatorStart, body.provenance(terminator));
 		}
 
 		var scopedAssignments:Array<HlDebugAssignment> = [],
-			lastScopeLocations = new haxe.ds.ObjectMap<compiler.ir.IrFunction.IrDebugBinding, Int>();
+			scopeEnds = compiler.ir.IrPassScratch.filledInts(scratch.scopeEnds, body.bindingCount(), -2);
 		for (index in 0...debugAssignments.length) {
-			var assignment = debugAssignments[index],
-				binding = assignmentBindings[index];
+			var assignment = debugAssignments[index];
 			scopedAssignments.push({
 				name: assignment.name,
 				position: assignment.position,
-				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position,
-					instructions.length, lastScopeLocations)
+				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(assignmentBindings[index], debugLocations,
+					assignment.position, instructions.length, scopeEnds)
 			});
 		}
-		var key = view.typedInterfaceKey(fn.name);
+		var name = body.name, argumentCount = body.argumentCount(), result = body.types.type(body.result);
+		var key = view.typedInterfaceKey(name);
 		if (key != null) {
 			var handleType = IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE),
 				handle = temporaryRegister(handleType, registerTypes),
@@ -1913,9 +1422,9 @@ class HlLower {
 				receiver = temporaryRegister(IrType.Dyn, registerTypes),
 				entry = temporaryRegister(IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), registerTypes),
 				callable = temporaryRegister(IrType.Function([IrType.Dyn]
-					.concat([for (i in 1...fn.arguments.length) fn.arguments[i].type]), fn.result),
+					.concat([for (i in 1...argumentCount) body.valueType(body.argument(i))]), result),
 					registerTypes),
-				result = temporaryRegister(fn.result, registerTypes),
+				resultRegister = temporaryRegister(result, registerTypes),
 				global = internGlobalSlot("$typed-method-slot:" + key, handleType),
 				fallback = freshLabel(),
 				initialize = freshLabel(),
@@ -1933,8 +1442,9 @@ class HlLower {
 				HlInstruction.Call2(entry, requireFunction(HlTypedInterfaceTables.ENTRY_NATIVE), receiver, handle),
 				HlInstruction.JumpNull(entry, fallback),
 				HlInstruction.UnsafeCast(callable, entry),
-				HlInstruction.CallClosure(result, callable, [receiver].concat([for (i in 1...fn.arguments.length) i])),
-				HlInstruction.Return(result),
+				HlInstruction.CallClosure(resultRegister, callable,
+					[receiver].concat([for (i in 1...argumentCount) i])),
+				HlInstruction.Return(resultRegister),
 				HlInstruction.Label(fallback)
 			];
 			var first = debugLocations.length == 0
@@ -1954,13 +1464,551 @@ class HlLower {
 		// Release code shares registers between values that are not live at once; development code keeps one per value, which is
 		// what a debugger shows a variable from.
 		var allocated = developmentMetadata ? registerTypes : scratch.registerAllocation.run(instructions,
-			registerTypes,
-			fn.arguments.length);
-		var lowered = new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
-			requireFunction(fn.name), allocated == scratch.registerTypes ? allocated.copy() : allocated,
+			registerTypes, argumentCount);
+		var lowered = new HlFunction(internFunctionType([for (i in 0...argumentCount) body.valueType(body.argument(i))],
+			result), requireFunction(name), allocated == scratch.registerTypes ? allocated.copy() : allocated,
 			instructions.copy(), debugLocations.copy(), scopedAssignments);
 		scratch.release();
 		return lowered;
+	}
+
+	/** The comparison `lowerRow` made of the row that ends its block and feeds its branch, and whether it compares floats. */
+	var fusedPending:Null<HlInstruction> = null;
+
+	var fusedPendingFloat = false;
+
+	/**
+	 * Records, at `position`, an assignment of every binding from `binding` on (through `nextBinding`) that has none there yet.
+	 * Assignments are recorded in position order, so those at `position` are the last ones.
+	 */
+	function assignBindings(binding:Int, nextBinding:Array<Int>, position:Int):Void {
+		var debugAssignments = scratch.debugAssignments, assignmentBindings = scratch.assignmentBindings;
+		while (binding >= 0) {
+			var identity = body.bindingIdentity(binding), seen = false, index = debugAssignments.length;
+			while (index > 0 && debugAssignments[index - 1].position == position) {
+				index--;
+				if (body.bindingIdentity(assignmentBindings[index]) == identity) {
+					seen = true;
+					break;
+				}
+			}
+			if (!seen) {
+				debugAssignments.push({name: internString(body.bindingName(binding)), position: position,
+					scopeEnd: -1});
+				assignmentBindings.push(binding);
+			}
+			binding = nextBinding[binding];
+		}
+	}
+
+	/** A register for a value of type `type` that no IR value has, in the function being lowered (`allocateRegister`). */
+	function allocateTemporary(type:IrType):Int
+		return temporaryRegister(type, scratch.registerTypes);
+
+	/** Lowers instruction row `row` of block `block`, which has opcode `opcode` and defines `output`. */
+	function lowerRow(row:Int, opcode:IrOpcode, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
+			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
+			nonNull:compiler.ir.IrPassScratch.IrValueMarks, exactTypes:compiler.ir.IrExactTypeFacts,
+			firstBinding:Array<Int>, arrayRecasts:Array<Int>, catchValues:Array<Int>):Void {
+		var scalarOptionals = scratch.scalarLocals;
+		switch opcode {
+			case IrOpcode.Phi:
+			case IrOpcode.ClassId:
+				throw new InternalError('internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which HashLink does not have yet');
+			case IrOpcode.ConstVoid:
+				defineRegister(output, registers, registerTypes);
+			case IrOpcode.ConstInt:
+				instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+					internInt(body.aux(row))));
+			case IrOpcode.ConstFloat:
+				instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes),
+					internFloat(body.float(row))));
+			case IrOpcode.ConstString:
+				lowerStringLiteral(defineRegister(output, registers, registerTypes), body.string(row), registerTypes,
+					instructions);
+			case IrOpcode.StaticDataAddress:
+				// RuntimeData is a Wasm-only intrinsic. The HashLink shadow module is
+				// still assembled for a Wasm compilation, but never executes this path.
+				instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+					internInt(0)));
+			case IrOpcode.PointerOffset:
+				if (!folded(output))
+					instructions.push(HlInstruction.Call2(defineRegister(output, registers, registerTypes),
+						requireFunction("__hl_bytes_offset"), requireRegister(body.operand(row, 0), registers),
+						requireRegister(body.operand(row, 1), registers)));
+			case IrOpcode.MemoryLoad:
+				var size = body.aux(row) >> 1,
+					destination = defineRegister(output, registers, registerTypes),
+					offset = memoryAddress(body.operand(row, 0), instructions, registers, registerTypes),
+					base = memoryBase;
+				if (size == 1)
+					instructions.push(HlInstruction.GetI8(destination, base, offset));
+				else if (size == 2)
+					instructions.push(HlInstruction.GetI16(destination, base, offset));
+				else
+					instructions.push(HlInstruction.GetMem(destination, base, offset));
+				if (body.aux(row) & 1 == 1 && size < 4) {
+					var shift = temporaryRegister(IrType.I32, registerTypes),
+						shiftCount = internInt(size == 1 ? 24 : 16);
+					instructions.push(HlInstruction.LoadInt(shift, shiftCount));
+					instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
+					instructions.push(HlInstruction.ShiftRight(destination, destination, shift));
+				}
+			case IrOpcode.MemoryStore:
+				var size = body.aux(row),
+					offset = memoryAddress(body.operand(row, 0), instructions, registers, registerTypes),
+					base = memoryBase,
+					value = body.operand(row, 1);
+				if (size == 1)
+					instructions.push(HlInstruction.SetI8(base, offset, requireRegister(value, registers)));
+				else if (size == 2)
+					instructions.push(HlInstruction.SetI16(base, offset, requireRegister(value, registers)));
+				else
+					instructions.push(HlInstruction.SetMem(base, offset, requireRegister(value, registers)));
+			case IrOpcode.ConstBool:
+				instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes),
+					body.aux(row) == 1));
+			case IrOpcode.ConstNull:
+				switch body.valueType(output) {
+					case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers,
+						registerTypes), internInt(0)));
+					default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers,
+						registerTypes)));
+				}
+			case IrOpcode.TypeValue:
+				instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes),
+					internType(body.typeOperand(row))));
+			case IrOpcode.ToDyn:
+				if (!scratch.unboxedArrays.has(output) || firstBinding[output] >= 0)
+					instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes),
+						requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.IntToFloat, IrOpcode.FloatToFloat:
+				instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.IntToInt64, IrOpcode.FloatToInt:
+				instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.SafeCast:
+				var value = body.operand(row, 0), array = arrayRecasts[output];
+				if (array >= 0 && firstBinding[value] < 0)
+					instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+						requireRegister(IrValueId.of(array), registers)));
+				else if (switch body.valueType(output) {
+					case Obj(name): exactTypes.exactType(block, value) == name;
+					default: false;
+				})
+					// A dominating exact-class test proved the value an object of exactly this class.
+					instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+					requireRegister(value, registers)));
+				else
+					instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
+						requireRegister(value, registers)));
+			case IrOpcode.BeginTry:
+				var catchBlock = body.auxInt(row, 0),
+					handlerValue = catchBlock < catchValues.length ? catchValues[catchBlock] : -1;
+				if (handlerValue < 0)
+					throw new InternalError('Try block $block has no catch value in block $catchBlock');
+				instructions.push(HlInstruction.Trap(requireRegister(IrValueId.of(handlerValue), registers), catchBlock,
+					body.auxInt(row, 2) == 1));
+			case IrOpcode.EndTry:
+				var catchBlock = body.auxInt(row, 0),
+					handlerValue = catchBlock < catchValues.length ? catchValues[catchBlock] : -1;
+				if (handlerValue < 0)
+					throw new InternalError('Try block $block ends with unknown handler block $catchBlock');
+				instructions.push(HlInstruction.EndTrap(requireRegister(IrValueId.of(handlerValue), registers),
+					body.auxInt(row, 1) == 1));
+			case IrOpcode.Catch:
+			case IrOpcode.GlobalGet:
+				var global = requireGlobal(body.symbol(row).name);
+				instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes), global));
+			case IrOpcode.GlobalSet:
+				var global = requireGlobal(body.symbol(row).name);
+				instructions.push(HlInstruction.GlobalSet(global, requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.Div, IrOpcode.Mod, IrOpcode.BitAnd, IrOpcode.BitXor,
+				IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight:
+				var destination = defineRegister(output, registers, registerTypes),
+					left = requireRegister(body.operand(row, 0), registers),
+					right = requireRegister(body.operand(row, 1), registers);
+				instructions.push(switch opcode {
+					case IrOpcode.Add: HlInstruction.Add(destination, left, right);
+					case IrOpcode.Sub: HlInstruction.Sub(destination, left, right);
+					case IrOpcode.Mul: HlInstruction.Mul(destination, left, right);
+					case IrOpcode.Div: HlInstruction.Div(destination, left, right);
+					case IrOpcode.Mod: HlInstruction.Mod(destination, left, right);
+					case IrOpcode.BitAnd: HlInstruction.BitAnd(destination, left, right);
+					case IrOpcode.BitXor: HlInstruction.BitXor(destination, left, right);
+					case IrOpcode.BitOr: HlInstruction.BitOr(destination, left, right);
+					case IrOpcode.ShiftLeft: HlInstruction.ShiftLeft(destination, left, right);
+					case IrOpcode.ShiftRight: HlInstruction.ShiftRight(destination, left, right);
+					default: HlInstruction.UnsignedShiftRight(destination, left, right);
+				});
+			case IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal:
+				var left = body.operand(row, 0),
+					right = body.operand(row, 1),
+					operation = opcode == IrOpcode.Less ? 0 : opcode == IrOpcode.LessEqual ? 1 : 2,
+					leftNull = operation == 2 && scratch.nullValues[left],
+					rightNull = operation == 2 && scratch.nullValues[right];
+				if ((output:Int) == fusedCondition) {
+					fusedPendingFloat = operation < 2
+						&& (isFloat(body.valueType(left)) || isFloat(body.valueType(right)));
+					fusedPending = comparisonJump(operation, leftNull, rightNull, requireRegister(left, registers),
+						requireRegister(right, registers), -1);
+				} else
+					lowerComparison(output, left, right, operation, leftNull, rightNull, registers, registerTypes,
+						instructions);
+			case IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView, IrOpcode.EnumTagBox, IrOpcode.EnumTagUnbox,
+				IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
+				throw new InternalError("Unlowered IR intrinsic reached HashLink");
+			case IrOpcode.Call:
+				lowerCall(row, output, block, fusedCondition, registers, registerTypes, instructions, uses, nonNull,
+					firstBinding);
+			case IrOpcode.IteratorNew:
+				var destination = defineRegister(output, registers, registerTypes),
+					boxedArray = temporaryRegister(IrType.Dyn, registerTypes);
+				instructions.push(HlInstruction.ToDyn(boxedArray, requireRegister(body.operand(row, 0), registers)));
+				instructions.push(HlInstruction.Call1(destination, requireFunction("__iterator_new"), boxedArray));
+			case IrOpcode.IteratorHasNext:
+				instructions.push(HlInstruction.Call1(defineRegister(output, registers, registerTypes),
+					requireFunction("__iterator_has_next"), requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.IteratorNext:
+				var destination = defineRegister(output, registers, registerTypes),
+					nextNative = iteratorNextNative(body.valueType(output));
+				if ((switch (nextNative.result) {
+					case IrType.Dyn: true;
+					default: false;
+				})) {
+					var dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
+					instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name),
+						requireRegister(body.operand(row, 0), registers)));
+					instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
+				} else
+					instructions.push(HlInstruction.Call1(destination, requireFunction(nextNative.name),
+						requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.CNativeCall:
+				lowerCNativeCall(row, output, registers, registerTypes, instructions);
+			case IrOpcode.StaticClosure:
+				instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes),
+					requireFunction(body.symbol(row).name)));
+			case IrOpcode.InstanceClosure:
+				instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers, registerTypes),
+					requireFunction(body.symbol(row).name), requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.CallClosure:
+				var closure = body.operand(row, 0);
+				instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));
+				if ((switch (body.valueType(closure)) {
+					case IrType.Dyn: true;
+					default: false;
+				})) {
+					var callable = temporaryRegister(IrType.Bool, registerTypes),
+						error = temporaryRegister(IrType.Bytes, registerTypes),
+						valid = freshLabel();
+					instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"),
+						requireRegister(closure, registers)));
+					instructions.push(HlInstruction.JumpTrue(callable, valid));
+					lowerStringLiteral(error, "Cannot call a non-function value", registerTypes, instructions);
+					instructions.push(HlInstruction.Throw(error));
+					instructions.push(HlInstruction.Label(valid));
+				}
+				instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes),
+					requireRegister(closure, registers), operandRegisters(row, 1, registers)));
+			case IrOpcode.Upcast:
+				// HashLink accepts a subclass register wherever its base class is expected.
+				instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.ToVirtual:
+				instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.MethodCall:
+				var object = body.operand(row, 0),
+					objectType = body.valueType(object),
+					methodName = body.symbol(row).name,
+					methodArguments = operandRegisters(row, 0, registers),
+					valueMethod = valueMethodFunction(objectType, methodName);
+				if (valueMethod == null)
+					valueMethod = addedMethodFunction(objectType, methodName);
+				if (valueMethod != null) {
+					// A value class has no prototype to dispatch through and cannot be subclassed, so its methods are direct calls,
+					// as are methods a live patch added.
+					var destination = defineRegister(output, registers, registerTypes),
+						functionIndex = requireFunction(valueMethod);
+					switch methodArguments.length {
+						case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, methodArguments[0]));
+						case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, methodArguments[0],
+							methodArguments[1]));
+						default: instructions.push(HlInstruction.CallN(destination, functionIndex, methodArguments));
+					}
+				} else
+					instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
+						requireObjectMethod(objectType, object, methodName), methodArguments));
+			case IrOpcode.ValueInit:
+				var local = scalarOptionals.get(output);
+				if (local != null) {
+					for (field in local.declarations) {
+						var target:Int = cast local.fields.get(field.name);
+						switch field.type {
+							case Bool: instructions.push(HlInstruction.LoadBool(target, false));
+							case I32, I64: instructions.push(HlInstruction.LoadInt(target, internInt(0)));
+							case F32, F64: instructions.push(HlInstruction.LoadFloat(target, internFloat(0.0)));
+							default: instructions.push(HlInstruction.LoadNull(target));
+						}
+					}
+				} else
+					instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
+						requireObjectType(compiler.ir.IrTypeTools.valueObjectName(body.valueType(output))), 0));
+			case IrOpcode.NewObject:
+				instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
+					requireObjectType(body.symbol(row).name), 0));
+			case IrOpcode.FieldGet:
+				lowerFieldGet(row, output, registers, registerTypes, instructions);
+			case IrOpcode.FieldSet:
+				var object = body.operand(row, 0),
+					fieldName = body.symbol(row).name,
+					value = body.operand(row, 1),
+					local = scalarOptionals.get(object);
+				if (local != null) {
+					var destination:Int = cast local.fields.get(fieldName);
+					instructions.push(HlInstruction.Move(destination, requireRegister(value, registers)));
+				} else {
+					var objectType = body.valueType(object),
+						receiver = requireRegister(object, registers),
+						field = requireObjectField(objectType, object, fieldName),
+						source = requireRegister(value, registers),
+						nativeStorageType = internNativeStorage(body.valueType(value),
+							objectFieldNativeLayout(objectType, fieldName));
+					if (nativeStorageType != null) {
+						var storageSource = temporaryRegisterType(nativeStorageType, registerTypes);
+						instructions.push(HlInstruction.ToInt(storageSource, source));
+						source = storageSource;
+					}
+					instructions.push(HlInstruction.FieldSet(receiver, field, source));
+				}
+			case IrOpcode.ArrayGet:
+				var array = body.operand(row, 0), index = body.operand(row, 1);
+				instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
+					requireRegister(array, registers), requireRegister(index, registers)));
+				if (rawArrayShift(body.valueType(array)) != null) {
+					var key = '${array}:${index}';
+					provenInRange.set(key, true);
+					validatedArrayAccesses.set(key, true);
+				}
+			case IrOpcode.ArraySet:
+				var array = body.operand(row, 0), index = body.operand(row, 1), value = body.operand(row, 2);
+				if (rawArrayShift(body.valueType(array)) != null)
+					lowerRawArrayWrite(array, index, requireRegister(value, registers), instructions, registers,
+						registerTypes);
+				else
+					instructions.push(HlInstruction.ArraySet(requireRegister(array, registers),
+						requireRegister(index, registers), requireRegister(value, registers)));
+			case IrOpcode.ArraySize:
+				instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case IrOpcode.MakeEnum:
+				var constructor = body.auxInt(row, 1), outputType = body.valueType(output);
+				switch outputType {
+					case EnumTag(_):
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+							internInt(constructor + 1)));
+					default:
+						var typeName = body.symbol(row).name,
+							destination = defineRegister(output, registers, registerTypes),
+							enumConstructor = requireEnumConstructor(typeName, outputType, constructor),
+							args = operandRegisters(row, 0, registers);
+						if (args.length == 0)
+							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
+						else
+							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+				}
+			case IrOpcode.EnumIndex:
+				var value = body.operand(row, 0);
+				switch body.valueType(value) {
+					case EnumTag(_):
+						var one = temporaryRegister(IrType.I32, registerTypes);
+						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers), one));
+					default:
+						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
+				}
+			case IrOpcode.EnumField:
+				instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers), body.auxInt(row, 0), body.auxInt(row, 1)));
+			default:
+				throw new InternalError('IR body row $row is not an instruction');
+		}
+	}
+
+	/** The registers of operands `from` on of `row`, in order. */
+	function operandRegisters(row:Int, from:Int, registers:Array<Int>):Array<Int>
+		return [for (index in from...body.operandCount(row)) requireRegister(body.operand(row, index), registers)];
+
+	function lowerCall(row:Int, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
+			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
+			nonNull:compiler.ir.IrPassScratch.IrValueMarks, firstBinding:Array<Int>):Void {
+		var functionName = body.symbol(row).name;
+		if ((output:Int) == fusedCondition && functionName == compiler.ir.IrReferenceIdentity.NAME) {
+			// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
+			var pointers = identityPointers(row, instructions, registers, registerTypes);
+			fusedPending = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
+			fusedPendingFloat = false;
+			return;
+		}
+		if ((output:Int) == fusedCondition) {
+			// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
+			var actual = temporaryRegister(IrType.TypeRef, registerTypes);
+			instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
+			fusedPending = comparisonJump(2, false, false, actual, requireRegister(body.operand(row, 1), registers),
+				-1);
+			fusedPendingFloat = false;
+			return;
+		}
+		var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(row) : null;
+		if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(row)) {
+			// A previous successful dereference or check already proved this SSA receiver non-null.
+		} else if (StringTools.startsWith(functionName, VALUE_ARRAY_READ) && uses[output] == 0
+			&& firstBinding[output] < 0 && usedReadNearby(row, uses)) {
+			// A field of the element nothing reads; the read beside it checks the element the same way.
+		} else if (functionName == VALUE_ARRAY_VALIDATE && scalarReadFollows(row)) {
+			// The read checks the same element the same way (`realtime_value_array_check_read`).
+		} else if (inlineSlot != null) {
+			lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
+		} else if (!lowerRuntimeFastPath(row, output, functionName, instructions, registers, registerTypes)) {
+			var destination = defineRegister(output, registers, registerTypes);
+			var functionIndex = requireFunction(functionName);
+			var args = operandRegisters(row, 0, registers);
+			if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
+				for (index in 0...args.length)
+					switch body.valueType(body.operand(row, index)) {
+						case Function(_, _):
+							var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
+							instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
+							args[index] = dynamicClosure;
+						default:
+					}
+			switch args.length {
+				case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
+				case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
+				case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
+				default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
+			}
+		}
+	}
+
+	function lowerCNativeCall(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
+			instructions:Array<HlInstruction>):Void {
+		var functionName = body.symbol(row).name, argumentCount = body.operandCount(row);
+		var native = cNatives.get(functionName);
+		if (native == null)
+			throw new InternalError('Unknown ordinary C function "$functionName"');
+		for (type in native.arguments)
+			if (unsupportedCDispatchArgument(type))
+				throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
+		if ((switch (native.result) {
+			case Void: false;
+			default: true;
+		}) && unsupportedCDispatchResult(native.result))
+			throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
+		var callArguments = [
+			temporaryRegister(IrType.RawPtr, registerTypes),
+			temporaryRegister(IrType.RawPtr, registerTypes),
+			temporaryRegister(IrType.RawPtr, registerTypes)
+		];
+		instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
+		instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
+		instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
+		var pointerResult = isNativePointer(native.result),
+			bytesResult = isManagedPointerBytes(native),
+			aggregateResult = isAggregateResult(native),
+			utf8Result = isUtf8Result(native);
+		if (pointerResult || bytesResult || utf8Result) {
+			var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
+				release = temporaryRegister(IrType.RawPtr, registerTypes),
+				nullable = temporaryRegister(IrType.Bool, registerTypes);
+			instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
+			instructions.push(HlInstruction.LoadString(release,
+				internString(native.pointerRelease == null ? "" : native.pointerRelease)));
+			instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
+			callArguments.push(ownership);
+			callArguments.push(release);
+			if (bytesResult) {
+				var length = temporaryRegister(IrType.RawPtr, registerTypes);
+				instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
+				callArguments.push(length);
+			}
+			callArguments.push(nullable);
+		}
+		for (index in 0...argumentCount) {
+			var argument = body.operand(row, index), boxed = temporaryRegister(IrType.Dyn, registerTypes);
+			if (scratch.nullValues[argument])
+				instructions.push(HlInstruction.LoadNull(boxed));
+			else
+				instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
+			callArguments.push(boxed);
+		}
+		var dynamicResult = temporaryRegister(pointerResult
+			? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
+			? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
+			registerTypes);
+		instructions.push(HlInstruction.CallN(dynamicResult,
+			requireFunction(pointerResult ? '__c_native_pointer_invoke_${argumentCount}'
+			: bytesResult ? '__c_native_bytes_invoke_${argumentCount}' : aggregateResult
+			? '__c_native_aggregate_invoke_${argumentCount}' : utf8Result
+			? '__c_native_utf8_invoke_${argumentCount}' : '__c_native_invoke_${argumentCount}'),
+			callArguments));
+		if ((switch (native.result) {
+			case Void: true;
+			default: false;
+		}))
+			defineRegister(output, registers, registerTypes);
+		else if (pointerResult || bytesResult || aggregateResult || utf8Result)
+			instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
+		else
+			instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
+	}
+
+	function lowerFieldGet(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
+			instructions:Array<HlInstruction>):Void {
+		var object = body.operand(row, 0), fieldName = body.symbol(row).name, local = scratch.scalarLocals.get(object);
+		if (local != null) {
+			var source:Int = cast local.fields.get(fieldName);
+			instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), source));
+			return;
+		}
+		var objectType = body.valueType(object),
+			outputType = body.valueType(output),
+			destination = defineRegister(output, registers, registerTypes),
+			nativeLayout = objectFieldNativeLayout(objectType, fieldName),
+			storageType = internNativeStorage(outputType, nativeLayout);
+		if ((switch (outputType) {
+			case I64: true;
+			default: false;
+		}) && storageType != null) {
+			var stored = temporaryRegisterType(storageType, registerTypes);
+			instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers),
+				requireObjectField(objectType, object, fieldName)));
+			instructions.push(HlInstruction.ToInt(destination, stored));
+			if (nativeLayout != null && !nativeLayout.signed) {
+				var shift = temporaryRegister(IrType.I32, registerTypes);
+				instructions.push(HlInstruction.LoadInt(shift, internInt(32)));
+				instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
+				instructions.push(HlInstruction.UnsignedShiftRight(destination, destination, shift));
+			}
+		} else
+			instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers),
+				requireObjectField(objectType, object, fieldName)));
+		// Inline records produce an HSTRUCT pointer into their owner. Only scalar
+		// narrow fields need sign or zero extension after the field load.
+		if (nativeLayout != null && nativeLayout.size < 4) {
+			var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
+				bits = nativeLayout.size * 8;
+			instructions.push(HlInstruction.LoadInt(maskOrShift,
+				internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
+			if (nativeLayout.signed) {
+				instructions.push(HlInstruction.ShiftLeft(destination, destination, maskOrShift));
+				instructions.push(HlInstruction.ShiftRight(destination, destination, maskOrShift));
+			} else
+				instructions.push(HlInstruction.BitAnd(destination, destination, maskOrShift));
+		}
 	}
 
 	/**
@@ -2059,38 +2107,34 @@ class HlLower {
 		it falls at or after `position`, so it is found once per scope, not once per
 		assignment.
 	**/
-	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>,
-			position:Int, instructionCount:Int,
-			lastByScope:haxe.ds.ObjectMap<compiler.ir.IrFunction.IrDebugBinding, Int>):Int {
-		// Keyed by the binding, whose fields alone decide the search: a function's assignments of a variable share it.
-		var cached = lastByScope.get(binding),
-			lastInScope:Int;
-		if (cached == null) {
+	function scopeEndPosition(binding:Int, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
+			lastByScope:Array<Int>):Int {
+		// Per binding, as a function's assignments of a variable share it: -2 until it is found.
+		var lastInScope = lastByScope[binding];
+		if (lastInScope == -2) {
 			lastInScope = -1;
-			var index = locations.length - 1;
+			var start = body.bindingScopeStart(binding),
+				end = body.bindingScopeEnd(binding),
+				path = body.bindingPath(binding),
+				index = locations.length - 1;
 			while (index >= 0) {
 				var location = locations[index];
-				if (location.start >= 0
-					&& location.start >= binding.scopeStart
-					&& location.start < binding.scopeEnd
-					&& location.path == binding.path) {
+				if (location.start >= 0 && location.start >= start && location.start < end && location.path == path) {
 					lastInScope = index;
 					break;
 				}
 				index--;
 			}
-			lastByScope.set(binding, lastInScope);
-		} else
-			lastInScope = cached;
+			lastByScope[binding] = lastInScope;
+		}
 		var end = (lastInScope >= position ? lastInScope : position) + 1;
 		return end >= instructionCount ? -1 : end;
 	}
 
-	static function blockProvenance(block:IrBlock):SourceProvenance {
-		if (block.instructions.length > 0)
-			return block.instructions[0].provenance;
-		if (block.terminator != null)
-			return block.terminator.provenance;
+	static function blockProvenance(body:IrBody, block:Int):SourceProvenance {
+		var first = body.firstRow(block);
+		if (first >= 0)
+			return body.provenance(first);
 		return SourceProvenance.generated("empty-hl-block");
 	}
 
@@ -2099,32 +2143,29 @@ class HlLower {
 		allocation details, so lay each protected region out before its handler and
 		its continuation regardless of block creation order.
 	**/
-	function layOut(fn:IrFunction):Array<IrBlock> {
+	function layOut():Array<Int> {
 		var size = 0;
-		for (block in fn.blocks)
-			if (block.id >= size)
-				size = block.id + 1;
-		var byId = scratch.blocksById, layout = scratch.layout;
-		byId.resize(0);
-		for (_ in 0...size)
-			byId.push(null);
-		for (block in fn.blocks)
-			byId[block.id] = block;
+		for (block in 0...body.blockCount())
+			if (body.blockId(block) >= size)
+				size = body.blockId(block) + 1;
+		var byId = compiler.ir.IrPassScratch.filledInts(scratch.blocksById, size, -1), layout = scratch.layout;
+		for (block in 0...body.blockCount())
+			byId[body.blockId(block)] = block;
 		scratch.laidOut.clear();
 		layout.resize(0);
-		appendReversePostorder(fn.blocks[0].id);
-		for (block in fn.blocks)
-			if (!scratch.laidOut.has(block.id) && (block.instructions.length > 0 || block.terminator != null))
-				appendReversePostorder(block.id);
+		appendReversePostorder(body.blockId(0));
+		for (block in 0...body.blockCount())
+			if (!scratch.laidOut.has(body.blockId(block)) && body.firstRow(block) >= 0)
+				appendReversePostorder(body.blockId(block));
 		// A block with neither instructions nor a terminator writes nothing.
 		var kept = 0;
 		for (block in layout)
-			if (block.instructions.length > 0 || block.terminator != null)
+			if (body.firstRow(block) >= 0)
 				layout[kept++] = block;
 		layout.resize(kept);
 		var positions = compiler.ir.IrPassScratch.filledInts(scratch.layoutPositions, size, -1);
 		for (index in 0...kept)
-			positions[layout[index].id] = index;
+			positions[body.blockId(layout[index])] = index;
 		return layout;
 	}
 
@@ -2145,7 +2186,7 @@ class HlLower {
 	 */
 	function visitPostorder(id:Int):Void {
 		var byId = scratch.blocksById, laidOut = scratch.laidOut;
-		if (id < 0 || id >= byId.length || byId[id] == null || !laidOut.add(id))
+		if (id < 0 || id >= byId.length || byId[id] < 0 || !laidOut.add(id))
 			return;
 		var stackBlocks = scratch.stackBlocks,
 			stackNext = scratch.stackNext,
@@ -2155,20 +2196,14 @@ class HlLower {
 		stackNext.resize(0);
 		stackEnd.resize(0);
 		children.resize(0);
-		function push(id:Int):Void {
-			stackBlocks.push(id);
-			stackNext.push(children.length);
-			appendPostorderChildren(byId[id], children);
-			stackEnd.push(children.length);
-		}
-		push(id);
+		pushPostorder(id);
 		while (stackBlocks.length > 0) {
 			var top = stackBlocks.length - 1;
 			if (stackNext[top] < stackEnd[top]) {
 				var child = children[stackNext[top]];
 				stackNext[top]++;
-				if (child >= 0 && child < byId.length && byId[child] != null && laidOut.add(child))
-					push(child);
+				if (child >= 0 && child < byId.length && byId[child] >= 0 && laidOut.add(child))
+					pushPostorder(child);
 			} else {
 				scratch.postorder.push(byId[stackBlocks[top]]);
 				children.resize(top > 0 ? stackEnd[top - 1] : 0);
@@ -2179,37 +2214,50 @@ class HlLower {
 		}
 	}
 
-	static function appendPostorderChildren(block:IrBlock, children:Array<Int>):Void {
-		var catchBlock = -1, afterBlock = -1;
-		for (instruction in block.instructions)
-			switch instruction.value {
-				case BeginTry(handler, after, _):
-					catchBlock = handler;
-					afterBlock = after;
-				default:
+	/** Puts block `id` on the walk's stack, with its children (`visitPostorder`). */
+	function pushPostorder(id:Int):Void {
+		var children = scratch.children;
+		scratch.stackBlocks.push(id);
+		scratch.stackNext.push(children.length);
+		appendPostorderChildren(body, scratch.blocksById[id], children);
+		scratch.stackEnd.push(children.length);
+	}
+
+	static function appendPostorderChildren(body:IrBody, block:Int, children:Array<Int>):Void {
+		var catchBlock = -1, afterBlock = -1, terminator = body.terminatorRow(block), row = body.firstRow(block);
+		while (row >= 0 && row != terminator) {
+			if (body.opcode(row) == IrOpcode.BeginTry) {
+				catchBlock = body.auxInt(row, 0);
+				afterBlock = body.auxInt(row, 1);
 			}
+			row = body.nextRow(row);
+		}
 		if (catchBlock >= 0) {
 			// Visit structural exits first because reversal places the protected
 			// body before its handler and the handler before the shared exit.
 			children.push(afterBlock);
 			children.push(catchBlock);
 		}
-		var terminator = block.terminator;
-		if (terminator != null)
-			switch terminator.value {
-				case Jump(target):
-					children.push(target);
-				case Branch(_, yes, no):
-					children.push(no);
-					children.push(yes);
-				case Switch(_, targets, otherwise):
-					var successors = compiler.ir.IrSwitch.successors(targets, otherwise),
-						successorIndex = successors.length;
-					while (successorIndex > 0) {
-						successorIndex--;
-						children.push(successors[successorIndex]);
+		if (terminator >= 0)
+			switch body.opcode(terminator) {
+				case IrOpcode.Jump:
+					children.push(body.aux(terminator));
+				case IrOpcode.Branch:
+					children.push(body.auxInt(terminator, 1));
+					children.push(body.auxInt(terminator, 0));
+				case IrOpcode.Switch:
+					// Each successor once, the targets in order and then the default, pushed last first.
+					var count = body.successorCount(terminator), index = count;
+					while (index > 0) {
+						index--;
+						var target = body.successor(terminator, index), first = true;
+						for (earlier in 0...index)
+							if (body.successor(terminator, earlier) == target)
+								first = false;
+						if (first)
+							children.push(target);
 					}
-				case Return(_), Throw(_), Rethrow(_), Unreachable:
+				default:
 			}
 	}
 
@@ -2217,60 +2265,58 @@ class HlLower {
 	 * Groups the phi moves of `fn` by the block their edge leaves, in the order of the phis and of their inputs. Only an edge
 	 * that is a jump can carry moves; a block whose moves go to more than one block has the target -2.
 	 */
-	function groupPhiMoves(fn:IrFunction):Void {
+	function groupPhiMoves():Void {
 		var size = 0, total = 0;
-		for (block in fn.blocks) {
-			if (block.id >= size)
-				size = block.id + 1;
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (input.block >= size)
-								size = input.block + 1;
-					default:
-				}
+		for (block in 0...body.blockCount()) {
+			if (body.blockId(block) >= size)
+				size = body.blockId(block) + 1;
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Phi)
+					for (input in 0...body.operandCount(row))
+						if (body.auxInt(row, input) >= size)
+							size = body.auxInt(row, input) + 1;
+				row = body.nextRow(row);
+			}
 		}
 		var starts = compiler.ir.IrPassScratch.filledInts(scratch.moveStart, size, 0),
 			counts = compiler.ir.IrPassScratch.filledInts(scratch.moveCount, size, 0),
 			targets = compiler.ir.IrPassScratch.filledInts(scratch.moveTarget, size, -1);
-		for (block in fn.blocks)
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case Phi(_, inputs):
-						for (input in inputs) {
-							counts[input.block]++;
-							total++;
-							var target = targets[input.block];
-							targets[input.block] = target == -1 || target == block.id ? block.id : -2;
-						}
-					default:
-				}
+		for (block in 0...body.blockCount()) {
+			var id = body.blockId(block), row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Phi)
+					for (input in 0...body.operandCount(row)) {
+						var from = body.auxInt(row, input);
+						counts[from]++;
+						total++;
+						var target = targets[from];
+						targets[from] = target == -1 || target == id ? id : -2;
+					}
+				row = body.nextRow(row);
+			}
+		}
 		var offset = 0;
 		for (id in 0...size) {
 			starts[id] = offset;
 			offset += counts[id];
 			counts[id] = 0;
 		}
-		var destinations = scratch.moveDestinations, sources = scratch.moveSources;
-		destinations.resize(0);
-		sources.resize(0);
-		for (_ in 0...total) {
-			destinations.push(null);
-			sources.push(null);
+		var destinations = compiler.ir.IrPassScratch.filledInts(scratch.moveDestinations, total, -1),
+			sources = compiler.ir.IrPassScratch.filledInts(scratch.moveSources, total, -1);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Phi)
+					for (input in 0...body.operandCount(row)) {
+						var from = body.auxInt(row, input), at = starts[from] + counts[from];
+						destinations[at] = body.output(row);
+						sources[at] = body.operand(row, input);
+						counts[from]++;
+					}
+				row = body.nextRow(row);
+			}
 		}
-		for (block in fn.blocks)
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case Phi(output, inputs):
-						for (input in inputs) {
-							var at = starts[input.block] + counts[input.block];
-							destinations[at] = output;
-							sources[at] = input.value;
-							counts[input.block]++;
-						}
-					default:
-				}
 	}
 
 	/** Whether the edge `from` to `to` has phi moves. */
@@ -2298,8 +2344,8 @@ class HlLower {
 		writtenValues.resize(0);
 		writtenPositions.resize(0);
 		if (count == 1) {
-			var destination = requireRegister(destinations[start], registers),
-				source = requireRegister(sources[start], registers);
+			var destination = requireRegister(IrValueId.of(destinations[start]), registers),
+				source = requireRegister(IrValueId.of(sources[start]), registers);
 			if (destination != source) {
 				writtenValues.push(destinations[start]);
 				writtenPositions.push(instructions.length);
@@ -2316,8 +2362,8 @@ class HlLower {
 		pendingSources.resize(0);
 		pendingValues.resize(0);
 		for (index in start...start + count) {
-			var destination = requireRegister(destinations[index], registers),
-				source = requireRegister(sources[index], registers);
+			var destination = requireRegister(IrValueId.of(destinations[index]), registers),
+				source = requireRegister(IrValueId.of(sources[index]), registers);
 			if (destination != source) {
 				pendingDestinations.push(destination);
 				pendingSources.push(source);
@@ -2412,9 +2458,8 @@ class HlLower {
 			default: throw new InternalError("Not a comparison jump");
 		};
 
-	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool,
-			registers:Array<Int>,
-			registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
+	function lowerComparison(output:IrValueId, left:IrValueId, right:IrValueId, operation:Int, leftNull:Bool,
+			rightNull:Bool, registers:Array<Int>, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
 		var destination = defineRegister(output, registers, registerTypes);
 		var leftReg = requireRegister(left, registers),
 			rightReg = requireRegister(right, registers);
@@ -2437,40 +2482,69 @@ class HlLower {
 	 * byte offset register, so such an address is never made: each access takes the offset's pointer and byte offset itself.
 	 * `uses` counts every read of a value; a debug binding keeps the offset, so a debugger can show it.
 	 */
-	static function foldedPointerOffsets(fn:IrFunction, uses:Array<Int>):Null<Map<Int, {
-		pointer:IrValue,
-		byteOffset:IrValue
-	}>> {
-		var offsets:Map<Int, {pointer:IrValue, byteOffset:IrValue}> = [], addressUses:Map<Int, Int> = [];
-		for (block in fn.blocks)
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case PointerOffset(output, pointer, byteOffset):
-						offsets.set(output.id, {pointer: pointer, byteOffset: byteOffset});
-					case MemoryLoad(_, pointer, _, _), MemoryStore(pointer, _, _):
-						addressUses.set(pointer.id,
-							(addressUses.exists(pointer.id) ? addressUses.get(pointer.id) : 0) + 1);
+	function foldPointerOffsets(uses:Array<Int>):Void {
+		var limit = body.valueLimit(),
+			pointers = compiler.ir.IrPassScratch.filledInts(scratch.foldedPointers, limit, -1),
+			offsets = compiler.ir.IrPassScratch.filledInts(scratch.foldedOffsets, limit, -1),
+			addressUses = compiler.ir.IrPassScratch.filledInts(scratch.addressUses, limit, 0);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.PointerOffset:
+						pointers[body.output(row)] = body.operand(row, 0);
+						offsets[body.output(row)] = body.operand(row, 1);
+					case IrOpcode.MemoryLoad, IrOpcode.MemoryStore:
+						addressUses[body.operand(row, 0)]++;
 					default:
 				}
-		for (binding in fn.debugBindings)
-			offsets.remove(binding.value.id);
-		var folded = false;
-		for (id in [for (id in offsets.keys()) id])
-			if (!addressUses.exists(id) || addressUses.get(id) != uses[id])
-				offsets.remove(id);
-			else
-				folded = true;
-		return folded ? offsets : null;
+				row = body.nextRow(row);
+			}
+		}
+		for (index in 0...body.bindingCount())
+			pointers[body.bindingValue(index)] = -1;
+		var any = false;
+		for (id in 0...limit)
+			if (pointers[id] >= 0) {
+				if (addressUses[id] == 0 || addressUses[id] != uses[id])
+					pointers[id] = -1;
+				else
+					any = true;
+			}
+		hasFoldedAddresses = any;
 	}
 
-	function defineRegister(value:IrValue, registers:Array<Int>, types:Array<Int>):Int {
-		if (value.id < registers.length && registers[value.id] >= 0)
-			return registers[value.id];
+	/** Whether pointer offset `value` is folded into the loads and stores that read it (`foldPointerOffsets`). */
+	inline function folded(value:IrValueId):Bool
+		return hasFoldedAddresses && scratch.foldedPointers[value] >= 0;
+
+	/**
+	 * The byte offset register of the address `pointer` for a memory access, with its base register in `memoryBase`: a folded
+	 * offset's pointer and byte offset, or `pointer` itself at a zero offset.
+	 */
+	function memoryAddress(pointer:IrValueId, instructions:Array<HlInstruction>, registers:Array<Int>,
+			registerTypes:Array<Int>):Int {
+		if (folded(pointer)) {
+			memoryBase = requireRegister(IrValueId.of(scratch.foldedPointers[pointer]), registers);
+			return requireRegister(IrValueId.of(scratch.foldedOffsets[pointer]), registers);
+		}
+		var zeroOffset = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
+		memoryBase = requireRegister(pointer, registers);
+		return zeroOffset;
+	}
+
+	/** Whether the function being lowered has folded pointer offsets, and the base register `memoryAddress` gave last. */
+	var hasFoldedAddresses = false;
+
+	var memoryBase = 0;
+
+	function defineRegister(value:IrValueId, registers:Array<Int>, types:Array<Int>):Int {
+		if (registers[value] >= 0)
+			return registers[value];
 		var index = types.length;
-		while (registers.length <= value.id)
-			registers.push(-1);
-		registers[value.id] = index;
-		types.push(internType(value.type));
+		registers[value] = index;
+		types.push(internType(body.valueType(value)));
 		return index;
 	}
 
@@ -2525,40 +2599,39 @@ class HlLower {
 
 	var hasViewedArrays = false;
 
-	/** The function being lowered, and the proofs of its loops' array indices, made when a read first asks for one. */
-	var loweringFunction:Null<IrFunction> = null;
-
+	/** The proofs of the loops' array indices of the function being lowered, made when a read first asks for one. */
 	var loopBounds:Null<compiler.ir.IrLoopBounds> = null;
 
 	@:processWide("an empty set of calls known not to resize arrays, never added to")
 	static final noPureCalls:Map<String, Bool> = [];
 
 	/** Whether the loops around `block` prove `index` in range of `array` (`IrLoopBounds`). */
-	function provenByLoop(array:IrValue, index:IrValue, block:Int):Bool {
-		var bounds = loopBounds, fn = loweringFunction;
-		if (fn == null)
-			return false;
+	function provenByLoop(array:IrValueId, index:IrValueId, block:Int):Bool {
+		var bounds = loopBounds;
 		if (bounds == null) {
-			bounds = new compiler.ir.IrLoopBounds(fn, noPureCalls);
+			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
+			bounds = new compiler.ir.IrLoopBounds(body.toFunction(), noPureCalls);
 			loopBounds = bounds;
 		}
-		return bounds.proven(array, index, block);
+		return bounds.proven(valueOf(array), valueOf(index), block);
 	}
+
+	/** `value` of the body being lowered as an `IrValue`, for an analysis that reads objects. */
+	function valueOf(value:IrValueId):IrValue
+		return new IrValue(value, body.valueName(value), body.valueType(value));
 
 	/**
 	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
 	 * including every call, forgets them. Array writes only ever grow an array, so they keep them.
 	 */
-	static function keepsArrayBounds(instruction:IrInstruction):Bool
-		return switch instruction {
-			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_),
-				TypeValue(_, _), ToDyn(_, _),
-				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), Add(_, _, _), Sub(_, _, _),
-				Mul(_, _, _), BitAnd(_, _, _),
-				BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _),
-				Less(_, _, _), LessEqual(_, _, _),
-				Equal(_, _, _), FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
-				Phi(_, _): true;
+	static function keepsArrayBounds(opcode:IrOpcode):Bool
+		return switch opcode {
+			case IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString, IrOpcode.ConstBool,
+				IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64,
+				IrOpcode.FloatToInt, IrOpcode.FloatToFloat, IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.BitAnd,
+				IrOpcode.BitXor, IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight,
+				IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal, IrOpcode.FieldGet, IrOpcode.ArrayGet,
+				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.Phi: true;
 			default: false;
 		};
 
@@ -2577,16 +2650,15 @@ class HlLower {
 	 * where the write lands past the logical end instead of extending the array. Reads always re-test after a call,
 	 * so reading a removed element still raises.
 	 */
-	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, writes:Bool,
-			instructions:Array<HlInstruction>, registers:Array<Int>,
-			registerTypes:Array<Int>, access:(Int, Int) -> HlInstruction):Void {
-		var elementShift = rawArrayShift(array.type);
+	function lowerRawArrayWrite(array:IrValueId, index:IrValueId, source:Int, instructions:Array<HlInstruction>,
+			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var arrayType = body.valueType(array), elementShift = rawArrayShift(arrayType);
 		if (elementShift == null)
 			throw new InternalError("Inline array access requires an Int or Float array");
 		var arrayRegister = requireRegister(array, registers),
 			indexRegister = requireRegister(index, registers),
-			key = '${array.id}:${index.id}';
-		if (!provenInRange.exists(key) && !(writes && validatedArrayAccesses.exists(key))) {
+			key = '${array}:${index}';
+		if (!provenInRange.exists(key) && !validatedArrayAccesses.exists(key)) {
 			var outOfRange = freshLabel(),
 				inRange = freshLabel(),
 				size = temporaryRegister(IrType.I32, registerTypes),
@@ -2594,7 +2666,7 @@ class HlLower {
 			instructions.push(HlInstruction.ArraySize(size, arrayRegister));
 			instructions.push(HlInstruction.JumpUnsignedLess(indexRegister, size, inRange));
 			instructions.push(HlInstruction.Label(outOfRange));
-			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(array.type, operation)),
+			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(arrayType, "ensure")),
 				arrayRegister, indexRegister));
 			instructions.push(HlInstruction.Label(inRange));
 			provenInRange.set(key, true);
@@ -2610,17 +2682,17 @@ class HlLower {
 		}
 		var data = temporaryRegister(IrType.Bytes, registerTypes);
 		instructions.push(HlInstruction.RefData(data, arrayRegister));
-		instructions.push(access(data, offset));
+		instructions.push(HlInstruction.SetMem(data, offset, source));
 	}
 
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	/** The two references a reference-identity test compares, as raw pointers: a virtual is compared by the object it wraps. */
-	function identityPointers(arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Array<Int>,
+	function identityPointers(row:Int, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Array<Int> {
 		var pointers:Array<Int> = [];
-		for (arg in arguments) {
-			var source = requireRegister(arg, registers);
-			switch arg.type {
+		for (index in 0...body.operandCount(row)) {
+			var argument = body.operand(row, index), source = requireRegister(argument, registers);
+			switch body.valueType(argument) {
 				case Virtual(_):
 					var concrete = temporaryRegister(IrType.Dyn, registerTypes);
 					instructions.push(HlInstruction.ToDyn(concrete, source));
@@ -2634,22 +2706,23 @@ class HlLower {
 		return pointers;
 	}
 
-	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>,
-			instructions:Array<HlInstruction>, registers:Array<Int>,
-			registerTypes:Array<Int>):Bool {
+	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, instructions:Array<HlInstruction>,
+			registers:Array<Int>, registerTypes:Array<Int>):Bool {
 		if (compiler.ir.IrScalarWordBits.matches(name)) {
-			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name, arguments[0].type, output.type))
+			if (body.operandCount(row) != 1 || !compiler.ir.IrScalarWordBits.valid(name,
+				body.valueType(body.operand(row, 0)), body.valueType(output)))
 				throw new InternalError("Invalid scalar word transport signature");
-			var scalar = name == compiler.ir.IrScalarWordBits.PACK ? arguments[0].type : output.type;
+			var scalar = name == compiler.ir.IrScalarWordBits.PACK
+				? body.valueType(body.operand(row, 0)) : body.valueType(output);
 			if (compiler.ir.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
 				throw new InternalError("HashLink callbacks belong in the reference lane");
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-				requireRegister(arguments[0], registers)));
+				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-				requireRegister(arguments[0], registers)));
+				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrExactTypeFacts.TEST) {
@@ -2659,8 +2732,8 @@ class HlLower {
 				result = defineRegister(output, registers, registerTypes),
 				yes = freshLabel(),
 				done = freshLabel();
-			instructions.push(HlInstruction.GetType(actual, requireRegister(arguments[0], registers)));
-			instructions.push(HlInstruction.JumpEqual(actual, requireRegister(arguments[1], registers), yes));
+			instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
+			instructions.push(HlInstruction.JumpEqual(actual, requireRegister(body.operand(row, 1), registers), yes));
 			instructions.push(HlInstruction.LoadBool(result, false));
 			instructions.push(HlInstruction.Jump(done));
 			instructions.push(HlInstruction.Label(yes));
@@ -2669,7 +2742,7 @@ class HlLower {
 			return true;
 		}
 		if (name == compiler.ir.IrReferenceIdentity.NAME) {
-			var pointers = identityPointers(arguments, instructions, registers, registerTypes);
+			var pointers = identityPointers(row, instructions, registers, registerTypes);
 			var result = defineRegister(output, registers, registerTypes),
 				yes = freshLabel(),
 				done = freshLabel();
@@ -2682,22 +2755,22 @@ class HlLower {
 			return true;
 		}
 		if (name == compiler.ir.IrReceiverCheck.NAME) {
-			instructions.push(HlInstruction.NullCheck(requireRegister(arguments[0], registers)));
+			instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrHlScalarRef.ADDRESS) {
 			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
-				requireRegister(arguments[0], registers)));
+				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrHlScalarRef.LOAD) {
 			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
-				requireRegister(arguments[0], registers)));
+				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrHlScalarRef.STORE) {
-			instructions.push(HlInstruction.Setref(requireRegister(arguments[0], registers),
-				requireRegister(arguments[1], registers)));
+			instructions.push(HlInstruction.Setref(requireRegister(body.operand(row, 0), registers),
+				requireRegister(body.operand(row, 1), registers)));
 			return true;
 		}
 		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64"
@@ -2707,7 +2780,7 @@ class HlLower {
 		if (!push && !get && !set)
 			return false;
 		var destination = defineRegister(output, registers, registerTypes);
-		var args = [for (argument in arguments) requireRegister(argument, registers)];
+		var args = operandRegisters(row, 0, registers);
 		var slow = freshLabel(),
 			done = freshLabel();
 		var size = temporaryRegister(IrType.I32, registerTypes);
@@ -2727,7 +2800,7 @@ class HlLower {
 			instructions.push(HlInstruction.FieldSet(header, 1, destination));
 			// OSetref performs the managed store/write barrier without OSetArray's native bounds helper.
 			var data = temporaryRegister(IrType.RawPtr, registerTypes);
-			var slot = temporaryRegisterType(internReference(arguments[1].type), registerTypes);
+			var slot = temporaryRegisterType(internReference(body.valueType(body.operand(row, 1))), registerTypes);
 			instructions.push(HlInstruction.RefData(data, args[0]));
 			instructions.push(HlInstruction.UnsafeCast(slot, data));
 			instructions.push(HlInstruction.RefOffset(slot, slot, size));
@@ -2794,13 +2867,10 @@ class HlLower {
 			case _: false;
 		};
 
-	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
-		return compiler.ir.IrOperands.output(instruction);
-
-	function requireRegister(value:IrValue, registers:Array<Int>):Int {
-		var register = value.id >= 0 && value.id < registers.length ? registers[value.id] : -1;
+	function requireRegister(value:IrValueId, registers:Array<Int>):Int {
+		var register = (value:Int) >= 0 && (value:Int) < registers.length ? registers[value] : -1;
 		if (register < 0)
-			throw new InternalError('IR value ${value.id} is used before definition');
+			throw new InternalError('IR value ${(value : Int)} is used before definition');
 		return register;
 	}
 
@@ -2960,10 +3030,10 @@ class HlLower {
 		return constructor;
 	}
 
-	function requireObjectField(object:IrValue, name:String):Int {
-		var typeName = switch object.type {
+	function requireObjectField(objectType:IrType, object:IrValueId, name:String):Int {
+		var typeName = switch objectType {
 			case Obj(value): value;
-			default: throw new InternalError('IR value ${object.id} is not an object');
+			default: throw new InternalError('IR value ${(object : Int)} is not an object');
 		};
 		return requireObjectFieldByType(typeName, name);
 	}
@@ -3083,8 +3153,8 @@ class HlLower {
 		return visible;
 	}
 
-	function objectFieldNativeLayout(object:IrValue, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
-		var typeName = switch object.type {
+	function objectFieldNativeLayout(objectType:IrType, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
+		var typeName = switch objectType {
 			case Obj(value): value;
 			default: return null;
 		};
@@ -3102,8 +3172,8 @@ class HlLower {
 	}
 
 	/** The implementing function of `name` when `value` is an instance of a value class, whose methods are not virtual. */
-	function valueMethodFunction(value:IrValue, name:String):Null<String> {
-		var typeName = switch value.type {
+	function valueMethodFunction(valueType:IrType, name:String):Null<String> {
+		var typeName = switch valueType {
 			case Obj(objectName): objectName;
 			default: return null;
 		};
@@ -3121,8 +3191,8 @@ class HlLower {
 	 * method a live patch added. The patch planner lets one in only when nothing overrides it and it overrides nothing, so
 	 * a direct call reaches the method every receiver has.
 	 */
-	function addedMethodFunction(value:IrValue, name:String):Null<String> {
-		var typeName = switch value.type {
+	function addedMethodFunction(valueType:IrType, name:String):Null<String> {
+		var typeName = switch valueType {
 			case Obj(objectName): objectName;
 			default: return null;
 		};
@@ -3144,15 +3214,15 @@ class HlLower {
 		return null;
 	}
 
-	function requireObjectMethod(value:IrValue, name:String):Int {
-		var typeName = switch value.type {
+	function requireObjectMethod(valueType:IrType, value:IrValueId, name:String):Int {
+		var typeName = switch valueType {
 			case Obj(value): value;
 			case Virtual(value):
 				var slot = symbols.requireInterfaceMethodIndex(value, name);
 				if (requests != null)
 					requests.push(InterfaceSlot(value, name, slot));
 				return slot;
-			default: throw new InternalError('IR value ${value.id} is not an object');
+			default: throw new InternalError('IR value ${(value : Int)} is not an object');
 		};
 		var slot = symbols.requireObjectMethodIndex(typeName, name);
 		if (requests != null)

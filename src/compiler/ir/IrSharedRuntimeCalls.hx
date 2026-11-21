@@ -1,10 +1,7 @@
 package compiler.ir;
 
-import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.SourceProvenance.Located;
 
 /**
  * On HashLink the lowering writes a fast path in place of a call to some runtime functions (an array push, a byte read or write; see
@@ -34,14 +31,18 @@ class IrSharedRuntimeCalls {
 	public static function isHelper(name:String):Bool
 		return name.indexOf(SUFFIX) > 0 && shared.exists(name.substr(0, name.indexOf(SUFFIX)));
 
-	/** `program` with its runtime calls going through helpers, added after its own functions, and the helpers' names. */
-	public static function apply(program:IrProgram):{program:IrProgram, helpers:Array<String>} {
+	/**
+	 * `program` with its runtime calls going through helpers, added after its own functions, and the helpers' names. With `memo`,
+	 * a function whose IR is the object it was last time keeps the form it got then.
+	 */
+	public static function apply(program:IrProgram, ?memo:IrSharedCallsMemo):{program:IrProgram,
+		helpers:Array<String>} {
 		var helpers:Map<String, IrFunction> = [for (fn in program.functions) if (isHelper(fn.name)) fn.name => fn],
 			added:Array<IrFunction> = [];
 		// The helper of each runtime function by signature, so a call site whose helper is known spells no name.
 		var named:Map<String, IrTypeMap<String>> = [];
-		function helper(name:String, arguments:Array<IrValue>, result:IrType):String {
-			var signature = IrType.Function([for (argument in arguments) argument.type], result),
+		function helper(name:String, arguments:Array<IrType>, result:IrType):String {
+			var signature = IrType.Function(arguments, result),
 				bySignature = named.get(name);
 			if (bySignature == null) {
 				bySignature = new IrTypeMap();
@@ -50,13 +51,13 @@ class IrSharedRuntimeCalls {
 			var known = bySignature.get(signature);
 			if (known != null)
 				return known;
-			var key = name + SUFFIX + IrTypeIdentity.listText([for (argument in arguments) argument.type]) + "->"
+			var key = name + SUFFIX + IrTypeIdentity.listText(arguments) + "->"
 				+ IrTypeIdentity.text(result);
 			bySignature.set(signature, key);
 			if (!helpers.exists(key)) {
 				var builder = new IrBuilder(),
 					parameters = [for (index in 0...arguments.length) builder.argument("value" + index,
-						arguments[index].type)];
+						arguments[index])];
 				builder.returnValue(builder.call(name, parameters, result));
 				var fn = new IrFunction(key, builder.arguments, result, builder.blocks, GeneratedHelper);
 				helpers.set(key, fn);
@@ -65,18 +66,84 @@ class IrSharedRuntimeCalls {
 			return key;
 		}
 		// A helper's own call is the one that keeps the fast path.
-		var result = program.copy();
-		result.functions = [for (fn in program.functions)
-			isHelper(fn.name) ? fn : IrFunctionRewrite.instructions(fn, located -> switch located.value {
-				case Call(output, name, arguments) if (shared.exists(name.name)):
-					[new Located(IrInstruction.Call(output, IrSymbol.of(helper(name.name, arguments, output.type)),
-						arguments),
-						located.provenance)];
-				default: null;
-			})];
+		var result = program.copy(),
+			types = new IrTypeIds(),
+			builder = new IrBodyBuilder(types),
+			rows:Array<Int> = [],
+			targets:Array<Int> = [];
+		result.functions = [];
+		var known:Map<String, SharedCallsEntry> = memo == null ? [] : memo.entries,
+			kept:Map<String, SharedCallsEntry> = [];
+		for (fn in program.functions) {
+			if (isHelper(fn.name)) {
+				result.functions.push(fn);
+				continue;
+			}
+			var entry = known.get(fn.name);
+			if (entry != null && entry.source == fn) {
+				for (call in entry.calls)
+					helper(call.name, call.arguments, call.result);
+				kept.set(fn.name, entry);
+				result.functions.push(entry.result);
+				continue;
+			}
+			var body = fn.bodyIn(types, builder), calls:Array<SharedCall> = [];
+			rows.resize(0);
+			targets.resize(0);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.Call && shared.exists(body.symbol(row).name)) {
+						var call:SharedCall = {
+							name: body.symbol(row).name,
+							arguments: [for (operand in 0...body.operandCount(row)) body.valueType(body.operand(row,
+								operand))],
+							result: body.valueType(body.output(row))
+						};
+						calls.push(call);
+						rows.push(row);
+						targets.push(IrSymbol.of(helper(call.name, call.arguments, call.result)).id);
+					}
+					row = body.nextRow(row);
+				}
+			}
+			var rewritten = rows.length == 0 ? fn : IrFunction.ofBody(IrBodyBuilder.copyWithAuxes(body, rows, targets,
+				builder).freeze());
+			kept.set(fn.name, {source: fn, result: rewritten, calls: calls});
+			result.functions.push(rewritten);
+		}
+		if (memo != null)
+			memo.entries = kept;
 		added.sort((left, right) -> left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
 		for (fn in added)
 			result.functions.push(fn);
 		return {program: result, helpers: [for (fn in added) fn.name]};
+	}
+}
+
+/** A runtime call `IrSharedRuntimeCalls` sends through a helper: the runtime function, its argument types and its result. */
+typedef SharedCall = {
+	final name:String;
+	final arguments:Array<IrType>;
+	final result:IrType;
+}
+
+/** A function, its form with its runtime calls through helpers, and those calls. */
+typedef SharedCallsEntry = {
+	final source:IrFunction;
+	final result:IrFunction;
+	final calls:Array<SharedCall>;
+}
+
+/** Each function's form with its runtime calls through helpers, by name, kept while the function is the same object. */
+class IrSharedCallsMemo {
+	public var entries:Map<String, SharedCallsEntry> = [];
+
+	public function new() {}
+
+	public function copy():IrSharedCallsMemo {
+		var result = new IrSharedCallsMemo();
+		result.entries = [for (name => entry in entries) name => entry];
+		return result;
 	}
 }

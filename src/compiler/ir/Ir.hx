@@ -355,6 +355,11 @@ enum IrDefault {
 class IrProgram {
 	public var natives:Array<IrNative> = [];
 	public var cNatives:Array<IrCNative> = [];
+
+	/**
+	 * After the inliner stage each function is its frozen body (`IrFunction.ofBody`): the HashLink backend reads the bodies, and a
+	 * function's blocks are decoded from its body only when something reads them, once.
+	 */
 	public var functions:Array<IrFunction> = [];
 	public var objects:Array<IrObject> = [];
 	public var interfaces:Array<IrInterface> = [];

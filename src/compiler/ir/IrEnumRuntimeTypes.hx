@@ -80,6 +80,24 @@ class IrEnumRuntimeTypes {
 			for (argument in fn.arguments)
 				visit(argument.type);
 			visit(fn.result);
+			// The inliner's output is read as its body; a function made after it, as objects.
+			var body = fn.body;
+			if (body != null) {
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block);
+					while (row >= 0) {
+						var output = body.output(row);
+						if (output.exists())
+							visit(body.valueType(output));
+						for (operand in 0...body.operandCount(row))
+							visit(body.valueType(body.operand(row, operand)));
+						if (body.opcode(row) == IrOpcode.TypeValue)
+							descriptor(body.typeOperand(row));
+						row = body.nextRow(row);
+					}
+				}
+				continue;
+			}
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
 					IrOperands.anyValue(located.value, value);

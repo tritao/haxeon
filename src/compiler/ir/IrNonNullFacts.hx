@@ -22,15 +22,11 @@ class IrNonNullFacts {
 		return false;
 	}
 
-	/**
-	 * `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function; `scratch`, the caller's
-	 * tables reused across functions (`IrPassScratch.nonNull`). The facts are kept in `scratch`: they hold until it is next
-	 * given to an analysis.
-	 */
-	public function new(fn:IrFunction, ?checkedDereferences:Bool = false, ?graph:IrGraph, ?scratch:IrNonNullScratch) {
+	/** The facts of `fn`; a function that is a body reads them with `analyzeBody`. */
+	public function new(fn:IrFunction, ?checkedDereferences:Bool = false) {
 		if (hasReceiver(fn)) {
-			var tables = scratch ?? new IrNonNullScratch();
-			new NonNullFlow(fn, checkedDereferences, graph, tables).run();
+			var tables = new IrNonNullScratch();
+			new NonNullFlow(fn, checkedDereferences, tables).run();
 			rows = tables;
 		}
 	}
@@ -112,10 +108,10 @@ private class NonNullFlow {
 
 	var hasRows = false;
 
-	public function new(fn:IrFunction, checkedDereferences:Bool, graph:Null<IrGraph>, scratch:IrNonNullScratch) {
+	public function new(fn:IrFunction, checkedDereferences:Bool, scratch:IrNonNullScratch) {
 		this.fn = fn;
 		this.checkedDereferences = checkedDereferences;
-		this.graph = graph ?? new IrGraph(fn);
+		this.graph = new IrGraph(fn);
 		this.scratch = scratch;
 		positions = scratch.positions;
 		testValue = scratch.testValue;

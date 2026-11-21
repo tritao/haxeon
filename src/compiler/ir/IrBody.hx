@@ -283,6 +283,21 @@ class IrBody {
 	public inline function bindingValue(index:Int):IrValueId
 		return IrValueId.of(bindingValues[index]);
 
+	public inline function bindingIdentity(index:Int):String
+		return bindingIdentities[index];
+
+	public inline function bindingName(index:Int):String
+		return bindingNames[index];
+
+	public inline function bindingPath(index:Int):String
+		return bindingPaths[index];
+
+	public inline function bindingScopeStart(index:Int):Int
+		return bindingStarts[index];
+
+	public inline function bindingScopeEnd(index:Int):Int
+		return bindingEnds[index];
+
 	// Ownership.
 
 	/**
@@ -796,6 +811,25 @@ class IrBody {
 	public function toFunction():IrFunction {
 		var values:Array<Null<IrValue>> = [];
 		values.resize(valueTypes.length);
+		var arguments = [for (id in argumentIds) valueOf(id, values)];
+		return new IrFunction(name, arguments, types.type(result), decodeBlocks(values), kind, decodeBindings(values),
+			inlineHint, retention);
+	}
+
+	/** The arguments of the function this body is (`IrFunction.ofBody`), which `decodeRest` decodes the rest with. */
+	public function decodeArguments():Array<IrValue>
+		return [for (id in argumentIds) new IrValue(id, valueNames[id], types.type(valueTypes[id]))];
+
+	/** The blocks and bindings of the function this body is, given its arguments as `decodeArguments` made them. */
+	public function decodeRest(arguments:Array<IrValue>):{blocks:Array<IrBlock>, bindings:Array<IrDebugBinding>} {
+		var values:Array<Null<IrValue>> = [];
+		values.resize(valueTypes.length);
+		for (argument in arguments)
+			values[argument.id] = argument;
+		return {blocks: decodeBlocks(values), bindings: decodeBindings(values)};
+	}
+
+	function decodeBlocks(values:Array<Null<IrValue>>):Array<IrBlock> {
 		var blocks:Array<IrBlock> = [];
 		for (block in 0...blockIds.length) {
 			var instructions:Array<Located<IrInstruction>> = [],
@@ -810,7 +844,11 @@ class IrBody {
 				decoded.terminator = new Located(decodeTerminator(terminator, values), provenance(terminator));
 			blocks.push(decoded);
 		}
-		var bindings:Array<IrDebugBinding> = [for (index in 0...bindingIdentities.length)
+		return blocks;
+	}
+
+	function decodeBindings(values:Array<Null<IrValue>>):Array<IrDebugBinding>
+		return [for (index in 0...bindingIdentities.length)
 			{
 				identity:bindingIdentities[index],
 					name:bindingNames[index],
@@ -819,9 +857,6 @@ class IrBody {
 					scopeStart:bindingStarts[index],
 					scopeEnd:bindingEnds[index]
 			}];
-		return new IrFunction(name, [for (id in argumentIds) valueOf(id, values)], types.type(result), blocks, kind,
-			bindings, inlineHint, retention);
-	}
 
 	/**
 	 * Where `fn` and the function its body decodes to first differ, or null when they are equal: every function the compiler makes

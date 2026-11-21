@@ -518,7 +518,8 @@ class IrInliner {
 	 * not change, because a callee they inlined did.
 	 *
 	 * The stage runs on bodies (docs/design/IR_CORE_COLUMNS.md): each function is encoded when it is first inlined, inlined,
-	 * forwarded, reduced and cleaned up in place, and decoded once at the end into `program.functions`.
+	 * forwarded, reduced and cleaned up in place, and frozen at the end: `program.functions` holds each as its body
+	 * (`IrFunction.ofBody`), which the HashLink lowering reads, decoded only for what still reads objects.
 	 */
 	/** Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). */
 	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile,
@@ -611,7 +612,9 @@ class IrInliner {
 	 */
 	static function encodeOrNull(fn:IrFunction):Null<Bytes> {
 		try {
-			return IrFunctionStateCodec.encodeForComparison(fn);
+			// Encoded once (`IrInlineCache.publishedBytes` keeps the bytes), from a decoding nothing keeps.
+			var body = fn.body;
+			return IrFunctionStateCodec.encodeForComparison(body != null ? body.toFunction() : fn);
 		} catch (_:Dynamic) {
 			return null;
 		}
@@ -626,8 +629,9 @@ class IrInliner {
 	}
 
 	/**
-	 * The final cleanup of `fn`'s inlined form, decoded: in place when no caller may still inline the form as it is, else on a
-	 * copy. A function nothing changed is its source.
+	 * The final cleanup of `fn`'s inlined form: in place when no caller may still inline the form as it is, else on a copy. The
+	 * result is the frozen body, as a function decoded only when something reads its blocks (`IrFunction.ofBody`); a function
+	 * nothing changed is its source, which keeps its body for the backends.
 	 */
 	function cleanUp(fn:IrFunction, inlined:IrBody):IrFunction {
 		var body = inlined.frozen ? inlined.thaw(passScratch.bodyBuilder) : inlined;
@@ -637,7 +641,11 @@ class IrInliner {
 		IrReceiverCheckElision.runBody(body, passScratch);
 		IrJumpThreading.runBody(body, passScratch);
 		var id = ids.get(fn.name);
-		return id != null && sourceBodies[id] == inlined && !body.edited ? fn : body.toFunction();
+		if (id != null && sourceBodies[id] == inlined && !body.edited) {
+			fn.keepBody(inlined.frozen ? inlined : inlined.freeze(passScratch.bodyBuilder));
+			return fn;
+		}
+		return IrFunction.ofBody(body.freeze(passScratch.bodyBuilder));
 	}
 
 	/**

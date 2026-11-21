@@ -770,7 +770,8 @@ class HlModuleAssembler {
 		var startedAt = Sys.time() * 1000.0;
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
 		// has not published yet is new code, which a patch must carry.
-		var shared = compiler.ir.IrSharedRuntimeCalls.apply(program),
+		var shared = compiler.ir.IrSharedRuntimeCalls.apply(program,
+			loweredCache == null ? null : loweredCache.sharedCalls),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;
 		regenerated = regenerated.copy();

@@ -82,7 +82,17 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    changed it). The memo holds frozen bodies; in a compile that keeps a session the cache also holds each source's frozen
    body while the source is the same object. Until the object passes are gone, a pass that numbers new values as its object
    version did takes them from `IrBody.newValueAt` (strength reduction after load-store forwarding), which may reuse the id of
-   a value no row or binding names any more. HlLower reading bodies, which removes the exit decode, is the next step.
+   a value no row or binding names any more.
+   *HlLower reads the bodies*: nothing is decoded at the stage's exit. Each function of `program.functions` is its frozen body
+   (`IrFunction.ofBody`; a function the stage left as it was keeps its source object and gets its source body), and its blocks
+   and bindings are decoded from the body the first time something reads them, once: the verifier when verification is on, the
+   reports, instrumentation, the Wasm backends, the session's comparisons of functions. A function made after the stage, or
+   one without a body, is encoded once when a body reader asks for it (`IrFunction.bodyIn`). On the HashLink path the readers
+   are bodies: the plain build's reachability walk and table trim, the shared runtime calls (a copy of a body with its call
+   symbols replaced, `IrBodyBuilder.copyWithAuxes`), the runtime enum descriptors, natives discovery, function identities, and
+   HlLower itself (edge blocks on a copy, `PhiEdges.splitBody`; non-null facts with `IrNonNullFacts.analyzeBody`; exact
+   types, scalar value locals and phi moves on rows). The loop proofs of inline value-array reads (`IrLoopBounds`) still read
+   objects, decoding the few functions that have such reads.
 4. The program-level passes, from the last back to the first, each moving the conversion before it; `IrBuilder` emits
    rows.
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.

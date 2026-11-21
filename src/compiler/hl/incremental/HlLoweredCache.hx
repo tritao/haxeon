@@ -13,6 +13,9 @@ class HlLoweredCache {
 	/** Identities and opcode spans of functions whose IR and code did not change. */
 	public final debug:HlDebugMetadataCache;
 
+	/** Each function's form with its runtime calls through helpers, while its IR is the same object (`IrSharedRuntimeCalls`). */
+	public var sharedCalls = new compiler.ir.IrSharedRuntimeCalls.IrSharedCallsMemo();
+
 	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";
 
@@ -22,6 +25,7 @@ class HlLoweredCache {
 	public function copy():HlLoweredCache {
 		var result = new HlLoweredCache(debug);
 		result.entries = [for (name => entry in entries) name => entry];
+		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;
 		return result;
 	}
