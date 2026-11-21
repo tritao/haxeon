@@ -8,7 +8,7 @@ import compiler.runtime.CompilerIntrinsics;
  * A plain build in a reused compiler session gives the bytes of a fresh build of the same sources, and when nothing the IR pipeline
  * reads changed it does so without running a pass or lowering a function (`metrics.reuse`).
  *
- * The program has a generic class (`Box`), an enum (`Shape`), a library module and a user of both. Every scenario compiles it once,
+ * The program has a generic class (`Box`), an enum (`Shape`), an enum abstract (`Level`), a library module and a user of them. Every scenario compiles it once,
  * applies an edit in the same session, compiles again, and compares the module with a fresh compiler's. An edit that changes the
  * program must not report a reused module; a build with no edit must. A compile that checks its reuse also assembles the reused result again
  * and compared inside the compiler, which throws on a difference.
@@ -17,6 +17,7 @@ class WarmRebuildReuseMain {
 	static final boxSource =
 		"class Box<T> { public var value:T; public var spare:Int; public function new(value:T) this.value = value; public function get():T return value; }";
 	static final shapeSource = "enum Shape { Circle(radius:Int); Square(side:Int); }";
+	static final levelSource = "enum abstract Level(Int) to Int { var Low = 1; var High = 2; }";
 
 	/** `step` is recursive so it is not inlined into `of` or `main`: a function nothing reaches is not in the module, and the scenarios below edit functions that are. */
 	static final areaSource =
@@ -30,12 +31,13 @@ class WarmRebuildReuseMain {
 		"class Config { public static var empty:Dynamic = {}; public var data:Dynamic = {a: 1}; public function new() {} }";
 
 	static final mainSource =
-		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)); return total == 18 && Lib.name().length == 3 && new Config().data != null && Config.empty != null ? 42 : 1; } }";
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null ? 42 : 1; } }";
 
 	static function initialSources():Map<String, String>
 		return [
 			"Box.hx" => boxSource,
 			"Shape.hx" => shapeSource,
+			"Level.hx" => levelSource,
 			"Area.hx" => areaSource,
 			"Lib.hx" => libSource,
 			"Config.hx" => configSource,
@@ -84,6 +86,9 @@ class WarmRebuildReuseMain {
 			StringTools.replace(libSource, "return \"lib\";",
 			"return \"lib\";"
 			+ " public static function shifted():String return \"a-constant-that-shifts-the-string-table\";")));
+		// A reader inlines an enum abstract's value where the value is declared, so moving the declaration retypes the reader.
+		edit(failures, "after an enum abstract moved down its file",
+			files -> files.set("Level.hx", "\n\n" + levelSource));
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");

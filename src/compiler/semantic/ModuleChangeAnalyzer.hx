@@ -125,13 +125,16 @@ class ModuleChangeAnalyzer {
 			signature += ":method-metadata:"
 				+ [for (method in abstractDecl.methods) if (method.isStatic && method.metadata != null)
 				method.name + "=" + fieldMetadataFingerprint(state, method.metadata)].join(";");
-			// An enum abstract's values, conformances and metadata (`@:annotation`) are part of how it types.
+			// An enum abstract's values, conformances and metadata (`@:annotation`) are part of how it types. Its readers inline
+			// the values at their declarations and its conformance members are located at the abstract, so their lines count too,
+			// as a static field initializer's do.
 			if (abstractDecl.values != null)
-				signature += ":enum[" + fieldMetadataFingerprint(state, abstractDecl.metadata) + "]{"
+				signature += ":enum@" + Std.string(state.source.lineAt(abstractDecl.span.start)) + "["
+					+ fieldMetadataFingerprint(state, abstractDecl.metadata) + "]{"
 					+ [
 						for (value in abstractDecl.values)
 							fieldMetadataFingerprint(state, value.metadata) + value.name + "="
-							+ state.source.slice(value.span.start, value.span.end)
+							+ sourceFingerprint(state, value.span)
 					].join(";") + "} implements " + (abstractDecl.conformances == null
 					? "" : [for (type in abstractDecl.conformances) SemanticSignature.parsed(type,
 					ast.aliases)].join(","));
