@@ -213,6 +213,12 @@ running program after `--`:
 ./scripts/haxeon run -- --verbose
 ```
 
+A program's standard output flushes at once on a terminal and is buffered into a pipe
+or a file. It is flushed before a read from standard input, a subprocess, a sleep and
+exit, and a fatal signal attempts a last flush; SIGKILL can lose the buffered tail.
+`Sys.stdout().flush()` flushes explicitly, and `HL_STDOUT_FLUSH=1` flushes after every
+print (`haxeon script.hx` sets it, so a script's lines appear as they are printed).
+
 For function breakpoints during debugging, set `"inline": false` in `haxeon.json`; inlining is on otherwise. The
 choice applies to the root project's compilation, including dependencies, and participates in action and compiler memo
 fingerprints. It does not disable the other IR passes. Direct compiler calls turn it off with `--no-inline`.
