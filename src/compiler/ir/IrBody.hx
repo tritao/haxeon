@@ -815,12 +815,13 @@ class IrBody {
 	 * is an internal error. For a pass that only knows whether a change pays once it has made it.
 	 */
 	public function beginTrial(into:IrBodyTrial):Void {
+		// What the body was before the trial: `editing` below marks it edited.
 		into.edits = edits;
+		into.edited = edited;
 		editing();
 		if (trial != null)
 			throw new InternalError('IR body $name has a trial open already');
 		trial = into;
-		into.edited = edited;
 		into.rows = opcodes.length;
 		into.operands = operandPool.length;
 		into.ints = ints.length;
