@@ -30,9 +30,13 @@ class TypedProgramAssembler {
 			session.enumRepresentations.discover(type);
 			session.representation.discoverGenericOwners(type, origin);
 		}
+		var signatures = new AnonymousTypeRegistry(session);
 		for (fn in functions) {
-			for (argument in fn.arguments)
+			for (argument in fn.arguments) {
+				signatures.recordSignature(fn.name, argument.type);
 				register(argument.type, fn.name);
+			}
+			signatures.recordSignature(fn.name, fn.result);
 			register(fn.result, fn.name);
 		}
 		for (classDecl in classes) {

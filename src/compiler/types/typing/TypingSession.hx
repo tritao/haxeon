@@ -233,10 +233,18 @@ class TypingSession {
 		return new CompileError(recoveredErrors[0], recoveredErrors.slice(1));
 	}
 
-	/** Merges the outputs of units typed in any order into the program's, in the order of `units` (declaration order). */
-	public function mergeUnits(units:Array<TypingOutput>):Void
+	/**
+	 * Merges the outputs of units typed in any order into the program's, in the order of `units` (declaration order), and
+	 * registers the anonymous types of the shared units merged with them.
+	 */
+	public function mergeUnits(units:Array<TypingOutput>):Void {
 		for (unit in units)
 			unit.mergeInto(programOutput, sharedOutputs, mergedUnits, null);
+		for (type in programOutput.takePendingAnonymousTypes())
+			anonymousTypeRegistry.discover(type);
+	}
+
+	final anonymousTypeRegistry:AnonymousTypeRegistry;
 
 	/**
 	 * The unit the anonymous types used here belong to: the unit's outermost body, or null for the user of the shared unit being
@@ -356,8 +364,8 @@ class TypingSession {
 		this.externals = externals == null ? [] : externals;
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
 		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
-		var anonymousTypes = new AnonymousTypeRegistry(this);
-		this.monomorphs = new MonomorphFrames(anonymousTypes.register);
+		anonymousTypeRegistry = new AnonymousTypeRegistry(this);
+		this.monomorphs = new MonomorphFrames(anonymousTypeRegistry.register);
 		this.representation = new TypeRepresentation(this);
 		this.enumRepresentations = new EnumRuntimeRepresentations(this);
 	}

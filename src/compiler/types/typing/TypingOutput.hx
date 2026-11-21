@@ -54,6 +54,12 @@ class TypingOutput {
 	final enumNames:Map<String, Bool> = [];
 	final uses:Array<UnitUse> = [];
 
+	/**
+	 * The anonymous types a shared unit's code met, which become the program's when the output is merged into it: a shared unit
+	 * no code uses (an abstract member typed for its errors) is not in the program, and neither are its types.
+	 */
+	final pendingAnonymousTypes:Array<CompilerType> = [];
+
 	/** Anonymous types a shared unit's bodies use before any of their own body contexts is open: its user's. */
 	final userAnonymousUses:Map<String, Array<AnonymousField>> = [];
 
@@ -91,6 +97,17 @@ class TypingOutput {
 
 	public function enumType(index:Int):CompilerType
 		return enums[index];
+
+	/** Holds `type` until this shared unit's output is merged into the program's (`takePendingAnonymousTypes`). */
+	public function deferAnonymousType(type:CompilerType):Void
+		pendingAnonymousTypes.push(type);
+
+	/** The anonymous types merged shared units met, for the program to register; the list starts over. */
+	public function takePendingAnonymousTypes():Array<CompilerType> {
+		var types = pendingAnonymousTypes.copy();
+		pendingAnonymousTypes.resize(0);
+		return types;
+	}
 
 	/** Attributes an anonymous type to `unit`; null for the user of this shared unit. */
 	public function recordAnonymousUse(unit:Null<String>, name:String, fields:Array<AnonymousField>):Void {
@@ -140,6 +157,8 @@ class TypingOutput {
 			owners.length, enumsFrom, enums.length);
 		records.mergeInto(program.records);
 		counters.mergeInto(program.counters);
+		for (type in pendingAnonymousTypes)
+			program.pendingAnonymousTypes.push(type);
 		if (user != null)
 			for (name => fields in userAnonymousUses)
 				program.records.recordAnonymousUse(user, name, fields);

@@ -492,7 +492,7 @@ class FrontendCompilation {
 				semanticAssembly.entryPoint, context.state.genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.state.lastTypedProgram : null,
 				semanticAssembly.facts, build.lowerToIr,
-				retainedFromPrevious(context, names, selected, build.lowerToIr,
+				retainedFromPrevious(context, names, selected, semanticAssembly.invalidated, build.lowerToIr,
 				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
 				previousSemantic), context.options.reverseTypingOrder, {
 					signatures: previousSignatures(context, names),
@@ -1726,13 +1726,23 @@ class FrontendCompilation {
 	 * generic owners and the other generated classes (no source declares them) they refer to, and the static fields they read.
 	 */
 	static function retainedFromPrevious(context:CompilationContext, modules:Array<String>, selected:Map<String, Bool>,
-			lowerToIr:Bool,
+			invalidated:Map<String, Bool>, lowerToIr:Bool,
 			declared:Map<String, Bool>, previousSemantic:Null<SemanticProgram>):Null<RetainedFromPrevious> {
 		var result:Map<String, Bool> = [],
 			retainedEnums:Map<String, Bool> = [],
 			previous = context.state.lastTypedProgram;
 		if (previous == null)
 			return null;
+		// As pruning keeps them (`pruneModule`): not typed again, and neither the function nor its origin invalidated.
+		var units:Map<String, Bool> = [];
+		for (module in modules) {
+			var state = context.state.modules.get(module);
+			if (state != null)
+				for (name => fn in state.typedFunctions)
+					if (!selected.exists(name) && !invalidated.exists(name)
+						&& (fn.origin == null || !invalidated.exists(fn.origin)))
+						units.set(name, true);
+		}
 		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
 		if (previousSemantic == null)
 			throw new InternalError("Internal error: previous typed program has no semantic program");
@@ -1750,14 +1760,16 @@ class FrontendCompilation {
 			return {
 				program: previous,
 				classes: result,
-				enums: retainedEnums
+				enums: retainedEnums,
+				units: units
 			};
 		// A type-only request has no complete IR graph to inspect.
 		if (!lowerToIr)
 			return {
 				program: previous,
 				classes: known,
-				enums: knownEnums
+				enums: knownEnums,
+				units: units
 			};
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [];
@@ -1870,7 +1882,8 @@ class FrontendCompilation {
 		return {
 			program: previous,
 			classes: result,
-			enums: retainedEnums
+			enums: retainedEnums,
+			units: units
 		};
 	}
 

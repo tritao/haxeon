@@ -533,7 +533,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		for (name in equalityNames)
 			typedFunctions.push(equalities.get(name));
 		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null,
-			program.classes);
+			program.classes, retained == null ? null : retained.units);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		var generatedDoneAt = Sys.time() * 1000.0;
@@ -595,9 +595,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	/**
 	 * A unit this build did not type keeps the anonymous types it registered when it was typed, as long as it still exists: the
 	 * program lists them, and so does a fresh build, which types every unit. A field's initializer is the unit `Class.__init.x`
-	 * (`InitializerUnit`).
+	 * (`InitializerUnit`); a generated function (a specialization, a lambda) exists while the build keeps it (`kept`).
 	 */
-	function keepAnonymousUnits(previous:Null<TypedProgram>, classes:Array<AstClass>):Void {
+	function keepAnonymousUnits(previous:Null<TypedProgram>, classes:Array<AstClass>,
+			kept:Null<Map<String, Bool>>):Void {
 		if (previous == null)
 			return;
 		var fields:Map<String, Bool> = [], registry = new AnonymousTypeRegistry(session);
@@ -610,7 +611,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				|| session.programOutput.records.hasAnonymousUnit(unit))
 				continue;
 			var initialized = InitializerUnit.field(unit),
-				exists = session.signatures.exists(unit) || initialized != null && fields.exists(initialized);
+				exists = session.signatures.exists(unit) || initialized != null && fields.exists(initialized)
+					|| kept != null && kept.exists(unit);
 			if (!exists)
 				continue;
 			var uses:Map<String, Array<compiler.types.Type.AnonymousField>> = [];

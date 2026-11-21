@@ -13,4 +13,11 @@ typedef RetainedFromPrevious = {
 
 	/** The enum specializations retained code uses. */
 	final enums:Map<String, Bool>;
+
+	/**
+	 * The functions of the previous program this build keeps without typing them again, generated ones (specializations,
+	 * lambdas, adapters) included: whose origin is not invalidated. Their units keep the anonymous types they registered
+	 * (`ProgramTyper.keepAnonymousUnits`).
+	 */
+	final units:Map<String, Bool>;
 }
