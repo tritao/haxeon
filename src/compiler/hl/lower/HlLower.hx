@@ -756,22 +756,22 @@ class HlLower {
 		};
 
 	/** Byte shift of one element of an Int or Float array, whose storage the compiler lays out itself; null for any other array. */
-	static inline final VALUE_ARRAY_VALIDATE = "__value_array_validate";
+	public static inline final VALUE_ARRAY_VALIDATE = "__value_array_validate";
 
-	static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
+	public static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
 
-	static inline final VALUE_ARRAY_READ = "__value_array_read_";
+	public static inline final VALUE_ARRAY_READ = "__value_array_read_";
 
 	/**
 	 * Whether a scalar read of the same element as the read at `position`, whose value is used, is beside it, with nothing
 	 * but constants and reads of that element between: that read checks the element (in range, present) as this one would.
 	 */
-	function usedReadNearby(row:Int, uses:Array<Int>):Bool {
-		return usedReadBeside(row, uses, true) || usedReadBeside(row, uses, false);
+	public static function usedReadNearby(body:IrBody, row:Int, uses:Array<Int>):Bool {
+		return usedReadBeside(body, row, uses, true) || usedReadBeside(body, row, uses, false);
 	}
 
 	/** `usedReadNearby` on one side of `row`: the rows before it, or those after it. */
-	function usedReadBeside(row:Int, uses:Array<Int>, before:Bool):Bool {
+	static function usedReadBeside(body:IrBody, row:Int, uses:Array<Int>, before:Bool):Bool {
 		var array = body.operand(row, 0),
 			index = body.operand(row, 1),
 			at = before ? body.previousRow(row) : body.nextRow(row);
@@ -792,27 +792,27 @@ class HlLower {
 	}
 
 	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
-	static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
+	public static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
 
-	static inline final VALUE_ARRAY_FORWARD_TYPE = "__value_array_forward_type";
+	public static inline final VALUE_ARRAY_FORWARD_TYPE = "__value_array_forward_type";
 
 	/** Where a value array keeps its scalar stride in bits, and an array its size and data; `value_arrays.c` asserts them. */
-	static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
+	public static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
 
-	static inline final ARRAY_SIZE_OFFSET = 16;
+	public static inline final ARRAY_SIZE_OFFSET = 16;
 
 	/** Where a value array keeps its validity lane (`value_arrays.c` asserts it). */
-	static inline final VALUE_ARRAY_VALIDITY_OFFSET = 104;
-	static inline final ARRAY_DATA_OFFSET = 24;
+	public static inline final VALUE_ARRAY_VALIDITY_OFFSET = 104;
+	public static inline final ARRAY_DATA_OFFSET = 24;
 
 	/** The type word at the start of an array's storage. */
-	static inline final LANE_HEADER_BYTES = 8;
+	public static inline final LANE_HEADER_BYTES = 8;
 
 	/** How far back from a call its constant arguments are looked for; the IR emits them right before it. */
-	static inline final CONSTANT_LOOKBACK = 8;
+	public static inline final CONSTANT_LOOKBACK = 8;
 
 	/** The Int or Bool constant (a Bool as 0 or 1) `value` is, when its definition is just before `index`; else -1. */
-	function constantBefore(row:Int, value:IrValueId):Int {
+	static function constantBefore(body:IrBody, row:Int, value:IrValueId):Int {
 		var position = body.previousRow(row), remaining = CONSTANT_LOOKBACK;
 		while (position >= 0 && remaining > 0) {
 			if ((body.output(position):Int) == (value:Int))
@@ -830,7 +830,7 @@ class HlLower {
 	}
 
 	/** Whether a value array of `array`'s type is read inline (`hasValidity` tells how). */
-	static function readsInline(array:IrType):Bool
+	public static function readsInline(array:IrType):Bool
 		return switch array {
 			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))), Array(Obj(_)): true;
 			default: false;
@@ -840,7 +840,7 @@ class HlLower {
 	 * Whether a value array of `array`'s type keeps a presence bit per element (`IrValueArrayLayout`): arrays of non-null
 	 * structs do; enums (their null is tag zero) and nullable structs do not.
 	 */
-	static function hasValidity(array:IrType):Bool
+	public static function hasValidity(array:IrType):Bool
 		return switch array {
 			case Array(Obj(_)): true;
 			default: false;
@@ -850,12 +850,12 @@ class HlLower {
 	 * The slot `__value_array_read_i32` at `index` of `instructions` reads, as constants, when it is read inline
 	 * (`lowerValueArrayRead`); null otherwise.
 	 */
-	function inlineValueArraySlot(row:Int):Null<InlineValueSlot> {
+	public static function inlineValueArraySlot(body:IrBody, row:Int):Null<InlineValueSlot> {
 		if (body.operandCount(row) != 5 || !readsInline(body.valueType(body.operand(row, 0))))
 			return null;
-		var offset = constantBefore(row, body.operand(row, 2)),
-			width = constantBefore(row, body.operand(row, 3)),
-			signed = constantBefore(row, body.operand(row, 4));
+		var offset = constantBefore(body, row, body.operand(row, 2)),
+			width = constantBefore(body, row, body.operand(row, 3)),
+			signed = constantBefore(body, row, body.operand(row, 4));
 		return offset >= 0 && offset % 8 == 0 && signed >= 0 && (width == 8 || width == 16 || width == 32)
 			? {offset: offset, width: width, signed: signed == 1} : null;
 	}
@@ -1020,7 +1020,7 @@ class HlLower {
 	 * The HashLink runtime's scalar reads validate their element as `__value_array_validate` does, with the same errors, so
 	 * a validation right before one adds nothing: a payload-free enum element is read as exactly that pair.
 	 */
-	function scalarReadFollows(row:Int):Bool {
+	public static function scalarReadFollows(body:IrBody, row:Int):Bool {
 		if (body.operandCount(row) != 2)
 			return false;
 		var array = body.operand(row, 0), index = body.operand(row, 1), position = body.nextRow(row);
@@ -1231,7 +1231,7 @@ class HlLower {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.Call && body.aux(row) == valueArrayRead
-					&& inlineValueArraySlot(row) != null) {
+					&& inlineValueArraySlot(body, row) != null) {
 					viewedArrays.set(body.operand(row, 0), true);
 					hasViewedArrays = true;
 				}
@@ -1868,13 +1868,13 @@ class HlLower {
 			fusedPendingFloat = false;
 			return;
 		}
-		var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(row) : null;
+		var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(body, row) : null;
 		if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(row)) {
 			// A previous successful dereference or check already proved this SSA receiver non-null.
 		} else if (StringTools.startsWith(functionName, VALUE_ARRAY_READ) && uses[output] == 0
-			&& firstBinding[output] < 0 && usedReadNearby(row, uses)) {
+			&& firstBinding[output] < 0 && usedReadNearby(body, row, uses)) {
 			// A field of the element nothing reads; the read beside it checks the element the same way.
-		} else if (functionName == VALUE_ARRAY_VALIDATE && scalarReadFollows(row)) {
+		} else if (functionName == VALUE_ARRAY_VALIDATE && scalarReadFollows(body, row)) {
 			// The read checks the same element the same way (`realtime_value_array_check_read`).
 		} else if (inlineSlot != null) {
 			lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
@@ -1906,39 +1906,22 @@ class HlLower {
 		var native = cNatives.get(functionName);
 		if (native == null)
 			throw new InternalError('Unknown ordinary C function "$functionName"');
-		for (type in native.arguments)
-			if (unsupportedCDispatchArgument(type))
-				throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
-		if ((switch (native.result) {
-			case Void: false;
-			default: true;
-		}) && unsupportedCDispatchResult(native.result))
-			throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
-		var callArguments = [
-			temporaryRegister(IrType.RawPtr, registerTypes),
-			temporaryRegister(IrType.RawPtr, registerTypes),
-			temporaryRegister(IrType.RawPtr, registerTypes)
-		];
-		instructions.push(HlInstruction.LoadString(callArguments[0], internString(native.library)));
-		instructions.push(HlInstruction.LoadString(callArguments[1], internString(native.symbol)));
-		instructions.push(HlInstruction.LoadString(callArguments[2], internString(native.signature)));
-		var pointerResult = isNativePointer(native.result),
-			bytesResult = isManagedPointerBytes(native),
-			aggregateResult = isAggregateResult(native),
-			utf8Result = isUtf8Result(native);
-		if (pointerResult || bytesResult || utf8Result) {
+		var invocation = cNativeInvocation(native, argumentCount);
+		var callArguments = [for (_ in 0...3) temporaryRegister(IrType.RawPtr, registerTypes)];
+		for (index in 0...3)
+			instructions.push(HlInstruction.LoadString(callArguments[index], internString(invocation.strings[index])));
+		if (invocation.nullable != null) {
 			var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
 				release = temporaryRegister(IrType.RawPtr, registerTypes),
 				nullable = temporaryRegister(IrType.Bool, registerTypes);
-			instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
-			instructions.push(HlInstruction.LoadString(release,
-				internString(native.pointerRelease == null ? "" : native.pointerRelease)));
-			instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
+			instructions.push(HlInstruction.LoadString(ownership, internString(invocation.strings[3])));
+			instructions.push(HlInstruction.LoadString(release, internString(invocation.strings[4])));
+			instructions.push(HlInstruction.LoadBool(nullable, invocation.nullable));
 			callArguments.push(ownership);
 			callArguments.push(release);
-			if (bytesResult) {
+			if (invocation.strings.length > 5) {
 				var length = temporaryRegister(IrType.RawPtr, registerTypes);
-				instructions.push(HlInstruction.LoadString(length, internString(native.pointerLength)));
+				instructions.push(HlInstruction.LoadString(length, internString(invocation.strings[5])));
 				callArguments.push(length);
 			}
 			callArguments.push(nullable);
@@ -1951,25 +1934,65 @@ class HlLower {
 				instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 			callArguments.push(boxed);
 		}
-		var dynamicResult = temporaryRegister(pointerResult
-			? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
-			? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
-			registerTypes);
-		instructions.push(HlInstruction.CallN(dynamicResult,
-			requireFunction(pointerResult ? '__c_native_pointer_invoke_${argumentCount}'
-			: bytesResult ? '__c_native_bytes_invoke_${argumentCount}' : aggregateResult
-			? '__c_native_aggregate_invoke_${argumentCount}' : utf8Result
-			? '__c_native_utf8_invoke_${argumentCount}' : '__c_native_invoke_${argumentCount}'),
-			callArguments));
-		if ((switch (native.result) {
-			case Void: true;
-			default: false;
-		}))
+		var dynamicResult = temporaryRegister(invocation.result, registerTypes);
+		instructions.push(HlInstruction.CallN(dynamicResult, requireFunction(invocation.invoker), callArguments));
+		if (invocation.isVoid)
 			defineRegister(output, registers, registerTypes);
-		else if (pointerResult || bytesResult || aggregateResult || utf8Result)
+		else if (!invocation.castsResult)
 			instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
 		else
 			instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
+	}
+
+	/**
+	 * How a call of ordinary C function `native` with `argumentCount` arguments goes through the runtime's dispatch: the invoke
+	 * native, the strings (library, symbol, signature, then for a pointer result its ownership, release and length) and the
+	 * nullable flag, which go before the boxed arguments with the flag last, the type the invoker returns, and whether
+	 * that is cast to the result. Both HashLink backends call it so.
+	 */
+	public static function cNativeInvocation(native:IrCNative, argumentCount:Int):{
+		invoker:String,
+		strings:Array<String>,
+		nullable:Null<Bool>,
+		result:IrType,
+		castsResult:Bool,
+		isVoid:Bool
+	} {
+		var functionName = native.name;
+		for (type in native.arguments)
+			if (unsupportedCDispatchArgument(type))
+				throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
+		var isVoid = switch (native.result) {
+			case Void: true;
+			default: false;
+		};
+		if (!isVoid && unsupportedCDispatchResult(native.result))
+			throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
+		var strings = [native.library, native.symbol, native.signature];
+		var pointerResult = isNativePointer(native.result),
+			bytesResult = isManagedPointerBytes(native),
+			aggregateResult = isAggregateResult(native),
+			utf8Result = isUtf8Result(native);
+		var nullable:Null<Bool> = null;
+		if (pointerResult || bytesResult || utf8Result) {
+			strings.push(native.pointerOwnership);
+			strings.push(native.pointerRelease == null ? "" : native.pointerRelease);
+			if (bytesResult)
+				strings.push(native.pointerLength);
+			nullable = native.pointerNullable;
+		}
+		return {
+			invoker: pointerResult ? '__c_native_pointer_invoke_${argumentCount}' : bytesResult
+				? '__c_native_bytes_invoke_${argumentCount}' : aggregateResult
+				? '__c_native_aggregate_invoke_${argumentCount}' : utf8Result
+				? '__c_native_utf8_invoke_${argumentCount}' : '__c_native_invoke_${argumentCount}',
+			strings: strings,
+			nullable: nullable,
+			result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
+				? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
+			castsResult: !(pointerResult || bytesResult || aggregateResult || utf8Result),
+			isVoid: isVoid
+		};
 	}
 
 	function lowerFieldGet(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
@@ -2630,7 +2653,7 @@ class HlLower {
 	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
 	 * including every call, forgets them. Array writes only ever grow an array, so they keep them.
 	 */
-	static function keepsArrayBounds(opcode:IrOpcode):Bool
+	public static function keepsArrayBounds(opcode:IrOpcode):Bool
 		return switch opcode {
 			case IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString, IrOpcode.ConstBool,
 				IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64,
@@ -3295,7 +3318,7 @@ class HlLower {
 }
 
 /** A value array scalar slot read inline: its bit offset in the element, its width in bits and whether it is signed. */
-private typedef InlineValueSlot = {
+typedef InlineValueSlot = {
 	final offset:Int;
 	final width:Int;
 	final signed:Bool;

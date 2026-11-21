@@ -43,8 +43,19 @@ class HlcModule {
 	final native:Array<Bool> = [];
 	final objects:Map<String, IrObject> = [];
 
-	/** The program's objects as `HlLower`'s analyses read them. */
+	/** The program's objects and typed interface entries as `HlLower`'s analyses read them. */
 	public final view:compiler.hl.lower.HlLoweringView;
+
+	/** The program's ordinary C functions by name (`CNativeCall`). */
+	public final cNatives:Map<String, compiler.ir.Ir.IrCNative> = [];
+
+	/** Whether a function reads value arrays inline, which `hlc.h`'s view helper serves. */
+	public var readsValueArrays = false;
+
+	/** The object types allocated inline, each with its descriptor's index in `hlc_alloc_data`. */
+	final allocationTypes:Array<Int> = [];
+
+	final allocationIndices:Map<Int, Int> = [];
 
 	public function new(code:HlCode, symbols:HlSymbolTable, program:IrProgram, slots:Map<String, Int>) {
 		this.code = code;
@@ -59,7 +70,10 @@ class HlcModule {
 		typeRef = symbols.internType(IrType.TypeRef);
 		for (object in program.objects)
 			objects.set(object.name, object);
-		view = new compiler.hl.lower.HlLoweringView([], objects);
+		view = new compiler.hl.lower.HlLoweringView(new compiler.hl.lower.HlTypedInterfaceTables(program).keys,
+			objects);
+		for (native in program.cNatives)
+			cNatives.set(native.name, native);
 		for (fn in code.functions)
 			place(fn.functionIndex, fn.type, false);
 		for (entry in code.natives)
@@ -206,6 +220,20 @@ class HlcModule {
 		throw new InternalError('C backend: no method at prototype slot $index of ${types.typeName(type)}');
 	}
 
+	/**
+	 * The index of type `type`'s inline allocation descriptor in `hlc_alloc_data`, which the entry point fills with the
+	 * collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything runs.
+	 */
+	public function allocationIndex(type:Int):Int {
+		var index = allocationIndices.get(type);
+		if (index == null) {
+			index = allocationTypes.length;
+			allocationTypes.push(type);
+			allocationIndices.set(type, index);
+		}
+		return index;
+	}
+
 	/** Whether slot `slot` has the signature the runtime takes as an object's `__compare` (`hl_get_obj_rt`). */
 	public function isCompare(slot:Int):Bool {
 		var signature = types.signature(slotTypes[slot]);
@@ -303,16 +331,81 @@ class HlcModule {
 		buffer.add("#endif\n\n");
 		buffer.add("extern hl_type *hlc_types;\nextern unsigned char *hlc_globals;\nextern void **hlc_slots;\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
+		buffer.add("extern hl_jit_alloc_data hlc_alloc_data[];\n");
 		buffer.add("static inline double hlc_f64( unsigned int high, unsigned int low ) {\n");
 		buffer.add("\tunsigned long long bits = ((unsigned long long)high << 32) | low; double value;\n");
 		buffer.add("\tmemcpy(&value,&bits,sizeof(value)); return value;\n}\n\n");
+		buffer.add(ALLOCATION_HELPER);
 		types.structDeclarations(buffer);
 		buffer.add("\n");
+		if (readsValueArrays)
+			valueArrayHelper(buffer);
 		for (slot in 0...slotTypes.length)
 			if (slotTypes[slot] >= 0 && !native[slot])
 				buffer.add('${prototype(slot)}; /* ${slotName(slot)} */\n');
 		buffer.add("\n#endif\n");
 		return buffer.toString();
+	}
+
+	/**
+	 * `hlc_new`: an object allocated from the thread's allocation buffer as the JIT's inline allocation does, by the
+	 * descriptor the collector gave for its type (`hl_jit_alloc_data`), and through the collector's slow path otherwise. Where
+	 * the collector gives no descriptor (other targets, debug collectors) the descriptor is empty and `hl_alloc_obj` allocates.
+	 */
+	static final ALLOCATION_HELPER =
+		"#if defined(__GNUC__) && defined(__linux__) && (defined(__x86_64__) || defined(__aarch64__))\n"
+		+ "#define HLC_INLINE_ALLOC\n"
+		+ "static inline unsigned char *hlc_thread_pointer( void ) {\n"
+		+ "\tunsigned char *p;\n"
+		+ "#if defined(__x86_64__)\n"
+		+ "\t__asm__(\"mov %%fs:0,%0\" : \"=r\"(p));\n"
+		+ "#else\n"
+		+ "\t__asm__(\"mrs %0, tpidr_el0\" : \"=r\"(p));\n"
+		+ "#endif\n"
+		+ "\treturn p;\n}\n"
+		+ "#endif\n"
+		+ "static inline void *hlc_new( hl_jit_alloc_data *d, hl_type *t ) {\n"
+		+ "#ifdef HLC_INLINE_ALLOC\n"
+		+ "\tif( !d->type ) return hl_alloc_obj(t);\n"
+		+ "\tfor(int i=0;i<d->nguards;i++) {\n"
+		+ "\t\thl_jit_alloc_guard *g = d->guards + i;\n"
+		+ "\t\tuint64 v = g->bytes == 1 ? *(volatile unsigned char*)g->address : g->bytes == 4 ? *(volatile unsigned int*)g->address : *(volatile uint64*)g->address;\n"
+		+ "\t\tif( v & g->mask ) return hl_jit_alloc_slow(t);\n"
+		+ "\t}\n"
+		+ "\tif( !d->runtime->allocation_ready ) return hl_jit_alloc_slow(t);\n"
+		+ "\tunsigned char *th = *(unsigned char**)(hlc_thread_pointer() + d->tls_offset);\n"
+		+ "\tif( !th ) return hl_jit_alloc_slow(t);\n"
+		+ "\tunsigned char *tlab = *(unsigned char**)(th + d->tlab_field);\n"
+		+ "\tif( !tlab ) return hl_jit_alloc_slow(t);\n"
+		+ "\tunsigned char **slot = (unsigned char**)(tlab + d->slot_offset);\n"
+		+ "\tunsigned char *p = slot[0];\n"
+		+ "\tif( !p || (uintptr_t)(p + d->block) > (uintptr_t)slot[1] ) return hl_jit_alloc_slow(t);\n"
+		+ "\tslot[0] = p + d->block;\n"
+		+ "\tfor(int o=HL_WSIZE;o<d->block;o+=HL_WSIZE) *(void**)(p + o) = NULL;\n"
+		+ "\t*(hl_type**)p = d->type;\n"
+		+ "\treturn p;\n"
+		+ "#else\n"
+		+ "\treturn hl_alloc_obj(t);\n"
+		+ "#endif\n"
+		+ "}\n\n";
+
+	/**
+	 * `hlc_value_array_view`: the value array a header leads to, as `HlLower.resolveValueArrayView` resolves it (the header
+	 * itself, or a forwarding header's data; null for anything else), and its stride in bytes.
+	 */
+	function valueArrayHelper(buffer:StringBuf):Void {
+		var header = functionPointer(requireSlot(compiler.hl.lower.HlLower.VALUE_ARRAY_HEADER_TYPE)),
+			forward = functionPointer(requireSlot(compiler.hl.lower.HlLower.VALUE_ARRAY_FORWARD_TYPE));
+		buffer.add("static hl_type *hlc_value_array_header_t, *hlc_value_array_forward_t;\n");
+		buffer.add("static inline vbyte *hlc_value_array_view( void *header, int *stride ) {\n");
+		buffer.add("\thl_type *t = header ? ((vdynamic*)header)->t : &hlt_void;\n\tvbyte *a;\n");
+		buffer.add('\tif( !hlc_value_array_header_t ) hlc_value_array_header_t = (hl_type*)$header();\n');
+		buffer.add("\tif( t == hlc_value_array_header_t ) a = (vbyte*)header;\n\telse {\n");
+		buffer.add('\t\tif( !hlc_value_array_forward_t ) hlc_value_array_forward_t = (hl_type*)$forward();\n');
+		buffer.add('\t\tif( t != hlc_value_array_forward_t ) return NULL;\n');
+		buffer.add('\t\ta = *(vbyte**)((vbyte*)header + ${compiler.hl.lower.HlLower.ARRAY_DATA_OFFSET});\n\t}\n');
+		buffer.add('\tif( a ) *stride = (int)(*(unsigned int*)(a + ${compiler.hl.lower.HlLower.VALUE_ARRAY_STRIDE_OFFSET}) >> 3);\n');
+		buffer.add("\treturn a;\n}\n\n");
 	}
 
 	/**
@@ -354,6 +447,9 @@ class HlcModule {
 			buffer.add((slot % 4 == 0 ? "\n\t" : " ")
 				+ (slotTypes[slot] >= 0 && !native[slot] ? '(void*)${cNames[slot]},' : "NULL,"));
 		buffer.add("\n\tNULL};\n\n");
+		buffer.add('const int hlc_alloc_count = ${allocationTypes.length};\n');
+		buffer.add('const int hlc_alloc_types[] = {${allocationTypes.concat([-1]).join(",")}};\n');
+		buffer.add('hl_jit_alloc_data hlc_alloc_data[${allocationTypes.length + 1}];\n\n');
 		buffer.add('const int hlc_global_count = ${globalOffsets.length};\n');
 		buffer.add('const int hlc_global_offsets[] = {${globalOffsets.concat([-1]).join(",")}};\n\n');
 		buffer.add("/* Object layouts: type, field count, then field index and offset pairs; -1 ends the list. */\n");

@@ -185,14 +185,22 @@ no IR or C text, so `CompileOptions.key` leaves them out.
 ### State
 
 Milestone 1 is done. `tests/aot/test-aot-programs.sh --all` passes 639 of the 643 programs of `tests/programs` with the
-JIT's exact exit code, stdout and stderr; `tests/aot/programs.txt` lists them and is the runner's default. The four
-others differ only by Haxe stack traces, milestone 3 (`throw-string`, `try-rethrow`, `jit-stack-trace`,
-`defer-exception-stack`): uncaught exceptions print no frames, and `CallStack` sees none. No IR construct of the
-programs is unsupported.
+JIT's exact exit code, stdout and stderr; `tests/aot/programs.txt` lists them and is the runner's default, and the `ci` suite
+`aot-programs` runs it. The four others differ only by Haxe stack traces, milestone 3 (`throw-string`, `try-rethrow`,
+`jit-stack-trace`, `defer-exception-stack`). No IR construct of the programs is unsupported.
 
-Not yet done in milestone 1's lowering, each a performance difference, not a semantic one: `HlLower`'s inline runtime
-fast paths (array push, bytes get and set) and value-array reads call their helpers; the typed interface method table
-prologue of dispatch functions is left out (the body is the fallback it falls back to); natives are called through the
-slot table; `IrLoopBounds` proofs do not drop array checks; allocation is `hl_alloc_obj`, not the JIT's inline
-allocation. A first small benchmark (allocation, a linked list, a String map, recursion) runs as fast as on the JIT;
-the compiler built with `hlc` is the measure that matters (milestone 5).
+Milestone 2 is done but for nothing open: the C lowering writes what `HlLower` writes inline, from the same decisions
+(`HlLower`'s value array constants and read selection, `HlLower.cNativeInvocation`): the array push and byte read and write
+fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves the JIT start-up time, which C does not pay);
+value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
+table prologue of dispatch functions; ordinary C function calls (`CNativeCall`) through the runtime's dispatch. Array bounds
+checks are inline compares, dropped where an earlier check in the block still holds (`HlLower.keepsArrayBounds`) or the loop
+proves the index in range (`IrLoopBounds`). Objects are allocated by `hlc_new`, the JIT's inline allocation driven by the
+collector's own descriptor (`hl_jit_alloc_prepare`, filled at start-up); the JIT has it opt-in only.
+
+Measured on the cross-language benchmarks (`benchmarks/cross-lang`, first bench input, median of 5 interleaved runs, wall time,
+machine loaded by other work at a load of about 5 to 7), JIT, milestone 1, milestone 2: binarytrees 2.40, 2.46, 2.52 s;
+nbody 0.48, 0.50, 0.48 s; spectral-norm 0.41, 0.74, 0.31 s; fasta 0.90, 0.96, 0.85 s; merkletrees 0.76, 0.81, 0.86 s;
+lru 0.27, 0.28, 0.28 s. The array checks are what spectral-norm and fasta gain. binarytrees and merkletrees spend most of
+their time in the collector's marking threads, which the generated code does not change; inline allocation shows no gain
+there. nbody and lru are within noise.

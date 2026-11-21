@@ -4,6 +4,7 @@ import compiler.backend.c.HlcTypes.HlcField;
 import compiler.core.InternalError;
 import compiler.hl.HlType;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
+import compiler.hl.lower.HlLower;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBody;
 import compiler.ir.IrBodyGraph;
@@ -51,6 +52,21 @@ class HlcFunctionLower {
 	/** The `array:index` pairs of Int and Float arrays an access in the block being lowered validated. */
 	final validatedAccesses:Map<String, Bool> = [];
 
+	/** The `array:index` pairs a check proved in range, until a row that may shrink an array (`HlLower.keepsArrayBounds`). */
+	final provenInRange:Map<String, Bool> = [];
+
+	/** The loops' proofs of array indices in range (`IrLoopBounds`), made when an access first asks. */
+	var loopBounds:Null<compiler.ir.IrLoopBounds> = null;
+
+	/** The block being lowered, by id. */
+	var currentBlock = -1;
+
+	/** The array values read inline (`HlLower.inlineValueArraySlot`), whose value array view is resolved where they are defined. */
+	final viewedArrays:Map<Int, Bool> = [];
+
+	@:processWide("an empty set of calls known not to resize arrays, never added to")
+	static final noPureCalls:Map<String, Bool> = [];
+
 	public function new(module:HlcModule) {
 		this.module = module;
 		this.types = module.types;
@@ -89,8 +105,13 @@ class HlcFunctionLower {
 			return scalarLocalTypes.length - 1;
 		});
 		hasTry = false;
+		loopBounds = null;
+		viewedArrays.clear();
 		var phis:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
+			if (body.opcode(row) == IrOpcode.Call && body.symbol(row).name == HlLower.VALUE_ARRAY_READ_I32
+				&& HlLower.inlineValueArraySlot(body, row) != null)
+				viewedArrays.set(body.operand(row, 0), true);
 			switch body.opcode(row) {
 				case IrOpcode.ConstNull:
 					nullValues[body.output(row)] = true;
@@ -123,6 +144,10 @@ class HlcFunctionLower {
 		for (local in 0...scalarLocalTypes.length)
 			if (!types.isVoid(scalarLocalTypes[local]))
 				out.add('\t${types.cType(scalarLocalTypes[local])}${hasTry ? " volatile" : ""} s$local;\n');
+		for (array in viewedArrays.keys()) {
+			module.readsValueArrays = true;
+			out.add('\tvbyte *${hasTry ? " volatile" : ""} va$array = NULL; int vs$array = 0;\n');
+		}
 		var traps:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
 			if (body.opcode(row) == IrOpcode.BeginTry) {
@@ -134,11 +159,50 @@ class HlcFunctionLower {
 				}
 			}
 		});
+		var key = module.view.typedInterfaceKey(body.name);
+		if (key != null)
+			typedInterfacePrologue(key, arguments, signature);
+		for (argument in arguments)
+			defineView(argument);
 		for (block in 0...body.blockCount())
 			if (reachable[block])
 				lowerBlock(block, traps);
 		out.add("}\n\n");
 	}
+
+	/**
+	 * `HlLower`'s typed interface method table prologue of a dispatch function: the receiver's class's private entry for the
+	 * method, when it has one, is called directly; otherwise the body, the dispatch by name, runs.
+	 */
+	function typedInterfacePrologue(key:String, arguments:Array<IrValueId>,
+			signature:{arguments:Array<Int>, result:Int}):Void {
+		var slotNative = module.requireSlot(compiler.hl.lower.HlTypedInterfaceTables.SLOT_NATIVE),
+			entryNative = module.requireSlot(compiler.hl.lower.HlTypedInterfaceTables.ENTRY_NATIVE),
+			keyType = HlRemap.typeIndex(module.symbols, IrType.Abstract(key)),
+			slotType = module.slotResult(slotNative);
+		var receiver = '(vdynamic*)${v(arguments[0])}';
+		out.add('\t{ static ${types.cType(slotType)} slot; if( !slot ) slot = ${callExpression(slotNative, [typeAddress(keyType)], [module.typeRef])};\n');
+		out.add('\tvclosure *entry = ${callExpression(entryNative, [receiver, "slot"], [module.dyn, slotType])};\n');
+		var parameters = ["vdynamic*"]
+			.concat([for (index in 1...signature.arguments.length) types.cType(signature.arguments[index])]),
+			values = [receiver].concat([for (index in 1...arguments.length) v(arguments[index])]);
+		var call = '((${types.cType(signature.result)} (*)(${parameters.join(",")}))entry->fun)(${values.join(",")})';
+		out.add(types.isVoid(signature.result)
+			? '\tif( entry ) { $call; return; } }\n' : '\tif( entry ) return $call; }\n');
+	}
+
+	/** The scalar local holding field `name` of value place `value`. */
+	function scalarSlot(value:IrValueId, name:String):Int {
+		var local = scalarLocals.get(value);
+		if (local == null)
+			throw new InternalError('IR value ${(value : Int)} of ${body.name} is not a scalar local');
+		return cast local.fields.get(name);
+	}
+
+	/** Resolves the value array view of `array` where it is defined, when it is read inline (`HlLower.defineValueArrayView`). */
+	function defineView(array:IrValueId):Void
+		if (viewedArrays.exists(array))
+			line('va$array = hlc_value_array_view(${v(array)},&vs$array);');
 
 	/** The blocks control reaches from the entry, through branches and traps: as for `HlLower`, the others are not written. */
 	function markReachable():Void {
@@ -177,13 +241,19 @@ class HlcFunctionLower {
 	function lowerBlock(block:Int, traps:Map<Int, Bool>):Void {
 		var id = body.blockId(block);
 		out.add('b$id:;\n');
+		currentBlock = id;
 		validatedAccesses.clear();
+		provenInRange.clear();
 		var terminator = body.terminatorRow(block), row = body.firstRow(block);
 		if (terminator < 0)
 			throw new InternalError('Reachable IR block $id of ${body.name} has no terminator');
 		while (row >= 0 && row != terminator) {
 			position(row);
+			if (!HlLower.keepsArrayBounds(body.opcode(row)))
+				provenInRange.clear();
 			lowerRow(row, traps);
+			if (body.output(row).exists() && body.opcode(row) != IrOpcode.Catch)
+				defineView(body.output(row));
 			row = body.nextRow(row);
 		}
 		position(terminator);
@@ -353,26 +423,31 @@ class HlcFunctionLower {
 					module.dyn);
 			case IrOpcode.MethodCall:
 				lowerMethodCall(row);
+			case IrOpcode.CNativeCall:
+				lowerCNativeCall(row);
 			case IrOpcode.ValueInit if (scalarLocals.get(output) != null):
 				var local = scalarLocals.get(output);
-				for (field in local.declarations) {
-					var slot = local.fields.get(field.name);
-					if (!types.isVoid(scalarLocalTypes[slot]))
-						line('s$slot = ${types.isPointer(scalarLocalTypes[slot]) ? "NULL" : "0"};');
-				}
+				if (local != null)
+					for (field in local.declarations) {
+						var slot:Int = cast local.fields.get(field.name);
+						if (!types.isVoid(scalarLocalTypes[slot]))
+							line('s$slot = ${types.isPointer(scalarLocalTypes[slot]) ? "NULL" : "0"};');
+					}
 			case IrOpcode.NewObject, IrOpcode.ValueInit:
 				var type = typeOf(output);
 				switch types.kind(type) {
-					case Obj, Struct: assign(row, 'hl_alloc_obj(${typeAddress(type)})', module.dyn);
+					case Obj: assign(row,
+						'hlc_new(&hlc_alloc_data[${module.allocationIndex(type)}],${typeAddress(type)})', module.dyn);
+					case Struct: assign(row, 'hl_alloc_obj(${typeAddress(type)})', module.dyn);
 					case Virtual: assign(row, 'hl_alloc_virtual(${typeAddress(type)})', module.dyn);
 					case DynObj: assign(row, 'hl_alloc_dynobj()', module.dyn);
 					default: throw unsupported('allocation of ${types.typeName(type)}');
 				}
 			case IrOpcode.FieldGet if (scalarLocals.get(body.operand(row, 0)) != null):
-				var slot = scalarLocals.get(body.operand(row, 0)).fields.get(body.symbol(row).name);
+				var slot = scalarSlot(body.operand(row, 0), body.symbol(row).name);
 				assign(row, 's$slot', scalarLocalTypes[slot]);
 			case IrOpcode.FieldSet if (scalarLocals.get(body.operand(row, 0)) != null):
-				var slot = scalarLocals.get(body.operand(row, 0)).fields.get(body.symbol(row).name);
+				var slot = scalarSlot(body.operand(row, 0), body.symbol(row).name);
 				line('s$slot = ${operandAs(row, 1, scalarLocalTypes[slot])};');
 			case IrOpcode.FieldGet:
 				var object = body.operand(row, 0), name = body.symbol(row).name;
@@ -413,7 +488,9 @@ class HlcFunctionLower {
 				var array = body.operand(row, 0), index = body.operand(row, 1);
 				requireArray(array);
 				nullCheck(row, array);
-				line('hl_array_check(${v(array)},${v(index)});');
+				if (!inRange(array, index))
+					line('if( (unsigned)${v(index)} >= (unsigned)${v(array)}->size ) hl_array_out_of_bounds(${v(array)},${v(index)});');
+				provenInRange.set('$array:$index', true);
 				assign(row, 'hl_aptr(${v(array)},${types.cType(typeOf(output))})[${v(index)}]', typeOf(output));
 				if (rawArray(array))
 					validatedAccesses.set('$array:$index', true);
@@ -424,12 +501,11 @@ class HlcFunctionLower {
 				var key = '$array:$index';
 				// `HlLower.lowerRawArrayWrite`: an Int or Float array write that an earlier access in the block validated is
 				// not tested again, so `a[i] += f()` keeps Haxe's rule when `f` shrinks the array.
-				if (!rawArray(array))
-					line('hl_array_ensure(${v(array)},${v(index)});');
-				else if (!validatedAccesses.exists(key)) {
+				if (!inRange(array, index) && !(rawArray(array) && validatedAccesses.exists(key)))
 					line('if( (unsigned)${v(index)} >= (unsigned)${v(array)}->size ) hl_array_ensure(${v(array)},${v(index)});');
+				provenInRange.set(key, true);
+				if (rawArray(array))
 					validatedAccesses.set(key, true);
-				}
 				store('hl_aptr(${v(array)},${types.cType(typeOf(value))})[${v(index)}]', v(value), typeOf(value));
 			case IrOpcode.ArraySize:
 				var array = body.operand(row, 0);
@@ -569,6 +645,22 @@ class HlcFunctionLower {
 			case Array(I32), Array(F64): true;
 			default: false;
 		};
+
+	/** Whether `index` is in range of `array`: checked since nothing could shrink it, or proved by the loops around the access. */
+	function inRange(array:IrValueId, index:IrValueId):Bool {
+		if (provenInRange.exists('$array:$index'))
+			return true;
+		var bounds = loopBounds;
+		if (bounds == null) {
+			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
+			bounds = new compiler.ir.IrLoopBounds(body.toFunction(), noPureCalls);
+			loopBounds = bounds;
+		}
+		return bounds.proven(valueOf(array), valueOf(index), currentBlock);
+	}
+
+	function valueOf(value:IrValueId):compiler.ir.Ir.IrValue
+		return new compiler.ir.Ir.IrValue(value, body.valueName(value), body.valueType(value));
 
 	function requireArray(array:IrValueId):Void
 		if (types.kind(typeOf(array)) != HlType.Array)
@@ -754,9 +846,144 @@ class HlcFunctionLower {
 				return;
 			default:
 		}
+		if (StringTools.startsWith(name, HlLower.VALUE_ARRAY_READ) && output.exists() && uses[output] == 0
+			&& HlLower.usedReadNearby(body, row, uses))
+			// A field of the element nothing reads; the read beside it checks the element the same way.
+			return;
+		if (name == HlLower.VALUE_ARRAY_VALIDATE && HlLower.scalarReadFollows(body, row))
+			// The read checks the same element the same way.
+			return;
+		if (name == HlLower.VALUE_ARRAY_READ_I32) {
+			var slot = HlLower.inlineValueArraySlot(body, row);
+			if (slot != null) {
+				lowerValueArrayRead(row, slot);
+				return;
+			}
+		}
+		if (lowerRuntimeFastPath(row, name))
+			return;
 		var slot = module.requireSlot(name), arguments = operandsFrom(row, 0);
 		callSlot(row, slot, [for (value in arguments) nullValues[value] ? "NULL" : v(value)],
 			[for (value in arguments) typeOf(value)]);
+	}
+
+	/** The call of `row` through slot `slot`, as a C expression. */
+	function callOf(row:Int, slot:Int):String {
+		var arguments = operandsFrom(row, 0);
+		return callExpression(slot, [for (value in arguments) nullValues[value] ? "NULL" : v(value)],
+			[for (value in arguments) typeOf(value)]);
+	}
+
+	/** `target = ` for `row`'s output, or nothing when it has none. */
+	function target(row:Int):String {
+		var output = body.output(row);
+		return output.exists() && !types.isVoid(typeOf(output)) ? '${v(output)} = ' : "";
+	}
+
+	/**
+	 * A value array element's scalar read, inline as `HlLower.lowerValueArrayRead` writes it: with the array's view resolved,
+	 * an index in range (or proved by its loop) of an element present, the slot is loaded from the scalar lane; anything
+	 * else calls the native, which raises its errors.
+	 */
+	function lowerValueArrayRead(row:Int, slot:compiler.hl.lower.HlLower.InlineValueSlot):Void {
+		var array = body.operand(row, 0), index = body.operand(row, 1), i = v(index), va = 'va$array';
+		var conditions = [va];
+		if (!inRange(array, index))
+			conditions.push('(unsigned)$i < *(unsigned int*)($va + ${HlLower.ARRAY_SIZE_OFFSET})');
+		if (HlLower.hasValidity(body.valueType(array)))
+			conditions.push('((*(vbyte**)($va + ${HlLower.VALUE_ARRAY_VALIDITY_OFFSET}))[${HlLower.LANE_HEADER_BYTES} + ((unsigned)$i >> 3)] >> ($i & 7) & 1)');
+		var storage = switch slot.width {
+			case 8: slot.signed ? "signed char" : "unsigned char";
+			case 16: slot.signed ? "short" : "unsigned short";
+			default: "int";
+		};
+		var address =
+			'*(vbyte**)($va + ${HlLower.ARRAY_DATA_OFFSET}) + $i * vs$array + ${HlLower.LANE_HEADER_BYTES + (slot.offset >> 3)}';
+		var id = temporaries++;
+		line('if( ${conditions.join(" && ")} ) { $storage e$id; memcpy(&e$id,$address,sizeof(e$id)); ${target(row)}e$id; }');
+		line('else ${target(row)}${callOf(row, module.requireSlot(HlLower.VALUE_ARRAY_READ_I32))};');
+	}
+
+	/**
+	 * `HlLower.lowerRuntimeFastPath`'s array push and byte read and write: the common case inline, the native on the slow path,
+	 * which keeps allocation and error behavior. A call of the shared helper of one of them (`IrSharedRuntimeCalls`) is written
+	 * the same way: in C the fast path costs no start-up time.
+	 */
+	function lowerRuntimeFastPath(row:Int, name:String):Bool {
+		var suffix = name.indexOf(compiler.ir.IrSharedRuntimeCalls.SUFFIX);
+		var base = suffix > 0 && compiler.ir.IrSharedRuntimeCalls.isHelper(name) ? name.substr(0, suffix) : name;
+		var push = base == "__array_push_i32" || base == "__array_push_i64" || base == "__array_push_f64"
+			|| base == "__array_push_bool" || base == "__array_push_bytes" || base == "__array_push_ref";
+		var get = base == "__bytes_get", set = base == "__bytes_try_set";
+		if (!push && !get && !set)
+			return false;
+		var native = module.requireSlot(base), slow = callOf(row, native), out = target(row);
+		var receiver = v(body.operand(row, 0)), id = temporaries++;
+		if (push) {
+			var element = module.slotArgument(native, 1), cType = types.cType(element);
+			line('{ varray *a$id = (varray*)$receiver; if( a$id && a$id->size < a$id->capacity ) { int n$id = a$id->size;');
+			store('hl_aptr(a$id,$cType)[n$id]', operandAs(row, 1, element), element);
+			line('a$id->size = n$id + 1; ${out}n$id + 1; } else ${out}$slow; }');
+			return true;
+		}
+		var header =
+			module.symbols.internRuntimeHeader(compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader.BytesHeader),
+			headerStruct = types.structName(header),
+			data = "",
+			length = "";
+		for (field in types.fields(header))
+			if (field.name == "data")
+				data = 'f${field.index}';
+			else if (field.name == "length")
+				length = 'f${field.index}';
+		var index = v(body.operand(row, 1));
+		line('{ $headerStruct *b$id = ($headerStruct*)$receiver; if( b$id && (unsigned)$index < (unsigned)b$id->$length ) {');
+		if (get)
+			line('${out}((vbyte*)b$id->$data)[$index];');
+		else
+			line('((vbyte*)b$id->$data)[$index] = (vbyte)${v(body.operand(row, 2))}; ${out}true;');
+		line('} else ${out}$slow; }');
+		return true;
+	}
+
+	/** An ordinary C function's call, through the runtime's dispatch as `HlLower.lowerCNativeCall` makes it. */
+	function lowerCNativeCall(row:Int):Void {
+		var name = body.symbol(row).name, native = module.cNatives.get(name), count = body.operandCount(row);
+		if (native == null)
+			throw new InternalError('Unknown ordinary C function "$name"');
+		var invocation = HlLower.cNativeInvocation(native, count), slot = module.requireSlot(invocation.invoker);
+		var parameters = module.slotArguments(slot), arguments:Array<String> = [];
+		for (text in invocation.strings) {
+			for (index in 0...text.length)
+				if (StringTools.fastCodeAt(text, index) > 126)
+					throw unsupported('a non-ASCII C function name or signature');
+			arguments.push('USTR(${HlcModule.quote(text)})');
+		}
+		if (invocation.nullable != null)
+			arguments.push(invocation.nullable ? "true" : "false");
+		for (index in 0...count) {
+			var value = body.operand(row, index);
+			arguments.push(nullValues[value] ? "NULL" : boxed(value));
+		}
+		if (arguments.length != parameters.length)
+			throw new InternalError('Call of ${invocation.invoker} with ${arguments.length} arguments for ${parameters.length} in ${body.name}');
+		var call =
+			'${module.functionPointer(slot)}(${[for (index in 0...arguments.length) '(${types.cType(parameters[index])})${arguments[index]}'].join(",")})';
+		var output = body.output(row), result = module.slotResult(slot);
+		if (invocation.isVoid || !output.exists() || types.isVoid(typeOf(output)))
+			line('$call;');
+		else if (!invocation.castsResult)
+			assign(row, call, result);
+		else {
+			var id = temporaries++;
+			line('{ ${types.cType(result)} r$id = $call; ${v(output)} = ${dynamicCast('r$id', result, typeOf(output))}; }');
+		}
+	}
+
+	/** `value` as a Dynamic, as `ToDyn` makes it. */
+	function boxed(value:IrValueId):String {
+		var type = typeOf(value);
+		return isDynamic(type) ? '(vdynamic*)${v(value)}' : 'hl_make_dyn(&${v(value)},${typeAddress(type)})';
 	}
 
 	function lowerClosureCall(row:Int):Void {

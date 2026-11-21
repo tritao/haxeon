@@ -8,6 +8,7 @@
 set -uo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
+source "$root_dir/scripts/lib/env.sh"
 source "$root_dir/scripts/haxeon-compiler.sh"
 verbose=0
 programs=()
@@ -22,7 +23,7 @@ done
 if ((${#programs[@]} == 0)); then
 	mapfile -t programs < <(grep -v '^#' "$root_dir/tests/aot/programs.txt" | sed '/^$/d')
 fi
-out_dir=${HAXEON_AOT_OUTPUT_DIR:-$root_dir/out/aot-tests}
+out_dir=${HAXEON_AOT_OUTPUT_DIR:-$haxeon_suite_out/aot-tests}
 sdk=${HAXEON_HLC_SDK:-$(dirname "$hashlink_dir")/hlc-sdk}
 cc=${CC:-cc}
 jobs=${TEST_JOBS:-4}

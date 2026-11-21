@@ -13,6 +13,9 @@ extern const int hlc_entry;
 extern const int hlc_global_count;
 extern const int hlc_global_offsets[];
 extern const int hlc_object_layouts[];
+extern const int hlc_alloc_count;
+extern const int hlc_alloc_types[];
+extern hl_jit_alloc_data hlc_alloc_data[];
 
 hl_type *hlc_types;
 unsigned char *hlc_globals;
@@ -65,6 +68,11 @@ int main( int argc, char *argv[] ) {
 	for(int i=0;i<hlc_slot_count;i++)
 		if( hlc_functions[i] ) m->functions_ptrs[i] = hlc_functions[i];
 	hlc_check_layouts(m);
+	// The collector describes its allocation fast path for each type the code allocates inline; an empty descriptor allocates
+	// through hl_alloc_obj.
+	for(int i=0;i<hlc_alloc_count;i++)
+		if( !hl_jit_alloc_supported() || !hl_jit_alloc_prepare(hlc_types + hlc_alloc_types[i], hlc_alloc_data + i) )
+			memset(hlc_alloc_data + i, 0, sizeof(hl_jit_alloc_data));
 	vclosure cl = { 0 };
 	cl.t = code->functions[m->functions_indexes[hlc_entry]].type;
 	cl.fun = hlc_functions[hlc_entry];
