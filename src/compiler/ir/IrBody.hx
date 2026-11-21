@@ -804,6 +804,47 @@ class IrBody {
 		edited = saved.edited;
 	}
 
+	/**
+	 * Leaves only the values an argument, a linked row or a binding names, as encoding the decoded function would: the ids end
+	 * after the last named one (`presentValueLimit`), and an id below it that nothing names has no value. So a pass after this
+	 * one numbers new values as it would on the decoding (`IrFunction.nextValueId`). Transitional, as `presentValueLimit` is;
+	 * `named` is a table this reuses.
+	 */
+	public function keepNamedValues(named:Array<Bool>):Void {
+		editing();
+		if (trial != null)
+			throw new InternalError('IR body $name has a trial open, which could not undo this edit');
+		var marks = IrPassScratch.filledBools(named, valueTypes.length, false), limit = 0;
+		for (id in argumentIds)
+			marks[id] = true;
+		for (block in 0...blockIds.length) {
+			var row = blockFirstRows[block];
+			while (row >= 0) {
+				if (outputs[row] >= 0)
+					marks[outputs[row]] = true;
+				for (index in operandStarts[row]...operandEnds[row])
+					marks[operandPool[index]] = true;
+				row = nextRows[row];
+			}
+		}
+		for (id in bindingValues)
+			marks[id] = true;
+		for (id in 0...valueTypes.length)
+			if (marks[id])
+				limit = id + 1;
+		for (id in 0...limit)
+			if (!marks[id]) {
+				valueTypes[id] = -1;
+				valueNames[id] = null;
+				valueRows[id] = -1;
+			}
+		valueTypes.resize(limit);
+		valueNames.resize(limit);
+		valueRows.resize(limit);
+		if (aliases.length > limit)
+			aliases.resize(limit);
+	}
+
 	public function removeBinding(index:Int):Void {
 		overwriting();
 		bindingIdentities.splice(index, 1);

@@ -48,6 +48,9 @@ class IrPassScratch {
 	/** The tables of `IrCopyElision.runBody`. */
 	public final copyElision = new IrCopyElision.IrBodyCopyElision();
 
+	/** By value id, whether a body names it (`IrBody.keepNamedValues`). */
+	public final namedValues:Array<Bool> = [];
+
 	/** The builder that copies and compactions of bodies reuse (`IrBody.freeze`, `IrBody.thaw`). */
 	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
 

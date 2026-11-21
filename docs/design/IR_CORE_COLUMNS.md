@@ -95,6 +95,12 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    objects, decoding the few functions that have such reads.
 4. The program-level passes, from the last back to the first, each moving the conversion before it; `IrBuilder` emits
    rows.
+   *Scalar replacement, nullable-scalar-flow and enum-tag-escapes read bodies*: the encode is at scalar replacement's entry
+   (`bodyIn` with the inline cache's type ids), and the inliner takes each function's body as it has it. A function a stage
+   changes is its frozen body (`IrFunction.ofBody`), made in place on a thawed copy or rebuilt into a body the stage owns; one
+   it leaves as it was stays the same object. Until the object passes are gone, a stage whose object version numbered new
+   values from `IrFunction.nextValueId` leaves only the values the decoding would name (`IrBody.keepNamedValues`,
+   `IrBodyBuilder.finishNamed`), so the stages after it number theirs as before.
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
    The codec writes bodies.
 6. The Wasm lowerings read bodies (until then they decode, off the self-compile's path); `IrInstruction`, `Located`

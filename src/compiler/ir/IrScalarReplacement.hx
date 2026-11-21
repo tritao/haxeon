@@ -84,6 +84,38 @@ class IrScalarReplacement {
 			constructFields = false):Bool
 		return scratch.scalarReplacement.runOn(body, objects, forcePhis, constructFields);
 
+	/**
+	 * `rewrite` on `fn`'s body (`bodyIn` with `types`), for the pipeline's stage: `fn` itself when nothing changes, else its
+	 * edited copy, frozen (`retained` past this compile when a session keeps it), with the values its decoding would have.
+	 */
+	public static function rewriteBody(fn:IrFunction, objects:IrObjectTable, types:IrTypeIds, scratch:IrPassScratch,
+			constructFields:Bool, retained:Bool):IrFunction {
+		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder);
+		if (!hasCandidates(body, objects))
+			return fn;
+		var edited = body.thaw(builder);
+		if (!runBody(edited, objects, scratch, false, constructFields))
+			return fn;
+		edited.keepNamedValues(scratch.namedValues);
+		return IrFunction.ofBody(edited.freeze(retained, builder));
+	}
+
+	/** Whether `body` allocates a value object, which both replacement and in-place construction need. */
+	static function hasCandidates(body:IrBody, objects:IrObjectTable):Bool {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.ValueInit) {
+					var descriptor = objects.get(IrTypeTools.valueObjectName(body.valueType(body.output(row))));
+					if (descriptor != null && descriptor.isValue)
+						return true;
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return false;
+	}
+
 	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int,
 			forcePhis = false):ScalarReplacementResult {
 		var substitutions:Map<Int, IrValue> = [];

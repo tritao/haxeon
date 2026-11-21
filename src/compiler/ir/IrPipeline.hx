@@ -492,10 +492,13 @@ class IrPipeline {
 	}
 
 	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrProgram {
-		var scalarObjects = context.scalarObjects, hashLink = !context.isWasm();
+		var scalarObjects = context.scalarObjects,
+			hashLink = !context.isWasm(),
+			types = bodyTypes(context),
+			retained = context.options.keepSession;
 		program.functions = [
 			for (fn in program.functions)
-				IrScalarReplacement.rewrite(fn, scalarObjects, false, hashLink)
+				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink, retained)
 		];
 		return program;
 	}
