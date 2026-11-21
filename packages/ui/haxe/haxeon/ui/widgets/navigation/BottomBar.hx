@@ -89,7 +89,8 @@ class BottomBar implements ScopeView {
 		var row = NavUi.child(context, "items", "bottom-bar-items", rowStyle);
 		for (position in 0...items.length) {
 			var item = items[position];
-			row.add(context.withScope(new Key("item:" + item.id), function() return buildItem(context, item, position)));
+			row.add(context.withScope(new Key("item:" + item.id),
+				function() return buildItem(context, item, position)));
 		}
 		root.add(row);
 		return root;
@@ -120,7 +121,8 @@ class BottomBar implements ScopeView {
 		}
 
 		var foreground = active ? NavUi.accent : NavUi.secondary;
-		node.add(context.withScope(new Key("icon"), function() return new Icon("glyph", item.icon, 22.0, foreground).build(context)));
+		node.add(context.withScope(new Key("icon"),
+			function() return new Icon("glyph", item.icon, 22.0, foreground).build(context)));
 
 		var labelRowStyle = new LayoutStyle();
 		labelRowStyle.direction = LayoutDirection.LeftToRight;

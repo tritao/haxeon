@@ -100,7 +100,8 @@ class NativeInputAdapter {
 				pointerY = y;
 				if (mouseAsTouch) {
 					if (mouseTouchDown)
-						context.pointerMove(x / coordinateScale, y / coordinateScale, pointerModifiers, touchPointerId(0),
+						context.pointerMove(x / coordinateScale, y / coordinateScale, pointerModifiers,
+							touchPointerId(0),
 							new UiTouchData(TouchTool.Finger, 1.0, 0.0, 0.0));
 					return true;
 				}
@@ -112,14 +113,17 @@ class NativeInputAdapter {
 				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue()));
 				if (mouseAsTouch) {
 					if (button.rawValue() != NativeKitTypes.PointerButton.Left.rawValue()) return true;
-					var touchData = new UiTouchData(TouchTool.Finger, action == InputAction.Press ? 1.0 : 0.0, 0.0, 0.0);
+					var touchData = new UiTouchData(TouchTool.Finger, action == InputAction.Press ? 1.0 : 0.0, 0.0,
+						0.0);
 					if (action == InputAction.Press) {
 						mouseTouchDown = true;
-						context.pointerDown(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()),
+						context.pointerDown(x / coordinateScale, y / coordinateScale, 0,
+							UiModifier.fromRaw(modifiers.rawValue()),
 							touchPointerId(0), touchData);
 					} else if (action == InputAction.Release) {
 						mouseTouchDown = false;
-						context.pointerUp(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()),
+						context.pointerUp(x / coordinateScale, y / coordinateScale, 0,
+							UiModifier.fromRaw(modifiers.rawValue()),
 							touchPointerId(0), touchData);
 					}
 					return true;

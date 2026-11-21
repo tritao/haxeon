@@ -49,7 +49,8 @@ class NavUi {
 	/** A box under its own sub-scope, so several can share a parent. */
 	public static function child(context:BuildContext, local:String, type:String, style:LayoutStyle,
 			?classes:Array<String>):RenderNode {
-		return context.withScope(new Key(local), function() return box(context, context.rootId(type), type, local, style, classes));
+		return context.withScope(new Key(local),
+			function() return box(context, context.rootId(type), type, local, style, classes));
 	}
 
 	/** A single-line text node built under its own sub-scope. */

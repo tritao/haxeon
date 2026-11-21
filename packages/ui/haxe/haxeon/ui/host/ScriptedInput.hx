@@ -83,12 +83,14 @@ class ScriptedInput {
 					throw "Tap events require finite x/y";
 			case "drag":
 				if (event.x == null || event.y == null || event.dx == null || event.dy == null
-					|| !Math.isFinite(event.x) || !Math.isFinite(event.y) || !Math.isFinite(event.dx) || !Math.isFinite(event.dy))
+					|| !Math.isFinite(event.x) || !Math.isFinite(event.y) || !Math.isFinite(event.dx)
+					|| !Math.isFinite(event.dy))
 					throw "Drag events require finite x/y/dx/dy";
 				if (event.ms != null && (!Math.isFinite(event.ms) || event.ms <= 0)) throw "Drag ms must be positive";
 			case "back":
 			case "resize":
-				if (event.width == null || event.height == null || !Math.isFinite(event.width) || !Math.isFinite(event.height)
+				if (event.width == null || event.height == null || !Math.isFinite(event.width)
+					|| !Math.isFinite(event.height)
 					|| event.width <= 0 || event.height <= 0) throw "Resize events require positive width/height";
 			case _: throw "Unsupported scripted input kind: " + event.kind;
 		}
@@ -179,7 +181,8 @@ class ScriptedInput {
 				};
 				var id:Int = event.id == null ? 0 : event.id;
 				var pressure:Float = event.action == "end" || event.action == "cancel" ? 0.0 : 1.0;
-				[PlatformEvent.Touch(source, id, action, NativeKitTypes.TouchTool.Finger, NativeKitTypes.Modifiers.empty(),
+				[PlatformEvent.Touch(source, id, action, NativeKitTypes.TouchTool.Finger,
+					NativeKitTypes.Modifiers.empty(),
 					event.x, event.y, pressure, 0.0, 0.0)];
 			case "key":
 				var key:Int = event.key, modifiers:Int = event.modifiers == null ? 0 : event.modifiers;
@@ -204,7 +207,8 @@ class ScriptedInput {
 		var position = NativeKit.nk_window_get_position(window);
 		if (position.status != NativeKitTypes.Result.Ok)
 			throw "Window position query failed: " + NativeKit.nk_last_error();
-		if (NativeKit.nk_window_set_bounds(window, position.out_x, position.out_y, width, height) != NativeKitTypes.Result.Ok)
+		if (NativeKit.nk_window_set_bounds(window, position.out_x, position.out_y, width, height)
+			!= NativeKitTypes.Result.Ok)
 			throw "Scripted resize failed: " + NativeKit.nk_last_error();
 	}
 

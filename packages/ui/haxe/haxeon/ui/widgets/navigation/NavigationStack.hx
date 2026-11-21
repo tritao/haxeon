@@ -107,7 +107,8 @@ class NavigationStack implements ScopeView {
 			var node = NavUi.box(context, context.rootId("navigation-entry"), "navigation-entry", entry.id, layerStyle,
 				["navigation-entry"]);
 			var content = context.withStyleParent(node.computedStyle,
-				function() return context.withScope(new Key("content"), function() return entry.build().build(context)));
+				function() return context.withScope(new Key("content"),
+				function() return entry.build().build(context)));
 			node.add(content);
 			return node;
 		});

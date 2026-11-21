@@ -102,8 +102,10 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		var travel = (1.0 - decay) / -Math.log(FlingFriction);
 		var nextX = clampX(offsetX + flingX * travel);
 		var nextY = clampY(offsetY + flingY * travel);
-		if (nextX == offsetX || (flingX < 0.0 && nextX <= 0.0) || (flingX > 0.0 && hasMetrics && nextX >= maxScrollX)) flingX = 0.0;
-		if (nextY == offsetY || (flingY < 0.0 && nextY <= 0.0) || (flingY > 0.0 && hasMetrics && nextY >= maxScrollY)) flingY = 0.0;
+		if (nextX == offsetX || (flingX < 0.0 && nextX <= 0.0)
+			|| (flingX > 0.0 && hasMetrics && nextX >= maxScrollX)) flingX = 0.0;
+		if (nextY == offsetY || (flingY < 0.0 && nextY <= 0.0)
+			|| (flingY > 0.0 && hasMetrics && nextY >= maxScrollY)) flingY = 0.0;
 		flingX *= decay;
 		flingY *= decay;
 		if (Math.abs(flingX) < FlingMinVelocity) flingX = 0.0;
@@ -174,7 +176,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		binding.changed = callback;
 		binding.scheduler = clock;
 		binding.owner = owner;
-		if (binding.scheduler != null && (offsetX != targetX || offsetY != targetY || isFlinging)) binding.scheduler.track(this);
+		if (binding.scheduler != null
+			&& (offsetX != targetX || offsetY != targetY || isFlinging)) binding.scheduler.track(this);
 	}
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollBinding)

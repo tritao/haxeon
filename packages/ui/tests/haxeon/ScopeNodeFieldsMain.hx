@@ -41,7 +41,8 @@ class ScopeNodeFieldsMain {
 		changed.commandShortcutFilter = bodyFilter;
 		authored.transfer(plain, changed);
 		if (changed.cursor != CursorShape.Crosshair || changed.tabIndex != 12
-			|| changed.commandShortcutFilter != bodyFilter) throw "Body-owned fields failed to advance without a caller override";
+			|| changed.commandShortcutFilter != bodyFilter)
+			throw "Body-owned fields failed to advance without a caller override";
 		return 42;
 	}
 	static function check(node:RenderNode):Void {

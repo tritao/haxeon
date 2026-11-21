@@ -339,7 +339,8 @@ class GestureArena {
 	function makePinchEvent(kind:Int, state:PinchState):GestureEvent
 		return new GestureEvent(kind, state.first.target, state.first.pointerId, state.startFocusX,
 			state.startFocusY, state.focusX, state.focusY, state.focusX - state.startFocusX,
-			state.focusY - state.startFocusY, state.first.elapsed, 0.0, 0.0, state.scale, state.focusX, state.focusY, 0);
+			state.focusY - state.startFocusY, state.first.elapsed, 0.0, 0.0, state.scale, state.focusX, state.focusY,
+			0);
 
 	static inline function finite(value:Float):Bool
 		return value == value && value - value == 0.0;

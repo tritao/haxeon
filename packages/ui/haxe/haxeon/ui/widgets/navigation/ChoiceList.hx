@@ -44,7 +44,8 @@ class ChoiceList implements ScopeView {
 		this.selected = selected == null ? [] : selected.copy();
 		this.multi = multi;
 		this.onChange = onChange;
-		this.searchPlaceholder = searchPlaceholder == null || searchPlaceholder.length == 0 ? "Search" : searchPlaceholder;
+		this.searchPlaceholder = searchPlaceholder == null
+			|| searchPlaceholder.length == 0 ? "Search" : searchPlaceholder;
 	}
 
 	public function scopeKey():String return key;
@@ -190,7 +191,8 @@ class ChoiceList implements ScopeView {
 		boxStyle.childAlignY = LayoutAlignmentY.Center;
 		boxStyle.childDistribution = LayoutDistribution.Center;
 		boxStyle.background = checked ? NavUi.accent : NavUi.rgb(0xd0d3da);
-		boxStyle.padding = new Insets(checked ? 0.0 : 2.0, checked ? 0.0 : 2.0, checked ? 0.0 : 2.0, checked ? 0.0 : 2.0);
+		boxStyle.padding = new Insets(checked ? 0.0 : 2.0, checked ? 0.0 : 2.0, checked ? 0.0 : 2.0,
+			checked ? 0.0 : 2.0);
 		boxStyle.radiusTopLeft = 5.0;
 		boxStyle.radiusTopRight = 5.0;
 		boxStyle.radiusBottomLeft = 5.0;
