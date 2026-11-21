@@ -62,15 +62,27 @@ loosely), and
 main-thread `instructions:u` where perf is installed and `perf_event_paranoid` is at most 2 (on CI runners it is not, and the
 metric is skipped). Wall time is printed, never compared. It measures on Linux x86-64 only and passes elsewhere.
 
-Each metric is compared with `tests/perf/self-compile-baseline.json`, which holds its value and tolerance and why the tolerance
-is what it is. Above the tolerance the suite fails; below it the suite passes and asks for the baseline to be updated, so a gain
-is locked in. The input is the live source tree, so the values move as the compiler grows: a change that moves them on purpose
-(a feature that costs memory, an optimization) updates the baseline in the same commit, from a quiet Linux x86-64 machine:
+It then measures incremental builds, which the one-shot compile never exercises: the same build's compile server, whose session
+keeps its state, on a copy of the sources, through a cold build, two no-op rebuilds, a body-only edit of the entry module made
+and taken back six times, and an optional argument added to `InternalError`'s constructor, which most modules call. For each it
+gates allocated bytes and the functions retyped, artifacts invalidated and functions regenerated (the `HAXEON_EXPLAIN_INVALIDATION`
+counts); wall is printed. A heap census at the end of every build gives the session's live data after the last body edit and its
+growth over the last two, which stays near zero unless the session keeps something from every build. This part adds about two
+and a half minutes; `--only=self-compile` or `--only=incremental` runs one part.
+
+Each metric is compared with `tests/perf/self-compile-baseline.json` or `tests/perf/incremental-baseline.json`, which hold its
+value and tolerance and why the tolerance is what it is. Above the tolerance the suite fails; below it the suite passes and asks
+for the baseline to be updated, so a gain is locked in. The input is the live source tree, so the values move as the compiler
+grows: a change that moves them on purpose (a feature that costs memory, an optimization) updates the baseline in the same
+commit, from a quiet Linux x86-64 machine:
 
 ```sh
 python3 scripts/perf-guard.py            # measure and compare
-python3 scripts/perf-guard.py --update   # write the measured values into the baseline; tolerances are kept
+python3 scripts/perf-guard.py --update   # write the measured values into the baselines; tolerances are kept
 ```
+
+The incremental edits are anchored on a line of `HaxeonCompiler.main` and on `InternalError`'s constructor (`BODY_EDIT` and
+`SIGNATURE_EDIT` in the script); a change that removes an anchor makes the suite say so, and picks another of the same kind.
 
 Say in the commit message what moved and why. A tolerance is changed by editing the file, with its `why`.
 

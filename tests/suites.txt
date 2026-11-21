@@ -149,8 +149,8 @@ debug-metadata                   ci          -- bash tests/integration/test-debu
 condition-integration            ci          -- python3 tests/integration/test-condition.py
 build-mode-metadata              ci          -- python3 tests/integration/test-build-mode-metadata.py
 binary-size-report               ci          -- python3 tests/integration/test-binary-size-report.py
-# The compiler compiling itself costs no more than tests/perf/self-compile-baseline.json allows (Linux x86-64; docs/DEVELOPMENT.md,
-# "Performance guard").
+# The compiler compiling itself, once and incrementally in a compile server, costs no more than tests/perf/self-compile-baseline.json
+# and tests/perf/incremental-baseline.json allow (Linux x86-64; docs/DEVELOPMENT.md, "Performance guard").
 perf-guard                       ci          -- python3 scripts/perf-guard.py
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py
 jit-stack-probe                  ci          -- python3 tests/integration/test-jit-stack-probe.py
