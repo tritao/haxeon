@@ -431,7 +431,7 @@ class ModuleAnalyzer {
 			try
 				parsed[index] = parseText(pending[index])
 			catch (_:haxe.Exception) {}
-		}, Lexer.releaseThreadTables);
+		});
 		for (index in 0...pending.length) {
 			var result = parsed[index];
 			if (result != null)

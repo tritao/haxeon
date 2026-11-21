@@ -8,11 +8,10 @@ import sys.thread.Thread;
  * Runs independent pieces of work on several threads, the caller's among them. A piece is an index: `work(index)` must write
  * only what belongs to its index, such as a slot of an array the caller sized, and read nothing another piece writes. The caller
  * then sees the same results whatever the scheduling. The first exception a piece throws stops the pieces not yet started and is
- * rethrown to the caller once every thread is done. `threadEnd` runs on each thread started here before it ends, to let go of what
- * the work kept in thread-local storage, which the runtime keeps alive until it is cleared.
+ * rethrown to the caller once every thread is done.
  */
 class Parallel {
-	public static function forEach(count:Int, threads:Int, work:Int->Void, ?threadEnd:() -> Void):Void {
+	public static function forEach(count:Int, threads:Int, work:Int->Void):Void {
 		if (count <= 0)
 			return;
 		if (threads > count)
@@ -46,8 +45,6 @@ class Parallel {
 		for (_ in 1...threads)
 			Thread.create(function() {
 				run();
-				if (threadEnd != null)
-					threadEnd();
 				finished.release();
 			});
 		run();
