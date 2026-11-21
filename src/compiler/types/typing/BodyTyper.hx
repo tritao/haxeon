@@ -146,6 +146,18 @@ class BodyTyper implements BodyTyping {
 		return compiler.core.QualifiedName.split(path);
 	}
 
+	/** The first `count` of `parts`, the parts of `path` (`splitPath`), joined by dots: `path` or a part itself when it is one. */
+	static function leadingParts(path:String, parts:Array<String>, count:Int):String {
+		if (count == parts.length)
+			return path;
+		if (count == 1)
+			return parts[0];
+		var end = count - 1;
+		for (index in 0...count)
+			end += parts[index].length;
+		return path.substring(0, end);
+	}
+
 	public static function enumName(type:Null<CompilerType>):Null<String> {
 		return switch enumInstance(type) {
 			case TInstance(Enum, name, _): name;
@@ -1916,8 +1928,8 @@ class BodyTyper implements BodyTyping {
 					var parts = splitPath(name),
 						objectName = parts[0],
 						fieldName = parts[1],
-						enumName = pathBeforeLast(name),
-						enumCaseName = lastPathSegment(name);
+						enumName = leadingParts(name, parts, parts.length - 1),
+						enumCaseName = parts[parts.length - 1];
 					var enumAbstractName = session.enumAbstractName(enumName);
 					if (enumAbstractName != null) {
 						var enumAbstract = requiredMapValue(session.enumAbstractDecls, enumAbstractName);
@@ -1948,7 +1960,7 @@ class BodyTyper implements BodyTyping {
 					}
 					var classEnd = parts.length - 1;
 					while (classEnd > 0) {
-						var className = parts.slice(0, classEnd).join(".");
+						var className = leadingParts(name, parts, classEnd);
 						var abstractName = session.enumAbstractName(className);
 						if (abstractName != null)
 							className = abstractName;
@@ -1960,7 +1972,7 @@ class BodyTyper implements BodyTyping {
 								TInstance(NominalKind.Class, className, []), span);
 							for (index in classEnd...parts.length)
 								classObject = typedMemberWithFlow(classObject, parts[index],
-									referencePrefixSpan(parts.slice(0, index + 1).join("."), span),
+									referencePrefixSpan(leadingParts(name, parts, index + 1), span),
 									scope);
 							return classObject;
 						}
@@ -1969,7 +1981,7 @@ class BodyTyper implements BodyTyping {
 					var object = typeExpression(Variable(objectName, span), scope);
 					for (index in 1...parts.length)
 						object = memberOrExtension(object, parts[index],
-							referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
+							referencePrefixSpan(leadingParts(name, parts, index + 1), span), scope);
 					object;
 				}
 			}

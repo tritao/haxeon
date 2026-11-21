@@ -60,9 +60,9 @@ class PurityInference {
 					setters.set(field.name, true);
 		// Abstracts and interfaces declare setters as methods only; a name match over-approximates safely.
 		for (name in signatures.keys()) {
-			var simple = compiler.core.QualifiedName.last(name);
-			if (StringTools.startsWith(simple, "set_"))
-				setters.set(simple.substr(4), true);
+			var start = name.lastIndexOf(".") + 1;
+			if (isSetterAt(name, start))
+				setters.set(name.substr(start + 4), true);
 		}
 	}
 
@@ -222,6 +222,14 @@ class PurityInference {
 				result.set(name, true);
 		return result;
 	}
+
+	/** Whether the name in `key` from `start` on starts with `set_`, read in place. */
+	static function isSetterAt(key:String, start:Int):Bool
+		return key.length >= start + 4
+			&& StringTools.fastCodeAt(key, start) == "s".code
+			&& StringTools.fastCodeAt(key, start + 1) == "e".code
+			&& StringTools.fastCodeAt(key, start + 2) == "t".code
+			&& StringTools.fastCodeAt(key, start + 3) == "_".code;
 
 	static function isValueClass(declaration:AstClass):Bool {
 		if (declaration.isStruct == true) return true;
@@ -384,8 +392,10 @@ class PurityInference {
 		var fn = signatures.get(key);
 		if (fn == null || fn.isExtern == true)
 			return isAnnotatedPure(key);
+		if (fn.isStatic)
+			return true;
 		var owner = compiler.core.QualifiedName.parent(key);
-		if (fn.isStatic || owner == null || !isTypeName(owner))
+		if (owner == null || !isTypeName(owner))
 			return true;
 		return classes.exists(owner) && fn.name != "new";
 	}

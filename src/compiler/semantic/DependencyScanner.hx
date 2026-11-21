@@ -191,8 +191,8 @@ class DependencyScanner {
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
 			case Call(name, args, _):
-				if (name.indexOf(".") >= 0)
-					scanArrayLibraryMethod(compiler.core.QualifiedName.last(name), dependencies);
+				if (compiler.runtime.ArrayLibrary.providesLastOf(name))
+					dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);

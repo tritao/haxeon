@@ -14,4 +14,14 @@ class ArrayLibrary {
 
 	public static function provides(methodName:String):Bool
 		return METHODS.indexOf(methodName) >= 0;
+
+	/** Whether the last part of the dotted `path` is one of these methods (`provides`), read in place. */
+	public static function providesLastOf(path:String):Bool {
+		for (method in METHODS) {
+			var dot = path.length - method.length - 1;
+			if (dot >= 0 && StringTools.fastCodeAt(path, dot) == ".".code && StringTools.endsWith(path, method))
+				return true;
+		}
+		return false;
+	}
 }
