@@ -214,10 +214,14 @@ run_known_divergence() {
 	echo "PASS: $name is still a known divergence (Haxe runs it, Haxeon rejects it)"
 }
 
-# Cases are independent; run them concurrently and report in order.
+# Cases are independent; run them concurrently and report in order. At most TEST_JOBS (else one per CPU) run at a time:
+# all of them at once (several hundred processes, each compiling) ran a 16 GB runner out of memory.
+jobs_limit=${TEST_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 pids=()
 logs=()
 in_background() {
+	# Bash 3.2 (macOS) has no `wait -n`: wait for a slot by polling the running jobs.
+	while (( $(jobs -rp | wc -l) >= jobs_limit )); do sleep 0.1; done
 	local log="$out_dir/$2.$1.log"
 	("$@") >"$log" 2>&1 &
 	pids+=($!)
