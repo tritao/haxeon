@@ -37,15 +37,15 @@ class IrNullableScalarFlow {
 		while (changed) {
 			changed = false;
 			for (name in [for (name in candidates.keys()) name])
-				if (!rewriteFunction(candidates.get(name), [], candidates, true).eligible) {
+				if (!rewriteFunction(candidates.get(name), [], candidates, true, true).eligible) {
 					candidates.remove(name);
 					changed = true;
 				}
 		}
-		program.functions = [for (fn in originals) rewriteFunction(fn, checks, candidates, false).fn];
+		program.functions = [for (fn in originals) rewriteFunction(fn, checks, candidates, false, false).fn];
 		for (fn in originals)
 			if (candidates.exists(fn.name))
-				program.functions.push(rewriteFunction(fn, checks, candidates, true).fn);
+				program.functions.push(rewriteFunction(fn, checks, candidates, true, false).fn);
 		var names = [for (name in checks.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -115,8 +115,9 @@ class IrNullableScalarFlow {
 			default: throw new InternalError('Invalid nullable scalar payload ${value.type}');
 		};
 
+	/** `eligibilityOnly`: the candidate fixpoint needs only whether `fn` qualifies, not its rewritten form. */
 	static function rewriteFunction(fn:IrFunction, checks:Map<String, IrType>, functions:Map<String, IrFunction>,
-			clone:Bool):NullableScalarRewrite {
+			clone:Bool, eligibilityOnly:Bool):NullableScalarRewrite {
 		var candidates:Map<Int, IrValue> = [], nulls:Map<Int, Bool> = [], next = fn.nextValueId();
 		for (argument in fn.arguments)
 			if (clone && inner(argument.type) != null)
@@ -209,7 +210,7 @@ class IrNullableScalarFlow {
 			for (argument in fn.arguments)
 				if (inner(argument.type) != null && !candidates.exists(argument.id))
 					eligible = false;
-		if (!eligible || !candidates.keys().hasNext())
+		if (eligibilityOnly || !eligible || !candidates.keys().hasNext())
 			return {fn: fn, eligible: eligible};
 		var parts:Map<Int, NullableScalarParts> = [];
 		for (id => value in candidates)
