@@ -2,20 +2,47 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
-import compiler.ir.SourceProvenance.Located;
 
-/** Project an unobserved nominal tag to its integer ABI, including ordinary integer arrays. */
+/**
+ * Project an unobserved nominal tag to its integer ABI, including ordinary integer arrays. On IR bodies
+ * (docs/design/IR_CORE_COLUMNS.md, migration): where it runs (release builds), the first stage over bodies, so the conversion
+ * point, where each function is encoded. A function's types change in place (`setValueType`, `setResult`).
+ */
 class IrClosedEnumTagAbi {
 	final closed:Map<String, Bool>;
+	final types:IrTypeIds;
+	final builder:IrBodyBuilder;
+	final retained:Bool;
 
-	function new(closed:Map<String, Bool>)
+	/** By type id: 1 when the type changes, 0 when not, -1 when not yet known. */
+	final changing:Array<Int> = [];
+
+	function new(closed:Map<String, Bool>, types:IrTypeIds, builder:IrBodyBuilder, retained:Bool) {
 		this.closed = closed;
+		this.types = types;
+		this.builder = builder;
+		this.retained = retained;
+	}
 
-	public static function run(program:IrProgram, ?reflectableObjects:Array<String>):IrProgram {
-		var closed = select(program, reflectableObjects);
+	/**
+	 * `program` with the closed tags projected, read from the functions' bodies, made with `types` (those of the program's bodies
+	 * when not given). A function that changes becomes its edited body: a frozen copy when a session keeps the stage's functions
+	 * (`retained`), else the body edited in place.
+	 */
+	public static function run(program:IrProgram, ?reflectableObjects:Array<String>, ?types:IrTypeIds,
+			?scratch:IrPassScratch, retained = true):IrProgram {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(program.functions);
+		var builder = scratch == null ? new IrBodyBuilder(types) : scratch.bodyBuilder;
+		for (fn in program.functions)
+			fn.bodyIn(types, builder, retained);
+		if (!retained)
+			for (fn in program.functions)
+				fn.releaseDecoded();
+		var closed = select(program, types, builder, reflectableObjects);
 		if (!closed.keys().hasNext())
 			return program;
-		var pass = new IrClosedEnumTagAbi(closed);
+		var pass = new IrClosedEnumTagAbi(closed, types, builder, retained);
 		return pass.project(program);
 	}
 
@@ -26,6 +53,17 @@ class IrClosedEnumTagAbi {
 			case Function(args, result): Lambda.exists(args, changes) || changes(result);
 			default: false;
 		};
+
+	function changesId(id:Int):Bool {
+		var known = id < changing.length ? changing[id] : -1;
+		if (known < 0) {
+			known = changes(types.type(id)) ? 1 : 0;
+			while (changing.length <= id)
+				changing.push(-1);
+			changing[id] = known;
+		}
+		return known == 1;
+	}
 
 	function physical(type:IrType):IrType
 		return switch type {
@@ -38,27 +76,31 @@ class IrClosedEnumTagAbi {
 			default: type;
 		};
 
-	function functionChanges(fn:IrFunction):Bool {
-		if (changes(fn.result)
-			|| Lambda.exists(fn.arguments, a -> changes(a.type))
-			|| Lambda.exists(fn.debugBindings, b -> changes(b.value.type)))
+	function functionChanges(body:IrBody):Bool {
+		if (changesId(body.result))
 			return true;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && changes(output.type))
+		for (index in 0...body.argumentCount())
+			if (changesId(body.valueTypeId(body.argument(index))))
+				return true;
+		for (index in 0...body.bindingCount())
+			if (changesId(body.valueTypeId(body.bindingValue(index))))
+				return true;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var output = body.output(row);
+				if (output.exists() && changesId(body.valueTypeId(output)))
 					return true;
-				switch located.value {
-					case TypeValue(_, type):
-						if (changes(type))
-							return true;
-					default:
-				}
+				if (body.opcode(row) == IrOpcode.TypeValue && changesId(body.aux(row)))
+					return true;
+				row = body.nextRow(row);
 			}
+		}
 		return false;
 	}
 
-	static function select(program:IrProgram, ?reflectableObjects:Array<String>):Map<String, Bool> {
+	static function select(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder,
+			?reflectableObjects:Array<String>):Map<String, Bool> {
 		var closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true],
 			functions = [for (fn in program.functions) fn.name => fn],
 			natives = [for (n in program.natives) n.name => n];
@@ -96,73 +138,49 @@ class IrClosedEnumTagAbi {
 				escape(fn.result);
 			}
 
-			for (block in fn.blocks) {
-				for (located in block.instructions)
-					switch located.value {
-						case Intrinsic(_, operation, _):
-							switch operation {
-								case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type),
-									InlineEnumBox(type),
-									InlineEnumUnbox(type): escape(type);
-							}
-						case TypeValue(out, type):
-							escape(type);
-						case ToDyn(_, input):
-							escape(input.type);
-						case SafeCast(out, input):
-							escape(out.type);
-							escape(input.type);
-						case ToVirtual(_, input):
-							escape(input.type);
-						case Call(_, name, args):
-							var native = natives.get(name.name);
-							if (native != null) {
-								for (argument in args)
-									escape(argument.type);
+			var body = fn.bodyIn(types, builder);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.EnumDynamicBox | IrOpcode.EnumDynamicView | IrOpcode.EnumTagBox
+							| IrOpcode.EnumTagUnbox
+							| IrOpcode.InlineEnumBox | IrOpcode.InlineEnumUnbox | IrOpcode.TypeValue:
+							escape(body.typeOperand(row));
+						case IrOpcode.ToDyn | IrOpcode.ToVirtual | IrOpcode.EnumIndex | IrOpcode.Throw
+							| IrOpcode.Rethrow:
+							escape(body.valueType(body.operand(row, 0)));
+						case IrOpcode.SafeCast:
+							escape(body.valueType(body.output(row)));
+							escape(body.valueType(body.operand(row, 0)));
+						case IrOpcode.Call:
+							var name = body.symbol(row).name;
+							if (natives.exists(name)) {
+								for (index in 0...body.operandCount(row))
+									escape(body.valueType(body.operand(row, index)));
 							} else {
-								var target = functions.get(name.name);
+								var target = functions.get(name);
 								if (target != null)
-									for (index in 0...args.length)
+									for (index in 0...body.operandCount(row))
 										if (index < target.arguments.length && switch target.arguments[index].type {
 											case Dyn: true;
 											default: false;
 										})
-											escape(args[index].type);
+											escape(body.valueType(body.operand(row, index)));
 							}
-
-						case CNativeCall(_, _, args):
-							for (a in args)
-								escape(a.type);
-						case EnumIndex(_, input):
-							escape(input.type);
-						case CallClosure(_, closure, args):
-							switch closure.type {
-								case Dyn: for (a in args)
-									escape(a.type);
+						case IrOpcode.CNativeCall:
+							for (index in 0...body.operandCount(row))
+								escape(body.valueType(body.operand(row, index)));
+						case IrOpcode.CallClosure:
+							switch body.valueType(body.operand(row, 0)) {
+								case Dyn: for (index in 1...body.operandCount(row))
+									escape(body.valueType(body.operand(row, index)));
 								default:
 							}
-						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _),
-							StaticDataAddress(_, _), PointerOffset(_, _, _),
-							MemoryLoad(_, _, _, _), MemoryStore(_, _, _), ConstBool(_, _), ConstNull(_),
-							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _),
-							FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _),
-							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _),
-							Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _),
-							ShiftLeft(_, _, _),
-							ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
-							Equal(_, _, _), StaticClosure(_, _),
-							InstanceClosure(_, _, _), Upcast(_, _), ClassId(_, _), MethodCall(_, _, _, _, _),
-							NewObject(_, _), ValueInit(_),
-							FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
-							IteratorNew(_, _),
-							IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumField(_, _, _, _):
-					}
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Throw(v), Rethrow(v):
-							escape(v.type);
 						default:
 					}
+					row = body.nextRow(row);
+				}
 			}
 		}
 		if (ObjectReflection.usedByProgram(program)) {
@@ -185,7 +203,7 @@ class IrClosedEnumTagAbi {
 		var result = new IrProgram(program.entryPoint);
 		result.natives = [for (native in program.natives) projectNative(native)];
 		result.cNatives = [for (native in program.cNatives) projectCNative(native)];
-		result.functions = [for (fn in program.functions) projectFunction(fn)];
+		result.functions = [for (fn in program.functions) projectFunction(fn, fn.bodyIn(types, builder, retained))];
 		// Only the selected tag carriers change; native placement and optional payload widths stay intact.
 		result.objects = [for (object in program.objects)
 			{
@@ -236,62 +254,33 @@ class IrClosedEnumTagAbi {
 		return result;
 	}
 
-	function projectFunction(fn:IrFunction):IrFunction {
-		if (!functionChanges(fn))
+	function projectFunction(fn:IrFunction, source:IrBody):IrFunction {
+		if (!functionChanges(source))
 			return fn;
-		var values:Map<Int, IrValue> = [];
-		function use(value:IrValue):IrValue {
-			var known = values.get(value.id);
-			if (known != null)
-				return known;
-			var replacement = changes(value.type) ? new IrValue(value.id, value.name, physical(value.type)) : value;
-			values.set(value.id, replacement);
-			return replacement;
+		var body = source.forEditing(builder);
+		for (value in 0...body.valueLimit()) {
+			var id = IrValueId.of(value), type = body.valueTypeId(id);
+			if (type >= 0 && changesId(type))
+				body.setValueType(id, body.typeId(physical(types.type(type))));
 		}
-		var arguments = [for (argument in fn.arguments) use(argument)];
-		var blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var instruction = IrInliner.remap(located.value, use, id -> id);
-				switch instruction {
-					case MakeEnum(output, name, constructor, []) if (closed.exists(name)):
-						instruction = ConstInt(output, constructor + 1);
-					case ConstNull(output) if (switch output.type {
-						case I32: true;
-						default: false;
-					}): instruction = ConstInt(output, 0);
-					case TypeValue(output, type) if (changes(type)):
-						instruction = TypeValue(output, physical(type));
+		var i32 = body.typeId(I32);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.MakeEnum if (body.operandCount(row) == 0 && closed.exists(body.symbol(row).name)):
+						body.setOperation(row, IrOpcode.ConstInt, body.auxInt(row, 1) + 1);
+					case IrOpcode.ConstNull if (body.valueTypeId(body.output(row)) == i32):
+						body.setOperation(row, IrOpcode.ConstInt, 0);
+					case IrOpcode.TypeValue if (changesId(body.aux(row))):
+						body.setAux(row, body.typeId(physical(body.typeOperand(row))));
 					default:
 				}
-				copy.instructions.push(new Located(instruction, located.provenance));
+				row = body.nextRow(row);
 			}
-			var terminator = block.terminator;
-			if (terminator != null)
-				copy.terminator = new Located(switch terminator.value {
-					case Unreachable: Unreachable;
-					case Return(value): Return(use(value));
-					case Throw(value): Throw(use(value));
-					case Rethrow(value): Rethrow(use(value));
-					case Jump(target): Jump(target);
-					case Branch(condition, whenTrue, whenFalse): Branch(use(condition), whenTrue, whenFalse);
-					case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
-						switchTargets.copy(), switchOtherwise);
-				}, terminator.provenance);
-			blocks.push(copy);
 		}
-		var bindings:Array<IrDebugBinding> = [for (binding in fn.debugBindings)
-			{
-				identity:binding.identity,
-					name:binding.name,
-					value:use(binding.value),
-					path:binding.path,
-					scopeStart:binding.scopeStart,
-					scopeEnd:binding.scopeEnd
-			}];
-		return new IrFunction(fn.name, arguments, physical(fn.result), blocks, fn.kind, bindings, fn.inlineHint,
-			fn.retention);
+		body.setResult(body.typeId(physical(types.type(body.result))));
+		return retained ? IrFunction.ofBody(body.freeze(true, builder)) : IrFunction.ofOwnedBody(body);
 	}
 
 	function projectNative(native:IrNative):IrNative

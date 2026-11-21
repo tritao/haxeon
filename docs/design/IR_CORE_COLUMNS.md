@@ -110,7 +110,9 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    branching constructor with the inliner's expansion (`IrBodyCallExpansion`). *The value-array rewrite reads bodies*, and is
    the encode point on every target: a function's rewrites edit a copy of its body, so the originals its place methods clone
    (still from their decoding) stay as they were; the helpers it generates are built as functions and encoded, and its
-   boundary helpers are expanded with `IrBodyCallExpansion`.
+   boundary helpers are expanded with `IrBodyCallExpansion`. *The closed enum tag ABI reads bodies* (release builds), changing
+   value types and constants in place, and is the encode point where it runs. `IrEnumEscapeReach` reads a function's body when
+   it has one and its objects before the encode point.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
    `setResult`).
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
@@ -121,7 +123,7 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 ## Session caching model
 
 What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
-(the encode point is the value-array rewrite, on every target). Every body a cache holds is
+(the encode point is the closed enum tag ABI in release builds, else the value-array rewrite, on every target). Every body a cache holds is
 frozen; a body no cache holds is the stages' own (`ofOwnedBody`) and exists only in a one-shot compile. Keys are function
 names; reuse is by object identity of the `IrFunction` an entry was made from.
 

@@ -49,31 +49,60 @@ class IrEnumEscapeReach {
 				}
 				children.push(object);
 			}
-		for (fn in functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case InstanceClosure(output, _, receiver):
-							var environments = closureEnvironments.get(output.type);
-							if (environments == null) {
-								environments = [];
-								closureEnvironments.set(output.type, environments);
-							}
-							environments.push(receiver.type);
-						case Call(_, name, arguments)
-							if (StringTools.startsWith(name.name, "__map_")
-							&& StringTools.contains(name.name, "_ref_")
-							&& StringTools.endsWith(name.name, "_set")
-							&& arguments.length >= 3):
-							var contents = mapContents.get(arguments[0].type);
-							if (contents == null) {
-								contents = [];
-								mapContents.set(arguments[0].type, contents);
-							}
-							contents.push(arguments[1].type);
-							contents.push(arguments[arguments.length - 1].type);
-						default:
+		// A function read past the encode point is its body; one before it, its objects.
+		for (fn in functions) {
+			var body = fn.body;
+			if (body != null)
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block);
+					while (row >= 0) {
+						switch body.opcode(row) {
+							case IrOpcode.InstanceClosure:
+								closureEnvironment(body.valueType(body.output(row)),
+									body.valueType(body.operand(row, 0)));
+							case IrOpcode.Call if (body.operandCount(row) >= 3 && mapSetter(body.symbol(row).name)):
+								mapContent(body.valueType(body.operand(row, 0)), body.valueType(body.operand(row, 1)),
+									body.valueType(body.operand(row, body.operandCount(row) - 1)));
+							default:
+						}
+						row = body.nextRow(row);
 					}
+				}
+					else
+					for (block in fn.blocks)
+						for (located in block.instructions)
+							switch located.value {
+								case InstanceClosure(output, _, receiver):
+									closureEnvironment(output.type, receiver.type);
+								case Call(_, name, arguments) if (arguments.length >= 3 && mapSetter(name.name)):
+									mapContent(arguments[0].type, arguments[1].type,
+										arguments[arguments.length - 1].type);
+								default:
+							}
+		}
+	}
+
+	static function mapSetter(name:String):Bool
+		return StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")
+			&& StringTools.endsWith(name, "_set");
+
+	function closureEnvironment(closure:IrType, receiver:IrType):Void {
+		var environments = closureEnvironments.get(closure);
+		if (environments == null) {
+			environments = [];
+			closureEnvironments.set(closure, environments);
+		}
+		environments.push(receiver);
+	}
+
+	function mapContent(map:IrType, key:IrType, value:IrType):Void {
+		var contents = mapContents.get(map);
+		if (contents == null) {
+			contents = [];
+			mapContents.set(map, contents);
+		}
+		contents.push(key);
+		contents.push(value);
 	}
 
 	/** Opaque native handles do not expose the contents of a container stored behind them.

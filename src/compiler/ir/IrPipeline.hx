@@ -451,16 +451,21 @@ class IrPipeline {
 
 	// Target stages.
 
-	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram
-		return IrClosedEnumTagAbi.run(program, context.reflectable);
-
 	/**
-	 * The first stage over bodies on every target: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each
-	 * function is encoded.
+	 * The first stage over bodies where it runs (release builds): the conversion point (docs/design/IR_CORE_COLUMNS.md, migration),
+	 * where each function is encoded.
 	 */
+	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram {
+		stableBodySources(program, context);
+		return IrClosedEnumTagAbi.run(program, context.reflectable, bodyTypes(context), context.passScratch,
+			context.options.keepSession);
+	}
+
+	/** The conversion point where `closed-enum-tag-abi` does not run (see there). */
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
-		stableBodySources(program, context);
+		if (!closesEnumTags(program, context))
+			stableBodySources(program, context);
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
 			bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
