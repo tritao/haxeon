@@ -46,8 +46,8 @@ class IrPipeline {
 		new IrAssemblyStage("exported-functions", exportedFunctions).when(exportsFunctions),
 		new IrAssemblyStage("enum-specializations", enumSpecializations).when(lowersEnums),
 		new IrAssemblyStage("enum-tag-lowering", enumTagLowering).when(lowersEnums),
-		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
 		new IrAssemblyStage("encode-bodies", encodeBodies),
+		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
 		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
@@ -351,14 +351,20 @@ class IrPipeline {
 	}
 
 	static function enumTagLowering(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		IrEnumTagLowering.run(assembly.enumInput);
+		var enumInput = assembly.enumInput;
+		if (enumInput == null)
+			throw new InternalError("Enum tag lowering needs the enum specializations' input");
+		IrEnumTagLowering.run(enumInput);
+		assembly.functions = enumInput.functions;
 		return assembly;
 	}
 
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+		var input = assembly.functions;
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
-			assembly.reflectableObjects);
-		assembly.functions = enumOutput.functions;
+			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.options.keepSession);
+		assembly.functions = stableChanged("inline-enum-lowering", input, enumOutput.functions, context);
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;
 		assembly.staticFields = enumOutput.staticFields;
@@ -434,6 +440,28 @@ class IrPipeline {
 		return functions;
 	}
 
+	/**
+	 * `output`, which a stage past the conversion point made from `input` with every function a body: in a session, one it changed
+	 * or made the same as last build is last build's, so the stages after it reuse what they made of it; a one-shot compile lets the
+	 * objects of the functions it made go.
+	 */
+	static function stableChanged(stage:String, input:Array<IrFunction>, output:Array<IrFunction>,
+			context:IrPipelineContext):Array<IrFunction> {
+		var cache = context.inlineCache, retained = context.options.keepSession;
+		var given:Map<String, IrFunction> = [for (fn in input) fn.name => fn];
+		var changed = [for (fn in output) if (given.get(fn.name) != fn) fn];
+		if (!retained || cache == null) {
+			for (fn in changed)
+				fn.releaseDecoded();
+			return output;
+		}
+		var stable = cache.stableGenerated(stage, changed);
+		if (changed.length == 0)
+			return output;
+		var index = 0;
+		return [for (fn in output) given.get(fn.name) != fn ? stable[index++] : fn];
+	}
+
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
 		var types = bodyTypes(context),
 			builder = context.passScratch.bodyBuilder,
@@ -480,6 +508,9 @@ class IrPipeline {
 		if (retained && cache != null)
 			assembly.functions = cache.stableBodySources(assembly.functions);
 		encodeAll(assembly.functions, context);
+		var enumInput = assembly.enumInput;
+		if (enumInput != null)
+			enumInput.functions = assembly.functions;
 		return assembly;
 	}
 

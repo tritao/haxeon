@@ -123,6 +123,11 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    dereference of a static, on a copy in a session. *Optional scalar flow* finds the functions with an optional value on
    their bodies; it still rewrites those few from their decoding into new functions, encoded at the end of the stage with
    the optional value helpers, which it now adds itself (the `optional-value-helpers` stage is merged into it).
+   *Inline enum lowering reads bodies*: its eligibility scans rows, a function that mentions a selected enum is lowered in
+   place (value types, result and descriptors mapped last, loads and stores of packets linked where the instruction was, enum
+   operations made calls of their helpers, and the typed interface calls such a function now carries redirected, as the
+   typed-interface stage does), and the helpers, typed dispatchers and escape adapters it adds are built as functions and
+   encoded. In a session, a function it changed or made the same as last build is last build's (`IrPipeline.stableChanged`).
    The encode point is now a stage of its own (`encode-bodies` in `IrPipeline.assembly`),
    which runs on every target whichever stages after it run, and moves up the list as stages are ported.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
@@ -143,7 +148,7 @@ names; reuse is by object identity of the `IrFunction` an entry was made from.
   has its objects (the stages before still read them) and its frozen encoding. A rebuilt function equal to it
   (`IrFunctionStateEquality.same`) is replaced by it, so the stages after see the same object and reuse by identity.
 - **Generated functions past the encode point** (`IrInlineCache.generatedSources`, stage → name → `IrFunction`): a stage that
-  builds functions as objects each build (the reflection helpers, optional scalar flow's functions and helpers) takes last build's for one generated the same, as the
+  builds functions as objects each build (the reflection helpers, optional scalar flow's functions and helpers), or edits a copy of a body each build (inline enum lowering), takes last build's for one made the same, as the
   encode point does, so it is encoded once.
 - **Static null checks** (`IrInlineCache.staticChecks`): name → {source function, its checked copy}, reused while the source
   is the same object, and the checks by name, made once.

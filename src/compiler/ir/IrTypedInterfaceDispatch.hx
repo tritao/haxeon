@@ -75,6 +75,53 @@ class IrTypedInterfaceDispatch {
 		return rewritten;
 	}
 
+	/**
+	 * `rewriteValueCalls` on one body, in place: an interface call or method value that carries a value object (`values`, by
+	 * name) calls its typed dispatcher. A method value is rewritten only for an interface in `contracts`.
+	 */
+	public static function rewriteBodyValueCalls(body:IrBody, values:Map<String, Bool>,
+			contracts:Map<String, Bool>):Void {
+		function isValue(type:IrType):Bool return switch type {
+			case Obj(name): values.exists(name);
+			default: false;
+		};
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.MethodCall:
+						switch body.valueType(body.operand(row, 0)) {
+							case Virtual(name):
+								var output = body.valueType(body.output(row)), carriesValue = isValue(output);
+								for (index in 1...body.operandCount(row))
+									if (isValue(body.valueType(body.operand(row, index))))
+										carriesValue = true;
+								if (carriesValue)
+									body.setOperation(row, IrOpcode.Call,
+										IrSymbol.of(callName(name, body.symbol(row).name,
+										[for (index in 1...body.operandCount(row)) body.valueType(body.operand(row,
+										index))],
+										output)).id);
+							default:
+						}
+					case IrOpcode.InstanceClosure:
+						var name = body.symbol(row).name, separator = name.lastIndexOf(".");
+						if (!StringTools.startsWith(name, PREFIX) && separator >= 0
+							&& contracts.exists(name.substr(0, separator)))
+							switch [body.valueType(body.operand(row, 0)), body.valueType(body.output(row))] {
+								case [Virtual(owner), Function(arguments, result)]
+									if (isValue(result) || Lambda.exists(arguments, isValue)):
+									body.setAux(row,
+										IrSymbol.of(callName(owner, name.substr(separator + 1), arguments, result)).id);
+								default:
+							}
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+	}
+
 	public static function callName(interfaceName:String, method:String, arguments:Array<IrType>,
 			result:IrType):String {
 		var signature = IrTypeIdentity.listText(arguments) + ":" + IrTypeIdentity.text(result);
@@ -94,18 +141,50 @@ class IrTypedInterfaceDispatch {
 				throw new InternalError('Conflicting typed interface dispatch "$name"');
 			requests.set(name, signature);
 		}
-		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
-				request(name.name, {arguments: [for (argument in arguments) argument.type], result: output.type});
-			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
-				switch output.type {
-					case Function(arguments, result): request(name.name, {
-						arguments: [receiver.type].concat(arguments),
-						result: result
-					});
-					default: throw new InternalError('Invalid typed interface method reference "$name"');
+		function closureRequest(name:String, output:IrType, receiver:IrType):Void
+			switch output {
+				case Function(arguments, result): request(name, {
+					arguments: [receiver].concat(arguments),
+					result: result
+				});
+				default: throw new InternalError('Invalid typed interface method reference "$name"');
+			}
+		// A function read past the encode point is its body; one before it, its objects.
+		for (fn in functions) {
+			var body = fn.body;
+			if (body != null)
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block);
+					while (row >= 0) {
+						var opcode = body.opcode(row);
+						if (opcode == IrOpcode.Call || opcode == IrOpcode.InstanceClosure) {
+							var name = body.symbol(row).name;
+							if (StringTools.startsWith(name, PREFIX)) {
+								if (opcode == IrOpcode.Call)
+									request(name, {
+										arguments: [for (index in 0...body.operandCount(row))
+											body.valueType(body.operand(row, index))],
+										result: body.valueType(body.output(row))
+									});
+								else
+									closureRequest(name, body.valueType(body.output(row)),
+										body.valueType(body.operand(row, 0)));
+							}
+						}
+						row = body.nextRow(row);
+					}
 				}
-			default:
+					else
+					for (block in fn.blocks) for (located in block.instructions) switch located.value {
+						case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
+							request(name.name, {
+								arguments: [for (argument in arguments) argument.type],
+								result: output.type
+							});
+						case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
+							closureRequest(name.name, output.type, receiver.type);
+						default:
+					}
 		}
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],

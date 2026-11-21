@@ -31,9 +31,17 @@ class IrInlineEnumEligibility {
 	final nodes:Array<EnumUseNode> = [];
 	final words:Int;
 	final rejected:Array<Int>;
+	/** The constants null of the function `scan` reads. */
+	final nulls:Map<Int, Bool> = [];
 
-	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>) {
+	/**
+	 * The enums of `program` that may be lowered to value packets, reading the functions' bodies made with `types` (those of the
+	 * functions' bodies when not given), encoding a function that has none (frozen when `retained`).
+	 */
+	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
+			?types:IrTypeIds, ?builder:IrBodyBuilder, retained = true) {
 		this.planner = planner;
+		var bodyTypes = types == null ? IrTypeIds.ofFunctions(program.functions) : types;
 		reflectionReach = new IrEnumEscapeReach(program);
 		declarations = [for (declaration in program.enums) declaration.name => declaration];
 		objects = [for (object in program.objects) object.name => object];
@@ -148,151 +156,176 @@ class IrInlineEnumEligibility {
 				escape(argument, "C native signature");
 			escape(native.result, "C native signature");
 		}
-		for (fn in program.functions) {
-			if (fn.retention == Expose || fn.name == program.entryPoint) {
-				for (argument in fn.arguments)
-					escape(argument.type, "host signature");
-				escape(fn.result, "host signature");
-			}
-			var descriptors:Map<Int, IrType> = [],
-				arrayDescriptors:Map<Int, Bool> = [],
-				callableDescriptorUses:Map<Int, Bool> = [],
-				referenceTypeDescriptorUses:Map<Int, Bool> = [],
-				logicalEnumDescriptorUses:Map<Int, Bool> = [],
-				descriptorUses:Map<Int, Int> = [],
-				otherDescriptors:Map<Int, Bool> = [],
-				nulls:Map<Int, Bool> = [];
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case TypeValue(out, type):
-							descriptors.set(out.id, type);
-						case ConstNull(out):
-							nulls.set(out.id, true);
-						default:
-					}
-			for (block in fn.blocks) {
-				for (located in block.instructions) {
-					var instruction = located.value;
-					for (inputIndex in 0...IrOperands.count(instruction)) {
-						var input = IrOperands.at(instruction, inputIndex);
-						if (descriptors.exists(input.id)) {
-							descriptorUses.set(input.id,
-								(descriptorUses.exists(input.id) ? descriptorUses.get(input.id) : 0) + 1);
-							switch instruction {
-								case Call(_, callTarget,
-									arguments) if (callTarget.name == "__closure_is_of_type" && arguments.length == 2
-									&& arguments[1].id == input.id
-									&& supportsCallableEscape(descriptors.get(input.id))):
-									callableDescriptorUses.set(input.id, true);
-								case Call(_, callTarget,
-									arguments) if ((callTarget.name == "__std_is_exact_type" || callTarget.name
-									== "__std_is_of_type") && arguments.length == 2 && arguments[1].id == input.id
-									&& isReferenceTypeDescriptor(descriptors.get(input.id))):
-									referenceTypeDescriptorUses.set(input.id, true);
-								case Call(_, callTarget,
-									arguments) if (callTarget.name == "__array_alloc_typed_ref" && arguments.length == 2
-									&& arguments[1].id == input.id):
-									arrayDescriptors.set(input.id, true);
-								case Call(_, callTarget,
-									arguments) if ((callTarget.name == "__std_is_exact_type" || callTarget.name
-									== "__std_is_of_type") && arguments.length == 2 && arguments[1].id == input.id
-									&& logicalEnumDescriptorFunction(fn.name)
-									&& isSelectedEnumDescriptor(descriptors.get(input.id))):
-									logicalEnumDescriptorUses.set(input.id, true);
-								default:
-									otherDescriptors.set(input.id, true);
-							}
-						}
-					}
-					switch instruction {
-						case Call(out, name, arguments) if (StringTools.startsWith(name.name, "__map_")
-							&& StringTools.contains(name.name, "_ref_")):
-							var operation = name.name.substr(name.name.lastIndexOf("_ref_") + 5);
-							switch operation {
-								case "set" if (arguments.length >= 3):
-									// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;
-									// a direct enum or value struct still needs its nominal boxed representation here.
-									escapeMapReference(arguments[arguments.length - 1].type,
-										"native reference map storage");
-								case "get" | "values" | "handles":
-									escapeMapReference(out.type, "native reference map storage");
-								default:
-							}
-						case ToDyn(out, value) if (!supportsCallableEscape(value.type)):
-							escape(value.type, "Dynamic escape");
-						case SafeCast(out, value) if (!((switch (value.type) {
-							case Dyn: true;
-							default: false;
-						}) && supportsCallableEscape(out.type))): escape(out.type, "checked escape");
-						escape(value.type, "checked escape");
-						case Phi(_, inputs):
-							for (input in inputs)
-								if (descriptors.exists(input.value.id)) {
-									descriptorUses.set(input.value.id, (descriptorUses.exists(input.value.id)
-										? descriptorUses.get(input.value.id) : 0) + 1);
-									otherDescriptors.set(input.value.id, true);
-								}
-						case MethodCall(out, receiver, _, arguments, _):
-							// Interface packets have a verified typed table; ordinary value calls do not yet share it.
-							switch receiver.type {
-								case Virtual(_):
-								default:
-									value(receiver.type, "ordinary method receiver");
-									value(out.type, "ordinary method result");
-									for (argument in arguments)
-										value(argument.type, "ordinary method argument");
-							}
-						case InstanceClosure(out, _, receiver):
-							switch receiver.type {
-								case Virtual(_):
-								case Obj(name) if (StringTools.startsWith(name,
-									compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
-								default:
-									value(receiver.type, "bound value receiver");
-									callableValue(out.type, "bound value method", true);
-							}
-						case Equal(_, left, right) if (!nulls.exists(left.id) && !nulls.exists(right.id)):
-							value(left.type, "unlowered enum comparison");
-							value(right.type, "unlowered enum comparison");
-						default:
-					}
-					var out = IrOperands.output(instruction);
-					if (out != null)
-						containerCallable(out.type);
-				}
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Throw(thrown), Rethrow(thrown):
-							escape(thrown.type, "exception escape");
-						case Return(result), Branch(result, _, _),
-							Switch(result, _, _) if (descriptors.exists(result.id)):
-							otherDescriptors.set(result.id, true);
-						default:
-					}
-			}
-			var validCallableDescriptors:Map<Int, Bool> = [];
-			for (id => type in descriptors) {
-				var singleUse = descriptorUses.get(id) == 1 && !otherDescriptors.exists(id);
-				if (referenceTypeDescriptorUses.exists(id) && singleUse && isReferenceTypeDescriptor(type))
-					continue;
-				if (logicalEnumDescriptorUses.exists(id) && singleUse && isSelectedEnumDescriptor(type))
-					continue;
-				if (callableDescriptorUses.exists(id) && singleUse && supportsCallableEscape(type))
-					validCallableDescriptors.set(id, true);
-				else if (!arrayDescriptors.exists(id) || otherDescriptors.exists(id) || descriptorUses.get(id) != 1)
-					{
-					escape(type, "runtime type descriptor");
-				}
-			}
-			if (validCallableDescriptors.keys().hasNext()) callableDescriptors.set(fn.name, validCallableDescriptors);
-		}
+		for (fn in program.functions)
+			scan(fn, fn.bodyIn(bodyTypes, builder, retained), program.entryPoint);
 		for (reason in escapeOrder)
 			for (name in reflectionReach.collect(escapeRoots.get(reason), supportsCallableEscape).keys()) block(name,
 				reason);
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
+	}
+
+	/** What one function's rows let escape or keep in value form, and its verified callable descriptors. */
+	function scan(fn:IrFunction, body:IrBody, entryPoint:String):Void {
+		if (fn.retention == Expose || fn.name == entryPoint) {
+			for (argument in fn.arguments)
+				escape(argument.type, "host signature");
+			escape(fn.result, "host signature");
+		}
+		// Descriptors are rare: their tables are made for a function that has one.
+		var descriptors:Null<Map<Int, IrType>> = null;
+		nulls.clear();
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.TypeValue:
+						if (descriptors == null)
+							descriptors = [];
+						descriptors.set(body.output(row), body.typeOperand(row));
+					case IrOpcode.ConstNull:
+						nulls.set(body.output(row), true);
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		var arrayDescriptors:Map<Int, Bool> = descriptors == null ? null : [],
+			callableDescriptorUses:Map<Int, Bool> = descriptors == null ? null : [],
+			referenceTypeDescriptorUses:Map<Int, Bool> = descriptors == null ? null : [],
+			logicalEnumDescriptorUses:Map<Int, Bool> = descriptors == null ? null : [],
+			descriptorUses:Map<Int, Int> = descriptors == null ? null : [],
+			otherDescriptors:Map<Int, Bool> = descriptors == null ? null : [];
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var opcode = body.opcode(row);
+				if (opcode.isTerminator()) {
+					switch opcode {
+						case IrOpcode.Throw, IrOpcode.Rethrow:
+							escape(body.valueType(body.operand(row, 0)), "exception escape");
+						case IrOpcode.Return, IrOpcode.Branch, IrOpcode.Switch
+							if (descriptors != null && descriptors.exists(body.operand(row, 0))):
+							otherDescriptors.set(body.operand(row, 0), true);
+						default:
+					}
+					row = body.nextRow(row);
+					continue;
+				}
+				if (descriptors != null && opcode != IrOpcode.Phi)
+					for (inputIndex in 0...body.operandCount(row)) {
+						var input:Int = body.operand(row, inputIndex);
+						if (descriptors.exists(input)) {
+							descriptorUses.set(input,
+								(descriptorUses.exists(input) ? descriptorUses.get(input) : 0) + 1);
+							var callTarget = opcode == IrOpcode.Call && body.operandCount(row) == 2
+								&& body.operand(row, 1) == input ? body.symbol(row).name : null;
+							if (callTarget == "__closure_is_of_type" && supportsCallableEscape(descriptors.get(input)))
+								callableDescriptorUses.set(input, true);
+							else if ((callTarget == "__std_is_exact_type" || callTarget == "__std_is_of_type")
+								&& isReferenceTypeDescriptor(descriptors.get(input)))
+								referenceTypeDescriptorUses.set(input, true);
+							else if (callTarget == "__array_alloc_typed_ref")
+								arrayDescriptors.set(input, true);
+							else if ((callTarget == "__std_is_exact_type" || callTarget == "__std_is_of_type")
+								&& logicalEnumDescriptorFunction(fn.name)
+								&& isSelectedEnumDescriptor(descriptors.get(input)))
+								logicalEnumDescriptorUses.set(input, true);
+							else
+								otherDescriptors.set(input, true);
+						}
+					}
+				switch opcode {
+					case IrOpcode.Call:
+						var name = body.symbol(row).name;
+						if (StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")) {
+							var count = body.operandCount(row);
+							switch name.substr(name.lastIndexOf("_ref_") + 5) {
+								case "set" if (count >= 3):
+									// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;
+									// a direct enum or value struct still needs its nominal boxed representation here.
+									escapeMapReference(body.valueType(body.operand(row, count - 1)),
+										"native reference map storage");
+								case "get" | "values" | "handles":
+									escapeMapReference(body.valueType(body.output(row)),
+										"native reference map storage");
+								default:
+							}
+						}
+					case IrOpcode.ToDyn:
+						var value = body.valueType(body.operand(row, 0));
+						if (!supportsCallableEscape(value))
+							escape(value, "Dynamic escape");
+					case IrOpcode.SafeCast:
+						var value = body.valueType(body.operand(row, 0)), out = body.valueType(body.output(row));
+						if (!((switch value {
+							case Dyn: true;
+							default: false;
+						}) && supportsCallableEscape(out))) {
+							escape(out, "checked escape");
+							escape(value, "checked escape");
+						}
+					case IrOpcode.Phi if (descriptors != null):
+						for (index in 0...body.operandCount(row)) {
+							var input:Int = body.operand(row, index);
+							if (descriptors.exists(input)) {
+								descriptorUses.set(input,
+									(descriptorUses.exists(input) ? descriptorUses.get(input) : 0) + 1);
+								otherDescriptors.set(input, true);
+							}
+						}
+					case IrOpcode.MethodCall:
+						// Interface packets have a verified typed table; ordinary value calls do not yet share it.
+						var receiver = body.valueType(body.operand(row, 0));
+						switch receiver {
+							case Virtual(_):
+							default:
+								value(receiver, "ordinary method receiver");
+								value(body.valueType(body.output(row)), "ordinary method result");
+								for (index in 1...body.operandCount(row))
+									value(body.valueType(body.operand(row, index)), "ordinary method argument");
+						}
+					case IrOpcode.InstanceClosure:
+						var receiver = body.valueType(body.operand(row, 0));
+						switch receiver {
+							case Virtual(_):
+							case Obj(name) if (StringTools.startsWith(name,
+								compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
+							default:
+								value(receiver, "bound value receiver");
+								callableValue(body.valueType(body.output(row)), "bound value method", true);
+						}
+					case IrOpcode.Equal:
+						var left = body.operand(row, 0), right = body.operand(row, 1);
+						if (!nulls.exists(left) && !nulls.exists(right)) {
+							value(body.valueType(left), "unlowered enum comparison");
+							value(body.valueType(right), "unlowered enum comparison");
+						}
+					default:
+				}
+				var out = body.output(row);
+				if (out.exists())
+					containerCallable(body.valueType(out));
+				row = body.nextRow(row);
+			}
+		}
+		if (descriptors == null)
+			return;
+		var validCallableDescriptors:Map<Int, Bool> = [];
+		for (id => type in descriptors) {
+			var singleUse = descriptorUses.get(id) == 1 && !otherDescriptors.exists(id);
+			if (referenceTypeDescriptorUses.exists(id) && singleUse && isReferenceTypeDescriptor(type))
+				continue;
+			if (logicalEnumDescriptorUses.exists(id) && singleUse && isSelectedEnumDescriptor(type))
+				continue;
+			if (callableDescriptorUses.exists(id) && singleUse && supportsCallableEscape(type))
+				validCallableDescriptors.set(id, true);
+			else if (!arrayDescriptors.exists(id) || otherDescriptors.exists(id) || descriptorUses.get(id) != 1)
+				escape(type, "runtime type descriptor");
+		}
+		if (validCallableDescriptors.keys().hasNext())
+			callableDescriptors.set(fn.name, validCallableDescriptors);
 	}
 
 	static function logicalEnumDescriptorFunction(name:String):Bool
