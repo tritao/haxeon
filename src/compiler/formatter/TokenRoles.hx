@@ -137,7 +137,10 @@ class TokenRoles {
 	/** Whether the bracket at `step` closes a group whose opener follows one of `keywords`. */
 	function keywordBefore(step:Int, keywords:Array<TokenKind>):Bool {
 		var open = matchOf(step);
-		return open > 0 && keywords.indexOf(kind(open - 1)) >= 0;
+		if (open <= 0)
+			return false;
+		var before = kind(open - 1);
+		return before != null && keywords.indexOf(before) >= 0;
 	}
 
 	function opensParameters(step:Int):Bool {
