@@ -140,6 +140,7 @@ map-for-in	52
 map-nested-values	42
 map-key-value-for-in	42
 map-nullable-get	42
+map-unboxed-values	42
 map-string-equality	42
 loop-control	42
 increment	42

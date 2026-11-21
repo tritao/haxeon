@@ -921,13 +921,29 @@ class IrProgramAssembler {
 				arguments: [mapType, keyIrType],
 				result: Bool
 			});
-			program.natives.push({
-				name: '__${mapName}_get',
-				library: "haxeon_runtime",
-				symbol: '__${mapName}_get',
-				arguments: [mapType, keyIrType],
-				result: Dyn
-			});
+			if (RuntimeType.hasScalarValues(mapName)) {
+				program.natives.push({
+					name: '__${mapName}_index',
+					library: "haxeon_runtime",
+					symbol: '__${mapName}_index',
+					arguments: [mapType, keyIrType],
+					result: I32
+				});
+				program.natives.push({
+					name: '__${mapName}_value',
+					library: "haxeon_runtime",
+					symbol: '__${mapName}_value',
+					arguments: [mapType, I32],
+					result: valueIrType
+				});
+			} else
+				program.natives.push({
+					name: '__${mapName}_get',
+					library: "haxeon_runtime",
+					symbol: '__${mapName}_get',
+					arguments: [mapType, keyIrType],
+					result: Dyn
+				});
 			program.natives.push({
 				name: '__${mapName}_keys',
 				library: "haxeon_runtime",

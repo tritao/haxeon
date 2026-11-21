@@ -1324,6 +1324,8 @@ class IrGenerator {
 		}
 		var name = RuntimeType.requireMapName(keyType, valueType),
 			target = lowerType(resultType == null ? valueType : resultType);
+		if (RuntimeType.hasScalarValues(name))
+			return lowerScalarMapGet(builder, localTypes, name, map, lowerMapKey(builder, key, keyType), target);
 		var value = builder.call('__${name}_get', [map, lowerMapKey(builder, key, keyType)], Dyn);
 		var box = mapValueBox(valueType);
 		if (box == null)
@@ -1343,6 +1345,37 @@ class IrGenerator {
 		builder.jump(afterBlock);
 		builder.select(presentBlock);
 		builder.store(resultName, unboxMapValue(builder, builder.load(storedName, Dyn), box, target));
+		builder.jump(afterBlock);
+		builder.select(afterBlock);
+		return builder.load(resultName, target);
+	}
+
+	/**
+	 * A lookup in a map of scalar values: the entry holding the key, then its value, so nothing is boxed. A missing key
+	 * gives null, or zero for a target that cannot hold null. The result joins the two as a nullable scalar, which stays in
+	 * presence/payload form where it does not escape (`IrNullableScalarFlow`).
+	 */
+	function lowerScalarMapGet(builder:IrLocalsBuilder, localTypes:Map<String, IrType>, name:String, map:IrValue,
+			key:IrValue, target:IrType):IrValue {
+		var index = builder.call('__${name}_index', [map, key], I32),
+			resultName = '$' + 'map-value:${index.id}',
+			presentBlock = builder.createBlock(),
+			missingBlock = builder.createBlock(),
+			afterBlock = builder.createBlock();
+		localTypes.set(resultName, target);
+		builder.branch(builder.less(index, builder.constInt(0)), missingBlock, presentBlock);
+		builder.select(missingBlock);
+		builder.store(resultName, switch target {
+			case I32, I64: builder.constInt(0, target);
+			case F64: builder.constFloat(0.0);
+			case Bool: builder.constBool(false);
+			default: builder.constNull(target);
+		});
+		builder.jump(afterBlock);
+		builder.select(presentBlock);
+		var payload = builder.call('__${name}_value', [map, index],
+			lowerType(RuntimeType.mapValueType(name)));
+		builder.store(resultName, abiBoundaryCast(builder, payload, target));
 		builder.jump(afterBlock);
 		builder.select(afterBlock);
 		return builder.load(resultName, target);

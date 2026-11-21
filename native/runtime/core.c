@@ -160,6 +160,13 @@ extern varray *hl_hbvalues( realtime_string_map *map );
 extern int hl_hbsize( realtime_string_map *map );
 extern void hl_hbclear( realtime_string_map *map );
 extern realtime_string_map *hl_hbcopy( realtime_string_map *map );
+extern realtime_string_map *hl_hbs_alloc( void );
+extern int64 hl_hbs_value( realtime_string_map *map, int index );
+extern varray *hl_hbs_keys( realtime_string_map *map );
+extern varray *hl_hbs_values( realtime_string_map *map, hl_type *type );
+extern int hl_hbs_size( realtime_string_map *map );
+extern void hl_hbs_clear( realtime_string_map *map );
+extern realtime_string_map *hl_hbs_copy( realtime_string_map *map );
 
 static HL_NO_RETURN( void realtime_raise_module_exception( void ) );
 static void realtime_raise_module_exception( void ) {
@@ -183,6 +190,17 @@ extern int hl_hisize( realtime_int_map *map );
 extern bool hl_hiremove( realtime_int_map *map, int key );
 extern void hl_hiclear( realtime_int_map *map );
 extern realtime_int_map *hl_hicopy( realtime_int_map *map );
+extern realtime_int_map *hl_his_alloc( void );
+extern void hl_his_set( realtime_int_map *map, int key, int64 value );
+extern bool hl_his_exists( realtime_int_map *map, int key );
+extern int hl_his_index( realtime_int_map *map, int key );
+extern int64 hl_his_value( realtime_int_map *map, int index );
+extern varray *hl_his_keys( realtime_int_map *map );
+extern varray *hl_his_values( realtime_int_map *map, hl_type *type );
+extern int hl_his_size( realtime_int_map *map );
+extern bool hl_his_remove( realtime_int_map *map, int key );
+extern void hl_his_clear( realtime_int_map *map );
+extern realtime_int_map *hl_his_copy( realtime_int_map *map );
 
 typedef struct {
 	int offset;

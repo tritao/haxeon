@@ -121,6 +121,16 @@ class RuntimeType {
 			default: null;
 		};
 
+	/**
+	 * True for a map of Int, Int64, Bool or Float values, which the runtime keeps unboxed. Such a map has no `get`
+	 * native for compiled code: a lookup is `index` (the entry holding the key, or -1), then `value` of that entry.
+	 */
+	public static function hasScalarValues(name:String):Bool
+		return switch mapValueType(name) {
+			case TInt, TInt64, TBool, TFloat: true;
+			default: false;
+		};
+
 	static function isRuntimeReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isRuntimeReference(representation);

@@ -93,9 +93,11 @@ class IrAllocationReport {
 			return switch map.matched(3) {
 				case "alloc", "copy", "keys", "values": {kind: Alloc, what: name};
 				case "set": {kind: Grow, what: name};
-				// A map of references returns the stored reference; any other value type comes back boxed.
-				case "get": map.matched(2) == "ref" ? null : {kind: Alloc, what: name + " (boxes the value)"};
-				case "exists", "remove", "clear", "size": null;
+				// A map of references or Strings returns what it stores. Compiled code reads a scalar map through `index` and
+				// `value`; its `get`, kept for bytecode built before them, boxes the value.
+				case "get" if (map.matched(2) == "ref" || map.matched(2) == "bytes"): null;
+				case "get": {kind: Alloc, what: name + " (boxes the value)"};
+				case "exists", "remove", "clear", "size", "index", "value": null;
 				default: {kind: Unknown, what: name};
 			};
 		if (StringTools.startsWith(body, "array_")) {

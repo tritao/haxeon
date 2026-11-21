@@ -1752,6 +1752,9 @@ class WasmLinearRuntime {
 				ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
 			case "get": addMapGet(module, name, keyType, valueType, entrySize, valueOffset, allocator, stringEqual,
 				ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+			case "index": addMapIndex(module, name, keyType,
+				ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+			case "value": addMapValue(module, name, valueType, entrySize, valueOffset);
 			case "keys": addMapProjection(module, name, keyType, entrySize, 0, allocator,
 				ensureMapArrayAllocator(module, functions, allocator, keyType));
 			case "values": addMapProjection(module, name, valueType, entrySize, valueOffset, allocator,
@@ -2041,6 +2044,34 @@ class WasmLinearRuntime {
 				I32Eqz,
 				Return
 			]));
+
+	/** The entry holding a key, or -1: with `value`, a lookup of a scalar value that boxes nothing. */
+	static function addMapIndex(module:WasmModule, name:String, keyType:IrType, find:Int):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {
+			parameters: [I32, WasmModuleSupport.requireValueType(keyType)],
+			results: [I32]
+		}, [], [
+			LocalGet(0),
+			LocalGet(1),
+			Call(find),
+			Return
+		]));
+
+	/** The value of an entry `index` found. */
+	static function addMapValue(module:WasmModule, name:String, valueType:IrType, entrySize:Int, valueOffset:Int):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {
+			parameters: [I32, I32],
+			results: [WasmModuleSupport.requireValueType(valueType)]
+		}, [], [
+			LocalGet(0),
+			I32Load(WasmLayout.MAP_ENTRIES_OFFSET),
+			LocalGet(1),
+			I32Const(entrySize),
+			I32Mul,
+			I32Add,
+			loadMapValue(valueType, valueOffset),
+			Return
+		]));
 
 	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int,
 			valueOffset:Int, allocator:Int,

@@ -399,6 +399,8 @@ class IrInterpreter {
 				var at = map.find(arguments[1]);
 				at < 0 ? null : map.entries[at].value;
 			case "exists": map.find(arguments[1]) >= 0;
+			case "index": map.find(arguments[1]);
+			case "value": map.entries[arguments[1]].value;
 			case "set":
 				var at = map.find(arguments[1]);
 				if (at < 0)

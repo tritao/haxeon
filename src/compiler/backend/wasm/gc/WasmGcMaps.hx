@@ -37,6 +37,16 @@ class WasmGcMaps {
 				ensureHelpers(module, functions, plan, mapName).find);
 			case "get": addGet(module, name, plan, map, mapType, mapReference,
 				ensureHelpers(module, functions, plan, mapName).find);
+			case "index": module.addFunction(new WasmFunction(name, {
+				parameters: [mapReference, plan.valueType(map.keyType)],
+				results: [I32]
+			}, [], [
+				LocalGet(0),
+				LocalGet(1),
+				Call(ensureHelpers(module, functions, plan, mapName).find),
+				Return
+			]));
+			case "value": addValue(module, name, plan, map, mapType, mapReference);
 			case "keys": addProjectionForNative(module, name, plan, native, map, mapType, mapReference, true);
 			case "values": addProjectionForNative(module, name, plan, native, map, mapType, mapReference, false);
 			case "remove": addRemove(module, name, plan, map, mapType, mapReference,
@@ -676,6 +686,25 @@ class WasmGcMaps {
 				I32Eqz,
 				Return
 			]));
+
+	/** The value of an entry `index` found: with it, a lookup of a scalar value that boxes nothing. */
+	static function addValue(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType):Int {
+		var valueArray = plan.arrayType(map.valueType),
+			valueStorage = plan.arrayStorageType(map.valueType);
+		return module.addFunction(new WasmFunction(name, {
+			parameters: [mapReference, I32],
+			results: [plan.valueType(map.valueType)]
+		}, [], [
+			LocalGet(0),
+			StructGet(mapType, 3),
+			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
+			RefCast({nullable: false, heap: Type(valueStorage)}),
+			LocalGet(1),
+			ArrayGet(valueStorage),
+			Return
+		]));
+	}
 
 	static function addGet(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
 			mapReference:WasmValueType, find:Int):Int {
