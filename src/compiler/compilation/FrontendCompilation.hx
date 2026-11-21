@@ -794,6 +794,20 @@ class FrontendCompilation {
 			if (!owners.exists(fn.name))
 				generatedFunctions.set(fn.name, true);
 		}
+		// The module each generated function was held by before this build, found when one first needs it.
+		var heldBy:Null<Map<String, String>> = null;
+		function previouslyHeld(name:String):Null<String> {
+			var held = heldBy;
+			if (held == null) {
+				held = [];
+				for (module => state in context.state.modules)
+					for (functionName in state.irFunctions.keys())
+						if (generatedFunctions.exists(functionName))
+							held.set(functionName, module);
+				heldBy = held;
+			}
+			return held.get(name);
+		}
 		for (fn in typedNew.functions) {
 			checkCancelled(token);
 			checkLambdaOrigin(fn);
@@ -857,12 +871,31 @@ class FrontendCompilation {
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
 			if (lowerToIr) {
-				state.irFunctions.set(fn.name, generator.generateFunction(fn));
+				var ir = generator.generateFunction(fn),
+					previous = state.pendingIrFunctions.exists(fn.name) ? null : state.irFunctions.get(fn.name),
+					previousVersion = state.irVersions.exists(fn.name) ? state.irVersions.get(fn.name) : 0;
+				// A helper is owned by the module of the code that asked for it first, which another build can ask from elsewhere:
+				// what it had is in the module that owned it before, until pruning drops that copy.
+				if (previous == null && generated && !state.irFunctions.exists(fn.name)) {
+					var held = previouslyHeld(fn.name);
+					var holder = held == null ? null : context.state.modules.get(held);
+					if (holder != null && !holder.pendingIrFunctions.exists(fn.name)) {
+						previous = holder.irFunctions.get(fn.name);
+						previousVersion = holder.irVersions.exists(fn.name) ? holder.irVersions.get(fn.name) : 0;
+					}
+				}
 				state.irSourceRevisions.set(fn.name, state.revision);
 				state.pendingIrFunctions.remove(fn.name);
+				// Typed again to the IR it already had (a helper every build types from the program's requests, an edit that changes
+				// nothing the function compiles to): the function keeps that IR and its version, so nothing after it sees a change.
+				if (previous != null && compiler.ir.codec.IrFunctionStateEquality.same(previous, ir)) {
+					state.irFunctions.set(fn.name, previous);
+					state.irVersions.set(fn.name, previousVersion);
+					continue;
+				}
+				state.irFunctions.set(fn.name, ir);
 				regenerated.push(fn.name);
-				var version = state.irVersions.exists(fn.name) ? state.irVersions.get(fn.name) + 1 : 1;
-				state.irVersions.set(fn.name, version);
+				state.irVersions.set(fn.name, previousVersion + 1);
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}

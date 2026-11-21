@@ -1,4 +1,5 @@
 import compiler.Compiler;
+import compiler.compilation.PipelineSnapshot;
 
 /**
  * Making a parameter optional (`p:T` -> `?p:T`, or giving it a default) changes how many arguments callers may pass,
@@ -20,8 +21,11 @@ class OptionalParameterSignatureMain {
 	}
 
 	/**
-	 * A caller that omits an optional argument is lowered with the default, so editing the default must regenerate it
-	 * even though the signature types and arity are unchanged and the caller still type-checks.
+	 * A caller that omits an optional argument is lowered with the default, so editing the default must give the program a
+	 * fresh build of the edited sources has, even though the signature types and arity are unchanged and the caller still
+	 * type-checks. Where the default is applied (the caller, or a dispatch wrapper it calls) is the lowering's choice; a
+	 * function whose IR the edit does not change keeps it, so the check is the final program, not which functions were
+	 * regenerated.
 	 */
 	static function checkDefault(label:String, gateBefore:String, gateAfter:String, caller:String):Void {
 		var compiler = new Compiler();
@@ -30,8 +34,12 @@ class OptionalParameterSignatureMain {
 		compiler.compile("Main", null, false);
 		compiler.update("Gate.hx", gateAfter);
 		var changed = compiler.compile("Main", null, false);
-		if (changed.regenerated.indexOf("Main.main") < 0)
-			throw '$label: the caller kept the old default: ${changed.regenerated}';
+		var fresh = new Compiler();
+		fresh.update("Gate.hx", gateAfter);
+		fresh.update("Main.hx", caller);
+		var difference = PipelineSnapshot.irDifference(changed.ir, fresh.compile("Main", null, false).ir);
+		if (difference != null)
+			throw '$label: the caller kept the old default: $difference (regenerated ${changed.regenerated})';
 	}
 
 	static function main():Void {

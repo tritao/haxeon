@@ -183,24 +183,27 @@ class EnumEqualityGenerator {
 	static function compareField(session:TypingSession, type:CompilerType, left:TypedExpression, right:TypedExpression,
 			requestInfo:EqualityRequest,
 			reflective:Bool):TypedExpression {
+		// The helper's own span (its enum's declaration), never the span of whichever code asked for it first: the helper is the
+		// same whoever asks.
+		var span = left.span;
 		if (enumType(type)) {
 			if (reflective)
-				requestReflective(session, type, requestInfo.origin, requestInfo.span);
+				requestReflective(session, type, requestInfo.origin, span);
 			else
-				request(session, type, requestInfo.origin, requestInfo.span);
-			return call(session, type, left, right, requestInfo.span, reflective);
+				request(session, type, requestInfo.origin, span);
+			return call(session, type, left, right, span, reflective);
 		}
 		if (DeclaredConformance.usesEquality(session, type)) {
-			ValueEqualityGenerator.request(session, type, requestInfo.origin, requestInfo.span);
+			ValueEqualityGenerator.request(session, type, requestInfo.origin, span);
 			var helper = session.helperNames.named(ValueEqualityGenerator.PREFIX, type);
-			return new TypedExpression(TCall(helper, [left, right]), TBool, requestInfo.span);
+			return new TypedExpression(TCall(helper, [left, right]), TBool, span);
 		}
 		return switch type {
 			case TNullable(element) if (enumType(element)):
 				if (reflective)
-					requestReflective(session, element, requestInfo.origin, requestInfo.span);
+					requestReflective(session, element, requestInfo.origin, span);
 				else
-					request(session, element, requestInfo.origin, requestInfo.span);
+					request(session, element, requestInfo.origin, span);
 				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, left.span)), type,
 					left.span),
 					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, left.span),

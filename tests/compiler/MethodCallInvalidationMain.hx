@@ -17,8 +17,11 @@ class MethodCallInvalidationMain {
 		compiler.update("Gate.hx",
 			"class Gate { public function new() {} public function worst(scale:Float = 1.0):Float return 1.0 * scale; }");
 		var changed = compiler.compile("Main", null, false);
-		if (changed.regenerated.indexOf(callerName) >= 0)
-			return;
+		// A function typed again to the IR it already had keeps it, so only the function holding the call is regenerated: for a
+		// lambda, the lambda (named after the function it is written in), not that function.
+		for (name in changed.regenerated)
+			if (StringTools.startsWith(name, callerName))
+				return;
 		throw '$label: $callerName was not regenerated when Gate.worst gained a parameter: ${changed.regenerated}';
 	}
 
@@ -34,7 +37,7 @@ class MethodCallInvalidationMain {
 			"Main.use");
 		check("lambda",
 			"class Main { static function main():Int { var gate = new Gate(); var probe = function() return gate.worst() > 0.5 ? 0 : 1; return probe(); } }",
-			"Main.main");
+			"$lambda:Main.main:");
 		Sys.println("PASS: a change to an instance method's signature regenerates its callers through any receiver");
 	}
 }
