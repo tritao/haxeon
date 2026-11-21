@@ -1496,6 +1496,20 @@ class CallResolver {
 		return new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
 	}
 
+	/** A call of the local inline function `local`: its body, where the call is (`LocalInlineFunctions.call`). */
+	function typeInlineCall(name:String, local:compiler.types.analysis.Scope.LocalFunction,
+			arguments:Array<AstExpression>,
+			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		var declared = local.span;
+		if (declared != null && declared.file == span.file && span.start >= declared.start && span.end <= declared.end)
+			fail("E1007", "Inline function cannot be recursive", declared);
+		if (arguments.length != local.arguments.length)
+			fail("E1008", 'Function value "$name" expects ${local.arguments.length} arguments, got ${arguments.length}',
+				span);
+		return bodyTyper.typeExpression(compiler.types.analysis.LocalInlineFunctions.call(local.arguments, local.body,
+			local.result, arguments, span), scope, expectedType);
+	}
+
 	function invalidateClosureWrites(callee:AstExpression, callableName:Null<String>, scope:Scope):Void {
 		if (callableName == null)
 			switch callee {
@@ -1715,6 +1729,8 @@ class CallResolver {
 		if (calleeLocal != null) {
 			// A local function runs a known body, so a call through it only clears facts when that body might.
 			var local = calleeLocal.localFunction;
+			if (local != null && local.isInline == true)
+				return typeInlineCall(name, local, arguments, span, scope, expectedType);
 			return typeClosureCall(Variable(name, span), arguments, span, scope, name,
 				local == null || !session.localFunctionIsPure(local,
 				session.currentContext.lexicalOwner));

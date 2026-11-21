@@ -1770,6 +1770,9 @@ class BodyTyper implements BodyTyping {
 		if (type != null && session.monomorphs.active())
 			type = compiler.types.Monomorphs.resolve(type);
 		return if (binding != null && type != null) {
+			var called = binding.localFunction;
+			if (called != null && called.isInline == true)
+				fail("E1007", "Cannot create closure on inline closure", span);
 			if (!scope.privateMapUseIsKnownFor(binding, name, span))
 				fail("E9001",
 					'Internal compiler error: "$name" was analysed as a map nothing else can reach, but this use was not seen by that analysis',

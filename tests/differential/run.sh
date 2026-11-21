@@ -240,6 +240,10 @@ in_background run_case assignment-evaluation-order 0
 in_background run_case interface-default-arguments 0
 in_background run_case optional-argument-types 0
 in_background run_case local-function-defaults 0
+# A local inline function is its body at each call; it is never a value and never calls itself (LocalInlineFunctions).
+in_background run_case local-inline-functions 0
+in_background run_compile_failure local-inline-function-value
+in_background run_compile_failure local-inline-function-recursive
 in_background run_case value-default-arguments 0
 in_background run_case function-value-optional-arguments 0
 in_background run_case local-inference-empty-array 0

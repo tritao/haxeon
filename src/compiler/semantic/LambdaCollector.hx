@@ -67,6 +67,9 @@ class LambdaCollector {
 		switch expression {
 			case PrivateAccessExpression(inner, _):
 				collectExpression(inner, functionName, module, generatedByModule);
+			case Lambda(_, body, _, _, true) if (compiler.types.analysis.LocalInlineFunctions.expands(expression)):
+				// No function of its own: its body is typed where it is called.
+				collect(body, functionName, module, generatedByModule);
 			case Lambda(_, body, identity, _):
 				var lambdaName = LambdaName.of(functionName, identity);
 				var names:Map<String, Bool>;

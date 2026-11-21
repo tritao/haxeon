@@ -39,6 +39,9 @@ class BindingWalker implements AstChildVisitor {
 	/** How many `try` bodies of the innermost function or lambda enclose the walk; a lambda starts again from 0. */
 	var tryDepth:Int = 0;
 
+	/** The local inline functions declared so far and the calls of them being walked; null until one is declared. */
+	var inlining:Null<InlineCalls> = null;
+
 	function new() {}
 
 	/** The identity of the declaration of `name` at `span`. */
@@ -73,16 +76,47 @@ class BindingWalker implements AstChildVisitor {
 	function resolve(name:String):Null<String> {
 		var dot = name.indexOf("."),
 			rootLength = dot < 0 ? name.length : dot,
-			index = bindingNames.length;
+			index = bindingNames.length,
+			calls = inlining,
+			hides = calls != null && calls.hidden.length > 0;
 		while (index > 0) {
 			index--;
-			if (isRoot(bindingNames[index], name, rootLength)) {
+			if (hides && calls != null)
+				index = calls.visibleAtOrBelow(index);
+			if (index >= 0 && isRoot(bindingNames[index], name, rootLength)) {
 				resolvedIndex = index;
 				return bindingDeclarations[index];
 			}
 		}
 		resolvedIndex = -1;
 		return null;
+	}
+
+	/**
+	 * Walks the body of the inline function `declaration` names, if it is one, where it is called with `values`: its parameters
+	 * are locals initialized with them, as the typer declares them (`LocalInlineFunctions.call`), and its names are the ones it
+	 * saw where it was declared. A call from its own body is not walked again; the typer rejects it.
+	 */
+	function inlineCall(declaration:String, values:Array<AstExpression>):Void {
+		var calls = inlining;
+		if (calls == null)
+			return;
+		var called = calls.functions.get(declaration);
+		if (called == null || calls.expanding.indexOf(declaration) >= 0)
+			return;
+		calls.expanding.push(declaration);
+		var scope = enterScope();
+		calls.hidden.push(called.height);
+		calls.hidden.push(scope);
+		for (index in 0...called.arguments.length) {
+			var argument = called.arguments[index];
+			declare(argument.name, argument.span, Local, argument.type, values[index]);
+		}
+		for (statement in called.body)
+			this.statement(statement);
+		calls.hidden.resize(calls.hidden.length - 2);
+		leaveScope(scope);
+		calls.expanding.pop();
 	}
 
 	/** Where in the visible bindings the last `resolve` found its name, or -1; a hook reads it for the name it was given. */
@@ -178,6 +212,13 @@ class BindingWalker implements AstChildVisitor {
 				statement(inner);
 			case VarDeclaration(name, type, initializer, span):
 				switch initializer {
+					case Lambda(arguments, body, _, _, true) if (LocalInlineFunctions.expands(initializer)):
+						// Its body is walked at each call instead.
+						var declaration = declare(name, span, Local, type, initializer);
+						if (inlining == null)
+							inlining = new InlineCalls();
+						inlining.functions.set(declaration,
+							{arguments: arguments, body: body, height: bindingNames.length});
 					case Lambda(_, _, _, _):
 						// A local function can call itself, so its name is visible in its own body.
 						declare(name, span, Local, type, initializer);
@@ -277,16 +318,20 @@ class BindingWalker implements AstChildVisitor {
 			case DeclaredVariable(name, _, span):
 				used(name, resolve(name), span);
 			case Call(name, arguments, span):
-				var dot = name.indexOf(".");
+				var dot = name.indexOf("."), called:Null<String> = null;
 				if (dot > 0) {
 					// A local's root is its binding's name, already made.
 					var declaration = resolve(name);
 					memberCall(declaration == null ? name.substring(0, dot) : bindingNames[resolvedIndex], declaration,
 						name, dot, span);
-				} else
-					callee(name, resolve(name), span);
+				} else {
+					called = resolve(name);
+					callee(name, called, span);
+				}
 				for (argument in arguments)
 					expression(argument);
+				if (called != null && inlining != null)
+					inlineCall(called, arguments);
 			case MethodCall(target, name, arguments, _):
 				receiver(target, name);
 				for (argument in arguments)
@@ -404,5 +449,38 @@ class BindingWalker implements AstChildVisitor {
 				bindPattern(right, span);
 			default:
 		}
+	}
+}
+
+/** What `BindingWalker` keeps about local inline functions (`LocalInlineFunctions`), in a body that declares one. */
+private class InlineCalls {
+	/**
+	 * The functions declared so far, by declaration: their parameters and body, which each call walks where it is, and how many
+	 * bindings were visible at the declaration, which are all the body sees.
+	 */
+	public final functions:Map<String, {arguments:Array<AstArgument>, body:Array<AstStatement>, height:Int}> = [];
+
+	/** The declarations of the functions whose bodies are being walked at a call, innermost last. */
+	public final expanding:Array<String> = [];
+
+	/**
+	 * Pairs `[start, end)` of visible bindings a body walked at a call does not see: those declared after its function and before
+	 * the call.
+	 */
+	public final hidden:Array<Int> = [];
+
+	public function new() {}
+
+	/** The highest binding at or below `index` that is not hidden, or -1. */
+	public function visibleAtOrBelow(index:Int):Int {
+		var pair = hidden.length;
+		while (pair > 0 && index >= 0) {
+			pair -= 2;
+			if (index >= hidden[pair] && index < hidden[pair + 1]) {
+				index = hidden[pair] - 1;
+				pair = hidden.length;
+			}
+		}
+		return index;
 	}
 }

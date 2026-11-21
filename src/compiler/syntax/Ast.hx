@@ -332,8 +332,12 @@ enum AstExpression {
 	 */
 	AssignmentValue(assignment:AstStatement, span:SourceSpan);
 
-	/** `identity` is the parser's `<member>#<ordinal>` name for the lambda; see `LambdaName`. */
-	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan);
+	/**
+	 * `identity` is the parser's `<member>#<ordinal>` name for the lambda; see `LambdaName`. `isInline` marks a local
+	 * `inline function`, which each call replaces by its body (`LocalInlineFunctions`).
+	 */
+	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan,
+		?isInline:Bool);
 }
 
 /** Compile-time query over a fixed native ABI layout. */

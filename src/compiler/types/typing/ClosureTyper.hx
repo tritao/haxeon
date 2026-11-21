@@ -134,6 +134,7 @@ class ClosureTyper {
 						freeVariables.set("this", true);
 				}
 		var pathConstants:Map<String, String> = [],
+			inlineFunctions:Array<String> = [],
 			freeBindings:Map<String, LocalBinding> = [],
 			captures:Array<TypedCapture> = [],
 			captureCells:Map<String, String> = [],
@@ -145,6 +146,12 @@ class ClosureTyper {
 			var binding = freeBinding(name);
 			if (binding != null) {
 				freeBindings.set(name, binding);
+				var called = binding.localFunction;
+				// A local inline function has no value to capture: its calls in the lambda are its body there.
+				if (called != null && called.isInline == true) {
+					inlineFunctions.push(name);
+					continue;
+				}
 				var constant = binding.keyPathConstant;
 				if (constant != null) {
 					pathConstants.set(name, constant);
@@ -213,6 +220,13 @@ class ClosureTyper {
 				captureCells.get(capture.field), capture.bindingId, capture.storageType,
 				binding == null ? null : binding.localFunction, binding == null ? null : binding.declaration,
 				binding == null ? null : binding.temporary);
+		}
+		for (name in inlineFunctions) {
+			var outer = freeBindings.get(name);
+			if (outer == null)
+				throw new InternalError('Missing the binding of inline function "$name"');
+			typedBodyScope.define(name, scope.typeOf(outer), span, true, null, false, outer.localFunction,
+				outer.declaration, outer.temporary);
 		}
 		for (name in freeNames) if (pathConstants.exists(name)) {
 			// Like a capture, the same local as the one outside, with that declaration's identity.

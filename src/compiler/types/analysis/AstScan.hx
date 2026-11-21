@@ -10,48 +10,61 @@ class AstScan {
 		return new ExpressionSearch(test).inStatements(statements);
 
 	/** Whether a `return` in these statements returns from the function they belong to; a lambda's returns are its own. */
-	public static function returns(statements:Array<AstStatement>):Bool {
+	public static function returns(statements:Array<AstStatement>):Bool
+		return returnsFrom(statements, false);
+
+	/** Whether a `return` of a value in these statements returns from the function they belong to (`returns`). */
+	public static function returnsValue(statements:Array<AstStatement>):Bool
+		return returnsFrom(statements, true);
+
+	static function returnsFrom(statements:Array<AstStatement>, valueOnly:Bool):Bool {
 		for (statement in statements) {
 			switch statement {
-				case Return(_, _), ReturnVoid(_):
+				case Return(_, _):
 					return true;
+				case ReturnVoid(_):
+					if (!valueOnly)
+						return true;
+				case PrivateAccessStatement(inner, _):
+					if (returnsFrom([inner], valueOnly))
+						return true;
 				case If(_, yes, no, _):
-					if (returns(yes) || returns(no))
+					if (returnsFrom(yes, valueOnly) || returnsFrom(no, valueOnly))
 						return true;
 				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _), Defer(body, _):
-					if (returns(body))
+					if (returnsFrom(body, valueOnly))
 						return true;
 				case Try(tryBranch, catches, _):
-					if (returns(tryBranch))
+					if (returnsFrom(tryBranch, valueOnly))
 						return true;
 					for (caught in catches)
-						if (returns(caught.statements))
+						if (returnsFrom(caught.statements, valueOnly))
 							return true;
 				case Switch(_, cases, defaultBranch, _, _):
 					for (entry in cases)
-						if (returns(entry.statements))
+						if (returnsFrom(entry.statements, valueOnly))
 							return true;
-					if (returns(defaultBranch))
+					if (returnsFrom(defaultBranch, valueOnly))
 						return true;
 				default:
 			}
 			for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
-				if (expressionReturns(expression))
+				if (expressionReturns(expression, valueOnly))
 					return true;
 		}
 		return false;
 	}
 
-	static function expressionReturns(expression:AstExpression):Bool {
+	static function expressionReturns(expression:AstExpression, valueOnly:Bool):Bool {
 		switch expression {
 			case BlockExpression(statements, value, _):
-				return returns(statements) || expressionReturns(value);
+				return returnsFrom(statements, valueOnly) || expressionReturns(value, valueOnly);
 			case Lambda(_, _, _, _):
 				return false;
 			default:
 		}
 		for (child in compiler.syntax.AstChildren.expressions(expression))
-			if (expressionReturns(child))
+			if (expressionReturns(child, valueOnly))
 				return true;
 		return false;
 	}

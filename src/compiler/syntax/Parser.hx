@@ -1335,7 +1335,7 @@ class Parser {
 			var initializer = parseAnchoredExpression(name + "=");
 			return ScopedDeclaration(name, type, initializer, start.merge(expressionEnd(initializer)));
 		}
-		// `inline` on a local function is only a hint; it is compiled as any local function.
+		// A local `inline function` is replaced by its body at each call and makes no closure (`LocalInlineFunctions`).
 		var inlined = check(TokenKind.Inline) && peekKind(1) == TokenKind.Function;
 		if (inlined)
 			advance();
@@ -1371,7 +1371,7 @@ class Parser {
 				span = start.merge(end),
 				declared = result == null ? null : localFunctionType(arguments, result);
 			closeLambda();
-			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span), span);
+			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined), span);
 		}
 		if (match(TokenKind.Defer)) {
 			var start = spanOf(previous());

@@ -19,6 +19,7 @@ import compiler.types.Type.NominalKind;
 import compiler.types.analysis.AstScan;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
+import compiler.types.analysis.LocalInlineFunctions;
 import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
 import compiler.types.analysis.Scope;
@@ -82,6 +83,28 @@ class StatementTyper {
 	}
 
 	/**
+	 * A local inline function (`LocalInlineFunctions`): a local with no value whose calls the typer replaces by its body
+	 * (`CallResolver.typeInlineCall`); as in Haxe, it cannot be assigned (`typeAssignment`).
+	 */
+	function declareInlineFunction(name:String, declared:Null<AstType>,
+			arguments:Array<compiler.syntax.Ast.AstArgument>,
+			body:Array<AstStatement>, lambdaSpan:SourceSpan, span:SourceSpan, scope:Scope,
+			temporary:Null<compiler.syntax.Ast.TemporaryLocal>):Array<TypedStatement> {
+		scope.define(name, TDynamic, span, true, null, false, {arguments: arguments,
+			body: body,
+			outerLocals: scope.visibleLocalNames(),
+			declaredIn: scope,
+			isInline: true,
+			span: lambdaSpan,
+			result: switch declared {
+				case FunctionType(_, result, _): result;
+				default: null;
+			}
+		}, null, temporary);
+		return [];
+	}
+
+	/**
 	 * The type of `var name;`: the one its block is expected to have, for a block expression's result local; otherwise a type
 	 * variable its first assignment fills (`Monomorphs`).
 	 */
@@ -113,6 +136,8 @@ class StatementTyper {
 					case VarDeclaration(_, _, wrapped, _): lambda = wrapped;
 					default:
 				}
+			case Lambda(arguments, body, _, lambdaSpan, true) if (LocalInlineFunctions.expands(initializer)):
+				return declareInlineFunction(name, declared, arguments, body, lambdaSpan, span, scope, temporary);
 			default:
 		}
 		switch lambda {
@@ -421,6 +446,8 @@ class StatementTyper {
 			var binding = bound != null ? bound : bodyTyper.referenceBinding(written, span, name, scope);
 			if (binding != null && binding.scoped)
 				fail("E1002", 'Cannot reassign scoped binding "$name"', span);
+			if (binding != null && binding.localFunction != null && binding.localFunction.isInline == true)
+				fail("E1007", "Cannot set inline closure", span);
 			if (binding == null) {
 				var thisType = scope.receiverType(),
 					instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);

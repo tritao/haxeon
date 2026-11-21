@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
@@ -21,6 +22,15 @@ typedef LocalFunction = {
 
 	/** The scope it was declared in, where the free names of its body resolve. */
 	final ?declaredIn:Scope;
+
+	/** Declared `inline`: it has no value, and each call is its body (`LocalInlineFunctions`). */
+	final ?isInline:Bool;
+
+	/** An inline function's declared result type, when it has one. */
+	final ?result:AstType;
+
+	/** An inline function's span, which a call of it from its own body is in. */
+	final ?span:SourceSpan;
 }
 
 /** A local as the typer knows it: its name, declaration, binding id and the facts recorded about it. */
