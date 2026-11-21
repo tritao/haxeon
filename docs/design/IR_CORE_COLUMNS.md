@@ -103,8 +103,11 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    `IrBodyBuilder.finishNamed`), so the stages after it number theirs as before. In a session, a function the passes before
    the conversion point rebuild the same as last time is replaced by last compile's object (`stableBodySources`), which has
    its body, as the inliner does with its own inputs.
-   *Value phi scalarization reads bodies*: its last run before scalar replacement (each target's) is the encode point; the
-   earlier runs, and the calls from scalar arguments, keep the object version until those stages move.
+   *Value phi scalarization reads bodies*: its last run before scalar replacement (each target's) reads bodies; the earlier
+   runs, and the calls from scalar arguments, keep the object version until those stages move. *Scalar closures reads
+   bodies*, and is the encode point on HashLink (Wasm's is that last value phi scalarization); its object version is gone.
+   A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
+   `setResult`).
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
    The codec writes bodies.
 6. The Wasm lowerings read bodies (until then they decode, off the self-compile's path); `IrInstruction`, `Located`

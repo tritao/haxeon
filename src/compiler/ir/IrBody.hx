@@ -36,7 +36,7 @@ class IrBody {
 	public final retention:IrRetention;
 
 	/** The type id of the function's result. */
-	public final result:Int;
+	public var result(default, null):Int;
 
 	/** The program's type ids, which this body's type ids index. */
 	public final types:IrTypeIds;
@@ -526,6 +526,18 @@ class IrBody {
 	public function setOperand(row:Int, index:Int, value:IrValueId):Void {
 		overwriting();
 		operandPool[operandStarts[row] + index] = value;
+	}
+
+	/** Gives value `value` the type with id `typeId`: for a pass that changes how a type is represented. */
+	public function setValueType(value:IrValueId, typeId:Int):Void {
+		overwriting();
+		valueTypes[value] = typeId;
+	}
+
+	/** Gives the function the result type with id `typeId`. */
+	public function setResult(typeId:Int):Void {
+		overwriting();
+		result = typeId;
 	}
 
 	/** A new value of this body, with the next id. */

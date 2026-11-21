@@ -3,7 +3,6 @@ package compiler.ir;
 import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
-import compiler.ir.SourceProvenance.Located;
 
 /** HashLink's scalar argument/result convention applied to typed, non-erased closures. */
 class IrScalarClosures {
@@ -24,15 +23,32 @@ class IrScalarClosures {
 	/** How many operands read each value id of the function `discover` is reading, its storage kept from one to the next. */
 	final useCounts:Array<Int> = [];
 
-	public static function rewrite(program:IrProgram):Void {
-		var pass = new IrScalarClosures(program);
-		pass.discover();
+	final types:IrTypeIds;
+	final scratch:IrPassScratch;
+	final retained:Bool;
+
+	/** By value id, the type a `TypeValue` row of the function being rewritten names, before the rewrite. */
+	final typeValues:Map<Int, IrType> = [];
+
+	/**
+	 * Rewrites `program`'s functions as bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (fresh ones when not
+	 * given), which this stage encodes on HashLink, the pipeline's first over bodies there. A function that changes becomes its
+	 * edited body: a frozen copy when a session keeps the stage's functions (`retained`), else the body edited in place.
+	 */
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = false):Void {
+		var pass = new IrScalarClosures(program, types == null ? new IrTypeIds() : types,
+			scratch == null ? new IrPassScratch() : scratch, retained);
+		var bodies = [for (fn in program.functions) pass.bodyOf(fn)];
+		pass.discover(bodies);
 		if (pass.candidates.keys().hasNext())
-			pass.apply();
+			pass.apply(bodies);
 	}
 
-	function new(program:IrProgram) {
+	function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch, retained:Bool) {
 		this.program = program;
+		this.types = types;
+		this.scratch = scratch;
+		this.retained = retained;
 		objects = [for (object in program.objects) object.name => object];
 		for (declaration in program.enums)
 			if (declaration.inlineStorage != null)
@@ -41,7 +57,15 @@ class IrScalarClosures {
 		functions = [for (fn in program.functions) fn.name => fn];
 	}
 
-	function discover():Void {
+	/** `fn`'s body, encoded when it has none; in a compile that keeps no session its objects go. */
+	function bodyOf(fn:IrFunction):IrBody {
+		var body = fn.bodyIn(types, scratch.bodyBuilder, retained);
+		if (!retained)
+			fn.releaseDecoded();
+		return body;
+	}
+
+	function discover(bodies:Array<IrBody>):Void {
 		for (native in program.natives) {
 			for (type in native.arguments)
 				excludeNested(type);
@@ -52,80 +76,77 @@ class IrScalarClosures {
 				excludeNested(type);
 			excludeNested(native.result);
 		}
-		for (fn in program.functions) {
+		for (index in 0...bodies.length) {
+			var fn = program.functions[index], body = bodies[index];
 			// Most functions make no signature query, and need no map of them.
-			var signatureQueries:Null<Map<Int, Bool>> = null, uses = useCounts;
-			uses.resize(0);
-			for (block in fn.blocks) {
-				for (located in block.instructions) {
-					for (inputIndex in 0...IrOperands.count(located.value))
-						countUse(uses, IrOperands.at(located.value, inputIndex));
-					switch located.value {
-						case Phi(_, inputs):
-							for (input in inputs)
-								countUse(uses, input.value);
-						case Call(_, callTarget,
-							arguments) if (callTarget.name == "__closure_is_of_type" && (arguments.length == 2)):
-							if (signatureQueries == null)
-								signatureQueries = [];
-							signatureQueries.set(arguments[1].id, true);
-						default:
+			var signatureQueries:Null<Map<Int, Bool>> = null,
+				uses = IrPassScratch.filledInts(useCounts, body.valueLimit(), 0);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					for (input in 0...body.operandCount(row))
+						uses[body.operand(row, input)]++;
+					if (body.opcode(row) == IrOpcode.Call && body.operandCount(row) == 2
+						&& body.symbol(row).name == "__closure_is_of_type") {
+						if (signatureQueries == null)
+							signatureQueries = [];
+						signatureQueries.set(body.operand(row, 1), true);
 					}
+					row = body.nextRow(row);
 				}
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
-							countUse(uses, value);
-						default:
-					}
 			}
 			if (fn.name == program.entryPoint || fn.retention != Reachable) {
-				for (argument in fn.arguments)
-					excludeNested(argument.type);
-				excludeNested(fn.result);
+				for (argument in 0...body.argumentCount())
+					excludeNested(body.valueType(body.argument(argument)));
+				excludeNested(types.type(body.result));
 			}
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case StaticClosure(out, name):
-							if (note(out.type) && !functions.exists(IrScalarArguments.PREFIX + name))
-								excluded.set(key(out.type), true);
-						case InstanceClosure(out, name, receiver):
-							if (note(out.type)
-								&& (isValue(receiver.type) || !functions.exists(IrScalarArguments.PREFIX + name)))
-								excluded.set(key(out.type), true);
-						case CallClosure(_, closure, _):
-							note(closure.type);
-						case ToDyn(_, input):
-							var callable = functionType(input.type);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.StaticClosure:
+							var type = body.valueType(body.output(row));
+							if (note(type) && !functions.exists(IrScalarArguments.PREFIX + body.symbol(row).name))
+								excluded.set(key(type), true);
+						case IrOpcode.InstanceClosure:
+							var type = body.valueType(body.output(row));
+							if (note(type)
+								&& (isValue(body.valueType(body.operand(row, 0)))
+								|| !functions.exists(IrScalarArguments.PREFIX + body.symbol(row).name)))
+								excluded.set(key(type), true);
+						case IrOpcode.CallClosure:
+							note(body.valueType(body.operand(row, 0)));
+						case IrOpcode.ToDyn:
+							var input = body.valueType(body.operand(row, 0)), callable = functionType(input);
 							if (callable != null)
 								note(callable);
 							else
-								excludeNested(input.type);
-						case SafeCast(output, input):
-							var callable = functionType(output.type);
-							if (callable != null && (switch (input.type) {
+								excludeNested(input);
+						case IrOpcode.SafeCast:
+							var output = body.valueType(body.output(row)),
+								input = body.valueType(body.operand(row, 0)),
+								callable = functionType(output);
+							if (callable != null && (switch (input) {
 								case Dyn: true;
 								default: false;
 							}))
 								note(callable);
 							else
-								excludeNested(output.type);
-							excludeNested(input.type);
-						case TypeValue(out, type) if (signatureQueries == null || !signatureQueries.exists(out.id)
-							|| out.id >= uses.length || uses[out.id] != 1):
-							excludeNested(type);
+								excludeNested(output);
+							excludeNested(input);
+						case IrOpcode.TypeValue:
+							var out:Int = body.output(row);
+							if (signatureQueries == null || !signatureQueries.exists(out) || out >= uses.length
+								|| uses[out] != 1)
+								excludeNested(body.typeOperand(row));
 						default:
 					}
+					row = body.nextRow(row);
+				}
+			}
 		}
 		for (name in excluded.keys())
 			candidates.remove(name);
-	}
-
-	static function countUse(uses:Array<Int>, value:IrValue):Void {
-		while (uses.length <= value.id)
-			uses.push(0);
-		uses[value.id]++;
 	}
 
 	function note(type:IrType):Bool {
@@ -173,12 +194,14 @@ class IrScalarClosures {
 		return true;
 	}
 
-	function apply():Void {
-		var rewritten = [for (fn in program.functions) rewriteFunction(fn)],
+	function apply(bodies:Array<IrBody>):Void {
+		var rewritten = [for (index in 0...bodies.length) rewriteFunction(program.functions[index], bodies[index])],
 			generated:Array<IrFunction> = [],
 			generatedIndex = 0;
-		while (generatedIndex < generatedFunctions.length)
-			generated.push(rewriteFunction(generatedFunctions[generatedIndex++]));
+		while (generatedIndex < generatedFunctions.length) {
+			var fn = generatedFunctions[generatedIndex++];
+			generated.push(rewriteFunction(fn, bodyOf(fn)));
+		}
 		var mappedObjects:Array<IrObject> = [for (object in program.objects)
 			{
 				name:object.name,
@@ -312,162 +335,185 @@ class IrScalarClosures {
 			default: false;
 		};
 
-	function needsRewrite(fn:IrFunction):Bool
-		return IrTypePositions.any(fn, changesType);
-
-	function rewriteFunction(fn:IrFunction):IrFunction {
-		if (!needsRewrite(fn))
-			return fn;
-		var next = fn.nextValueId(), values:Map<Int, IrValue> = [];
-		var typeValues:Map<Int, IrType> = [];
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case TypeValue(out, type):
-						typeValues.set(out.id, type);
-					default:
-				}
-		function map(value:IrValue):IrValue {
-			var existing = values.get(value.id);
-			if (existing != null)
-				return existing;
-			var result = new IrValue(value.id, value.name, mapType(value.type));
-			values.set(value.id, result);
-			return result;
+	/** Whether a type `body` holds changes: a value's (an argument's, a row's, a binding's), the result, a `TypeValue`'s. */
+	function needsRewrite(body:IrBody):Bool {
+		if (changesType(types.type(body.result)))
+			return true;
+		for (value in 0...body.valueLimit())
+			if (body.valueTypeId(IrValueId.of(value)) >= 0 && changesType(body.valueType(IrValueId.of(value))))
+				return true;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.TypeValue && changesType(body.typeOperand(row)))
+					return true;
+				row = body.nextRow(row);
+			}
 		}
-		var blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var rewritten = new IrBlock(block.id);
-			for (located in block.instructions)
-				switch located.value {
-					case Call(out, callTarget, arguments)
-						if (callTarget.name == "__closure_is_of_type" && arguments.length == 2
-						&& typeValues.exists(arguments[1].id)
-						&& needsBoundaryAdapter(typeValues.get(arguments[1].id))):
-						rewritten.instructions.push(new Located(Call(map(out),
-							IrSymbol.of(ensureSignatureCheck(typeValues.get(arguments[1].id))), [map(arguments[0])]),
-							located.provenance));
-					case ToDyn(out, input) if (needsBoundaryAdapter(input.type)):
-						var erasure = ensureErasure(input.type),
-							boxed = new IrValue(next++, "$scalar-closure:erased", erasedType(input.type));
-						rewritten.instructions.push(new Located(Call(boxed, IrSymbol.of(erasure.maker), [map(input)]),
-							located.provenance));
-						rewritten.instructions.push(new Located(ToDyn(map(out), boxed), located.provenance));
-					case SafeCast(out, input) if ((switch (input.type) {
+		return false;
+	}
+
+	function rewriteFunction(fn:IrFunction, source:IrBody):IrFunction {
+		if (!needsRewrite(source))
+			return fn;
+		var body = source.forEditing(scratch.bodyBuilder), next = body.presentValueLimit(), limit = next;
+		typeValues.clear();
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.TypeValue)
+					typeValues.set(body.output(row), body.typeOperand(row));
+				row = body.nextRow(row);
+			}
+		}
+		// The rows read the types as they were; the values' types change once every row is rewritten.
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var following = body.nextRow(row), where = body.provenance(row);
+				switch body.opcode(row) {
+					case IrOpcode.Call if (body.operandCount(row) == 2
+						&& body.symbol(row).name == "__closure_is_of_type"
+						&& typeValues.exists(body.operand(row, 1))
+						&& needsBoundaryAdapter(typeValues.get(body.operand(row, 1)))):
+						body.beginRow();
+						body.pushOperand(body.operand(row, 0));
+						var check = body.endRow(IrOpcode.Call, body.output(row),
+							IrSymbol.of(ensureSignatureCheck(typeValues.get(body.operand(row, 1)))).id, where);
+						body.linkAfter(block, row, check);
+						body.removeRow(block, row);
+					case IrOpcode.ToDyn if (needsBoundaryAdapter(body.valueType(body.operand(row, 0)))):
+						var input = body.operand(row, 0),
+							type = body.valueType(input),
+							erasure = ensureErasure(type),
+							boxed = body.newValueAt(next++, "$scalar-closure:erased", body.typeId(erasedType(type)));
+						body.beginRow();
+						body.pushOperand(input);
+						body.linkBefore(block, row,
+							body.endRow(IrOpcode.Call, boxed, IrSymbol.of(erasure.maker).id, where));
+						body.setOperand(row, 0, boxed);
+					case IrOpcode.SafeCast if ((switch (body.valueType(body.operand(row, 0))) {
 						case Dyn: true;
 						default: false;
-					}) && needsBoundaryAdapter(out.type)): rewritten.instructions.push(new Located(Call(map(out),
-						IrSymbol.of(ensureRestoration(out.type)), [map(input)]), located.provenance));
-					case StaticClosure(out, name) if (candidates.exists(key(out.type))):
-						rewritten.instructions.push(new Located(StaticClosure(map(out),
-							IrSymbol.of(IrScalarArguments.PREFIX + name)), located.provenance));
-					case InstanceClosure(out, name, receiver) if (candidates.exists(key(out.type))):
-						rewritten.instructions.push(new Located(InstanceClosure(map(out),
-							IrSymbol.of(IrScalarArguments.PREFIX + name), map(receiver)), located.provenance));
-					case CallClosure(out, closure, arguments) if (candidates.exists(key(closure.type))):
-						var expanded:Array<IrValue> = [];
-						for (argument in arguments) {
-							if (!isValue(argument.type)) {
-								expanded.push(map(argument));
-								continue;
-							}
-							for (slot in slots(argument.type)) {
-								var current = map(argument),
-									logical = argument.type;
-								for (part in slot.path) {
-									var field = fieldOf(logical, part),
-										leaf = new IrValue(next++, "$scalar-closure:field", mapType(field.type));
-									rewritten.instructions.push(new Located(FieldGet(leaf, current, part),
-										located.provenance));
-									current = leaf;
-									logical = field.type;
-								}
-								expanded.push(current);
-							}
-						}
-						var resultSlots = isValue(out.type) ? slots(out.type) : [],
-							references:Array<IrValue> = [];
-						for (slot in resultSlots) {
-							var type = mapType(slot.type),
-								zero = new IrValue(next++, "$scalar-closure:zero", type),
-								reference = new IrValue(next++, "$scalar-closure:reference", IrHlScalarRef.type(type));
-							var initial:IrInstruction = switch type {
-								case I32 | I64: ConstInt(zero, 0);
-								case F32 | F64: ConstFloat(zero, 0.0);
-								case Bool: ConstBool(zero, false);
-								default: ConstNull(zero);
-							};
-							rewritten.instructions.push(new Located(initial, located.provenance));
-							rewritten.instructions
-								.push(new Located(Call(reference, IrSymbol.of(IrHlScalarRef.ADDRESS), [zero]),
-								located.provenance));
-							references.push(reference);
-							expanded.push(reference);
-						}
-						if (resultSlots.length == 0)
-							rewritten.instructions.push(new Located(CallClosure(map(out), map(closure), expanded),
-								located.provenance));
-						else {
-							var ignored = new IrValue(next++, "$scalar-closure:call", Void),
-								result = map(out),
-								name = switch out.type {
-									case Obj(value): value;
-									default: throw new InternalError("Invalid scalar closure result");
-								};
-							rewritten.instructions.push(new Located(CallClosure(ignored, map(closure), expanded),
-								located.provenance));
-							rewritten.instructions.push(new Located(ValueInit(result), located.provenance));
-							for (index in 0...resultSlots.length) {
-								var slot = resultSlots[index],
-									leaf = new IrValue(next++, "$scalar-closure:result", mapType(slot.type)),
-									current = result,
-									logical = out.type;
-								rewritten.instructions.push(new Located(Call(leaf, IrSymbol.of(IrHlScalarRef.LOAD),
-									[references[index]]), located.provenance));
-								for (position in 0...slot.path.length - 1) {
-									var part = slot.path[position],
-										field = fieldOf(logical, part),
-										child = new IrValue(next++, part, mapType(field.type));
-									rewritten.instructions.push(new Located(FieldGet(child, current, part),
-										located.provenance));
-									current = child;
-									logical = field.type;
-								}
-								rewritten.instructions.push(new Located(FieldSet(current,
-									slot.path[slot.path.length - 1], leaf), located.provenance));
-							}
-						}
-					case TypeValue(out, type):
-						rewritten.instructions.push(new Located(TypeValue(map(out), mapType(type)),
-							located.provenance));
+					}) && needsBoundaryAdapter(body.valueType(body.output(row)))): body.setOperation(row, IrOpcode.Call,
+						IrSymbol.of(ensureRestoration(body.valueType(body.output(row)))).id);
+					case IrOpcode.StaticClosure if (candidates.exists(key(body.valueType(body.output(row))))):
+						body.setAux(row, IrSymbol.of(IrScalarArguments.PREFIX + body.symbol(row).name).id);
+					case IrOpcode.InstanceClosure if (candidates.exists(key(body.valueType(body.output(row))))):
+						body.setAux(row, IrSymbol.of(IrScalarArguments.PREFIX + body.symbol(row).name).id);
+					case IrOpcode.CallClosure if (candidates.exists(key(body.valueType(body.operand(row, 0))))):
+						next = expandCall(body, block, row, next);
+					case IrOpcode.TypeValue:
+						body.setAux(row, body.typeId(mapType(body.typeOperand(row))));
 					default:
-						rewritten.instructions.push(new Located(IrInliner.remap(located.value, map, id -> id),
-							located.provenance));
 				}
-			var terminator = block.terminator;
-			if (terminator != null)
-				rewritten.terminator = new Located(switch terminator.value {
-					case Unreachable: Unreachable;
-					case Return(value): Return(map(value));
-					case Throw(value): Throw(map(value));
-					case Rethrow(value): Rethrow(map(value));
-					case Jump(target): Jump(target);
-					case Branch(condition, yes, no): Branch(map(condition), yes, no);
-					case Switch(switchValue, switchTargets, switchOtherwise): Switch(map(switchValue),
-						switchTargets.copy(), switchOtherwise);
-				}, terminator.provenance);
-			blocks.push(rewritten);
+				row = following;
+			}
 		}
-		var debug:Array<compiler.ir.IrFunction.IrDebugBinding> = [for (binding in fn.debugBindings)
-			{
-				identity:binding.identity,
-					name:binding.name,
-					value:map(binding.value),
-					path:binding.path,
-					scopeStart:binding.scopeStart,
-					scopeEnd:binding.scopeEnd
-			}];
-		return fn.withBlocks(blocks, debug, [for (argument in fn.arguments) map(argument)], mapType(fn.result));
+		for (value in 0...limit) {
+			var id = IrValueId.of(value), type = body.valueTypeId(id);
+			if (type >= 0)
+				body.setValueType(id, body.typeId(mapType(types.type(type))));
+		}
+		body.setResult(body.typeId(mapType(types.type(body.result))));
+		body.keepNamedValues(scratch.namedValues);
+		return retained ? IrFunction.ofBody(body.freeze(true, scratch.bodyBuilder)) : IrFunction.ofOwnedBody(body);
+	}
+
+	/**
+	 * Replaces the closure call at `row` by one that passes each value argument's fields and, for a value result, a reference
+	 * per field that the callee stores through, the result made again from them after it; values numbered from `next`.
+	 */
+	function expandCall(body:IrBody, block:Int, row:Int, next:Int):Int {
+		var where = body.provenance(row),
+			out = body.output(row),
+			closure = body.operand(row, 0),
+			outType = body.valueType(out),
+			expanded:Array<IrValueId> = [];
+		for (index in 1...body.operandCount(row)) {
+			var argument = body.operand(row, index), argumentType = body.valueType(argument);
+			if (!isValue(argumentType)) {
+				expanded.push(argument);
+				continue;
+			}
+			for (slot in slots(argumentType)) {
+				var current = argument, logical = argumentType;
+				for (part in slot.path) {
+					var field = fieldOf(logical, part),
+						leaf = body.newValueAt(next++, "$scalar-closure:field", body.typeId(mapType(field.type)));
+					body.beginRow();
+					body.pushOperand(current);
+					body.linkBefore(block, row, body.endRow(IrOpcode.FieldGet, leaf, IrSymbol.of(part).id, where));
+					current = leaf;
+					logical = field.type;
+				}
+				expanded.push(current);
+			}
+		}
+		var resultSlots = isValue(outType) ? slots(outType) : [], references:Array<IrValueId> = [];
+		for (slot in resultSlots) {
+			var type = mapType(slot.type),
+				zero = body.newValueAt(next++, "$scalar-closure:zero", body.typeId(type)),
+				reference = body.newValueAt(next++, "$scalar-closure:reference", body.typeId(IrHlScalarRef.type(type)));
+			body.beginRow();
+			var initial = switch type {
+				case I32 | I64: body.endRow(IrOpcode.ConstInt, zero, 0, where);
+				case F32 | F64: body.endRow(IrOpcode.ConstFloat, zero, body.addFloat(0.0), where);
+				case Bool: body.endRow(IrOpcode.ConstBool, zero, 0, where);
+				default: body.endRow(IrOpcode.ConstNull, zero, 0, where);
+			};
+			body.linkBefore(block, row, initial);
+			body.beginRow();
+			body.pushOperand(zero);
+			body.linkBefore(block, row,
+				body.endRow(IrOpcode.Call, reference, IrSymbol.of(IrHlScalarRef.ADDRESS).id, where));
+			references.push(reference);
+			expanded.push(reference);
+		}
+		var output = out;
+		if (resultSlots.length > 0)
+			output = body.newValueAt(next++, "$scalar-closure:call", body.typeId(Void));
+		body.beginRow();
+		body.pushOperand(closure);
+		for (value in expanded)
+			body.pushOperand(value);
+		var call = body.endRow(IrOpcode.CallClosure, output, 0, where);
+		body.linkAfter(block, row, call);
+		body.removeRow(block, row);
+		if (resultSlots.length == 0)
+			return next;
+		var after = call;
+		inline function add(made:Int):Void {
+			body.linkAfter(block, after, made);
+			after = made;
+		}
+		body.beginRow();
+		add(body.endRow(IrOpcode.ValueInit, out, 0, where));
+		for (index in 0...resultSlots.length) {
+			var slot = resultSlots[index],
+				leaf = body.newValueAt(next++, "$scalar-closure:result", body.typeId(mapType(slot.type))),
+				current = out,
+				logical = outType;
+			body.beginRow();
+			body.pushOperand(references[index]);
+			add(body.endRow(IrOpcode.Call, leaf, IrSymbol.of(IrHlScalarRef.LOAD).id, where));
+			for (position in 0...slot.path.length - 1) {
+				var part = slot.path[position],
+					field = fieldOf(logical, part),
+					child = body.newValueAt(next++, part, body.typeId(mapType(field.type)));
+				body.beginRow();
+				body.pushOperand(current);
+				add(body.endRow(IrOpcode.FieldGet, child, IrSymbol.of(part).id, where));
+				current = child;
+				logical = field.type;
+			}
+			body.beginRow();
+			body.pushOperand(current);
+			body.pushOperand(leaf);
+			add(body.endRow(IrOpcode.FieldSet, IrValueId.of(-1), IrSymbol.of(slot.path[slot.path.length - 1]).id,
+				where));
+		}
+		return next;
 	}
 
 	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */

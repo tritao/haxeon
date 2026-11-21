@@ -477,14 +477,13 @@ class IrPipeline {
 	}
 
 	/**
-	 * The last value phi scalarization before scalar replacement, on bodies: the conversion point (docs/design/IR_CORE_COLUMNS.md,
-	 * migration), where each function is encoded. A session takes last compile's object for a function rebuilt the same, which
-	 * has its body.
+	 * The last value phi scalarization before scalar replacement, on bodies. On Wasm, the conversion point
+	 * (docs/design/IR_CORE_COLUMNS.md, migration), where each function is encoded; on HashLink that is scalar closures.
 	 */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		if (retained && cache != null)
-			program.functions = cache.stableBodySources(program.functions);
+		var retained = context.options.keepSession;
+		if (context.isWasm())
+			stableBodySources(program, context);
 		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch, retained);
 		return program;
 	}
@@ -499,9 +498,19 @@ class IrPipeline {
 		return program;
 	}
 
+	/** On HashLink, the first stage over bodies: the conversion point (see `valuePhiScalarizationBodies`). */
 	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarClosures.rewrite(program);
+		var retained = context.options.keepSession;
+		stableBodySources(program, context);
+		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch, retained);
 		return program;
+	}
+
+	/** A session takes last compile's object for a function rebuilt the same, which has its body, at the conversion point. */
+	static function stableBodySources(program:IrProgram, context:IrPipelineContext):Void {
+		var cache = context.inlineCache;
+		if (context.options.keepSession && cache != null)
+			program.functions = cache.stableBodySources(program.functions);
 	}
 
 	static function scalarReplacementObjects(program:IrProgram, context:IrPipelineContext):IrProgram {
