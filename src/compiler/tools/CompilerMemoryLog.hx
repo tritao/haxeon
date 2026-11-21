@@ -48,11 +48,13 @@ class CompilerMemoryLog {
 			var compiler = session.compiler;
 			if (compiler == null)
 				return "no-compiler";
-			var result = compiler.cachedCompileResult == null
-				? null : BackendArtifacts.hashLink(compiler.cachedCompileResult.artifact).module,
-				snapshot = compiler.state.pipelineSnapshot == null || compiler.state.pipelineSnapshot.backend == null
-					? null : BackendArtifacts.hashLink(compiler.state.pipelineSnapshot.backend.artifact).module,
-				encoded = session.encodedModule == null ? null : session.encodedModule.code;
+			var cached = compiler.cachedCompileResult,
+				pipeline = compiler.state.pipelineSnapshot,
+				known = session.encodedModule;
+			var backend = pipeline == null ? null : pipeline.backend;
+			var result = cached == null ? null : BackendArtifacts.hashLink(cached.artifact).module,
+				snapshot = backend == null ? null : BackendArtifacts.hashLink(backend.artifact).module,
+				encoded = known == null ? null : known.code;
 			return 'result==snapshot:${result == snapshot} result==encoded:${result == encoded} snapshot==encoded:${snapshot == encoded} result:${result != null} snapshot:${snapshot != null} encoded:${encoded != null}';
 		}
 		#else
