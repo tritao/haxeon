@@ -145,22 +145,41 @@ class IrInlineCache {
 	 */
 	var sources:Map<String, IrFunction> = [];
 
+	/**
+	 * The same for the functions where the pipeline starts reading bodies (docs/design/IR_CORE_COLUMNS.md, the conversion point):
+	 * a function rebuilt the same as last time is then the object that has its body already, so it is not encoded again.
+	 */
+	var bodySources:Map<String, IrFunction> = [];
+
 	public function stableSources(functions:Array<IrFunction>):Array<IrFunction> {
-		var next:Map<String, IrFunction> = [], result:Array<IrFunction> = [];
+		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next);
+		sources = next;
+		return result;
+	}
+
+	public function stableBodySources(functions:Array<IrFunction>):Array<IrFunction> {
+		var next:Map<String, IrFunction> = [], result = stable(functions, bodySources, next);
+		bodySources = next;
+		return result;
+	}
+
+	static function stable(functions:Array<IrFunction>, previous:Map<String, IrFunction>,
+			next:Map<String, IrFunction>):Array<IrFunction> {
+		var result:Array<IrFunction> = [];
 		for (fn in functions) {
-			var known = sources.get(fn.name);
+			var known = previous.get(fn.name);
 			if (known == null || !compiler.ir.codec.IrFunctionStateEquality.same(known, fn))
 				known = fn;
 			next.set(fn.name, known);
 			result.push(known);
 		}
-		sources = next;
 		return result;
 	}
 
 	/** Lets the sources go, for a compile no next one reuses: they are the objects the stage's bodies were made from. */
 	public function forgetSources():Void {
 		sources = [];
+		bodySources = [];
 		staticChecks.copies = [];
 		staticChecks.helpers = [];
 	}
@@ -168,6 +187,7 @@ class IrInlineCache {
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
+		result.bodySources = bodySources;
 		result.types = types;
 		for (name => entry in originals)
 			result.originals.set(name, entry);

@@ -495,7 +495,11 @@ class IrPipeline {
 		var scalarObjects = context.scalarObjects,
 			hashLink = !context.isWasm(),
 			types = bodyTypes(context),
-			retained = context.options.keepSession;
+			retained = context.options.keepSession,
+			cache = context.inlineCache;
+		// The conversion point: a session takes last compile's object for a function rebuilt the same, which has its body.
+		if (retained && cache != null)
+			program.functions = cache.stableBodySources(program.functions);
 		program.functions = [
 			for (fn in program.functions)
 				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink, retained)
