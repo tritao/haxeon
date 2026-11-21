@@ -87,7 +87,12 @@ private class FunctionScratch {
 		observableConstructorInitialization = isConstructor;
 }
 
-/** Lowers typed syntax to SSA IR; `IrLocalsBuilder` turns the reads and writes of locals into SSA values (`DIRECT_SSA.md`). */
+/**
+ * Lowers typed syntax to SSA IR; `IrLocalsBuilder` turns the reads and writes of locals into SSA values (`DIRECT_SSA.md`).
+ * When lowering control flow, a block whose predecessors are not all known when it is selected (loop headers, continue
+ * targets, do-while bodies, shared case bodies) must come from `createOpenBlock` and be sealed when its last edge is in;
+ * a missed one is an internal error, a crash for users rather than a miscompile.
+ */
 class IrGenerator {
 	public final facts:ProgramFacts;
 	public final profile:TargetProfile;

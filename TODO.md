@@ -179,13 +179,6 @@ SSA from.
   phis, used by the passes) are separate. Merge them, locals as an option, so
   passes that restructure control flow repair SSA through the same machinery
   the generator uses.
-- **Document sealing where control flow is lowered.** A block whose
-  predecessors are not all known when it is selected (loop headers, continue
-  targets, do-while bodies, shared case bodies) must be made with
-  `createOpenBlock` and sealed when its last edge is in; a missed one is an
-  internal error, never a miscompile, but a crash for users. Say so at the
-  generator's control-flow lowering, so a new construct gets it right the
-  first time.
 
 ### Structure after the memory work
 

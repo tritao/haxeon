@@ -61,7 +61,11 @@ class IrLocalsBuilder {
 	public function createBlock():IrBlock
 		return addBlock(true);
 
-	/** A block that can get predecessors after it is selected, such as a loop header; see `seal`. */
+	/**
+	 * A block that can get predecessors after it is selected: a loop header, a continue target, a do-while body, a case
+	 * body shared by several arms. Any block whose predecessors are not all known when it is selected must be made here
+	 * and passed to `seal` once its last edge is in; a missed one is an internal error when the late edge is added.
+	 */
 	public function createOpenBlock():IrBlock
 		return addBlock(false);
 
@@ -72,7 +76,7 @@ class IrLocalsBuilder {
 		return block;
 	}
 
-	/** Every edge into `block`, made by `createOpenBlock`, now exists. */
+	/** Every edge into `block`, made by `createOpenBlock`, now exists; no edge into it may be added after this. */
 	public function seal(block:IrBlock):Void
 		variables.seal(block.id);
 
