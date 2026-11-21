@@ -68,15 +68,17 @@ class IrPipeline {
 	public static final target:IrStageList = new IrStageList("target", [
 		new IrStage("closed-enum-tag-abi", closedEnumTagAbi).when(closesEnumTags),
 		new IrStage("value-array-rewrite", valueArrayRewrite),
-		new IrStage("value-constructors", valueConstructors).when(wasm),
-		new IrStage("value-phi-scalarization", valuePhiScalarization).when(wasm),
-		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
+		new IrStage("value-constructors", valueConstructors).when(wasmValueLanes),
 		new IrStage("value-phi-scalarization", valuePhiScalarization).when(wasmValueLanes),
+		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
+		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
+		new IrStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
+		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
 		new IrStage("value-constructors", valueConstructors).when(hashLink),
 		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink),
 		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
 		new IrStage("scalar-closures", scalarClosures).when(hashLink),
-		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink),
+		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
 		new IrStage("scalar-replacement", scalarReplacement),
 		new IrStage("nullable-scalar-flow", nullableScalarFlow),
@@ -124,6 +126,9 @@ class IrPipeline {
 
 	static function hashLink(program:IrProgram, context:IrPipelineContext):Bool
 		return !context.isWasm();
+
+	static function wasmWithoutLanes(program:IrProgram, context:IrPipelineContext):Bool
+		return context.isWasm() && !wasmValueLanes(program, context);
 
 	static function wasmValueLanes(program:IrProgram, context:IrPipelineContext):Bool
 		return context.isWasm()
@@ -471,6 +476,19 @@ class IrPipeline {
 		return program;
 	}
 
+	/**
+	 * The last value phi scalarization before scalar replacement, on bodies: the conversion point (docs/design/IR_CORE_COLUMNS.md,
+	 * migration), where each function is encoded. A session takes last compile's object for a function rebuilt the same, which
+	 * has its body.
+	 */
+	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
+		var cache = context.inlineCache, retained = context.options.keepSession;
+		if (retained && cache != null)
+			program.functions = cache.stableBodySources(program.functions);
+		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch, retained);
+		return program;
+	}
+
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
 		IrScalarArguments.rewrite(program, true);
 		return program;
@@ -495,11 +513,7 @@ class IrPipeline {
 		var scalarObjects = context.scalarObjects,
 			hashLink = !context.isWasm(),
 			types = bodyTypes(context),
-			retained = context.options.keepSession,
-			cache = context.inlineCache;
-		// The conversion point: a session takes last compile's object for a function rebuilt the same, which has its body.
-		if (retained && cache != null)
-			program.functions = cache.stableBodySources(program.functions);
+			retained = context.options.keepSession;
 		program.functions = [
 			for (fn in program.functions)
 				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink, retained)
