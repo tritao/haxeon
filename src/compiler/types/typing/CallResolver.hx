@@ -30,6 +30,7 @@ import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
+import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypeRelations;
 import compiler.types.DeclarationIndex;
 import compiler.semantic.SemanticSignature;
@@ -434,6 +435,28 @@ class CallResolver {
 		};
 	}
 
+	/** A call of a method the platform implements (`PlatformAbi.method`), loading the stdlib module it is written in. */
+	function typePlatformMethodCall(receiver:TypedExpression,
+			method:{arguments:Array<CompilerType>, result:CompilerType, nativeName:String},
+			arguments:Array<AstExpression>,
+			span:SourceSpan, scope:Scope, name:String):TypedExpression {
+		var typed = typeCallArguments(arguments, method.arguments, scope, name);
+		var module = PlatformAbi.sourceModule(method.nativeName);
+		if (module != null)
+			session.runtimeDependencyTracker.record(session.currentContext.name, module);
+		var call = [receiver].concat(typed);
+		if (!PlatformAbi.signalsOutsideBounds(method.nativeName))
+			return new TypedExpression(TCall(method.nativeName, call), method.result, span);
+		// The check stays at the call site, so a write inside the bytes calls no Haxe function.
+		session.runtimeDependencyTracker.record(session.currentContext.name,
+			PlatformAbi.sourceModule(PlatformAbi.OUTSIDE_BOUNDS));
+		var stored = new TypedExpression(TCall(method.nativeName, call), CompilerType.TBool, span),
+			outside = new TypedExpression(TCall(PlatformAbi.OUTSIDE_BOUNDS, []), CompilerType.TVoid, span);
+		return new TypedExpression(TBlockExpression([
+			TIf(new TypedExpression(TNot(stored), CompilerType.TBool, span), [TExpression(outside, span)], [], span)
+		], new TypedExpression(TVoidLiteral, CompilerType.TVoid, span)), method.result, span);
+	}
+
 	function typeMemberCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool, contextualGenericArguments:Bool):TypedExpression {
@@ -454,14 +477,8 @@ class CallResolver {
 				return rawPointerCall;
 		}
 		var platformMethod = PlatformAbi.method(receiver.type, name);
-		if (platformFirst && platformMethod != null) {
-			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
-			var module = PlatformAbi.sourceModule(platformMethod.nativeName);
-			if (module != null)
-				session.runtimeDependencyTracker.record(session.currentContext.name, module);
-			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)),
-				platformMethod.result, span);
-		}
+		if (platformFirst && platformMethod != null)
+			return typePlatformMethodCall(receiver, platformMethod, arguments, span, scope, name);
 		var stringCall = typeStringMethod(receiver, name, arguments, span, scope);
 		if (stringCall != null)
 			return stringCall;
@@ -471,14 +488,8 @@ class CallResolver {
 			return typeArrayMethod(receiver, name, arguments, span, scope);
 		if (isIterator(receiver.type))
 			return typeIteratorMethod(receiver, name, arguments, span);
-		if (!platformFirst && platformMethod != null) {
-			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
-			var module = PlatformAbi.sourceModule(platformMethod.nativeName);
-			if (module != null)
-				session.runtimeDependencyTracker.record(session.currentContext.name, module);
-			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)),
-				platformMethod.result, span);
-		}
+		if (!platformFirst && platformMethod != null)
+			return typePlatformMethodCall(receiver, platformMethod, arguments, span, scope, name);
 		var forwardedArray = AbstractForwarding.arrayStorage(session, receiver.type, name);
 		if (forwardedArray != null)
 			return typeArrayMethod(session.representation.boundaryCast(receiver, forwardedArray), name, arguments, span,

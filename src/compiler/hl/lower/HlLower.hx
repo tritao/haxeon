@@ -2698,7 +2698,7 @@ class HlLower {
 		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64"
 			|| name == "__array_push_bool"
 			|| name == "__array_push_bytes" || name == "__array_push_ref";
-		var get = name == "__bytes_get", set = name == "__bytes_set";
+		var get = name == "__bytes_get", set = name == "__bytes_try_set";
 		if (!push && !get && !set)
 			return false;
 		var destination = defineRegister(output, registers, registerTypes);
@@ -2732,8 +2732,12 @@ class HlLower {
 			instructions.push(HlInstruction.FieldGet(size, header, 1));
 			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(args[1], size, slow));
 			instructions.push(HlInstruction.FieldGet(data, header, 0));
-			instructions.push(get ? HlInstruction.GetI8(destination, data, args[1]) : HlInstruction.SetI8(data, args[1],
-				args[2]));
+			if (get)
+				instructions.push(HlInstruction.GetI8(destination, data, args[1]));
+			else {
+				instructions.push(HlInstruction.SetI8(data, args[1], args[2]));
+				instructions.push(HlInstruction.LoadBool(destination, true));
+			}
 		}
 		instructions.push(HlInstruction.Jump(done));
 		instructions.push(HlInstruction.Label(slow));

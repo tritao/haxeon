@@ -310,6 +310,11 @@ class ModuleAnalyzer {
 		}
 		for (fn in ast.functions)
 			addFunctionTypeDependencies(fn, state, dependencies);
+		for (implementation in PlatformAbi.implementationModules(state.name)) {
+			var module = sourceModuleForDependency(implementation);
+			if (module != null)
+				dependencies.set(module, true);
+		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
 	}

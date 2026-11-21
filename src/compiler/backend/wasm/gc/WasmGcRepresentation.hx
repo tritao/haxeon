@@ -2932,11 +2932,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| argumentLocals.length != 2)
 				throw new InternalError("Invalid Wasm GC Bytes.get signature");
-			return managedByteGet(argumentLocals[0], argumentLocals[1], outputLocal);
+			return insideBytes(argumentLocals[0], argumentLocals[1], 1,
+				managedByteGet(argumentLocals[0], argumentLocals[1], outputLocal), I32Const(0), outputLocal);
 		}
-		if (name == "__bytes_set") {
+		if (name == "__bytes_try_set") {
 			if ((switch (output.type) {
-				case Void: false;
+				case Bool: false;
 				default: true;
 			})
 				|| arguments.length != 3
@@ -2954,11 +2955,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| argumentLocals.length != 3)
 				throw new InternalError("Invalid Wasm GC Bytes.set signature");
-			return managedByteSet(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
+			return insideBytes(argumentLocals[0], argumentLocals[1], 1,
+				managedByteSet(argumentLocals[0], argumentLocals[1], argumentLocals[2]).concat([
+					I32Const(1),
+					LocalSet(outputLocal)
+				]),
+				I32Const(0), outputLocal);
 		}
-		if (name == "__bytes_blit") {
+		if (name == "__bytes_try_blit") {
 			if ((switch (output.type) {
-				case Void: false;
+				case Bool: false;
 				default: true;
 			})
 				|| arguments.length != 5
@@ -2984,10 +2990,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| argumentLocals.length != 5)
 				throw new InternalError("Invalid Wasm GC Bytes.blit signature");
-			var body = checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1],
-				argumentLocals[4]);
-			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[2], argumentLocals[3],
-				argumentLocals[4]));
+			var body = byteRangeOutside(argumentLocals[0], argumentLocals[1], argumentLocals[4])
+				.concat(byteRangeOutside(argumentLocals[2], argumentLocals[3], argumentLocals[4]))
+				.concat([I32Or, If(null), I32Const(0), LocalSet(outputLocal), Else]);
 			return body.concat([
 				LocalGet(argumentLocals[0]),
 				StructGet(plan.managedBytesTypeIndex, 0),
@@ -3002,7 +3007,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalGet(argumentLocals[3]),
 				I32Add,
 				LocalGet(argumentLocals[4]),
-				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
+				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex),
+				I32Const(1),
+				LocalSet(outputLocal),
+				End
 			]);
 		}
 		if (name == "getI8" || name == "getU8" || name == "getI16" || name == "getU16") {
@@ -3102,11 +3110,14 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| argumentLocals.length != 2)
 				throw new InternalError("Invalid Wasm GC Bytes.getInt32 signature");
-			return managedByteGetI32(argumentLocals[0], argumentLocals[1], outputLocal);
+			var body = managedByteGetI32(argumentLocals[0], argumentLocals[1], outputLocal);
+			return name == "getI32" ? body : insideBytes(argumentLocals[0], argumentLocals[1], 4, body, I32Const(0),
+				outputLocal);
 		}
-		if (name == "__bytes_set_i32" || name == "setI32") {
+		if (name == "__bytes_try_set_i32" || name == "setI32") {
 			if ((switch (output.type) {
-				case Void: false;
+				case Void: name != "setI32";
+				case Bool: name == "setI32";
 				default: true;
 			})
 				|| arguments.length != 3
@@ -3124,11 +3135,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| argumentLocals.length != 3)
 				throw new InternalError("Invalid Wasm GC Bytes.setInt32 signature");
-			return managedByteSetI32(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
+			return checkedWrite(name == "setI32", argumentLocals[0], argumentLocals[1], 4,
+				managedByteSetI32(argumentLocals[0], argumentLocals[1], argumentLocals[2]), outputLocal);
 		}
-		if (name == "__bytes_set_float" || name == "setF32") {
+		if (name == "__bytes_try_set_float" || name == "setF32") {
 			if ((switch (output.type) {
-				case Void: false;
+				case Void: name != "setF32";
+				case Bool: name == "setF32";
 				default: true;
 			})
 				|| arguments.length != 3
@@ -3147,12 +3160,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| argumentLocals.length != 3)
 				throw new InternalError("Invalid Wasm GC Bytes.setFloat signature");
 			var floatBitsLocal = allocateLocal(I32);
-			return [
+			return checkedWrite(name == "setF32", argumentLocals[0], argumentLocals[1], 4, [
 				LocalGet(argumentLocals[2]),
 				F32DemoteF64,
 				I32ReinterpretF32,
 				LocalSet(floatBitsLocal)
-			].concat(managedByteSetI32(argumentLocals[0], argumentLocals[1], floatBitsLocal));
+			].concat(managedByteSetI32(argumentLocals[0], argumentLocals[1], floatBitsLocal)), outputLocal);
 		}
 		if (name == "getI64") {
 			if ((switch (output.type) {
@@ -3211,8 +3224,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| argumentLocals.length != 2)
 				throw new InternalError("Invalid Wasm GC HXI f32 getter signature");
 			var bits = allocateLocal(I32),
-				body = managedByteGetI32(argumentLocals[0], argumentLocals[1], bits);
-			return body.concat([LocalGet(bits), F32ReinterpretI32, F64PromoteF32, LocalSet(outputLocal)]);
+				body = managedByteGetI32(argumentLocals[0], argumentLocals[1], bits)
+					.concat([LocalGet(bits), F32ReinterpretI32, F64PromoteF32, LocalSet(outputLocal)]);
+			return name == "getF32" ? body : insideBytes(argumentLocals[0], argumentLocals[1], 4, body, F64Const(0),
+				outputLocal);
 		}
 		if (name == "__bytes_get_double" || name == "getF64") {
 			if ((switch (output.type) {
@@ -3231,12 +3246,15 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| argumentLocals.length != 2)
 				throw new InternalError("Invalid Wasm GC HXI f64 getter signature");
 			var bits = allocateLocal(I64),
-				body = managedByteGetI64(argumentLocals[0], argumentLocals[1], bits);
-			return body.concat([LocalGet(bits), F64ReinterpretI64, LocalSet(outputLocal)]);
+				body = managedByteGetI64(argumentLocals[0], argumentLocals[1], bits)
+					.concat([LocalGet(bits), F64ReinterpretI64, LocalSet(outputLocal)]);
+			return name == "getF64" ? body : insideBytes(argumentLocals[0], argumentLocals[1], 8, body, F64Const(0),
+				outputLocal);
 		}
-		if (name == "__bytes_set_double" || name == "setF64") {
+		if (name == "__bytes_try_set_double" || name == "setF64") {
 			if ((switch (output.type) {
-				case Void: false;
+				case Void: name != "setF64";
+				case Bool: name == "setF64";
 				default: true;
 			})
 				|| arguments.length != 3
@@ -3255,8 +3273,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| argumentLocals.length != 3)
 				throw new InternalError("Invalid Wasm GC HXI f64 setter signature");
 			var bits = allocateLocal(I64);
-			return [LocalGet(argumentLocals[2]), I64ReinterpretF64,
-				LocalSet(bits)].concat(managedByteSetI64(argumentLocals[0], argumentLocals[1], bits));
+			return checkedWrite(name == "setF64", argumentLocals[0], argumentLocals[1], 8, [
+				LocalGet(argumentLocals[2]),
+				I64ReinterpretF64,
+				LocalSet(bits)
+			].concat(managedByteSetI64(argumentLocals[0], argumentLocals[1], bits)),
+				outputLocal);
 		}
 		if (name == "structCopy") {
 			if ((switch (output.type) {
@@ -5908,6 +5930,59 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body.push(End);
 		return body;
 	}
+
+	/** Pushes whether `width` bytes at `indexLocal` are outside the bytes. */
+	function byteIndexOutside(bytesLocal:Int, indexLocal:Int, width:Int):Array<WasmInstruction>
+		return [
+			LocalGet(indexLocal),
+			I32Const(0),
+			I32LtS,
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 2),
+			I32Const(width),
+			I32Sub,
+			LocalGet(indexLocal),
+			I32LtS,
+			I32Or
+		];
+
+	/** Pushes whether `lengthLocal` bytes at `offsetLocal` are outside the bytes. */
+	function byteRangeOutside(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int):Array<WasmInstruction>
+		return [
+			LocalGet(offsetLocal),
+			I32Const(0),
+			I32LtS,
+			LocalGet(lengthLocal),
+			I32Const(0),
+			I32LtS,
+			I32Or,
+			LocalGet(bytesLocal),
+			StructGet(plan.managedBytesTypeIndex, 2),
+			LocalGet(offsetLocal),
+			I32Sub,
+			LocalGet(lengthLocal),
+			I32LtS,
+			I32Or
+		];
+
+	/** `body` when `width` bytes at `indexLocal` are inside the bytes, else `outside` into `destination`: Haxe's Bytes read 0 there. */
+	function insideBytes(bytesLocal:Int, indexLocal:Int, width:Int, body:Array<WasmInstruction>,
+			outside:WasmInstruction,
+			destination:Int):Array<WasmInstruction>
+		return byteIndexOutside(bytesLocal, indexLocal, width).concat([If(null), outside, LocalSet(destination), Else])
+			.concat(body).concat([End]);
+
+	/**
+	 * A write of `width` bytes at `indexLocal`: an HXI accessor's traps outside the bytes; a Bytes writer's stores nothing there and
+	 * sets `destination` to whether it stored, for the caller to throw Haxe's OutsideBounds.
+	 */
+	function checkedWrite(trapping:Bool, bytesLocal:Int, indexLocal:Int, width:Int, body:Array<WasmInstruction>,
+			destination:Int):Array<WasmInstruction>
+		return trapping ? body : insideBytes(bytesLocal, indexLocal, width, body.concat([
+			I32Const(1),
+			LocalSet(destination)
+		]),
+			I32Const(0), destination);
 
 	function checkedByteIndex(wrapperType:Int, bytesLocal:Int, indexLocal:Int, width:Int):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [LocalGet(indexLocal), I32Const(0), I32LtS, If(null)];

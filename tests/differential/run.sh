@@ -225,6 +225,7 @@ in_background run_case control-flow
 in_background run_case nullable
 in_background run_case observable-output
 in_background run_case bytes-access 0
+in_background run_case bytes-bounds 0
 in_background run_case compiler-audit
 in_background run_case exception-capture-order 0
 # Haxe 4.3.7's HL backend loses the final local write before this throw;

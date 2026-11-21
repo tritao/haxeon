@@ -26,7 +26,7 @@ class IrSharedRuntimeCalls {
 		"__array_push_bytes" => true,
 		"__array_push_ref" => true,
 		"__bytes_get" => true,
-		"__bytes_set" => true
+		"__bytes_try_set" => true
 	];
 
 	public static inline final SUFFIX = "$shared:";

@@ -26,6 +26,13 @@ class PlatformAbi {
 		return dot <= 0 ? null : target.substr(0, dot);
 	}
 
+	/**
+	 * The stdlib modules that implement methods of the platform types `module` declares, which a call of one adds to the program.
+	 * They come with the declaring module, so the typer finds them loaded: one found while typing restarts the frontend.
+	 */
+	public static function implementationModules(module:String):Array<String>
+		return module == "haxe.io.Bytes" ? ["haxe.io.BytesBounds"] : [];
+
 	public static function isType(name:String):Bool
 		return types.exists(name);
 
@@ -110,41 +117,42 @@ class PlatformAbi {
 			case "set": {
 				arguments: [CompilerType.TInt, CompilerType.TInt],
 				result: CompilerType.TVoid,
-				nativeName: "__bytes_set"
+				nativeName: "__bytes_try_set"
 			};
 			case "setInt32": {
 				arguments: [CompilerType.TInt, CompilerType.TInt],
 				result: CompilerType.TVoid,
-				nativeName: "__bytes_set_i32"
+				nativeName: "__bytes_try_set_i32"
 			};
 			case "setFloat": {
 				arguments: [CompilerType.TInt, CompilerType.TFloat],
 				result: CompilerType.TVoid,
-				nativeName: "__bytes_set_float"
+				nativeName: "__bytes_try_set_float"
 			};
 			case "setDouble": {
 				arguments: [CompilerType.TInt, CompilerType.TFloat],
 				result: CompilerType.TVoid,
-				nativeName: "__bytes_set_double"
+				nativeName: "__bytes_try_set_double"
 			};
 			case "blit": {
 				arguments: [CompilerType.TInt, CompilerType.TBytes, CompilerType.TInt, CompilerType.TInt],
 				result: CompilerType.TVoid,
-				nativeName: "__bytes_blit"
-			};
-			case "sub": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TBytes,
-				nativeName: "__bytes_sub"
-			};
-			case "getString": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TString,
-				nativeName: "__bytes_get_string"
+				nativeName: "__bytes_try_blit"
 			};
 			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt,
 				nativeName: "__bytes_compare"};
 			case "toString": {arguments: noArguments(), result: CompilerType.TString, nativeName: "__bytes_to_string"};
+			// Haxe source in the stdlib (haxe/io/BytesBounds.hx), the same on every target.
+			case "sub": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TBytes,
+				nativeName: "haxe.io.BytesBounds.sub"
+			};
+			case "getString": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TString,
+				nativeName: "haxe.io.BytesBounds.getString"
+			};
 			// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
 			case "fill": {
 				arguments: [CompilerType.TInt, CompilerType.TInt, CompilerType.TInt],
@@ -179,6 +187,20 @@ class PlatformAbi {
 			};
 			default: null;
 		};
+
+	/**
+	 * Whether a platform method's native returns whether its range was inside the bytes, where Haxe throws
+	 * `haxe.io.Error.OutsideBounds` when it was not: the call is typed as the method's result, after that check.
+	 */
+	public static function signalsOutsideBounds(nativeName:String):Bool
+		return switch nativeName {
+			case "__bytes_try_set", "__bytes_try_set_i32", "__bytes_try_set_float", "__bytes_try_set_double",
+				"__bytes_try_blit": true;
+			default: false;
+		};
+
+	/** The stdlib function that throws Haxe's `haxe.io.Error.OutsideBounds`. */
+	public static inline final OUTSIDE_BOUNDS = "haxe.io.BytesBounds.outsideBounds";
 
 	static function noArguments():Array<CompilerType>
 		return [];

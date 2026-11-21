@@ -235,7 +235,11 @@ remain supported. These conversions, dynamic object literals, and field reflecti
 Wasm32, and Wasm GC.
 
 On HashLink, an in-capacity typed array push and in-range `Bytes.get`/`set` use inline instructions. Growth and
-byte-access errors use the existing runtime functions. Reference pushes retain the managed write barrier.
+out-of-range byte access use the existing runtime functions. Reference pushes retain the managed write barrier.
+
+`haxe.io.Bytes` outside its range behaves as Haxe's HashLink `Bytes` on every target: `get`, `getInt32`, `getFloat`,
+`getDouble`, `getUInt16` and `getInt64` read 0, and `set`, the other setters, `blit`, `fill`, `sub` and `getString` throw
+`haxe.io.Error.OutsideBounds` without writing anything.
 
 HashLink strings use HashLink's standard `String` object layout: zero
 terminated UTF-16 data plus its length in code units, so `.length` and

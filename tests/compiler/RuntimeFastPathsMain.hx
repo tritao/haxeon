@@ -2,7 +2,7 @@ import compiler.Compiler;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.runtime.CompilerIntrinsics;
 
-/** Growth, byte bounds, byte truncation and GC barriers remain correct with inline runtime operations. */
+/** Growth, byte bounds (a read outside is 0, a write throws OutsideBounds), byte truncation and GC barriers remain correct with inline runtime operations. */
 class RuntimeFastPathsMain {
 	static final programs = [
 		'class Box {public var value:Int;public function new(n:Int)value=n;} function main():Int {hl.Gc.enable(false);var a:Array<Box>=[];a.resize(4096);a.resize(0);var roots:Array<Box>=[];for(i in 0...20000)roots.push(new Box(i));var done=hl.Gc.step(0.001);for(i in 0...2048){a.push(new Box(i));done=hl.Gc.step(1.0);}hl.Gc.major();hl.Gc.enable(true);return a[2047].value==2047 && roots[19999].value==19999?42:1;}',
@@ -16,9 +16,9 @@ class RuntimeFastPathsMain {
 		'function main():Int { var a=[1,2,3];a.resize(0);var n=a.push(42);return n==1 && a[0]==42?42:1; }',
 		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(1000);for(i in 0...1000)b.set(i,i);for(i in 0...1000)if(b.get(i)!=(i&255))return 1;return 42;}',
 		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(1);b.set(0,-1);return b.get(0)==255?42:1;}',
-		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(1);try {return b.get(-1);}catch(e:Dynamic){return 42;}}',
-		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(1);try {b.set(1,42);return 1;}catch(e:Dynamic){return 42;}}',
-		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(0);try {return b.get(0);}catch(e:Dynamic){return 42;}}',
+		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(1);return b.get(-1)==0 && b.get(1)==0?42:1;}',
+		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(1);try {b.set(1,42);return 1;}catch(e:haxe.io.Error){return e==haxe.io.Error.OutsideBounds?42:2;}}',
+		'import haxe.io.Bytes; function main():Int {var b=Bytes.alloc(0);return b.get(0)==0?42:1;}',
 		'import haxe.io.Bytes; function main():Int {var b:Bytes=null;try {return b.get(0);}catch(e:Dynamic){return 42;}}'
 	];
 

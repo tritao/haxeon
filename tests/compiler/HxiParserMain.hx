@@ -14,6 +14,7 @@ import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import haxe.Int64;
@@ -36,6 +37,7 @@ class HxiParserMain {
 	static function newCompiler():Compiler {
 		var compiler = new Compiler();
 		compiler.addStandardLibrarySourceRoot("stdlib");
+		CompilerIntrinsics.register(compiler);
 		return compiler;
 	}
 

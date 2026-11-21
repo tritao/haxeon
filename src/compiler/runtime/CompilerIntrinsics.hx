@@ -37,10 +37,8 @@ class CompilerIntrinsics {
 		"__bytes_get_i32",
 		"__bytes_get_float",
 		"__bytes_get_double",
-		"__bytes_sub",
 		"__bytes_compare",
-		"__bytes_to_string",
-		"__bytes_get_string"
+		"__bytes_to_string"
 	];
 
 	/** Intrinsics that only read their operands or allocate fresh values. Calls that can reach user
@@ -104,19 +102,20 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_get_data", "haxeon_runtime", "__bytes_get_data", [bytes], THlBytes));
 		definitions.push(native("__bytes_get", "haxeon_runtime", "__bytes_get", [bytes, TInt], TInt));
 		definitions.push(native("__bytes_get_i32", "haxeon_runtime", "__bytes_get_i32", [bytes, TInt], TInt));
-		definitions.push(native("__bytes_get_float", "haxeon_runtime", "getF32", [bytes, TInt], TFloat));
-		definitions.push(native("__bytes_get_double", "haxeon_runtime", "getF64", [bytes, TInt], TFloat));
-		definitions.push(native("__bytes_set", "haxeon_runtime", "__bytes_set", [bytes, TInt, TInt], TVoid));
-		definitions.push(native("__bytes_set_i32", "haxeon_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));
-		definitions.push(native("__bytes_set_float", "haxeon_runtime", "setF32", [bytes, TInt, TFloat], TVoid));
-		definitions.push(native("__bytes_set_double", "haxeon_runtime", "setF64", [bytes, TInt, TFloat], TVoid));
-		definitions.push(native("__bytes_blit", "haxeon_runtime", "__bytes_blit", [bytes, TInt, bytes, TInt, TInt],
-			TVoid));
-		definitions.push(native("__bytes_sub", "haxeon_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes));
+		definitions.push(native("__bytes_get_float", "haxeon_runtime", "__bytes_get_float", [bytes, TInt], TFloat));
+		definitions.push(native("__bytes_get_double", "haxeon_runtime", "__bytes_get_double", [bytes, TInt], TFloat));
+		// Writers return whether the range was inside the bytes; the typer throws Haxe's OutsideBounds when not.
+		definitions.push(native("__bytes_try_set", "haxeon_runtime", "__bytes_try_set", [bytes, TInt, TInt], TBool));
+		definitions.push(native("__bytes_try_set_i32", "haxeon_runtime", "__bytes_try_set_i32", [bytes, TInt, TInt],
+			TBool));
+		definitions.push(native("__bytes_try_set_float", "haxeon_runtime", "__bytes_try_set_float",
+			[bytes, TInt, TFloat], TBool));
+		definitions.push(native("__bytes_try_set_double", "haxeon_runtime", "__bytes_try_set_double",
+			[bytes, TInt, TFloat], TBool));
+		definitions.push(native("__bytes_try_blit", "haxeon_runtime", "__bytes_try_blit",
+			[bytes, TInt, bytes, TInt, TInt], TBool));
 		definitions.push(native("__bytes_compare", "haxeon_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "haxeon_runtime", "__bytes_to_string", [bytes], TString));
-		definitions.push(native("__bytes_get_string", "haxeon_runtime", "__bytes_get_string", [bytes, TInt, TInt],
-			TString));
 		return definitions;
 	}
 

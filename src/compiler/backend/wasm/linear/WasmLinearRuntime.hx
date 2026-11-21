@@ -595,18 +595,29 @@ class WasmLinearRuntime {
 			case "__string_utf8_length": addBytesLength(module, native.name);
 			case "__bytes_set_utf8": addBytesSetUtf8(module, native.name, bytesDataPointer);
 			case "__bytes_compare": addBytesCompare(module, native.name, bytesDataPointer);
-			case "__bytes_get", "getU8": addBytesLoad(module, native.name, I32, I32Load8U(0), bytesDataPointer);
-			case "__bytes_blit": addBytesBlit(module, native.name, bytesDataPointer);
+			case "__bytes_get": addBytesLoad(module, native.name, I32, I32Load8U(0), bytesDataPointer, null, 1);
+			case "getU8": addBytesLoad(module, native.name, I32, I32Load8U(0), bytesDataPointer);
+			case "__bytes_try_blit": addBytesBlit(module, native.name, bytesDataPointer);
 			case "getI8": addBytesLoad(module, native.name, I32, I32Load8S(0), bytesDataPointer);
 			case "getU16": addBytesLoad(module, native.name, I32, I32Load16U(0), bytesDataPointer);
 			case "getI16": addBytesLoad(module, native.name, I32, I32Load16S(0), bytesDataPointer);
-			case "__bytes_get_i32", "getI32": addBytesLoad(module, native.name, I32, I32Load(0), bytesDataPointer);
+			case "__bytes_get_i32": addBytesLoad(module, native.name, I32, I32Load(0), bytesDataPointer, null, 4);
+			case "getI32": addBytesLoad(module, native.name, I32, I32Load(0), bytesDataPointer);
+			case "__bytes_get_float": addBytesLoad(module, native.name, F64, F32Load(0), bytesDataPointer,
+				[F64PromoteF32],
+				4);
+			case "__bytes_get_double": addBytesLoad(module, native.name, F64, F64Load(0), bytesDataPointer, null, 8);
 			case "getI64": addBytesLoad(module, native.name, I64, I64Load(0), bytesDataPointer);
 			case "getF32": addBytesLoad(module, native.name, F64, F32Load(0), bytesDataPointer, [F64PromoteF32]);
 			case "getF64": addBytesLoad(module, native.name, F64, F64Load(0), bytesDataPointer);
-			case "__bytes_set", "setI8",
-				"setU8": addBytesStore(module, native.name, I32, I32Store8(0), bytesDataPointer);
-			case "__bytes_set_i32", "setI32": addBytesStore(module, native.name, I32, I32Store(0), bytesDataPointer);
+			case "setI8", "setU8": addBytesStore(module, native.name, I32, I32Store8(0), bytesDataPointer);
+			case "setI32": addBytesStore(module, native.name, I32, I32Store(0), bytesDataPointer);
+			case "__bytes_try_set": addBytesStore(module, native.name, I32, I32Store8(0), bytesDataPointer, null, 1);
+			case "__bytes_try_set_i32": addBytesStore(module, native.name, I32, I32Store(0), bytesDataPointer, null, 4);
+			case "__bytes_try_set_float": addBytesStore(module, native.name, F64, F32Store(0), bytesDataPointer,
+				[F32DemoteF64], 4);
+			case "__bytes_try_set_double": addBytesStore(module, native.name, F64, F64Store(0), bytesDataPointer, null,
+				8);
 			case "setI16", "setU16": addBytesStore(module, native.name, I32, I32Store16(0), bytesDataPointer);
 			case "setI64": addBytesStore(module, native.name, I64, I64Store(0), bytesDataPointer);
 			case "setF32": addBytesStore(module, native.name, F64, F32Store(0), bytesDataPointer, [F32DemoteF64]);
@@ -946,12 +957,24 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
+	/** A load at an offset; with a `checkedWidth`, one that reads 0 outside the bytes, as Haxe's Bytes getters do. */
 	static function addBytesLoad(module:WasmModule, name:String, result:WasmValueType, instruction:WasmInstruction,
 			bytesDataPointer:Int,
-			?after:Array<WasmInstruction>):Int {
+			?after:Array<WasmInstruction>, checkedWidth:Int = 0):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [result]}),
 			bytes = builder.parameter("bytes", 0),
 			offset = builder.parameter("offset", 1);
+		if (checkedWidth > 0) {
+			bytesOutsideWidth(builder, bytes, offset, checkedWidth);
+			builder.if_(function(builder) {
+				builder.emit(switch result {
+					case F64: F64Const(0);
+					case I64: I64Const(0);
+					default: I32Const(0);
+				});
+				builder.return_();
+			});
+		}
 		builder.localGet(bytes);
 		builder.call(builder.functionRef(bytesDataPointer));
 		builder.localGet(offset);
@@ -963,13 +986,27 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
+	/**
+	 * A store at an offset; with a `checkedWidth`, one that stores nothing outside the bytes and returns whether it stored, for
+	 * the caller to throw Haxe's OutsideBounds.
+	 */
 	static function addBytesStore(module:WasmModule, name:String, valueType:WasmValueType, instruction:WasmInstruction,
 			bytesDataPointer:Int,
-			?before:Array<WasmInstruction>):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, valueType], results: []}),
+			?before:Array<WasmInstruction>, checkedWidth:Int = 0):Int {
+		var builder = new WasmFunctionBuilder(name, {
+			parameters: [I32, I32, valueType],
+			results: checkedWidth > 0 ? [I32] : []
+		}),
 			bytes = builder.parameter("bytes", 0),
 			offset = builder.parameter("offset", 1),
 			value = builder.parameter("value", 2);
+		if (checkedWidth > 0) {
+			bytesOutsideWidth(builder, bytes, offset, checkedWidth);
+			builder.if_(function(builder) {
+				builder.i32Const(0);
+				builder.return_();
+			});
+		}
 		builder.localGet(bytes);
 		builder.call(builder.functionRef(bytesDataPointer));
 		builder.localGet(offset);
@@ -978,19 +1015,27 @@ class WasmLinearRuntime {
 		if (before != null)
 			builder.emitAll(before);
 		builder.emit(instruction);
+		if (checkedWidth > 0)
+			builder.i32Const(1);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}
 
+	/** Copies a range between two bytes and returns 1, or returns 0 when either range is outside its bytes. */
 	static function addBytesBlit(module:WasmModule, name:String, bytesDataPointer:Int):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32, I32, I32], results: []}),
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32, I32, I32], results: [I32]}),
 			destination = builder.parameter("destination", 0),
 			position = builder.parameter("position", 1),
 			source = builder.parameter("source", 2),
 			sourcePosition = builder.parameter("sourcePosition", 3),
 			length = builder.parameter("length", 4);
-		bytesRangeCheck(builder, destination, position, length);
-		bytesRangeCheck(builder, source, sourcePosition, length);
+		bytesOutsideRange(builder, destination, position, length);
+		bytesOutsideRange(builder, source, sourcePosition, length);
+		builder.emit(I32Or);
+		builder.if_(function(builder) {
+			builder.i32Const(0);
+			builder.return_();
+		});
 		builder.localGet(destination);
 		builder.call(builder.functionRef(bytesDataPointer));
 		builder.localGet(position);
@@ -1001,6 +1046,7 @@ class WasmLinearRuntime {
 		builder.i32Add();
 		builder.localGet(length);
 		builder.emit(MemoryCopy);
+		builder.i32Const(1);
 		builder.return_();
 		return module.addFunction(builder.finish());
 	}
@@ -1124,6 +1170,40 @@ class WasmLinearRuntime {
 		builder.localGet(result);
 		builder.return_();
 		return module.addFunction(builder.finish());
+	}
+
+	/** Pushes whether `width` bytes at `offset` are outside `bytes`. */
+	static function bytesOutsideWidth(builder:WasmFunctionBuilder, bytes:WasmLocalRef, offset:WasmLocalRef,
+			width:Int):Void {
+		builder.localGet(offset);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.localGet(bytes);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.i32Const(width);
+		builder.i32Sub();
+		builder.localGet(offset);
+		builder.emit(I32LtS);
+		builder.emit(I32Or);
+	}
+
+	/** Pushes whether `length` bytes at `offset` are outside `bytes`. */
+	static function bytesOutsideRange(builder:WasmFunctionBuilder, bytes:WasmLocalRef, offset:WasmLocalRef,
+			length:WasmLocalRef):Void {
+		builder.localGet(offset);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.localGet(length);
+		builder.i32Const(0);
+		builder.emit(I32LtS);
+		builder.emit(I32Or);
+		builder.localGet(bytes);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localGet(offset);
+		builder.i32Sub();
+		builder.localGet(length);
+		builder.emit(I32LtS);
+		builder.emit(I32Or);
 	}
 
 	static function bytesRangeCheck(builder:WasmFunctionBuilder, bytes:WasmLocalRef, offset:WasmLocalRef,

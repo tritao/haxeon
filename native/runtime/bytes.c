@@ -180,17 +180,25 @@ HL_PRIM realtime_bytes *HL_NAME(structUtf8Copy)( vstring *value ) {
 
 HL_PRIM int HL_NAME(__bytes_length)( realtime_bytes *bytes ) { return bytes == NULL ? 0 : bytes->length; }
 HL_PRIM vbyte *HL_NAME(__bytes_get_data)( realtime_bytes *bytes ) { return bytes == NULL ? NULL : bytes->data; }
-HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
-	realtime_bytes_bounds(bytes, position, 1);
-	return bytes->data[position];
+/* Whether `length` bytes at `position` are inside `bytes`, which Haxe's accessors read or write. */
+static bool realtime_bytes_in_range( realtime_bytes *bytes, int position, int length ) {
+	if( bytes == NULL ) hl_null_access();
+	return position >= 0 && length >= 0 && position <= bytes->length - length;
 }
 
-HL_PRIM void HL_NAME(__bytes_blit)( realtime_bytes *destination, int position,
+/* Haxe's Bytes reads 0 outside the bytes. */
+HL_PRIM int HL_NAME(__bytes_get)( realtime_bytes *bytes, int position ) {
+	return realtime_bytes_in_range(bytes, position, 1) ? bytes->data[position] : 0;
+}
+
+/* Writes nothing and returns false outside the bytes; the caller throws Haxe's OutsideBounds. */
+HL_PRIM bool HL_NAME(__bytes_try_blit)( realtime_bytes *destination, int position,
     realtime_bytes *source, int source_position, int length ) {
-	realtime_bytes_bounds(destination, position, length);
-	realtime_bytes_bounds(source, source_position, length);
+	if( !realtime_bytes_in_range(destination, position, length)
+		|| !realtime_bytes_in_range(source, source_position, length) ) return false;
 	if( length > 0 ) memmove(destination->data + position,
 		source->data + source_position, (size_t)length);
+	return true;
 }
 
 HL_PRIM int HL_NAME(getI8)( realtime_bytes *bytes, int offset ) { int8_t value; realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(&value,bytes->data + offset,sizeof(value)); return value; }
@@ -213,12 +221,54 @@ HL_PRIM void HL_NAME(setF32)( realtime_bytes *bytes, int offset, double value ) 
 HL_PRIM void HL_NAME(setF64)( realtime_bytes *bytes, int offset, double value ) { realtime_bytes_bounds(bytes,offset,sizeof(value)); memcpy(bytes->data + offset,&value,sizeof(value)); }
 
 HL_PRIM int HL_NAME(__bytes_get_i32)( realtime_bytes *bytes, int position ) {
-	realtime_bytes_bounds(bytes, position, 4);
+	if( !realtime_bytes_in_range(bytes, position, 4) ) return 0;
 	return (int)((unsigned int)bytes->data[position]
 		| ((unsigned int)bytes->data[position + 1] << 8)
 		| ((unsigned int)bytes->data[position + 2] << 16)
 		| ((unsigned int)bytes->data[position + 3] << 24));
 }
+HL_PRIM double HL_NAME(__bytes_get_float)( realtime_bytes *bytes, int position ) {
+	float value;
+	if( !realtime_bytes_in_range(bytes, position, sizeof(value)) ) return 0;
+	memcpy(&value, bytes->data + position, sizeof(value));
+	return value;
+}
+HL_PRIM double HL_NAME(__bytes_get_double)( realtime_bytes *bytes, int position ) {
+	double value;
+	if( !realtime_bytes_in_range(bytes, position, sizeof(value)) ) return 0;
+	memcpy(&value, bytes->data + position, sizeof(value));
+	return value;
+}
+HL_PRIM bool HL_NAME(__bytes_try_set)( realtime_bytes *bytes, int position, int value ) {
+	if( !realtime_bytes_in_range(bytes, position, 1) ) return false;
+	bytes->data[position] = (vbyte)value;
+	return true;
+}
+HL_PRIM bool HL_NAME(__bytes_try_set_i32)( realtime_bytes *bytes, int position, int value ) {
+	if( !realtime_bytes_in_range(bytes, position, 4) ) return false;
+	for( int i = 0; i < 4; i++ ) bytes->data[position + i] = (vbyte)(value >> (i * 8));
+	return true;
+}
+HL_PRIM bool HL_NAME(__bytes_try_set_float)( realtime_bytes *bytes, int position, double value ) {
+	float converted = (float)value;
+	if( !realtime_bytes_in_range(bytes, position, sizeof(converted)) ) return false;
+	memcpy(bytes->data + position, &converted, sizeof(converted));
+	return true;
+}
+HL_PRIM bool HL_NAME(__bytes_try_set_double)( realtime_bytes *bytes, int position, double value ) {
+	if( !realtime_bytes_in_range(bytes, position, sizeof(value)) ) return false;
+	memcpy(bytes->data + position, &value, sizeof(value));
+	return true;
+}
+/* The unchecked forms of the __bytes_try_* writers, which bytecode compiled before them still imports. */
+HL_PRIM void HL_NAME(__bytes_blit)( realtime_bytes *destination, int position,
+    realtime_bytes *source, int source_position, int length ) {
+	realtime_bytes_bounds(destination, position, length);
+	realtime_bytes_bounds(source, source_position, length);
+	if( length > 0 ) memmove(destination->data + position,
+		source->data + source_position, (size_t)length);
+}
+
 HL_PRIM void HL_NAME(__bytes_set)( realtime_bytes *bytes, int position, int value ) {
 	realtime_bytes_bounds(bytes, position, 1);
 	bytes->data[position] = (vbyte)value;
