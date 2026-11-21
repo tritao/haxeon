@@ -1,8 +1,9 @@
 {
-	"about": "scripts/perf-guard.py: the compiler, built in release mode from the checkout, compiling the checkout's own sources. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
+	"about": "scripts/perf-guard.py: the compiler, built in release mode from the checkout, compiling the frozen input (its sources at input_revision, the same for every checkout). Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value, and move input_revision only with a re-baseline. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
+	"input_revision": "b3a22d6bf8ec9487a7061b12f93259aaff161552",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2152778312,
+			"value": 2182673208,
 			"tolerance": 0.02,
 			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
 		},
@@ -12,27 +13,27 @@
 			"why": "Phase-end collections (CompileOptions.phaseCollections) plus the byte trigger as a safety net; one extra collection can come from crossing a trigger boundary."
 		},
 		"live_bytes_tables": {
-			"value": 243584205,
+			"value": 245681357,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_ir": {
-			"value": 304925901,
+			"value": 308386202,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_backend": {
-			"value": 267596595,
+			"value": 269274317,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"peak_rss_bytes": {
-			"value": 1338003456,
+			"value": 1344897024,
 			"tolerance": 0.08,
 			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly."
 		},
 		"main_thread_instructions": {
-			"value": 51576641973,
+			"value": 52490328965,
 			"tolerance": 0.03,
 			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed."
 		}

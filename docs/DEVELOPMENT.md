@@ -56,14 +56,16 @@ builds release builds (`driver-release`), the mode tools ship in.
 ### Performance guard
 
 The `perf-guard` suite (`scripts/perf-guard.py`) builds the compiler from the checkout in release mode and measures that build
-compiling the checkout's own sources: allocated bytes and collections (from the driver's allocation phases), live data at the
+compiling a frozen input: the compiler's sources at the revision `input_revision` in `tests/perf/self-compile-baseline.json`
+names, extracted with `git archive`, so every checkout is measured on the same program and a change that adds code does not
+grow its own input. It measures allocated bytes and collections (from the driver's allocation phases), live data at the
 phase boundaries (from a heap census taken there in a second run), peak RSS (an outcome of the collection schedule, so gated
 loosely), and
-main-thread `instructions:u` where perf is installed and `perf_event_paranoid` is at most 2 (on CI runners it is not, and the
+main-thread `instructions:u` (and `cycles:u`, printed, never compared) where perf is installed and `perf_event_paranoid` is at most 2 (on CI runners it is not, and the
 metric is skipped). Wall time is printed, never compared. It measures on Linux x86-64 only and passes elsewhere.
 
 It then measures incremental builds, which the one-shot compile never exercises: the same build's compile server, whose session
-keeps its state, on a copy of the sources, through a cold build, two no-op rebuilds, a body-only edit of the entry module made
+keeps its state, on a copy of the frozen input, through a cold build, two no-op rebuilds, a body-only edit of the entry module made
 and taken back six times, and an optional argument added to `InternalError`'s constructor, which most modules call. For each it
 gates allocated bytes and the functions retyped, artifacts invalidated and functions regenerated (the `HAXEON_EXPLAIN_INVALIDATION`
 counts); wall is printed. A heap census at the end of every build gives the session's live data after the last body edit and its
@@ -72,8 +74,8 @@ and a half minutes; `--only=self-compile` or `--only=incremental` runs one part.
 
 Each metric is compared with `tests/perf/self-compile-baseline.json` or `tests/perf/incremental-baseline.json`, which hold its
 value and tolerance and why the tolerance is what it is. Above the tolerance the suite fails; below it the suite passes and asks
-for the baseline to be updated, so a gain is locked in. The input is the live source tree, so the values move as the compiler
-grows: a change that moves them on purpose (a feature that costs memory, an optimization) updates the baseline in the same
+for the baseline to be updated, so a gain is locked in. Moving `input_revision` (when the old sources no longer compile, or to
+follow the compiler's growth) re-baselines every metric in the same commit. A change that moves the values on purpose (a feature that costs memory, an optimization) updates the baseline in the same
 commit, from a quiet Linux x86-64 machine:
 
 ```sh

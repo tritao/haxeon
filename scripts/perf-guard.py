@@ -1,22 +1,26 @@
 #!/usr/bin/env python3
-"""Guards the cost of the compiler compiling itself, once and in a compile server, against tests/perf/*-baseline.json.
+"""Guards the cost of the compiler compiling a frozen copy of its sources, once and in a compile server, against
+tests/perf/*-baseline.json.
 
     scripts/perf-guard.py                          measure, compare, fail on a regression beyond a metric's tolerance
     scripts/perf-guard.py --update                 measure and write the measured values into the baselines (tolerances are kept)
     scripts/perf-guard.py --only=incremental       only one part (self-compile or incremental), with or without --update
 
-Two compiles of the checkout's own sources, both in release mode: the tool-cache compiler builds the compiler, and that build,
-which carries the checkout's own code generation, compiles the same sources again. The second compile is the one measured:
+Two compiles, both in release mode: the tool-cache compiler builds the compiler from the checkout, and that build, which carries
+the checkout's own code generation, compiles the frozen input: the compiler's sources at the revision the self-compile baseline
+names (`input_revision`, extracted with git archive), the same for every checkout, so a change that adds code does not grow
+what it is measured on. The second compile is the one measured:
   allocated bytes   the driver's allocation phases summed (deterministic)
   collections       the driver phases' GC count
   live bytes        live data at the phase boundaries (tables, IR, backend), from a heap census taken there in a second
                     run of the same compile (deterministic to a fraction of a megabyte)
   peak RSS          the process's maximum resident set, an outcome of the collection schedule: gated loosely
   instructions      main-thread instructions:u from perf, when perf is installed and allowed; skipped otherwise
+  cycles            main-thread cycles:u beside them, reported, never compared (they vary with the machine's load)
   wall              reported, never compared (noisy on a shared machine)
 
 The incremental part (tests/perf/incremental-baseline.json) runs that build's compile server (CompilerServer, which keeps its
-session) on a copy of the same sources, through a scripted series of builds: cold, two no-op rebuilds, a body-only edit of the
+session) on a copy of the frozen input, through a scripted series of builds: cold, two no-op rebuilds, a body-only edit of the
 entry module made and taken back a few times, an edit to a widely used constructor's signature, then the body edit again. Per
 build it reads allocated bytes (the driver's allocation phases), functions retyped, artifacts invalidated and functions
 regenerated (deterministic), and wall (reported). A heap census after each build (live data at its end, pages only) gives the
@@ -67,6 +71,30 @@ def compile_command(hl, compiler, sources, output, entry=ENTRY):
     return [hl, compiler] + compile_arguments(sources, output, entry)
 
 
+def list_sources(tree, listing_path):
+    """Writes the `.hx` files under `tree`'s source roots, relative to it, to `listing_path`."""
+    with open(listing_path, "w") as listing:
+        for root in SOURCE_ROOTS:
+            for directory, _, names in sorted(os.walk(os.path.join(tree, root))):
+                for name in sorted(names):
+                    if name.endswith(".hx"):
+                        listing.write(os.path.relpath(os.path.join(directory, name), tree) + "\n")
+
+
+def frozen_input(out):
+    """The frozen input's tree (made once per revision) and its source listing."""
+    with open(BASELINE) as source:
+        revision = json.load(source)["input_revision"]
+    tree = os.path.join(out, "input-" + revision[:12])
+    if not os.path.exists(os.path.join(tree, "sources.txt")):
+        shutil.rmtree(tree, ignore_errors=True)
+        os.makedirs(tree)
+        archive = subprocess.run(["git", "archive", revision] + SOURCE_ROOTS, cwd=ROOT, check=True, stdout=subprocess.PIPE).stdout
+        subprocess.run(["tar", "-x", "-C", tree], input=archive, check=True)
+        list_sources(tree, os.path.join(tree, "sources.txt"))
+    return tree, os.path.join(tree, "sources.txt")
+
+
 def perf_unavailable():
     if run(["sh", "-c", "command -v perf || true"]).strip() == "":
         return "perf is not installed"
@@ -80,23 +108,24 @@ def perf_unavailable():
     return None
 
 
-def measure(hl, compiler, sources, output, log_path):
-    """Runs one compile; returns its metrics."""
+def measure(hl, compiler, sources, output, log_path, cwd):
+    """Runs one compile in `cwd`; returns its metrics."""
     env = dict(os.environ, HL_GC_MARK_SERIAL="1")
     skip = perf_unavailable()
-    command, event = compile_command(hl, compiler, sources, output), "instructions:u"
+    command, prefix = compile_command(hl, compiler, sources, output), ""
     # On a hybrid CPU each core type has its own counter, multiplexed and extrapolated when the thread moves between them:
     # keep the compile on the performance cores and count theirs.
     hybrid = "/sys/bus/event_source/devices/cpu_core/cpus"
     if skip is None and os.path.exists(hybrid):
         with open(hybrid) as source:
-            command, event = ["taskset", "-c", source.read().strip()] + command, "cpu_core/instructions/u"
+            command, prefix = ["taskset", "-c", source.read().strip()] + command, "cpu_core/"
+    events = {prefix + "instructions/u": "main_thread_instructions", prefix + "cycles/u": "main_thread_cycles"}
     started = time.monotonic()
     with open(log_path, "w") as log:
-        process = subprocess.Popen(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT)
         counter = None
         if skip is None:
-            counter = subprocess.Popen(["perf", "stat", "--per-thread", "-x,", "-e", event, "-p", str(process.pid)],
+            counter = subprocess.Popen(["perf", "stat", "--per-thread", "-x,", "-e", ",".join(events), "-p", str(process.pid)],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         _, status, usage = os.wait4(process.pid, 0)
         process.returncode = os.waitstatus_to_exitcode(status)
@@ -104,12 +133,14 @@ def measure(hl, compiler, sources, output, log_path):
     metrics = {"peak_rss_bytes": usage.ru_maxrss * 1024, "wall_seconds": round(wall, 2)}
     if counter is not None:
         _, errors = counter.communicate()
-        # One row per thread and core type: `comm-tid,count,...`; the main thread's tid is the pid.
+        # One row per thread, core type and event: `comm-tid,count,unit,event,...`; the main thread's tid is the pid.
         rows = [row.split(",") for row in errors.splitlines()]
-        counts = [int(row[1]) for row in rows if len(row) > 1 and row[0].endswith(f"-{process.pid}") and row[1].isdigit()]
-        if counts:
-            metrics["main_thread_instructions"] = sum(counts)
-        else:
+        for event, name in events.items():
+            counts = [int(row[1]) for row in rows
+                      if len(row) > 3 and row[0].endswith(f"-{process.pid}") and row[1].isdigit() and row[3] == event]
+            if counts:
+                metrics[name] = sum(counts)
+        if "main_thread_instructions" not in metrics:
             skip = "perf counted nothing: " + errors.strip().replace("\n", " ")[:200]
     with open(log_path) as source:
         log = source.read()
@@ -126,11 +157,11 @@ def measure(hl, compiler, sources, output, log_path):
 BOUNDARIES = ["tables", "ir", "backend"]
 
 
-def measure_live(hl, compiler, sources, output, log_path):
-    """Runs the compile again with a heap census at each phase boundary; returns the live bytes there."""
+def measure_live(hl, compiler, sources, output, log_path, cwd):
+    """Runs the compile again in `cwd` with a heap census at each phase boundary; returns the live bytes there."""
     env = dict(os.environ, HL_GC_MARK_SERIAL="1", HAXEON_PEAK_CENSUS=",".join(f"{name}-end" for name in BOUNDARIES))
     with open(log_path, "w") as log:
-        status = subprocess.run(compile_command(hl, compiler, sources, output), cwd=ROOT, env=env, stdout=log,
+        status = subprocess.run(compile_command(hl, compiler, sources, output), cwd=cwd, env=env, stdout=log,
                                 stderr=subprocess.STDOUT).returncode
     with open(log_path) as source:
         log = source.read()
@@ -258,7 +289,7 @@ def edit(tree, change, forward=True):
         target.write(text.replace(old, new))
 
 
-def measure_incremental(hl, compiler, out):
+def measure_incremental(hl, compiler, out, frozen):
     """Builds the compile server with `compiler` and drives it through the scripted builds; returns their metrics."""
     server = os.path.join(out, "compiler-server.hl")
     with open(os.path.join(out, "server-build.log"), "w") as log:
@@ -270,8 +301,8 @@ def measure_incremental(hl, compiler, out):
     shutil.rmtree(tree, ignore_errors=True)
     os.makedirs(tree)
     for root in SOURCE_ROOTS:
-        shutil.copytree(os.path.join(ROOT, root), os.path.join(tree, root))
-    shutil.copyfile(os.path.join(out, "sources.txt"), os.path.join(tree, "sources.txt"))
+        shutil.copytree(os.path.join(frozen, root), os.path.join(tree, root))
+    shutil.copyfile(os.path.join(frozen, "sources.txt"), os.path.join(tree, "sources.txt"))
     open(os.path.join(out, "server-messages.log"), "w").close()
     session = CompileServer(hl, server, tree, os.path.join(out, "server.log"))
     try:
@@ -347,12 +378,8 @@ def main(arguments):
     hl = hashlink()
     tool = os.environ.get("HAXEON_COMPILER_HL") or run([os.path.join(ROOT, "scripts", "haxeon"), "dev", "tool-path", ENTRY]).strip()
     sources = os.path.join(out, "sources.txt")
-    with open(sources, "w") as listing:
-        for root in SOURCE_ROOTS:
-            for directory, _, names in sorted(os.walk(os.path.join(ROOT, root))):
-                for name in sorted(names):
-                    if name.endswith(".hx"):
-                        listing.write(os.path.relpath(os.path.join(directory, name), ROOT) + "\n")
+    list_sources(ROOT, sources)
+    frozen, frozen_sources = frozen_input(out)
     compiler = os.path.join(out, "compiler.hl")
     with open(os.path.join(out, "build.log"), "w") as log:
         status = subprocess.run(compile_command(hl, tool, sources, compiler), cwd=ROOT, stdout=log, stderr=subprocess.STDOUT).returncode
@@ -360,10 +387,13 @@ def main(arguments):
         raise SystemExit(f"perf-guard: building the compiler failed (exit {status}); log: {os.path.join(out, 'build.log')}")
     failures, improvements = [], []
     if "self-compile" in parts:
-        metrics, skip = measure(hl, compiler, sources, os.path.join(out, "self-compile.hl"), os.path.join(out, "self-compile.log"))
-        metrics.update(measure_live(hl, compiler, sources, os.path.join(out, "self-compile-census.hl"),
-                                    os.path.join(out, "self-compile-census.log")))
-        print(f"perf-guard: self-compile wall {metrics['wall_seconds']} s (not compared)")
+        metrics, skip = measure(hl, compiler, frozen_sources, os.path.join(out, "self-compile.hl"),
+                                os.path.join(out, "self-compile.log"), frozen)
+        metrics.update(measure_live(hl, compiler, frozen_sources, os.path.join(out, "self-compile-census.hl"),
+                                    os.path.join(out, "self-compile-census.log"), frozen))
+        cycles = metrics.get("main_thread_cycles")
+        print(f"perf-guard: self-compile wall {metrics['wall_seconds']} s"
+              + (f", main-thread cycles {cycles / 1e9:.2f}G" if cycles else "") + " (not compared)")
         if skip:
             print(f"perf-guard: instructions skipped: {skip}")
         found = compare(BASELINE, metrics, update)
@@ -371,7 +401,7 @@ def main(arguments):
         improvements += found[1]
     if "incremental" in parts:
         started = time.monotonic()
-        metrics = measure_incremental(hl, compiler, out)
+        metrics = measure_incremental(hl, compiler, out, frozen)
         print(f"perf-guard: incremental builds wall {time.monotonic() - started:.1f} s (not compared)")
         found = compare(INCREMENTAL_BASELINE, metrics, update)
         failures += found[0]
