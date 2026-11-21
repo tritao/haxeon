@@ -47,6 +47,15 @@ cat src/Main.hx | ./scripts/haxeon fmt --stdin
 ./scripts/haxeon lint --fix --manifest haxeon.json src/Main.hx
 ```
 
+`haxeon --help` lists the commands by task; `haxeon help build`, `haxeon build --help`
+and `haxeon build -h` print one command's options. `haxeon --version` (or `haxeon
+version`) prints the CLI's version, the checkout commit its compiler is built from and
+the HashLink version, as `haxeon 0.3.0 (compiler 7970f0eaaa86, HashLink 2.0.0)`. A
+mistyped command gets one line naming the closest command, and a Haxe command line
+(an `.hxml` file, `-cp`, `-main`, `--hl`, `-lib`, `-D`, `--interp`, ...) gets one line
+saying it is not supported yet and to create a project with `haxeon init`; both exit
+with status 2.
+
 `haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
 default, while `--check` reports files that would change; a directory stands for
 the `.hx` files under it. Use `--stdin` for editor or pipeline integration.

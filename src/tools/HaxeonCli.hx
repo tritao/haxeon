@@ -135,6 +135,15 @@ class HaxeonCli {
 		}
 
 		var command = arguments.shift();
+		if (CliHelp.isHaxeArgument(command)) {
+			Sys.stderr()
+				.writeString("haxeon: Haxe-style arguments are not supported yet: create a project with 'haxeon init' (see docs/reference/CLI.md)\n");
+			Sys.exit(2);
+		}
+		if (helpRequested(command, arguments)) {
+			Sys.println(CliHelp.command(command));
+			Sys.exit(0);
+		}
 		try {
 			var status = switch command {
 				case "init": init(arguments);
@@ -161,11 +170,13 @@ class HaxeonCli {
 				case "lsp": runTool("LspMain", arguments);
 				case "ffi": ffi(arguments);
 				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
+				case "version", "--version": version();
+				case "help" if (arguments.length > 0): commandHelp(arguments[0]);
 				case "help", "--help", "-h": usage();
 				case _ if (ScriptRun.isScript(command)): runScript(command, arguments);
 				case _:
-					Sys.stderr().writeString('Unknown command: $command\n');
-					usage(2);
+					unknownCommand(command);
+					2;
 			};
 			Sys.exit(status);
 		} catch (error:Dynamic) {
@@ -1643,63 +1654,55 @@ class HaxeonCli {
 	static function executableSuffix():String
 		return Sys.systemName() == "Windows" ? ".exe" : "";
 
+	/**
+	 * Whether `haxeon COMMAND ARGUMENTS` asks for the command's help: `-h` or `--help` among its options. A command that hands its
+	 * arguments to another program (a script, the language server, the FFI tools) is asked only by its first argument.
+	 */
+	static function helpRequested(command:String, arguments:Array<String>):Bool {
+		if (CliHelp.command(command) == null || command == "help")
+			return false;
+		var forwards = ["lsp", "ffi", "dev", "heap", "lint"].indexOf(command) >= 0
+			|| (command == "run" && arguments.length > 0 && ScriptRun.isScript(arguments[0]));
+		for (argument in (forwards ? arguments.slice(0, 1) : arguments)) {
+			if (argument == "--")
+				break;
+			if (argument == "--help" || argument == "-h")
+				return true;
+		}
+		return false;
+	}
+
+	/** One line for a mistyped command, with the closest command when there is one. */
+	static function unknownCommand(name:String):Void {
+		var suggestion = CliHelp.suggestion(name);
+		Sys.stderr().writeString('haxeon: unknown command "$name"'
+			+ (suggestion == null ? "." : '; did you mean "$suggestion"?') + " See 'haxeon --help'.\n");
+	}
+
+	static function commandHelp(name:String):Int {
+		var help = CliHelp.command(name);
+		if (help == null) {
+			unknownCommand(name);
+			return 2;
+		}
+		Sys.println(help);
+		return 0;
+	}
+
+	/** `haxeon version`: this CLI's version, the checkout's commit, which names the compiler, and the VM's version. */
+	static function version():Int {
+		var home = haxeonHome(),
+			commit = ProcessRunner.capture("git", ["-C", home, "rev-parse", "--short=12", "HEAD"]),
+			hashlink = ProcessRunner.capture(Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]),
+				["--version"]);
+		Sys.println('haxeon ${project.PackageCompatibility.CURRENT_HAXEON} (compiler '
+			+ (commit.status == 0 ? StringTools.trim(commit.output) : "unknown") + ", HashLink "
+			+ (hashlink.status == 0 ? StringTools.trim(hashlink.output) : "unknown") + ")");
+		return 0;
+	}
+
 	static function usage(status:Int = 0):Int {
-		Sys.println("Usage: haxeon <command> [options]");
-		Sys.println("  init [--entry Main] [--target host|wasm32|android]");
-		Sys.println("  add --git URL --rev REF [NAME]  Add a Git package dependency");
-		Sys.println("  install [--locked]              Resolve dependencies and write haxeon.lock");
-		Sys.println("  update                          Re-resolve refs and rewrite haxeon.lock");
-		Sys.println("  publish --registry NAME --version VERSION  Publish an immutable local release");
-		Sys.println("  package check [--project PATH]     Validate the resolved package graph");
-		Sys.println("  tree                            Show the resolved package graph");
-		Sys.println("  why PACKAGE                     Explain a dependency path");
-		Sys.println("  identity-path [--project PATH] FROM TO  Why the code identity of module FROM depends on module TO");
-		Sys.println("  doctor                         Check the local compiler and HashLink runtime");
-		Sys.println("  platforms                      Show targets exposed by this CLI");
-		Sys.println("  devices                        List connected Android devices");
-		Sys.println("  fmt [options] PATH...          Format Haxe source files");
-		Sys.println("       [--check] [--stdin]      Check files or format stdin; indentation and line width come from");
-		Sys.println("                                    the \"format\" section of haxeon.json (default: tabs, 120 columns)");
-		Sys.println("  lint [--fix] [--only RULE] [--manifest FILE]... FILE...  Report (or fix) unused imports and imports out of order;");
-		Sys.println("                                    RULE is unused-imports or import-order; opt-in: unbound-local,");
-		Sys.println("                                    module-namespace, throw-non-exception");
-		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
-		Sys.println("       [-v quiet|minimal|normal|detailed|diagnostic] [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
-		Sys.println("                                    Inspect planning details or timings");
-		Sys.println("       [--build-mode release|development]  Select artifact build mode");
-		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
-		Sys.println("       [--gradle-inputs FILE]       Android: build what Gradle packages and describe it in FILE, without Gradle");
-		Sys.println("  run [--target TARGET] [--quiet] [-- args] Build and launch (host or Android); --quiet prints the build only if it fails");
-		Sys.println("  SCRIPT.hx [args]               Build and run one Haxe file (also: run SCRIPT.hx [args])");
-		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
-		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
-		Sys.println("       [--strict-live]              With --live, report an edit that cannot patch instead of reloading");
-		Sys.println("       [--profile[=SOURCES]]        Launch under hl --diagnostics, capture with hlprof-live and export a Perfetto trace;");
-		Sys.println("                                    SOURCES is a comma list of instrument, sampling, alloc (default instrument,");
-		Sys.println("                                    which runs the instrumented build from <outputDir>-instrument)");
-		Sys.println("       [--profile-output PATH]      Write the HLPC capture to PATH (implies --profile); with --watch, the directory for");
-		Sys.println("                                    one capture per launch");
-		Sys.println("       [--profile-start=launch|manual]  Record from launch (default), or start paused until the program calls");
-		Sys.println("                                    haxeon.ProfileRecording.start()");
-		Sys.println("       [--profile-duration=SEC]     Stop after SEC seconds of recording");
-		Sys.println("       [--profile-max-size=MIB]     Stop when the capture reaches MIB (default 4096; 0 for no limit)");
-		Sys.println("       [--profile-window=START:END] Export only that part of the capture, in seconds (either side optional)");
-		Sys.println("       [--profile-min-call=US]      Drop calls shorter than US microseconds unless a call inside them is kept");
-		Sys.println("                                    (default instrument.minCallMicros, else 1; 0 keeps every call)");
-		Sys.println("  workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME]");
-		Sys.println("       [--jobs N] [--compilers N] [--no-test-cache] [--actions]");
-		Sys.println("                                    Merge the workspace's projects into one build graph;");
-		Sys.println("                                    build or test run it with shared native builds");
-		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
-		Sys.println("  lsp                            The language server, over standard input and output");
-		Sys.println("  ffi import ...                 Import C or C++ headers as HXI (docs/reference/C_HEADER_FFI.md)");
-		Sys.println("  ffi audit ...                  Import one header for several targets and compare their C ABIs");
-		Sys.println("       [--capture DIR] [--report PATH]  Read a capture manifest or choose a report path");
-		Sys.println("  dev tool-path MAIN             (checkout) Print a cached HashLink build of a Haxe entry point; see `dev help`");
-		Sys.println("  --device SERIAL                Select Android device for run");
-		Sys.println("  --project PATH                 Select a haxeon.json file");
-		Sys.println("  --output PATH                  Override the build output path");
-		Sys.println("  --define NAME[=VALUE]          Add a conditional compilation define");
+		Sys.println(CliHelp.overview());
 		return status;
 	}
 }
