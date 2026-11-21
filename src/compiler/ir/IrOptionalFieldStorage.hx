@@ -100,8 +100,17 @@ class IrOptionalFieldStorage {
 		}];
 	}
 
-	/** Replace logical reads and writes, including generated reflection operations, with field-specific accessors. */
-	public function rewrite(functions:Array<IrFunction>):Array<IrFunction> {
+	/**
+	 * Replace logical reads and writes, including generated reflection operations, with field-specific accessors. On IR bodies
+	 * (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the functions' bodies when not given): a function
+	 * that changes becomes its edited body, frozen when a session keeps the stage's functions (`retained`), else owned by the next
+	 * stage. The accessors and the value methods specialized to a field path (still cloned from their decoding) are built as
+	 * functions and encoded.
+	 */
+	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
+			retained = true):Array<IrFunction> {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(functions);
 		var all = functions.copy();
 		var ordered = [for (fields in plans)
 			for (plan in fields)
@@ -131,23 +140,32 @@ class IrOptionalFieldStorage {
 			generated:Map<String, Bool> = [];
 		var index = 0;
 		while (index < all.length) {
-			var fn = all[index++];
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, name, _):
-							var request = methodRequest(name.name);
-							if (request != null && !generated.exists(name.name)) {
-								generated.set(name.name, true);
-								var original = originals.get(request.method);
-								if (original == null)
-									throw new InternalError('Missing value method "${request.method}" for optional field');
-								all.push(specializeMethod(name.name, request, original));
-							}
-						default:
+			var body = all[index++].bodyIn(types, builder, retained);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.Call) {
+						var name = body.symbol(row).name, request = methodRequest(name);
+						if (request != null && !generated.exists(name)) {
+							generated.set(name, true);
+							var original = originals.get(request.method);
+							if (original == null)
+								throw new InternalError('Missing value method "${request.method}" for optional field');
+							all.push(specializeMethod(name, request, original));
+						}
 					}
+					row = body.nextRow(row);
+				}
+			}
 		}
-		return [for (fn in all) rewriteFunction(fn)];
+		return [for (fn in all) {
+			var body = fn.bodyIn(types, builder, retained);
+			if (needsRewrite(body)) {
+				var edited = body.forEditing(builder);
+				rewriteBody(edited);
+				retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
+			} else fn;
+		}];
 	}
 
 	/** Clone a value method with its receiver represented by an owner and field path. */
@@ -419,18 +437,35 @@ class IrOptionalFieldStorage {
 			default: false;
 		};
 
-	function rewriteFunction(fn:IrFunction):IrFunction {
-		if (!needsRewrite(fn))
-			return fn;
-		var changed = false, blocks:Array<IrBlock> = [], next = fn.nextValueId();
-		for (block in fn.blocks) {
-			var replacement = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var instruction = located.value, rewrittenInstruction = false;
-				switch instruction {
-					case Call(out, name, arguments) if (StringTools.startsWith(name.name, COPY_PREFIX)):
-						var fields:Array<String> = haxe.Json.parse(name.name.substr(COPY_PREFIX.length));
-						if (fields.length != 4 || arguments.length != 2 || (switch (out.type) {
+	/** Rewrites `body` in place; new values are numbered from the first id nothing names, as the object version numbered them. */
+	function rewriteBody(body:IrBody):Void {
+		var next = body.presentValueLimit();
+		// A new value of `type` that `operation` makes from `input`, linked before `row`.
+		function linkUnary(block:Int, row:Int, operation:IrOpcode, label:String, type:IrType, input:IrValueId,
+				aux:Int):IrValueId {
+			var made = body.newValueAt(next++, label, body.typeId(type));
+			body.beginRow();
+			body.pushOperand(input);
+			body.linkBefore(block, row, body.endRow(operation, made, aux, body.provenance(row)));
+			return made;
+		}
+		// `row` replaced by a call of `name` with `operands` and the output `output`.
+		function replaceByCall(block:Int, row:Int, output:IrValueId, name:String, operands:Array<IrValueId>):Void {
+			body.beginRow();
+			for (operand in operands)
+				body.pushOperand(operand);
+			body.linkBefore(block, row, body.endRow(IrOpcode.Call, output, IrSymbol.of(name).id, body.provenance(row)));
+			body.removeRow(block, row);
+		}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var following = body.nextRow(row);
+				switch body.opcode(row) {
+					case IrOpcode.Call if (StringTools.startsWith(body.symbol(row).name, COPY_PREFIX)):
+						var name = body.symbol(row).name, out = body.output(row);
+						var fields:Array<String> = haxe.Json.parse(name.substr(COPY_PREFIX.length));
+						if (fields.length != 4 || body.operandCount(row) != 2 || (switch body.valueType(out) {
 							case Void: false;
 							default: true;
 						}))
@@ -442,81 +477,75 @@ class IrOptionalFieldStorage {
 							|| !Type.enumEq(target.type, source.type)
 							|| target.slots.length != source.slots.length)
 							throw new InternalError('Incompatible optional field copy "$name"');
-						var destination = arguments[0], origin = arguments[1];
-						if (!Type.enumEq(destination.type, Obj(target.owner))) {
-							var base = new IrValue(next++, "$optional-copy-target", Obj(target.owner));
-							replacement.instructions.push(new Located(Upcast(base, destination), located.provenance));
-							destination = base;
+						var destination = body.operand(row, 0),
+							origin = body.operand(row, 1),
+							where = body.provenance(row);
+						if (!Type.enumEq(body.valueType(destination), Obj(target.owner)))
+							destination = linkUnary(block, row, IrOpcode.Upcast, "$optional-copy-target",
+								Obj(target.owner),
+								destination, 0);
+						if (!Type.enumEq(body.valueType(origin), Obj(source.owner)))
+							origin = linkUnary(block, row, IrOpcode.Upcast, "$optional-copy-source", Obj(source.owner),
+								origin, 0);
+						var snapshot:Array<IrValueId> = [];
+						for (slot in source.slots)
+							snapshot.push(linkUnary(block, row, IrOpcode.FieldGet, "$optional-copy-slot", slot.type,
+								origin,
+								IrSymbol.of(IrInlineValueLayout.slotName(source.field, slot)).id));
+						for (index in 0...target.slots.length) {
+							body.beginRow();
+							body.pushOperand(destination);
+							body.pushOperand(snapshot[index]);
+							body.linkBefore(block, row, body.endRow(IrOpcode.FieldSet, IrValueId.of(-1),
+								IrSymbol.of(IrInlineValueLayout.slotName(target.field, target.slots[index])).id,
+								where));
 						}
-						if (!Type.enumEq(origin.type, Obj(source.owner))) {
-							var base = new IrValue(next++, "$optional-copy-source", Obj(source.owner));
-							replacement.instructions.push(new Located(Upcast(base, origin), located.provenance));
-							origin = base;
-						}
-						var snapshot:Array<IrValue> = [];
-						for (slot in source.slots) {
-							var value = new IrValue(next++, "$optional-copy-slot", slot.type);
-							replacement.instructions.push(new Located(FieldGet(value, origin,
-								IrInlineValueLayout.slotName(source.field, slot)),
-								located.provenance));
-							snapshot.push(value);
-						}
-						for (index in 0...target.slots.length)
-							replacement.instructions.push(new Located(FieldSet(destination,
-								IrInlineValueLayout.slotName(target.field, target.slots[index]),
-								snapshot[index]), located.provenance));
-						instruction = ConstVoid(out);
-						rewrittenInstruction = true;
-						changed = true;
-					case FieldGet(out, object, field):
-						var plan = find(object.type, field);
+						body.beginRow();
+						body.linkBefore(block, row, body.endRow(IrOpcode.ConstVoid, out, 0, where));
+						body.removeRow(block, row);
+					case IrOpcode.FieldGet:
+						var object = body.operand(row, 0), plan = find(body.valueType(object), body.symbol(row).name);
 						if (plan != null) {
 							var receiver = object;
-							if (!Type.enumEq(object.type, Obj(plan.owner))) {
-								receiver = new IrValue(next++, "$optional-field-base", Obj(plan.owner));
-								replacement.instructions.push(new Located(Upcast(receiver, object),
-									located.provenance));
-							}
-							instruction = Call(out, IrSymbol.of(accessorName(plan, false)), [receiver]);
-							rewrittenInstruction = true;
-							changed = true;
+							if (!Type.enumEq(body.valueType(object), Obj(plan.owner)))
+								receiver = linkUnary(block, row, IrOpcode.Upcast, "$optional-field-base",
+									Obj(plan.owner),
+									object, 0);
+							replaceByCall(block, row, body.output(row), accessorName(plan, false), [receiver]);
 						}
-					case FieldSet(object, field, value):
-						var plan = find(object.type, field);
+					case IrOpcode.FieldSet:
+						var object = body.operand(row, 0), plan = find(body.valueType(object), body.symbol(row).name);
 						if (plan != null) {
-							var receiver = object;
-							if (!Type.enumEq(object.type, Obj(plan.owner))) {
-								receiver = new IrValue(next++, "$optional-field-base", Obj(plan.owner));
-								replacement.instructions.push(new Located(Upcast(receiver, object),
-									located.provenance));
-							}
-							var unused = new IrValue(next++, "$optional-field-write", Void);
-							instruction = Call(unused, IrSymbol.of(accessorName(plan, true)), [receiver, value]);
-							rewrittenInstruction = true;
-							changed = true;
+							var receiver = object, value = body.operand(row, 1);
+							if (!Type.enumEq(body.valueType(object), Obj(plan.owner)))
+								receiver = linkUnary(block, row, IrOpcode.Upcast, "$optional-field-base",
+									Obj(plan.owner),
+									object, 0);
+							var unused = body.newValueAt(next++, "$optional-field-write", body.typeId(Void));
+							replaceByCall(block, row, unused, accessorName(plan, true), [receiver, value]);
 						}
 					default:
 				}
-				replacement.instructions.push(rewrittenInstruction ? new Located(instruction,
-					located.provenance) : located);
+				row = following;
 			}
-			replacement.terminator = block.terminator;
-			blocks.push(replacement);
 		}
-		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
-	function needsRewrite(fn:IrFunction):Bool {
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case Call(_, name, _) if (StringTools.startsWith(name.name, COPY_PREFIX)):
+	function needsRewrite(body:IrBody):Bool {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.Call if (StringTools.startsWith(body.symbol(row).name, COPY_PREFIX)):
 						return true;
-					case FieldGet(_, owner, name), FieldSet(owner, name, _):
-						if (find(owner.type, name) != null)
+					case IrOpcode.FieldGet, IrOpcode.FieldSet:
+						if (find(body.valueType(body.operand(row, 0)), body.symbol(row).name) != null)
 							return true;
 					default:
 				}
+				row = body.nextRow(row);
+			}
+		}
 		return false;
 	}
 

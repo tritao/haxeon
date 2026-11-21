@@ -131,13 +131,30 @@ class IrEntryPrune {
 		function require(caller:String, callee:String):Void
 			if (removed.exists(callee) && !present.exists(callee))
 				throw new InternalError('early prune: after "$pass", "$caller" calls "$callee", which the prune removed');
-		for (fn in functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
-							require(fn.name, target.name);
+		// A function past the encode point is read as its body; one before it, as its objects.
+		for (fn in functions) {
+			var body = fn.body;
+			if (body == null) {
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
+								require(fn.name, target.name);
+							default:
+						}
+				continue;
+			}
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.Call, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+							require(fn.name, body.symbol(row).name);
 						default:
 					}
+					row = body.nextRow(row);
+				}
+			}
+		}
 	}
 }

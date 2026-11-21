@@ -53,8 +53,8 @@ class IrPipeline {
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage("object-reflection", objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
-		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
 		new IrAssemblyStage("encode-bodies", encodeBodies),
+		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
 		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
 		new IrAssemblyStage("enum-tag-escapes", assemblyEnumTagEscapes)
@@ -431,7 +431,8 @@ class IrPipeline {
 	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var optionalStorage = new IrOptionalFieldStorage(assembly.objects);
 		if (optionalStorage.hasFields()) {
-			assembly.functions = optionalStorage.rewrite(assembly.functions);
+			assembly.functions = optionalStorage.rewrite(assembly.functions, bodyTypes(context),
+				context.passScratch.bodyBuilder, context.options.keepSession);
 			assembly.objects = optionalStorage.physicalObjects(assembly.objects);
 		}
 		return assembly;

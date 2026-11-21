@@ -113,7 +113,9 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    value types and constants in place. `IrEnumEscapeReach` reads a function's body when it has one and its objects before the
    encode point. *The assembly's enum tag escapes read bodies* (the target stage's walk, `escapeBodies`). *The runtime
    surface reads bodies* (`IrProgramAssembler.finish`: the runtime calls, C native calls made in place, the concrete enums).
-   *Nullable scalar fields read bodies*. The encode point is now a stage of its own (`encode-bodies` in `IrPipeline.assembly`),
+   *Nullable scalar fields read bodies*. *Optional field storage reads bodies*; the value methods it specializes to a field path
+   are still cloned from their decoding, as the place methods are. The early prune's check reads bodies past the encode point.
+   The encode point is now a stage of its own (`encode-bodies` in `IrPipeline.assembly`),
    which runs on every target whichever stages after it run, and moves up the list as stages are ported.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
    `setResult`).
