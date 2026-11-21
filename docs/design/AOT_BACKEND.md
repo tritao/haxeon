@@ -108,6 +108,16 @@ builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>
   the IR does for every backend, so the JIT and Wasm gain as much. Tagged small Ints inside Dynamic would be a runtime
   and ABI decision for the fork, not part of this backend. Casts go through `hl_dyn_cast*`, dynamic fields through
   `hl_dyn_get*`/`hl_dyn_set*`.
+
+  The self-compile asks for about 4.8 million scalar boxes, of which the JIT's shared Bool and small-Int boxes serve
+  all but a few hundred thousand. Without a cache, an AOT compiler would allocate nearly all of them, so "no box cache"
+  depends on removing their causes first, in the compiler and runtime, where JIT and Wasm gain too: the native typed
+  maps box Int and Bool values on `set` (most of the requests and allocations: unboxed value slots, and `get` lowered
+  to a found flag and value pair); map handles stored as values of other maps (store the handle in a reference-valued
+  map); optional and default Bool and Int arguments through dispatch and overridable methods (extend the nullable
+  scalar argument splitting); generics with scalar `T` (specialization); real Dynamic boundaries (JSON, `Reflect`)
+  stay. Until then, generated code boxes only through the runtime's helper (`hl_make_dyn`), so the policy lives in
+  one place and changes there for both backends.
 - **Null and bounds checks.** A receiver gets `if (!o) hl_null_access()` unless `IrNonNullFacts` proves it non-null.
   Array accesses call `hl_array_check`/`hl_array_ensure` as the JIT does unless the IR proved the index in range
   (`IrLoopBounds`, milestone 2).
@@ -160,10 +170,11 @@ no IR or C text, so `CompileOptions.key` leaves them out.
    constants, arithmetic and comparisons, control flow and phis, static calls, globals, objects and fields, virtual
    calls, closures, boxing and casts, arrays, strings, enums and exceptions; unsupported constructs are a clear compile
    error. The test runner and its first list of programs.
-2. **Coverage.** Every IR opcode and pseudo-call: interfaces and virtuals with typed interface tables, value-array reads,
-   memory loads and stores, C native calls, iterators, the runtime fast paths `HlLower` writes inline; dropped bounds
-   checks from loop proofs. All of `tests/programs` with a skip list, in the test driver.
-3. **Debugging and natives.** `#line` mapping and Haxe stack traces; direct native calls; perf symbol names.
+2. **Speed and coverage.** What `HlLower` writes inline: the runtime fast paths, value-array reads, typed interface
+   method tables, the JIT's inline allocation; ordinary C function calls (`CNativeCall`, still unsupported); bounds
+   checks dropped by loop proofs. The parity runner in the test driver.
+3. **Debugging and natives.** Haxe stack traces (`#line` mapping is in milestone 1); direct native calls; perf symbol
+   names.
 4. **No JIT.** `hl_module_init_aot` in the fork, static call trampolines, optional static type tables; an executable
    without the JIT for platforms that forbid it.
 5. **The compiler AOT.** Build the compiler with `hlc`, byte-identical self-compile output, measured against the JIT.
@@ -173,4 +184,15 @@ no IR or C text, so `CompileOptions.key` leaves them out.
 
 ### State
 
-Milestone 1 in progress; see the end of this section for what runs.
+Milestone 1 is done. `tests/aot/test-aot-programs.sh --all` passes 639 of the 643 programs of `tests/programs` with the
+JIT's exact exit code, stdout and stderr; `tests/aot/programs.txt` lists them and is the runner's default. The four
+others differ only by Haxe stack traces, milestone 3 (`throw-string`, `try-rethrow`, `jit-stack-trace`,
+`defer-exception-stack`): uncaught exceptions print no frames, and `CallStack` sees none. No IR construct of the
+programs is unsupported.
+
+Not yet done in milestone 1's lowering, each a performance difference, not a semantic one: `HlLower`'s inline runtime
+fast paths (array push, bytes get and set) and value-array reads call their helpers; the typed interface method table
+prologue of dispatch functions is left out (the body is the fallback it falls back to); natives are called through the
+slot table; `IrLoopBounds` proofs do not drop array checks; allocation is `hl_alloc_obj`, not the JIT's inline
+allocation. A first small benchmark (allocation, a linked list, a String map, recursion) runs as fast as on the JIT;
+the compiler built with `hlc` is the measure that matters (milestone 5).

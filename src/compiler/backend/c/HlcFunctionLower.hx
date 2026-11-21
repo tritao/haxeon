@@ -27,6 +27,12 @@ class HlcFunctionLower {
 	final graph = new IrBodyGraph();
 	final nonNullScratch = new IrNonNullScratch();
 
+	/** Value places that never escape, kept as one C local per field as `HlLower` keeps them in registers. */
+	final scalarLocals = new compiler.hl.lower.HlScalarValueLocals();
+
+	/** The C type of each scalar local, by its number. */
+	final scalarLocalTypes:Array<Int> = [];
+
 	var body:IrBody;
 	var out:StringBuf;
 	var valueTypes:Array<Int> = [];
@@ -38,6 +44,9 @@ class HlcFunctionLower {
 	var hasTry = false;
 	var functionResult = -1;
 	final reachable:Array<Bool> = [];
+
+	/** How many operands of the body read each value. */
+	final uses:Array<Int> = [];
 
 	/** The `array:index` pairs of Int and Float arrays an access in the block being lowered validated. */
 	final validatedAccesses:Map<String, Bool> = [];
@@ -63,6 +72,22 @@ class HlcFunctionLower {
 			nullValues.push(false);
 		}
 		markReachable();
+		uses.resize(0);
+		for (_ in 0...limit)
+			uses.push(0);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				for (operand in 0...body.operandCount(row))
+					uses[body.operand(row, operand)]++;
+				row = body.nextRow(row);
+			}
+		}
+		scalarLocalTypes.resize(0);
+		scalarLocals.reset(body, module.view, function(type) {
+			scalarLocalTypes.push(HlRemap.typeIndex(module.symbols, type));
+			return scalarLocalTypes.length - 1;
+		});
 		hasTry = false;
 		var phis:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
@@ -95,6 +120,9 @@ class HlcFunctionLower {
 			var qualifier = hasTry && phis.exists(value) ? " volatile" : "";
 			out.add('\t${types.cType(typeOf(value))}$qualifier v$value;\n');
 		});
+		for (local in 0...scalarLocalTypes.length)
+			if (!types.isVoid(scalarLocalTypes[local]))
+				out.add('\t${types.cType(scalarLocalTypes[local])}${hasTry ? " volatile" : ""} s$local;\n');
 		var traps:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
 			if (body.opcode(row) == IrOpcode.BeginTry) {
@@ -221,7 +249,7 @@ class HlcFunctionLower {
 	}
 
 	function nullCheck(row:Int, receiver:IrValueId, ?field:String):Void {
-		if (nonNull.has(row))
+		if (nonNull.has(row) || scalarLocals.get(receiver) != null)
 			return;
 		// The JIT names the field a failed check was for; a check before anything else reads "Null access".
 		if (field != null)
@@ -247,6 +275,29 @@ class HlcFunctionLower {
 				var bits = haxe.io.FPHelper.doubleToI64(body.float(row));
 				assign(row, 'hlc_f64(0x${StringTools.hex(bits.high, 8)}u,0x${StringTools.hex(bits.low, 8)}u)',
 					module.f64);
+			case IrOpcode.PointerOffset:
+				// `__hl_bytes_offset`, which `HlLower` folds into the access when it can.
+				line('${v(output)} = (${types.cType(typeOf(output))})((char*)${v(body.operand(row, 0))} + ${v(body.operand(row, 1))});');
+			case IrOpcode.MemoryLoad:
+				var size = body.aux(row) >> 1,
+					signed = body.aux(row) & 1 == 1,
+					address = '(char*)${v(body.operand(row, 0))}';
+				if (size == 1)
+					line('${v(output)} = *(${signed ? "signed" : "unsigned"} char*)($address);');
+				else if (size == 2)
+					line('{ ${signed ? "short" : "unsigned short"} t; memcpy(&t,$address,2); ${v(output)} = t; }');
+				else
+					line('memcpy(&${v(output)},$address,sizeof(${v(output)}));');
+			case IrOpcode.MemoryStore:
+				var size = body.aux(row),
+					address = '(char*)${v(body.operand(row, 0))}',
+					value = v(body.operand(row, 1));
+				if (size == 1)
+					line('*(unsigned char*)($address) = (unsigned char)$value;');
+				else if (size == 2)
+					line('{ unsigned short t = (unsigned short)$value; memcpy($address,&t,2); }');
+				else
+					line('memcpy($address,&$value,sizeof($value));');
 			case IrOpcode.ConstBool:
 				assign(row, body.aux(row) == 1 ? "true" : "false", module.bool);
 			case IrOpcode.ConstNull:
@@ -261,6 +312,8 @@ class HlcFunctionLower {
 				assign(row, typeAddress(HlRemap.typeIndex(module.symbols, body.typeOperand(row))), module.typeRef);
 			case IrOpcode.ToDyn:
 				var value = body.operand(row, 0), from = typeOf(value);
+				if (arrayRecast(row))
+					return;
 				if (isDynamic(from))
 					line('${v(output)} = (vdynamic*)${v(value)};');
 				else
@@ -300,6 +353,13 @@ class HlcFunctionLower {
 					module.dyn);
 			case IrOpcode.MethodCall:
 				lowerMethodCall(row);
+			case IrOpcode.ValueInit if (scalarLocals.get(output) != null):
+				var local = scalarLocals.get(output);
+				for (field in local.declarations) {
+					var slot = local.fields.get(field.name);
+					if (!types.isVoid(scalarLocalTypes[slot]))
+						line('s$slot = ${types.isPointer(scalarLocalTypes[slot]) ? "NULL" : "0"};');
+				}
 			case IrOpcode.NewObject, IrOpcode.ValueInit:
 				var type = typeOf(output);
 				switch types.kind(type) {
@@ -308,6 +368,12 @@ class HlcFunctionLower {
 					case DynObj: assign(row, 'hl_alloc_dynobj()', module.dyn);
 					default: throw unsupported('allocation of ${types.typeName(type)}');
 				}
+			case IrOpcode.FieldGet if (scalarLocals.get(body.operand(row, 0)) != null):
+				var slot = scalarLocals.get(body.operand(row, 0)).fields.get(body.symbol(row).name);
+				assign(row, 's$slot', scalarLocalTypes[slot]);
+			case IrOpcode.FieldSet if (scalarLocals.get(body.operand(row, 0)) != null):
+				var slot = scalarLocals.get(body.operand(row, 0)).fields.get(body.symbol(row).name);
+				line('s$slot = ${operandAs(row, 1, scalarLocalTypes[slot])};');
 			case IrOpcode.FieldGet:
 				var object = body.operand(row, 0), name = body.symbol(row).name;
 				nullCheck(row, object, name);
@@ -320,8 +386,14 @@ class HlcFunctionLower {
 				// An inline record is read as a pointer into its owner, as the JIT reads an HPACKED field.
 				if (types.kind(field.type) == HlType.Packed)
 					line('${v(body.output(row))} = (${types.cType(typeOf(body.output(row)))})&$place;');
-				else
-					assign(row, place, field.type);
+				else {
+					var storage = integerStorage(body.valueType(object), name, field.type);
+					if (storage != null && (storage.size < 4 || types.kind(typeOf(body.output(row))) == HlType.I64))
+						// As `HlLower.lowerFieldGet`: a narrow stored integer is widened by its signedness.
+						line('${v(body.output(row))} = (${types.cType(typeOf(body.output(row)))})(${storageType(storage)})$place;');
+					else
+						assign(row, place, field.type);
+				}
 			case IrOpcode.FieldSet:
 				var object = body.operand(row, 0), name = body.symbol(row).name;
 				nullCheck(row, object, name);
@@ -333,8 +405,8 @@ class HlcFunctionLower {
 					slot = '((${types.structName(objectType(object))}*)${v(object)})->f${field.index}';
 				if (types.kind(field.type) == HlType.Packed)
 					line('hl_gc_copy_packed(&$slot,${v(body.operand(row, 1))},sizeof($slot),NULL);');
-				else if (types.size(field.type) < 4 && types.kind(field.type) != HlType.Bool)
-					throw unsupported('native storage field $name');
+				else if (integerStorage(body.valueType(object), name, field.type) != null)
+					line('$slot = (${types.cType(field.type)})${v(body.operand(row, 1))};');
 				else
 					store(slot, operandAs(row, 1, field.type), field.type);
 			case IrOpcode.ArrayGet:
@@ -458,6 +530,39 @@ class HlcFunctionLower {
 			default: false;
 		};
 
+	/**
+	 * Whether ToDyn row `row` boxes an array only for the next row to cast it back to an array, as a coercion between array
+	 * types does: as in `HlLower`, the cast takes the array itself and no box is made (HashLink arrays carry no element type).
+	 */
+	function arrayRecast(row:Int):Bool {
+		var boxed = body.output(row), next = body.nextRow(row);
+		return isArrayType(body.valueType(body.operand(row, 0))) && next >= 0 && body.opcode(next) == IrOpcode.SafeCast
+			&& (body.operand(next, 0):Int) == (boxed:Int) && isArrayType(body.valueType(body.output(next)))
+			&& uses[boxed] == 1;
+	}
+
+	static function isArrayType(type:IrType):Bool
+		return switch type {
+			case Array(_): true;
+			default: false;
+		};
+
+	/** The native storage of an integer field (`HlLower.internNativeStorage` has one only for those), or null. */
+	function integerStorage(type:IrType, name:String, fieldType:Int):Null<compiler.ir.Ir.IrScalarStorage>
+		return switch types.kind(fieldType) {
+			case Ui8, Ui16, I32, I64: module.fieldStorage(type, name);
+			default: null;
+		};
+
+	/** The C integer type of a native storage width and signedness. */
+	static function storageType(storage:compiler.ir.Ir.IrScalarStorage):String
+		return switch storage.size {
+			case 1: storage.signed ? "signed char" : "unsigned char";
+			case 2: storage.signed ? "short" : "unsigned short";
+			case 4: storage.signed ? "int" : "unsigned int";
+			default: storage.signed ? "int64" : "uint64";
+		};
+
 	/** Whether `array` holds Int or Float elements in place, the arrays `HlLower` writes inline. */
 	function rawArray(array:IrValueId):Bool
 		return switch body.valueType(array) {
@@ -498,7 +603,11 @@ class HlcFunctionLower {
 
 	/** `HlLower`'s `SafeCast`, as the JIT does it: a checked cast through the runtime's `hl_dyn_cast*` (`emit_dyn_cast`). */
 	function lowerCast(row:Int):Void {
-		var value = body.operand(row, 0), output = body.output(row);
+		var value = body.operand(row, 0), output = body.output(row), previous = body.previousRow(row);
+		if (previous >= 0 && body.opcode(previous) == IrOpcode.ToDyn && arrayRecast(previous)) {
+			line('${v(output)} = (varray*)${v(body.operand(previous, 0))};');
+			return;
+		}
 		line('${v(output)} = ${dynamicCast(v(value), typeOf(value), typeOf(output))};');
 	}
 

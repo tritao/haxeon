@@ -43,6 +43,9 @@ class HlcModule {
 	final native:Array<Bool> = [];
 	final objects:Map<String, IrObject> = [];
 
+	/** The program's objects as `HlLower`'s analyses read them. */
+	public final view:compiler.hl.lower.HlLoweringView;
+
 	public function new(code:HlCode, symbols:HlSymbolTable, program:IrProgram, slots:Map<String, Int>) {
 		this.code = code;
 		this.symbols = symbols;
@@ -56,6 +59,7 @@ class HlcModule {
 		typeRef = symbols.internType(IrType.TypeRef);
 		for (object in program.objects)
 			objects.set(object.name, object);
+		view = new compiler.hl.lower.HlLoweringView([], objects);
 		for (fn in code.functions)
 			place(fn.functionIndex, fn.type, false);
 		for (entry in code.natives)
@@ -168,6 +172,21 @@ class HlcModule {
 		for (method in object.methods)
 			if (method.name == name)
 				return method.functionName.name;
+		return null;
+	}
+
+	/** The native storage of field `name` of object type `type` or a base (`IrFieldStorage.scalar`), or null. */
+	public function fieldStorage(type:IrType, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
+		var owner = switch type {
+			case Obj(objectName): objects.get(objectName);
+			default: null;
+		};
+		while (owner != null) {
+			for (field in owner.fields)
+				if (field.name == name)
+					return compiler.ir.IrFieldStorage.scalar(field);
+			owner = owner.base == null ? null : objects.get(Std.string(owner.base));
+		}
 		return null;
 	}
 
