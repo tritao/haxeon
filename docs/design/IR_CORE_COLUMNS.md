@@ -156,10 +156,12 @@ names; reuse is by object identity of the `IrFunction` an entry was made from.
   leaves is the same object.
 - **Inliner** (`IrInlineCache`): `sources` (name → the function it was given, deduplicated as above); `originals` (name →
   {source function, its frozen body}); `memo` (name → {source function, fingerprint, the functions and object prints it
-  consulted, the inlined form as a frozen compacted body}); `cleaned` (name → {inlined form, cleaned function}); `published`
+  consulted, the inlined form as a frozen compacted body when a caller may splice it, the cleaned function}); `published`
   (name → the function the backends got); `publishedBytes` (name → {function, its comparison encoding}); `instrumented`.
   A memo entry is reused while its source is the same object, its dependencies are the same objects and its object prints
-  match; an unchanged inlined form is the original body itself, and an unchanged cleanup shares the memo's body.
+  match, and its cleaned function with it; an unchanged inlined form is the original body itself, and an unchanged cleanup
+  shares the memo's body. The inlined form of a function no caller may splice (one that does not look inlinable, or whose
+  form does not fit) is not kept: its cleanup edits the body the inlining did, in place, so a session keeps one body for it.
 - **After the inliner**: the published functions are their frozen bodies (`IrFunction.ofBody`), decoded only when read.
 
 The objects stay alive in a session for as long as stages before the encode point read them, through their own caches and

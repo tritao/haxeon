@@ -440,12 +440,13 @@ function main():Int return stay(1);
 		expect(overridden.indexOf("viaLeaf") < 0, "a function that never looked at the base is not reported");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main"),
-			cleanedMain = cache.cleaned.get("main");
+			cleanedMain = cache.memo.get("main").cleaned;
 		program.functions = originals.copy();
 		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0,
 			"an unchanged program must report no changed functions");
 		expect(programFunction(program, "main") == inlinedMain, "an unchanged caller keeps its inlined identity");
-		expect(cache.cleaned.get("main") == cleanedMain && cache.copy().cleaned.get("main") == cleanedMain,
+		expect(cleanedMain != null && cache.memo.get("main").cleaned == cleanedMain
+			&& cache.copy().memo.get("main").cleaned == cleanedMain,
 			"unchanged cleanup is reused and retained when copying the incremental cache");
 		// Editing a callee changes exactly the functions that inlined it.
 		var edited = Frontend.compile(StringTools.replace(source, "function twice(x:Int):Int return x + x;",

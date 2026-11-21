@@ -25,16 +25,25 @@ class InlineMemo {
 	 */
 	public final objects:Map<String, Int>;
 
-	/** The inlined form, frozen. */
-	public final result:IrBody;
+	/**
+	 * The inlined form, frozen, when a caller may splice it (`IrInliner.calleeOf`: the source looks inlinable and the form fits),
+	 * else null: no caller reads the form of a larger function, and its cleanup edits it in place.
+	 */
+	public final inlined:Null<IrBody>;
+
+	/**
+	 * The inlined form cleaned up (`IrInliner.cleanUp`), as the compile that made or reused this entry published it: it depends on
+	 * the inlined form alone, so a compile that reuses the entry reuses it too. Null until that compile's cleanup.
+	 */
+	public var cleaned:Null<IrFunction> = null;
 
 	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, objects:Map<String, Int>,
-			result:IrBody) {
+			inlined:Null<IrBody>) {
 		this.source = source;
 		this.fingerprint = fingerprint;
 		this.dependencies = dependencies;
 		this.objects = objects;
-		this.result = result;
+		this.inlined = inlined;
 	}
 }
 
@@ -46,12 +55,6 @@ class InlineMemo {
 class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
-
-	/**
-	 * Final cleanup depends only on the inliner's result and must not affect inlining decisions: each function's cleaned form,
-	 * decoded, kept while its inlined form is the same body.
-	 */
-	public var cleaned:Map<String, {source:IrBody, result:IrFunction}> = [];
 
 	/** The type ids every body the inliner keeps is made with, for the session. */
 	public var types(default, null) = new IrTypeIds();
@@ -218,8 +221,6 @@ class IrInlineCache {
 			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
-		for (name => entry in cleaned)
-			result.cleaned.set(name, entry);
 		for (name => entry in publishedBytes)
 			result.publishedBytes.set(name, entry);
 		for (name => entry in instrumented)
@@ -274,7 +275,15 @@ class IrInliner {
 	final idsBySymbol:Array<Int> = [];
 
 	final functions:Array<IrFunction> = [];
+
+	/** By function id, its inlined form once inlined, null for one no caller may splice (`InlineMemo.inlined`); see `finished`. */
 	final done:Array<Null<IrBody>> = [];
+
+	/** By function id, whether it was inlined or its memo reused in this compile. */
+	final finished:Array<Bool> = [];
+
+	/** By function id, its memo when this compile's inlined form is the memo's, so its cleaned form is the memo's too. */
+	final reused:Array<Null<InlineMemo>> = [];
 
 	/** The type ids of every body of this run: the cache's. */
 	final types:IrTypeIds;
@@ -290,7 +299,7 @@ class IrInliner {
 
 	/**
 	 * By function id, its cleaned-up form when the inlining that made its memoized form ran in this compile: the cleanup edits the
-	 * body the inlining did, which no cache holds, once the memo has its own compacted copy.
+	 * body the inlining did, which no cache holds: the memo has its own compacted copy, or no copy when no caller may splice it.
 	 */
 	final cleanedForms:Array<Null<IrFunction>> = [];
 
@@ -410,6 +419,8 @@ class IrInliner {
 			ids.set(name, functions.length);
 			functions.push(byName.get(name));
 			done.push(null);
+			finished.push(false);
+			reused.push(null);
 			pristine.push(null);
 			cleanedForms.push(null);
 			sourceBodies.push(null);
@@ -600,25 +611,40 @@ class IrInliner {
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
-			cleaned:Map<String, {source:IrBody, result:IrFunction}> = [],
 			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		// Every function is inlined before any is cleaned up: a caller inlines a callee's form before its cleanup, which edits it.
 		var inlinedForms = [for (fn in program.functions) inliner.inlinedVersionOf(fn.name)];
 		for (index in 0...program.functions.length) {
-			var fn = program.functions[index], inlined = inlinedForms[index], result:IrFunction;
+			var fn = program.functions[index],
+				inlined = inlinedForms[index],
+				id:Int = inliner.ids.get(fn.name),
+				result:IrFunction;
 			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
-			var clean = cache.cleaned.get(fn.name);
-			if (clean == null || clean.source != inlined) {
-				var early = inliner.cleanedForms[inliner.ids.get(fn.name)];
-				result = early != null ? early : inliner.cleanUp(fn, inlined);
-				clean = {source: inlined, result: result};
-			} else
-				result = clean.result;
-			// A compile that keeps no session has no next compile to reuse the cleaned form in.
-			if (inliner.memoizes)
-				cleaned.set(fn.name, clean);
+			// The cleaned form is the memo's while the inlined form is: reused, or made again as the same body.
+			var memo = inliner.reused[id];
+			if (memo == null && inliner.memoizes) {
+				var last = cache.memo.get(fn.name);
+				if (last != null && inlined != null && last.inlined == inlined)
+					memo = last;
+			}
+			var known = memo == null ? null : memo.cleaned;
+			if (known != null)
+				result = known;
+			else {
+				var early = inliner.cleanedForms[id];
+				if (early != null)
+					result = early;
+				else if (inlined != null)
+					result = inliner.cleanUp(fn, inlined);
+				else
+					throw new InternalError('The inline memo of ${fn.name} keeps neither its inlined form nor its cleaned one');
+			}
+			// A compile that keeps no session has no memo, nor a next compile to reuse the cleaned form in.
+			var entry = inliner.nextMemo.get(fn.name);
+			if (entry != null)
+				entry.cleaned = result;
 			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
 			// without them.
 			if (instrument != null) {
@@ -642,8 +668,8 @@ class IrInliner {
 					if (IrFunctionStateCodec.samePlacement(previous, result)) {
 						result = previous;
 						// The next compile then finds the published form itself and compares nothing.
-						if (instrument == null)
-							cleaned.set(fn.name, {source: clean.source, result: previous});
+						if (instrument == null && entry != null)
+							entry.cleaned = previous;
 					} else {
 						relocated.push(fn.name);
 						previousEntry = {fn: result, bytes: resultBytes};
@@ -672,7 +698,6 @@ class IrInliner {
 		IrOpportunityCensus.report(program, inliner.allowInline);
 		IrAllocationReport.report(program);
 		cache.memo = inliner.nextMemo;
-		cache.cleaned = cleaned;
 		cache.published = published;
 		// Only functions that were compared have bytes; an entry for a function that is gone or unchanged-but-uncompared stays out.
 		for (name => entry in cache.publishedBytes)
@@ -812,11 +837,11 @@ class IrInliner {
 			frames[frames.length - 1].push(consultedId);
 	}
 
-	function inlinedVersion(id:Int):IrBody {
-		var known = done[id];
-		if (known != null) {
+	/** Function `id`'s inlined form, null when it was reused from a memo that keeps none (`InlineMemo.inlined`). */
+	function inlinedVersion(id:Int):Null<IrBody> {
+		if (finished[id]) {
 			consultResult(id);
-			return known;
+			return done[id];
 		}
 		var original = functions[id], name = original.name;
 		var memo = memoizes ? cache.memo.get(name) : null,
@@ -826,7 +851,10 @@ class IrInliner {
 				&& dependenciesCurrent(memo.dependencies)
 				&& objectsCurrent(memo.objects);
 		if (usable && !checkingMemo && memo != null) {
-			done[id] = memo.result;
+			var inlined = memo.inlined;
+			done[id] = inlined;
+			finished[id] = true;
+			reused[id] = memo;
 			dependenciesOf[id] = memo.dependencies;
 			var memoDependencyIds:Array<Int> = [];
 			for (dependency in memo.dependencies) {
@@ -837,10 +865,10 @@ class IrInliner {
 			}
 			dependencyIdsOf[id] = memoDependencyIds;
 			objectsOf[id] = memo.objects;
-			sourceBodies[id] = memo.result == cachedOriginal(id) ? memo.result : null;
+			sourceBodies[id] = inlined != null && inlined == cachedOriginal(id) ? inlined : null;
 			nextMemo.set(name, memo);
 			consultResult(id);
-			return memo.result;
+			return inlined;
 		}
 		visiting[id] = true;
 		depth++;
@@ -863,13 +891,17 @@ class IrInliner {
 		if (strengthReduction)
 			IrStrengthReduction.runBody(body);
 
-		// The memo holds the result as it is. Without one, callers inline the result as it is and the final cleanup, which runs
-		// once every function is inlined, edits it in place.
+		// The memo holds the result as it is, when a caller may splice it (a check of reuse compares every one). Without a memo,
+		// callers inline the result as it is and the final cleanup, which runs once every function is inlined, edits it in place.
 		var unchanged = body.edits == before;
-		var result = if (memoizes)
-			unchanged ? originalBody(id) : body.freeze(memoizes, passScratch.bodyBuilder);
-		else
+		var result:Null<IrBody> = if (!memoizes)
 			body;
+		else if (unchanged)
+			originalBody(id);
+		else if (checkingMemo || looksInlinable(id) && fits(body))
+			body.freeze(memoizes, passScratch.bodyBuilder);
+		else
+			null;
 
 		var isImpure = frameImpure.pop() == true;
 		frameIds.pop();
@@ -877,6 +909,7 @@ class IrInliner {
 		visiting[id] = false;
 		if (!memoizes) {
 			done[id] = result;
+			finished[id] = true;
 			sourceBodies[id] = unchanged ? result : null;
 			return result;
 		}
@@ -896,14 +929,20 @@ class IrInliner {
 		var objectPrintsOf:Map<String, Int> =
 			[for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
 		if (usable && checkingMemo && memo != null) {
-			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result.toFunction(), result.toFunction()))
-				throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
-			result = memo.result;
+			var kept = memo.inlined;
+			if (kept != null && result != null) {
+				if (!compiler.ir.codec.IrFunctionStateEquality.same(kept.toFunction(), result.toFunction()))
+					throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
+				result = kept;
+				reused[id] = memo;
+			}
 		}
 		done[id] = result;
-		sourceBodies[id] = result == cachedOriginal(id) ? result : null;
+		finished[id] = true;
+		sourceBodies[id] = result != null && result == cachedOriginal(id) ? result : null;
+		// A form no caller splices is cleaned up now, in place: the memo keeps no copy of it.
 		if (!unchanged)
-			cleanedForms[id] = cleanUp(original, result, body);
+			cleanedForms[id] = result != null ? cleanUp(original, result, body) : cleanUp(original, body);
 		dependenciesOf[id] = dependencies;
 		dependencyIdsOf[id] = dependencyIds;
 		objectsOf[id] = objectPrintsOf;
