@@ -74,6 +74,9 @@ class IrBody {
 	final bindingEnds:Array<Int>;
 	final bindingValues:Array<Int>;
 
+	/** Where the operands of the row being made (`beginRow`) start in the operand pool. */
+	var rowOperandsFrom = 0;
+
 	/** By value id, the value that replaces it (`alias`), or -1; empty when the body has no alias. */
 	final aliases:Array<Int> = [];
 
@@ -356,6 +359,180 @@ class IrBody {
 		operandPool.push(value);
 		ints.push(block);
 		operandEnds[row] = operandPool.length;
+	}
+
+	/** Sets operand `index` of `row`. */
+	public function setOperand(row:Int, index:Int, value:IrValueId):Void {
+		editing();
+		operandPool[operandStarts[row] + index] = value;
+	}
+
+	/** A new value of this body, with the next id. */
+	public function newValue(name:String, typeId:Int):IrValueId {
+		editing();
+		var id = valueTypes.length;
+		valueTypes.push(typeId);
+		valueNames.push(name);
+		valueRows.push(-1);
+		return IrValueId.of(id);
+	}
+
+	/** The id of `type` in this body's type table. */
+	public inline function typeId(type:IrType):Int
+		return types.id(type);
+
+	/**
+	 * Starts a row: its operands are the ones `pushOperand` appends until `endRow` makes it. Its auxiliary run, when it has one,
+	 * starts where `pushInt` appends next.
+	 */
+	public function beginRow():Void {
+		editing();
+		rowOperandsFrom = operandPool.length;
+	}
+
+	public inline function pushOperand(value:IrValueId):Void
+		operandPool.push(value);
+
+	/** Appends `value` to the int pool and gives its index. */
+	public inline function pushInt(value:Int):Int {
+		ints.push(value);
+		return ints.length - 1;
+	}
+
+	/** Adds a float to the pool and gives its index, for a `ConstFloat` row's auxiliary field. */
+	public inline function addFloat(value:Float):Int {
+		floats.push(value);
+		return floats.length - 1;
+	}
+
+	/** Adds a string to the pool and gives its index, for a `ConstString` row's auxiliary field. */
+	public inline function addString(value:String):Int {
+		strings.push(value);
+		return strings.length - 1;
+	}
+
+	/** Makes the row begun, unlinked: `linkBefore` or `linkAfter` puts it in a block. */
+	public function endRow(opcode:IrOpcode, output:IrValueId, aux:Int, provenance:SourceProvenance):Int {
+		var row = opcodes.length, last = provenancePool.length - 1;
+		opcodes.push(opcode);
+		outputs.push(output);
+		auxes.push(aux);
+		if (last < 0 || provenancePool[last] != provenance) {
+			provenancePool.push(provenance);
+			last++;
+		}
+		provenances.push(last);
+		operandStarts.push(rowOperandsFrom);
+		operandEnds.push(operandPool.length);
+		previousRows.push(UNLINKED);
+		nextRows.push(UNLINKED);
+		rowOperandsFrom = operandPool.length;
+		return row;
+	}
+
+	/**
+	 * Makes a copy of `source`'s row `row` here, unlinked: each operand and the output renamed through `values` (by source
+	 * value id; -1 keeps the id), each block it names through `blocks` when given, its pool entries copied.
+	 */
+	public function copyRow(source:IrBody, row:Int, values:Array<Int>, ?blocks:Array<Int>):Int {
+		beginRow();
+		inline function value(id:Int):IrValueId
+			return IrValueId.of(id >= 0 && id < values.length && values[id] >= 0 ? values[id] : id);
+		inline function block(id:Int):Int
+			return blocks == null ? id : blocks[id];
+		for (index in source.operandStarts[row]...source.operandEnds[row])
+			operandPool.push(value(source.operandPool[index]));
+		var aux = source.auxes[row];
+		inline function copyInts(count:Int):Int {
+			var start = ints.length;
+			for (index in aux...aux + count)
+				ints.push(source.ints[index]);
+			return start;
+		}
+		var opcode = source.opcode(row);
+		var copied = switch opcode {
+			case IrOpcode.ConstFloat: addFloat(source.floats[aux]);
+			case IrOpcode.ConstString: addString(source.strings[aux]);
+			case IrOpcode.StaticDataAddress: copyInts(1 + source.ints[aux]);
+			case IrOpcode.MakeEnum, IrOpcode.EnumField: copyInts(2);
+			case IrOpcode.Phi:
+				var start = ints.length;
+				for (index in 0...source.operandCount(row))
+					ints.push(block(source.ints[aux + index]));
+				start;
+			case IrOpcode.BeginTry:
+				var start = pushInt(block(source.ints[aux]));
+				ints.push(block(source.ints[aux + 1]));
+				ints.push(source.ints[aux + 2]);
+				start;
+			case IrOpcode.EndTry:
+				var start = pushInt(block(source.ints[aux]));
+				ints.push(source.ints[aux + 1]);
+				start;
+			case IrOpcode.Jump: block(aux);
+			case IrOpcode.Branch:
+				var start = pushInt(block(source.ints[aux]));
+				ints.push(block(source.ints[aux + 1]));
+				start;
+			case IrOpcode.Switch:
+				var start = pushInt(block(source.ints[aux])), count = source.ints[aux + 1];
+				ints.push(count);
+				for (index in 0...count)
+					ints.push(block(source.ints[aux + 2 + index]));
+				start;
+			default: aux;
+		};
+		var out = source.outputs[row];
+		return endRow(opcode, out >= 0 ? value(out) : IrValueId.of(-1), copied, source.provenance(row));
+	}
+
+	/** Links `row`, made by `endRow` or `copyRow`, into block `block` (an index) after `after`, or first when `after` is -1. */
+	public function linkAfter(block:Int, after:Int, row:Int):Void {
+		editing();
+		var next = after >= 0 ? nextRows[after] : blockFirstRows[block];
+		previousRows[row] = after;
+		nextRows[row] = next;
+		if (after >= 0)
+			nextRows[after] = row;
+		else
+			blockFirstRows[block] = row;
+		if (next >= 0)
+			previousRows[next] = row;
+		else
+			blockLastRows[block] = row;
+		var out = outputs[row];
+		if (out >= 0)
+			valueRows[out] = row;
+	}
+
+	/** Links `row` into block `block` (an index) before `before`, or last when `before` is -1. */
+	public inline function linkBefore(block:Int, before:Int, row:Int):Void
+		linkAfter(block, before >= 0 ? previousRows[before] : blockLastRows[block], row);
+
+	/** Adds an empty block with id `id` to the layout at index `at`. */
+	public function addBlock(at:Int, id:Int):Void {
+		editing();
+		blockIds.insert(at, id);
+		blockFirstRows.insert(at, -1);
+		blockLastRows.insert(at, -1);
+	}
+
+	/** Moves `row` and every row after it in block `from` (an index) to the end of block `to`. */
+	public function moveTail(from:Int, row:Int, to:Int):Void {
+		editing();
+		var previous = previousRows[row], last = blockLastRows[from];
+		if (previous >= 0)
+			nextRows[previous] = -1;
+		else
+			blockFirstRows[from] = -1;
+		blockLastRows[from] = previous;
+		var tail = blockLastRows[to];
+		previousRows[row] = tail;
+		if (tail >= 0)
+			nextRows[tail] = row;
+		else
+			blockFirstRows[to] = row;
+		blockLastRows[to] = last;
 	}
 
 	/**

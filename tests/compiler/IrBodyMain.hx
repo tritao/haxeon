@@ -235,6 +235,44 @@ class IrBodyMain {
 			throw 'IrBody: $what: the frozen body must be a compacted copy equal to the edited one';
 	}
 
+	/**
+	 * Rows made or copied here and linked before, after or into new blocks; a block's tail moved to another. The layout stays
+	 * sound and the decoded function has the rows where they were linked.
+	 */
+	static function construction(body:IrBody):Void {
+		var where = SourceProvenance.generated("construction-test"), int = body.typeId(I32);
+		var made = body.newValue("made", int);
+		body.beginRow();
+		var row = body.endRow(compiler.ir.IrOpcode.ConstInt, made, 42, where);
+		var first = body.firstRow(0);
+		body.linkBefore(0, body.nextRow(first), row);
+		expect(body.nextRow(first) == row && body.definingRow(made) == row && body.layoutDifference() == null,
+			"linking a made row");
+		var sum = body.newValue("sum", int);
+		body.beginRow();
+		body.pushOperand(made);
+		body.pushOperand(made);
+		var add = body.endRow(compiler.ir.IrOpcode.Add, sum, 0, where);
+		body.linkAfter(0, row, add);
+		var values = [for (_ in 0...body.valueLimit()) -1];
+		var copiedValue = body.newValue("copied", int);
+		values[sum] = copiedValue;
+		var copy = body.copyRow(body, add, values);
+		var count = body.blockCount();
+		body.addBlock(count, 99);
+		body.linkAfter(count, -1, copy);
+		expect(body.operand(copy, 0) == made && body.output(copy) == copiedValue && body.firstRow(count) == copy
+			&& body.layoutDifference() == null, "copying a row into a new block");
+		var moved = body.nextRow(add);
+		body.moveTail(0, moved, count);
+		expect(body.nextRow(add) == -1 && body.lastRow(0) == add && body.nextRow(copy) == moved
+			&& body.layoutDifference() == null, "moving a block's tail");
+		var decoded = body.toFunction();
+		expect(decoded.blocks[0].instructions.length == 3 && decoded.blocks[0].terminator == null
+			&& decoded.blocks[count].id == 99
+			&& decoded.blocks[count].terminator != null, "the decoded rows are where they were linked");
+	}
+
 	/** Edits keep the layout sound and say what changed; a frozen body refuses them; a thawed copy takes them. */
 	static function edits(source:IrBody):Void {
 		var body = source.thaw();
@@ -261,6 +299,7 @@ class IrBodyMain {
 		catch (error:compiler.core.InternalError)
 			refused = true;
 		expect(refused, "a frozen body refuses edits");
+		construction(source.thaw());
 		var unedited = source.thaw();
 		expect(unedited.freeze() == unedited, "freezing an unedited body keeps it");
 	}
