@@ -525,6 +525,9 @@ class IrVerifier {
 						if (difference != null)
 							throw new InternalError('IR body round trip: $difference');
 					}
+					// The verification read the decoding of a function that is a body: only the body stays.
+					if (fn.body != null)
+						fn.releaseDecoded();
 					if (memo != null)
 						memo.accept(fn);
 				} catch (error:InternalError) {
