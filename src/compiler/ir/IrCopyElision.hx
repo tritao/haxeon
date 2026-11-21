@@ -2,7 +2,6 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 import compiler.ir.IrPassScratch.IrValueMarks;
-import compiler.ir.SourceProvenance.Located;
 
 /**
  * Drops the copy of a value class instance made for an argument when the callee cannot tell the difference.
@@ -38,44 +37,15 @@ class IrCopyElision {
 		"__std_int_f64"
 	];
 
-	final byName:Map<String, IrFunction>;
-	final resolve:IrValue->String->Null<String>;
-	final consult:String->Void;
-	final resultDependencies:Map<String, Bool> = [];
-
-	public function new(byName:Map<String, IrFunction>, resolve:IrValue->String->Null<String>, consult:String->Void) {
-		this.byName = byName;
-		this.resolve = resolve;
-		this.consult = consult;
-	}
-
-	public function run(blocks:Array<IrBlock>):Void {
-		for (block in blocks) {
-			var position = 0;
-			while (position < block.instructions.length) {
-				var located = block.instructions[position];
-				if (isValueCopy(located)) {
-					switch located.value {
-						case ValueInit(copy):
-							if (tryElide(blocks, block, position, copy))
-								continue;
-						default:
-					}
-				}
-				position++;
-			}
-		}
-	}
-
 	/**
-	 * `run` on a body, in place: the callees it analyzes are `bodyOf`'s, a method call's target `resolve`'s for the receiver's
-	 * type, and each function looked at is reported through `consult` as `run` reports it; whether any copy was dropped.
+	 * On a body, in place: the callees it analyzes are `bodyOf`'s, a method call's target `resolve`'s for the receiver's type,
+	 * and each function looked at is reported through `consult`; whether any copy was dropped.
 	 */
 	public static function runBody(body:IrBody, bodyOf:String->Null<IrBody>, resolve:IrType->String->Null<String>,
 			consult:String->Void, scratch:IrPassScratch):Bool
 		return scratch.copyElision.run(body, bodyOf, resolve, consult);
 
-	/** `hasCopies` on a body. */
+	/** Whether `body` contains a generated value copy at all, so a function without other work can be skipped. */
 	public static function hasCopiesBody(body:IrBody):Bool {
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -97,223 +67,6 @@ class IrCopyElision {
 		};
 	}
 
-	/** Whether `blocks` contains a generated value copy at all, so a function without other work can be skipped. */
-	public static function hasCopies(blocks:Array<IrBlock>):Bool {
-		for (block in blocks)
-			for (located in block.instructions)
-				if (isValueCopy(located))
-					return true;
-		return false;
-	}
-
-	static function isValueCopy(located:Located<IrInstruction>):Bool {
-		switch located.value {
-			case ValueInit(_):
-			default:
-				return false;
-		}
-		return switch located.provenance.origin {
-			case CompilerGenerated(reason): reason == "value-copy";
-			default: false;
-		};
-	}
-
-	function tryElide(blocks:Array<IrBlock>, block:IrBlock, allocation:Int, copy:IrValue):Bool {
-		// The copy's fields are written from reads of one source, and the copy has one other use: a call argument.
-		var writes:Array<Int> = [],
-			feeders:Array<Int> = [],
-			source:Null<IrValue> = null,
-			callPosition = -1,
-			argument = -1;
-		for (other in blocks)
-			for (position in 0...other.instructions.length) {
-				var instruction = other.instructions[position].value;
-				var uses = 0;
-				for (input in IrOperands.inputs(instruction))
-					if (input.id == copy.id)
-						uses++;
-				switch instruction {
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (input.value.id == copy.id)
-								return false;
-					default:
-				}
-				if (uses == 0)
-					continue;
-				if (other != block || position <= allocation)
-					return false;
-				switch instruction {
-					case FieldSet(target, name, value) if (target.id == copy.id && value.id != copy.id):
-						var feeder = feederOf(block, allocation, position, value, name);
-						if (feeder < 0)
-							return false;
-						var read = block.instructions[feeder].value;
-						switch read {
-							case FieldGet(_, from, _):
-								if (source != null && source.id != from.id)
-									return false;
-								source = from;
-							default: return false;
-						}
-						writes.push(position);
-						feeders.push(feeder);
-					case Call(_, _, arguments) if (callPosition < 0 && uses == 1):
-						callPosition = position;
-						argument = indexOf(arguments, copy);
-					case MethodCall(_, receiver, _, arguments,
-						_) if (callPosition < 0 && uses == 1 && receiver.id != copy.id):
-						callPosition = position;
-						argument = indexOf(arguments, copy) + 1;
-					default:
-						return false;
-				}
-			}
-		for (other in blocks) {
-			var terminator = other.terminator;
-			if (terminator == null)
-				continue;
-			switch terminator.value {
-				case Return(value), Throw(value), Rethrow(value):
-					if (value.id == copy.id)
-						return false;
-				case Branch(condition, _, _), Switch(condition, _, _):
-					if (condition.id == copy.id)
-						return false;
-				case Jump(_), Unreachable:
-			}
-		}
-		if (source == null || callPosition < 0 || argument < 0)
-			return false;
-		var lastWrite = 0;
-		for (position in writes)
-			if (position > lastWrite)
-				lastWrite = position;
-		if (callPosition < lastWrite || !nothingRunsBetween(block, lastWrite + 1, callPosition))
-			return false;
-		var callee = calleeOf(block.instructions[callPosition].value, argument);
-		if (callee == null
-			|| resultDependsOnParameter(callee.name, callee.parameter, [], 0)
-			|| !readsOnly(callee.name, callee.parameter, [], 0)
-			|| !storesNothing(callee.name, false, [], 0))
-			return false;
-		// Pass the source itself, and drop the copy with the reads that fed it.
-		var rewritten:Array<Located<IrInstruction>> = [];
-		for (position in 0...block.instructions.length) {
-			var current = block.instructions[position];
-			if (position == allocation || writes.indexOf(position) >= 0 || feeders.indexOf(position) >= 0)
-				continue;
-			if (position == callPosition) {
-				var replacement = replaceArgument(current.value, copy, source);
-				rewritten.push(new Located(replacement, current.provenance));
-				continue;
-			}
-			rewritten.push(current);
-		}
-		block.instructions.resize(0);
-		for (kept in rewritten)
-			block.instructions.push(kept);
-		return true;
-	}
-
-	/** Whether the callee can return or throw an alias of a value copied from this argument. */
-	function resultDependsOnParameter(name:String, index:Int, visiting:Array<String>, depth:Int):Bool {
-		var fn = byName.get(name);
-		if (fn == null || index >= fn.arguments.length || depth > MaxDepth)
-			return true;
-		var key = name + "#" + index;
-		if (resultDependencies.exists(key))
-			return resultDependencies.get(key);
-		if (visiting.indexOf(key) >= 0)
-			return true;
-		consult(name);
-		visiting.push(key);
-		var parameter = fn.arguments[index],
-			tainted:Map<Int, Bool> = [],
-			fresh:Map<Int, Bool> = [];
-		tainted.set(parameter.id, true);
-		var changed = true, rounds = 0;
-		while (changed && rounds++ < fn.blocks.length + 1) {
-			changed = false;
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var instruction = located.value;
-					switch instruction {
-						case NewObject(out, _) | ValueInit(out):
-							fresh.set(out.id, true);
-						case FieldSet(target, _, value) if (fresh.exists(target.id) && tainted.exists(value.id)):
-							if (!tainted.exists(target.id)) {
-								tainted.set(target.id, true);
-								changed = true;
-							}
-						case ArraySet(array, _, value) if (fresh.exists(array.id) && tainted.exists(value.id)):
-							if (!tainted.exists(array.id)) {
-								tainted.set(array.id, true);
-								changed = true;
-							}
-						case Phi(out, inputs) if (canCarryIdentity(out.type)):
-							for (input in inputs)
-								if (tainted.exists(input.value.id) && !tainted.exists(out.id)) {
-									tainted.set(out.id, true);
-									changed = true;
-								}
-						default:
-							var output = IrOperands.output(instruction);
-							if (output != null && canCarryIdentity(output.type) && !tainted.exists(output.id)) {
-								var depends = switch instruction {
-									case Call(_, callee, arguments):
-										var found = false;
-										for (argument in 0...arguments.length)
-											if (tainted.exists(arguments[argument].id)
-												&& resultDependsOnParameter(callee.name, argument, visiting, depth + 1))
-												found = true;
-										found;
-									case MethodCall(_, receiver, method, arguments, _):
-										var target = valueMethod(receiver, method),
-											found = target == null && tainted.exists(receiver.id);
-										if (target != null
-											&& tainted.exists(receiver.id)
-											&& resultDependsOnParameter(target, 0, visiting, depth + 1))
-											found = true;
-										for (argument in 0...arguments.length)
-											if (tainted.exists(arguments[argument].id)
-												&& (target == null
-												|| resultDependsOnParameter(target, argument + 1, visiting, depth + 1)))
-												found = true;
-										found;
-									default:
-										var found = false;
-										for (input in IrOperands.inputs(instruction))
-											if (tainted.exists(input.id))
-												found = true;
-										found;
-								};
-								if (depends) {
-									tainted.set(output.id, true);
-									changed = true;
-								}
-							}
-					}
-				}
-		}
-		var depends = false;
-		for (block in fn.blocks) {
-			var terminator = block.terminator;
-			if (terminator == null)
-				continue;
-			switch terminator.value {
-				case Return(value), Throw(value), Rethrow(value):
-					if (tainted.exists(value.id))
-						depends = true;
-				case Branch(condition, _, _), Switch(condition, _, _):
-				case Jump(_), Unreachable:
-			}
-		}
-		visiting.pop();
-		resultDependencies.set(key, depends);
-		return depends;
-	}
-
 	static function canCarryIdentity(type:IrType):Bool
 		return switch type {
 			case Bytes, RawPtr, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_),
@@ -321,214 +74,11 @@ class IrCopyElision {
 			case Nullable(element): canCarryIdentity(element);
 			case _: false;
 		};
-
-	/** The FieldGet of `field` whose value is `value`, when nothing else uses that value. */
-	static function feederOf(block:IrBlock, allocation:Int, writePosition:Int, value:IrValue, field:String):Int {
-		for (position in allocation + 1...writePosition)
-			switch block.instructions[position].value {
-				case FieldGet(out, _, name) if (out.id == value.id && name == field):
-					var uses = 0;
-					for (candidate in block.instructions)
-						for (input in IrOperands.inputs(candidate.value))
-							if (input.id == value.id)
-								uses++;
-					return uses == 1 ? position : -1;
-				default:
-			}
-		return -1;
-	}
-
-	/** Only pure computation may sit between the copy and the call, or the callee could see a later state of the source. */
-	static function nothingRunsBetween(block:IrBlock, from:Int, to:Int):Bool {
-		var fresh:Map<Int, Bool> = [];
-		for (position in 0...block.instructions.length) {
-			var instruction = block.instructions[position].value;
-			switch instruction {
-				case NewObject(out, _) | ValueInit(out):
-					fresh.set(out.id, true);
-				default:
-			}
-			if (position < from || position >= to)
-				continue;
-			switch instruction {
-				case Call(_, name, _) if (name.name == IrReceiverCheck.NAME || name.name == IrReferenceIdentity.NAME):
-				case Call(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _), CNativeCall(_, _, _),
-					ArraySet(_, _, _), GlobalSet(_, _),
-					MemoryStore(_, _, _), IteratorNext(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_):
-					return false;
-				case FieldSet(target, _, _):
-					if (!fresh.exists(target.id))
-						return false;
-				default:
-			}
-		}
-		return true;
-	}
-
-	static function indexOf(values:Array<IrValue>, value:IrValue):Int {
-		for (index in 0...values.length)
-			if (values[index].id == value.id)
-				return index;
-		return -1;
-	}
-
-	static function replaceArgument(instruction:IrInstruction, from:IrValue, to:IrValue):IrInstruction {
-		var swap = function(values:Array<IrValue>):Array<IrValue> return [for (value in values) value.id == from.id
-			? to : value];
-		return switch instruction {
-			case Call(out, name, arguments): Call(out, name, swap(arguments));
-			case MethodCall(out, receiver, name, arguments, terminalReceiver): MethodCall(out, receiver, name,
-				swap(arguments), terminalReceiver);
-			default: instruction;
-		};
-	}
-
-	/** The function a call resolves to and which of its parameters receives `argument`. */
-	function calleeOf(instruction:IrInstruction, argument:Int):Null<{name:String, parameter:Int}> {
-		switch instruction {
-			case Call(_, name, _):
-				return byName.exists(name.name) ? {
-					name: name.name, parameter: argument
-				} : null;
-			case MethodCall(_, receiver, method, _, _):
-				var target = valueMethod(receiver, method);
-				return target != null && byName.exists(target) ? {
-					name: target, parameter: argument
-				} : null;
-			default:
-				return null;
-		}
-	}
-
-	function valueMethod(receiver:IrValue, method:String):Null<String>
-		return resolve(receiver, method);
-
-	/** Parameter `index` of `name` is only read: never written, stored, returned or otherwise let out. */
-	function readsOnly(name:String, index:Int, visiting:Array<String>, depth:Int):Bool {
-		var fn = byName.get(name);
-		if (fn == null || index >= fn.arguments.length || depth > MaxDepth)
-			return false;
-		var key = name + "#" + index;
-		if (visiting.indexOf(key) >= 0)
-			return false;
-		consult(name);
-		visiting.push(key);
-		var parameter = fn.arguments[index], ok = true;
-		for (block in fn.blocks) {
-			for (located in block.instructions) {
-				var instruction = located.value;
-				switch instruction {
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (input.value.id == parameter.id)
-								ok = false;
-						continue;
-					default:
-				}
-				var uses = 0;
-				for (input in IrOperands.inputs(instruction))
-					if (input.id == parameter.id)
-						uses++;
-				if (uses == 0)
-					continue;
-				switch instruction {
-					case FieldGet(_, target, _) if (target.id == parameter.id):
-					case Call(_, callee, arguments):
-						for (position in 0...arguments.length)
-							if (arguments[position].id == parameter.id
-								&& !readsOnly(callee.name, position, visiting, depth + 1))
-								ok = false;
-					case MethodCall(_, receiver, method, arguments, _):
-						var target = valueMethod(receiver, method);
-						if (target == null)
-							ok = false;
-						else {
-							if (receiver.id == parameter.id && !readsOnly(target, 0, visiting, depth + 1))
-								ok = false;
-							for (position in 0...arguments.length)
-								if (arguments[position].id == parameter.id
-									&& !readsOnly(target, position + 1, visiting, depth + 1))
-									ok = false;
-						}
-					default:
-						ok = false;
-				}
-			}
-			var terminator = block.terminator;
-			if (terminator != null)
-				switch terminator.value {
-					case Return(value), Throw(value), Rethrow(value):
-						if (value.id == parameter.id)
-							ok = false;
-					case Branch(condition, _, _), Switch(condition, _, _):
-						if (condition.id == parameter.id)
-							ok = false;
-					case Jump(_), Unreachable:
-				}
-		}
-		visiting.pop();
-		return ok;
-	}
-
-	/**
-	 * `name` and everything it calls store only into objects it creates itself (and, for a constructor run on a new
-	 * object, into that object), so no existing object changes while it runs.
-	 */
-	function storesNothing(name:String, allowThis:Bool, visiting:Array<String>, depth:Int):Bool {
-		var fn = byName.get(name);
-		if (fn == null)
-			return PureNatives.indexOf(name) >= 0;
-		if (depth > MaxDepth)
-			return false;
-		var key = name + (allowThis ? "#this" : "");
-		if (visiting.indexOf(key) >= 0)
-			return false;
-		consult(name);
-		visiting.push(key);
-		var fresh:Map<Int, Bool> = [], ok = true;
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case NewObject(out, _) | ValueInit(out):
-						fresh.set(out.id, true);
-					default:
-				}
-		var receiver = fn.arguments.length > 0 ? fn.arguments[0] : null;
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case FieldSet(target, _, _):
-						if (!fresh.exists(target.id) && !(allowThis && receiver != null && target.id == receiver.id))
-							ok = false;
-					case ArraySet(_, _, _), GlobalSet(_, _), MemoryStore(_, _, _), CNativeCall(_, _, _),
-						CallClosure(_, _, _):
-						ok = false;
-					case Call(_, callee, arguments):
-						var target = byName.get(callee.name);
-						var constructor = target != null
-							&& (switch target.result {
-								case Void: true;
-								default: false;
-							})
-								&& StringTools.endsWith(callee.name, ".new")
-								&& arguments.length > 0
-								&& fresh.exists(arguments[0].id);
-						if (!storesNothing(callee.name, constructor, visiting, depth + 1))
-							ok = false;
-					case MethodCall(_, receiverValue, method, _, _):
-						var target = valueMethod(receiverValue, method);
-						if (target == null || !storesNothing(target, false, visiting, depth + 1))
-							ok = false;
-					default:
-				}
-		visiting.pop();
-		return ok;
-	}
 }
 
 /**
- * `IrCopyElision` on a body, in place, with the same result, and the same functions consulted in the same order. Its tables
- * are kept from one function to the next (`IrPassScratch.copyElision`).
+ * `IrCopyElision.runBody`'s pass, on a body in place. Its tables are kept from one function to the next
+ * (`IrPassScratch.copyElision`).
  */
 @:allow(compiler.ir.IrCopyElision)
 class IrBodyCopyElision {
@@ -620,7 +170,10 @@ class IrBodyCopyElision {
 		return result;
 	}
 
-	/** `IrCopyElision.tryElide`: positions within the copy's block are counted in `positions`. */
+	/**
+	 * Drops the copy made at `row` when its fields are written from reads of one source and its one other use is a call argument
+	 * the callee only reads; positions within the copy's block are counted in `positions`.
+	 */
 	function tryElide(home:Int, allocation:Int, copy:IrValueId):Bool {
 		var body = this.body, source = -1, callRow = -1, argument = -1;
 		writes.resize(0);
@@ -723,7 +276,7 @@ class IrBodyCopyElision {
 		return -1;
 	}
 
-	/** `IrCopyElision.feederOf`. */
+	/** The FieldGet of `field` whose value is `value`, when nothing else uses that value. */
 	function feederOf(block:Int, allocation:Int, write:Int, value:IrValueId, field:Int):Int {
 		var row = body.nextRow(allocation);
 		while (row != write) {
@@ -744,7 +297,7 @@ class IrBodyCopyElision {
 		return -1;
 	}
 
-	/** `IrCopyElision.nothingRunsBetween`. */
+	/** Only pure computation may sit between the copy and the call, or the callee could see a later state of the source. */
 	function nothingRunsBetween(block:Int, from:Int, to:Int):Bool {
 		if (checkSymbol < 0) {
 			checkSymbol = IrSymbol.of(IrReceiverCheck.NAME).id;
@@ -775,7 +328,7 @@ class IrBodyCopyElision {
 		return true;
 	}
 
-	/** `IrCopyElision.resultDependsOnParameter`. */
+	/** Whether the callee can return or throw an alias of a value copied from this argument. */
 	function resultDependsOnParameter(name:String, index:Int, depth:Int):Bool {
 		var fn = bodyOf(name);
 		if (fn == null || index >= fn.argumentCount() || depth > IrCopyElision.MaxDepth)
@@ -865,7 +418,7 @@ class IrBodyCopyElision {
 		return found;
 	}
 
-	/** `IrCopyElision.readsOnly`. */
+	/** Parameter `index` of `name` is only read: never written, stored, returned or otherwise let out. */
 	function readsOnly(name:String, index:Int, depth:Int):Bool {
 		var fn = bodyOf(name);
 		if (fn == null || index >= fn.argumentCount() || depth > IrCopyElision.MaxDepth)
@@ -925,7 +478,10 @@ class IrBodyCopyElision {
 		return ok;
 	}
 
-	/** `IrCopyElision.storesNothing`. */
+	/**
+	 * `name` and everything it calls store only into objects it creates itself (and, for a constructor run on a new
+	 * object, into that object), so no existing object changes while it runs.
+	 */
 	function storesNothing(name:String, allowThis:Bool, depth:Int):Bool {
 		var fn = bodyOf(name);
 		if (fn == null)

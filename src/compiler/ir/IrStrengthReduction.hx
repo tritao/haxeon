@@ -1,48 +1,13 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.SourceProvenance.Located;
 
 /** Exact post-inline arithmetic rewrites. */
 class IrStrengthReduction {
-
-	public static function run(fn:IrFunction):IrFunction {
-		var constants:Map<Int, Float> = [];
-		var nextValue = fn.nextValueId();
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case ConstFloat(out, value):
-						constants.set(out.id, value);
-					default:
-				}
-
-		// Only the blocks with a division to reduce are copied; a function without one comes back as it is.
-		return IrFunctionRewrite.instructions(fn, function(located) {
-			return switch located.value {
-				case Div(out, left, right) if ((switch (out.type) {
-					case F64: true;
-					default: false;
-				}) && (switch (right.type) {
-					case F64: true;
-					default: false;
-				})): var divisor = constants.get(right.id);
-				if (divisor != null && exactNormalReciprocal(divisor)) {
-					var reciprocal = new IrValue(nextValue++, "strength.reciprocal", F64);
-					[
-						new Located(ConstFloat(reciprocal, 1.0 / divisor), located.provenance),
-						new Located(Mul(out, left, reciprocal), located.provenance)
-					];
-				} else
-					null;
-				default:
-					null;
-			};
-		});
-	}
-
-	/** `run` on a body, in place: a division by such a constant becomes a multiplication by its reciprocal. */
+	/**
+	 * On a body, in place: a float division by a constant whose reciprocal is exact (`exactNormalReciprocal`) becomes a
+	 * multiplication by that reciprocal.
+	 */
 	public static function runBody(body:IrBody):Bool {
 		var f64 = body.typeId(F64), changed = false, nextValue = -1;
 		for (block in 0...body.blockCount()) {

@@ -9,6 +9,19 @@ import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 class JumpThreadingMain {
+	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
+	static function threadJumps(fn:IrFunction):IrFunction {
+		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		return IrJumpThreading.runBody(body, new compiler.ir.IrPassScratch()) ? body.toFunction() : fn;
+	}
+
+	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
+	static function threadConstantBranches(fn:IrFunction):IrFunction {
+		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		return IrJumpThreading.threadConstantBranchesBody(body, new compiler.ir.IrPassScratch())
+			? body.toFunction() : fn;
+	}
+
 	static function expect(value:Bool, message:String):Void {
 		if (!value) throw message;
 	}
@@ -32,7 +45,7 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(b.phi(I32, [{block: 0, value: first}, {block: bridge.id, value: second}]));
 		var fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		expect(IrJumpThreading.run(fn) == fn, "branch edges are not rewritten");
+		expect(threadJumps(fn) == fn, "branch edges are not rewritten");
 		verify(fn, 41, 40);
 
 		b = new IrBuilder();
@@ -46,10 +59,10 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(b.phi(I32, [{block: bridge.id, value: first}]));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		var bytes = IrFunctionStateCodec.encode(fn), optimized = IrJumpThreading.run(fn);
+		var bytes = IrFunctionStateCodec.encode(fn), optimized = threadJumps(fn);
 		expect(optimized.blocks.length == 2, "linear edges thread through the empty block");
 		expect(bytes.compare(IrFunctionStateCodec.encode(fn)) == 0, "input remains unchanged");
-		expect(IrJumpThreading.run(optimized) == optimized, "pass is idempotent");
+		expect(threadJumps(optimized) == optimized, "pass is idempotent");
 		verify(optimized, 42, 42);
 
 		b = new IrBuilder();
@@ -67,7 +80,7 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(b.phi(I32, [{block: 0, value: first}, {block: bridge.id, value: second}]));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.run(fn);
+		optimized = threadJumps(fn);
 		expect(optimized.blocks.length == 3, "threaded linear predecessor replaces the phi edge");
 		verify(optimized, 41, 40);
 
@@ -87,7 +100,7 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(b.phi(I32, [{block: bridge.id, value: first}]));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.run(fn);
+		optimized = threadJumps(fn);
 		verify(optimized, 42, 42);
 		// Both sides of the branch only jump to `bridge`, which has no phis: the branch goes there itself.
 		expect(optimized.blocks.length == fn.blocks.length - 2, "empty branch sides thread to a block without phis");
@@ -106,7 +119,7 @@ class JumpThreadingMain {
 		b.select(unreachable);
 		b.jump(bridge);
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		expect(IrJumpThreading.run(fn) == fn, "an unreachable predecessor cannot be left pointing at a removed block");
+		expect(threadJumps(fn) == fn, "an unreachable predecessor cannot be left pointing at a removed block");
 
 		b = new IrBuilder();
 		condition = b.argument("condition", Bool);
@@ -118,7 +131,7 @@ class JumpThreadingMain {
 		}
 		b.returnValue(first);
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.run(fn);
+		optimized = threadJumps(fn);
 		expect(optimized.blocks.length == 2, "a whole linear chain is threaded in one analysis");
 		verify(optimized, 42, 42);
 
@@ -135,7 +148,7 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(b.phi(I32, [{block: secondBridge.id, value: first}]));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.run(fn);
+		optimized = threadJumps(fn);
 		expect(optimized.blocks.length == 2,
 			"a chain of removed blocks maps its final phi to the original predecessor");
 		verify(optimized, 42, 42);
@@ -152,7 +165,7 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(first);
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		expect(IrJumpThreading.run(fn) == fn, "handler-bearing functions remain unchanged");
+		expect(threadJumps(fn) == fn, "handler-bearing functions remain unchanged");
 
 		// Both sides of a branch reach a phi block through chains of empty blocks: bridging them would give the phi two inputs
 		// from the branch, so neither side is bridged to it.
@@ -177,7 +190,7 @@ class JumpThreadingMain {
 		b.select(exit);
 		b.returnValue(b.phi(I32, [{block: leftTail.id, value: first}, {block: rightTail.id, value: second}]));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		verify(IrJumpThreading.run(fn), 40, 41);
+		verify(threadJumps(fn), 40, 41);
 
 		// A branch side that only jumps to a block without phis goes there directly.
 		b = new IrBuilder();
@@ -191,7 +204,7 @@ class JumpThreadingMain {
 		b.select(no);
 		b.returnValue(b.constInt(2));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.run(fn);
+		optimized = threadJumps(fn);
 		expect(optimized.blocks.length == fn.blocks.length - 1, "a conditional edge threads past an empty block");
 		verify(optimized, 1, 2);
 
@@ -215,7 +228,7 @@ class JumpThreadingMain {
 		b.select(no);
 		b.returnValue(b.constInt(2));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.threadConstantBranches(fn);
+		optimized = threadConstantBranches(fn);
 		expect(!Lambda.exists(optimized.blocks, block -> block.id == join.id),
 			"a branch on constant phi inputs is threaded");
 		verify(optimized, 1, 2);
@@ -240,7 +253,7 @@ class JumpThreadingMain {
 		b.select(never);
 		b.returnValue(b.constInt(9));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrJumpThreading.threadConstantBranches(fn);
+		optimized = threadConstantBranches(fn);
 		expect(!Lambda.exists(optimized.blocks, block -> block.id == join.id),
 			"a constant is threaded into a block with phis");
 		verify(optimized, 5, 7);

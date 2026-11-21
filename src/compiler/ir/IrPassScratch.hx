@@ -12,12 +12,6 @@ class IrPassScratch {
 	/** Value ids marked during a pass. */
 	public final marked = new IrValueMarks();
 
-	/** Per value id, its defining instruction while a pass runs; all null between passes, so it keeps no function alive. */
-	public final definitions:Array<Null<IrInstruction>> = [];
-
-	/** A worklist of values. */
-	public final pending:Array<IrValue> = [];
-
 	/** The tables of `IrNonNullFacts`. */
 	public final nonNull = new IrNonNullScratch();
 
@@ -31,9 +25,6 @@ class IrPassScratch {
 
 	/** The graph of the function a pass reads, refilled for each (`IrGraph.reset`) and released when the pass is done. */
 	public final graph = new IrGraph();
-
-	/** The tables of `IrLoadStoreForwarding`. */
-	public final loadStore = new IrLoadStoreForwarding.IrLoadStoreScratch();
 
 	/** The tables of `IrBodyLoadStoreForwarding`. */
 	public final bodyLoadStore = new IrLoadStoreForwarding.IrBodyLoadStoreScratch();

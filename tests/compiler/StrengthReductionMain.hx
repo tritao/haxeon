@@ -6,6 +6,12 @@ import compiler.ir.codec.IrFunctionStateCodec;
 import haxe.io.FPHelper;
 
 class StrengthReductionMain {
+	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
+	static function reduce(fn:IrFunction):IrFunction {
+		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		return IrStrengthReduction.runBody(body) ? body.toFunction() : fn;
+	}
+
 	static function expect(ok:Bool, message:String):Void {
 		if (!ok)
 			throw message;
@@ -48,12 +54,12 @@ class StrengthReductionMain {
 		for (divisor in [2.0, 0.5, 1024.0, -4.0, Math.pow(2, -1022), Math.pow(2, 1022)]) {
 			var source = build(divisor),
 				encoded = IrFunctionStateCodec.encode(source),
-				result = IrStrengthReduction.run(source),
+				result = reduce(source),
 				ops = operations(result);
 			expect(ops.divides == 0 && ops.multiplies == 1, "power of two must become multiply: " + divisor);
 			expect(ops.reciprocal != null && sameBits(ops.reciprocal, 1.0 / divisor), "reciprocal bits: " + divisor);
 			expect(encoded.compare(IrFunctionStateCodec.encode(source)) == 0, "input mutation: " + divisor);
-			expect(IrStrengthReduction.run(result) == result, "identity after rewrite: " + divisor);
+			expect(reduce(result) == result, "identity after rewrite: " + divisor);
 		}
 		for (divisor in [
 			0.0,
@@ -66,11 +72,11 @@ class StrengthReductionMain {
 			Math.pow(2, 1023)
 		]) {
 			var source = build(divisor),
-				result = IrStrengthReduction.run(source),
+				result = reduce(source),
 				ops = operations(result);
 			expect(result == source && ops.divides == 1 && ops.multiplies == 0, "must retain divide: " + divisor);
 		}
 		var left = build(2.0, true);
-		expect(IrStrengthReduction.run(left) == left, "constant numerator");
+		expect(reduce(left) == left, "constant numerator");
 	}
 }

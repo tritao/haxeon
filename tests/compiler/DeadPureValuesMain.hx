@@ -7,6 +7,12 @@ import compiler.ir.IrVerifier;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 class DeadPureValuesMain {
+	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
+	static function removeDeadValues(fn:IrFunction):IrFunction {
+		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		return IrDeadPureValues.runBody(body, new compiler.ir.IrPassScratch()) ? body.toFunction() : fn;
+	}
+
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition) throw message;
 	}
@@ -28,12 +34,12 @@ class DeadPureValuesMain {
 			scopeEnd: 1
 		};
 		var fn = new IrFunction("test", b.arguments, I32, b.blocks, Ordinary, [binding]);
-		var before = IrFunctionStateCodec.encode(fn), result = IrDeadPureValues.run(fn);
+		var before = IrFunctionStateCodec.encode(fn), result = removeDeadValues(fn);
 		expect(before.compare(IrFunctionStateCodec.encode(fn)) == 0, "input was mutated");
 		expect(result.blocks[0].instructions.length == 4,
 			"dead chain removed, debug value, divisor, division and call retained");
-		expect(result.debugBindings[0].value == debug, "debug value remains defined");
-		expect(IrDeadPureValues.run(result) == result, "unchanged result retains identity");
+		expect(result.debugBindings[0].value.id == debug.id, "debug value remains defined");
+		expect(removeDeadValues(result) == result, "unchanged result retains identity");
 
 		b = new IrBuilder();
 		var condition = b.argument("condition", Bool),
@@ -52,7 +58,7 @@ class DeadPureValuesMain {
 		b.returnValue(b.add(chosen, b.constInt(2)));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
 		var program = new IrProgram("main");
-		program.functions = [IrDeadPureValues.run(fn)];
+		program.functions = [removeDeadValues(fn)];
 		IrVerifier.verify(program);
 		var interpreter = new IrInterpreter(program);
 		expect(interpreter.run("main", [true]) == 42 && interpreter.run("main", [false]) == 43,
@@ -63,7 +69,7 @@ class DeadPureValuesMain {
 		b.fieldSet(liveValue, "x", field);
 		b.returnValue(field);
 		fn = new IrFunction("values", b.arguments, I32, b.blocks, Ordinary);
-		result = IrDeadPureValues.run(fn);
+		result = removeDeadValues(fn);
 		var initializers = 0, stores = 0;
 		for (instruction in result.blocks[0].instructions) switch instruction.value {
 			case ValueInit(_): initializers++;

@@ -10,6 +10,12 @@ import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 class ReceiverCheckElisionMain {
+	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
+	static function elideChecks(fn:IrFunction):IrFunction {
+		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		return IrReceiverCheckElision.runBody(body, new compiler.ir.IrPassScratch()) ? body.toFunction() : fn;
+	}
+
 	static function expect(value:Bool, message:String):Void {
 		if (!value) throw message;
 	}
@@ -47,10 +53,10 @@ class ReceiverCheckElisionMain {
 		check(b, receiver);
 		b.returnValue(b.constInt(42));
 		var fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary), bytes = IrFunctionStateCodec.encode(fn);
-		var optimized = IrReceiverCheckElision.run(fn);
+		var optimized = elideChecks(fn);
 		expect(checks(optimized) == 1, "fresh, repeated and dominating checks are eliminated");
 		expect(bytes.compare(IrFunctionStateCodec.encode(fn)) == 0, "input remains unchanged");
-		expect(IrReceiverCheckElision.run(optimized) == optimized, "pass is idempotent");
+		expect(elideChecks(optimized) == optimized, "pass is idempotent");
 		var p = program(optimized);
 		IrVerifier.verify(p);
 		var threw = false;
@@ -73,7 +79,7 @@ class ReceiverCheckElisionMain {
 		check(b, receiver);
 		b.returnValue(b.constInt(42));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrReceiverCheckElision.run(fn);
+		optimized = elideChecks(fn);
 		expect(checks(optimized) == 2, "a check on only one predecessor does not dominate the merge");
 		p = program(optimized);
 		IrVerifier.verify(p);
@@ -96,7 +102,7 @@ class ReceiverCheckElisionMain {
 		check(b, receiver);
 		b.returnValue(b.constInt(42));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrReceiverCheckElision.run(fn);
+		optimized = elideChecks(fn);
 		expect(checks(optimized) == 1, "a pre-loop check dominates checks on both loop and exit edges");
 		IrVerifier.verify(program(optimized));
 
@@ -116,7 +122,7 @@ class ReceiverCheckElisionMain {
 		check(b, receiver);
 		b.returnValue(b.constInt(42));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		optimized = IrReceiverCheckElision.run(fn);
+		optimized = elideChecks(fn);
 		expect(checks(optimized) == 2, "a back-edge check must not justify the first iteration or exit");
 		p = program(optimized);
 		IrVerifier.verify(p);
@@ -138,7 +144,7 @@ class ReceiverCheckElisionMain {
 			scopeEnd: 1
 		};
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary, [binding]);
-		optimized = IrReceiverCheckElision.run(fn);
+		optimized = elideChecks(fn);
 		expect(checks(optimized) == 1, "a debug-referenced check remains defined");
 
 		b = new IrBuilder();
@@ -151,7 +157,7 @@ class ReceiverCheckElisionMain {
 		check(b, receiver);
 		b.returnValue(b.constInt(42));
 		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
-		expect(checks(IrReceiverCheckElision.run(fn)) == 2,
+		expect(checks(elideChecks(fn)) == 2,
 			"handler-bearing functions do not propagate check facts across blocks");
 		Sys.println("PASS: receiver checks preserve null failures across control flow");
 	}

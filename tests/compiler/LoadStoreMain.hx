@@ -11,6 +11,12 @@ import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 class LoadStoreMain {
+	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
+	static function forward(fn:IrFunction, ?objects:IrObjectTable):IrFunction {
+		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		return IrLoadStoreForwarding.runBody(body, objects, new compiler.ir.IrPassScratch()) ? body.toFunction() : fn;
+	}
+
 	static function located(i:IrInstruction):Located<IrInstruction>
 		return new Located(i, SourceProvenance.generated("loadstore-test"));
 
@@ -45,10 +51,10 @@ class LoadStoreMain {
 		var second = b.fieldGet(o, "n", I32),
 			fn = finish(b, b.add(first, second));
 		var bytes = IrFunctionStateCodec.encode(fn);
-		var result = IrLoadStoreForwarding.run(fn);
+		var result = forward(fn);
 		expect(loads(result) == expected, name);
 		expect(bytes.compare(IrFunctionStateCodec.encode(fn)) == 0, "input mutated: " + name);
-		expect(IrLoadStoreForwarding.run(result) == result, "idempotent identity: " + name);
+		expect(forward(result) == result, "idempotent identity: " + name);
 	}
 
 	static function arrayCase(name:String, unknown:Bool, alias:Bool, same:Bool, expected:Int):Void {
@@ -62,7 +68,7 @@ class LoadStoreMain {
 		b.blocks[0].instructions.push(located(ArrayGet(first, a, i)));
 		b.blocks[0].instructions.push(located(ArraySet(alias ? other : a, j, b.constInt(8))));
 		b.blocks[0].instructions.push(located(ArrayGet(last, a, i)));
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.add(first, last)))) == expected, name);
+		expect(loads(forward(finish(b, b.add(first, last)))) == expected, name);
 	}
 
 	static function crossBlockCases():Void {
@@ -85,7 +91,7 @@ class LoadStoreMain {
 			b.jump(join);
 			b.select(join);
 			var second = b.fieldGet(object, "n", I32),
-				result = IrLoadStoreForwarding.run(finish(b, b.add(first, second)));
+				result = forward(finish(b, b.add(first, second)));
 			expect(loads(result) == (kind == 1 || kind == 2 ? 2 : 1), 'join clobber case $kind');
 		}
 		for (clobber in [false, true]) for (before in [false, true]) {
@@ -104,7 +110,7 @@ class LoadStoreMain {
 			if (clobber) b.fieldSet(object, "n", b.constInt(2));
 			b.jump(header);
 			b.select(exit);
-			var result = IrLoadStoreForwarding.run(finish(b, value));
+			var result = forward(finish(b, value));
 			expect(loads(result) == (before && clobber ? 2 : 1), 'loop before=$before clobber=$clobber');
 		}
 		var b = new IrBuilder(),
@@ -120,7 +126,7 @@ class LoadStoreMain {
 		b.select(no);
 		b.jump(join);
 		b.select(join);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 2,
+		expect(loads(forward(finish(b, b.fieldGet(object, "n", I32)))) == 2,
 			"a load on one branch does not dominate the join");
 		b = new IrBuilder();
 		object = b.argument("object", Obj("Box"));
@@ -128,7 +134,7 @@ class LoadStoreMain {
 		b.fieldSet(object, "n", b.constInt(7));
 		b.jump(storeNext);
 		b.select(storeNext);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 1,
+		expect(loads(forward(finish(b, b.fieldGet(object, "n", I32)))) == 1,
 			"a store does not create a cross-block load fact");
 		b = new IrBuilder();
 		object = b.argument("object", Obj("Box"));
@@ -137,7 +143,7 @@ class LoadStoreMain {
 		b.blocks[0].instructions.push(located(EndTry(0, false)));
 		b.jump(next);
 		b.select(next);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 2,
+		expect(loads(forward(finish(b, b.fieldGet(object, "n", I32)))) == 2,
 			"exception regions do not propagate field facts across blocks");
 	}
 
@@ -156,12 +162,12 @@ class LoadStoreMain {
 			scopeEnd: 10
 		};
 		fn = new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, Ordinary, [binding]);
-		var result = IrLoadStoreForwarding.run(fn);
+		var result = forward(fn);
 		expect(loads(result) == 0, "store then load");
-		expect(result.debugBindings[0].value == stored, "debug binding substitution");
+		expect(result.debugBindings[0].value.id == stored.id, "debug binding substitution");
 		switch result.blocks[0].terminator.value {
 			case Return(v):
-				expect(v == stored, "return substitution");
+				expect(v.id == stored.id, "return substitution");
 			default:
 				throw "return";
 		}
@@ -194,7 +200,7 @@ class LoadStoreMain {
 		o = b.argument("o", Obj("Box"));
 		var nullable = b.argument("nullable", Nullable(I32));
 		b.fieldSet(o, "dyn", nullable);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "dyn", Dyn)))) == 1, "exact types only");
+		expect(loads(forward(finish(b, b.fieldGet(o, "dyn", Dyn)))) == 1, "exact types only");
 		var objects:Map<String, IrObject> = [];
 		objects.set("Value", {
 			name: "Value",
@@ -210,7 +216,7 @@ class LoadStoreMain {
 		b.fieldSet(o, "v", value);
 		var v1 = b.fieldGet(o, "v", Obj("Value")),
 			v2 = b.fieldGet(o, "v", Obj("Value"));
-		expect(loads(IrLoadStoreForwarding.run(finish(b, v2), IrObjectTable.of(objects))) == 2,
+		expect(loads(forward(finish(b, v2), IrObjectTable.of(objects))) == 2,
 			"inline value fields must not be forwarded");
 		objects.set("Narrow", {
 			name: "Narrow", isValue: true, base: null, interfaces: [], methods: [],
@@ -236,19 +242,19 @@ class LoadStoreMain {
 		o = b.argument("narrow", Obj("Narrow"));
 		stored = b.constInt(65535);
 		b.fieldSet(o, "small", stored);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "small", I32)), IrObjectTable.of(objects))) == 1,
+		expect(loads(forward(finish(b, b.fieldGet(o, "small", I32)), IrObjectTable.of(objects))) == 1,
 			"a narrow native store must be loaded back after truncation and sign extension");
 		b = new IrBuilder();
 		o = b.argument("wide", Obj("Narrow"));
 		stored = b.constInt(65535);
 		b.fieldSet(o, "wide", stored);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "wide", I32)), IrObjectTable.of(objects))) == 0,
+		expect(loads(forward(finish(b, b.fieldGet(o, "wide", I32)), IrObjectTable.of(objects))) == 0,
 			"a full-width native store can still be forwarded");
 		b = new IrBuilder();
 		o = b.argument("float", Obj("Narrow"));
 		var f32 = b.argument("fraction", F32);
 		b.fieldSet(o, "fraction", f32);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects)))
+		expect(loads(forward(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects)))
 			== 1,
 			"a native Float32 store must be read after rounding");
 		objects.set("ManagedFloat", {
@@ -262,7 +268,7 @@ class LoadStoreMain {
 		o = b.argument("managed", Obj("ManagedFloat"));
 		f32 = b.argument("fraction", F32);
 		b.fieldSet(o, "fraction", f32);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects)))
+		expect(loads(forward(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects)))
 			== 1,
 			"Float32 storage rounds even in an object without a native layout");
 		// Replacing an inline value also changes primitive fields reached through interior pointers.
@@ -272,7 +278,7 @@ class LoadStoreMain {
 		value = b.argument("replacement", Obj("Value"));
 		b.fieldGet(interior, "n", I32);
 		b.fieldSet(o, "v", value);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(interior, "n", I32)), IrObjectTable.of(objects)))
+		expect(loads(forward(finish(b, b.fieldGet(interior, "n", I32)), IrObjectTable.of(objects)))
 			== 2,
 			"inline copies kill interior facts");
 		// Available field facts cross clean edges, and eliminated values are substituted in successor phis.
@@ -286,11 +292,11 @@ class LoadStoreMain {
 		b.select(next);
 		var phi = b.phi(I32, [{block: 0, value: reload}]);
 		var later = b.fieldGet(o, "n", I32);
-		result = IrLoadStoreForwarding.run(finish(b, b.add(phi, later)));
+		result = forward(finish(b, b.add(phi, later)));
 		expect(loads(result) == 0, "a field store dominates the reload across the edge");
 		switch result.blocks[1].instructions[0].value {
 			case Phi(_, inputs):
-				expect(inputs[0].value == stored, "phi substitution");
+				expect(inputs[0].value.id == stored.id, "phi substitution");
 			default:
 				throw "phi";
 		}
