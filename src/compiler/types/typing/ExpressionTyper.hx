@@ -1663,8 +1663,7 @@ class ExpressionTyper {
 				var element = bodyTyper.arrayElementType(typedArray.type,
 					span);
 				var access = new TypedExpression(TIndex(typedArray, typedIndex), element, span),
-					path = FlowAnalysis.accessPath(access),
-					refined = path == null ? null : scope.resolveExpression(path);
+					refined = scope.resolveAccess(access);
 				refined == null || TypeRelations.equals(refined,
 					element) ? access : new TypedExpression(TCast(access), refined, span);
 		};

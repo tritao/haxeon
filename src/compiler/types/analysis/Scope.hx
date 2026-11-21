@@ -557,6 +557,14 @@ class Scope {
 	public function resolveExpression(path:String):Null<CompilerType>
 		return facts.resolve('$' + 'expression:$path');
 
+	/** The refined type of the place `access` reads (`FlowAnalysis.accessPath`), or null; spells the path only when a fact may match. */
+	public function resolveAccess(access:TypedExpression):Null<CompilerType> {
+		if (!facts.mayResolveExpressions())
+			return null;
+		var path = FlowAnalysis.accessPath(access);
+		return path == null ? null : resolveExpression(path);
+	}
+
 	public function invalidateExpression(path:String):Void
 		facts.invalidatePrefix('$' + 'expression:$path');
 

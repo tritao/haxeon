@@ -26,6 +26,9 @@ class FlowFacts {
 	/** Most branches record no fact, so a branch's tables are made with its first one (`own`); until then it has none. */
 	var tables:Null<FactTables> = null;
 
+	/** How many expression-path facts this branch refined: with none along its chain, no expression path resolves. */
+	var expressionRefinements = 0;
+
 	/** The namespace of facts about expression paths. */
 	static inline final EXPRESSION_PREFIX = "$expression:";
 
@@ -117,6 +120,8 @@ class FlowFacts {
 
 	public function refine(bindingId:String, type:CompilerType, stable:Bool = false):Void {
 		var facts = own();
+		if (StringTools.startsWith(bindingId, EXPRESSION_PREFIX))
+			expressionRefinements++;
 		facts.invalidated.remove(bindingId);
 		if (stable) {
 			facts.refinedTypes.remove(bindingId);
@@ -134,6 +139,17 @@ class FlowFacts {
 		facts.refinedTypes.remove(bindingId);
 		facts.stableRefinedTypes.remove(bindingId);
 		facts.invalidated.set(bindingId, true);
+	}
+
+	/** Whether an expression path may resolve here: false when no branch along the chain refined one, so callers skip spelling it. */
+	public function mayResolveExpressions():Bool {
+		var current = this;
+		while (current != null) {
+			if (current.expressionRefinements > 0)
+				return true;
+			current = current.parent;
+		}
+		return false;
 	}
 
 	public function resolve(bindingId:String):Null<CompilerType> {

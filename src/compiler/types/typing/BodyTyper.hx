@@ -23,7 +23,6 @@ import compiler.types.typing.CallResolver.EnumConstructorInfo;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
-import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.Scope;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.semantic.SemanticSignature;
@@ -2143,10 +2142,8 @@ class BodyTyper implements BodyTyping {
 		var property = ClassProperties.readStatic(session, this, owner, name, type, span, scope);
 		if (property != null)
 			return property;
-		var field = new TypedExpression(TStaticField(owner, name), type, span),
-			path = FlowAnalysis.accessPath(field),
-			refined = path == null ? null : scope.resolveExpression(path);
-		return refinedFieldValue(field, refined);
+		var field = new TypedExpression(TStaticField(owner, name), type, span);
+		return refinedFieldValue(field, scope.resolveAccess(field));
 	}
 
 	/** A proven-null field has a null value in its declared storage type, not an ABI cast to TNull. */
@@ -2221,23 +2218,16 @@ class BodyTyper implements BodyTyping {
 
 	public function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan,
 			scope:Scope):TypedExpression {
-		var objectPath = FlowAnalysis.accessPath(object);
-		if (objectPath != null) {
-			var refinedObject = scope.resolveExpression(objectPath);
-			if (refinedObject != null && !sameType(object.type, refinedObject))
-				object = new TypedExpression(TCast(object), refinedObject, object.span);
-		}
+		var refinedObject = scope.resolveAccess(object);
+		if (refinedObject != null && !sameType(object.type, refinedObject))
+			object = new TypedExpression(TCast(object), refinedObject, object.span);
 		explainNullableReceiver(object, name, span, scope);
 		var property = AbstractProperties.find(session, object.type, name);
 		if (property != null)
 			return callResolver.typeAbstractAccessorCall(object, AbstractProperties.accessor(session, property, true,
 				span), [], span, scope);
-		var member = typedMember(object, name, span),
-			path = FlowAnalysis.accessPath(member);
-		if (path == null)
-			return member;
-		var refined = scope.resolveExpression(path);
-		return refinedFieldValue(member, refined);
+		var member = typedMember(object, name, span);
+		return refinedFieldValue(member, scope.resolveAccess(member));
 	}
 
 	function specializeGeneric(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
