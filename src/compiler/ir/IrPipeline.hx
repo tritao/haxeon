@@ -501,7 +501,7 @@ class IrPipeline {
 	}
 
 	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrNullableScalarFlow.rewrite(program);
+		IrNullableScalarFlow.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}
 

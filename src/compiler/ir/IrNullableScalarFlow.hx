@@ -4,24 +4,28 @@ import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.IrFunction;
 
-private typedef NullableScalarParts = {
-	final present:IrValue;
-	final payload:IrValue;
-}
-private typedef NullableScalarRewrite = {
-	final fn:IrFunction;
-	final eligible:Bool;
-}
-
-/** Keep nonescaping nullable scalars in presence/payload SSA form across control-flow joins. */
+/**
+ * Keep nonescaping nullable scalars in presence/payload SSA form across control-flow joins. Runs on bodies
+ * (docs/design/IR_CORE_COLUMNS.md): each function is read as its body, and one that changes is rebuilt into a body this pass
+ * owns, so a function nothing changes stays the same object.
+ */
 class IrNullableScalarFlow {
-	static inline final PREFIX = "$nullable-scalar:require:";
-	static inline final EQUAL_PREFIX = "$nullable-scalar:equal:";
+	public static inline final PREFIX = "$nullable-scalar:require:";
+	public static inline final EQUAL_PREFIX = "$nullable-scalar:equal:";
 	public static inline final CALL_PREFIX = "$nullable-scalar:arguments:";
 
-	public static function rewrite(program:IrProgram):Void {
+	/**
+	 * Rewrites `program`'s functions, reading them as bodies made with `types` (fresh ones when not given) and keeping results
+	 * frozen, compacted when `retained` past this compile.
+	 */
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = false):Void {
+		if (types == null)
+			types = new IrTypeIds();
+		if (scratch == null)
+			scratch = new IrPassScratch();
+		var builder = scratch.bodyBuilder;
 		var checks:Map<String, IrType> = [],
 			originals = program.functions.copy(),
 			candidates:Map<String, IrFunction> = [];
@@ -33,19 +37,20 @@ class IrNullableScalarFlow {
 			if (hasArgument && inner(fn.result) == null && !isSpecialization(fn.name))
 				candidates.set(fn.name, fn);
 		}
+		var flow = new IrBodyNullableScalars(scratch, candidates, checks);
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (name in [for (name in candidates.keys()) name])
-				if (!rewriteFunction(candidates.get(name), [], candidates, true, true).eligible) {
+				if (!flow.analyze(candidates.get(name).bodyIn(types, builder), true)) {
 					candidates.remove(name);
 					changed = true;
 				}
 		}
-		program.functions = [for (fn in originals) rewriteFunction(fn, checks, candidates, false, false).fn];
+		program.functions = [for (fn in originals) rewritten(flow, fn, types, builder, retained, false)];
 		for (fn in originals)
 			if (candidates.exists(fn.name))
-				program.functions.push(rewriteFunction(fn, checks, candidates, true, false).fn);
+				program.functions.push(rewritten(flow, fn, types, builder, retained, true));
 		var names = [for (name in checks.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -86,8 +91,17 @@ class IrNullableScalarFlow {
 		}
 	}
 
+	/** `fn` with its nullable scalars split, or its specialization (`clone`); `fn` itself when nothing changes. */
+	static function rewritten(flow:IrBodyNullableScalars, fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
+			retained:Bool, clone:Bool):IrFunction {
+		var body = fn.bodyIn(types, builder);
+		if (!flow.analyze(body, clone) || !flow.splits())
+			return fn;
+		return IrFunction.ofBody(flow.build(body, builder, clone).freeze(retained, builder));
+	}
+
 	/** Nullable argument expansion preserves an existing scalar result/stack-reference ABI. */
-	static function specializationName(name:String):String {
+	public static function specializationName(name:String):String {
 		var scalar = IrScalarArguments.PREFIX;
 		return StringTools.startsWith(name, scalar)
 			? scalar + CALL_PREFIX + name.substr(scalar.length) : CALL_PREFIX + name;
@@ -97,7 +111,7 @@ class IrNullableScalarFlow {
 		return StringTools.startsWith(name, CALL_PREFIX)
 			|| StringTools.startsWith(name, IrScalarArguments.PREFIX + CALL_PREFIX);
 
-	static function inner(type:IrType):Null<IrType>
+	public static function inner(type:IrType):Null<IrType>
 		return switch type {
 			case Nullable(I32): I32;
 			case Nullable(I64): I64;
@@ -107,220 +121,360 @@ class IrNullableScalarFlow {
 			default: null;
 		};
 
-	static function zero(value:IrValue):IrInstruction
-		return switch value.type {
-			case I32, I64: ConstInt(value, 0);
-			case F32, F64: ConstFloat(value, 0);
-			case Bool: ConstBool(value, false);
-			default: throw new InternalError('Invalid nullable scalar payload ${value.type}');
-		};
+}
 
-	/** `eligibilityOnly`: the candidate fixpoint needs only whether `fn` qualifies, not its rewritten form. */
-	static function rewriteFunction(fn:IrFunction, checks:Map<String, IrType>, functions:Map<String, IrFunction>,
-			clone:Bool, eligibilityOnly:Bool):NullableScalarRewrite {
-		var candidates:Map<Int, IrValue> = [], nulls:Map<Int, Bool> = [], next = fn.nextValueId();
-		for (argument in fn.arguments)
-			if (clone && inner(argument.type) != null)
-				candidates.set(argument.id, argument);
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var instruction = located.value,
-					out = IrOperands.output(instruction);
-				if (out != null && inner(out.type) != null)
-					switch instruction {
-						case ConstNull(_):
-							candidates.set(out.id, out);
-							nulls.set(out.id, true);
-						case ToDyn(_, value) if (Type.enumEq(value.type, inner(out.type))):
-							candidates.set(out.id, out);
-						case Phi(_, _):
-							candidates.set(out.id, out);
-						default:
-					}
+/**
+ * The analysis and the rewrite of `IrNullableScalarFlow` on one body at a time, its tables by value id kept between bodies.
+ * A candidate is a nullable scalar whose every use can read a presence flag and a payload instead: a null constant, a scalar
+ * boxed to its nullable type, a phi of candidates, and, in a specialization, an argument. New values are numbered as the
+ * decoded function would number them: from `IrBody.presentValueLimit`, each candidate's flag and payload in the order the
+ * candidates were found, then the rows' new values in row order.
+ */
+class IrBodyNullableScalars {
+	static inline final CANDIDATE = 1;
+	static inline final NULL = 2;
+
+	final scratch:IrPassScratch;
+	final functions:Map<String, IrFunction>;
+	final checks:Map<String, IrType>;
+
+	/** By value id: CANDIDATE while it is one, NULL when a null constant defines it. */
+	var states:Array<Int>;
+
+	/** The candidates in the order they were found, rejected ones included. */
+	var order:Array<Int>;
+
+	/** By candidate value id, its presence flag's id (the payload's is the next); by payload id, the value that replaces it or -1. */
+	var parts:Array<Int>;
+
+	var substitutions:Array<Int>;
+	var body:IrBody;
+	var changed = false;
+
+	public function new(scratch:IrPassScratch, functions:Map<String, IrFunction>, checks:Map<String, IrType>) {
+		this.scratch = scratch;
+		this.functions = functions;
+		this.checks = checks;
+		states = scratch.firstInts;
+		order = scratch.pendingIds;
+		parts = scratch.secondInts;
+		substitutions = scratch.thirdInts;
+		body = null;
+	}
+
+	inline function isCandidate(value:IrValueId):Bool
+		return (states[value] & CANDIDATE) != 0;
+
+	inline function isNull(value:IrValueId):Bool
+		return (states[value] & NULL) != 0;
+
+	function reject(value:IrValueId):Void
+		if (isCandidate(value)) {
+			states[value] &= ~CANDIDATE;
+			changed = true;
+		}
+
+	function found(value:IrValueId, state:Int):Void {
+		states[value] = state;
+		order.push(value);
+	}
+
+	/**
+	 * Finds the candidates of `body` (its nullable arguments too for a specialization, `clone`) and rejects those with a use
+	 * that needs the box; whether the function stays eligible, which only a specialization can fail.
+	 */
+	public function analyze(source:IrBody, clone:Bool):Bool {
+		body = source;
+		IrPassScratch.filledInts(states, body.valueLimit(), 0);
+		order.resize(0);
+		if (clone)
+			for (index in 0...body.argumentCount()) {
+				var argument = body.argument(index);
+				if (IrNullableScalarFlow.inner(body.valueType(argument)) != null)
+					found(argument, CANDIDATE);
 			}
-		if (!candidates.keys().hasNext())
-			return {fn: fn, eligible: true};
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var out = body.output(row);
+				if (out.exists()) {
+					var type = IrNullableScalarFlow.inner(body.valueType(out));
+					if (type != null)
+						switch body.opcode(row) {
+							case IrOpcode.ConstNull:
+								found(out, CANDIDATE | NULL);
+							case IrOpcode.ToDyn if (Type.enumEq(body.valueType(body.operand(row, 0)), type)):
+								found(out, CANDIDATE);
+							case IrOpcode.Phi:
+								found(out, CANDIDATE);
+							default:
+						}
+				}
+				row = body.nextRow(row);
+			}
+		}
+		if (order.length == 0)
+			return true;
 		// All uses of a component value must be expressible without reconstructing its box.
 		// Remove whole connected phi groups when any boundary escapes or has an unsupported operation.
-		var changed = true;
+		changed = true;
 		while (changed) {
 			changed = false;
-			function reject(value:IrValue):Void
-				if (candidates.remove(value.id))
-					changed = true;
-			for (block in fn.blocks) {
-				for (located in block.instructions) {
-					var instruction = located.value;
-					switch instruction {
-						case Phi(out, inputs):
-							var eligible = candidates.exists(out.id);
-							for (input in inputs)
-								if (!candidates.exists(input.value.id))
-									eligible = false;
-							if (!eligible) {
-								reject(out);
-								for (input in inputs)
-									reject(input.value);
-							}
-						case Call(_, name, args) if (functions.exists(name.name)):
-							var called = functions.get(name.name),
-								eligible = args.length == called.arguments.length;
-							if (eligible)
-								for (index in 0...args.length)
-									if (inner(called.arguments[index].type) != null
-										&& !candidates.exists(args[index].id))
-										eligible = false;
-							if (!eligible)
-								for (arg in args)
-									reject(arg);
-						case Call(_, callTarget, args) if (callTarget.name == "__dynamic_equal" && args.length == 2
-							&& Type.enumEq(args[0].type, args[1].type)
-							&& inner(args[0].type) != null):
-							if (!candidates.exists(args[0].id) || !candidates.exists(args[1].id))
-								for (arg in args)
-									reject(arg);
-						default:
-							for (valueIndex in 0...IrOperands.count(instruction)) {
-								var value = IrOperands.at(instruction, valueIndex);
-								if (candidates.exists(value.id)) {
-									var allowed = switch instruction {
-										case SafeCast(out, input) if (input.id == value.id
-											&& Type.enumEq(out.type, inner(value.type))): true;
-										case Equal(_, left, right)
-											if ((left.id == value.id && nulls.exists(right.id))
-											|| (right.id == value.id && nulls.exists(left.id))): true;
-										default: false;
-									};
-									if (!allowed)
-										reject(value);
-								}
-							}
-					}
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					rejectUses(row);
+					row = body.nextRow(row);
 				}
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
-							reject(value);
-						default:
-					}
 			}
 		}
-		var eligible = true;
 		if (clone)
-			for (argument in fn.arguments)
-				if (inner(argument.type) != null && !candidates.exists(argument.id))
-					eligible = false;
-		if (eligibilityOnly || !eligible || !candidates.keys().hasNext())
-			return {fn: fn, eligible: eligible};
-		var parts:Map<Int, NullableScalarParts> = [];
-		for (id => value in candidates)
-			parts.set(id, {
-				present: new IrValue(next++, "$nullable-present", Bool),
-				payload: new IrValue(next++, "$nullable-payload", inner(value.type))
-			});
-		function required(value:IrValue):NullableScalarParts {
-			var result = parts.get(value.id);
-			if (result == null)
-				throw new InternalError('Missing nullable scalar components for ${value.id}');
-			return result;
-		}
-		var arguments:Array<IrValue> = [];
-		for (argument in fn.arguments) {
-			if (clone && parts.exists(argument.id)) {
-				var part = required(argument);
-				arguments.push(part.present);
-				arguments.push(part.payload);
-			} else
-				arguments.push(argument);
-		}
-		var substitutions:Map<Int, IrValue> = [], blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var target = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var instruction = located.value;
-				switch instruction {
-					case Call(out, name, args) if (functions.exists(name.name)):
-						var called = functions.get(name.name),
-							use = args.length == called.arguments.length;
-						if (use)
-							for (index in 0...args.length)
-								if (inner(called.arguments[index].type) != null && !parts.exists(args[index].id))
-									use = false;
-						if (use) {
-							var expanded:Array<IrValue> = [];
-							for (index in 0...args.length)
-								if (inner(called.arguments[index].type) != null) {
-									var part = required(args[index]);
-									expanded.push(part.present);
-									expanded.push(part.payload);
-								} else
-									expanded.push(args[index]);
-							target.instructions
-								.push(new Located(Call(out, IrSymbol.of(specializationName(name.name)), expanded),
-								located.provenance));
-						} else
-							target.instructions.push(located);
-					case Call(out, callTarget, args)
-						if (callTarget.name == "__dynamic_equal" && args.length == 2 && parts.exists(args[0].id)
-						&& parts.exists(args[1].id)
-						&& Type.enumEq(args[0].type, args[1].type)):
-						var left = required(args[0]),
-							right = required(args[1]),
-							type = inner(args[0].type),
-							name = EQUAL_PREFIX + IrTypeIdentity.text(type);
-						checks.set(name, type);
-						target.instructions.push(new Located(Call(out, IrSymbol.of(name), [
-							left.present,
-							left.payload,
-							right.present,
-							right.payload
-						]), located.provenance));
-					case ConstNull(out) if (parts.exists(out.id)):
-						var part = required(out);
-						target.instructions.push(new Located(ConstBool(part.present, false), located.provenance));
-						target.instructions.push(new Located(zero(part.payload), located.provenance));
-					case ToDyn(out, value) if (parts.exists(out.id)):
-						var part = required(out);
-						target.instructions.push(new Located(ConstBool(part.present, true), located.provenance));
-						substitutions.set(part.payload.id, value);
-					case Phi(out, inputs) if (parts.exists(out.id)):
-						var part = required(out);
-						target.instructions.push(new Located(Phi(part.present,
-							[for (input in inputs) {
-								block:input.block, value:required(input.value).present
-							}]), located.provenance));
-						target.instructions.push(new Located(Phi(part.payload,
-							[for (input in inputs) {
-								block:input.block, value:required(input.value).payload
-							}]), located.provenance));
-					case SafeCast(out, value) if (parts.exists(value.id)):
-						var part = required(value),
-							name = PREFIX + IrTypeIdentity.text(out.type);
-						checks.set(name, out.type);
-						target.instructions.push(new Located(Call(out, IrSymbol.of(name), [part.present, part.payload]),
-							located.provenance));
-					case Equal(out, left, right) if ((parts.exists(left.id) && nulls.exists(right.id))
-						|| (parts.exists(right.id) && nulls.exists(left.id))):
-						var value = nulls.exists(left.id) && parts.exists(right.id) ? right : left,
-							no = new IrValue(next++, "$nullable-false", Bool);
-						target.instructions.push(new Located(ConstBool(no, false), located.provenance));
-						target.instructions.push(new Located(Equal(out, required(value).present, no),
-							located.provenance));
-					default:
-						target.instructions.push(located);
-				}
+			for (index in 0...body.argumentCount()) {
+				var argument = body.argument(index);
+				if (IrNullableScalarFlow.inner(body.valueType(argument)) != null && !isCandidate(argument))
+					return false;
 			}
-			target.terminator = block.terminator;
-			blocks.push(target);
+		return true;
+	}
+
+	/** Whether the last analysis left a candidate, so the body changes. */
+	public function splits():Bool {
+		for (value in order)
+			if (isCandidate(IrValueId.of(value)))
+				return true;
+		return false;
+	}
+
+	/** The candidate function a call row targets, when it passes as many arguments as that function takes, or null. */
+	function calledCandidate(row:Int):Null<IrFunction> {
+		var called = functions.get(body.symbol(row).name);
+		return called != null && called.arguments.length == body.operandCount(row) ? called : null;
+	}
+
+	function isEqualityOfNullables(row:Int):Bool {
+		if (body.symbol(row).name != "__dynamic_equal" || body.operandCount(row) != 2)
+			return false;
+		var left = body.valueType(body.operand(row, 0));
+		return Type.enumEq(left, body.valueType(body.operand(row, 1))) && IrNullableScalarFlow.inner(left) != null;
+	}
+
+	function rejectUses(row:Int):Void {
+		var count = body.operandCount(row);
+		switch body.opcode(row) {
+			case IrOpcode.Phi:
+				var out = body.output(row), eligible = isCandidate(out);
+				for (index in 0...count)
+					if (!isCandidate(body.operand(row, index)))
+						eligible = false;
+				if (!eligible) {
+					reject(out);
+					for (index in 0...count)
+						reject(body.operand(row, index));
+				}
+			case IrOpcode.Call if (functions.exists(body.symbol(row).name)):
+				var called = calledCandidate(row), eligible = called != null;
+				if (called != null)
+					for (index in 0...count)
+						if (IrNullableScalarFlow.inner(called.arguments[index].type) != null
+							&& !isCandidate(body.operand(row, index)))
+							eligible = false;
+				if (!eligible)
+					for (index in 0...count)
+						reject(body.operand(row, index));
+			case IrOpcode.Call if (isEqualityOfNullables(row)):
+				if (!isCandidate(body.operand(row, 0)) || !isCandidate(body.operand(row, 1))) {
+					reject(body.operand(row, 0));
+					reject(body.operand(row, 1));
+				}
+			case IrOpcode.Return, IrOpcode.Throw, IrOpcode.Rethrow, IrOpcode.Branch, IrOpcode.Switch:
+				if (count > 0)
+					reject(body.operand(row, 0));
+			case IrOpcode.Unreachable, IrOpcode.Jump:
+			case opcode:
+				for (index in 0...count) {
+					var value = body.operand(row, index);
+					if (isCandidate(value) && !allowedUse(opcode, row, index, value))
+						reject(value);
+				}
 		}
-		var debug = [for (binding in fn.debugBindings) if (!parts.exists(binding.value.id)) binding];
-		debug = IrInliner.substitute(blocks, substitutions, debug);
-		return {fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks,
-			clone ? (switch fn.kind {
-				case ScalarArguments: GeneratedHelper;
-				default: NullableScalarArguments;
-			}) : fn.kind, debug, fn.inlineHint,
-				clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention),
-				eligible: true};
+	}
+
+	function allowedUse(opcode:IrOpcode, row:Int, index:Int, value:IrValueId):Bool
+		return switch opcode {
+			case IrOpcode.SafeCast:
+				index == 0
+					&& Type.enumEq(body.valueType(body.output(row)), IrNullableScalarFlow.inner(body.valueType(value)));
+			case IrOpcode.Equal:
+				var left = body.operand(row, 0), right = body.operand(row, 1);
+				(left == value && isNull(right)) || (right == value && isNull(left));
+			default:
+				false;
+		};
+
+	inline function present(value:IrValueId):IrValueId
+		return IrValueId.of(parts[value]);
+
+	/** The payload of candidate `value`, or what replaces it. */
+	function payload(value:IrValueId):IrValueId {
+		var id = parts[value] + 1, replacement = id < substitutions.length ? substitutions[id] : -1;
+		return IrValueId.of(replacement >= 0 ? replacement : id);
+	}
+
+	/**
+	 * The body of the last analysis with its candidates split, made with `builder`: for the function itself, or for its
+	 * specialization (`clone`), which takes each nullable argument as a flag and a payload under its own name.
+	 */
+	public function build(source:IrBody, builder:IrBodyBuilder, clone:Bool):IrBody {
+		body = source;
+		var next = body.presentValueLimit();
+		builder.startFrom(body);
+		var boolType = body.typeId(Bool);
+		IrPassScratch.filledInts(parts, body.valueLimit(), -1);
+		for (value in order) {
+			var id = IrValueId.of(value);
+			if (!isCandidate(id))
+				continue;
+			parts[value] = next;
+			builder.defineValue(IrValueId.of(next++), "$nullable-present", boolType);
+			builder.defineValue(IrValueId.of(next++), "$nullable-payload",
+				body.typeId(IrNullableScalarFlow.inner(body.valueType(id))));
+		}
+		IrPassScratch.filledInts(substitutions, next, -1);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.ToDyn && isCandidate(body.output(row)))
+					substitutions[parts[body.output(row)] + 1] = body.operand(row, 0);
+				row = body.nextRow(row);
+			}
+		}
+		if (clone) {
+			builder.clearArguments();
+			for (index in 0...body.argumentCount()) {
+				var argument = body.argument(index);
+				if (isCandidate(argument)) {
+					builder.addArgument(present(argument));
+					builder.addArgument(payload(argument));
+				} else
+					builder.addArgument(argument);
+			}
+		}
+		for (block in 0...body.blockCount()) {
+			builder.beginBlock(body.blockId(block));
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				next = buildRow(builder, row, next, boolType);
+				row = body.nextRow(row);
+			}
+		}
+		for (index in 0...body.bindingCount()) {
+			var value = body.bindingValue(index);
+			if (!isCandidate(value))
+				builder.copyBinding(body, index, value);
+		}
+		var kind = clone ? (switch body.kind {
+			case ScalarArguments: GeneratedHelper;
+			default: NullableScalarArguments;
+		}) : body.kind;
+		return builder.finishNamed(clone ? IrNullableScalarFlow.specializationName(body.name) : body.name, kind,
+			body.result, body.inlineHint, clone ? IrRetention.Reachable : body.retention);
+	}
+
+	/** Appends `row` rewritten, or as it is; the next new value's id after it. */
+	function buildRow(builder:IrBodyBuilder, row:Int, next:Int, boolType:Int):Int {
+		var where = body.provenance(row), out = body.output(row);
+		switch body.opcode(row) {
+			case IrOpcode.Call if (functions.exists(body.symbol(row).name)):
+				var called = calledCandidate(row), name = body.symbol(row).name;
+				if (called == null || !expands(row, called)) {
+					builder.copyRow(body, row);
+					return next;
+				}
+				for (index in 0...body.operandCount(row)) {
+					var argument = body.operand(row, index);
+					if (IrNullableScalarFlow.inner(called.arguments[index].type) != null) {
+						builder.operandId(present(argument));
+						builder.operandId(payload(argument));
+					} else
+						builder.operandId(argument);
+				}
+				builder.row(IrOpcode.Call, out, IrSymbol.of(IrNullableScalarFlow.specializationName(name)).id, where);
+			case IrOpcode.Call if (isEqualityOfNullables(row) && isCandidate(body.operand(row, 0))
+				&& isCandidate(body.operand(row, 1))):
+				var left = body.operand(row, 0),
+					right = body.operand(row, 1),
+					type = IrNullableScalarFlow.inner(body.valueType(left)),
+					name = IrNullableScalarFlow.EQUAL_PREFIX + IrTypeIdentity.text(type);
+				checks.set(name, type);
+				builder.operandId(present(left));
+				builder.operandId(payload(left));
+				builder.operandId(present(right));
+				builder.operandId(payload(right));
+				builder.row(IrOpcode.Call, out, IrSymbol.of(name).id, where);
+			case IrOpcode.ConstNull if (isCandidate(out)):
+				builder.row(IrOpcode.ConstBool, present(out), 0, where);
+				var value = payload(out);
+				switch IrNullableScalarFlow.inner(body.valueType(out)) {
+					case I32, I64:
+						builder.row(IrOpcode.ConstInt, value, 0, where);
+					case F32, F64:
+						builder.row(IrOpcode.ConstFloat, value, builder.float(0), where);
+					case Bool:
+						builder.row(IrOpcode.ConstBool, value, 0, where);
+					case other:
+						throw new InternalError('Invalid nullable scalar payload $other');
+				}
+			case IrOpcode.ToDyn if (isCandidate(out)):
+				builder.row(IrOpcode.ConstBool, present(out), 1, where);
+			case IrOpcode.Phi if (isCandidate(out)):
+				var count = body.operandCount(row);
+				for (index in 0...count)
+					builder.operandId(present(body.operand(row, index)));
+				var start = builder.poolStart();
+				for (index in 0...count)
+					builder.int(body.auxInt(row, index));
+				builder.row(IrOpcode.Phi, present(out), start, where);
+				for (index in 0...count)
+					builder.operandId(payload(body.operand(row, index)));
+				start = builder.poolStart();
+				for (index in 0...count)
+					builder.int(body.auxInt(row, index));
+				builder.row(IrOpcode.Phi, payload(out), start, where);
+			case IrOpcode.SafeCast if (isCandidate(body.operand(row, 0))):
+				var value = body.operand(row, 0),
+					type = body.valueType(out),
+					name = IrNullableScalarFlow.PREFIX + IrTypeIdentity.text(type);
+				checks.set(name, type);
+				builder.operandId(present(value));
+				builder.operandId(payload(value));
+				builder.row(IrOpcode.Call, out, IrSymbol.of(name).id, where);
+			case IrOpcode.Equal if (nullComparison(row)):
+				var left = body.operand(row, 0),
+					right = body.operand(row, 1),
+					value = isNull(left) && isCandidate(right) ? right : left,
+					no = IrValueId.of(next++);
+				builder.defineValue(no, "$nullable-false", boolType);
+				builder.row(IrOpcode.ConstBool, no, 0, where);
+				builder.operandId(present(value));
+				builder.operandId(no);
+				builder.row(IrOpcode.Equal, out, 0, where);
+			default:
+				builder.copyRow(body, row);
+		}
+		return next;
+	}
+
+	/** Whether a call of candidate `called` passes each of its nullable arguments as a candidate, so it calls the specialization. */
+	function expands(row:Int, called:IrFunction):Bool {
+		for (index in 0...body.operandCount(row))
+			if (IrNullableScalarFlow.inner(called.arguments[index].type) != null
+				&& !isCandidate(body.operand(row, index)))
+				return false;
+		return true;
+	}
+
+	function nullComparison(row:Int):Bool {
+		var left = body.operand(row, 0), right = body.operand(row, 1);
+		return (isCandidate(left) && isNull(right)) || (isCandidate(right) && isNull(left));
 	}
 }

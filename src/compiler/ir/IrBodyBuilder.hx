@@ -61,6 +61,9 @@ class IrBodyBuilder {
 	final bindingEnds:Array<Int> = [];
 	final bindingValues:Array<Int> = [];
 
+	/** By value id, whether the body being finished names it (`finishNamed`). */
+	final named:Array<Bool> = [];
+
 	public function new(types:IrTypeIds)
 		this.types = types;
 
@@ -195,6 +198,77 @@ class IrBodyBuilder {
 		bindingStarts.push(source.bindingStarts[index]);
 		bindingEnds.push(source.bindingEnds[index]);
 		bindingValues.push(value);
+	}
+
+	/** Gives value `id` (a new one, or one of the source's, `startFrom`) a name and a type id. */
+	public function defineValue(value:IrValueId, name:String, typeId:Int):Void {
+		var id:Int = value;
+		if (valueTypes.length <= id) {
+			var from = valueTypes.length;
+			valueTypes.resize(id + 1);
+			valueNames.resize(id + 1);
+			valueRows.resize(id + 1);
+			for (index in from...id + 1) {
+				valueTypes[index] = -1;
+				valueRows[index] = -1;
+			}
+		}
+		valueTypes[id] = typeId;
+		valueNames[id] = name;
+	}
+
+	/** Empties the arguments, for a body whose arguments differ from its source's (`startFrom`). */
+	public inline function clearArguments():Void
+		argumentIds.resize(0);
+
+	public inline function addArgument(id:IrValueId):Void
+		argumentIds.push(id);
+
+	/** Adds a float to the pool and gives its index, for a `ConstFloat` row's auxiliary field. */
+	public inline function float(value:Float):Int {
+		floats.push(value);
+		return floats.length - 1;
+	}
+
+	/**
+	 * The body made, its values as `encode` gives a function's: an id that no argument, row or binding names has no value, and
+	 * the ids end after the last named one. For a body rebuilt from a source (`startFrom`) whose values some rows no longer name,
+	 * so it numbers new values as its decoding would (`IrFunction.nextValueId`).
+	 */
+	public function finishNamed(name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
+			retention:IrRetention):IrBody {
+		var marks = IrPassScratch.filledBools(named, valueTypes.length, false), limit = 0;
+		for (id in argumentIds) {
+			marks[id] = true;
+			if (id >= limit)
+				limit = id + 1;
+		}
+		for (id in outputs)
+			if (id >= 0) {
+				marks[id] = true;
+				if (id >= limit)
+					limit = id + 1;
+			}
+		for (id in operands) {
+			marks[id] = true;
+			if (id >= limit)
+				limit = id + 1;
+		}
+		for (id in bindingValues) {
+			marks[id] = true;
+			if (id >= limit)
+				limit = id + 1;
+		}
+		for (id in 0...limit)
+			if (!marks[id]) {
+				valueTypes[id] = -1;
+				valueNames[id] = null;
+				valueRows[id] = -1;
+			}
+		valueTypes.resize(limit);
+		valueNames.resize(limit);
+		valueRows.resize(limit);
+		return new IrBody(this, name, kind, result, inlineHint, retention);
 	}
 
 	/** The body made, with `source`'s name, kind, result and flags. */
