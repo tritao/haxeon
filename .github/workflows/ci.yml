@@ -23,7 +23,8 @@ jobs:
       fail-fast: false
       matrix:
         # Each limit leaves room for a slow runner and still stops a hung job: Linux x86 takes 77 to 88 minutes, Apple Silicon
-        # 59 to 73 and Intel 117 to 134, and slow runners pushed each past its limit (90, 90, 150) with every suite passing.
+        # 59 to 73, Intel 117 to 134 and Windows about 60, and slow runners pushed each past its limit (90, 90, 150, 60) with
+        # every suite passing.
         include:
           - name: test
             platform: test
@@ -40,7 +41,7 @@ jobs:
             platform: windows
             os: windows
             runs_on: windows-2022
-            timeout: 60
+            timeout: 90
           - name: macos
             platform: macos
             os: macos
