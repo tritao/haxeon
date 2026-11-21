@@ -950,17 +950,21 @@ class BodyTyper implements BodyTyping {
 			default: null;
 		};
 
+	/**
+	 * The type `expression` will have, typed ahead of the expression itself. The trial typing runs in a scope of its own: a call
+	 * in it must not clear the null checks the real typing of the same expression still relies on.
+	 */
 	public function contextualExpressionType(expression:AstExpression, scope:Scope):Null<CompilerType> {
 		var known = knownExpressionType(expression);
 		if (known != null)
 			return known;
 		var unannotated = compiler.syntax.AstPredicates.unannotatedExpression(expression);
 		return switch unannotated {
-			case Variable(name, _): if (name.indexOf(".") >= 0) typeExpression(expression, scope).type else {
+			case Variable(name, _): if (name.indexOf(".") >= 0) typeExpression(expression, new Scope(scope)).type else {
 					var local = localAt(unannotated, scope);
 					local == null ? null : scope.typeOf(local);
 				}
-			case Member(_, _, _): typeExpression(expression, scope).type;
+			case Member(_, _, _): typeExpression(expression, new Scope(scope)).type;
 			case Cast(_, target, castSpan): target == null ? null : lowerType(target, castSpan);
 			case CheckType(_, type, checkSpan): lowerType(type, checkSpan);
 			default: null;

@@ -12,6 +12,7 @@ class NullReassignmentMain {
 		+ 'class Hooks { public static var saved:Null<Void->Void>; public static function fire():Void {var call=saved;if(call!=null) call();} } '
 		+ 'class Holder { public var slot:Null<Box>=new Box(); public final saved:Null<Box>=new Box(); public function new() {} } '
 		+ 'function invoke(call:Void->Void):Void call(); function invokeGeneric<T>(call:Void->Void, value:T):T {call();return value;} '
+		+ 'function wrap(value:Int):Box { Hooks.saved=null; var box=new Box(); box.value=value; return box; } '
 		+ 'function readOnly():Void {} '
 		+ 'function flag():Bool return true; '
 		+ 'function maybe(flag:Bool):Void { if(flag) throw "stop"; } '
@@ -45,7 +46,10 @@ class NullReassignmentMain {
 		'var x:Null<Int>=null; x=42; var read=()->{if(x==null) return 1;return x;}; if(x==null) return 1; invoke(()->{}); return x;',
 		'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=new Box();} catch(e:Dynamic) {return 1;} invoke(()->{}); return x.value;',
 		'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; var items=[2,1];items.sort((a,b)->a-b);return x.value;',
-		'var x:Null<Int>=42; var y=x; x=null; if(y==null) return 1; return y;'
+		'var x:Null<Int>=42; var y=x; x=null; if(y==null) return 1; return y;',
+		// A call's arguments run before it, so its effects cannot undo a check its argument reads under; a field read on the result
+		// makes the conditional type that branch ahead of time.
+		'var h=new Holder(); var r=h.slot!=null ? wrap(h.slot.value).value : null; return r==null ? 1 : r;'
 	];
 	static final invalid =
 		[
