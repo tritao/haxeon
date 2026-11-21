@@ -8,7 +8,9 @@ Two compiles of the checkout's own sources, both in release mode: the tool-cache
 which carries the checkout's own code generation, compiles the same sources again. The second compile is the one measured:
   allocated bytes   the driver's allocation phases summed (deterministic)
   collections       the driver phases' GC count
-  peak RSS          the process's maximum resident set
+  live bytes        live data at the phase boundaries (tables, IR, backend), from a heap census taken there in a second
+                    run of the same compile (deterministic to a fraction of a megabyte)
+  peak RSS          the process's maximum resident set, an outcome of the collection schedule: gated loosely
   instructions      main-thread instructions:u from perf, when perf is installed and allowed; skipped otherwise
   wall              reported, never compared (noisy on a shared machine)
 
@@ -102,6 +104,33 @@ def measure(hl, compiler, sources, output, log_path):
     return metrics, skip
 
 
+BOUNDARIES = ["tables", "ir", "backend"]
+
+
+def measure_live(hl, compiler, sources, output, log_path):
+    """Runs the compile again with a heap census at each phase boundary; returns the live bytes there."""
+    env = dict(os.environ, HL_GC_MARK_SERIAL="1", HAXEON_PEAK_CENSUS=",".join(f"{name}-end" for name in BOUNDARIES))
+    with open(log_path, "w") as log:
+        status = subprocess.run(compile_command(hl, compiler, sources, output), cwd=ROOT, env=env, stdout=log,
+                                stderr=subprocess.STDOUT).returncode
+    with open(log_path) as source:
+        log = source.read()
+    if status != 0:
+        sys.stderr.write(log[-4000:])
+        raise SystemExit(f"perf-guard: the census compile failed (exit {status}); log: {log_path}")
+    metrics = {}
+    for line in log.splitlines():
+        # `census ir-end total mapped M MB resident R MB live L MB ...`
+        words = line.split()
+        if len(words) > 3 and words[0] == "census" and words[2] == "total" and "live" in words:
+            name = words[1][:-len("-end")] if words[1].endswith("-end") else words[1]
+            metrics[f"live_bytes_{name}"] = round(float(words[words.index("live") + 1]) * 1024 * 1024)
+    missing = [name for name in BOUNDARIES if f"live_bytes_{name}" not in metrics]
+    if missing:
+        raise SystemExit(f"perf-guard: no census at the {', '.join(missing)} boundary; log: {log_path}")
+    return metrics
+
+
 def main(arguments):
     update = arguments == ["--update"]
     if arguments and not update:
@@ -126,6 +155,8 @@ def main(arguments):
     if status != 0:
         raise SystemExit(f"perf-guard: building the compiler failed (exit {status}); log: {os.path.join(out, 'build.log')}")
     metrics, skip = measure(hl, compiler, sources, os.path.join(out, "self-compile.hl"), os.path.join(out, "self-compile.log"))
+    metrics.update(measure_live(hl, compiler, sources, os.path.join(out, "self-compile-census.hl"),
+                                os.path.join(out, "self-compile-census.log")))
 
     with open(BASELINE) as source:
         baseline = json.load(source)

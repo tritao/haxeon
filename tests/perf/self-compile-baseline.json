@@ -2,22 +2,37 @@
 	"about": "scripts/perf-guard.py: the compiler, built in release mode from the checkout, compiling the checkout's own sources. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2349044632,
+			"value": 2206099872,
 			"tolerance": 0.02,
 			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
 		},
 		"collections": {
 			"value": 2,
 			"tolerance_abs": 1,
-			"why": "Follows allocated bytes over the one-shot collection trigger; one extra collection can come from crossing a trigger boundary."
+			"why": "Phase-end collections (CompileOptions.phaseCollections) plus the byte trigger as a safety net; one extra collection can come from crossing a trigger boundary."
+		},
+		"live_bytes_tables": {
+			"value": 243374490,
+			"tolerance": 0.03,
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
+		},
+		"live_bytes_ir": {
+			"value": 304821043,
+			"tolerance": 0.03,
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
+		},
+		"live_bytes_backend": {
+			"value": 267386880,
+			"tolerance": 0.03,
+			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"peak_rss_bytes": {
-			"value": 1455947776,
-			"tolerance": 0.03,
-			"why": "Stable within a few MB run to run; the slack covers code growth and runner differences."
+			"value": 1356365824,
+			"tolerance": 0.08,
+			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly."
 		},
 		"main_thread_instructions": {
-			"value": 53066928594,
+			"value": 52476824892,
 			"tolerance": 0.03,
 			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed."
 		}

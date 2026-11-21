@@ -56,7 +56,9 @@ builds release builds (`driver-release`), the mode tools ship in.
 ### Performance guard
 
 The `perf-guard` suite (`scripts/perf-guard.py`) builds the compiler from the checkout in release mode and measures that build
-compiling the checkout's own sources: allocated bytes and collections (from the driver's allocation phases), peak RSS, and
+compiling the checkout's own sources: allocated bytes and collections (from the driver's allocation phases), live data at the
+phase boundaries (from a heap census taken there in a second run), peak RSS (an outcome of the collection schedule, so gated
+loosely), and
 main-thread `instructions:u` where perf is installed and `perf_event_paranoid` is at most 2 (on CI runners it is not, and the
 metric is skipped). Wall time is printed, never compared. It measures on Linux x86-64 only and passes elsewhere.
 
