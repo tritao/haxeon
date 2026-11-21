@@ -51,6 +51,12 @@ class IrPassScratch {
 	/** The graph the passes over bodies refill (`IrBodyGraph.reset`). */
 	public final bodyGraph = new IrBodyGraph();
 
+	/** The tables of `IrScalarReplacement.runBody`. */
+	public final scalarReplacement = new IrScalarReplacement.IrBodyScalarReplacement();
+
+	/** The tables of `IrCopyElision.runBody`. */
+	public final copyElision = new IrCopyElision.IrBodyCopyElision();
+
 	/** The builder that copies and compactions of bodies reuse (`IrBody.freeze`, `IrBody.thaw`). */
 	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
 

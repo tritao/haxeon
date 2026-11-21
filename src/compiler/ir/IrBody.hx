@@ -80,6 +80,9 @@ class IrBody {
 	/** By value id, the value that replaces it (`alias`), or -1; empty when the body has no alias. */
 	final aliases:Array<Int> = [];
 
+	/** The trial open on this body (`beginTrial`), or null. */
+	var trial:Null<IrBodyTrial> = null;
+
 	/** Copies the builder's columns at their exact size. */
 	function new(builder:IrBodyBuilder, name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
 			retention:IrRetention) {
@@ -281,6 +284,13 @@ class IrBody {
 		edited = true;
 	}
 
+	/** An edit that overwrites a pool entry or a binding, which a trial does not remember. */
+	inline function overwriting():Void {
+		editing();
+		if (trial != null)
+			throw new InternalError('IR body $name has a trial open, which could not undo this edit');
+	}
+
 	/** Unlinks `row` from block `block` (an index); its output loses its defining row. */
 	public function removeRow(block:Int, row:Int):Void {
 		editing();
@@ -321,19 +331,19 @@ class IrBody {
 	}
 
 	public function setAux(row:Int, value:Int):Void {
-		editing();
+		overwriting();
 		auxes[row] = value;
 	}
 
 	/** Sets entry `index` of the row's run in the int pool. */
 	public function setAuxInt(row:Int, index:Int, value:Int):Void {
-		editing();
+		overwriting();
 		ints[auxes[row] + index] = value;
 	}
 
 	/** Removes input `index` of phi `row`, keeping the others in order. */
 	public function removePhiInput(row:Int, index:Int):Void {
-		editing();
+		overwriting();
 		var start = operandStarts[row], end = operandEnds[row], aux = auxes[row];
 		for (from in index + 1...end - start) {
 			operandPool[start + from - 1] = operandPool[start + from];
@@ -344,7 +354,7 @@ class IrBody {
 
 	/** Adds an input to phi `row`, `value` from block `block`, after the others. */
 	public function addPhiInput(row:Int, block:Int, value:IrValueId):Void {
-		editing();
+		overwriting();
 		var start = operandStarts[row], end = operandEnds[row], aux = auxes[row], count = end - start;
 		// The runs grow where they are when both end their pools; otherwise they move to the ends.
 		if (end != operandPool.length || aux + count != ints.length) {
@@ -363,7 +373,7 @@ class IrBody {
 
 	/** Sets operand `index` of `row`. */
 	public function setOperand(row:Int, index:Int, value:IrValueId):Void {
-		editing();
+		overwriting();
 		operandPool[operandStarts[row] + index] = value;
 	}
 
@@ -375,6 +385,17 @@ class IrBody {
 		valueNames.push(name);
 		valueRows.push(-1);
 		return IrValueId.of(id);
+	}
+
+	/**
+	 * Takes the next value id without making a value, as the encoder leaves an id no value has: for a pass that numbered a value
+	 * and then dropped it, so the ids after it are the ones its object version gives.
+	 */
+	public function skipValue():Void {
+		editing();
+		valueTypes.push(-1);
+		valueNames.resize(valueTypes.length);
+		valueRows.push(-1);
 	}
 
 	/** The id of `type` in this body's type table. */
@@ -564,6 +585,7 @@ class IrBody {
 	public function sweepAliases():Void {
 		if (aliases.length == 0)
 			return;
+		overwriting();
 		for (index in 0...operandPool.length)
 			operandPool[index] = resolve(IrValueId.of(operandPool[index]));
 		for (index in 0...bindingValues.length)
@@ -571,8 +593,73 @@ class IrBody {
 		aliases.resize(0);
 	}
 
-	public function removeBinding(index:Int):Void {
+	/**
+	 * Opens a trial: until `endTrial`, `rollback` brings the body back to this point. Within it rows and values may be made,
+	 * linked and unlinked, blocks added, removed and split, and aliases set; an edit that overwrites a pool entry or a binding
+	 * is an internal error. For a pass that only knows whether a change pays once it has made it.
+	 */
+	public function beginTrial(into:IrBodyTrial):Void {
 		editing();
+		if (trial != null)
+			throw new InternalError('IR body $name has a trial open already');
+		trial = into;
+		into.edited = edited;
+		into.rows = opcodes.length;
+		into.operands = operandPool.length;
+		into.ints = ints.length;
+		into.floats = floats.length;
+		into.strings = strings.length;
+		into.provenances = provenancePool.length;
+		into.values = valueTypes.length;
+		IrBodyTrial.save(into.previousRows, previousRows);
+		IrBodyTrial.save(into.nextRows, nextRows);
+		IrBodyTrial.save(into.blockIds, blockIds);
+		IrBodyTrial.save(into.blockFirstRows, blockFirstRows);
+		IrBodyTrial.save(into.blockLastRows, blockLastRows);
+		IrBodyTrial.save(into.valueRows, valueRows);
+		IrBodyTrial.save(into.aliases, aliases);
+	}
+
+	/** Keeps what the open trial did. */
+	public function endTrial():Void {
+		if (trial == null)
+			throw new InternalError('IR body $name has no trial open');
+		trial = null;
+	}
+
+	/** Undoes what the open trial did, and ends it. */
+	public function rollback():Void {
+		var saved = trial;
+		if (saved == null)
+			throw new InternalError('IR body $name has no trial open');
+		trial = null;
+		var rows = saved.rows;
+		opcodes.resize(rows);
+		outputs.resize(rows);
+		auxes.resize(rows);
+		provenances.resize(rows);
+		operandStarts.resize(rows);
+		operandEnds.resize(rows);
+		operandPool.resize(saved.operands);
+		ints.resize(saved.ints);
+		floats.resize(saved.floats);
+		strings.resize(saved.strings);
+		provenancePool.resize(saved.provenances);
+		valueTypes.resize(saved.values);
+		valueNames.resize(saved.values);
+		IrBodyTrial.save(previousRows, saved.previousRows);
+		IrBodyTrial.save(nextRows, saved.nextRows);
+		IrBodyTrial.save(blockIds, saved.blockIds);
+		IrBodyTrial.save(blockFirstRows, saved.blockFirstRows);
+		IrBodyTrial.save(blockLastRows, saved.blockLastRows);
+		IrBodyTrial.save(valueRows, saved.valueRows);
+		IrBodyTrial.save(aliases, saved.aliases);
+		rowOperandsFrom = operandPool.length;
+		edited = saved.edited;
+	}
+
+	public function removeBinding(index:Int):Void {
+		overwriting();
 		bindingIdentities.splice(index, 1);
 		bindingNames.splice(index, 1);
 		bindingPaths.splice(index, 1);
@@ -786,5 +873,37 @@ class IrBody {
 				ints[aux]);
 			default: throw new InternalError('IR body row $row is not a terminator');
 		};
+	}
+}
+
+/**
+ * What `IrBody.beginTrial` remembers of a body for `rollback`: the sizes of its columns, and copies of the ones that edits
+ * change in place.
+ */
+@:allow(compiler.ir.IrBody)
+class IrBodyTrial {
+	var edited = false;
+	var rows = 0;
+	var operands = 0;
+	var ints = 0;
+	var floats = 0;
+	var strings = 0;
+	var provenances = 0;
+	var values = 0;
+	final previousRows:Array<Int> = [];
+	final nextRows:Array<Int> = [];
+	final blockIds:Array<Int> = [];
+	final blockFirstRows:Array<Int> = [];
+	final blockLastRows:Array<Int> = [];
+	final valueRows:Array<Int> = [];
+	final aliases:Array<Int> = [];
+
+	public function new() {}
+
+	/** Makes `into` a copy of `from`, in its own storage. */
+	static function save(into:Array<Int>, from:Array<Int>):Void {
+		into.resize(from.length);
+		for (index in 0...from.length)
+			into[index] = from[index];
 	}
 }

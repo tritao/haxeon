@@ -3,6 +3,7 @@ package compiler.ir;
 import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
+import compiler.ir.IrScalarReplacement.IrBodyScalarReplacement;
 import compiler.ir.SourceProvenance.Located;
 
 private typedef NestedAlias = {
@@ -11,6 +12,7 @@ private typedef NestedAlias = {
 }
 
 /** Scalar-replace a non-escaping value and recursively inline its value fields into independent SSA fields. */
+@:allow(compiler.ir.IrBodyNestedScalarReplacement)
 class IrNestedScalarReplacement {
 	/** Expand copies of a fresh value into inline fields, snapshot their leaves, and scalar-replace the source.
 	 * Publish the expansion only when all uses can be replaced; genuine escapes keep their original ABI.
@@ -338,4 +340,413 @@ class IrNestedScalarReplacement {
 
 	static function slotName(path:Array<String>):String
 		return IrInlineValueLayout.slotName("scalar", {path: path, type: Void, isPresence: false, nativeLayout: null});
+}
+
+/**
+ * `IrNestedScalarReplacement` on a body, in place, with the same result. The object version rewrites copies of the blocks and
+ * keeps them only when the replacement goes through; this rewrites the body in a trial (`IrBody.beginTrial`) and rolls it back
+ * when it does not, so the values it numbered are given again, as the object version's are.
+ */
+@:allow(compiler.ir.IrBodyScalarReplacement)
+class IrBodyNestedScalarReplacement {
+	/** The values that are the root or a value field of it, with the path of each from the root and its type's name. */
+	final aliased = new IrPassScratch.IrValueMarks();
+
+	final aliasPaths:Array<Null<Array<String>>> = [];
+	final aliasTypes:Array<Null<String>> = [];
+	final aliasIds:Array<Int> = [];
+
+	/** Per block id, the position of its last write to an alias, or -1. */
+	final lastWrites:Array<Int> = [];
+
+	/** `BeginTry` rows as (block id, position) pairs. */
+	final handlers:Array<Int> = [];
+
+	final seen:Array<Int> = [];
+	var stamp = 0;
+	final work:Array<Int> = [];
+
+	/** Stores a copy makes: (destination, field symbol, value) triples. */
+	final pending:Array<Int> = [];
+
+	/** The leaves a nested store writes: slot names and values. */
+	final leafNames:Array<String> = [];
+
+	final leafValues:Array<Int> = [];
+
+	public function new() {}
+
+	/** Drops what the tables hold of the last function. */
+	function release():Void {
+		for (id in aliasIds) {
+			aliasPaths[id] = null;
+			aliasTypes[id] = null;
+		}
+		aliasIds.resize(0);
+		leafNames.resize(0);
+	}
+
+	/** `IrNestedScalarReplacement.constructInPlace`; whether the copies of `root` were expanded and `root` replaced. */
+	function constructInPlace(pass:IrBodyScalarReplacement, root:IrValueId, typeName:String, home:Int,
+			allocation:Int):Bool {
+		var body = pass.body, objects = pass.objects;
+		if (!IrNestedScalarReplacement.hasFiniteKnownLayout(typeName, objects, []))
+			return false;
+		var stores = 0;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.FieldSet && body.operand(row, 1) == root
+					&& body.operand(row, 0) != root) {
+					if (!IrScalarReplacement.parentSlotTypeIsInline(body.valueType(body.operand(row, 0)),
+						IrSymbol.at(body.aux(row)).name, typeName, objects))
+						return false;
+					stores++;
+				}
+				row = body.nextRow(row);
+			}
+		}
+		if (stores == 0)
+			return false;
+		var slots = new IrInlineValueLayout(objects).slots(Obj(typeName));
+		for (slot in slots)
+			if (slot.isPresence)
+				return false;
+		body.beginTrial(pass.trial);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var next = body.nextRow(row);
+				if (body.opcode(row) == IrOpcode.FieldSet && body.operand(row, 1) == root
+					&& body.operand(row, 0) != root
+					&& !expandStore(body, objects, block, row, root, typeName, slots)) {
+					body.rollback();
+					return false;
+				}
+				row = next;
+			}
+		}
+		// Restrict this transformation to one block in functions with handlers, as in the ordinary pass.
+		var hasHandlers = false;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.BeginTry, IrOpcode.EndTry, IrOpcode.Catch:
+						hasHandlers = true;
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		if (!tryReplace(pass, root, typeName, home, allocation, hasHandlers, false, false)
+			|| body.definingRow(root) >= 0) {
+			body.rollback();
+			return false;
+		}
+		body.endTrial();
+		return true;
+	}
+
+	/** Replaces the store `row` of `root` into another value's field by a copy of each of its leaves; false to give up. */
+	function expandStore(body:IrBody, objects:IrObjectTable, block:Int, row:Int, root:IrValueId, typeName:String,
+			slots:Array<IrInlineValueSlot>):Bool {
+		var destination = body.operand(row, 0),
+			fieldSymbol = body.aux(row),
+			provenance = body.provenance(row),
+			target = body.newValue(IrSymbol.at(fieldSymbol).name, body.typeId(Obj(typeName)));
+		linkLoad(body, block, row, target, destination, fieldSymbol, provenance);
+		pending.resize(0);
+		for (slot in slots) {
+			var source = root, destination = target, owner = typeName;
+			for (partIndex in 0...slot.path.length) {
+				var part = slot.path[partIndex], declared = IrNestedScalarReplacement.findField(objects, owner, part);
+				if (declared == null)
+					return false;
+				var partSymbol = IrSymbol.of(part).id, value = body.newValue(part, body.typeId(declared.type));
+				linkLoad(body, block, row, value, source, partSymbol, provenance);
+				if (partIndex == slot.path.length - 1) {
+					pending.push(destination);
+					pending.push(partSymbol);
+					pending.push(value);
+				} else {
+					var nested = IrNestedScalarReplacement.valueName(declared.type, objects);
+					if (nested == null)
+						return false;
+					var child = body.newValue(part, body.typeId(declared.type));
+					linkLoad(body, block, row, child, destination, partSymbol, provenance);
+					source = value;
+					destination = child;
+					owner = nested;
+				}
+			}
+		}
+		for (entry in 0...Std.int(pending.length / 3))
+			linkStore(body, block, row, IrValueId.of(pending[entry * 3]), pending[entry * 3 + 1],
+				IrValueId.of(pending[entry * 3 + 2]), provenance);
+		body.removeRow(block, row);
+		return true;
+	}
+
+	static function linkLoad(body:IrBody, block:Int, before:Int, output:IrValueId, object:IrValueId, field:Int,
+			provenance:SourceProvenance):Void {
+		body.beginRow();
+		body.pushOperand(object);
+		body.linkBefore(block, before, body.endRow(IrOpcode.FieldGet, output, field, provenance));
+	}
+
+	static function linkStore(body:IrBody, block:Int, before:Int, object:IrValueId, field:Int, value:IrValueId,
+			provenance:SourceProvenance):Void {
+		body.beginRow();
+		body.pushOperand(object);
+		body.pushOperand(value);
+		body.linkBefore(block, before, body.endRow(IrOpcode.FieldSet, IrValueId.of(-1), field, provenance));
+	}
+
+	function addAlias(value:IrValueId, path:Array<String>, typeName:String):Void {
+		aliased.add(value);
+		while (aliasPaths.length <= (value:Int)) {
+			aliasPaths.push(null);
+			aliasTypes.push(null);
+		}
+		aliasPaths[value] = path;
+		aliasTypes[value] = typeName;
+		aliasIds.push(value);
+	}
+
+	/**
+	 * `IrNestedScalarReplacement.tryReplace`; whether `root` was replaced. In its own trial when `ownTrial`, else in the
+	 * caller's, which the caller rolls back when this gives up.
+	 */
+	function tryReplace(pass:IrBodyScalarReplacement, root:IrValueId, typeName:String, home:Int, allocation:Int,
+			hasHandlers:Bool, forcePhis:Bool, ownTrial:Bool):Bool {
+		var body = pass.body, objects = pass.objects;
+		if (!IrNestedScalarReplacement.hasFiniteKnownLayout(typeName, objects, []))
+			return false;
+		release();
+		aliased.clear();
+		addAlias(root, [], typeName);
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.FieldGet && aliased.has(body.operand(row, 0))
+						&& !aliased.has(body.output(row))) {
+						var object = body.operand(row, 0),
+							field = IrSymbol.at(body.aux(row)).name,
+							declared = IrNestedScalarReplacement.findField(objects, aliasTypes[object], field);
+						if (declared == null)
+							return false;
+						var nested = IrNestedScalarReplacement.valueName(declared.type, objects);
+						if (nested != null) {
+							addAlias(body.output(row), aliasPaths[object].concat([field]), nested);
+							changed = true;
+						}
+					}
+					row = body.nextRow(row);
+				}
+			}
+		}
+		var graph = pass.prepareGraph();
+		if (!onlyFieldUses(body, graph, home, allocation,
+			hasHandlers && !unchangedAfterHandlers(body, graph, home)))
+			return false;
+		var slots = new IrInlineValueLayout(objects).slots(Obj(typeName)),
+			fields:Array<IrObjectField> = [];
+		for (slot in slots) {
+			if (slot.isPresence)
+				return false;
+			fields.push({
+				name: IrNestedScalarReplacement.slotName(slot.path),
+				type: slot.type,
+				nativeLayout: slot.nativeLayout,
+				scalarStorage: slot.scalarStorage,
+				nullableScalarStorage: slot.nullableScalarStorage
+			});
+		}
+		var descriptor:IrObject = {
+			name: typeName,
+			isValue: true,
+			base: null,
+			interfaces: [],
+			fields: fields,
+			methods: []
+		};
+		if (ownTrial)
+			body.beginTrial(pass.trial);
+		if (!flatten(body, objects, root, slots)
+			|| !pass.replace(root, typeName, home, allocation, descriptor, forcePhis)) {
+			if (ownTrial)
+				body.rollback();
+			return false;
+		}
+		if (ownTrial)
+			body.endTrial();
+		return true;
+	}
+
+	/** Rewrites every access through an alias as an access to the root's slot; false to give up. */
+	function flatten(body:IrBody, objects:IrObjectTable, root:IrValueId, slots:Array<IrInlineValueSlot>):Bool {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var next = body.nextRow(row), opcode = body.opcode(row);
+				if ((opcode == IrOpcode.FieldGet || opcode == IrOpcode.FieldSet) && aliased.has(body.operand(row, 0))) {
+					var object = body.operand(row, 0),
+						provenance = body.provenance(row),
+						field = IrSymbol.at(body.aux(row)).name,
+						path = aliasPaths[object].concat([field]);
+					if (opcode == IrOpcode.FieldGet) {
+						var out = body.output(row);
+						if (!aliased.has(out))
+							linkLoad(body, block, row, out, root, slotSymbol(path), provenance);
+					} else {
+						var value = body.operand(row, 1),
+							declared = IrNestedScalarReplacement.findField(objects, aliasTypes[object], field);
+						if (declared == null)
+							return false;
+						var nested = IrNestedScalarReplacement.valueName(declared.type, objects);
+						if (nested == null) {
+							if (IrNestedScalarReplacement.findSlot(slots, path) == null)
+								return false;
+							linkStore(body, block, row, root, slotSymbol(path), value, provenance);
+						} else if (!snapshot(body, objects, block, row, root, slots, path, value, nested, provenance))
+							return false;
+					}
+					body.removeRow(block, row);
+				}
+				row = next;
+			}
+		}
+		return true;
+	}
+
+	/** Reads every leaf of `value` under `path` before writing any, as source and destination may overlap. */
+	function snapshot(body:IrBody, objects:IrObjectTable, block:Int, row:Int, root:IrValueId,
+			slots:Array<IrInlineValueSlot>, path:Array<String>, value:IrValueId, nested:String,
+			provenance:SourceProvenance):Bool {
+		leafNames.resize(0);
+		leafValues.resize(0);
+		for (slot in slots)
+			if (IrNestedScalarReplacement.startsWith(slot.path, path)) {
+				var relative = slot.path.slice(path.length), leaf:IrValueId;
+				if (aliased.has(value)) {
+					leaf = body.newValue(body.valueName(value) + ".field", body.typeId(slot.type));
+					linkLoad(body, block, row, leaf, root, slotSymbol(aliasPaths[value].concat(relative)), provenance);
+				} else {
+					var current = value, currentName = nested;
+					for (part in relative) {
+						var component = IrNestedScalarReplacement.findField(objects, currentName, part);
+						if (component == null)
+							return false;
+						var loaded = body.newValue(body.valueName(value) + "." + part, body.typeId(component.type));
+						linkLoad(body, block, row, loaded, current, IrSymbol.of(part).id, provenance);
+						current = loaded;
+						var child = IrNestedScalarReplacement.valueName(component.type, objects);
+						if (child != null)
+							currentName = child;
+					}
+					leaf = current;
+				}
+				leafNames.push(IrNestedScalarReplacement.slotName(slot.path));
+				leafValues.push(leaf);
+			}
+		for (index in 0...leafNames.length)
+			linkStore(body, block, row, root, IrSymbol.of(leafNames[index]).id, IrValueId.of(leafValues[index]),
+				provenance);
+		return true;
+	}
+
+	static function slotSymbol(path:Array<String>):Int
+		return IrSymbol.of(IrNestedScalarReplacement.slotName(path)).id;
+
+	/** `IrNestedScalarReplacement.unchangedAfterHandlers`, positions counted within each block. */
+	function unchangedAfterHandlers(body:IrBody, graph:IrBodyGraph, home:Int):Bool {
+		var homeId = body.blockId(home), size = 0;
+		for (block in 0...body.blockCount())
+			if (body.blockId(block) >= size)
+				size = body.blockId(block) + 1;
+		IrPassScratch.filledInts(lastWrites, size, -1);
+		while (seen.length < size)
+			seen.push(0);
+		handlers.resize(0);
+		for (block in 0...body.blockCount()) {
+			var id = body.blockId(block), row = body.firstRow(block), position = 0;
+			while (row >= 0 && !body.opcode(row).isTerminator()) {
+				var opcode = body.opcode(row);
+				if (opcode != IrOpcode.Phi)
+					for (index in 0...body.operandCount(row))
+						if (aliased.has(body.operand(row, index)) && !graph.dominates(homeId, id))
+							return false;
+				if (opcode == IrOpcode.FieldSet && aliased.has(body.operand(row, 0)))
+					lastWrites[id] = position;
+				else if (opcode == IrOpcode.BeginTry) {
+					handlers.push(id);
+					handlers.push(position);
+				}
+				position++;
+				row = body.nextRow(row);
+			}
+		}
+		for (handler in 0...Std.int(handlers.length / 2)) {
+			var block = handlers[handler * 2], position = handlers[handler * 2 + 1];
+			if (lastWrites[block] > position)
+				return false;
+			var mark = ++stamp;
+			work.resize(0);
+			if (graph.isReachable(block))
+				for (index in 0...graph.successorCount(block))
+					work.push(graph.successor(block, index));
+			while (work.length > 0) {
+				var id = work.pop();
+				if (id == homeId || seen[id] == mark)
+					continue;
+				seen[id] = mark;
+				if (lastWrites[id] >= 0)
+					return false;
+				if (graph.isReachable(id))
+					for (index in 0...graph.successorCount(id))
+						work.push(graph.successor(id, index));
+			}
+		}
+		return true;
+	}
+
+	/** `IrNestedScalarReplacement.onlyFieldUses`: rows up to the allocation in its block count as before it. */
+	function onlyFieldUses(body:IrBody, graph:IrBodyGraph, home:Int, allocation:Int, singleBlock:Bool):Bool {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), after = false;
+			while (row >= 0) {
+				var opcode = body.opcode(row), count = body.operandCount(row);
+				switch opcode {
+					case IrOpcode.Return, IrOpcode.Throw, IrOpcode.Rethrow, IrOpcode.Branch:
+						if (aliased.has(body.operand(row, 0)))
+							return false;
+					case IrOpcode.Phi:
+						for (index in 0...count)
+							if (aliased.has(body.operand(row, index)))
+								return false;
+					case _ if (opcode.isTerminator()):
+					default:
+						var touches = false;
+						for (index in 0...count)
+							if (aliased.has(body.operand(row, index)))
+								touches = true;
+						if (touches) {
+							if (block == home ? !after : singleBlock || !graph.contains(body.blockId(block)))
+								return false;
+							if ((opcode != IrOpcode.FieldGet && opcode != IrOpcode.FieldSet)
+								|| !aliased.has(body.operand(row, 0)))
+								return false;
+						}
+				}
+				if (row == allocation)
+					after = true;
+				row = body.nextRow(row);
+			}
+		}
+		return true;
+	}
 }

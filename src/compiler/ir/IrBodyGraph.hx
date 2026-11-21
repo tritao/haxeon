@@ -3,9 +3,10 @@ package compiler.ir;
 import compiler.core.InternalError;
 
 /**
- * `IrGraph` over an `IrBody`: reachable normal and trap-entry edges, by block id. Its tables are arrays indexed by block id that
- * `reset` refills for another body without giving their storage back, so one graph (`IrPassScratch.bodyGraph`) serves every
- * function of a pass. The walk, and so the order of `order` and of each block's predecessors, is `IrGraph`'s.
+ * `IrGraph` over an `IrBody`: reachable normal and trap-entry edges and immediate dominators, by block id. Its tables are arrays
+ * indexed by block id that `reset` refills for another body without giving their storage back, so one graph
+ * (`IrPassScratch.bodyGraph`) serves every function of a pass. The walk, and so the order of `order` and of each block's
+ * predecessors, is `IrGraph`'s.
  */
 class IrBodyGraph {
 	/** The reachable blocks in reverse postorder, the entry first. */
@@ -25,6 +26,12 @@ class IrBodyGraph {
 	final edgeTo:Array<Int> = [];
 	final stack:Array<Int> = [];
 	final next:Array<Int> = [];
+
+	/** Immediate dominators by id, -1 for an unreachable block; computed the first time one is asked for. */
+	final dominators:Array<Int> = [];
+
+	final rank:Array<Int> = [];
+	var hasDominators = false;
 	var body:Null<IrBody> = null;
 
 	public function new() {}
@@ -51,6 +58,7 @@ class IrBodyGraph {
 		IrPassScratch.filledInts(predecessorCounts, size, 0);
 		successorTargets.resize(0);
 		predecessorSources.resize(0);
+		hasDominators = false;
 		for (block in 0...count) {
 			var id = body.blockId(block);
 			if (indices[id] >= 0)
@@ -91,6 +99,63 @@ class IrBodyGraph {
 
 	public inline function predecessor(id:Int, index:Int):Int
 		return predecessorSources[predecessorStart[id] + index];
+
+	/** The immediate dominator of `id`, the entry for itself, or -1 when `id` is not reachable. */
+	public function immediateDominator(id:Int):Int {
+		if (!hasDominators) {
+			computeDominators();
+			hasDominators = true;
+		}
+		return id >= 0 && id < dominators.length ? dominators[id] : -1;
+	}
+
+	public function dominates(definition:Int, use:Int):Bool {
+		if (!isReachable(use))
+			return false;
+		while (use != definition) {
+			var parent = immediateDominator(use);
+			if (parent == use)
+				return false;
+			use = parent;
+		}
+		return true;
+	}
+
+	/** As `IrGraph.computeDominators`. */
+	function computeDominators():Void {
+		var size = indices.length,
+			table = IrPassScratch.filledInts(dominators, size, -1),
+			rank = IrPassScratch.filledInts(this.rank, size, -1);
+		for (index in 0...order.length)
+			rank[order[index]] = index;
+		table[order[0]] = order[0];
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (index in 1...order.length) {
+				var id = order[index], parent = -1;
+				for (index in 0...predecessorCount(id)) {
+					var pred = predecessor(id, index);
+					if (table[pred] >= 0)
+						parent = parent < 0 ? pred : intersect(table, rank, parent, pred);
+				}
+				if (parent >= 0 && table[id] != parent) {
+					table[id] = parent;
+					changed = true;
+				}
+			}
+		}
+	}
+
+	static function intersect(table:Array<Int>, rank:Array<Int>, left:Int, right:Int):Int {
+		while (left != right) {
+			while (rank[left] > rank[right])
+				left = table[left];
+			while (rank[right] > rank[left])
+				right = table[right];
+		}
+		return left;
+	}
 
 	function visit(entry:Int):Void {
 		edgeFrom.resize(0);

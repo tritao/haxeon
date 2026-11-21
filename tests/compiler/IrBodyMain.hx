@@ -370,6 +370,149 @@ class IrBodyMain {
 			block(0, [ConstFloat(two, 2.0), Div(half, real, two)], Return(half))
 		], Ordinary), fn -> compiler.ir.IrStrengthReduction.run(fn),
 			(body, scratch) -> compiler.ir.IrStrengthReduction.runBody(body));
+		scalarReplacement();
+		copyElision();
+	}
+
+	static function field(name:String, type:IrType, ?nativeSize:Int):IrObjectField
+		return nativeSize == null ? {name: name, type: type} : {
+			name: name,
+			type: type,
+			nativeLayout: {
+				offset: 0,
+				size: nativeSize,
+				alignment: nativeSize,
+				signed: true,
+				inlineRecord: false
+			}
+		};
+
+	static function object(name:String, isValue:Bool, fields:Array<IrObjectField>):IrObject
+		return {
+			name: name,
+			isValue: isValue,
+			base: null,
+			interfaces: [],
+			fields: fields,
+			methods: []
+		};
+
+	/**
+	 * Scalar replacement with phis, zero defaults and narrowed stores; phis declined, the ids they took skipped; nested values,
+	 * one declined and rolled back before another goes through; a fresh value copied into a parent's inline slot, expanded and through `placeInSlot`.
+	 */
+	static function scalarReplacement():Void {
+		nextId = 0;
+		var objects = compiler.ir.IrObjectTable.of([
+			"Point" => object("Point", true, [field("x", I32, 1), field("y", F32), field("z", I32)]),
+			"Inner" => object("Inner", true, [field("a", I32), field("b", I32)]),
+			"Outer" => object("Outer", true, [field("inner", Obj("Inner")), field("w", I32)]),
+			"Pair" => object("Pair", true, [field("x", I32), field("y", I32)]),
+			"Loose" => object("Loose", true, [field("x", I32), field("o", Nullable(Obj("Pair")))]),
+			"Holder" => object("Holder", false, [field("pair", Obj("Pair")), field("loose", Obj("Loose"))])
+		]);
+		var condition = value("condition", Bool),
+			x = value("x", I32),
+			single = value("single", F32),
+			point = value("point", Obj("Point")),
+			read = value("read", I32),
+			one = value("one", I32),
+			bumped = value("bumped", I32),
+			readY = value("readY", F32),
+			readZ = value("readZ", I32),
+			sum = value("sum", I32);
+		var loop = new IrFunction("Main.loop", [condition, x, single], I32, [
+			block(0, [ValueInit(point), FieldSet(point, "x", x), FieldSet(point, "y", single)], Jump(1)),
+			block(1, [FieldGet(read, point, "x")], Branch(condition, 2, 3)),
+			block(2, [ConstInt(one, 1), Add(bumped, read, one), FieldSet(point, "x", bumped)], Jump(1)),
+			block(3, [FieldGet(readY, point, "y"), FieldGet(readZ, point, "z"), Add(sum, read, readZ)], Return(sum))
+		], Ordinary);
+		samePass("scalar replacement with phis", loop,
+			fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects, true),
+			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch, true));
+		var declinedPair = value("declinedPair", Obj("Pair")),
+			pairRead = value("pairRead", I32),
+			declined = value("declined", Obj("Outer")),
+			declinedInner = value("declinedInner", Obj("Inner")),
+			joined = value("joined", I32),
+			outer = value("outer", Obj("Outer")),
+			inner = value("inner", Obj("Inner")),
+			a = value("a", I32),
+			b = value("b", I32),
+			total = value("total", I32);
+		var nested = new IrFunction("Main.nested", [condition, x], I32, [
+			block(0, [
+				ValueInit(declinedPair),
+				ValueInit(declined),
+				FieldGet(declinedInner, declined, "inner"),
+				ValueInit(outer),
+				FieldGet(inner, outer, "inner"),
+				FieldSet(inner, "a", x),
+				FieldGet(a, inner, "a"),
+				FieldGet(b, inner, "b"),
+				Add(total, a, b)
+			], Branch(condition, 1, 2)),
+			block(1, [FieldSet(declinedInner, "a", x), FieldSet(declinedPair, "x", x)], Jump(2)),
+			block(2, [FieldGet(joined, declinedInner, "a"), FieldGet(pairRead, declinedPair, "x")], Return(total))
+		], Ordinary);
+		samePass("nested scalar replacement", nested, fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects),
+			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch));
+		var holder = value("holder", Obj("Holder")),
+			pair = value("pair", Obj("Pair")),
+			loose = value("loose", Obj("Loose"));
+		var construct = new IrFunction("Main.construct", [holder, x], I32, [
+			block(0, [
+				ValueInit(pair),
+				FieldSet(pair, "x", x),
+				FieldSet(holder, "pair", pair),
+				ValueInit(loose),
+				FieldSet(loose, "x", x),
+				FieldSet(holder, "loose", loose)
+			], Return(x))
+		], Ordinary);
+		samePass("construction in place", construct,
+			fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, true),
+			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch, false, true));
+	}
+
+	/** A value copy passed to a callee that only reads it is replaced by its source; the callees consulted are the same. */
+	static function copyElision():Void {
+		nextId = 0;
+		var parameter = value("parameter", Obj("Pair")), field = value("field", I32);
+		var reader = new IrFunction("Main.reader", [parameter], I32, [block(0, [FieldGet(field, parameter, "x")],
+			Return(field))], Ordinary);
+		var source = value("source", Obj("Pair")),
+			copy = value("copy", Obj("Pair")),
+			fed = value("fed", I32),
+			result = value("result", I32);
+		var main = block(0, [], Return(result));
+		main.instructions.push(new Located(ValueInit(copy), SourceProvenance.generated("value-copy")));
+		for (instruction in [
+			FieldGet(fed, source, "x"),
+			FieldSet(copy, "x", fed),
+			Call(result, IrSymbol.of("Main.reader"), [copy])
+		])
+			main.instructions.push(new Located(instruction, SourceProvenance.generated("body-pass-test")));
+		var fn = new IrFunction("Main.copies", [source], I32, [main], Ordinary);
+		var objectConsulted:Array<String> = [], bodyConsulted:Array<String> = [];
+		var readerBody = IrBodyBuilder.encode(reader, new IrTypeIds());
+		expect(compiler.ir.IrCopyElision.hasCopies(fn.blocks)
+			&& compiler.ir.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(fn, new IrTypeIds()))
+			&& !compiler.ir.IrCopyElision.hasCopiesBody(readerBody), "finding value copies");
+		samePass("copy elision", fn, function(fn:IrFunction):IrFunction {
+			var blocks:Array<IrBlock> = [];
+			for (block in fn.blocks) {
+				var copied = new IrBlock(block.id, block.instructions.copy());
+				copied.terminator = block.terminator;
+				blocks.push(copied);
+			}
+			new compiler.ir.IrCopyElision(["Main.reader" => reader], (receiver, method) -> null,
+				name -> objectConsulted.push(name)).run(blocks);
+			return fn.withBlocks(blocks);
+		}, (body, scratch) -> compiler.ir.IrCopyElision.runBody(body, name -> name == "Main.reader" ? readerBody : null,
+			(type, method) -> null, name -> bodyConsulted.push(name), scratch));
+		expect(objectConsulted.length > 0 && objectConsulted.join(",") == bodyConsulted.join(","),
+			"copy elision consults the same callees");
 	}
 
 	static function check(fn:IrFunction, types:IrTypeIds):Void {
