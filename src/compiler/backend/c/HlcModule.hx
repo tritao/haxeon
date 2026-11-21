@@ -41,6 +41,9 @@ class HlcModule {
 	final slotNames:Array<String> = [];
 	final cNames:Array<String> = [];
 	final native:Array<Bool> = [];
+
+	/** The C symbol of each native the program calls directly (by slot), null for those called through the slot table. */
+	final nativeSymbols:Array<Null<String>> = [];
 	final objects:Map<String, IrObject> = [];
 
 	/** The program's objects and typed interface entries as `HlLower`'s analyses read them. */
@@ -76,8 +79,10 @@ class HlcModule {
 			cNatives.set(native.name, native);
 		for (fn in code.functions)
 			place(fn.functionIndex, fn.type, false);
-		for (entry in code.natives)
+		for (entry in code.natives) {
 			place(entry.functionIndex, entry.type, true);
+			nativeSymbols[entry.functionIndex] = nativeSymbol(code.strings[entry.library], code.strings[entry.name]);
+		}
 		for (name => slot in slots)
 			if (slot < slotNames.length)
 				slotNames[slot] = name;
@@ -156,10 +161,26 @@ class HlcModule {
 	public function slotResult(slot:Int):Int
 		return types.signature(slotTypes[slot]).result;
 
-	/** What a C call of slot `slot` calls: the function itself, or a native through the slot table the loader filled. */
+	/**
+	 * The C function a native of `library` is, by the convention of its library's `HL_NAME`: the VM's own natives are `hl_`,
+	 * the Haxeon runtime's `realtime_`. Natives of other libraries, which load at run time, are called through the slot table.
+	 */
+	static function nativeSymbol(library:String, name:String):Null<String>
+		return switch library {
+			case "std": "hl_" + name;
+			case "haxeon_runtime": "realtime_" + name;
+			default: null;
+		};
+
+	/**
+	 * What a C call of slot `slot` calls: the function itself, a native of the VM or the runtime by its C symbol (declared in
+	 * `hlc.h` under a name of its own, so its C types never meet `hl.h`'s), or another native through the slot table.
+	 */
 	public function functionPointer(slot:Int):String {
 		if (!native[slot])
 			return cNames[slot];
+		if (nativeSymbols[slot] != null)
+			return 'hlc_native_$slot';
 		var signature = types.signature(slotTypes[slot]);
 		var arguments = [for (type in signature.arguments) types.cType(type)];
 		return '((${types.cType(signature.result)} (*)(${arguments.length == 0 ? "void" : arguments.join(",")}))hlc_slots[$slot])';
@@ -329,6 +350,12 @@ class HlcModule {
 		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n");
 		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-but-set-variable\"\n");
 		buffer.add("#endif\n\n");
+		// The program's functions are in a section of their own, which tells the stack capture its frames (`hlc_stack.c`), and
+		// are not inlined into each other by the C compiler, so a Haxe stack trace has every frame the JIT's has.
+		buffer.add("#if defined(__ELF__) && defined(__GNUC__)\n");
+		buffer.add("#define HLC_FUNCTION __attribute__((section(\"hlc_text\"), noinline))\n");
+		buffer.add("#elif defined(__GNUC__)\n#define HLC_FUNCTION __attribute__((noinline))\n");
+		buffer.add("#else\n#define HLC_FUNCTION\n#endif\n\n");
 		buffer.add("extern hl_type *hlc_types;\nextern unsigned char *hlc_globals;\nextern void **hlc_slots;\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
 		buffer.add("extern hl_jit_alloc_data hlc_alloc_data[];\n");
@@ -338,11 +365,26 @@ class HlcModule {
 		buffer.add(ALLOCATION_HELPER);
 		types.structDeclarations(buffer);
 		buffer.add("\n");
-		if (readsValueArrays)
-			valueArrayHelper(buffer);
 		for (slot in 0...slotTypes.length)
 			if (slotTypes[slot] >= 0 && !native[slot])
-				buffer.add('${prototype(slot)}; /* ${slotName(slot)} */\n');
+				buffer.add('HLC_FUNCTION ${prototype(slot)}; /* ${slotName(slot)} */\n');
+		buffer.add("\n#if defined(__GNUC__)\n#define HLC_STRING2(x) #x\n#define HLC_STRING(x) HLC_STRING2(x)\n");
+		// Weak where the linker allows it: a native the libraries lack is the loader's error at start-up, as for the JIT, not a
+		// link error.
+		buffer.add("#if defined(__ELF__)\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name) __attribute__((weak))\n");
+		buffer.add("#else\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name)\n#endif\n#endif\n");
+		for (slot in 0...slotTypes.length)
+			if (slotTypes[slot] >= 0 && native[slot] && nativeSymbols[slot] != null) {
+				var signature = types.signature(slotTypes[slot]);
+				var result = types.cType(signature.result),
+					arguments = [for (type in signature.arguments) types.cType(type)].join(",");
+				if (arguments == "")
+					arguments = "void";
+				buffer.add('#if defined(__GNUC__)\nextern $result hlc_native_$slot($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n');
+				buffer.add('#else\n#define hlc_native_$slot (($result (*)($arguments))hlc_slots[$slot])\n#endif\n');
+			}
+		if (readsValueArrays)
+			valueArrayHelper(buffer);
 		buffer.add("\n#endif\n");
 		return buffer.toString();
 	}
@@ -423,6 +465,9 @@ class HlcModule {
 		stubbed.natives = code.natives;
 		stubbed.constants = code.constants;
 		stubbed.entryPoint = code.entryPoint;
+		// The functions' names, which stack traces show as the JIT's do.
+		stubbed.debugSections =
+			[for (section in code.debugSections) if (section.kind == HlWriter.FUNCTION_IDENTITIES) section];
 		stubbed.functions = [for (fn in code.functions) {
 			var signature = types.signature(fn.type);
 			new HlFunction(fn.type, fn.functionIndex, signature.arguments.concat([signature.result]),

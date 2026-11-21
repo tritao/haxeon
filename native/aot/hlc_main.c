@@ -17,6 +17,8 @@ extern const int hlc_alloc_count;
 extern const int hlc_alloc_types[];
 extern hl_jit_alloc_data hlc_alloc_data[];
 
+void hlc_stack_init( hl_module *m, void **functions, int count );
+
 hl_type *hlc_types;
 unsigned char *hlc_globals;
 void **hlc_slots;
@@ -68,6 +70,7 @@ int main( int argc, char *argv[] ) {
 	for(int i=0;i<hlc_slot_count;i++)
 		if( hlc_functions[i] ) m->functions_ptrs[i] = hlc_functions[i];
 	hlc_check_layouts(m);
+	hlc_stack_init(m, hlc_functions, hlc_slot_count);
 	// The collector describes its allocation fast path for each type the code allocates inline; an empty descriptor allocates
 	// through hl_alloc_obj.
 	for(int i=0;i<hlc_alloc_count;i++)

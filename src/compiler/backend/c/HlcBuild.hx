@@ -38,6 +38,7 @@ class HlcBuild {
 		var header = directory + "/hlc.h", headerTime = modified(header);
 		var sources = [for (file in files) if (StringTools.endsWith(file.path, ".c")) directory + "/" + file.path];
 		sources.push(sdk + "/src/hlc_main.c");
+		sources.push(sdk + "/src/hlc_stack.c");
 		var outputs = [for (source in sources) objects + "/"
 			+ haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(source)) + ".o"];
 		var pending = [
@@ -49,7 +50,9 @@ class HlcBuild {
 		compiler.core.Parallel.forEach(pending.length, 8, function(item) {
 			var index = pending[item];
 			var result = ProcessOutputCapture.capture(cCompiler, [
-				"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-w", '-I$directory', '-I$sdk/include',
+				// No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has.
+				"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-fno-optimize-sibling-calls", "-w",
+				'-I$directory', '-I$sdk/include',
 				"-c",
 				sources[index], "-o", outputs[index]
 			], ProcessOutputCapture.defaultDiagnosticLimit);

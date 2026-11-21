@@ -79,6 +79,8 @@ class HlcFunctionLower {
 		temporaries = 0;
 		lastLine = -1;
 		lastPath = "";
+		directive = "";
+		linesSinceDirective = 0;
 		nonNull = compiler.ir.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch);
 		var limit = body.valueLimit();
 		valueTypes.resize(0);
@@ -263,16 +265,25 @@ class HlcFunctionLower {
 	/** A `#line` directive when the row's source line differs from the last one written, so C debug info names Haxe lines. */
 	function position(row:Int):Void {
 		var location = body.provenance(row).location;
-		if (location == null || location.line <= 0)
+		// Rows of no source are where `HlLower` puts them: line 1 of `<generated>`.
+		var line = location == null ? 1 : location.line, path = location == null ? "<generated>" : location.path;
+		if (line <= 0 || line == lastLine && path == lastPath)
 			return;
-		if (location.line == lastLine && location.path == lastPath)
-			return;
-		lastLine = location.line;
-		lastPath = location.path;
-		out.add('#line ${location.line} ${HlcModule.quote(location.path)}\n');
+		lastLine = line;
+		lastPath = path;
+		directive = '#line $line ${HlcModule.quote(path)}\n';
+		out.add(directive);
+		linesSinceDirective = 0;
 	}
 
-	inline function line(text:String):Void {
+	/** The last `#line` written, which a row's second and later C lines repeat: each C line would count one more. */
+	var directive = "";
+
+	var linesSinceDirective = 0;
+
+	function line(text:String):Void {
+		if (linesSinceDirective++ > 0 && directive != "")
+			out.add(directive);
 		out.add("\t");
 		out.add(text);
 		out.add("\n");

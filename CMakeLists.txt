@@ -203,11 +203,12 @@ add_custom_target(haxeon-hlc-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_HLC_SDK_DIR}/include" "${HAXEON_HLC_SDK_DIR}/lib"
     "${HAXEON_HLC_SDK_DIR}/src"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${_hlc_sdk_headers} "${HAXEON_HLC_SDK_DIR}/include"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${HAXEON_HLC_SDK_DIR}/src"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
+    "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${HAXEON_HLC_SDK_DIR}/src"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm>" "${HAXEON_HLC_SDK_DIR}/lib"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_pinned_libffi>"
     "${HAXEON_HLC_SDK_DIR}/lib/libffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  DEPENDS hlvm "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
+  DEPENDS hlvm "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c"
   COMMENT "Assembling the hlc SDK"
   VERBATIM
 )

@@ -109,6 +109,7 @@ declared-equality
 default-constructor-class
 default-parameter-inference
 defer-cleanup
+defer-exception-stack
 diff-stored-property
 do-while
 do-while-join
@@ -285,6 +286,7 @@ jit-boxed-allocation
 jit-call-save
 jit-inline-allocation
 jit-phi-coalescing
+jit-stack-trace
 json-array-is-of-type
 json-decoded-object-array
 json-typed-object-array
@@ -579,6 +581,7 @@ thread-stand-ins
 thread-tls
 throw-expression
 throw-lambda
+throw-string
 trace
 trailing-object-comma
 transparent-abstract
@@ -596,6 +599,7 @@ try-multiple-catches
 try-nested
 try-outer-local
 try-register-sharing
+try-rethrow
 try-return
 try-return-body
 try-typed-class
