@@ -86,41 +86,90 @@ class IrBody {
 	/** The trial open on this body (`beginTrial`), or null. */
 	var trial:Null<IrBodyTrial> = null;
 
-	/** Copies the builder's columns at their exact size. */
-	function new(builder:IrBodyBuilder, name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
-			retention:IrRetention) {
+	/**
+	 * Copies the builder's columns at their exact size; or, given a frozen body `shared`, takes its columns as they are but for a
+	 * copy of the auxiliary column: frozen bodies are never edited, so they can share what they have in common.
+	 */
+	function new(builder:Null<IrBodyBuilder>, name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
+			retention:IrRetention, ?shared:IrBody) {
 		this.name = name;
 		this.kind = kind;
 		this.result = result;
 		this.inlineHint = inlineHint;
 		this.retention = retention;
-		types = builder.types;
-		opcodes = builder.opcodes.copy();
-		outputs = builder.outputs.copy();
-		auxes = builder.auxes.copy();
-		provenances = builder.provenances.copy();
-		operandStarts = builder.operandStarts.copy();
-		operandEnds = builder.operandEnds.copy();
-		previousRows = builder.previousRows.copy();
-		nextRows = builder.nextRows.copy();
-		operandPool = builder.operands.copy();
-		ints = builder.ints.copy();
-		floats = builder.floats.copy();
-		strings = builder.strings.copy();
-		provenancePool = builder.provenancePool.copy();
-		blockIds = builder.blockIds.copy();
-		blockFirstRows = builder.blockFirstRows.copy();
-		blockLastRows = builder.blockLastRows.copy();
-		valueTypes = builder.valueTypes.copy();
-		valueNames = builder.valueNames.copy();
-		valueRows = builder.valueRows.copy();
-		argumentIds = builder.argumentIds.copy();
-		bindingIdentities = builder.bindingIdentities.copy();
-		bindingNames = builder.bindingNames.copy();
-		bindingPaths = builder.bindingPaths.copy();
-		bindingStarts = builder.bindingStarts.copy();
-		bindingEnds = builder.bindingEnds.copy();
-		bindingValues = builder.bindingValues.copy();
+		if (shared != null) {
+			types = shared.types;
+			opcodes = shared.opcodes;
+			outputs = shared.outputs;
+			auxes = shared.auxes.copy();
+			provenances = shared.provenances;
+			operandStarts = shared.operandStarts;
+			operandEnds = shared.operandEnds;
+			previousRows = shared.previousRows;
+			nextRows = shared.nextRows;
+			operandPool = shared.operandPool;
+			ints = shared.ints;
+			floats = shared.floats;
+			strings = shared.strings;
+			provenancePool = shared.provenancePool;
+			blockIds = shared.blockIds;
+			blockFirstRows = shared.blockFirstRows;
+			blockLastRows = shared.blockLastRows;
+			valueTypes = shared.valueTypes;
+			valueNames = shared.valueNames;
+			valueRows = shared.valueRows;
+			argumentIds = shared.argumentIds;
+			bindingIdentities = shared.bindingIdentities;
+			bindingNames = shared.bindingNames;
+			bindingPaths = shared.bindingPaths;
+			bindingStarts = shared.bindingStarts;
+			bindingEnds = shared.bindingEnds;
+			bindingValues = shared.bindingValues;
+		} else {
+			if (builder == null)
+				throw new InternalError('IR body $name has neither a builder nor a body to share');
+			types = builder.types;
+			opcodes = builder.opcodes.copy();
+			outputs = builder.outputs.copy();
+			auxes = builder.auxes.copy();
+			provenances = builder.provenances.copy();
+			operandStarts = builder.operandStarts.copy();
+			operandEnds = builder.operandEnds.copy();
+			previousRows = builder.previousRows.copy();
+			nextRows = builder.nextRows.copy();
+			operandPool = builder.operands.copy();
+			ints = builder.ints.copy();
+			floats = builder.floats.copy();
+			strings = builder.strings.copy();
+			provenancePool = builder.provenancePool.copy();
+			blockIds = builder.blockIds.copy();
+			blockFirstRows = builder.blockFirstRows.copy();
+			blockLastRows = builder.blockLastRows.copy();
+			valueTypes = builder.valueTypes.copy();
+			valueNames = builder.valueNames.copy();
+			valueRows = builder.valueRows.copy();
+			argumentIds = builder.argumentIds.copy();
+			bindingIdentities = builder.bindingIdentities.copy();
+			bindingNames = builder.bindingNames.copy();
+			bindingPaths = builder.bindingPaths.copy();
+			bindingStarts = builder.bindingStarts.copy();
+			bindingEnds = builder.bindingEnds.copy();
+			bindingValues = builder.bindingValues.copy();
+		}
+	}
+
+	/**
+	 * This frozen body with auxiliary field `values[i]` in row `rows[i]`, frozen: it shares every other column with this one.
+	 * For a field that stays meaningful for the row's opcode, a constant or a symbol id.
+	 */
+	public function withAuxes(rows:Array<Int>, values:Array<Int>):IrBody {
+		if (!frozen)
+			throw new InternalError('IR body $name is not frozen, so another body cannot share its columns');
+		var result = new IrBody(null, name, kind, this.result, inlineHint, retention, this);
+		for (index in 0...rows.length)
+			result.auxes[rows[index]] = values[index];
+		result.frozen = true;
+		return result;
 	}
 
 	// Rows.

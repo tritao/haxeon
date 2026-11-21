@@ -330,6 +330,12 @@ class IrBodyMain {
 			refused = true;
 		expect(refused, "a frozen body refuses edits");
 		construction(source.thaw());
+		var shared = source.freeze(true),
+			row = shared.firstRow(0),
+			aux = shared.aux(row),
+			changed = shared.withAuxes([row], [aux + 1]);
+		expect(changed.frozen && changed.aux(row) == aux + 1 && shared.aux(row) == aux
+			&& changed.opcode(row) == shared.opcode(row), "a body that shares columns but for its auxiliary fields");
 		var unedited = source.thaw();
 		expect(unedited.freeze(true) == unedited, "freezing an unedited body keeps it");
 	}

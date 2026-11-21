@@ -220,24 +220,14 @@ class IrBodyBuilder {
 	}
 
 	/** A copy of `source` column for column, for a body no edit touched: the same rows, runs and pools where they were. */
-	public static function copy(source:IrBody, ?builder:IrBodyBuilder):IrBody
-		return copyWithAuxes(source, null, null, builder);
-
-	/**
-	 * `copy`, but with auxiliary field `auxes[i]` in row `rows[i]` (both null for none): a body of the same layout, which no edit
-	 * made, so freezing it keeps it as it is. For a field that stays meaningful for the row's opcode, a constant or a symbol id.
-	 */
-	public static function copyWithAuxes(source:IrBody, rows:Null<Array<Int>>, auxes:Null<Array<Int>>,
-			?builder:IrBodyBuilder):IrBody {
+	/** A copy of `source` with the same layout, column for column, which no edit made: freezing it keeps it as it is. */
+	public static function copy(source:IrBody, ?builder:IrBodyBuilder):IrBody {
 		if (builder == null)
 			builder = new IrBodyBuilder(source.types);
 		builder.reset(source.types);
 		copyColumn(builder.opcodes, source.opcodes);
 		copyColumn(builder.outputs, source.outputs);
 		copyColumn(builder.auxes, source.auxes);
-		if (rows != null && auxes != null)
-			for (index in 0...rows.length)
-				builder.auxes[rows[index]] = auxes[index];
 		copyColumn(builder.provenances, source.provenances);
 		copyColumn(builder.operandStarts, source.operandStarts);
 		copyColumn(builder.operandEnds, source.operandEnds);
