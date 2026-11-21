@@ -218,6 +218,26 @@ Design debt and levers left once the peak work lands:
   the 1 GB trigger; a trigger tied to the live data is a policy to measure,
   not necessarily more collections.
 
+### Generated code optimizations
+
+Semantic and whole-program optimizations go in the IR (every backend gains, the
+IR has Haxe's types, nullability, purity and the class hierarchy, and the cost
+is paid at compile time, not at every start); machine-level ones in the fork's
+JIT. Heavier passes run in release builds only, written on IR bodies.
+
+- **First: measure.** A generated-code benchmark set in CI, and
+  `IrOpportunityCensus` over real programs (the compiler, the apps), to rank
+  the passes below by counts rather than by guess.
+- **IR, likely order:** devirtualization through the class hierarchy (direct
+  calls, then inlining behind them; devirtualized calls recorded as
+  dependencies so hot reload and live patching invalidate them); global value
+  numbering with loop-invariant code motion; escape analysis across calls
+  (per-function summaries, so more allocations become locals); sparse
+  conditional constant propagation.
+- **JIT and VM:** keeping values in machine registers across operations; fused
+  or unchecked opcodes that let IR proofs pay (bounds checks on plain
+  `Int`/`Float` arrays, fused on ARM64); a profile-guided tier only much later.
+
 ### Known differences from Haxe still open
 
 The Haxe code Haxeon rejects or runs differently is listed in
