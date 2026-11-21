@@ -166,7 +166,16 @@ from. Whether it inlines generated functions into each other follows the build m
   them is named at the line of the helper's call. Clones the C compiler makes (`.part`, `.constprop`) are named by their
   abstract origin.
 
-Each mode keeps its objects (`OUTPUT.c/obj-development`, `obj-release`); the C text is the same. Implemented for Linux (ELF); elsewhere exceptions carry no frames yet (Windows has DbgHelp for
+Each mode keeps its objects (`OUTPUT.c/obj-development`, `obj-release`), made again when the compiler or its flags change;
+the C text is the same. Where the C compiler has the flag (gcc), it compiles with `-fno-crossjumping`: it would otherwise
+merge identical calls of different Haxe lines, throws most often, also in inlined copies of one function, into one call
+of one line, losing the others' lines and inlined frames.
+
+A frame's file is the path the `#line` directive wrote, as the JIT prints the module's debug file. The C compiler's line
+table keeps a path under its working directory relative to it, so `/work/Main.hx` and `Main.hx` read the same there; the
+image lists the directives' paths (`hlc_source_paths`), and the line table's files are matched to them by absolute path.
+
+Implemented for Linux (ELF); elsewhere exceptions carry no frames yet (Windows has DbgHelp for
 lines, macOS the dSYM). The debugger and hot reload are JIT features and stay so.
 
 ## Driver and target selection

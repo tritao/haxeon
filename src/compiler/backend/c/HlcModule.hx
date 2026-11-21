@@ -60,6 +60,13 @@ class HlcModule {
 
 	final allocationIndices:Map<Int, Int> = [];
 
+	/** The source paths the `#line` directives name, as written. */
+	final sourcePaths:Map<String, Bool> = [];
+
+	/** Records that a `#line` directive names `path`. */
+	public function useSourcePath(path:String):Void
+		sourcePaths.set(path, true);
+
 	/** Whether objects are allocated inline (`CompileOptions.inlineAllocation`), else by `hl_alloc_obj`. */
 	public final inlineAllocation:Bool;
 
@@ -592,6 +599,15 @@ class HlcModule {
 		buffer.add('const int hlc_alloc_count = ${allocationTypes.length};\n');
 		buffer.add('const int hlc_alloc_types[] = {${allocationTypes.concat([-1]).join(",")}};\n');
 		buffer.add('hl_jit_alloc_data hlc_alloc_data[${allocationTypes.length + 1}];\n\n');
+		// The C compiler's line table keeps a `#line` path relative to its working directory when the path is under it, so the
+		// stack traces read the paths as written from here (`hlc_stack.c`).
+		var paths = [for (path in sourcePaths.keys()) path];
+		paths.sort(Reflect.compare);
+		buffer.add('const int hlc_source_path_count = ${paths.length};\n');
+		buffer.add("const char *const hlc_source_paths[] = {");
+		for (path in paths)
+			buffer.add('\n\t${quote(path)},');
+		buffer.add("\n\tNULL};\n\n");
 		buffer.add('const int hlc_global_count = ${globalOffsets.length};\n');
 		buffer.add('const int hlc_global_offsets[] = {${globalOffsets.concat([-1]).join(",")}};\n\n');
 		buffer.add("/* Object layouts: type, field count, then field index and offset pairs; -1 ends the list. */\n");

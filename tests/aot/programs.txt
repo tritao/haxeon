@@ -420,6 +420,7 @@ open-literal-helpers
 optional-argument-forwarding
 optional-enum-parameter
 override-method
+package-stack-trace
 phi-parallel-moves
 postfix-increment
 prefix-increment

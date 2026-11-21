@@ -272,6 +272,7 @@ class HlcFunctionLower {
 		lastLine = line;
 		lastPath = path;
 		directive = '#line $line ${HlcModule.quote(path)}\n';
+		module.useSourcePath(path);
 		out.add(directive);
 		linesSinceDirective = 0;
 	}

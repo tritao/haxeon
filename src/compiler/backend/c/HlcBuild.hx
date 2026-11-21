@@ -46,25 +46,35 @@ class HlcBuild {
 		sources.push(sdk + "/src/hlc_stack.c");
 		var outputs = [for (source in sources) objects + "/"
 			+ haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(source)) + ".o"];
+		// No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has, and a jump leaves no record to restore
+		// it from. No cross-jumping, where the compiler has the flag (gcc; clang has not): identical calls of different Haxe lines
+		// (throws, most often, also in inlined copies of one function) are not merged into one, which would keep one line and
+		// lose the inlined frames of the others.
+		var flags = [
+			"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-fno-optimize-sibling-calls", "-w",
+			'-I$directory', '-I$sdk/include'
+		];
+		if (exactFrames)
+			flags.push("-DHLC_EXACT_FRAMES");
+		if (ProcessOutputCapture.capture(cCompiler, ["-fno-crossjumping", "--version"], 0).exitCode == 0)
+			flags.push("-fno-crossjumping");
+		// Objects made with other flags or another compiler are all made again.
+		var stamp = objects + "/flags", command = [cCompiler].concat(flags).join(" ");
+		var rebuild = !FileSystem.exists(stamp) || File.getContent(stamp) != command;
 		var pending = [
 			for (index in 0...sources.length)
-				if (!FileSystem.exists(outputs[index]) || modified(outputs[index]) <= Math.max(modified(sources[index]),
-				headerTime)) index
+				if (rebuild || !FileSystem.exists(outputs[index])
+				|| modified(outputs[index]) <= Math.max(modified(sources[index]), headerTime)) index
 		];
 		var failures:Array<Null<String>> = [for (_ in pending) null];
 		compiler.core.Parallel.forEach(pending.length, 8, function(item) {
 			var index = pending[item];
-			// No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has, and a jump leaves no record to
-			// restore it from.
-			var arguments = [
-				"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-fno-optimize-sibling-calls", "-w",
-				'-I$directory', '-I$sdk/include'
-			];
-			if (exactFrames)
-				arguments.push("-DHLC_EXACT_FRAMES");
-			for (argument in ["-c", sources[index], "-o", outputs[index]])
-				arguments.push(argument);
-			var result = ProcessOutputCapture.capture(cCompiler, arguments,
+			var result = ProcessOutputCapture.capture(cCompiler, flags.concat([
+				"-c",
+				sources[index],
+				"-o",
+				outputs[index]
+			]),
 				ProcessOutputCapture.defaultDiagnosticLimit);
 			if (result.exitCode != 0)
 				failures[item] = '${sources[index]}:\n${result.stderr}';
@@ -72,6 +82,7 @@ class HlcBuild {
 		for (failure in failures)
 			if (failure != null)
 				throw new InternalError('C compilation failed: $failure');
+		File.saveContent(stamp, command);
 		// The whole VM library is linked: the loader resolves natives by name (`hlp_*`) in the executable itself, so nothing in the
 		// generated code references them, and they must be exported.
 		var link = ["-o", output].concat(outputs);

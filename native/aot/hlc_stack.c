@@ -160,6 +160,57 @@ static void hlc_add_row( uintptr_t address, int file, int line ) {
 	hlc_row_count++;
 }
 
+/* The source paths the generated `#line` directives name, as written (image.c). */
+extern const char *const hlc_source_paths[];
+extern const int hlc_source_path_count;
+
+typedef struct {
+	char *absolute;
+	const char *path;
+} hlc_source_path;
+
+static hlc_source_path *hlc_sources;
+static char *hlc_sources_base;
+
+static char *hlc_join( const char *a, const char *b ) {
+	size_t la = strlen(a), lb = strlen(b);
+	char *r = (char*)malloc(la + lb + 2);
+	memcpy(r, a, la);
+	r[la] = '/';
+	memcpy(r + la + 1, b, lb + 1);
+	return r;
+}
+
+static int hlc_compare_sources( const void *a, const void *b ) {
+	return strcmp(((const hlc_source_path*)a)->absolute, ((const hlc_source_path*)b)->absolute);
+}
+
+/* The path a `#line` directive wrote, for a file of a line table. The C compiler splits it into a directory and a name, and
+ * keeps a path under its working directory (directory 0, `base`) relative to it, so `/work/Main.hx` and `Main.hx` read the
+ * same: the file's absolute path is matched against the directives' paths made absolute from `base`. */
+static const char *hlc_source_name( const char *base, const char *dir, int dir_index, const char *name ) {
+	if( !name ) return NULL;
+	const char *written = dir_index == 0 || !dir || name[0] == '/' ? name : hlc_join(dir, name);
+	if( !base || base[0] != '/' ) return written;
+	if( !hlc_sources_base || strcmp(hlc_sources_base, base) != 0 ) {
+		if( !hlc_sources ) hlc_sources = (hlc_source_path*)malloc(sizeof(hlc_source_path) * (hlc_source_path_count ? hlc_source_path_count : 1));
+		else for(int i=0;i<hlc_source_path_count;i++) free(hlc_sources[i].absolute);
+		free(hlc_sources_base);
+		hlc_sources_base = strdup(base);
+		for(int i=0;i<hlc_source_path_count;i++) {
+			const char *path = hlc_source_paths[i];
+			hlc_sources[i].absolute = path[0] == '/' ? strdup(path) : hlc_join(base, path);
+			hlc_sources[i].path = path;
+		}
+		qsort(hlc_sources, hlc_source_path_count, sizeof(hlc_source_path), hlc_compare_sources);
+	}
+	hlc_source_path key;
+	key.absolute = written[0] == '/' ? (char*)written : hlc_join(base, written);
+	hlc_source_path *found = (hlc_source_path*)bsearch(&key, hlc_sources, hlc_source_path_count, sizeof(hlc_source_path), hlc_compare_sources);
+	if( key.absolute != written ) free(key.absolute);
+	return found ? found->path : written;
+}
+
 /* Decodes every line program of `.debug_line` (DWARF 2 to 5), keeping the rows of the generated code, moved by `bias`. */
 static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_strings *strings, uintptr_t bias ) {
 	const unsigned char *p = data, *end = data + size;
@@ -184,6 +235,8 @@ static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_
 		const unsigned char *opcode_lengths = p;
 		p += opcode_base - 1;
 		int *files = NULL, nfiles = 0;
+		const char *dirs[256];
+		int ndirs = 0;
 		if( version >= 5 ) {
 			for(int table=0;table<2;table++) {
 				int nformats = *p++, types[16], forms[16];
@@ -195,16 +248,24 @@ static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_
 				if( table == 1 ) files = (int*)malloc(sizeof(int) * (count ? count : 1));
 				for(uint64 e=0;e<count;e++) {
 					const char *name = NULL;
+					int dir = 0;
 					for(int i=0;i<nformats && i<16;i++) {
 						const char *text; uint64 number;
 						if( !hlc_read_form(&p, unit_end, forms[i], offset_size, strings, &text, &number) ) { free(files); return; }
-						if( types[i] == 1 ) name = text;
+						if( types[i] == 1 ) name = text; // DW_LNCT_path
+						else if( types[i] == 2 ) dir = (int)number; // DW_LNCT_directory_index
 					}
-					if( table == 1 ) files[nfiles++] = hlc_add_file(name);
+					if( table == 0 ) { if( ndirs < 256 ) dirs[ndirs++] = name; }
+					else files[nfiles++] = hlc_add_file(hlc_source_name(ndirs ? dirs[0] : NULL, dir < ndirs ? dirs[dir] : NULL, dir, name));
 				}
 			}
 		} else {
-			while( p < unit_end && *p ) { while( p < unit_end && *p ) p++; p++; }
+			dirs[ndirs++] = NULL; // directory 0 is the compilation's, not in the table
+			while( p < unit_end && *p ) {
+				if( ndirs < 256 ) dirs[ndirs++] = (const char*)p;
+				while( p < unit_end && *p ) p++;
+				p++;
+			}
 			p++;
 			files = (int*)malloc(sizeof(int) * 256);
 			int capacity = 256;
@@ -213,9 +274,10 @@ static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_
 				const char *name = (const char*)p;
 				while( p < unit_end && *p ) p++;
 				p++;
-				hlc_uleb(&p, unit_end); hlc_uleb(&p, unit_end); hlc_uleb(&p, unit_end);
+				int dir = (int)hlc_uleb(&p, unit_end);
+				hlc_uleb(&p, unit_end); hlc_uleb(&p, unit_end);
 				if( nfiles == capacity ) { capacity *= 2; files = (int*)realloc(files, sizeof(int) * capacity); }
-				files[nfiles++] = hlc_add_file(name);
+				files[nfiles++] = hlc_add_file(hlc_source_name(NULL, dir < ndirs ? dirs[dir] : NULL, dir, name));
 			}
 		}
 		p = program;
