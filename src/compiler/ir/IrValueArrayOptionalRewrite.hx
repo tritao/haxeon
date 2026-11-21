@@ -197,7 +197,7 @@ class IrValueArrayOptionalRewrite {
 		}
 		if (!unboxes.keys().hasNext() && !writes.keys().hasNext() && !dynamicWrites.keys().hasNext())
 			return false;
-		var next = body.presentValueLimit(), voidType = body.typeId(Void);
+		var voidType = body.typeId(Void);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -256,7 +256,7 @@ class IrValueArrayOptionalRewrite {
 						if (wrapper == null)
 							throw new InternalError("Missing optional array wrapper");
 						IrValueArrayRows.call3(body, block, row,
-							body.newValueAt(next++, "$optional-array-write", voidType),
+							body.newValue("$optional-array-write", voidType),
 							components.setName(), body.operand(row, 0), body.operand(row, 1), wrapper,
 							body.provenance(row));
 						body.removeRow(block, row);

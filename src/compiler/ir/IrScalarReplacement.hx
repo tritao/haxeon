@@ -86,8 +86,8 @@ class IrScalarReplacement {
 
 	/**
 	 * `rewrite` on `fn`'s body (`bodyIn` with `types`), for the pipeline's stage: `fn` itself when nothing changes, else its
-	 * edited body, with the values its decoding would have. The body is edited in
-	 * place when the stage owns it, else a copy (one a cache holds is frozen), and the result is owned by the next stage.
+	 * edited body. The body is edited in place when the stage owns it, else a copy (one a cache holds is frozen), and the result
+	 * is owned by the next stage.
 	 */
 	public static function rewriteBody(fn:IrFunction, objects:IrObjectTable, types:IrTypeIds, scratch:IrPassScratch,
 			constructFields:Bool):IrFunction {
@@ -97,7 +97,6 @@ class IrScalarReplacement {
 		var edited = body.forEditing(builder), before = edited.edits;
 		if (!runBody(edited, objects, scratch, false, constructFields) || edited.edits == before)
 			return fn;
-		edited.keepNamedValues(scratch.namedValues);
 		return IrFunction.ofOwnedBody(edited);
 	}
 
@@ -774,9 +773,9 @@ class IrScalarReplacement {
 
 /**
  * `IrScalarReplacement` on a body, in place, with the same result: replaced reads unlinked and their outputs made aliases of
- * the values that reach them, new values numbered from the body's `valueLimit` in the order the object version numbers them,
- * phis linked at block starts. Its tables are kept from one function to the next (`IrPassScratch.scalarReplacement`); the
- * maps keyed by field name stay maps, because the object version's phis come in their iteration order.
+ * the values that reach them, phis linked at block starts. Its tables are kept from one function to the next
+ * (`IrPassScratch.scalarReplacement`); the maps keyed by field name stay maps, because the object version's phis come in their
+ * iteration order.
  */
 @:allow(compiler.ir.IrScalarReplacement)
 @:allow(compiler.ir.IrBodyNestedScalarReplacement)
@@ -1191,9 +1190,6 @@ class IrBodyScalarReplacement {
 			&& !inLoop(homeId)) {
 			for (target in phiBlocks)
 				phisAt[target] = null;
-			// The object version numbered the phis before declining them.
-			for (_ in 0...phiBlocks.length)
-				body.skipValue();
 			return false;
 		}
 		var objectName = body.valueName(object);

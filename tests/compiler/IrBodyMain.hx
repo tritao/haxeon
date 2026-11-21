@@ -252,19 +252,18 @@ class IrBodyMain {
 		var layout = body.layoutDifference();
 		if (layout != null)
 			throw 'IrBody: $what left a broken layout: $layout';
-		var difference = IrFunctionStateEquality.difference(expected, body.toFunction());
+		var difference = differenceButIds(expected, body);
 		if (difference != null)
 			throw 'IrBody: $what on a body differs from its object version: $difference';
 		var frozen = body.freeze(true, scratch.bodyBuilder);
 		if (frozen == body || !frozen.frozen || frozen.layoutDifference() != null
-			|| IrFunctionStateEquality.difference(expected, frozen.toFunction()) != null)
+			|| differenceButIds(expected, frozen) != null)
 			throw 'IrBody: $what: the frozen body must be a compacted copy equal to the edited one';
 	}
 
 	/**
 	 * A pipeline stage on bodies against its object version: it changes `fn` into a function that is its frozen body, decoding
-	 * to the object result, whose values end where the object result's do (`IrFunction.nextValueId`), so later stages number
-	 * theirs the same; and it gives back a function it leaves as it was as the same object.
+	 * to the object result but for how values are numbered; and it gives back a function it leaves as it was as the same object.
 	 */
 	static function sameStage(what:String, fn:IrFunction, expected:IrFunction,
 			stage:(IrFunction, IrTypeIds, compiler.ir.IrPassScratch) -> IrFunction):Void {
@@ -278,16 +277,23 @@ class IrBodyMain {
 		// A body no cache holds is the stage's own: edited in place, not copied.
 		if (!body.frozen && fn.body != body)
 			throw 'IrBody: $what must edit the body it owns in place';
-		var difference = IrFunctionStateEquality.difference(expected, body.toFunction());
+		var difference = differenceButIds(expected, body);
 		if (difference != null)
 			throw 'IrBody: $what on a body differs from its object version: $difference';
-		if (body.valueLimit() != expected.nextValueId())
-			throw 'IrBody: $what leaves ${body.valueLimit()} value ids where its object version has ${expected.nextValueId()}';
 		var unchanged = new IrFunction("Main.unchanged", [], Void, [block(0, [], Return(value("nothing", Void)))],
 			Ordinary);
 		if (stage(unchanged, types, scratch) != unchanged)
 			throw 'IrBody: $what must give back a function it does not change';
 	}
+
+	/**
+	 * Where `expected` and the function `body` is first differ, but for value ids: a pass on bodies numbers the values it adds
+	 * from the body's next id, its object version from the decoding's, so both are compared renumbered (`IrBodyBuilder.renumbered`).
+	 */
+	static function differenceButIds(expected:IrFunction, body:IrBody):Null<String>
+		return IrFunctionStateEquality.difference(IrBodyBuilder.renumbered(IrBodyBuilder.encode(expected,
+			body.types)).toFunction(),
+			IrBodyBuilder.renumbered(body).toFunction());
 
 	/** A thaw of a frozen body shares its columns until its first edit, which leaves the frozen body as it was. */
 	static function sharedThaw(fn:IrFunction):Void {

@@ -61,9 +61,6 @@ class IrBodyBuilder {
 	final bindingEnds:Array<Int> = [];
 	final bindingValues:Array<Int> = [];
 
-	/** By value id, whether the body being finished names it (`finishNamed`). */
-	final named:Array<Bool> = [];
-
 	/** By value id of the body being renumbered, its new id or -1 (`renumbered`). */
 	final renumbering:Array<Int> = [];
 
@@ -233,46 +230,10 @@ class IrBodyBuilder {
 		return floats.length - 1;
 	}
 
-	/**
-	 * The body made, its values as `encode` gives a function's: an id that no argument, row or binding names has no value, and
-	 * the ids end after the last named one. For a body rebuilt from a source (`startFrom`) whose values some rows no longer name,
-	 * so it numbers new values as its decoding would (`IrFunction.nextValueId`).
-	 */
-	public function finishNamed(name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
-			retention:IrRetention):IrBody {
-		var marks = IrPassScratch.filledBools(named, valueTypes.length, false), limit = 0;
-		for (id in argumentIds) {
-			marks[id] = true;
-			if (id >= limit)
-				limit = id + 1;
-		}
-		for (id in outputs)
-			if (id >= 0) {
-				marks[id] = true;
-				if (id >= limit)
-					limit = id + 1;
-			}
-		for (id in operands) {
-			marks[id] = true;
-			if (id >= limit)
-				limit = id + 1;
-		}
-		for (id in bindingValues) {
-			marks[id] = true;
-			if (id >= limit)
-				limit = id + 1;
-		}
-		for (id in 0...limit)
-			if (!marks[id]) {
-				valueTypes[id] = -1;
-				valueNames[id] = null;
-				valueRows[id] = -1;
-			}
-		valueTypes.resize(limit);
-		valueNames.resize(limit);
-		valueRows.resize(limit);
+	/** The body made, named `name`, its result the type with id `result`: for a body rebuilt from a source (`startFrom`). */
+	public function finishAs(name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
+			retention:IrRetention):IrBody
 		return new IrBody(this, name, kind, result, inlineHint, retention);
-	}
 
 	/** The body made, with `source`'s name, kind, result and flags. */
 	public function finishFrom(source:IrBody):IrBody

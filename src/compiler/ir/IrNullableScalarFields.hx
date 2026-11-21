@@ -53,16 +53,14 @@ class IrNullableScalarFields {
 		return field != null && field.nullableScalarStorage != null ? field : null;
 	}
 
-	/** New values are numbered from the first id nothing names, as the object version numbered them. */
 	function rewriteBody(body:IrBody):Void {
-		var next = body.presentValueLimit();
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				var field = narrowedField(body, row);
 				if (field != null) {
 					var helper = helperFor(field.type, field.nullableScalarStorage),
-						normalized = body.newValueAt(next++, "$nullable-scalar", body.typeId(field.type));
+						normalized = body.newValue("$nullable-scalar", body.typeId(field.type));
 					body.beginRow();
 					body.pushOperand(body.operand(row, 1));
 					body.linkBefore(block, row,

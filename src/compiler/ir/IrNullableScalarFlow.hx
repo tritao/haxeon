@@ -127,9 +127,7 @@ class IrNullableScalarFlow {
 /**
  * The analysis and the rewrite of `IrNullableScalarFlow` on one body at a time, its tables by value id kept between bodies.
  * A candidate is a nullable scalar whose every use can read a presence flag and a payload instead: a null constant, a scalar
- * boxed to its nullable type, a phi of candidates, and, in a specialization, an argument. New values are numbered as the
- * decoded function would number them: from `IrBody.presentValueLimit`, each candidate's flag and payload in the order the
- * candidates were found, then the rows' new values in row order.
+ * boxed to its nullable type, a phi of candidates, and, in a specialization, an argument.
  */
 class IrBodyNullableScalars {
 	static inline final CANDIDATE = 1;
@@ -327,7 +325,7 @@ class IrBodyNullableScalars {
 	 */
 	public function build(source:IrBody, builder:IrBodyBuilder, clone:Bool):IrBody {
 		body = source;
-		var next = body.presentValueLimit();
+		var next = body.valueLimit();
 		builder.startFrom(body);
 		var boolType = body.typeId(Bool);
 		IrPassScratch.filledInts(parts, body.valueLimit(), -1);
@@ -377,7 +375,7 @@ class IrBodyNullableScalars {
 			case ScalarArguments: GeneratedHelper;
 			default: NullableScalarArguments;
 		}) : body.kind;
-		return builder.finishNamed(clone ? IrNullableScalarFlow.specializationName(body.name) : body.name, kind,
+		return builder.finishAs(clone ? IrNullableScalarFlow.specializationName(body.name) : body.name, kind,
 			body.result, body.inlineHint, clone ? IrRetention.Reachable : body.retention);
 	}
 

@@ -41,7 +41,6 @@ class IrValuePhiScalarization {
 		var result = new IrBodyValuePhis(objects, table, layouts, alwaysPresent, scratch).run(edited);
 		if (result == edited && edited.edits == before)
 			return fn;
-		result.keepNamedValues(scratch.namedValues);
 		return IrFunction.ofOwnedBody(result);
 	}
 
@@ -107,7 +106,6 @@ private class IrBodyValuePhis {
 			return body;
 		var attempt = body.thaw(scratch.bodyBuilder);
 		split(attempt, plans);
-		attempt.keepNamedValues(scratch.namedValues);
 		IrScalarReplacement.runBody(attempt, table, scratch, true, true);
 		var planned:Map<Int, Bool> = [for (plan in plans) plan.output => true];
 		for (block in 0...attempt.blockCount()) {
@@ -299,7 +297,7 @@ private class IrBodyValuePhis {
 	 * other phis, and the value made again from them after the scalar phis.
 	 */
 	function split(body:IrBody, plans:Array<{output:Int, block:Int}>):Void {
-		var next = body.presentValueLimit(), count = body.blockCount();
+		var count = body.blockCount();
 		var reads:Array<Array<Int>> = [for (_ in 0...count)[]],
 			phis:Array<Array<Int>> = [for (_ in 0...count)[]],
 			setups:Array<Array<Int>> = [for (_ in 0...count)[]],
@@ -324,13 +322,13 @@ private class IrBodyValuePhis {
 								isPresence: slot.isPresence,
 								nativeLayout: slot.nativeLayout
 							};
-							var read = body.newValueAt(next++, "$value-phi-read", body.typeId(slot.type));
+							var read = body.newValue("$value-phi-read", body.typeId(slot.type));
 							reads[predecessor].push(fieldGet(body, read, current,
 								IrInlineValueLayout.slotName(part, sub), where));
 							current = read;
 							break;
 						}
-						var read = body.newValueAt(next++, "$value-phi-read", body.typeId(field.type));
+						var read = body.newValue("$value-phi-read", body.typeId(field.type));
 						reads[predecessor].push(fieldGet(body, read, current, part, where));
 						current = read;
 					}
@@ -338,7 +336,7 @@ private class IrBodyValuePhis {
 					inputs[slotIndex].push(current);
 				}
 			}
-			var scalar = [for (slot in shape) body.newValueAt(next++, "$value-phi-slot", body.typeId(slot.type))];
+			var scalar = [for (slot in shape) body.newValue("$value-phi-slot", body.typeId(slot.type))];
 			body.beginRow();
 			setups[target].push(body.endRow(IrOpcode.ValueInit, out, 0, where));
 			for (index in 0...shape.length) {
@@ -360,7 +358,7 @@ private class IrBodyValuePhis {
 					if (partIndex == path.length - 1)
 						setups[target].push(fieldSet(body, current, part, scalar[index], where));
 					else {
-						var child = body.newValueAt(next++, "$value-phi-child", body.typeId(field.type));
+						var child = body.newValue("$value-phi-child", body.typeId(field.type));
 						setups[target].push(fieldGet(body, child, current, part, where));
 						current = child;
 					}

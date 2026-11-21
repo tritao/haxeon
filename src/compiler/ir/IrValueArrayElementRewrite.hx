@@ -20,8 +20,7 @@ class IrValueArrayElementRewrite {
 			iteratorType = body.typeId(Iterator(element)),
 			storage = body.typeId(helpers.storage),
 			i32 = body.typeId(I32),
-			voidType = body.typeId(Void),
-			next = -1;
+			voidType = body.typeId(Void);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -45,10 +44,8 @@ class IrValueArrayElementRewrite {
 					case IrOpcode.ArraySet if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)):
 						if (!IrValueArrayRows.typed(body, body.operand(row, 2), storage))
 							throw new InternalError('Wrong inline array write type ${body.valueType(body.operand(row, 2))}');
-						if (next < 0)
-							next = body.presentValueLimit();
 						IrValueArrayRows.replaceByCall(body, block, row,
-							body.newValueAt(next++, "$array-element-write", voidType),
+							body.newValue("$array-element-write", voidType),
 							helpers.setName());
 						changed = true;
 					case IrOpcode.Call if (body.operandCount(row) > 0

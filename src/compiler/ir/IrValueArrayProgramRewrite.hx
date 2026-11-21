@@ -497,15 +497,14 @@ class IrValueArrayProgramRewrite {
 
 	/** A checked concrete view must install the lane representation on the shared dynamic header. */
 	static function rewriteCasts(body:IrBody, element:IrType, retype:String):Bool {
-		var arrayType = body.typeId(Array(element)), dyn = body.typeId(Dyn), next = -1;
+		var arrayType = body.typeId(Array(element)), dyn = body.typeId(Dyn), changed = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.SafeCast && IrValueArrayRows.typed(body, body.output(row), arrayType)
 					&& IrValueArrayRows.typed(body, body.operand(row, 0), dyn)) {
-					if (next < 0)
-						next = body.presentValueLimit();
-					var dynamicView = body.newValueAt(next++, "$value-array-dynamic-view", body.typeId(Array(Dyn)));
+					changed = true;
+					var dynamicView = body.newValue("$value-array-dynamic-view", body.typeId(Array(Dyn)));
 					body.beginRow();
 					body.pushOperand(body.operand(row, 0));
 					body.linkBefore(block, row, body.endRow(IrOpcode.SafeCast, dynamicView, 0, body.provenance(row)));
@@ -515,7 +514,7 @@ class IrValueArrayProgramRewrite {
 				row = body.nextRow(row);
 			}
 		}
-		return next >= 0;
+		return changed;
 	}
 
 	/** A shared classifier keeps the index and actual rewrite in agreement; `arrayDyn` and `dyn` are the body's type ids. */
@@ -540,7 +539,7 @@ class IrValueArrayProgramRewrite {
 
 	/** Dynamic views dispatch by runtime storage. */
 	static function rewriteDynamicViews(body:IrBody):Bool {
-		var arrayDyn = body.typeId(Array(Dyn)), dyn = body.typeId(Dyn), next = -1, changed = false;
+		var arrayDyn = body.typeId(Array(Dyn)), dyn = body.typeId(Dyn), changed = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -550,10 +549,8 @@ class IrValueArrayProgramRewrite {
 						body.setOperation(row, IrOpcode.Call, IrSymbol.of("__array_get_any").id);
 						changed = true;
 					case 2:
-						if (next < 0)
-							next = body.presentValueLimit();
 						IrValueArrayRows.replaceByCall(body, block, row,
-							body.newValueAt(next++, "$dynamic-array-write", body.typeId(Void)), "__array_set_any");
+							body.newValue("$dynamic-array-write", body.typeId(Void)), "__array_set_any");
 						changed = true;
 					case 3:
 						var name = body.symbol(row).name;

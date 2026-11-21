@@ -352,7 +352,7 @@ class IrScalarClosures {
 	function rewriteFunction(fn:IrFunction, source:IrBody):IrFunction {
 		if (!needsRewrite(source))
 			return fn;
-		var body = source.forEditing(scratch.bodyBuilder), next = body.presentValueLimit(), limit = next;
+		var body = source.forEditing(scratch.bodyBuilder), limit = body.valueLimit();
 		typeValues.clear();
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -382,7 +382,7 @@ class IrScalarClosures {
 						var input = body.operand(row, 0),
 							type = body.valueType(input),
 							erasure = ensureErasure(type),
-							boxed = body.newValueAt(next++, "$scalar-closure:erased", body.typeId(erasedType(type)));
+							boxed = body.newValue("$scalar-closure:erased", body.typeId(erasedType(type)));
 						body.beginRow();
 						body.pushOperand(input);
 						body.linkBefore(block, row,
@@ -398,7 +398,7 @@ class IrScalarClosures {
 					case IrOpcode.InstanceClosure if (candidates.exists(key(body.valueType(body.output(row))))):
 						body.setAux(row, IrSymbol.of(IrScalarArguments.PREFIX + body.symbol(row).name).id);
 					case IrOpcode.CallClosure if (candidates.exists(key(body.valueType(body.operand(row, 0))))):
-						next = expandCall(body, block, row, next);
+						expandCall(body, block, row);
 					case IrOpcode.TypeValue:
 						body.setAux(row, body.typeId(mapType(body.typeOperand(row))));
 					default:
@@ -412,15 +412,14 @@ class IrScalarClosures {
 				body.setValueType(id, body.typeId(mapType(types.type(type))));
 		}
 		body.setResult(body.typeId(mapType(types.type(body.result))));
-		body.keepNamedValues(scratch.namedValues);
 		return IrFunction.ofOwnedBody(body);
 	}
 
 	/**
 	 * Replaces the closure call at `row` by one that passes each value argument's fields and, for a value result, a reference
-	 * per field that the callee stores through, the result made again from them after it; values numbered from `next`.
+	 * per field that the callee stores through, the result made again from them after it.
 	 */
-	function expandCall(body:IrBody, block:Int, row:Int, next:Int):Int {
+	function expandCall(body:IrBody, block:Int, row:Int):Void {
 		var where = body.provenance(row),
 			out = body.output(row),
 			closure = body.operand(row, 0),
@@ -436,7 +435,7 @@ class IrScalarClosures {
 				var current = argument, logical = argumentType;
 				for (part in slot.path) {
 					var field = fieldOf(logical, part),
-						leaf = body.newValueAt(next++, "$scalar-closure:field", body.typeId(mapType(field.type)));
+						leaf = body.newValue("$scalar-closure:field", body.typeId(mapType(field.type)));
 					body.beginRow();
 					body.pushOperand(current);
 					body.linkBefore(block, row, body.endRow(IrOpcode.FieldGet, leaf, IrSymbol.of(part).id, where));
@@ -449,8 +448,8 @@ class IrScalarClosures {
 		var resultSlots = isValue(outType) ? slots(outType) : [], references:Array<IrValueId> = [];
 		for (slot in resultSlots) {
 			var type = mapType(slot.type),
-				zero = body.newValueAt(next++, "$scalar-closure:zero", body.typeId(type)),
-				reference = body.newValueAt(next++, "$scalar-closure:reference", body.typeId(IrHlScalarRef.type(type)));
+				zero = body.newValue("$scalar-closure:zero", body.typeId(type)),
+				reference = body.newValue("$scalar-closure:reference", body.typeId(IrHlScalarRef.type(type)));
 			body.beginRow();
 			var initial = switch type {
 				case I32 | I64: body.endRow(IrOpcode.ConstInt, zero, 0, where);
@@ -468,7 +467,7 @@ class IrScalarClosures {
 		}
 		var output = out;
 		if (resultSlots.length > 0)
-			output = body.newValueAt(next++, "$scalar-closure:call", body.typeId(Void));
+			output = body.newValue("$scalar-closure:call", body.typeId(Void));
 		body.beginRow();
 		body.pushOperand(closure);
 		for (value in expanded)
@@ -477,7 +476,7 @@ class IrScalarClosures {
 		body.linkAfter(block, row, call);
 		body.removeRow(block, row);
 		if (resultSlots.length == 0)
-			return next;
+			return;
 		var after = call;
 		inline function add(made:Int):Void {
 			body.linkAfter(block, after, made);
@@ -487,7 +486,7 @@ class IrScalarClosures {
 		add(body.endRow(IrOpcode.ValueInit, out, 0, where));
 		for (index in 0...resultSlots.length) {
 			var slot = resultSlots[index],
-				leaf = body.newValueAt(next++, "$scalar-closure:result", body.typeId(mapType(slot.type))),
+				leaf = body.newValue("$scalar-closure:result", body.typeId(mapType(slot.type))),
 				current = out,
 				logical = outType;
 			body.beginRow();
@@ -496,7 +495,7 @@ class IrScalarClosures {
 			for (position in 0...slot.path.length - 1) {
 				var part = slot.path[position],
 					field = fieldOf(logical, part),
-					child = body.newValueAt(next++, part, body.typeId(mapType(field.type)));
+					child = body.newValue(part, body.typeId(mapType(field.type)));
 				body.beginRow();
 				body.pushOperand(current);
 				add(body.endRow(IrOpcode.FieldGet, child, IrSymbol.of(part).id, where));
@@ -509,7 +508,6 @@ class IrScalarClosures {
 			add(body.endRow(IrOpcode.FieldSet, IrValueId.of(-1), IrSymbol.of(slot.path[slot.path.length - 1]).id,
 				where));
 		}
-		return next;
 	}
 
 	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */

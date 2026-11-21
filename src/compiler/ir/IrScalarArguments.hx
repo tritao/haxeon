@@ -8,10 +8,6 @@ import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 private typedef ScalarCallPlan = {
 	final block:Int;
 	final row:Int;
-
-	/** Whether the call takes the clone; one that does not may still have taken an id for a receiver check. */
-	final qualifies:Bool;
-
 	final check:Bool;
 	final name:String;
 	final pinned:Bool;
@@ -276,9 +272,7 @@ class IrScalarArguments {
 		// Scalar call rewriting can introduce value constructions into a join. Split those joins before
 		// judging whether the specialized callee can keep its value arguments and result in registers.
 		specialized = IrValuePhiScalarization.runBody(specialized, objects, table, layouts, null, scratch);
-		specialized.keepNamedValues(scratch.namedValues);
 		IrScalarReplacement.runBody(specialized, table, scratch, true, true);
-		specialized.keepNamedValues(scratch.namedValues);
 		return specialized;
 	}
 
@@ -609,10 +603,10 @@ class IrScalarArguments {
 	/**
 	 * A new body, the copy of `source` for the scalar ABI: each value argument (but the receiver when `preserveReceiver`) becomes
 	 * one argument per slot, written into the value at entry, and a value result one reference argument per slot that each
-	 * return stores through. Values numbered from `source`'s next, as the decoding would be.
+	 * return stores through.
 	 */
 	function clone(source:IrBody, preserveReceiver:Bool):IrBody {
-		var builder = scratch.bodyBuilder, next = source.presentValueLimit();
+		var builder = scratch.bodyBuilder, next = source.valueLimit();
 		builder.startFrom(source);
 		builder.clearArguments();
 		var origin = SourceProvenance.generated("scalar-argument");
@@ -710,7 +704,7 @@ class IrScalarArguments {
 		}
 		for (index in 0...source.bindingCount())
 			builder.copyBinding(source, index, source.bindingValue(index));
-		return builder.finishNamed(PREFIX + (preserveReceiver ? "$receiver:" : "") + source.name, ScalarArguments,
+		return builder.finishAs(PREFIX + (preserveReceiver ? "$receiver:" : "") + source.name, ScalarArguments,
 			returnSlots.length > 0 ? types.id(Void) : source.result, source.inlineHint, Reachable);
 	}
 
@@ -816,15 +810,7 @@ class IrScalarArguments {
 			&& (safeArrayEquality(provenance, body)
 			|| freshValueArguments(body, arguments)));
 		if (!qualifies)
-			return check ? {
-				block: block,
-				row: row,
-				qualifies: false,
-				check: true,
-				name: name,
-				pinned: false,
-				arguments: arguments
-			} : null;
+			return null;
 		var pinned = pinnedCandidates.exists(name)
 			&& (!candidates.exists(name)
 			|| freshOnly.exists(name)
@@ -834,7 +820,6 @@ class IrScalarArguments {
 		return {
 			block: block,
 			row: row,
-			qualifies: true,
 			check: check,
 			name: name,
 			pinned: pinned,
@@ -844,22 +829,12 @@ class IrScalarArguments {
 
 	/**
 	 * Replaces each planned call of `body` by the call of its clone: value arguments read field by field, a reference per result
-	 * slot, and the value result made again from them. New values are numbered from the body's next, as the decoding would be; a
-	 * plan that only took an id for a receiver check still takes it.
+	 * slot, and the value result made again from them.
 	 */
 	function applyCalls(body:IrBody, plans:Array<ScalarCallPlan>):Void {
-		var next = body.presentValueLimit();
-		function fresh(name:String, type:IrType):IrValueId {
-			var id = next++;
-			while (body.valueLimit() < id)
-				body.skipValue();
-			return body.newValueAt(id, name, body.typeId(type));
-		}
+		inline function fresh(name:String, type:IrType):IrValueId
+			return body.newValue(name, body.typeId(type));
 		for (plan in plans) {
-			if (!plan.qualifies) {
-				next++;
-				continue;
-			}
 			var block = plan.block,
 				row = plan.row,
 				where = body.provenance(row),
@@ -959,7 +934,6 @@ class IrScalarArguments {
 			}
 			body.removeRow(block, row);
 		}
-		body.keepNamedValues(scratch.namedValues);
 	}
 
 	/** The Wasm scalar ABI reads fields at the call site. Only an unaliased value is stable there;

@@ -435,13 +435,12 @@ class IrOptionalFieldStorage {
 			default: false;
 		};
 
-	/** Rewrites `body` in place; new values are numbered from the first id nothing names, as the object version numbered them. */
+	/** Rewrites `body` in place. */
 	function rewriteBody(body:IrBody):Void {
-		var next = body.presentValueLimit();
 		// A new value of `type` that `operation` makes from `input`, linked before `row`.
 		function linkUnary(block:Int, row:Int, operation:IrOpcode, label:String, type:IrType, input:IrValueId,
 				aux:Int):IrValueId {
-			var made = body.newValueAt(next++, label, body.typeId(type));
+			var made = body.newValue(label, body.typeId(type));
 			body.beginRow();
 			body.pushOperand(input);
 			body.linkBefore(block, row, body.endRow(operation, made, aux, body.provenance(row)));
@@ -519,7 +518,7 @@ class IrOptionalFieldStorage {
 								receiver = linkUnary(block, row, IrOpcode.Upcast, "$optional-field-base",
 									Obj(plan.owner),
 									object, 0);
-							var unused = body.newValueAt(next++, "$optional-field-write", body.typeId(Void));
+							var unused = body.newValue("$optional-field-write", body.typeId(Void));
 							replaceByCall(block, row, unused, accessorName(plan, true), [receiver, value]);
 						}
 					default:

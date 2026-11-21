@@ -89,7 +89,7 @@ class IrStaticNullChecks {
 			if (cache != null)
 				body = fn.freezeBody(builder);
 			var origins = staticOrigins(body);
-			var used:Map<String, Bool> = [], edited:Null<IrBody> = null, next = 0;
+			var used:Map<String, Bool> = [], edited:Null<IrBody> = null;
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
@@ -106,19 +106,17 @@ class IrStaticNullChecks {
 						var helperName = helperFor(name, valueType);
 						used.set(helperName, true);
 						// Cached functions belong to the frontend; never instrument them in place.
-						if (edited == null) {
+						if (edited == null)
 							edited = body.forEditing(builder);
-							next = edited.presentValueLimit();
-						}
 						var actual = receiver;
 						if (valueType == null) {
-							actual = edited.newValueAt(next++, "staticReceiver", edited.typeId(Dyn));
+							actual = edited.newValue("staticReceiver", edited.typeId(Dyn));
 							edited.beginRow();
 							edited.pushOperand(receiver);
 							edited.linkBefore(block, row,
 								edited.endRow(IrOpcode.ToDyn, actual, 0, edited.provenance(row)));
 						}
-						var unused = edited.newValueAt(next++, "staticCheck", edited.typeId(Void));
+						var unused = edited.newValue("staticCheck", edited.typeId(Void));
 						edited.beginRow();
 						edited.pushOperand(actual);
 						edited.linkBefore(block, row,

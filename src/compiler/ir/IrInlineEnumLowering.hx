@@ -292,11 +292,10 @@ class IrInlineEnumLowering {
 		};
 
 	/**
-	 * Lowers `body` in place. The values it adds are numbered from the first id nothing names, in the order the object version
-	 * numbered them; the rows are read with their types as they were, which change last.
+	 * Lowers `body` in place. The rows are read with their types as they were, which change last.
 	 */
 	function rewrite(body:IrBody):Void {
-		var limit = body.valueLimit(), next = body.presentValueLimit(), name = body.name;
+		var limit = body.valueLimit(), name = body.name;
 		nulls.clear();
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -307,7 +306,7 @@ class IrInlineEnumLowering {
 			}
 		}
 		inline function fresh(type:IrType):IrValueId
-			return body.newValueAt(next++, "$enum-value-load", body.typeId(type));
+			return body.newValue("$enum-value-load", body.typeId(type));
 		function link(block:Int, before:Int, opcode:IrOpcode, output:IrValueId, aux:Int,
 				provenance:SourceProvenance):Int {
 			var row = body.endRow(opcode, output, aux, provenance);

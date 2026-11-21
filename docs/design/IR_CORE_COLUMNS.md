@@ -80,9 +80,7 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    *The inliner stage runs on bodies*: a function is encoded when it is first inlined, inlining splices and expands callees
    in place, the stage's passes edit that body, and it is decoded once at the stage's exit (back to its source when nothing
    changed it). The memo holds frozen bodies; in a compile that keeps a session the cache also holds each source's frozen
-   body while the source is the same object. Until the object passes are gone, a pass that numbers new values as its object
-   version did takes them from `IrBody.newValueAt` (strength reduction after load-store forwarding), which may reuse the id of
-   a value no row or binding names any more.
+   body while the source is the same object.
    *HlLower reads the bodies*: nothing is decoded at the stage's exit. Each function of `program.functions` is its frozen body
    (`IrFunction.ofBody`; a function the stage left as it was keeps its source object and gets its source body), and its blocks
    and bindings are decoded from the body the first time something reads them, once: the verifier when verification is on, the
@@ -98,11 +96,9 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    *Scalar replacement, nullable-scalar-flow and enum-tag-escapes read bodies*: the encode is at scalar replacement's entry
    (`bodyIn` with the inline cache's type ids), and the inliner takes each function's body as it has it. A function a stage
    changes is its frozen body (`IrFunction.ofBody`), made in place on a thawed copy or rebuilt into a body the stage owns; one
-   it leaves as it was stays the same object. Until the object passes are gone, a stage whose object version numbered new
-   values from `IrFunction.nextValueId` leaves only the values the decoding would name (`IrBody.keepNamedValues`,
-   `IrBodyBuilder.finishNamed`), so the stages after it number theirs as before. In a session, a function the passes before
-   the conversion point rebuild the same as last time is replaced by last compile's object (`stableBodySources`), which has
-   its body, as the inliner does with its own inputs.
+   it leaves as it was stays the same object. In a session, a function the passes before the conversion point rebuild the
+   same as last time is replaced by last compile's object (`stableBodySources`), which has its body, as the inliner does with
+   its own inputs.
    *Value phi scalarization reads bodies*, every run; its object version is gone. *Scalar closures reads bodies*; its object
    version is gone. *Scalar arguments reads bodies*, and splits value joins itself first (the value phi run that preceded
    it on every target that runs it). Its clones are new bodies (`IrBodyBuilder.startFrom` with new arguments), whose calls it

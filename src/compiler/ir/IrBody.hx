@@ -550,68 +550,6 @@ class IrBody {
 		return IrValueId.of(id);
 	}
 
-	/**
-	 * One past the highest value id an argument, a linked row (its output or an operand) or a binding names: where an object
-	 * pass starts numbering new values (`IrFunction.nextValueId`), which is below `valueLimit` once rows defining the highest ids
-	 * were unlinked. Transitional: a pass whose object version numbers new values that way takes them from here
-	 * (`newValueAt`), so its output stays the object version's until the object passes are gone.
-	 */
-	public function presentValueLimit():Int {
-		var next = 0;
-		for (id in argumentIds)
-			if (id >= next)
-				next = id + 1;
-		for (block in 0...blockIds.length) {
-			var row = blockFirstRows[block];
-			while (row >= 0) {
-				if (outputs[row] >= next)
-					next = outputs[row] + 1;
-				for (index in operandStarts[row]...operandEnds[row])
-					if (operandPool[index] >= next)
-						next = operandPool[index] + 1;
-				row = nextRows[row];
-			}
-		}
-		for (id in bindingValues)
-			if (id >= next)
-				next = id + 1;
-		return next;
-	}
-
-	/**
-	 * A new value with id `id`, at least `presentValueLimit()`: no linked row or binding names that id any more, so its column
-	 * slot is taken over, or appended when `id` is `valueLimit()`. Transitional, as `presentValueLimit` is.
-	 */
-	public function newValueAt(id:Int, label:String, typeId:Int):IrValueId {
-		if (id == valueTypes.length)
-			return newValue(label, typeId);
-		editing();
-		if (id > valueTypes.length)
-			throw new InternalError('IR body $name: value $id is past the next id ${valueTypes.length}');
-		// A linked row still defining `id` would be read as the new value (`presentValueLimit` is the full check, a walk).
-		if (valueRows[id] >= 0)
-			throw new InternalError('IR body $name: value $id is still defined by row ${valueRows[id]}');
-		if (trial != null)
-			throw new InternalError('IR body $name has a trial open, which could not undo this edit');
-		valueTypes[id] = typeId;
-		valueNames[id] = label;
-		valueRows[id] = -1;
-		if (id < aliases.length)
-			aliases[id] = -1;
-		return IrValueId.of(id);
-	}
-
-	/**
-	 * Takes the next value id without making a value, as the encoder leaves an id no value has: for a pass that numbered a value
-	 * and then dropped it, so the ids after it are the ones its object version gives.
-	 */
-	public function skipValue():Void {
-		editing();
-		valueTypes.push(-1);
-		valueNames.resize(valueTypes.length);
-		valueRows.push(-1);
-	}
-
 	/** The id of `type` in this body's type table. */
 	public inline function typeId(type:IrType):Int
 		return types.id(type);
@@ -878,47 +816,6 @@ class IrBody {
 		rowOperandsFrom = operandPool.length;
 		edited = saved.edited;
 		edits = saved.edits;
-	}
-
-	/**
-	 * Leaves only the values an argument, a linked row or a binding names, as encoding the decoded function would: the ids end
-	 * after the last named one (`presentValueLimit`), and an id below it that nothing names has no value. So a pass after this
-	 * one numbers new values as it would on the decoding (`IrFunction.nextValueId`). Transitional, as `presentValueLimit` is;
-	 * `named` is a table this reuses.
-	 */
-	public function keepNamedValues(named:Array<Bool>):Void {
-		editing();
-		if (trial != null)
-			throw new InternalError('IR body $name has a trial open, which could not undo this edit');
-		var marks = IrPassScratch.filledBools(named, valueTypes.length, false), limit = 0;
-		for (id in argumentIds)
-			marks[id] = true;
-		for (block in 0...blockIds.length) {
-			var row = blockFirstRows[block];
-			while (row >= 0) {
-				if (outputs[row] >= 0)
-					marks[outputs[row]] = true;
-				for (index in operandStarts[row]...operandEnds[row])
-					marks[operandPool[index]] = true;
-				row = nextRows[row];
-			}
-		}
-		for (id in bindingValues)
-			marks[id] = true;
-		for (id in 0...valueTypes.length)
-			if (marks[id])
-				limit = id + 1;
-		for (id in 0...limit)
-			if (!marks[id]) {
-				valueTypes[id] = -1;
-				valueNames[id] = null;
-				valueRows[id] = -1;
-			}
-		valueTypes.resize(limit);
-		valueNames.resize(limit);
-		valueRows.resize(limit);
-		if (aliases.length > limit)
-			aliases.resize(limit);
 	}
 
 	public function removeBinding(index:Int):Void {

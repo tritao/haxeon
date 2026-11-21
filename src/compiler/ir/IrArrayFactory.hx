@@ -103,7 +103,7 @@ class IrArrayFactory {
 
 	/** Replaces each factory call of `body` in place; whether one makes a typed reference array. */
 	static function emit(body:IrBody, name:Int):Bool {
-		var typed = false, next = body.presentValueLimit();
+		var typed = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -123,9 +123,9 @@ class IrArrayFactory {
 						default:
 							typed = true;
 							var where = body.provenance(row),
-								descriptor = body.newValueAt(next++, "$array-element", body.typeId(TypeRef)),
-								raw = body.newValueAt(next++, "$array-storage", body.typeId(Array(Dyn))),
-								erased = body.newValueAt(next++, "$array-erased", body.typeId(Dyn));
+								descriptor = body.newValue("$array-element", body.typeId(TypeRef)),
+								raw = body.newValue("$array-storage", body.typeId(Array(Dyn))),
+								erased = body.newValue("$array-erased", body.typeId(Dyn));
 							body.beginRow();
 							body.linkBefore(block, row,
 								body.endRow(IrOpcode.TypeValue, descriptor, body.typeId(element), where));

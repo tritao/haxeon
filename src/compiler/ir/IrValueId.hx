@@ -1,9 +1,8 @@
 package compiler.ir;
 
 /**
- * A value of an `IrBody`, by id: dense within its body and never reused (until the object passes are gone, a pass may number
- * as its object version did, `IrBody.newValueAt`), so it indexes the body's value columns and a pass's tables. Made from an
- * `Int` only explicitly (`of`), so a row or block number cannot pass for one.
+ * A value of an `IrBody`, by id: dense within its body and never reused, so it indexes the body's value columns and a pass's
+ * tables. Made from an `Int` only explicitly (`of`), so a row or block number cannot pass for one.
  */
 abstract IrValueId(Int) to Int {
 	inline function new(id:Int)

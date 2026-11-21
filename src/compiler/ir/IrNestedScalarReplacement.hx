@@ -345,7 +345,7 @@ class IrNestedScalarReplacement {
 /**
  * `IrNestedScalarReplacement` on a body, in place, with the same result. The object version rewrites copies of the blocks and
  * keeps them only when the replacement goes through; this rewrites the body in a trial (`IrBody.beginTrial`) and rolls it back
- * when it does not, so the values it numbered are given again, as the object version's are.
+ * when it does not.
  */
 @:allow(compiler.ir.IrBodyScalarReplacement)
 class IrBodyNestedScalarReplacement {

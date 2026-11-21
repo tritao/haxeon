@@ -841,8 +841,7 @@ class IrTagEscapeSignatures {
 
 /**
  * `IrEnumTagLowering.finishEscapes` on a body: inline-enum requests become calls of their providers, and, when the program has
- * tag adapters (`tags`), a tag that escapes where a `Dyn` is expected is boxed by its adapter, as the object version does, with
- * new values numbered as it numbers them. A walk that does not `edit` only says whether one that does would change the body;
+ * tag adapters (`tags`), a tag that escapes where a `Dyn` is expected is boxed by its adapter, as the object version does. A walk that does not `edit` only says whether one that does would change the body;
  * both record the tags that need adapters in `required`.
  */
 class IrBodyTagEscapes {
@@ -858,9 +857,6 @@ class IrBodyTagEscapes {
 	var body:IrBody;
 	var edit = false;
 	var changed = false;
-
-	/** The id of the next boxed value, -1 until the first is made. */
-	var next = -1;
 
 	public function new(program:IrProgram, tags:Bool, lookups:IrTagEscapeSignatures, adapterEnums:Map<String, String>,
 			boxNames:Map<String, String>, unboxNames:Map<String, String>) {
@@ -878,7 +874,6 @@ class IrBodyTagEscapes {
 		this.body = body;
 		this.edit = edit;
 		changed = false;
-		next = -1;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -944,9 +939,7 @@ class IrBodyTagEscapes {
 	}
 
 	function adaptOne(block:Int, row:Int, index:Int, value:IrValueId, name:String):Void {
-		if (next < 0)
-			next = body.presentValueLimit();
-		var boxed = body.newValueAt(next++, "$enum-tag:implicit-box", body.typeId(Dyn));
+		var boxed = body.newValue("$enum-tag:implicit-box", body.typeId(Dyn));
 		required.set(name, true);
 		body.beginRow();
 		body.pushOperand(value);

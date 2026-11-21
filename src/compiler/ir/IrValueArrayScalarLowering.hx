@@ -65,8 +65,6 @@ class IrValueArrayScalarLowering {
 		if (!found)
 			return body;
 		var edited = body.forEditing(scratch.bodyBuilder), nextBlock = 0;
-		// New values are numbered from the first id nothing names, as the decoding would number them.
-		edited.keepNamedValues(scratch.namedValues);
 		for (block in 0...edited.blockCount())
 			if (edited.blockId(block) >= nextBlock)
 				nextBlock = edited.blockId(block) + 1;

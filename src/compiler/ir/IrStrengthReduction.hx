@@ -9,7 +9,7 @@ class IrStrengthReduction {
 	 * multiplication by that reciprocal.
 	 */
 	public static function runBody(body:IrBody):Bool {
-		var f64 = body.typeId(F64), changed = false, nextValue = -1;
+		var f64 = body.typeId(F64), changed = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -19,10 +19,8 @@ class IrStrengthReduction {
 					var divisor = body.definingRow(body.operand(row, 1));
 					if (divisor >= 0 && body.opcode(divisor) == IrOpcode.ConstFloat
 						&& exactNormalReciprocal(body.float(divisor))) {
-						if (nextValue < 0)
-							nextValue = body.presentValueLimit();
 						var where = body.provenance(row),
-							reciprocal = body.newValueAt(nextValue++, "strength.reciprocal", f64);
+							reciprocal = body.newValue("strength.reciprocal", f64);
 						body.beginRow();
 						var constant = body.endRow(IrOpcode.ConstFloat, reciprocal,
 							body.addFloat(1.0 / body.float(divisor)),

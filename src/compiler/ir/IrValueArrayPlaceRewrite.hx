@@ -165,12 +165,9 @@ class IrValueArrayPlaceRewrite {
 				}
 			}
 		}
-		var next = body.presentValueLimit();
-		function newValue(name:String, type:Int):IrValueId
-			return body.newValueAt(next++, name, type);
 		/** Replaces `row` by a check of the place's path (with the element itself when `includeSelf`). */
 		function checkInstead(block:Int, row:Int, place:ArrayPlace):Void {
-			var check = newValue("$array-place-check", voidType);
+			var check = body.newValue("$array-place-check", voidType);
 			IrValueArrayRows.call2(body, block, row, check, helpers.checker(place.path, true), place.array, place.index,
 				body.provenance(row));
 			body.removeRow(block, row);
@@ -193,7 +190,7 @@ class IrValueArrayPlaceRewrite {
 					case IrOpcode.FieldGet if (aliases.exists(body.operand(row, 0))):
 						var place = requiredPlace(body.operand(row, 0)),
 							path = place.path.concat([body.symbol(row).name]),
-							check = newValue("$array-place-check", voidType);
+							check = body.newValue("$array-place-check", voidType);
 						IrValueArrayRows.call2(body, block, row, check, helpers.checker(path, false), place.array,
 							place.index,
 							where);
@@ -207,7 +204,7 @@ class IrValueArrayPlaceRewrite {
 						var place = requiredPlace(body.operand(row, 0)),
 							value = body.operand(row, 1),
 							path = place.path.concat([body.symbol(row).name]),
-							check = newValue("$array-place-check", voidType);
+							check = body.newValue("$array-place-check", voidType);
 						if (aliases.exists(value))
 							throw new InternalError("Aliased place write requires component specialization");
 						IrValueArrayRows.call2(body, block, row, check, helpers.checker(path, false), place.array,
@@ -216,7 +213,7 @@ class IrValueArrayPlaceRewrite {
 						var setter = isValue(value)
 							|| isNullableScalar(value) ? methods.valueSetter(body.valueType(value),
 							path) : helpers.setter(helpers.slot(path));
-						IrValueArrayRows.call3(body, block, row, newValue("$array-place-write", voidType), setter,
+						IrValueArrayRows.call3(body, block, row, body.newValue("$array-place-write", voidType), setter,
 							place.array,
 							place.index, value, where);
 						body.removeRow(block, row);
@@ -229,8 +226,8 @@ class IrValueArrayPlaceRewrite {
 						var place = requiredPlace(aliases.exists(body.operand(row, 0)) ? body.operand(row,
 							0) : body.operand(row,
 							1)),
-							present = newValue("$array-place-present", boolType),
-							no = newValue("$array-place-false", boolType);
+							present = body.newValue("$array-place-present", boolType),
+							no = body.newValue("$array-place-false", boolType);
 						IrValueArrayRows.call2(body, block, row, present,
 							helpers.getter(helpers.slot(place.path, true)),
 							place.array, place.index, where);

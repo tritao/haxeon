@@ -154,8 +154,6 @@ class IrValueConstructors {
 		if (!found)
 			return body;
 		var edited = body.forEditing(scratch.bodyBuilder), nextBlock = 0;
-		// New values are numbered from the first id nothing names, as the decoding would number them.
-		edited.keepNamedValues(scratch.namedValues);
 		for (block in 0...edited.blockCount())
 			if (edited.blockId(block) >= nextBlock)
 				nextBlock = edited.blockId(block) + 1;
@@ -203,8 +201,7 @@ class IrValueConstructors {
 		}
 		if (!found)
 			return body;
-		var edited = copy ? body.thaw(scratch.bodyBuilder) : body.forEditing(scratch.bodyBuilder),
-			next = edited.presentValueLimit();
+		var edited = copy ? body.thaw(scratch.bodyBuilder) : body.forEditing(scratch.bodyBuilder);
 		for (block in 0...edited.blockCount()) {
 			var row = edited.firstRow(block);
 			while (row >= 0) {
@@ -212,20 +209,19 @@ class IrValueConstructors {
 				if (callee != null) {
 					var returned = straightLineResult(callee, edited.operandCount(row));
 					if (returned >= 0)
-						next = copyStraightLine(edited, block, row, callee, returned, next);
+						copyStraightLine(edited, block, row, callee, returned);
 				}
 				row = following;
 			}
 		}
-		edited.keepNamedValues(scratch.namedValues);
 		return edited;
 	}
 
 	/**
 	 * Replaces the call at `row` of block `block` (an index) by the rows of the straight-line `callee`: its arguments are the call's
-	 * operands, the value it returns (`returned`) is the call's output, and its other values new ones numbered from `next`.
+	 * operands, the value it returns (`returned`) is the call's output, and its other values new ones.
 	 */
-	function copyStraightLine(body:IrBody, block:Int, row:Int, callee:IrBody, returned:Int, next:Int):Int {
+	function copyStraightLine(body:IrBody, block:Int, row:Int, callee:IrBody, returned:Int):Void {
 		var values = IrPassScratch.filledInts(calleeValues, callee.valueLimit(), -1), out = body.output(row);
 		for (index in 0...callee.argumentCount())
 			values[callee.argument(index)] = body.operand(row, index);
@@ -233,7 +229,7 @@ class IrValueConstructors {
 		while (source >= 0 && source != terminator) {
 			var result = callee.output(source);
 			if (result.exists())
-				values[result] = (result:Int) == returned ? out : body.newValueAt(next++, callee.valueName(result),
+				values[result] = (result:Int) == returned ? out : body.newValue(callee.valueName(result),
 					callee.valueTypeId(result));
 			for (index in 0...callee.operandCount(source)) {
 				var operand = callee.operand(source, index);
@@ -244,7 +240,6 @@ class IrValueConstructors {
 			source = callee.nextRow(source);
 		}
 		body.removeRow(block, row);
-		return next;
 	}
 
 	/**
