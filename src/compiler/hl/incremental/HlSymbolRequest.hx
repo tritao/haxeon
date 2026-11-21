@@ -135,6 +135,26 @@ class HlRemap {
 		return null;
 	}
 
+	/** `request`, replayed, with the index this build gave it: what lowering the function in this build would have recorded. */
+	public function rebased(request:HlSymbolRequest):HlSymbolRequest
+		return switch request {
+			case ConstInt(value, index): ConstInt(value, ints.get(index));
+			case ConstFloat(value, index): ConstFloat(value, floats.get(index));
+			case ConstString(value, index): ConstString(value, strings.get(index));
+			case TypeOf(type, index): TypeOf(type, types.get(index));
+			case RefTo(type, index): RefTo(type, types.get(index));
+			case RuntimeHeader(kind, index): RuntimeHeader(kind, types.get(index));
+			case NativeStorage(type, layout, index): NativeStorage(type, layout,
+				index == null ? null : types.get(index));
+			case GlobalSlot(name, type, index): GlobalSlot(name, type, globals.get(index));
+			case GlobalByName(name, index): GlobalByName(name, globals.get(index));
+			case StringLiteral(value, index): StringLiteral(value, globals.get(index));
+			case EnumValue(enumName, constructor, index): EnumValue(enumName, constructor, globals.get(index));
+			case FunctionRef(name, index): FunctionRef(name, functions.get(index));
+			// Slots are checked to be where they were, not mapped.
+			case FieldSlot(_, _, _), MethodSlot(_, _, _), InterfaceSlot(_, _, _), MethodSlotKnown(_, _, _): request;
+		};
+
 	/** The index of `type`, the way lowering asks for it. */
 	public static function typeIndex(symbols:HlSymbolTable, type:IrType):Int
 		return switch type {

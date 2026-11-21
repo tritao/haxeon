@@ -496,11 +496,16 @@ class HlLower {
 					var linked = compiler.hl.incremental.HlLink.link(entry, symbols, functionIndices, view);
 					if (linked.fn != null) {
 						code.functions.push(linked.fn);
+						// A function whose indices moved is kept with this build's, so the cache holds the module's code rather than a
+						// second copy of it, and the next build that gives it the same indices keeps it as it is.
+						var rebased = linked.rebased;
+						if (rebased != null) {
+							movedFunctions++;
+							entry = rebased;
+						}
 						entries.set(fn.name, entry.source == fn ? entry : entry.from(fn));
 						this.lowered.set(fn.name, entry);
 						reusedFunctions++;
-						if (linked.fn != entry.fn)
-							movedFunctions++;
 						continue;
 					}
 				}

@@ -10,6 +10,9 @@ import compiler.hl.lower.HlLoweringView;
 typedef HlLinked = {
 	final fn:Null<HlFunction>;
 	final reason:Null<String>;
+
+	/** When the indices moved, the function as lowering it in this build would have recorded it; null when they all stay. */
+	final ?rebased:HlLoweredFunction;
 }
 
 /**
@@ -37,15 +40,20 @@ class HlLink {
 		var before = lowered.fn;
 		if (remap.identity && own == before.functionIndex)
 			return {fn: before, reason: null};
-		return {fn: new HlFunction(index(remap.types, before.type, "function type"), own,
+		var fn = new HlFunction(index(remap.types, before.type, "function type"), own,
 			[for (register in before.registers) index(remap.types, register, "register type")],
 			[for (instruction in before.opcodes) rewrite(instruction, remap)], before.debugLocations,
 			[for (assignment in before.debugAssignments)
 			{
 				name:index(remap.strings, assignment.name, "debug name"), position:assignment.position,
 					scopeEnd:assignment.scopeEnd
-			}]),
-				reason: null};
+			}]);
+		return {
+			fn: fn,
+			reason: null,
+			rebased: new HlLoweredFunction(lowered.name, lowered.source, fn,
+				[for (request in lowered.requests) remap.rebased(request)], lowered.facts)
+		};
 	}
 
 	/** An index the function uses must be one of its requests: anything else would be moved by no one. */
