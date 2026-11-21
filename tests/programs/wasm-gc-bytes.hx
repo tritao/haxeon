@@ -29,14 +29,15 @@ function main():Int {
 		return 1;
 	if (doubleWord.getDouble(0) != 2.25)
 		return 2;
+	// As Haxe's HashLink Bytes: a read outside the range gives 0, a write there throws OutsideBounds.
 	var boundsCaught = false;
 	try {
-		bytes.get(bytes.length);
-	} catch (error:Dynamic) {
-		boundsCaught = true;
+		bytes.set(bytes.length, 1);
+	} catch (error:haxe.io.Error) {
+		boundsCaught = error == haxe.io.Error.OutsideBounds;
 	}
 	return bytes.length == 6 && bytes.get(2) == 7 && bytes.get(3) == 42 && copy.get(0) == 9
 		&& copy.compare(expected) == 0
 		&& word.getInt32(0) == -2147483647 && text.toString() == "ok" && text.getString(1, 1) == "k" && comparison < 0
-		&& boundsCaught ? 42 : 0;
+		&& boundsCaught && bytes.get(bytes.length) == 0 ? 42 : 0;
 }
