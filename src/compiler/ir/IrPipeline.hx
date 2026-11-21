@@ -461,36 +461,31 @@ class IrPipeline {
 	}
 
 	/**
-	 * Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen. Its call rewrite can
-	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
+	 * The first stage over bodies on every target: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each
+	 * function is encoded. Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen; its
+	 * call rewrite can introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValueConstructors.rewrite(program);
+		stableBodySources(program, context);
+		IrValueConstructors.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}
 
-	/**
-	 * The last value phi scalarization before scalar replacement, on bodies. Without value lanes on Wasm, the conversion point
-	 * (docs/design/IR_CORE_COLUMNS.md, migration), where each function is encoded; elsewhere that is scalar arguments.
-	 */
+	/** The last value phi scalarization before scalar replacement. */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
-		if (wasmWithoutLanes(program, context))
-			stableBodySources(program, context);
 		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch,
 			context.options.keepSession);
 		return program;
 	}
 
-	/** Wasm's scalar argument ABI, with value lanes; the conversion point there (see `valuePhiScalarizationBodies`). */
+	/** Wasm's scalar argument ABI, with value lanes. */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
-		stableBodySources(program, context);
 		IrScalarArguments.rewrite(program, true, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}
 
-	/** HashLink's scalar argument and result ABI; the conversion point there (see `valuePhiScalarizationBodies`). */
+	/** HashLink's scalar argument and result ABI. */
 	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrProgram {
-		stableBodySources(program, context);
 		IrScalarArguments.rewrite(program, false, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}

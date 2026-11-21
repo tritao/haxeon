@@ -54,6 +54,9 @@ class IrPassScratch {
 	/** The builder that copies and compactions of bodies reuse (`IrBody.freeze`, `IrBody.thaw`). */
 	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
 
+	/** The inliner's expansion of a call by a branching callee, its tables reused. */
+	public final callExpansion = new IrBodyCallExpansion();
+
 	public function new() {}
 
 	/** `values` with `count` entries, each `value`; its storage is kept between uses. */

@@ -2,84 +2,124 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
-import compiler.ir.SourceProvenance.Located;
 
-/** Expand bounded value constructors so newly constructed places can remain scalar. */
+/**
+ * Expand bounded value constructors so newly constructed places can remain scalar. On IR bodies (docs/design/IR_CORE_COLUMNS.md,
+ * migration): a straight-line constructor's rows are copied in place of its call, a branching one is expanded as the inliner
+ * expands a call (`IrBodyCallExpansion`).
+ */
 class IrValueConstructors {
-	public static function rewrite(program:IrProgram):Void {
+	final scratch:IrPassScratch;
+
+	/** By callee value id, its value in the body a straight-line constructor is copied into. */
+	final calleeValues:Array<Int> = [];
+
+	/**
+	 * Expands `program`'s value constructor calls, on bodies made with `types` (those of the program's bodies when not given,
+	 * `IrTypeIds.ofFunctions`), which this stage encodes as the pipeline's first over bodies. A function that changes becomes its
+	 * edited body: a frozen copy when a session keeps the stage's functions (`retained`), else the body edited in place.
+	 */
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = true):Void {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(program.functions);
+		new IrValueConstructors(scratch == null ? new IrPassScratch() : scratch).run(program, types, retained);
+	}
+
+	function new(scratch:IrPassScratch)
+		this.scratch = scratch;
+
+	function run(program:IrProgram, types:IrTypeIds, retained:Bool):Void {
+		var builder = scratch.bodyBuilder;
+		var bodies = [for (fn in program.functions) fn.bodyIn(types, builder, retained)];
+		if (!retained)
+			for (fn in program.functions)
+				fn.releaseDecoded();
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
-		var constructors:Map<String, IrFunction> = [],
-			straight:Map<String, IrFunction> = [];
-		for (fn in program.functions) {
-			var owner = switch fn.result {
+		// Callees are frozen, or copies: the functions they were made from are edited in place below.
+		var constructors:Map<String, IrBody> = [],
+			straight:Map<String, IrBody> = [];
+		for (body in bodies) {
+			var owner = switch body.types.type(body.result) {
 				case Obj(name): objects.get(name);
 				default: null;
 			};
-			if (owner == null || !owner.isValue || fn.name != owner.name + ".new" || fn.blocks.length == 0
-				|| fn.blocks.length > 16)
+			if (owner == null || !owner.isValue || body.name != owner.name + ".new" || body.blockCount() == 0
+				|| body.blockCount() > 16)
 				continue;
 			var safe = true, count = 0;
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					count++;
-					switch located.value {
-						case Phi(_, _) if (fn.blocks.length == 1):
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.Phi if (body.blockCount() == 1):
 							safe = false;
-						case BeginTry(_, _, _) | EndTry(_, _) | Catch(_):
+						case IrOpcode.BeginTry | IrOpcode.EndTry | IrOpcode.Catch:
 							safe = false;
 						default:
 					}
+					if (!body.opcode(row).isTerminator())
+						count++;
+					row = body.nextRow(row);
 				}
+			}
 			if (safe && count <= 64) {
-				if (fn.blocks.length == 1) {
-					var term = fn.blocks[0].terminator;
-					if (term != null)
-						switch term.value {
-							case Return(_):
-								straight.set(fn.name, fn);
-							default:
-						}
+				if (body.blockCount() == 1) {
+					var terminator = body.terminatorRow(0);
+					if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Return)
+						straight.set(body.name, snapshot(body));
 				} else
-					constructors.set(fn.name, fn);
+					constructors.set(body.name, snapshot(body));
 			}
 		}
 		// Prepare nested straight-line bodies first. Expanding only the caller once leaves constructor calls
 		// introduced by an outer constructor boxed even when the complete value never escapes.
 		var prepared = prepareStraightLine(straight),
-			branches:Map<String, IrFunction> = [];
-		for (name => fn in constructors)
-			branches.set(name, expandStraightLine(fn, prepared));
-		program.functions = [for (fn in program.functions) expand(expandStraightLine(fn, prepared), branches)];
+			branches:Map<String, IrBody> = [];
+		for (name => body in constructors)
+			branches.set(name, expandStraightLine(body, prepared, true));
+		program.functions = [for (index in 0...bodies.length) {
+			var source = bodies[index],
+				body = expand(expandStraightLine(source, prepared, false), branches);
+			body == source ? program.functions[index] : retained ? IrFunction.ofBody(body.freeze(true,
+				builder)) : IrFunction.ofOwnedBody(body);
+		}];
 	}
 
+	/** `body`, or a copy of it when it is not frozen. */
+	function snapshot(body:IrBody):IrBody
+		return body.frozen ? body : body.thaw(scratch.bodyBuilder);
+
 	/** Expand acyclic nested constructor bodies once, with a size bound to avoid exponential code growth. */
-	static function prepareStraightLine(constructors:Map<String, IrFunction>):Map<String, IrFunction> {
-		var prepared:Map<String, IrFunction> = [],
+	function prepareStraightLine(constructors:Map<String, IrBody>):Map<String, IrBody> {
+		var prepared:Map<String, IrBody> = [],
 			visiting:Map<String, Bool> = [];
-		function prepare(name:String):Null<IrFunction> {
+		function prepare(name:String):Null<IrBody> {
 			if (prepared.exists(name))
 				return prepared.get(name);
 			if (visiting.exists(name))
 				return null;
-			var fn = constructors.get(name);
-			if (fn == null)
+			var body = constructors.get(name);
+			if (body == null)
 				return null;
 			visiting.set(name, true);
-			var children:Map<String, IrFunction> = [];
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, child, _) if (child.name != name && constructors.exists(child.name)):
-							var nested = prepare(child.name);
+			var children:Map<String, IrBody> = [];
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.Call) {
+						var child = body.symbol(row).name;
+						if (child != name && constructors.exists(child)) {
+							var nested = prepare(child);
 							if (nested != null)
-								children.set(child.name, nested);
-						default:
+								children.set(child, nested);
+						}
 					}
-			var result = expandStraightLine(fn, children), count = 0;
-			for (block in result.blocks)
-				count += block.instructions.length;
-			if (count > 256)
-				result = fn;
+					row = body.nextRow(row);
+				}
+			}
+			var result = expandStraightLine(body, children, true);
+			if (result.instructionCount() > 256)
+				result = body;
 			visiting.remove(name);
 			prepared.set(name, result);
 			return result;
@@ -91,116 +131,142 @@ class IrValueConstructors {
 		return prepared;
 	}
 
-	static function expand(fn:IrFunction, constructors:Map<String, IrFunction>):IrFunction {
+	/** A call row of `body` to one of `constructors` other than itself: the constructor, or null. */
+	static function constructorCall(body:IrBody, row:Int, constructors:Map<String, IrBody>):Null<IrBody> {
+		if (body.opcode(row) != IrOpcode.Call)
+			return null;
+		var name = body.symbol(row).name;
+		return name != body.name ? constructors.get(name) : null;
+	}
+
+	/**
+	 * `body` with each call of a branching constructor of `constructors` expanded, the continuation after each visited next: on
+	 * `body` itself when no cache holds it, else on a copy; `body` when there is none.
+	 */
+	function expand(body:IrBody, constructors:Map<String, IrBody>):IrBody {
 		var found = false;
-		for (block in fn.blocks) {
-			for (located in block.instructions)
-				switch located.value {
-					case Call(_, name, _) if (name.name != fn.name && constructors.exists(name.name)):
-						found = true;
-					default:
-				}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0 && !found) {
+				if (constructorCall(body, row, constructors) != null)
+					found = true;
+				row = body.nextRow(row);
+			}
 			if (found)
 				break;
 		}
 		if (!found)
-			return fn;
-		var next = fn.nextValueId(), nextBlock = 0, blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions)
-				copy.instructions.push(located);
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-			if (block.id >= nextBlock)
-				nextBlock = block.id + 1;
-		}
+			return body;
+		var edited = body.forEditing(scratch.bodyBuilder), nextBlock = 0;
+		// New values are numbered from the first id nothing names, as the decoding would number them.
+		edited.keepNamedValues(scratch.namedValues);
+		for (block in 0...edited.blockCount())
+			if (edited.blockId(block) >= nextBlock)
+				nextBlock = edited.blockId(block) + 1;
 		var index = 0, changes = 0;
-		while (index < blocks.length) {
-			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;
-			for (i in 0...block.instructions.length)
-				switch block.instructions[i].value {
-					case Call(_, name, args) if (constructors.exists(name.name) && name.name != fn.name):
-						var target:IrFunction = cast constructors.get(name.name);
-						if (args.length == target.arguments.length) {
-							position = i;
-							callee = target;
-							break;
-						}
-					default:
+		while (index < edited.blockCount()) {
+			var call = -1, callee:Null<IrBody> = null, row = edited.firstRow(index);
+			while (row >= 0) {
+				var target = constructorCall(edited, row, constructors);
+				if (target != null && edited.operandCount(row) == target.argumentCount()) {
+					call = row;
+					callee = target;
+					break;
 				}
+				row = edited.nextRow(row);
+			}
 			if (callee == null) {
 				index++;
 				continue;
 			}
-			var expanded = IrInliner.expand(blocks, index, position, callee, next, nextBlock);
-			next = expanded.nextValue;
-			nextBlock = expanded.nextBlock;
+			nextBlock = scratch.callExpansion.expand(edited, index, call, callee, nextBlock, false);
 			changes++;
 			// Visit the continuation, not the cloned callee: recursive constructors
 			// stay calls, while every independent call site can be expanded.
-			index += callee.blocks.length + 1;
+			index += callee.blockCount() + 1;
 		}
-		return changes == 0 ? fn : fn.withBlocks(blocks);
+		return changes == 0 ? body : edited;
 	}
 
-	static function expandStraightLine(fn:IrFunction, constructors:Map<String, IrFunction>):IrFunction {
-		// The first free value id is found only once a call is expanded; only the blocks with one are copied.
-		var next = -1;
-		return IrFunctionRewrite.instructions(fn, function(located) {
-			return switch located.value {
-				case Call(out, name, args) if (constructors.exists(name.name) && name.name != fn.name):
-					var callee:IrFunction = cast constructors.get(name.name),
-						single:IrBlock = callee.blocks[0],
-						returned = straightLineResult(callee, args.length);
-					if (returned == null) null;
-					else {
-						if (next < 0)
-							next = fn.nextValueId();
-						var mapping:Map<Int, IrValue> = [],
-							expanded:Array<Located<IrInstruction>> = [];
-						for (i in 0...args.length)
-							mapping.set(callee.arguments[i].id, args[i]);
-						for (instruction in single.instructions) {
-							var result = IrOperands.output(instruction.value);
-							if (result != null)
-								mapping.set(result.id,
-									result.id == returned.id ? out : new IrValue(next++, result.name, result.type));
-							var mapped = IrInliner.remap(instruction.value, value -> {
-								var found = mapping.get(value.id);
-								if (found == null)
-									throw new InternalError('Missing value constructor operand ${value.id}');
-								return found;
-							}, id -> id);
-							expanded.push(new Located(mapped, instruction.provenance));
-						}
-						expanded;
-					}
-				default:
-					null;
-			};
-		});
+	/**
+	 * `body` with each call of a straight-line constructor of `constructors` replaced by the constructor's rows: on a copy when
+	 * `copy` or when a cache holds `body`, else on `body` itself; `body` when there is none.
+	 */
+	function expandStraightLine(body:IrBody, constructors:Map<String, IrBody>, copy:Bool):IrBody {
+		var found = false;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0 && !found) {
+				var callee = constructorCall(body, row, constructors);
+				if (callee != null && straightLineResult(callee, body.operandCount(row)) >= 0)
+					found = true;
+				row = body.nextRow(row);
+			}
+			if (found)
+				break;
+		}
+		if (!found)
+			return body;
+		var edited = copy ? body.thaw(scratch.bodyBuilder) : body.forEditing(scratch.bodyBuilder),
+			next = edited.presentValueLimit();
+		for (block in 0...edited.blockCount()) {
+			var row = edited.firstRow(block);
+			while (row >= 0) {
+				var following = edited.nextRow(row), callee = constructorCall(edited, row, constructors);
+				if (callee != null) {
+					var returned = straightLineResult(callee, edited.operandCount(row));
+					if (returned >= 0)
+						next = copyStraightLine(edited, block, row, callee, returned, next);
+				}
+				row = following;
+			}
+		}
+		edited.keepNamedValues(scratch.namedValues);
+		return edited;
 	}
 
-	/** The value a straight-line constructor called with `arguments` arguments returns, defined in its block; null when it cannot be expanded. */
-	static function straightLineResult(callee:IrFunction, arguments:Int):Null<IrValue> {
-		if (arguments != callee.arguments.length)
-			return null;
-		var single:IrBlock = callee.blocks[0], terminator = single.terminator;
-		if (terminator == null)
-			return null;
-		var returned:Null<IrValue> = switch terminator.value {
-			case Return(value): value;
-			default: null;
-		};
-		if (returned == null)
-			return null;
-		for (instruction in single.instructions) {
-			var value = IrOperands.output(instruction.value);
-			if (value != null && value.id == returned.id)
+	/**
+	 * Replaces the call at `row` of block `block` (an index) by the rows of the straight-line `callee`: its arguments are the call's
+	 * operands, the value it returns (`returned`) is the call's output, and its other values new ones numbered from `next`.
+	 */
+	function copyStraightLine(body:IrBody, block:Int, row:Int, callee:IrBody, returned:Int, next:Int):Int {
+		var values = IrPassScratch.filledInts(calleeValues, callee.valueLimit(), -1), out = body.output(row);
+		for (index in 0...callee.argumentCount())
+			values[callee.argument(index)] = body.operand(row, index);
+		var terminator = callee.terminatorRow(0), source = callee.firstRow(0);
+		while (source >= 0 && source != terminator) {
+			var result = callee.output(source);
+			if (result.exists())
+				values[result] = (result:Int) == returned ? out : body.newValueAt(next++, callee.valueName(result),
+					callee.valueTypeId(result));
+			for (index in 0...callee.operandCount(source)) {
+				var operand = callee.operand(source, index);
+				if ((operand:Int) >= values.length || values[operand] < 0)
+					throw new InternalError('Missing value constructor operand $operand');
+			}
+			body.linkBefore(block, row, body.copyRow(callee, source, values));
+			source = callee.nextRow(source);
+		}
+		body.removeRow(block, row);
+		return next;
+	}
+
+	/**
+	 * The value a straight-line constructor called with `arguments` operands returns, when a row of its block defines it, else -1:
+	 * it cannot be expanded.
+	 */
+	static function straightLineResult(callee:IrBody, arguments:Int):Int {
+		if (arguments != callee.argumentCount())
+			return -1;
+		var terminator = callee.terminatorRow(0);
+		if (terminator < 0 || callee.opcode(terminator) != IrOpcode.Return)
+			return -1;
+		var returned = callee.operand(terminator, 0), row = callee.firstRow(0);
+		while (row >= 0) {
+			if (row != terminator && (callee.output(row):Int) == (returned:Int))
 				return returned;
+			row = callee.nextRow(row);
 		}
-		return null;
+		return -1;
 	}
-
 }
