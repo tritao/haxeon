@@ -58,6 +58,8 @@ class IrFunctionStateEquality {
 
 	/** `same` on two functions that are bodies (`IrFunction.ofBody`), read as rows, so neither is decoded. */
 	public static function sameBodies(left:IrBody, right:IrBody):Bool {
+		// Types are compared as types, through each body's own table (`IrBody.types`), never as ids: two compiles' bodies have
+		// tables of their own.
 		if (left == right)
 			return true;
 		if (left.name != right.name

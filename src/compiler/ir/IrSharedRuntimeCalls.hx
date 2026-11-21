@@ -67,7 +67,7 @@ class IrSharedRuntimeCalls {
 		}
 		// A helper's own call is the one that keeps the fast path.
 		var result = program.copy(),
-			types = new IrTypeIds(),
+			types = IrTypeIds.ofFunctions(program.functions),
 			builder = new IrBodyBuilder(types),
 			rows:Array<Int> = [],
 			targets:Array<Int> = [];

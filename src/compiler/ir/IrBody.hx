@@ -588,6 +588,9 @@ class IrBody {
 		editing();
 		if (id > valueTypes.length)
 			throw new InternalError('IR body $name: value $id is past the next id ${valueTypes.length}');
+		// A linked row still defining `id` would be read as the new value (`presentValueLimit` is the full check, a walk).
+		if (valueRows[id] >= 0)
+			throw new InternalError('IR body $name: value $id is still defined by row ${valueRows[id]}');
 		if (trial != null)
 			throw new InternalError('IR body $name has a trial open, which could not undo this edit');
 		valueTypes[id] = typeId;

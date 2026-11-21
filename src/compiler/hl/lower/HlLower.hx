@@ -79,8 +79,11 @@ class HlLower {
 	/** The body of the function being lowered (`lowerFunction`). */
 	var body:IrBody;
 
-	/** The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`). */
-	final bodyTypes = new compiler.ir.IrTypeIds();
+	/**
+	 * The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`): the program's, so every
+	 * body of the program shares one table.
+	 */
+	var bodyTypes = new compiler.ir.IrTypeIds();
 
 	/** `allocateTemporary`, made once: the scalar locals of each function take their registers through it. */
 	final allocateRegister:IrType->Int;
@@ -342,7 +345,8 @@ class HlLower {
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
-		var types = new compiler.ir.IrTypeIds(), valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
+		var types = compiler.ir.IrTypeIds.ofFunctions(program.functions),
+			valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
 		for (fn in program.functions)
 			if (selected == null || selectedNames.exists(fn.name)) {
 				var body = fn.bodyIn(types);
@@ -389,6 +393,7 @@ class HlLower {
 		}
 
 	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Void {
+		bodyTypes = compiler.ir.IrTypeIds.ofFunctions(program.functions);
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var hasFunctionIndices = false;

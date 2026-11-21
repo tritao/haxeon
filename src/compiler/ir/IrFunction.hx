@@ -159,6 +159,8 @@ class IrFunction {
 	 */
 	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder, retained = true):IrBody {
 		var known = body;
+		// A body is read with its own table (`IrBody.types`), whichever `types` is asked for; splicing rows and comparing bodies
+		// across tables is checked where it happens (the inliner's sources, `IrFunctionStateEquality.sameBodies`).
 		if (known != null)
 			return known;
 		var encoded = IrBodyBuilder.encode(this, types, builder),
