@@ -369,6 +369,17 @@ class Lexer {
 	@:processWide("one set of scratch columns per thread, cleared by each file it lexes and copied out")
 	static final scratchColumns = new sys.thread.Tls<Null<LexerColumns>>();
 
+	/**
+	 * Lets go of this thread's tables, for a thread about to end: the runtime keeps a thread-local value alive until it is
+	 * cleared, so a thread that ends without this keeps its tables for the rest of the process (a compile server lexes each
+	 * build on a thread of its own).
+	 */
+	public static function releaseThreadTables():Void {
+		operatorTables.value = null;
+		nameTables.value = null;
+		scratchColumns.value = null;
+	}
+
 	final names:NameTable;
 
 	/** The text of an operator token, shared by every token with the same bytes; longer texts are read as usual. */

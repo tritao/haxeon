@@ -218,6 +218,7 @@ class CompilerServer {
 					failure = error;
 			if (counting)
 				AllocationCensus.end();
+			compiler.syntax.Lexer.releaseThreadTables();
 			done.release();
 		});
 		// A background compile has no requester to disconnect.
