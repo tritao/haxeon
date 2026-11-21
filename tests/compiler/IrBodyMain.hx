@@ -298,6 +298,29 @@ class IrBodyMain {
 			block(5, [ConstInt(two, 2)], Return(two))
 		], Ordinary), fn -> compiler.ir.IrJumpThreading.threadConstantBranches(fn),
 			(body, scratch) -> compiler.ir.IrJumpThreading.threadConstantBranchesBody(body, scratch));
+		var reference = value("reference", RawPtr),
+			stored = value("stored", Void),
+			loaded = value("loaded", I32),
+			address = IrSymbol.of(compiler.ir.IrHlScalarRef.ADDRESS),
+			store = IrSymbol.of(compiler.ir.IrHlScalarRef.STORE),
+			load = IrSymbol.of(compiler.ir.IrHlScalarRef.LOAD);
+		samePass("scalar reference promotion", new IrFunction("Main.reference", [condition, x], I32, [
+			block(0, [
+				Call(reference, address, [x]),
+				Call(stored, store, [reference, x]),
+				Call(loaded, load, [reference])
+			], Return(loaded))
+		], Ordinary), fn -> compiler.ir.IrScalarRefPromotion.run(fn),
+			(body, scratch) -> compiler.ir.IrScalarRefPromotion.runBody(body, scratch));
+		var receiver = value("receiver", Obj("Point")),
+			firstCheck = value("firstCheck", Void),
+			secondCheck = value("secondCheck", Void),
+			check = IrSymbol.of(compiler.ir.IrReceiverCheck.NAME);
+		samePass("receiver check elision", new IrFunction("Main.checks", [condition, x, receiver], I32, [
+			block(0, [Call(firstCheck, check, [receiver])], Jump(1)),
+			block(1, [Call(secondCheck, check, [receiver])], Return(x))
+		], Ordinary), fn -> compiler.ir.IrReceiverCheckElision.run(fn),
+			(body, scratch) -> compiler.ir.IrReceiverCheckElision.runBody(body, scratch));
 	}
 
 	static function check(fn:IrFunction, types:IrTypeIds):Void {

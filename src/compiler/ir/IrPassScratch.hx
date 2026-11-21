@@ -118,5 +118,8 @@ class IrNonNullScratch {
 	public final provenLength:Array<Int> = [];
 	public final provenWords:Array<Int> = [];
 
+	/** The rows of a body whose receiver the last analysis of a body proved non-null (`IrNonNullFacts.analyzeBody`). */
+	public final provenRows = new IrValueMarks();
+
 	public function new() {}
 }

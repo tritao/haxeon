@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 import compiler.ir.IrPassScratch.IrNonNullScratch;
+import compiler.ir.IrPassScratch.IrValueMarks;
 
 /** Must facts at instruction entry; SSA values are never invalidated by a call or a store. */
 class IrNonNullFacts {
@@ -42,6 +43,39 @@ class IrNonNullFacts {
 		return start >= 0 && word < rows.provenLength[block]
 			&& (rows.provenWords[start + word] & (1 << (index & 31))) != 0;
 	}
+
+	/**
+	 * The analysis on a body: the rows whose receiver is proven non-null on entry, marked in `scratch.provenRows` (cleared first),
+	 * which holds them until it is next given to an analysis. `graph` is the body's.
+	 */
+	public static function analyzeBody(body:IrBody, checkedDereferences:Bool, graph:IrBodyGraph,
+			scratch:IrNonNullScratch):IrValueMarks {
+		scratch.provenRows.clear();
+		var any = false;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0 && !any) {
+				any = checkedRow(body, row).exists();
+				row = body.nextRow(row);
+			}
+		}
+		if (any)
+			new NonNullBodyFlow(body, checkedDereferences, graph, scratch).run();
+		return scratch.provenRows;
+	}
+
+	/** `checked` for a body's row: the receiver it dereferences, or a value that does not exist. */
+	public static function checkedRow(body:IrBody, row:Int):IrValueId
+		return switch body.opcode(row) {
+			case IrOpcode.Call:
+				body.symbol(row).name == IrReceiverCheck.NAME && body.operandCount(row) == 1 ? body.operand(row,
+					0) : IrValueId.of(-1);
+			case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure, IrOpcode.ArrayGet,
+				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew, IrOpcode.IteratorHasNext,
+				IrOpcode.IteratorNext,
+				IrOpcode.EnumIndex, IrOpcode.EnumField: body.operand(row, 0);
+			default: IrValueId.of(-1);
+		};
 
 	public static function checked(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
@@ -316,6 +350,258 @@ private class NonNullFlow {
 						return testValue[condition.id];
 				default:
 			}
+		return -1;
+	}
+
+	function edgeHas(from:Int, to:Int, value:Int):Bool {
+		if (hasRow(from)) {
+			var index = position(value);
+			if (index >= 0 && (outgoing[from * words + (index >>> 5)] & (1 << (index & 31))) != 0)
+				return true;
+		}
+		return edgeFact(from, to) == value && value >= 0;
+	}
+
+	function testOf(condition:Int):Int
+		return condition >= 0 && condition < testValue.length ? testValue[condition] : -1;
+
+	static inline function filledInts(values:Array<Int>, count:Int, value:Int):Array<Int>
+		return IrPassScratch.filledInts(values, count, value);
+
+	static inline function filledBools(values:Array<Bool>, count:Int, value:Bool):Array<Bool>
+		return IrPassScratch.filledBools(values, count, value);
+}
+
+/** `NonNullFlow` on a body: the same facts, proven per row instead of per instruction index. */
+private class NonNullBodyFlow {
+	final body:IrBody;
+	final checkedDereferences:Bool;
+	final graph:IrBodyGraph;
+	final scratch:IrNonNullScratch;
+	final positions:Array<Int>;
+	final testValue:Array<Int>;
+	final testOnTrue:Array<Bool>;
+	final outgoing:Array<Int>;
+	final receiverCheck:Int;
+	var words = 0;
+	var hasRows = false;
+
+	public function new(body:IrBody, checkedDereferences:Bool, graph:IrBodyGraph, scratch:IrNonNullScratch) {
+		this.body = body;
+		this.checkedDereferences = checkedDereferences;
+		this.graph = graph;
+		this.scratch = scratch;
+		positions = scratch.positions;
+		testValue = scratch.testValue;
+		testOnTrue = scratch.testOnTrue;
+		outgoing = scratch.outgoing;
+		receiverCheck = IrSymbol.of(IrReceiverCheck.NAME).id;
+	}
+
+	public function run():Void {
+		var valueCount = body.valueLimit(), blockCount = 0;
+		for (block in 0...body.blockCount())
+			if (body.blockId(block) >= blockCount)
+				blockCount = body.blockId(block) + 1;
+		filledInts(positions, valueCount, -1);
+		var count = 0;
+		for (index in 0...body.argumentCount())
+			if (positions[body.argument(index)] < 0)
+				positions[body.argument(index)] = count++;
+		var nulls = filledBools(scratch.nulls, valueCount, false),
+			fresh = scratch.fresh,
+			hasTry = false,
+			exactTest = IrSymbol.of(IrExactTypeFacts.TEST).id;
+		fresh.resize(0);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var out = body.output(row);
+				if (out.exists() && positions[out] < 0)
+					positions[out] = count++;
+				switch body.opcode(row) {
+					case IrOpcode.ConstNull:
+						nulls[out] = true;
+					case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+						fresh.push(out);
+					case IrOpcode.BeginTry, IrOpcode.EndTry, IrOpcode.Catch:
+						hasTry = true;
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		filledInts(testValue, valueCount, -1);
+		filledBools(testOnTrue, valueCount, false);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					// An exact-class test holds only for a non-null object (IrExactTypeFacts).
+					case IrOpcode.Call if (body.aux(row) == exactTest && body.operandCount(row) == 2):
+						testValue[body.output(row)] = body.operand(row, 0);
+						testOnTrue[body.output(row)] = true;
+					case IrOpcode.Equal:
+						var left = body.operand(row, 0), right = body.operand(row, 1);
+						if (isNull(nulls, left))
+							testValue[body.output(row)] = right;
+						else if (isNull(nulls, right))
+							testValue[body.output(row)] = left;
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		words = (count + 31) >>> 5;
+		var before = filledInts(scratch.before, words, 0), after = filledInts(scratch.after, words, 0);
+		var incoming = scratch.incoming;
+		if (!hasTry) {
+			hasRows = true;
+			filledInts(incoming, blockCount * words, 0);
+			filledInts(outgoing, blockCount * words, 0);
+			for (id in graph.order)
+				for (word in 0...words)
+					outgoing[id * words + word] = word == words - 1
+						&& (count & 31) != 0 ? -1 >>> (32 - (count & 31)) : -1;
+			var entry = body.blockId(0), changed = true;
+			while (changed) {
+				changed = false;
+				for (id in graph.order) {
+					var predecessors = graph.predecessorCount(id);
+					if (id != entry && predecessors > 0) {
+						var first = graph.predecessor(id, 0);
+						loadEdge(before, first, edgeFact(first, id));
+						for (i in 1...predecessors) {
+							var pred = graph.predecessor(id, i);
+							intersectEdge(before, pred, edgeFact(pred, id));
+						}
+					} else
+						clear(before);
+					for (word in 0...words) {
+						incoming[id * words + word] = before[word];
+						after[word] = before[word];
+					}
+					var block = graph.indexOf(id), row = body.firstRow(block), terminator = body.terminatorRow(block);
+					while (row >= 0 && row != terminator) {
+						transfer(row, after, id, true);
+						row = body.nextRow(row);
+					}
+					var base = id * words;
+					for (word in 0...words)
+						if (outgoing[base + word] != after[word]) {
+							outgoing[base + word] = after[word];
+							changed = true;
+						}
+				}
+			}
+		}
+		var facts = before, proven = scratch.provenRows;
+		for (block in 0...body.blockCount()) {
+			var id = body.blockId(block);
+			if (hasRows && graph.isReachable(id))
+				for (word in 0...words)
+					facts[word] = incoming[id * words + word];
+				else
+					clear(facts);
+			// Fresh SSA definitions stay non-null even when exception edges prevent propagating check facts.
+			if (hasTry)
+				for (value in fresh)
+					set(facts, value, true);
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var receiver = IrNonNullFacts.checkedRow(body, row);
+				if (receiver.exists() && has(facts, receiver))
+					proven.add(row);
+				transfer(row, facts, id, !hasTry);
+				row = body.nextRow(row);
+			}
+		}
+	}
+
+	static function isNull(nulls:Array<Bool>, value:Int):Bool
+		return value >= 0 && value < nulls.length && nulls[value];
+
+	function position(value:Int):Int
+		return value >= 0 && value < positions.length ? positions[value] : -1;
+
+	function has(facts:Array<Int>, value:Int):Bool {
+		var index = position(value);
+		return index >= 0 && (facts[index >>> 5] & (1 << (index & 31))) != 0;
+	}
+
+	function set(facts:Array<Int>, value:Int, present:Bool):Void {
+		var index = position(value);
+		if (index < 0)
+			return;
+		if (present)
+			facts[index >>> 5] |= 1 << (index & 31);
+		else
+			facts[index >>> 5] &= ~(1 << (index & 31));
+	}
+
+	function clear(facts:Array<Int>):Void
+		for (word in 0...words)
+			facts[word] = 0;
+
+	function hasRow(block:Int):Bool
+		return hasRows && graph.isReachable(block);
+
+	function loadEdge(facts:Array<Int>, from:Int, fact:Int):Void {
+		if (hasRow(from))
+			for (word in 0...words)
+				facts[word] = outgoing[from * words + word];
+			else
+				clear(facts);
+		if (fact >= 0)
+			set(facts, fact, true);
+	}
+
+	function intersectEdge(facts:Array<Int>, from:Int, fact:Int):Void {
+		var factIndex = fact >= 0 ? position(fact) : -1,
+			factWord = factIndex < 0 ? -1 : factIndex >>> 5,
+			factBit = factIndex < 0 ? 0 : 1 << (factIndex & 31),
+			row = hasRow(from);
+		for (word in 0...words) {
+			var along = row ? outgoing[from * words + word] : 0;
+			if (word == factWord)
+				along |= factBit;
+			facts[word] &= along;
+		}
+	}
+
+	function transfer(row:Int, facts:Array<Int>, block:Int, allowPhi:Bool):Void {
+		var receiver = IrNonNullFacts.checkedRow(body, row), opcode = body.opcode(row);
+		if (receiver.exists() && (checkedDereferences || opcode == IrOpcode.MethodCall
+			|| opcode == IrOpcode.Call && body.aux(row) == receiverCheck))
+			set(facts, receiver, true);
+		switch opcode {
+			case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+				set(facts, body.output(row), true);
+			// A cast of a non-null value is non-null: it returns the value or throws.
+			case IrOpcode.Upcast, IrOpcode.SafeCast:
+				if (has(facts, body.operand(row, 0)))
+					set(facts, body.output(row), true);
+			case IrOpcode.Phi if (allowPhi && body.operandCount(row) > 0):
+				var all = true;
+				for (input in 0...body.operandCount(row))
+					if (!edgeHas(body.auxInt(row, input), block, body.operand(row, input))) {
+						all = false;
+						break;
+					}
+				set(facts, body.output(row), all);
+			default:
+		}
+	}
+
+	function edgeFact(from:Int, to:Int):Int {
+		if (!graph.contains(from))
+			return -1;
+		var term = body.terminatorRow(graph.indexOf(from));
+		if (term >= 0 && body.opcode(term) == IrOpcode.Branch) {
+			var condition = body.operand(term, 0), yes = body.auxInt(term, 0), no = body.auxInt(term, 1);
+			if (yes != no && testOf(condition) >= 0 && (testOnTrue[condition] ? yes : no) == to)
+				return testValue[condition];
+		}
 		return -1;
 	}
 

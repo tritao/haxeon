@@ -74,6 +74,9 @@ class IrBody {
 	final bindingEnds:Array<Int>;
 	final bindingValues:Array<Int>;
 
+	/** By value id, the value that replaces it (`alias`), or -1; empty when the body has no alias. */
+	final aliases:Array<Int> = [];
+
 	/** Copies the builder's columns at their exact size. */
 	function new(builder:IrBodyBuilder, name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
 			retention:IrRetention) {
@@ -355,6 +358,40 @@ class IrBody {
 		operandEnds[row] = operandPool.length;
 	}
 
+	/**
+	 * Makes `replacement` stand for `value` in every row and binding that reads it. The reads change when the pass sweeps
+	 * (`sweepAliases`), which it does before it returns; until then `resolve` gives what a read will become.
+	 */
+	public function alias(value:IrValueId, replacement:IrValueId):Void {
+		editing();
+		if (aliases.length < valueTypes.length) {
+			var from = aliases.length;
+			aliases.resize(valueTypes.length);
+			for (index in from...valueTypes.length)
+				aliases[index] = -1;
+		}
+		aliases[value] = replacement;
+	}
+
+	/** The value `value` stands for once the aliases are swept: itself, or the end of its chain of aliases. */
+	public function resolve(value:IrValueId):IrValueId {
+		var current:Int = value;
+		while (current < aliases.length && aliases[current] >= 0)
+			current = aliases[current];
+		return IrValueId.of(current);
+	}
+
+	/** Rewrites every operand and binding that reads an aliased value to what it stands for, and forgets the aliases. */
+	public function sweepAliases():Void {
+		if (aliases.length == 0)
+			return;
+		for (index in 0...operandPool.length)
+			operandPool[index] = resolve(IrValueId.of(operandPool[index]));
+		for (index in 0...bindingValues.length)
+			bindingValues[index] = resolve(IrValueId.of(bindingValues[index]));
+		aliases.resize(0);
+	}
+
 	public function removeBinding(index:Int):Void {
 		editing();
 		bindingIdentities.splice(index, 1);
@@ -368,9 +405,11 @@ class IrBody {
 	/**
 	 * Where this body's layout is broken, or null: each linked row is in one block and reached once, `previousRow` mirrors
 	 * `nextRow`, a terminator only last, operand and int-pool runs inside their pools, a defining row for every linked output and
-	 * none for an unlinked one, distinct block ids.
+	 * none for an unlinked one, distinct block ids, no aliases left unswept.
 	 */
 	public function layoutDifference():Null<String> {
+		if (aliases.length > 0)
+			return 'aliases are left unswept';
 		var seen:Array<Bool> = [];
 		seen.resize(opcodes.length);
 		var ids:Map<Int, Bool> = [];
