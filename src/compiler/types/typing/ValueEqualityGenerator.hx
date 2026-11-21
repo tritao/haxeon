@@ -12,14 +12,13 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.HelperRequests.EqualityRequest;
 import compiler.types.typing.HelperRequests.HelperRequest;
-import haxe.crypto.Sha256;
 
 /** Fieldwise declared equality, including nested value helpers. */
 class ValueEqualityGenerator {
 	public static inline final PREFIX = "$value$equality:";
 
 	public static function equalsName(type:CompilerType):String
-		return PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return HelperNames.nameOf(PREFIX, type);
 
 	/**
 	 * Requests the helper comparing values of `type`, and returns the type it is keyed by: `type` with the literal structures it
@@ -28,7 +27,7 @@ class ValueEqualityGenerator {
 	public static function request(session:TypingSession, type:CompilerType, origin:String,
 			span:SourceSpan):CompilerType {
 		type = session.monomorphs.closeReached(type);
-		var name = equalsName(type);
+		var name = session.helperNames.named(PREFIX, type);
 		session.output.requests.add(ValueEqualityHelper(name, {type: type, origin: origin, span: span}));
 		return type;
 	}
@@ -79,7 +78,7 @@ class ValueEqualityGenerator {
 	static function collect(session:TypingSession, type:CompilerType, root:EqualityRequest,
 			requests:HelperRequests,
 			seen:Map<String, Bool>):Void {
-		var name = equalsName(type);
+		var name = session.helperNames.named(PREFIX, type);
 		if (seen.exists(name))
 			return;
 		seen.set(name, true);
@@ -134,7 +133,7 @@ class ValueEqualityGenerator {
 			compare:(TypedExpression, TypedExpression, SourceSpan) -> TypedExpression):TypedExpression {
 		if (DeclaredConformance.usesEquality(session, left.type)) {
 			request(session, left.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(equalsName(left.type), [left, right]), TBool, span);
+			return new TypedExpression(TCall(session.helperNames.named(PREFIX, left.type), [left, right]), TBool, span);
 		}
 		return compare(left, right, span);
 	}
@@ -244,7 +243,7 @@ class ValueEqualityGenerator {
 				throw new InternalError('Invalid value equality request for "$type"');
 		}
 		return {
-			name: equalsName(type),
+			name: session.helperNames.named(PREFIX, type),
 			role: ProviderFunction(type, Equals),
 			origin: request.origin,
 			originKind: Helper,

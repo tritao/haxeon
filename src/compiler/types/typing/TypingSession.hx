@@ -322,6 +322,8 @@ class TypingSession {
 
 	public final keyPaths = new KeyPathState();
 
+	public final helperNames = new HelperNames();
+
 	public final representation:TypeRepresentation;
 
 	public var currentContext(get, never):TypingContext;

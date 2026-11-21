@@ -12,7 +12,6 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.HelperRequests.EqualityRequest;
 import compiler.types.typing.HelperRequests.HelperRequest;
-import haxe.crypto.Sha256;
 
 /** Generates declared enum equality and the separate structural Type.enumEq operation. */
 class EnumEqualityGenerator {
@@ -21,23 +20,23 @@ class EnumEqualityGenerator {
 
 	/** Both generated operations keep a semantic value signature when eligible enums become inline values. */
 	public static function equalsName(type:CompilerType):String
-		return EQUALS_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return HelperNames.nameOf(EQUALS_PREFIX, type);
 
 	public static function reflectiveName(type:CompilerType):String
-		return REFLECTIVE_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return HelperNames.nameOf(REFLECTIVE_PREFIX, type);
 
 	/** Requests the helper comparing values of `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */
 	public static function request(session:TypingSession, type:CompilerType, origin:String,
 			span:SourceSpan):CompilerType {
 		type = session.monomorphs.closeReached(type);
-		requestNamed(session, equalsName(type), type, origin, span);
+		requestNamed(session, session.helperNames.named(EQUALS_PREFIX, type), type, origin, span);
 		return type;
 	}
 
 	public static function requestReflective(session:TypingSession, type:CompilerType, origin:String,
 			span:SourceSpan):CompilerType {
 		type = session.monomorphs.closeReached(type);
-		requestNamed(session, reflectiveName(type), type, origin, span);
+		requestNamed(session, session.helperNames.named(REFLECTIVE_PREFIX, type), type, origin, span);
 		return type;
 	}
 
@@ -63,7 +62,7 @@ class EnumEqualityGenerator {
 				var owner = compiler.core.QualifiedName.parent(request.origin),
 					context = session.enterBody(request.origin, null, owner == null ? "$enum-equality" : owner);
 				try {
-					var reflective = name == reflectiveName(request.type),
+					var reflective = name == session.helperNames.named(REFLECTIVE_PREFIX, request.type),
 						custom = reflective ? null : EnumConformanceMethods.method(session, request.type, "equals");
 					generated.set(name, equalityFunction(session, request, reflective));
 					if (custom != null) {
@@ -105,7 +104,7 @@ class EnumEqualityGenerator {
 				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
 				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)],
 					[], span));
-				statements.push(TReturn(call(element, leftValue, rightValue, span, reflective), span));
+				statements.push(TReturn(call(session, element, leftValue, rightValue, span, reflective), span));
 			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.get(name);
 				if (declaration == null)
@@ -158,7 +157,7 @@ class EnumEqualityGenerator {
 					span);
 		}
 		return {
-			name: reflective ? reflectiveName(type) : equalsName(type),
+			name: session.helperNames.named(reflective ? REFLECTIVE_PREFIX : EQUALS_PREFIX, type),
 			role: ProviderFunction(type, reflective ? ReflectEquals : Equals),
 			origin: req.origin,
 			originKind: Helper,
@@ -189,12 +188,12 @@ class EnumEqualityGenerator {
 				requestReflective(session, type, requestInfo.origin, requestInfo.span);
 			else
 				request(session, type, requestInfo.origin, requestInfo.span);
-			return call(type, left, right, requestInfo.span, reflective);
+			return call(session, type, left, right, requestInfo.span, reflective);
 		}
 		if (DeclaredConformance.usesEquality(session, type)) {
 			ValueEqualityGenerator.request(session, type, requestInfo.origin, requestInfo.span);
-			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(type), [left, right]), TBool,
-				requestInfo.span);
+			var helper = session.helperNames.named(ValueEqualityGenerator.PREFIX, type);
+			return new TypedExpression(TCall(helper, [left, right]), TBool, requestInfo.span);
 		}
 		return switch type {
 			case TNullable(element) if (enumType(element)):
@@ -209,7 +208,7 @@ class EnumEqualityGenerator {
 					leftValue = new TypedExpression(TCast(left), element, left.span),
 					rightValue = new TypedExpression(TCast(right), element, left.span),
 					absentResult = new TypedExpression(TEqual(leftAbsent, rightAbsent), TBool, left.span),
-					presentResult = call(element, leftValue, rightValue, left.span, reflective);
+					presentResult = call(session, element, leftValue, rightValue, left.span, reflective);
 				new TypedExpression(TConditional(leftAbsent, absentResult,
 					new TypedExpression(TConditional(rightAbsent,
 					new TypedExpression(TBoolLiteral(false), TBool, left.span), presentResult), TBool,
@@ -225,8 +224,9 @@ class EnumEqualityGenerator {
 			default: false;
 		};
 
-	static function call(type:CompilerType, left:TypedExpression, right:TypedExpression, span:SourceSpan,
-			reflective:Bool):TypedExpression
-		return new TypedExpression(TCall(reflective ? reflectiveName(type) : equalsName(type), [left, right]), TBool,
-			span);
+	static function call(session:TypingSession, type:CompilerType, left:TypedExpression, right:TypedExpression,
+			span:SourceSpan, reflective:Bool):TypedExpression {
+		var helper = session.helperNames.named(reflective ? REFLECTIVE_PREFIX : EQUALS_PREFIX, type);
+		return new TypedExpression(TCall(helper, [left, right]), TBool, span);
+	}
 }
