@@ -87,10 +87,9 @@ class SessionState {
 	 */
 	public function releaseRetained():Void {
 		releaseSyntax();
-		for (state in modules) {
+		releaseGeneratedIr();
+		for (state in modules)
 			state.typedFunctions = [];
-			state.irFunctions = [];
-		}
 		objectCache = [];
 		canonicalObjectCache = [];
 		anonymousStrings = [];
@@ -101,6 +100,14 @@ class SessionState {
 		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
 	}
+
+	/**
+	 * Releases the modules' generated IR functions, for a compile that keeps no session once its IR pipeline has its input: the
+	 * passes then hold the only copy of the program. Changes the modules in place, as `releaseRetained` does.
+	 */
+	public function releaseGeneratedIr():Void
+		for (state in modules)
+			state.irFunctions = [];
 
 	/**
 	 * Releases the modules' tokens, syntax trees, semantic models and canonical declarations, for a compile that keeps no session

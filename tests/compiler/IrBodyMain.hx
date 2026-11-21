@@ -223,7 +223,7 @@ class IrBodyMain {
 		var layout = body.layoutDifference();
 		if (layout != null)
 			throw 'IrBody: $what left a broken layout: $layout';
-		var edited = body.toFunction(), frozen = body.freeze(scratch.bodyBuilder);
+		var edited = body.toFunction(), frozen = body.freeze(true, scratch.bodyBuilder);
 		if (frozen == body || !frozen.frozen || frozen.layoutDifference() != null
 			|| IrFunctionStateEquality.difference(edited, frozen.toFunction()) != null)
 			throw 'IrBody: $what: the frozen body must be a compacted copy equal to the edited one';
@@ -255,7 +255,7 @@ class IrBodyMain {
 		var difference = IrFunctionStateEquality.difference(expected, body.toFunction());
 		if (difference != null)
 			throw 'IrBody: $what on a body differs from its object version: $difference';
-		var frozen = body.freeze(scratch.bodyBuilder);
+		var frozen = body.freeze(true, scratch.bodyBuilder);
 		if (frozen == body || !frozen.frozen || frozen.layoutDifference() != null
 			|| IrFunctionStateEquality.difference(expected, frozen.toFunction()) != null)
 			throw 'IrBody: $what: the frozen body must be a compacted copy equal to the edited one';
@@ -316,9 +316,13 @@ class IrBodyMain {
 		var blocks = body.blockCount();
 		body.removeBlock(blocks - 1);
 		expect(body.blockCount() == blocks - 1 && body.layoutDifference() == null, "removing a block");
-		var frozen = body.freeze();
+		var dropped = body.thaw();
+		dropped.removeRow(0, dropped.previousRow(dropped.lastRow(0)));
+		expect(dropped.freeze(false) == dropped && dropped.frozen, "a body the compile drops freezes as it is");
+		var frozen = body.freeze(true);
 		expect(frozen != body && frozen.frozen && frozen.layoutDifference() == null
-			&& IrFunctionStateEquality.difference(body.toFunction(), frozen.toFunction()) == null, "freezing compacts");
+			&& IrFunctionStateEquality.difference(body.toFunction(), frozen.toFunction()) == null,
+			"freezing a retained body compacts");
 		var refused = false;
 		try
 			frozen.setAux(frozen.firstRow(0), 0)
@@ -327,7 +331,7 @@ class IrBodyMain {
 		expect(refused, "a frozen body refuses edits");
 		construction(source.thaw());
 		var unedited = source.thaw();
-		expect(unedited.freeze() == unedited, "freezing an unedited body keeps it");
+		expect(unedited.freeze(true) == unedited, "freezing an unedited body keeps it");
 	}
 
 	static function bodyPasses():Void {

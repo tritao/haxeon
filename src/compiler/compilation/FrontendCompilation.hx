@@ -1555,6 +1555,13 @@ class FrontendCompilation {
 			passes.meter = meter;
 			passes.instrumentScope = build.instrumentScope;
 			passes.verifyMemo = context.state.verifyMemo;
+			// The generator's functions are the pipeline's input and only a next build reads them again: a build that keeps no
+			// session lets them go while the passes run, which then hold the only copy of the program.
+			if (!context.options.keepSession) {
+				build.cached = [];
+				cached = [];
+				context.state.releaseGeneratedIr();
+			}
 			ir = compiler.ir.IrPipeline.target.run(ir, passes);
 			for (entry in meter.entries())
 				context.irPassCosts.push(entry);

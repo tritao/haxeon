@@ -158,6 +158,13 @@ class IrInlineCache {
 		return result;
 	}
 
+	/** Lets the sources go, for a compile no next one reuses: they are the objects the stage's bodies were made from. */
+	public function forgetSources():Void {
+		sources = [];
+		staticChecks.copies = [];
+		staticChecks.helpers = [];
+	}
+
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
@@ -589,6 +596,14 @@ class IrInliner {
 				instrumented.get(fn.name).result = result;
 		}
 		program.functions = functions;
+		// A compile that keeps no session reads the stage's output as bodies only (a session compares and caches the objects), so
+		// once no callee is looked at any more an unchanged source keeps only its body.
+		if (!inliner.memoizes) {
+			for (fn in functions)
+				if (fn.body != null)
+					fn.releaseDecoded();
+			cache.forgetSources();
+		}
 		IrOpportunityCensus.report(program, inliner.allowInline);
 		IrAllocationReport.report(program);
 		cache.memo = inliner.nextMemo;
@@ -642,10 +657,10 @@ class IrInliner {
 		IrJumpThreading.runBody(body, passScratch);
 		var id = ids.get(fn.name);
 		if (id != null && sourceBodies[id] == inlined && !body.edited) {
-			fn.keepBody(inlined.frozen ? inlined : inlined.freeze(passScratch.bodyBuilder));
+			fn.keepBody(inlined.frozen ? inlined : inlined.freeze(memoizes, passScratch.bodyBuilder));
 			return fn;
 		}
-		return IrFunction.ofBody(body.freeze(passScratch.bodyBuilder));
+		return IrFunction.ofBody(body.freeze(memoizes, passScratch.bodyBuilder));
 	}
 
 	/**
@@ -656,7 +671,7 @@ class IrInliner {
 		var fn = functions[id], known = cache.originals.get(fn.name);
 		if (known != null && known.source == fn)
 			return known.body;
-		var body = IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze();
+		var body = IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
 		cache.originals.set(fn.name, {source: fn, body: body});
 		return body;
 	}
@@ -692,7 +707,7 @@ class IrInliner {
 			return originalBody(id);
 		var known = pristine[id];
 		if (known == null) {
-			known = IrBodyBuilder.encode(functions[id], types, passScratch.bodyBuilder).freeze();
+			known = IrBodyBuilder.encode(functions[id], types, passScratch.bodyBuilder).freeze(memoizes);
 			pristine[id] = known;
 		}
 		return known;
@@ -758,9 +773,9 @@ class IrInliner {
 
 		// A cache or a caller that inlines it holds the result as it is; one only the final cleanup reads is cleaned in place.
 		var result = if (memoizes)
-			body.edited ? body.freeze(passScratch.bodyBuilder) : originalBody(id);
+			body.edited ? body.freeze(memoizes, passScratch.bodyBuilder) : originalBody(id);
 		else
-			looksInlinable(original) ? body.freeze(passScratch.bodyBuilder) : body;
+			looksInlinable(original) ? body.freeze(memoizes, passScratch.bodyBuilder) : body;
 		var unchanged = !body.edited;
 
 		var isImpure = frameImpure.pop() == true;

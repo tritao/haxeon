@@ -301,11 +301,12 @@ class IrBody {
 	// Ownership.
 
 	/**
-	 * This body, frozen, for a cache to hold: compacted first when an edit left garbage, so what is kept holds only what it
-	 * reads.
+	 * This body, frozen, for holders that never edit it. Garbage left by edits costs only as long as the body lives: a body
+	 * `retained` past this compile (a session's caches) is compacted first, so what a session keeps holds only what it reads;
+	 * one the compile drops when it ends is frozen as it is.
 	 */
-	public function freeze(?builder:IrBodyBuilder):IrBody {
-		var result = edited ? IrBodyBuilder.compact(this, builder) : this;
+	public function freeze(retained:Bool, ?builder:IrBodyBuilder):IrBody {
+		var result = edited && retained ? IrBodyBuilder.compact(this, builder) : this;
 		result.frozen = true;
 		return result;
 	}

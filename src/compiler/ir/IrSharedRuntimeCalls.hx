@@ -108,7 +108,7 @@ class IrSharedRuntimeCalls {
 				}
 			}
 			var rewritten = rows.length == 0 ? fn : IrFunction.ofBody(IrBodyBuilder.copyWithAuxes(body, rows, targets,
-				builder).freeze());
+				builder).freeze(true));
 			kept.set(fn.name, {source: fn, result: rewritten, calls: calls});
 			result.functions.push(rewritten);
 		}

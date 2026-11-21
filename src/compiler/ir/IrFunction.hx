@@ -149,7 +149,7 @@ class IrFunction {
 		var known = body;
 		if (known != null)
 			return known;
-		var made = IrBodyBuilder.encode(this, types, builder).freeze();
+		var made = IrBodyBuilder.encode(this, types, builder).freeze(true);
 		body = made;
 		return made;
 	}
@@ -160,6 +160,17 @@ class IrFunction {
 			throw new InternalError('IR body ${encoded.name} is not frozen');
 		if (body == null)
 			body = encoded;
+	}
+
+	/**
+	 * Lets the decoded blocks and bindings go when the function has a body to decode them from again: for a function whose
+	 * objects nothing will read before the compile ends, so only its body stays live.
+	 */
+	public function releaseDecoded():Void {
+		if (body == null)
+			throw new InternalError('IR function $name has no body to decode its blocks from again');
+		decodedBlocks = null;
+		decodedBindings = null;
 	}
 
 	inline function get_blocks():Array<IrBlock> {
