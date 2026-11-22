@@ -47,17 +47,17 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 2182962704,
+			"value": 1533899736,
 			"tolerance": 0.03,
 			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
 		"signature_edit_retyped_functions": {
-			"value": 1718,
+			"value": 1431,
 			"tolerance": 0.05,
 			"why": "The constructor's callers and what depends on them: deterministic; the slack absorbs new callers."
 		},
 		"signature_edit_invalidated_artifacts": {
-			"value": 1237,
+			"value": 1015,
 			"tolerance": 0.05,
 			"why": "Deterministic; the slack absorbs new callers."
 		},
@@ -87,7 +87,7 @@
 			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
 		},
 		"signature_edit_instructions": {
-			"value": 44598812680,
+			"value": 29800650517,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the signature edit, measured as body_edit_instructions is."
 		}

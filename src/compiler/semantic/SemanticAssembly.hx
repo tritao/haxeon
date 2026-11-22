@@ -168,8 +168,7 @@ class SemanticAssembly {
 						prefixes);
 			}
 		}
-		var reuseModuleContributions = CompilationContext.mapIsEmpty(signatureChanged)
-			&& CompilationContext.mapIsEmpty(structuralChanged);
+		var reuseModuleContributions = !changesDiscoveredMethods(structuralChanged);
 		if (reuseModuleContributions) {
 			var discovered = true;
 			while (discovered) {
@@ -1197,6 +1196,24 @@ class SemanticAssembly {
 					&& dependency.targetId != null)
 					resolved.push(dependency.target);
 		return resolved.length == 0 ? fallback : resolved;
+	}
+
+	/**
+	 * Whether a change can alter the contribution of a module whose own source did not change. A contribution is the module's
+	 * declarations with every name resolved, which reads its own source, the entry, and the names every module sees: the type
+	 * names, enum constructors and module-level variables (the alias key each contribution is kept with). A signature names
+	 * nothing new, and neither does a structural change to an interface, typedef, enum, abstract or static field: whatever names
+	 * one of those adds or removes changes the key. What the key leaves out are the methods a class discovers
+	 * (`@:discoverMethods`), which a subclass in another module takes from its base chain: a class's metadata (a `constraint:`
+	 * change) or its base or layout (a change keyed by the class's own name).
+	 */
+	static function changesDiscoveredMethods(structuralChanged:Map<String, Bool>):Bool {
+		for (change in structuralChanged.keys()) {
+			var separator = change.indexOf(":");
+			if (separator < 0 || change.substring(0, separator) == "constraint")
+				return true;
+		}
+		return false;
 	}
 
 	static function declaredDiscoveryPrefixes(classDecl:AstClass):Null<Array<String>> {
