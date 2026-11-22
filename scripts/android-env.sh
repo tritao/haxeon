@@ -5,7 +5,7 @@
 
 android_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# The tool versions, shared with `haxeon` (HaxeonCli.androidVersion).
+# The tool versions, shared with `haxeon` (HaxeonCli.androidVersion) and android/app/build.gradle.
 while IFS='=' read -r android_key android_value; do
 	case "$android_key" in
 		ndk) android_ndk="$android_value" ;;

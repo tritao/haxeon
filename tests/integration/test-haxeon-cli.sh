@@ -53,6 +53,13 @@ for artifact in "" .hli .entry .hcs; do
 	test -s "$android_demo/build/android-arm64/app.hl$artifact"
 done
 
+# The Gradle wrapper reads its own properties, so it names its Gradle there; it must be the one android/versions.txt names.
+gradle_version=$(sed -n 's/^gradle=//p' "$repo_dir/android/versions.txt")
+if ! grep -qF "/gradle-$gradle_version-bin.zip" "$repo_dir/android/gradle/wrapper/gradle-wrapper.properties"; then
+	echo "android/gradle/wrapper/gradle-wrapper.properties does not name Gradle $gradle_version (android/versions.txt)" >&2
+	exit 1
+fi
+
 set +e
 "$cli" run --project "$project_dir/haxeon.json" -- hello
 run_status=$?
