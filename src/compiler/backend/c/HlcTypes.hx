@@ -12,6 +12,21 @@ typedef HlcField = {
 }
 
 /**
+ * What one C text names that needs a declaration or a definition elsewhere, by table position: the structs, type descriptors,
+ * globals, natives, inline allocation descriptors and generated functions (by slot). A file's declarations are made from it.
+ */
+class HlcUsage {
+	public final structs:Map<Int, Bool> = [];
+	public final types:Map<Int, Bool> = [];
+	public final globals:Map<Int, Bool> = [];
+	public final natives:Map<Int, Bool> = [];
+	public final allocations:Map<Int, Bool> = [];
+	public final functions:Map<Int, Bool> = [];
+
+	public function new() {}
+}
+
+/**
  * The C view of a HashLink module's type table (docs/design/AOT_BACKEND.md): a C type per HashLink type, a struct per object
  * type laid out as `hl_get_obj_rt` lays it out, and the offsets `hl_module_alloc` gives globals. Nothing here decides a
  * layout: the type table the HashLink assembly made does, and the generated image checks these offsets against the
@@ -20,6 +35,12 @@ typedef HlcField = {
 class HlcTypes {
 	final code:HlCode;
 	final fieldCache:Map<Int, Array<HlcField>> = [];
+
+	/** Each object type's struct name (`HlcModule`), settled before any C is written. */
+	public var structNames:Null<Array<String>>;
+
+	/** Where the structs named are recorded: the text being written. */
+	public var usage:Null<HlcUsage>;
 
 	public function new(code:HlCode)
 		this.code = code;
@@ -97,9 +118,15 @@ class HlcTypes {
 			default: 8;
 		};
 
-	/** The struct of object type `index`. */
-	public function structName(index:Int):String
-		return "hlc_obj" + index;
+	/** The struct of object type `index`, recorded as one the text being written names. */
+	public function structName(index:Int):String {
+		var names = structNames;
+		if (names == null || index >= names.length)
+			throw new InternalError('C backend: struct of HashLink type $index named before the names were settled');
+		if (usage != null)
+			usage.structs.set(index, true);
+		return names[index];
+	}
 
 	/** The object type a struct type's base is, or -1. */
 	public function base(index:Int):Int

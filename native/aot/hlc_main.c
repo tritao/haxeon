@@ -15,16 +15,25 @@ extern const int hlc_global_offsets[];
 extern const int hlc_object_layouts[];
 extern const int hlc_alloc_count;
 extern const int hlc_alloc_types[];
-extern hl_jit_alloc_data hlc_alloc_data[];
+extern hl_jit_alloc_data *const hlc_alloc_refs[];
+/* The generated code names types, globals and natives by stable names, not table positions, so an added type recompiles only
+ * the files that use it; image.c lists each named one with its position, and the pointers are set here before anything runs. */
+extern const int hlc_type_ref_count;
+extern hl_type **const hlc_type_refs[];
+extern const int hlc_type_ref_indices[];
+extern const int hlc_global_ref_count;
+extern void **const hlc_global_refs[];
+extern const int hlc_global_ref_indices[];
+extern const int hlc_native_ref_count;
+extern void **const hlc_native_refs[];
+extern const int hlc_native_ref_indices[];
 typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;
 extern const hlc_signature hlc_signatures[];
 extern const int hlc_signature_count;
 
 void hlc_stack_init( hl_module *m, void **functions, int count );
 
-hl_type *hlc_types;
-unsigned char *hlc_globals;
-void **hlc_slots;
+static hl_type *hlc_types;
 
 static void hlc_fail( const char *message, int a, int b, int c ) {
 	fprintf(stderr, "hlc: %s (%d, %d, %d)\n", message, a, b, c);
@@ -118,15 +127,19 @@ int main( int argc, char *argv[] ) {
 		return 70;
 	}
 	hlc_types = code->types;
-	hlc_globals = m->globals_data;
-	hlc_slots = m->functions_ptrs;
+	for(int i=0;i<hlc_type_ref_count;i++)
+		*hlc_type_refs[i] = hlc_types + hlc_type_ref_indices[i];
+	for(int i=0;i<hlc_global_ref_count;i++)
+		*hlc_global_refs[i] = m->globals_data + m->globals_indexes[hlc_global_ref_indices[i]];
+	for(int i=0;i<hlc_native_ref_count;i++)
+		*hlc_native_refs[i] = m->functions_ptrs[hlc_native_ref_indices[i]];
 	hlc_check_layouts(m);
 	hlc_stack_init(m, hlc_functions, hlc_slot_count);
 	// The collector describes its allocation fast path for each type the code allocates inline; an empty descriptor allocates
 	// through hl_alloc_obj.
 	for(int i=0;i<hlc_alloc_count;i++)
-		if( !hl_jit_alloc_supported() || !hl_jit_alloc_prepare(hlc_types + hlc_alloc_types[i], hlc_alloc_data + i) )
-			memset(hlc_alloc_data + i, 0, sizeof(hl_jit_alloc_data));
+		if( !hl_jit_alloc_supported() || !hl_jit_alloc_prepare(hlc_types + hlc_alloc_types[i], hlc_alloc_refs[i]) )
+			memset(hlc_alloc_refs[i], 0, sizeof(hl_jit_alloc_data));
 	vclosure cl = { 0 };
 	cl.t = code->functions[m->functions_indexes[hlc_entry]].type;
 	cl.fun = hlc_functions[hlc_entry];

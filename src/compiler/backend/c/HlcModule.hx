@@ -1,10 +1,12 @@
 package compiler.backend.c;
 
+import compiler.backend.c.HlcTypes.HlcUsage;
 import compiler.core.InternalError;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
+import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
@@ -28,7 +30,7 @@ class HlcModule {
 	public final code:HlCode;
 	public final symbols:HlSymbolTable;
 	public final types:HlcTypes;
-	public final globalOffsets:Array<Int>;
+	public var globalOffsets(default, null):Array<Int> = [];
 	public final i32:Int;
 	public final f64:Int;
 	public final bool:Int;
@@ -56,10 +58,30 @@ class HlcModule {
 	/** Whether a function reads value arrays inline, which `hlc.h`'s view helper serves. */
 	public var readsValueArrays = false;
 
-	/** The object types allocated inline, each with its descriptor's index in `hlc_alloc_data`. */
-	final allocationTypes:Array<Int> = [];
+	/** The object types allocated inline. */
+	final allocationTypes:Map<Int, Bool> = [];
 
-	final allocationIndices:Map<Int, Int> = [];
+	/**
+	 * The type and global tables' lengths once the collection pass has interned everything the functions use (`emit`): lowering
+	 * only reads the tables, and a type or global it would add is the collection's bug, reported as such.
+	 */
+	var typeLimit = 0x7FFFFFFF;
+
+	var globalLimit = 0x7FFFFFFF;
+
+	/** The C names of types, globals and natives (`HlcStableNames`), by table position, settled after the collection pass. */
+	var typeNames:Array<String> = [];
+
+	var globalNames:Array<String> = [];
+	var allocationNames:Array<String> = [];
+	var nativeNames:Array<Null<String>> = [];
+	var nativePointers:Array<Null<String>> = [];
+
+	/** What the text being written names (`use`), which its declarations are made from. */
+	var usage:Null<HlcUsage>;
+
+	/** What every file names, which `image.c` defines and the entry point fills. */
+	final used = new HlcUsage();
 
 	/** The source paths the `#line` directives name, as written, each with its C string literal. */
 	final sourcePaths:Map<String, String> = [];
@@ -105,18 +127,14 @@ class HlcModule {
 		for (name => slot in slots)
 			if (slot < slotNames.length)
 				slotNames[slot] = name;
-		var used:Map<String, Bool> = [];
+		// By the function's name, so a function keeps its C name when others are added or removed.
+		var named = [for (slot in 0...slotTypes.length) slotNames[slot] == null ? 'slot$slot' : slotNames[slot]];
+		var unique = HlcStableNames.unique([for (name in named) "hx_" + HlcStableNames.part(name)], named);
 		for (slot in 0...slotTypes.length) {
-			var name = slotNames[slot] == null ? 'slot$slot' : slotNames[slot],
-				cName = "hx_" + identifier(name);
-			if (used.exists(cName))
-				cName += "_" + slot;
-			used.set(cName, true);
-			cNames[slot] = cName;
+			cNames[slot] = unique[slot];
 			if (!native[slot])
-				cNameSlots.set(cName, slot);
+				cNameSlots.set(unique[slot], slot);
 		}
-		globalOffsets = types.globalOffsets();
 	}
 
 	function place(slot:Int, type:Int, isNative:Bool):Void {
@@ -194,17 +212,103 @@ class HlcModule {
 		};
 
 	/**
-	 * What a C call of slot `slot` calls: the function itself, a native of the VM or the runtime by its C symbol (declared in
-	 * the files that call it under a name of its own, so its C types never meet `hl.h`'s), or another native through the slot table.
+	 * What a C call of slot `slot` calls: the function itself, or a native under a name of its own (`nativeDeclaration`): a
+	 * native of the VM or the runtime by its C symbol, so its C types never meet `hl.h`'s, another through the pointer the
+	 * runtime resolved.
 	 */
 	public function functionPointer(slot:Int):String {
-		if (!native[slot])
-			return cNames[slot];
-		if (nativeSymbols[slot] != null)
-			return 'hlc_native_$slot';
-		var signature = types.signature(slotTypes[slot]);
-		var arguments = [for (type in signature.arguments) types.cType(type)];
-		return '((${types.cType(signature.result)} (*)(${arguments.length == 0 ? "void" : arguments.join(",")}))hlc_slots[$slot])';
+		var text = usage;
+		if (native[slot]) {
+			if (text != null)
+				text.natives.set(slot, true);
+			return nativeNames[slot];
+		}
+		if (text != null)
+			text.functions.set(slot, true);
+		return cNames[slot];
+	}
+
+	/** Records what the C text written from now on names in `text`. */
+	function use(text:HlcUsage):Void {
+		usage = text;
+		types.usage = text;
+	}
+
+	/** The HashLink type of `type`, interned while the functions are collected and only looked up after. */
+	public function typeIndex(type:IrType):Int
+		return collected(HlRemap.typeIndex(symbols, type), 'type $type');
+
+	/** The runtime header type `kind` (`HlSymbolTable.internRuntimeHeader`), as `typeIndex`. */
+	public function runtimeHeader(kind:compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader):Int
+		return collected(symbols.internRuntimeHeader(kind), 'runtime header $kind');
+
+	/** The global holding String literal `value`, interned while the functions are collected and only looked up after. */
+	public function stringConstant(value:String):Int {
+		var global = symbols.internStringConstant(value);
+		if (global >= globalLimit)
+			throw new InternalError('C backend: the String literal global of "$value" was not collected before lowering');
+		return global;
+	}
+
+	/** The global caching enum `name`'s constructor `constructor` without fields, as `stringConstant`. */
+	public function enumConstant(name:String, constructor:Int):Int {
+		var global = symbols.internEnumConstant(name, constructor);
+		if (global >= globalLimit)
+			throw new InternalError('C backend: the global of $name constructor $constructor was not collected before lowering');
+		return global;
+	}
+
+	function collected(type:Int, what:String):Int {
+		if (type >= typeLimit)
+			throw new InternalError('C backend: HashLink $what was not collected before lowering');
+		return type;
+	}
+
+	/** The descriptor of type `type` (`hl_type*`), a pointer the entry point sets before anything runs (`image`). */
+	public function typeDescriptor(type:Int):String {
+		if (usage != null)
+			usage.types.set(type, true);
+		return typeNames[type];
+	}
+
+	/** The address of global `global`'s value (`void*`), a pointer the entry point sets before anything runs (`image`). */
+	public function globalPointer(global:Int):String {
+		if (usage != null)
+			usage.globals.set(global, true);
+		return globalNames[global];
+	}
+
+	/**
+	 * Records that object type `type` is allocated inline, while the functions are collected: the entry point fills its
+	 * descriptor with the collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything runs.
+	 */
+	public function collectAllocation(type:Int):Void
+		allocationTypes.set(type, true);
+
+	/** The inline allocation descriptor of object type `type` (`hl_jit_alloc_data`). */
+	public function allocation(type:Int):String {
+		if (!allocationTypes.exists(type))
+			throw new InternalError('C backend: the inline allocation of ${types.typeName(type)} was not collected before lowering');
+		if (usage != null)
+			usage.allocations.set(type, true);
+		return allocationNames[type];
+	}
+
+	/** Settles every C name once the collection pass has interned all that the functions use. */
+	function settleNames():Void {
+		typeLimit = symbols.types.length;
+		globalLimit = symbols.globals.length;
+		if (code.types.length != typeLimit || code.globals.length != globalLimit)
+			throw new InternalError("C backend: the module's tables are not the symbol table's");
+		globalOffsets = types.globalOffsets();
+		var names = new HlcStableNames(code, symbols.namedGlobals());
+		types.structNames = [for (name in names.types) "hlc_obj_" + name];
+		typeNames = [for (name in names.types) "hlc_t_" + name];
+		allocationNames = [for (name in names.types) "hlc_a_" + name];
+		globalNames = [for (name in names.globals) "hlc_g_" + name];
+		nativeNames = [for (slot in 0...slotTypes.length) native[slot]
+			? "hlc_native_" + names.natives.get(slot) : null];
+		nativePointers = [for (slot in 0...slotTypes.length) native[slot] ? "hlc_np_" + names.natives.get(slot) : null];
 	}
 
 	/** The C declarator of the function in slot `slot`, its parameters named `names` (or left unnamed). */
@@ -262,20 +366,6 @@ class HlcModule {
 		throw new InternalError('C backend: no method at prototype slot $index of ${types.typeName(type)}');
 	}
 
-	/**
-	 * The index of type `type`'s inline allocation descriptor in `hlc_alloc_data`, which the entry point fills with the
-	 * collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything runs.
-	 */
-	public function allocationIndex(type:Int):Int {
-		var index = allocationIndices.get(type);
-		if (index == null) {
-			index = allocationTypes.length;
-			allocationTypes.push(type);
-			allocationIndices.set(type, index);
-		}
-		return index;
-	}
-
 	/** Whether slot `slot` has the signature the runtime takes as an object's `__compare` (`hl_get_obj_rt`). */
 	public function isCompare(slot:Int):Bool {
 		var signature = types.signature(slotTypes[slot]);
@@ -295,7 +385,15 @@ class HlcModule {
 		functions.sort((a, b) -> slots.get(a.name) - slots.get(b.name));
 		var defined:Map<Int, Bool> = [];
 		var bodies = [for (fn in functions) fn.bodyIn(bodyTypes, builder)];
-		var fileNames = sourceFiles(bodies);
+		// Everything the functions use is interned first, in slot order, so the names are settled before any C is written and
+		// lowering only reads the tables.
+		for (index in 0...functions.length)
+			try
+				lowering.collect(bodies[index])
+			catch (error:InternalError)
+				throw new InternalError('C backend, collecting ${bodies[index].name}: ${error.message}');
+		settleNames();
+		var fileNames = sourceFiles(bodies), usages:Map<String, HlcUsage> = [];
 		// A module's functions are split into files of about FILE_SIZE characters, which compile in parallel: a C compiler's
 		// time grows with a file's functions, and the largest modules would otherwise be the whole build's time.
 		var parts:Map<String, Int> = [];
@@ -309,11 +407,17 @@ class HlcModule {
 				file = haxe.io.Path.withoutExtension(module) + '.part$part.c';
 				buffer = null;
 			}
-			if (buffer == null) {
+			var fileUsage = usages.get(file);
+			if (buffer == null || fileUsage == null) {
 				buffer = new StringBuf();
+				fileUsage = new HlcUsage();
 				files.set(file, buffer);
+				usages.set(file, fileUsage);
 				fileOrder.push(file);
 			}
+			// A file declares its own functions too: the prototype puts each in the generated code's section (`HLC_FUNCTION`).
+			use(fileUsage);
+			fileUsage.functions.set(slot, true);
 			try
 				lowering.lower(body, slot, buffer)
 			catch (error:HlcFunctionLower.HlcUnsupported)
@@ -325,20 +429,23 @@ class HlcModule {
 		for (slot in 0...slotTypes.length)
 			if (slotTypes[slot] >= 0 && !native[slot] && !defined.exists(slot))
 				throw new InternalError('C backend: slot $slot (${slotName(slot)}) has no IR function');
-		// The header comes last: lowering may intern types (a cast's target) that the structs and the image must have.
 		var result:Array<HlcFile> = [{path: "hlc.h", content: header()}];
 		fileOrder.sort(Reflect.compare);
-		for (file in fileOrder)
-			result.push({path: file, content: withDeclarations(files.get(file).toString())});
-		result.push({path: "image.c", content: withDeclarations(image())});
+		for (file in fileOrder) {
+			var text = files.get(file), names = usages.get(file);
+			if (text == null || names == null)
+				throw new InternalError('C backend: no text for $file');
+			result.push({path: file, content: withDeclarations(text.toString(), names)});
+		}
+		var imageUsage = new HlcUsage();
+		use(imageUsage);
+		result.push({path: "image.c", content: withDeclarations(image(), imageUsage)});
+		use(null);
 		return result;
 	}
 
 	static final INCLUDE = '#include "hlc.h"\n\n';
 	static inline final FILE_SIZE = 600000;
-
-	function withDeclarations(text:String):String
-		return INCLUDE + declarations(text) + text;
 
 	/** Each function's file: the Haxe source most of its rows come from, so functions group by module. */
 	function sourceFiles(bodies:Array<compiler.ir.IrBody>):Array<String> {
@@ -396,9 +503,7 @@ class HlcModule {
 		buffer.add("#elif defined(_WIN32) && defined(__GNUC__)\n");
 		buffer.add("#define HLC_FUNCTION __attribute__((section(\".text$hlc.2\"))) HLC_NOINLINE\n");
 		buffer.add("#else\n#define HLC_FUNCTION HLC_NOINLINE\n#endif\n\n");
-		buffer.add("extern hl_type *hlc_types;\nextern unsigned char *hlc_globals;\nextern void **hlc_slots;\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
-		buffer.add("extern hl_jit_alloc_data hlc_alloc_data[];\n");
 		buffer.add("typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;\n");
 		buffer.add("static inline double hlc_f64( unsigned int high, unsigned int low ) {\n");
 		buffer.add("\tunsigned long long bits = ((unsigned long long)high << 32) | low; double value;\n");
@@ -412,81 +517,87 @@ class HlcModule {
 		buffer.add("#else\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name)\n#endif\n#endif\n\n");
 		if (readsValueArrays) {
 			var helper = new StringBuf();
+			var helperUsage = new HlcUsage();
+			use(helperUsage);
 			valueArrayHelper(helper);
-			var text = helper.toString();
-			buffer.add(declarations(text));
-			buffer.add(text);
+			buffer.add(withDeclarations(helper.toString(), helperUsage, false));
 		}
 		buffer.add("\n#endif\n");
 		return buffer.toString();
 	}
 
-	/** A native the program calls by its C symbol, under a name of its own (`functionPointer`). */
+	/**
+	 * A native under a name of its own (`functionPointer`): with gcc and clang a native of the VM or the runtime is its C symbol,
+	 * else the native is the pointer the runtime resolved for its slot, which the entry point copies to `hlc_np_` before anything
+	 * runs (`image`).
+	 */
 	function nativeDeclaration(slot:Int, buffer:StringBuf):Void {
 		var signature = types.signature(slotTypes[slot]);
 		var result = types.cType(signature.result),
 			arguments = [for (type in signature.arguments) types.cType(type)].join(",");
 		if (arguments == "")
 			arguments = "void";
-		buffer.add('#if defined(__GNUC__)\nextern $result hlc_native_$slot($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n');
-		buffer.add('#else\n#define hlc_native_$slot (($result (*)($arguments))hlc_slots[$slot])\n#endif\n');
+		var name = nativeNames[slot], pointer = nativePointers[slot];
+		buffer.add('extern void *$pointer;\n');
+		if (nativeSymbols[slot] != null)
+			buffer.add('#if defined(__GNUC__)\nextern $result $name($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n#else\n');
+		buffer.add('#define $name (($result (*)($arguments))$pointer)\n');
+		if (nativeSymbols[slot] != null)
+			buffer.add("#endif\n");
 	}
 
 	/**
-	 * The declarations C text `text` uses, which go before it in its file: the typedefs and definitions of the structs it names,
-	 * the natives it calls and the prototypes of the generated functions it names. Each file declares only what it uses, so a
-	 * file is not compiled again when a declaration it does not use changes, and no file parses the whole program's.
+	 * C text `text` with the declarations of what it names (`text`'s usage, recorded while it was written) before it: the
+	 * typedefs and definitions of its structs, the type descriptors, globals and allocation descriptors it reads, the natives
+	 * it calls and the prototypes of the generated functions it names, each kind sorted by name. Each file declares only what
+	 * it uses, so a file is not compiled again when a declaration it does not use changes, and no file parses the whole
+	 * program's. The declarations record the structs they name in turn.
 	 */
-	function declarations(text:String):String {
-		var names = new HlcNames();
-		names.scan(text);
-		var functions:Array<Int> = [], natives:Array<Int> = [];
-		for (name in names.functions) {
-			var slot = cNameSlots.get(name);
-			if (slot != null)
-				functions.push(slot);
-		}
-		for (name in names.natives) {
-			var slot = Std.parseInt(name.substr("hlc_native_".length));
-			if (slot != null && slot < slotTypes.length && native[slot] && nativeSymbols[slot] != null)
-				natives.push(slot);
-		}
-		functions.sort((a, b) -> a - b);
-		natives.sort((a, b) -> a - b);
+	function withDeclarations(text:String, names:HlcUsage, include = true):String {
+		use(names);
 		var calls = new StringBuf();
+		var natives = sorted(names.natives, slot -> nativeNames[slot]),
+			functions = sorted(names.functions, slot -> cNames[slot]);
 		for (slot in natives)
 			nativeDeclaration(slot, calls);
 		for (slot in functions)
 			calls.add('HLC_FUNCTION ${prototype(slot)}; /* ${slotName(slot)} */\n');
-		var callText = calls.toString(), definitions = new StringBuf();
-		names.scan(callText);
-		types.structDefinitions(structsNamed(names), definitions);
-		var definitionText = definitions.toString(), buffer = new StringBuf();
+		var structNames:Array<String> = types.structNames, definitions = new StringBuf();
+		types.structDefinitions(sorted(names.structs, index -> structNames[index]), definitions);
+		use(null);
+		var buffer = new StringBuf();
+		if (include)
+			buffer.add(INCLUDE);
 		// The definitions name the structs of their fields, which need typedefs too.
-		names.scan(definitionText);
-		for (index in structsNamed(names))
-			buffer.add('typedef struct ${types.structName(index)} ${types.structName(index)};\n');
-		buffer.add(definitionText);
-		buffer.add(callText);
+		for (index in sorted(names.structs, index -> structNames[index]))
+			buffer.add('typedef struct ${structNames[index]} ${structNames[index]};\n');
+		buffer.add(definitions.toString());
+		for (index in sorted(names.types, index -> typeNames[index]))
+			buffer.add('extern hl_type *${typeNames[index]};\n');
+		for (index in sorted(names.globals, index -> globalNames[index]))
+			buffer.add('extern void *${globalNames[index]};\n');
+		for (index in sorted(names.allocations, index -> allocationNames[index]))
+			buffer.add('extern hl_jit_alloc_data ${allocationNames[index]};\n');
+		buffer.add(calls.toString());
 		buffer.add("\n");
+		buffer.add(text);
+		for (index in names.types.keys())
+			used.types.set(index, true);
+		for (index in names.globals.keys())
+			used.globals.set(index, true);
+		for (index in names.natives.keys())
+			used.natives.set(index, true);
 		return buffer.toString();
 	}
 
-	/** The struct types of the `hlc_obj` names found, ascending. */
-	function structsNamed(names:HlcNames):Array<Int> {
-		var indices:Array<Int> = [];
-		for (name in names.structs) {
-			var index = Std.parseInt(name.substr("hlc_obj".length));
-			if (index != null && index < code.types.length && types.isObject(index))
-				indices.push(index);
-		}
-		indices.sort((a, b) -> a - b);
-		return indices;
+	/** The indices of `set` sorted by their C names, so declarations are in the same order in every build. */
+	static function sorted(set:Map<Int, Bool>, name:Int->String):Array<Int> {
+		var keyed = [for (index in set.keys()) {
+			index:index, name:name(index)
+		}];
+		keyed.sort((a, b) -> Reflect.compare(a.name, b.name));
+		return [for (entry in keyed) entry.index];
 	}
-
-	public static inline function identifierCode(code:Int):Bool
-		return (code >= "a".code && code <= "z".code) || (code >= "A".code && code <= "Z".code)
-			|| (code >= "0".code && code <= "9".code) || code == "_".code;
 
 	/**
 	 * `hlc_new`: an object allocated from the thread's allocation buffer as the JIT's inline allocation does, by the
@@ -637,6 +748,21 @@ class HlcModule {
 	}
 
 	/**
+	 * The definitions of the pointers `names` gives for `indices` of a table, and the table the entry point fills them from:
+	 * `hlc_KIND_refs` (each pointer's address) and `hlc_KIND_ref_indices`, in index order.
+	 */
+	function references(buffer:StringBuf, type:String, kind:String, indices:Array<Int>, names:Int->String):Void {
+		indices.sort((a, b) -> a - b);
+		for (index in indices)
+			buffer.add('$type *${names(index)};\n');
+		buffer.add('const int hlc_${kind}_ref_count = ${indices.length};\n');
+		buffer.add('$type **const hlc_${kind}_refs[] = {');
+		for (index in indices)
+			buffer.add('&${names(index)},');
+		buffer.add('NULL};\nconst int hlc_${kind}_ref_indices[] = {${indices.concat([-1]).join(",")}};\n\n');
+	}
+
+	/**
 	 * The module image: this module with every function body a stub, which the runtime decodes into its types, globals,
 	 * natives and constants (`hl_code_read`, `hl_module_init`) before the slots are pointed at the C functions; the slot table;
 	 * and the layouts the C code assumes, which the runtime checks against its own before running anything.
@@ -690,7 +816,7 @@ class HlcModule {
 		buffer.add("void *hlc_functions[] = {");
 		for (slot in 0...slotTypes.length)
 			buffer.add((slot % 4 == 0 ? "\n\t" : " ")
-				+ (slotTypes[slot] >= 0 && !native[slot] ? '(void*)${cNames[slot]},' : "NULL,"));
+				+ (slotTypes[slot] >= 0 && !native[slot] ? '(void*)${functionPointer(slot)},' : "NULL,"));
 		buffer.add("\n\tNULL};\n\n");
 		// By C name, for the stack capture: a function the C compiler inlined is a frame when it is a generated one.
 		var named = [for (slot in 0...slotTypes.length) if (slotTypes[slot] >= 0 && !native[slot]) slot];
@@ -701,9 +827,21 @@ class HlcModule {
 			buffer.add('\n\t{"${cNames[slot]}",$slot},');
 		buffer.add("\n\t{NULL,-1}};\n\n");
 		trampolines(buffer);
-		buffer.add('const int hlc_alloc_count = ${allocationTypes.length};\n');
-		buffer.add('const int hlc_alloc_types[] = {${allocationTypes.concat([-1]).join(",")}};\n');
-		buffer.add('hl_jit_alloc_data hlc_alloc_data[${allocationTypes.length + 1}];\n\n');
+		// What the files name by stable names, each pointed at by the entry point before anything runs: the type descriptors, the
+		// globals, the natives' pointers and the inline allocation descriptors.
+		references(buffer, "hl_type", "type", [for (type in used.types.keys()) type], index -> typeNames[index]);
+		references(buffer, "void", "global", [for (global in used.globals.keys()) global], index -> globalNames[index]);
+		references(buffer, "void", "native", [for (slot in used.natives.keys()) slot], slot -> nativePointers[slot]);
+		var allocations = [for (type in allocationTypes.keys()) type];
+		allocations.sort((a, b) -> a - b);
+		buffer.add('const int hlc_alloc_count = ${allocations.length};\n');
+		buffer.add('const int hlc_alloc_types[] = {${allocations.concat([-1]).join(",")}};\n');
+		for (type in allocations)
+			buffer.add('hl_jit_alloc_data ${allocationNames[type]};\n');
+		buffer.add("hl_jit_alloc_data *const hlc_alloc_refs[] = {");
+		for (type in allocations)
+			buffer.add('&${allocationNames[type]},');
+		buffer.add("NULL};\n\n");
 		// The C compiler's line table keeps a `#line` path relative to its working directory when the path is under it, so the
 		// stack traces read the paths as written from here (`hlc_stack.c`).
 		var paths = [for (path in sourcePaths.keys()) path];
@@ -727,54 +865,5 @@ class HlcModule {
 			}
 		buffer.add("\t-1};\n");
 		return buffer.toString();
-	}
-}
-
-/**
- * The distinct C identifiers of some C text that name declarations (`HlcModule.declarations`): generated functions (`hx_`),
- * natives (`hlc_native_`) and structs (`hlc_obj`), each list in the order the names first occur. One pass reads each identifier
- * once, at its first character; texts scanned one after another add to the same lists.
- */
-private class HlcNames {
-	public final functions:Array<String> = [];
-	public final natives:Array<String> = [];
-	public final structs:Array<String> = [];
-
-	final found:Map<String, Bool> = [];
-
-	public function new() {}
-
-	public function scan(text:String):Void {
-		var at = 0, length = text.length;
-		while (at < length) {
-			var code = StringTools.fastCodeAt(text, at);
-			if (!HlcModule.identifierCode(code)) {
-				at++;
-				continue;
-			}
-			var start = at;
-			while (++at < length && HlcModule.identifierCode(StringTools.fastCodeAt(text, at))) {}
-			// Every name of interest starts with "h" and is longer than its prefix.
-			if (code != "h".code || at - start < 4)
-				continue;
-			var into = startsWith(text, start, "hx_") ? functions : startsWith(text, start, "hlc_native_") ? natives
-				: startsWith(text, start, "hlc_obj") ? structs : null;
-			if (into == null)
-				continue;
-			var name = text.substring(start, at);
-			if (!found.exists(name)) {
-				found.set(name, true);
-				into.push(name);
-			}
-		}
-	}
-
-	static function startsWith(text:String, at:Int, prefix:String):Bool {
-		if (at + prefix.length > text.length)
-			return false;
-		for (index in 0...prefix.length)
-			if (StringTools.fastCodeAt(text, at + index) != StringTools.fastCodeAt(prefix, index))
-				return false;
-		return true;
 	}
 }

@@ -101,15 +101,37 @@ The sources go to `OUTPUT.c/`:
   the build's whole time. Each file starts with the declarations its text uses, found by its identifiers: the typedefs
   and definitions of the structs it names (a struct per object type, fields flattened from the base down, as
   `hl_get_obj_rt` lays them out with no tail padding between a base and its subclass, `f<index>` by HashLink field
-  index), the natives it calls and the prototypes of the functions it names. So no file parses the whole program's
-  declarations (one header of all of them was 3 MB, parsed by each of 517 files), and a declaration's change rebuilds
-  only the files that use it.
+  index), the type descriptors, globals and allocation descriptors it reads, the natives it calls and the prototypes of
+  the functions it names, each kind sorted by name. So no file parses the whole program's declarations (one header of all
+  of them was 3 MB, parsed by each of 517 files), and a declaration's change rebuilds only the files that use it.
 - `image.c`: the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
-  table (function pointers by slot), the generated functions by C name, and the layouts to check.
+  table (function pointers by slot), the generated functions by C name, the layouts to check, and the pointers the files
+  name with their table positions (below). It is the one file that depends on table positions.
 - `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them.
 
-Functions are named from their Haxe names (`hx_Point_sum`), deduplicated with the slot number, so names are stable across
-builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>` by IR value id.
+Every C name is derived from what it names, never from a table position, so a file's text depends only on what it uses
+and an added class does not rewrite the files that do not use it (`HlcStableNames`):
+
+- functions from their Haxe names (`hx_Point_sum`), readable in debuggers, `perf` and crash backtraces;
+- an object type's struct from its path (`hlc_obj_Point`), its descriptor `hlc_t_Point` and its inline allocation
+  descriptor `hlc_a_Point`; an enum, virtual, abstract or structure the same with its kind (`hlc_t_enum_Color`), a
+  wrapped type from what it wraps (`hlc_t_null_i32`), a function type from a digest of its signature (`hlc_t_fun_…`);
+- a global from its name (`hlc_g_Main_count`, a String literal's `hlc_g__string_hello`);
+- a native from its library and name (`hlc_native_std_alloc_array`).
+
+A name part longer than 64 characters is cut and given a digest of the whole. Names that come out the same get a
+digest of what each item is (a type's fields, a global's type), and items that are the same in that too are numbered in
+table order. The names are settled before any C is written: a collection pass (`HlcFunctionLower.collect`) walks every
+function's IR in slot order and interns what its lowering will use (every value's type, the scalar locals' types, String
+literal and cached enum constant globals, the runtime header of the byte fast paths, the typed interface keys, the types
+allocated inline). Lowering then only reads the tables and writes final names; a type or global it would intern is the
+collection's bug and stops the build (`HlcModule.typeIndex` and the others). While a file is written the names it uses are
+recorded (`HlcUsage`: structs, descriptors, globals, natives, allocation descriptors, functions), and its declarations are
+made from that record, each kind sorted by name. The descriptors,
+globals and natives are pointers (`hl_type *hlc_t_Point`, `void *hlc_g_Main_count`, `void *hlc_np_…`) that `image.c`
+defines with a table of their positions, and the entry point sets them from the runtime's tables before anything runs:
+a read of one is a load, as the read of the type table or global data pointer it replaces was. Values are `v<id>` by IR
+value id.
 
 ## Values, calls and the GC
 
@@ -122,10 +144,10 @@ builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>
   calls from the virtual's field table with the `hl_dyn_call_obj` fallback, as the JIT does.
 - **Natives** of the VM (`std`, `hl_*`) and of the Haxeon runtime (`haxeon_runtime`, `realtime_*`) are direct C calls, by
   the convention of their libraries' `HL_NAME`: each is declared in the files that call it under a name of its own bound to the symbol
-  (`extern ... hlc_native_17(...) __asm__("hl_alloc_array")`), so its C types never meet `hl.h`'s declaration. The loader
-  still resolves every native by its `hlp_` symbol and checks its signature, as for the JIT. Natives of other libraries,
-  loaded at run time, and every native where the compiler has no asm labels, are called through the slot table the loader
-  filled.
+  (`extern ... hlc_native_std_alloc_array(...) __asm__("hl_alloc_array")`), so its C types never meet `hl.h`'s declaration.
+  The loader still resolves every native by its `hlp_` symbol and checks its signature, as for the JIT. Natives of other
+  libraries, loaded at run time, and every native where the compiler has no asm labels, are called through the pointer the
+  loader resolved (`hlc_np_`, copied from its slot at start-up).
 - **Closures** are `vclosure`s: static closures allocated once per site, instance closures with `hl_alloc_closure_ptr`;
   a call tests `hasValue` as `hl2c` does. Function values from natives and the JIT are the same structure.
 - **Dynamic values.** Scalars stay unboxed by their static type throughout; a value is boxed only where the IR says it
@@ -402,8 +424,16 @@ about 5 to 14): a clean release build 110 s before, 64 s after (the C part from 
 busy throughout); a build after editing one function body 26 s before and 28 s after, the Haxe compile and one C file both
 times; a clean development build, now `-O0`, 40 s, whose compiler self-compiles in 15.3 s instead of 9.5 s, with the same
 output. Per-function `optimize("O1")` on the largest functions was measured and gains nothing (the time is spread over a
-file's functions, not one function's size), so it is not done. A declaration change still rebuilds more files than use it
-when it renumbers types or slots, as struct and native names are indices; stable names would fix that.
+file's functions, not one function's size), so it is not done.
+
+Stable names (see The C shape): struct, type, global and native names were table positions, so an added class renumbered
+the types and rewrote nearly every file. Measured on the compiler's C build (release, 8 C compiles at once, other work at a
+load of about 12 to 18; the C time includes the link, under a second): a no-op build writes and compiles no file either
+way; a one-function body edit, 1 file before and after (1.0 to 2.5 s); an added class used from one function, 598 of 649
+files and 47 s of C compile before (120 s at a load of 28), 3 files after (the class's, the function's and `image.c`) and
+6.8 s; removing it again, 597 files and 55 s before, 2 files and 6.3 s after. `image.c` is now that build's whole C time
+(about 6 s for 14.7 MB: the function table's prototypes, the struct definitions the layout checks need, the trampolines);
+splitting it would let those compile in parallel.
 
 Where the Haxe side of a C build goes. The compiler's phases are reported for a C build as for a HashLink one
 (`CompilerDriver.writeC`: the compile, writing the C, the C compiler; the C emission is the backend's publication phase).
@@ -424,11 +454,10 @@ pays a frontend restart (graph 8.6 s against 1.5 s) for standard library modules
 
 Per-function C emission in parallel (designed, a later track). Each function lowers into its own text and files are joined in
 slot order, so the output stays deterministic; declarations are per file and independent once lowering is done. What is shared
-and mutated while lowering, and must be settled first: the HashLink symbol table interns a type the first time a value asks
-for it (`typeOf` through `HlRemap.typeIndex`), the inline allocation descriptors are numbered on first use
-(`allocationIndex`), the `#line` paths are recorded (`linePath`), and `readsValueArrays` is set. A sequential pre-pass that
-interns every value type of every body and numbers allocation types in slot order would leave lowering read-only on the module,
-and the rest are per-function results merged in slot order. The workers would be `compiler.core.Parallel` threads, as the C
+and mutated while lowering: the `#line` paths are recorded (`linePath`), `readsValueArrays` is set, and each file's usage
+record is filled; these become per-function results merged in slot order. The symbol table is no longer one of them: the
+collection pass that settles the stable names (see The C shape) interns every type, global and allocation type first, so
+lowering only reads it. The workers would be `compiler.core.Parallel` threads, as the C
 compiles are; the limit is the collector, since emission allocates strings at a high rate, so the gain would be less than the
 core count. Peak memory would not grow: the C text is all held at once already (2.1 GB peak for a C build of the compiler
 against 1.3 GB for its bytecode build).
@@ -445,6 +474,5 @@ small Int allocates. The fix is the runtime's: `hl_dyn_castp` returning a shared
 change.
 
 Next: macOS and MSVC stack traces when they can be built; the static type tables; the static boxes in `hl_dyn_castp`; skipping
-the bytecode lowering of bodies for `hlc`; stable struct and native names (an added class renumbers types, and a rebuild of the
-compiler then compiles 629 of its 642 C files again); the
+the bytecode lowering of bodies for `hlc`; `image.c` split so an added type recompiles in less than its 6 s; the
 self-compile against `origin/main`'s map changes.

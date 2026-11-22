@@ -3,7 +3,7 @@ package compiler.backend.c;
 import compiler.backend.c.HlcTypes.HlcField;
 import compiler.core.InternalError;
 import compiler.hl.HlType;
-import compiler.hl.incremental.HlSymbolRequest.HlRemap;
+import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.hl.lower.HlLower;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBody;
@@ -103,7 +103,7 @@ class HlcFunctionLower {
 		}
 		scalarLocalTypes.resize(0);
 		scalarLocals.reset(body, module.view, function(type) {
-			scalarLocalTypes.push(HlRemap.typeIndex(module.symbols, type));
+			scalarLocalTypes.push(module.typeIndex(type));
 			return scalarLocalTypes.length - 1;
 		});
 		hasTry = false;
@@ -172,6 +172,68 @@ class HlcFunctionLower {
 		out.add("}\n\n");
 	}
 
+	/** The message of the error a call of a Dynamic value that is not a function throws. */
+	static inline final CALL_ERROR = "Cannot call a non-function value";
+
+	/**
+	 * Interns what lowering `source` will use: every value's type, the scalar locals' types, the String literal and cached
+	 * enum constant globals, the runtime header of the byte fast paths, the typed interface key, and the types allocated
+	 * inline. It runs for every function before any is lowered, so the C names are settled first and lowering only reads the
+	 * tables (`HlcModule.typeIndex` and the others fail for anything missed here). Each case mirrors the lowering that uses it.
+	 */
+	public function collect(source:IrBody):Void {
+		body = source;
+		var locals = 0;
+		scalarLocals.reset(body, module.view, function(type) {
+			module.typeIndex(type);
+			return locals++;
+		});
+		for (index in 0...body.argumentCount())
+			module.typeIndex(body.valueType(body.argument(index)));
+		var key = module.view.typedInterfaceKey(body.name);
+		if (key != null)
+			module.typeIndex(IrType.Abstract(key));
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var output = body.output(row);
+				if (output.exists())
+					module.typeIndex(body.valueType(output));
+				for (operand in 0...body.operandCount(row))
+					module.typeIndex(body.valueType(body.operand(row, operand)));
+				switch body.opcode(row) {
+					case IrOpcode.ConstString:
+						module.stringConstant(body.string(row));
+					case IrOpcode.TypeValue:
+						module.typeIndex(body.typeOperand(row));
+					case IrOpcode.CallClosure:
+						if (types.kind(module.typeIndex(body.valueType(body.operand(row, 0)))) == HlType.Dyn)
+							module.stringConstant(CALL_ERROR);
+					case IrOpcode.MakeEnum:
+						if (body.operandCount(row) == 0 && !isEnumTag(output))
+							module.enumConstant(body.symbol(row).name, body.auxInt(row, 1));
+					case IrOpcode.ValueInit if (scalarLocals.get(output) != null):
+					case IrOpcode.NewObject, IrOpcode.ValueInit:
+						var type = module.typeIndex(body.valueType(output));
+						if (module.inlineAllocation && types.kind(type) == HlType.Obj)
+							module.collectAllocation(type);
+					case IrOpcode.Call:
+						var base = fastPathBase(body.symbol(row).name);
+						if (base == "__bytes_get" || base == "__bytes_try_set")
+							module.runtimeHeader(BytesHeader);
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+	}
+
+	/** The runtime call `name` is, or is the shared helper of (`IrSharedRuntimeCalls`). */
+	static function fastPathBase(name:String):String {
+		var suffix = name.indexOf(compiler.ir.IrSharedRuntimeCalls.SUFFIX);
+		return suffix > 0 && compiler.ir.IrSharedRuntimeCalls.isHelper(name) ? name.substr(0, suffix) : name;
+	}
+
 	/**
 	 * `HlLower`'s typed interface method table prologue of a dispatch function: the receiver's class's private entry for the
 	 * method, when it has one, is called directly; otherwise the body, the dispatch by name, runs.
@@ -180,7 +242,7 @@ class HlcFunctionLower {
 			signature:{arguments:Array<Int>, result:Int}):Void {
 		var slotNative = module.requireSlot(compiler.hl.lower.HlTypedInterfaceTables.SLOT_NATIVE),
 			entryNative = module.requireSlot(compiler.hl.lower.HlTypedInterfaceTables.ENTRY_NATIVE),
-			keyType = HlRemap.typeIndex(module.symbols, IrType.Abstract(key)),
+			keyType = module.typeIndex(IrType.Abstract(key)),
 			slotType = module.slotResult(slotNative);
 		var receiver = '(vdynamic*)${v(arguments[0])}';
 		out.add('\t{ static ${types.cType(slotType)} slot; if( !slot ) slot = ${callExpression(slotNative, [typeAddress(keyType)], [module.typeRef])};\n');
@@ -292,11 +354,11 @@ class HlcFunctionLower {
 	inline function v(value:IrValueId):String
 		return "v" + (value:Int);
 
-	/** The HashLink type of `value`, interned the first time it is asked: a value no reachable row defines may name a type the assembly never registered. */
+	/** The HashLink type of `value`, which `collect` interned: a value no reachable row defines may name a type the assembly never registered. */
 	function typeOf(value:IrValueId):Int {
 		var known = valueTypes[value];
 		if (known < 0) {
-			known = HlRemap.typeIndex(module.symbols, body.valueType(value));
+			known = module.typeIndex(body.valueType(value));
 			valueTypes[value] = known;
 		}
 		return known;
@@ -340,10 +402,10 @@ class HlcFunctionLower {
 	}
 
 	function typeAddress(type:Int):String
-		return '(&hlc_types[$type])';
+		return module.typeDescriptor(type);
 
 	function globalAddress(global:Int):String
-		return '(${types.cType(module.code.globals[global])}*)(hlc_globals + ${module.globalOffsets[global]})';
+		return '((${types.cType(module.code.globals[global])}*)${module.globalPointer(global)})';
 
 	function lowerRow(row:Int, traps:Map<Int, Bool>):Void {
 		var opcode = body.opcode(row), output = body.output(row);
@@ -387,10 +449,10 @@ class HlcFunctionLower {
 				else
 					line('${v(output)} = NULL;');
 			case IrOpcode.ConstString:
-				var global = module.symbols.internStringConstant(body.string(row));
+				var global = module.stringConstant(body.string(row));
 				assign(row, '*${globalAddress(global)}', module.code.globals[global]);
 			case IrOpcode.TypeValue:
-				assign(row, typeAddress(HlRemap.typeIndex(module.symbols, body.typeOperand(row))), module.typeRef);
+				assign(row, typeAddress(module.typeIndex(body.typeOperand(row))), module.typeRef);
 			case IrOpcode.ToDyn:
 				var value = body.operand(row, 0), from = typeOf(value);
 				if (arrayRecast(row))
@@ -448,7 +510,7 @@ class HlcFunctionLower {
 				var type = typeOf(output);
 				switch types.kind(type) {
 					case Obj if (module.inlineAllocation): assign(row,
-						'hlc_new(&hlc_alloc_data[${module.allocationIndex(type)}],${typeAddress(type)})', module.dyn);
+						'hlc_new(&${module.allocation(type)},${typeAddress(type)})', module.dyn);
 					case Obj | Struct: assign(row, 'hl_alloc_obj(${typeAddress(type)})', module.dyn);
 					case Virtual: assign(row, 'hl_alloc_virtual(${typeAddress(type)})', module.dyn);
 					case DynObj: assign(row, 'hl_alloc_dynobj()', module.dyn);
@@ -693,7 +755,7 @@ class HlcFunctionLower {
 	}
 
 	function enumOffset(type:Int, constructor:Int, field:Int):String
-		return 'hlc_types[$type].tenum->constructs[$constructor].offsets[$field]';
+		return '${module.typeDescriptor(type)}->tenum->constructs[$constructor].offsets[$field]';
 
 	static function isDynamicKind(kind:HlType):Bool
 		return switch kind {
@@ -924,8 +986,7 @@ class HlcFunctionLower {
 	 * the same way: in C the fast path costs no start-up time.
 	 */
 	function lowerRuntimeFastPath(row:Int, name:String):Bool {
-		var suffix = name.indexOf(compiler.ir.IrSharedRuntimeCalls.SUFFIX);
-		var base = suffix > 0 && compiler.ir.IrSharedRuntimeCalls.isHelper(name) ? name.substr(0, suffix) : name;
+		var base = fastPathBase(name);
 		var push = base == "__array_push_i32" || base == "__array_push_i64" || base == "__array_push_f64"
 			|| base == "__array_push_bool" || base == "__array_push_bytes" || base == "__array_push_ref";
 		var get = base == "__bytes_get", set = base == "__bytes_try_set";
@@ -940,8 +1001,7 @@ class HlcFunctionLower {
 			line('a$id->size = n$id + 1; ${out}n$id + 1; } else ${out}$slow; }');
 			return true;
 		}
-		var header =
-			module.symbols.internRuntimeHeader(compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader.BytesHeader),
+		var header = module.runtimeHeader(BytesHeader),
 			headerStruct = types.structName(header),
 			data = "",
 			length = "";
@@ -1005,7 +1065,7 @@ class HlcFunctionLower {
 		line('if( !${v(closure)} ) hl_null_access();');
 		if (types.kind(typeOf(closure)) == HlType.Dyn) {
 			var slot = module.requireSlot("__reflect_is_function");
-			var error = module.symbols.internStringConstant("Cannot call a non-function value");
+			var error = module.stringConstant(CALL_ERROR);
 			line('if( !${callExpression(slot, [v(closure)], [typeOf(closure)])} ) hl_throw((vdynamic*)*${globalAddress(error)});');
 			var id = temporaries++;
 			line('{ vdynamic *args$id[] = {${[for (value in arguments) '(vdynamic*)${v(value)}'].concat(["NULL"]).join(",")}};');
@@ -1161,7 +1221,7 @@ class HlcFunctionLower {
 		var arguments = operandsFrom(row, 0);
 		if (arguments.length == 0) {
 			// As `HlLower.lowerEnumConstant`: a constructor without fields is made once and kept in a global.
-			var global = module.symbols.internEnumConstant(body.symbol(row).name, constructor);
+			var global = module.enumConstant(body.symbol(row).name, constructor);
 			line('${v(output)} = (venum*)*${globalAddress(global)};');
 			line('if( !${v(output)} ) { ${v(output)} = hl_alloc_enum(${typeAddress(type)},$constructor); *${globalAddress(global)} = (${types.cType(module.code.globals[global])})${v(output)}; }');
 			return;
