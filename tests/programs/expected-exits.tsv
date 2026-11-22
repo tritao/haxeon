@@ -670,3 +670,4 @@ null-check-facts	42
 null-access-throws	42
 anonymous-local-null	42
 dynamic-structure-shared-copy	42
+array-native-null-access	42

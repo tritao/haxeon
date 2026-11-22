@@ -897,6 +897,8 @@ class WasmFunctionLower {
 					default: value;
 				};
 			case Call(_, name, [value]) if (name.name == compiler.ir.names.IrReceiverCheck.STRING_LENGTH): value;
+			case Call(_, name, arguments) if (arguments.length > 0
+				&& compiler.ir.names.IrReceiverCheck.readsArray(name.name)): arguments[0];
 			default: null;
 		};
 		return value == null ? null : switch value.type {

@@ -935,7 +935,8 @@ class HlcFunctionLower {
 		var native = module.requireSlot(base), slow = callOf(row, native), out = target(row);
 		var receiver = v(body.operand(row, 0)), id = temporaries++;
 		var element = module.slotArgument(native, 1), cType = types.cType(element);
-		line('{ varray *a$id = (varray*)$receiver; if( a$id && a$id->size < a$id->capacity ) { int n$id = a$id->size;');
+		// The array was checked before the row (`HlLoweringDecisions.receiverOf`).
+		line('{ varray *a$id = (varray*)$receiver; if( a$id->size < a$id->capacity ) { int n$id = a$id->size;');
 		store('hl_aptr(a$id,$cType)[n$id]', operandAs(row, 1, element), element);
 		line('a$id->size = n$id + 1; ${out}n$id + 1; } else ${out}$slow; }');
 	}

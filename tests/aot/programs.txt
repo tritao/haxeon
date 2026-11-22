@@ -37,6 +37,7 @@ array-key-value-iteration
 array-last-index-of
 array-literal
 array-mutation
+array-native-null-access
 array-object-mutation
 array-remove
 array-resize

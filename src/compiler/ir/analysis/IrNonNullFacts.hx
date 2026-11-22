@@ -137,9 +137,9 @@ class IrNonNullFacts {
 	public static function checkedRow(body:IrBody, row:Int):IrValueId
 		return switch body.opcode(row) {
 			case IrOpcode.Call:
-				var name = body.symbol(row).name;
-				(name == IrReceiverCheck.NAME || name == IrReceiverCheck.STRING_LENGTH)
-					&& body.operandCount(row) == 1 ? body.operand(row, 0) : IrValueId.of(-1);
+				var name = body.symbol(row).name, count = body.operandCount(row);
+				count == 1 && (name == IrReceiverCheck.NAME || name == IrReceiverCheck.STRING_LENGTH)
+					|| count > 0 && IrReceiverCheck.readsArray(name) ? body.operand(row, 0) : IrValueId.of(-1);
 			case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure, IrOpcode.ArrayGet,
 				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew, IrOpcode.IteratorHasNext,
 				IrOpcode.IteratorNext,

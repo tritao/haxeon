@@ -92,10 +92,14 @@ class HlLoweringDecisions {
 
 	/**
 	 * The value row `row` dereferences and checks for null first, or no value. A native field, enum or array load cannot turn
-	 * a hardware fault into a Haxe exception, so the check is explicit and the active handler works on every thread.
+	 * a hardware fault into a Haxe exception, so the check is explicit and the active handler works on every thread; nor can
+	 * an array runtime native, which reads its array in C (`IrReceiverCheck.readsArray`).
 	 */
 	public static function receiverOf(body:IrBody, row:Int):IrValueId
 		return switch body.opcode(row) {
+			case IrOpcode.Call if (body.operandCount(row) > 0
+				&& compiler.ir.names.IrReceiverCheck.readsArray(body.symbol(row).name)):
+				body.operand(row, 0);
 			case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure, IrOpcode.ArrayGet,
 				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew, IrOpcode.IteratorHasNext,
 				IrOpcode.IteratorNext,

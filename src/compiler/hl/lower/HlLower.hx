@@ -2837,7 +2837,9 @@ class HlLower {
 		var slow = freshLabel(),
 			done = freshLabel();
 		var size = temporaryRegister(IrType.I32, registerTypes);
-		instructions.push(HlInstruction.JumpNull(args[0], slow));
+		// The array was checked before the row (`HlLoweringDecisions.receiverOf`); null bytes take the native.
+		if (!push)
+			instructions.push(HlInstruction.JumpNull(args[0], slow));
 		// The header is read through an object type laid out like it: one field access per header field. The fast path falls
 		// through; the slow path is the native, which keeps allocation and error behavior.
 		var header = temporaryRegisterType(internRuntimeHeader(push ? ArrayHeader : BytesHeader), registerTypes);
