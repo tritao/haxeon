@@ -163,7 +163,8 @@ function names; reuse is by object identity of the `IrFunction` an entry was mad
 - **Inliner** (`IrInlineCache`): `sources` (name → the function it was given, deduplicated as above); `originals` (name →
   {source function, its frozen body}); `memo` (name → {source function, fingerprint, the functions and object prints it
   consulted, the inlined form as a frozen compacted body when a caller may splice it, the cleaned function}); `published`
-  (name → the function the backends got); `publishedBytes` (name → {function, its comparison encoding}); `instrumented`.
+  (name → the function the backends got), which a re-inlined function is compared with as rows
+  (`IrFunctionStateEquality.same`, then `sameCode` for one that only moved within its file); `instrumented`.
   A memo entry is reused while its source is the same object, its dependencies are the same objects and its object prints
   match, and its cleaned function with it; an unchanged inlined form is the original body itself, and an unchanged cleanup
   shares the memo's body. The inlined form of a function no caller may splice (one that does not look inlinable, or whose

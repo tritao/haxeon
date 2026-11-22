@@ -1,7 +1,7 @@
 package compiler.ir;
 
 import compiler.core.InternalError;
-import haxe.io.Bytes;
+import compiler.ir.codec.IrFunctionStateEquality;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
@@ -61,12 +61,6 @@ class IrInlineCache {
 
 	/** Each function's source as a frozen body, kept while the source is the same object, so it is encoded once. */
 	public var originals:Map<String, {source:IrFunction, body:IrBody}> = [];
-
-	/**
-	 * The encoding of a published function, kept with the function it belongs to (null when it cannot be encoded). Comparing a
-	 * re-inlined function with the published one then encodes only the new one, and a published function is encoded once.
-	 */
-	public var publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [];
 
 	/** The static-null-check copies of the program's functions, so they keep their identity between compiles. */
 	public final staticChecks:IrStaticCheckCache = new IrStaticCheckCache();
@@ -199,7 +193,7 @@ class IrInlineCache {
 		var result:Array<IrFunction> = [];
 		for (fn in functions) {
 			var known = previous.get(fn.name);
-			if (known == null || !compiler.ir.codec.IrFunctionStateEquality.same(known, fn))
+			if (known == null || !IrFunctionStateEquality.same(known, fn))
 				known = fn;
 			if (known.body == null)
 				known.bodyIn(types, builder);
@@ -284,8 +278,6 @@ class IrInlineCache {
 			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
-		for (name => entry in publishedBytes)
-			result.publishedBytes.set(name, entry);
 		for (name => entry in instrumented)
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
 		result.staticChecks.copies = staticChecks.copies;
@@ -677,7 +669,6 @@ class IrInliner {
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
-			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		// Every function is inlined before any is cleaned up: a caller inlines a callee's form before its cleanup, which edits it.
 		var inlinedForms = [for (fn in program.functions) inliner.inlinedVersionOf(fn.name)];
@@ -723,28 +714,18 @@ class IrInliner {
 			}
 			var previous = cache.published.get(fn.name);
 			if (previous != null && previous != result) {
-				// Generated functions (initializers, the entry) are rebuilt on every compile; only different bytes count.
-				var previousEntry = cache.publishedBytes.get(fn.name);
-				if (previousEntry == null || previousEntry.fn != previous)
-					previousEntry = {fn: previous, bytes: encodeOrNull(previous)};
-				var resultBytes = previousEntry.bytes == null ? null : encodeOrNull(result);
-				if (resultBytes != null && previousEntry.bytes.compare(resultBytes) == 0) {
-					// The same code on the same lines. One that only moved within its file keeps its new positions, so its
-					// debug information names the snapshot this build carries; it is lowered again but needs no patch.
-					if (IrFunctionStateCodec.samePlacement(previous, result)) {
-						result = previous;
-						// The next compile then finds the published form itself and compares nothing.
-						if (instrument == null && entry != null)
-							entry.cleaned = previous;
-					} else {
-						relocated.push(fn.name);
-						previousEntry = {fn: result, bytes: resultBytes};
-					}
-				} else {
+				// Generated functions (initializers, the entry) are rebuilt on every compile; only different code counts.
+				if (IrFunctionStateEquality.same(previous, result)) {
+					result = previous;
+					// The next compile then finds the published form itself and compares nothing.
+					if (instrument == null && entry != null)
+						entry.cleaned = previous;
+				} else if (IrFunctionStateEquality.sameCode(previous, result)) {
+					// The same code on the same lines, only moved within its file: it keeps its new positions, so its debug
+					// information names the snapshot this build carries; it is lowered again but needs no patch.
+					relocated.push(fn.name);
+				} else
 					changed.push(fn.name);
-					previousEntry = {fn: result, bytes: resultBytes};
-				}
-				publishedBytes.set(fn.name, previousEntry);
 			} else if (previous == null)
 				changed.push(fn.name);
 			functions.push(result);
@@ -765,30 +746,10 @@ class IrInliner {
 		IrAllocationReport.report(program);
 		cache.memo = inliner.nextMemo;
 		cache.published = published;
-		// Only functions that were compared have bytes; an entry for a function that is gone or unchanged-but-uncompared stays out.
-		for (name => entry in cache.publishedBytes)
-			if (!publishedBytes.exists(name) && published.get(name) == entry.fn)
-				publishedBytes.set(name, entry);
-		cache.publishedBytes = publishedBytes;
 		cache.instrumented = instrumented;
 		cache.relocated = relocated;
 		inliner.keepOriginals();
 		return changed;
-	}
-
-	/**
-	 * A function's encoding for comparison, which leaves out the whole-file content hash and byte offsets so an edit elsewhere
-	 * in the file does not make it look changed; its own lines and columns still count, so line information in stack traces
-	 * stays right. Null when it cannot be encoded, which makes it count as different from anything.
-	 */
-	static function encodeOrNull(fn:IrFunction):Null<Bytes> {
-		try {
-			// Encoded once (`IrInlineCache.publishedBytes` keeps the bytes), from a decoding nothing keeps.
-			var body = fn.body;
-			return IrFunctionStateCodec.encodeForComparison(body != null ? body.toFunction() : fn);
-		} catch (_:Dynamic) {
-			return null;
-		}
 	}
 
 	inline function functionId(symbol:Int):Int
@@ -997,7 +958,7 @@ class IrInliner {
 		if (usable && checkingMemo && memo != null) {
 			var kept = memo.inlined;
 			if (kept != null && result != null) {
-				if (!compiler.ir.codec.IrFunctionStateEquality.same(kept.toFunction(), result.toFunction()))
+				if (!IrFunctionStateEquality.same(kept.toFunction(), result.toFunction()))
 					throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
 				result = kept;
 				reused[id] = memo;

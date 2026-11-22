@@ -30,76 +30,16 @@ class IrFunctionStateCodec {
 		return encodeFunction(fn, true);
 
 	/**
-	 * Encodes everything `encode` does except the content hash of each source file and the byte offsets of each location.
-	 * The hash covers the whole file and the offsets move with any edit before the function, so an edit anywhere would make
-	 * every later function of the file look different. Line and column numbers stay in: a function whose lines moved differs.
-	 * `samePlacement` tells whether two functions with the same comparison encoding also agree on what it leaves out.
-	 */
-	public static function encodeForComparison(fn:IrFunction):Bytes
-		return encodeFunction(fn, true, false);
-
-	/**
-	 * Whether two functions with the same comparison encoding also have the same file hashes and byte offsets, so one can
-	 * stand in for the other in a build: its debug information then names a source snapshot the build carries.
-	 */
-	public static function samePlacement(left:IrFunction, right:IrFunction):Bool {
-		var leftBody = left.body, rightBody = right.body;
-		if (leftBody != null && rightBody != null)
-			return sameBodyPlacement(leftBody, rightBody);
-		for (index in 0...left.debugBindings.length) {
-			var a = left.debugBindings[index], b = right.debugBindings[index];
-			if (a.scopeStart != b.scopeStart || a.scopeEnd != b.scopeEnd)
-				return false;
-		}
-		for (blockIndex in 0...left.blocks.length) {
-			var a = left.blocks[blockIndex], b = right.blocks[blockIndex];
-			for (index in 0...a.instructions.length)
-				if (!samePlace(a.instructions[index].provenance, b.instructions[index].provenance))
-					return false;
-			var leftTerminator = a.terminator, rightTerminator = b.terminator;
-			if (leftTerminator != null && rightTerminator != null
-				&& !samePlace(leftTerminator.provenance, rightTerminator.provenance))
-				return false;
-		}
-		return true;
-	}
-
-	/** `samePlacement` on two bodies, read as rows. */
-	static function sameBodyPlacement(left:compiler.ir.IrBody, right:compiler.ir.IrBody):Bool {
-		for (index in 0...left.bindingCount())
-			if (left.bindingScopeStart(index) != right.bindingScopeStart(index)
-				|| left.bindingScopeEnd(index) != right.bindingScopeEnd(index))
-				return false;
-		for (block in 0...left.blockCount()) {
-			var x = left.firstRow(block), y = right.firstRow(block);
-			while (x >= 0 && y >= 0) {
-				if (!samePlace(left.provenance(x), right.provenance(y)))
-					return false;
-				x = left.nextRow(x);
-				y = right.nextRow(y);
-			}
-		}
-		return true;
-	}
-
-	static function samePlace(left:SourceProvenance, right:SourceProvenance):Bool {
-		var a = left.location, b = right.location;
-		if (a == null || b == null)
-			return a == b;
-		return a.start == b.start && a.end == b.end && a.sourceHash == b.sourceHash;
-	}
-
-	/**
 	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
 	 * fingerprint run the same code, wherever their source sits and whatever they are called. SourceLambda ordinals are left out of
 	 * the names it mentions (`IrTypeCodec.withoutOrdinals`), so a lambda that only moved among its siblings keeps its
 	 * fingerprint even though its environment and nested lambdas are renamed with it (see `LambdaAlignment`).
 	 */
 	public static function codeFingerprint(fn:IrFunction):String
-		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false, true, true)));
+		return haxe.crypto.Base64.encode(build.execution.ContentDigest.make(encodeFunction(fn, false, true)));
 
 	/** With `erase`, names lose their lambda ordinals (see `codeFingerprint`). */
-	static function encodeFunction(fn:IrFunction, identified:Bool, hashed:Bool = true, erase:Bool = false):Bytes {
+	static function encodeFunction(fn:IrFunction, identified:Bool, erase:Bool = false):Bytes {
 		var values:Map<Int, IrValue> = [];
 		for (argument in fn.arguments)
 			collectValue(argument, values);
@@ -186,8 +126,8 @@ class IrFunctionStateCodec {
 			IrTypeCodec.writeString(output, binding.name);
 			IrValueTableCodec.writeReference(output, binding.value);
 			IrTypeCodec.writeString(output, binding.path);
-			output.writeInt32(hashed ? binding.scopeStart : 0);
-			output.writeInt32(hashed ? binding.scopeEnd : 0);
+			output.writeInt32(binding.scopeStart);
+			output.writeInt32(binding.scopeEnd);
 		}
 		// A fingerprint describes whatever the compiler holds, including functions still being built; only persisted state must be
 		// complete.
@@ -209,7 +149,7 @@ class IrFunctionStateCodec {
 			for (instruction in block.instructions) {
 				writeBytes(output, IrInstructionCodec.encode(instruction.value, erase));
 				if (identified)
-					writeProvenance(output, instruction.provenance, hashed);
+					writeProvenance(output, instruction.provenance);
 			}
 			// An unreachable block may stay open, as the continuation of a try whose every path returns or throws; the verifiers
 			// check only reachable blocks. Rejecting it here made every such function compare as changed on each live edit.
@@ -223,7 +163,7 @@ class IrFunctionStateCodec {
 			IrTerminatorCodec.write(terminator, blockTerminator.value);
 			writeBytes(output, terminator.getBytes());
 			if (identified)
-				writeProvenance(output, blockTerminator.provenance, hashed);
+				writeProvenance(output, blockTerminator.provenance);
 		}
 		return output.getBytes();
 	}
@@ -355,18 +295,18 @@ class IrFunctionStateCodec {
 		}
 	}
 
-	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance, hashed:Bool = true):Void {
+	static function writeProvenance(output:BytesOutput, provenance:SourceProvenance):Void {
 		var location = provenance.location;
 		output.writeByte(location == null ? 0 : 1);
 		if (location != null) {
 			IrTypeCodec.writeString(output, location.path);
-			output.writeInt32(hashed ? location.start : 0);
-			output.writeInt32(hashed ? location.end : 0);
+			output.writeInt32(location.start);
+			output.writeInt32(location.end);
 			output.writeInt32(location.line);
 			output.writeInt32(location.column);
 			output.writeInt32(location.endLine);
 			output.writeInt32(location.endColumn);
-			output.writeInt32(hashed ? location.sourceHash : 0);
+			output.writeInt32(location.sourceHash);
 		}
 		switch provenance.origin {
 			case UserSource:
