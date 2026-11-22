@@ -21,6 +21,7 @@ import compiler.ir.model.SourceProvenance.SourceLocation;
 import compiler.ir.model.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
+@:nullSafety(Strict)
 class IrFunctionStateCodec {
 	static inline final VERSION = 20;
 	static inline final MAX_BLOCKS = 0x100000;
@@ -432,8 +433,8 @@ class IrFunctionStateCodec {
 
 	static function collectValue(value:IrValue, values:Map<Int, IrValue>):Void {
 		var id:Int = value.id;
-		if (values.exists(id)) {
-			var previous = values.get(id);
+		var previous = values.get(id);
+		if (previous != null) {
 			if (previous != value
 				&& (previous.name != value.name || !compiler.ir.model.IrTypeIdentity.same(previous.type, value.type)))
 				throw new InternalError("Conflicting IR value identity");

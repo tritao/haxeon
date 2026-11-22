@@ -21,6 +21,7 @@ import compiler.ir.model.SourceProvenance.SourceOrigin;
  * one cannot stand in for the other in a build, whose debug information must name the source snapshot it carries. Neither
  * decodes a body: a function compared with a body is encoded instead.
  */
+@:nullSafety(Strict)
 class IrFunctionStateEquality {
 	public static inline function same(left:IrFunction, right:IrFunction):Bool
 		return compare(left, right, true);
@@ -78,10 +79,12 @@ class IrFunctionStateEquality {
 					return false;
 			}
 			var x = a.terminator, y = b.terminator;
-			if (x != y
-				&& (x == null || y == null || !provenance(x.provenance, y.provenance, placed)
-				|| !terminator(x.value, y.value)))
-				return false;
+			if (x != y) {
+				if (x == null || y == null)
+					return false;
+				if (!provenance(x.provenance, y.provenance, placed) || !terminator(x.value, y.value))
+					return false;
+			}
 		}
 		return true;
 	}

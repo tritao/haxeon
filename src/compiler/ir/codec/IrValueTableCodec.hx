@@ -8,6 +8,7 @@ import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 /** Canonical value table used by persisted IR functions. */
+@:nullSafety(Strict)
 class IrValueTableCodec {
 	static inline final VERSION = 3;
 	public static inline final MAX_VALUES = 0x100000;
@@ -90,9 +91,10 @@ class IrValueTableCodec {
 
 	public static function readReference(input:BytesInput, values:Map<Int, IrValue>):IrValue {
 		var id = input.readInt32();
-		if (id < 0 || !values.exists(id))
+		var value = id < 0 ? null : values.get(id);
+		if (value == null)
 			throw new InternalError("Unknown IR value reference");
-		return values.get(id);
+		return value;
 	}
 
 	static function writeString(output:BytesOutput, value:String):Void {

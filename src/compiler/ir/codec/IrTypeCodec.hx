@@ -6,6 +6,7 @@ import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 /** Deterministic, strictly validated persistence for IR types. */
+@:nullSafety(Strict)
 class IrTypeCodec {
 	static inline final VERSION = 7;
 	static inline final MAX_DEPTH = 64;
@@ -150,15 +151,16 @@ class IrTypeCodec {
 			return name;
 		var result = new StringBuf(), index = 0;
 		while (index < name.length) {
-			var code = name.charCodeAt(index);
+			var code = StringTools.fastCodeAt(name, index);
 			result.addChar(code);
 			index++;
 			if (code != "#".code)
 				continue;
 			var end = index;
-			while (end < name.length && name.charCodeAt(end) >= "0".code && name.charCodeAt(end) <= "9".code)
+			while (end < name.length && StringTools.fastCodeAt(name, end) >= "0".code
+				&& StringTools.fastCodeAt(name, end) <= "9".code)
 				end++;
-			if (end > index && (end == name.length || endsStep(name.charCodeAt(end))))
+			if (end > index && (end == name.length || endsStep(StringTools.fastCodeAt(name, end))))
 				index = end;
 		}
 		return result.toString();
