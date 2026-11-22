@@ -190,7 +190,9 @@ value id.
 Each C line is preceded by `#line N "file.hx"` when its source position differs from the previous one, and every C line
 after the first of one IR row repeats it (a `#line` counts the lines after it), so DWARF and PDB line tables point at Haxe
 sources, and gdb, lldb, perf and sanitizers report Haxe lines. Rows of no source are line 1 of `<generated>`, as `HlLower`
-places them. Functions keep their Haxe names in C (`hx_Point_sum`), which is what perf shows.
+places them. A function's definition is at its first row's line, so its prologue is a Haxe line too and a function of one Haxe
+file has no line of the C file (a PDB lists a function's lines file by file, and Wine's DbgHelp and LLVM's PDB reader look in
+the first file only). Functions keep their Haxe names in C (`hx_Point_sum`), which is what perf shows.
 
 Haxe stack traces (`haxe.CallStack`, uncaught exceptions) are the JIT's, frame for frame (`native/aot/hlc_stack.c`): the
 generated functions are in a section of their own (`hlc_text`), so `capture_stack` (the platform unwinder, `backtrace`)
@@ -214,14 +216,14 @@ from. Whether it inlines generated functions into each other follows the build m
   is named. Reading all of `.debug_info` at the first throw cost the AOT-built compiler half a second at start-up, as it
   throws early and catches.
 
-**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/reference/HLB_DEBUG_SECTIONS.md`) are written
-on every development rebuild and decoded at every load, where speed matters. Platform formats use the platform's standard
-codec, so standard tools keep working: an ELF executable's DWARF is compressed with zlib (`SHF_COMPRESSED`,
-`ELFCOMPRESS_ZLIB`), which gdb, perf and addr2line read; Windows and macOS will follow PDB and dSYM conventions when those
-builds come. Both libraries are already vendored in the fork, so no other codec (zstd) is added. A release build on Linux
-links with `--compress-debug-sections=zlib`; the stack capture inflates the sections it reads with the fork's zlib (linked
-into the SDK's `libhl.a` with prefixed, hidden symbols): the inline records' sections at the first capture, the line table
-when a frame is first named.
+**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/reference/HLB_DEBUG_SECTIONS.md`) are written on
+every development rebuild and decoded at every load, where speed matters. Platform formats use the platform's standard codec, so
+standard tools keep working: an ELF executable's DWARF is compressed with zlib (`SHF_COMPRESSED`, `ELFCOMPRESS_ZLIB`), which
+gdb, perf and addr2line read; a PDB stays as the linker writes it, uncompressed (DbgHelp and debuggers read no other form; a
+release archive compresses it), and macOS will follow dSYM conventions when that build comes. Both libraries are already
+vendored in the fork, so no other codec (zstd) is added. A release build on Linux links with `--compress-debug-sections=zlib`;
+the stack capture inflates the sections it reads with the fork's zlib (linked into the SDK's `libhl.a` with prefixed, hidden
+symbols): the inline records' sections at the first capture, the line table when a frame is first named.
 
 **What a release executable keeps.** The generated C is compiled with `-fvisibility=hidden`, so the dynamic symbol table
 lists only what the loader needs, libhl's natives (it resolves them by name in the executable). A release build on Linux then
@@ -252,13 +254,24 @@ Platforms:
   (the fork's `hl.h` lets it be defined), so references to libhl are direct rather than through a DLL's import table, and
   its entry point is `wmain` (`-municode`), as the runtime's arguments are UTF-16 there. Checked by cross-building with
   MinGW and running the six stack programs under wine in both build modes, against the JIT on Linux.
-- **Windows with MSVC** (not implemented): MSVC writes no DWARF; its line tables and inline records are in the PDB. The
-  section scheme is the same (`__declspec(code_seg(".text$hlc.2"))`, link.exe sorts `.text$` groups as GNU ld does) and the
-  frames the same (`RtlCaptureStackBackTrace`). Naming a frame would go through DbgHelp: `SymInitialize` once, then
-  `SymGetLineFromAddr64` for the file and line, and `SymQueryInlineTrace` with `SymFromInlineContext` and
-  `SymGetLineFromInlineContext` for the inlined frames of a release build; the C name maps to a slot by
-  `hlc_function_names` as with DWARF. DbgHelp needs the PDB next to the executable and is single-threaded (a lock around
-  it). The paths a PDB records are the `#line` paths as written, so no matching against `hlc_source_paths` is needed.
+- **Windows with MSVC** (`--c-compiler=clang-cl` or `cl`): MSVC writes no DWARF; its line tables and inline records are in
+  the PDB the link writes beside the executable (`OUTPUT.pdb`). The section scheme is MinGW's
+  (`__declspec(code_seg(".text$hlc.2"))` on each generated function's declaration and definition, the markers in
+  `.text$hlc.1` and `.text$hlc.3`; link.exe and lld-link sort `.text$` groups as GNU ld does), and the frames come from
+  `RtlCaptureStackBackTrace`. The link folds no identical functions (`/OPT:NOICF`) and is not incremental, so each
+  generated function keeps an address of its own, with no jump thunk in place of it. Frames are named through DbgHelp
+  (`HLC_STACK_PDB` in `hlc_stack.c`), under a lock, as it is single-threaded: `SymInitialize` at the first capture, with the
+  executable's directory as the search path (the link also records the PDB's absolute path); a frame's function by
+  `SymFromAddr`, mapped to a slot by `hlc_function_names`, and its file and line by `SymGetLineFromAddr64`. In a release
+  build, `SymAddrIncludeInlineTrace` and `SymQueryInlineTrace` give the inline chain at a return address, whose contexts
+  are consecutive from the innermost inlined function out to the function the code is in; `SymFromInlineContext` and
+  `SymGetLineFromInlineContext` name each level, and each level that is a generated function is a frame, named at the line
+  where it calls the level inside it, as with DWARF. A captured frame of an inlined level is its return address with the
+  depth in the top byte, which no user-space address has, so a capture allocates nothing. A development build captures
+  without DbgHelp (no inlining, so a return address is one frame) and loads it when a frame is first named. clang-cl may
+  make a relative `#line` path absolute from its working directory, so a PDB file is matched to the longest directive path
+  that ends it by component, with either separator and in any case. Without the PDB a frame is still named, from the module
+  image, with no file and line, and a release build loses its inlined frames.
 - **macOS** (not implemented): no machine to test it, so it stays on the unsupported path (no frames). The design: the
   section is `__TEXT,__hlc_text` with the linker's `section$start$__TEXT$__hlc_text` and `section$end$...` symbols; frames
   from `backtrace`; the bias from `_dyld_get_image_vmaddr_slide(0)`. The DWARF is not in the executable: the linker leaves
@@ -269,6 +282,9 @@ Platforms:
 
 Where none of these applies, `hlc_stack_init` installs a capture that returns no frames, so exceptions carry no stack. The
 debugger and hot reload are JIT features and stay so.
+
+Where the PDB is not beside the executable, DbgHelp finds no lines; whether a release ships it is decided under Shipping
+the compiler.
 
 A function the C compiler inlined is a frame when its C name is a generated function's: image.c lists the generated
 functions by C name with their slots (`hlc_function_names`, sorted), which needs no exported symbols or `dlsym`. The line
@@ -288,6 +304,21 @@ file that changed (as many at once as there are processors, the largest first; `
 traces read and leaves out the variables and types, most of the debug information's compile time), links the executable at `--output` with the whole VM library (the loader resolves natives by
 their `hlp_` symbols in the executable itself), and reports the C compiler's diagnostics as a compile error. Neither is read from the environment or from defines. They change
 no IR or C text, so `CompileOptions.key` leaves them out.
+
+The C compiler's name says which command line it takes (`HlcBuild.driverOf`): `cl` and `clang-cl` (LLVM's compiler with MSVC's
+command line and ABI) build for Windows with MSVC's toolchain, wherever they run; any other name is gcc's command line (gcc,
+clang, MinGW's gcc), building for the host. With MSVC's, the SDK is a native build with MSVC (the `windows-msvc` preset):
+`libhl.lib` and `libffi.lib`, built with the DLL C runtime. Each file is compiled with `/std:c11 /O2 /Z7 /MD` (`/Od` and
+`/DHLC_EXACT_FRAMES` in a development build) and `/DHL_IMPORT=extern`; `/Z7` keeps the CodeView records in each object, so
+parallel compiles share no PDB, and clang-cl keeps only line tables and inline sites (`-gline-tables-only`, as `-g1`) and
+takes gcc's `-fwrapv`, `-fno-strict-aliasing` and `-fno-optimize-sibling-calls` (`/clang:`). The link, through the same
+driver, makes `OUTPUT.exe` and `OUTPUT.pdb` with `/DEBUG /INCREMENTAL:NO /OPT:REF /OPT:NOICF /STACK:8388608` and
+`/WHOLEARCHIVE` of `libhl.lib`, whose objects export the natives the loader finds by name. The generated C needs no GCC
+extension there: `hlc.h` spells the section and `noinline` as `__declspec(code_seg)` and `__declspec(noinline)`, and a native
+of the VM or runtime is bound to its symbol by the linker (`#pragma comment(linker, "/alternatename:...")`) instead of an asm
+label. Plain `cl` has no flag for wrapping arithmetic or for keeping sibling calls: it relies on MSVC not exploiting signed
+overflow, and a release build may lose the frame of a function that ends in a tail call, which clang-cl keeps; clang-cl is
+the compiler the Windows release uses.
 
 ## Shipping the compiler
 
@@ -324,6 +355,15 @@ C files that changed. The hlc build links libhl statically, so the executable ne
 own DWARF (`-g1`), which is most of its 39 MB. On Linux the CLI with the executable builds a one-file project cold (CLI start,
 compile server start, compile) in 1.2 s against 2.3 s with the bytecode worker, and a language server session starts in 0.6 s
 against 2.1 s. The `aot-compiler` suite builds it, checks each role and runs the suites that compile through the CLI with it.
+
+On Windows the release builds the executable with clang-cl (`--c-compiler=clang-cl`, MSVC's ABI and C runtime, as the VM is
+built), and ships its PDB, `haxeon-compiler.pdb`, beside it. Without the PDB a trace names each frame's function from the module
+image but gives no file and line, and loses the frames of the functions the C compiler inlined, where the other platforms give
+both from the DWARF their executables keep: a trace of an internal error is what a user sends back, so it is worth the size.
+The PDB keeps only line tables and inline sites (clang-cl's `-gline-tables-only`): built from this tree, about 21 MB beside a
+14 MB executable, 5 MB compressed in the archive. DbgHelp finds it in the executable's directory. `haxeon dev aot-compiler`
+publishes the executable only (in a checkout the PDB is found where the link wrote it, by the path the executable records), so
+the release copies `out/aot-compiler/haxeon-compiler.pdb` beside the published executable.
 
 ## Testing
 
@@ -423,8 +463,14 @@ million scalar box requests in a self-compile, nearly all served by the shared B
 has the new maps API, which this base does not use.
 
 Stack traces on Windows: programs built with MinGW have the JIT's traces (see Debug information), checked by
-cross-building the six stack programs and running them under wine in both build modes; MSVC and macOS are designed there
-and take the no-frames path until built.
+cross-building the six stack programs and running them under wine in both build modes. Programs built with clang-cl have
+them through DbgHelp, checked by cross-building from Linux (clang-cl and lld-link against an MSVC sysroot from `xwin`, the SDK
+cross-built the same way) and running under wine: the eleven programs with exceptions and stacks in `programs.txt`, in both
+modes, and every eighth program of the list in release mode, against the JIT; and the compiler itself, which compiles a
+program under wine to the bytecode the JIT build of it writes but for the source paths. Wine's DbgHelp reads PDB line tables
+and inline sites but, as LLVM's reader, takes a function's lines from its first file only, so the wine check names lines only
+in functions of one Haxe file; the `aot-msvc` workflow (manual) runs the stack programs and a few others with clang-cl and cl
+on Windows in both modes. macOS is designed there and takes the no-frames path until built.
 
 Build speed. The compiler's C build took about two minutes, of which the Haxe compile is about 27 s; the C compile was
 the rest, at about 630 s of processor time with a few files over 15 s each. Changes: each file declares only what it uses
@@ -488,6 +534,6 @@ small Int allocates. The fix is the runtime's: `hl_dyn_castp` returning a shared
 (they are immutable and never on a stack), which removes the copies for the JIT's static boxes too. Not done: it is a fork
 change.
 
-Next: macOS and MSVC stack traces when they can be built; the static type tables; the static boxes in `hl_dyn_castp`; skipping
+Next: macOS stack traces when they can be built; the static type tables; the static boxes in `hl_dyn_castp`; skipping
 the bytecode lowering of bodies for `hlc`; `image.c` split so an added type recompiles in less than its 6 s; the
 self-compile against `origin/main`'s map changes.

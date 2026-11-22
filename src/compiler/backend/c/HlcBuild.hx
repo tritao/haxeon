@@ -34,10 +34,11 @@ class HlcBuild {
 	 * Compiles the C files of `directory` and the SDK's runtime support, and links the executable `output`. Returns how many it
 	 * compiled. With `exactFrames` (a development build) the C compiler inlines no generated function into another, so stack
 	 * traces are the JIT's frame for frame; otherwise it inlines as it sees fit and the stack capture restores the inlined frames
-	 * from the DWARF inline records. Each kind has its own objects.
+	 * from the debug information's inline records. Each kind has its own objects.
 	 */
 	public static function compile(files:Array<HlcFile>, directory:String, output:String, cCompiler:String, sdk:String,
 			exactFrames:Bool):Int {
+		var driver = driverOf(cCompiler);
 		var objects = directory + (exactFrames ? "/obj-development" : "/obj-release");
 		FileSystem.createDirectory(objects);
 		var header = directory + "/hlc.h", headerTime = modified(header);
@@ -45,27 +46,12 @@ class HlcBuild {
 		sources.push(sdk + "/src/hlc_main.c");
 		sources.push(sdk + "/src/hlc_stack.c");
 		var outputs = [for (source in sources) objects + "/"
-			+ haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(source)) + ".o"];
-		// No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has, and a jump leaves no record to restore
-		// it from. No cross-jumping, where the compiler has the flag (gcc; clang has not): identical calls of different Haxe lines
-		// (throws, most often, also in inlined copies of one function) are not merged into one, which would keep one line and
-		// lose the inlined frames of the others.
-		// Debug information is the line tables and the inline records the stack traces read (`-g1`), not the variables and types
-		// a debugger shows, which are most of its compile time. A development build is not optimized, so it builds quickly.
-		// The generated functions are not exported: the loader finds natives in libhl by name, never a generated function, and an
-		// exported name costs the dynamic symbol table and string table an entry each.
-		var flags = [
-			"-std=gnu11", exactFrames ? "-O0" : "-O2", "-g1", "-fwrapv", "-fno-strict-aliasing",
-			"-fno-optimize-sibling-calls", "-fvisibility=hidden",
-			"-w", '-I$directory', '-I$sdk/include'
-		];
-		if (exactFrames)
-			flags.push("-DHLC_EXACT_FRAMES");
-		// libhl is linked statically: its functions are referenced directly, not through a DLL's import table.
-		if (Sys.systemName() == "Windows")
-			flags.push("-DHL_IMPORT=extern");
-		if (ProcessOutputCapture.capture(cCompiler, ["-fno-crossjumping", "--version"], 0).exitCode == 0)
-			flags.push("-fno-crossjumping");
+			+ haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(source)) + (driver == Gnu ? ".o" : ".obj")];
+		// cl takes `-I` as gcc does.
+		var flags = (driver == Gnu ? gnuFlags(cCompiler, exactFrames) : msvcFlags(driver, exactFrames)).concat([
+			'-I$directory',
+			'-I$sdk/include'
+		]);
 		// Objects made with other flags or another compiler are all made again.
 		var stamp = objects + "/flags", command = [cCompiler].concat(flags).join(" ");
 		var rebuild = !FileSystem.exists(stamp) || File.getContent(stamp) != command;
@@ -80,34 +66,96 @@ class HlcBuild {
 		var failures:Array<Null<String>> = [for (_ in pending) null];
 		compiler.core.Parallel.forEach(pending.length, processorCount(), function(item) {
 			var index = pending[item];
-			var result = ProcessOutputCapture.capture(cCompiler, flags.concat([
-				"-c",
-				sources[index],
-				"-o",
-				outputs[index]
-			]),
+			var object = driver == Gnu ? ["-o", outputs[index]] : ["/Fo" + outputs[index]];
+			var result = ProcessOutputCapture.capture(cCompiler, flags.concat(["-c", sources[index]]).concat(object),
 				ProcessOutputCapture.defaultDiagnosticLimit);
 			if (result.exitCode != 0)
-				failures[item] = '${sources[index]}:\n${result.stderr}';
+				failures[item] = '${sources[index]}:\n${result.stderr}${result.stdout}';
 		});
 		for (failure in failures)
 			if (failure != null)
 				throw new InternalError('C compilation failed: $failure');
 		File.saveContent(stamp, command);
-		// The whole VM library is linked: the loader resolves natives by name (`hlp_*`) in the executable itself, so nothing in the
-		// generated code references them, and they must be exported.
-		var link = ["-o", output].concat(outputs);
+		var link = driver == Gnu ? gnuLink(output, outputs, sdk, exactFrames) : msvcLink(output, outputs, sdk);
+		var result = ProcessOutputCapture.capture(cCompiler, link, ProcessOutputCapture.defaultDiagnosticLimit);
+		if (result.exitCode != 0)
+			throw new InternalError('C link failed:\n${result.stderr}${driver == Gnu ? "" : result.stdout}');
+		if (driver == Gnu && !exactFrames && Sys.systemName() == "Linux")
+			stripSymbols(cCompiler, output);
+		return pending.length;
+	}
+
+	/**
+	 * Which command line `cCompiler` takes, by its name: MSVC's (`cl`, and `clang-cl`, LLVM's compiler with MSVC's command line
+	 * and ABI), which builds for Windows wherever it runs, or GCC's (gcc, clang, MinGW's gcc), which builds for the host.
+	 */
+	static function driverOf(cCompiler:String):HlcDriver {
+		var name = haxe.io.Path.withoutDirectory(cCompiler).toLowerCase();
+		if (StringTools.endsWith(name, ".exe"))
+			name = name.substr(0, name.length - 4);
+		return name == "cl" ? Msvc : StringTools.startsWith(name, "clang-cl") ? ClangCl : Gnu;
+	}
+
+	/**
+	 * gcc's and clang's flags. No sibling calls: a Haxe stack trace has the frame of every call, as the JIT's has, and a jump
+	 * leaves no record to restore it from. No cross-jumping, where the compiler has the flag (gcc; clang has not): identical
+	 * calls of different Haxe lines (throws, most often, also in inlined copies of one function) are not merged into one, which
+	 * would keep one line and lose the inlined frames of the others.
+	 * Debug information is the line tables and the inline records the stack traces read (`-g1`), not the variables and types a
+	 * debugger shows, which are most of its compile time. A development build is not optimized, so it builds quickly.
+	 * The generated functions are not exported: the loader finds natives in libhl by name, never a generated function, and an
+	 * exported name costs the dynamic symbol table and string table an entry each.
+	 */
+	static function gnuFlags(cCompiler:String, exactFrames:Bool):Array<String> {
+		var flags = [
+			"-std=gnu11", exactFrames ? "-O0" : "-O2", "-g1", "-fwrapv", "-fno-strict-aliasing",
+			"-fno-optimize-sibling-calls", "-fvisibility=hidden", "-w"
+		];
+		if (exactFrames)
+			flags.push("-DHLC_EXACT_FRAMES");
+		// libhl is linked statically: its functions are referenced directly, not through a DLL's import table.
+		if (Sys.systemName() == "Windows")
+			flags.push("-DHL_IMPORT=extern");
+		if (ProcessOutputCapture.capture(cCompiler, ["-fno-crossjumping", "--version"], 0).exitCode == 0)
+			flags.push("-fno-crossjumping");
+		return flags;
+	}
+
+	/**
+	 * cl's and clang-cl's flags, as `gnuFlags`. The debug information is CodeView in each object (`/Z7`, so parallel compiles
+	 * share no PDB), which the link gathers into the PDB the stack traces read through DbgHelp; clang-cl keeps only its line
+	 * tables and inline sites. The C runtime is the DLL one (`/MD`), as the SDK's libhl.lib is built with. clang-cl takes gcc's
+	 * flags for wrapping arithmetic and no sibling calls; cl has neither, and relies on MSVC not using signed overflow and on a
+	 * release build's tail calls being rare (docs/design/AOT_BACKEND.md).
+	 */
+	static function msvcFlags(driver:HlcDriver, exactFrames:Bool):Array<String> {
+		var flags = ["/nologo", "/std:c11", exactFrames ? "/Od" : "/O2", "/Z7", "/MD", "/w", "/DHL_IMPORT=extern"];
+		if (exactFrames)
+			flags.push("/DHLC_EXACT_FRAMES");
+		if (driver == ClangCl)
+			flags = flags.concat([
+				"-gline-tables-only",
+				"/clang:-fwrapv",
+				"/clang:-fno-strict-aliasing",
+				"/clang:-fno-optimize-sibling-calls"
+			]);
+		return flags;
+	}
+
+	/** The link with gcc's driver: the whole VM library, as the loader resolves natives by name (`hlp_*`) in the executable. */
+	static function gnuLink(output:String, objects:Array<String>, sdk:String, exactFrames:Bool):Array<String> {
+		var link = ["-o", output].concat(objects);
 		if (Sys.systemName() == "Mac")
-			link = link.concat([
+			return link.concat([
 				'-Wl,-force_load,$sdk/lib/libhl.a',
 				'$sdk/lib/libffi.a',
 				"-lm",
 				"-lpthread",
 				"-Wl,-export_dynamic"
 			]);
-		else if (Sys.systemName() == "Windows")
+		if (Sys.systemName() == "Windows")
 			// MinGW. The entry point is wmain; the main thread gets the 8 MB stack the other platforms give it.
-			link = link.concat([
+			return link.concat([
 				"-Wl,--whole-archive",
 				'$sdk/lib/libhl.a',
 				"-Wl,--no-whole-archive",
@@ -121,28 +169,50 @@ class HlcBuild {
 				"-lbcrypt",
 				"-ladvapi32"
 			]);
-		else {
-			link = link.concat([
-				"-Wl,--whole-archive",
-				'$sdk/lib/libhl.a',
-				"-Wl,--no-whole-archive",
-				'$sdk/lib/libffi.a',
-				"-lm",
-				"-lpthread",
-				"-ldl",
-				"-Wl,--export-dynamic"
-			]);
-			// A release build's DWARF is compressed with zlib (SHF_COMPRESSED), which the stack traces inflate at the first one and gdb,
-			// perf and addr2line read as it is.
-			if (!exactFrames)
-				link.push("-Wl,--compress-debug-sections=zlib");
-		}
-		var result = ProcessOutputCapture.capture(cCompiler, link, ProcessOutputCapture.defaultDiagnosticLimit);
-		if (result.exitCode != 0)
-			throw new InternalError('C link failed:\n${result.stderr}');
-		if (!exactFrames && Sys.systemName() == "Linux")
-			stripSymbols(cCompiler, output);
-		return pending.length;
+		link = link.concat([
+			"-Wl,--whole-archive",
+			'$sdk/lib/libhl.a',
+			"-Wl,--no-whole-archive",
+			'$sdk/lib/libffi.a',
+			"-lm",
+			"-lpthread",
+			"-ldl",
+			"-Wl,--export-dynamic"
+		]);
+		// A release build's DWARF is compressed with zlib (SHF_COMPRESSED), which the stack traces inflate at the first one and gdb,
+		// perf and addr2line read as it is.
+		if (!exactFrames)
+			link.push("-Wl,--compress-debug-sections=zlib");
+		return link;
+	}
+
+	/**
+	 * The link with cl's driver: `output`.exe and its PDB, `output`.pdb, beside it. The whole VM library is linked, its natives
+	 * exported (libhl's objects declare them so), and the loader finds them in the executable by name. The PDB is made in both
+	 * build modes, as the stack traces name frames from it. Identical functions are not folded (`/OPT:NOICF`): each generated
+	 * function keeps its own address and so its own name and lines; and no incremental link puts jump thunks where the stack
+	 * capture expects the functions. The entry point is wmain, and the main thread gets the 8 MB
+	 * stack the other platforms give it.
+	 */
+	static function msvcLink(output:String, objects:Array<String>, sdk:String):Array<String> {
+		return ["/nologo", '/Fe$output'].concat(objects).concat([
+			"/link",
+			"/DEBUG",
+			"/INCREMENTAL:NO",
+			"/OPT:REF",
+			"/OPT:NOICF",
+			"/STACK:8388608",
+			'/WHOLEARCHIVE:$sdk/lib/libhl.lib',
+			'$sdk/lib/libhl.lib',
+			'$sdk/lib/libffi.lib',
+			"ws2_32.lib",
+			"user32.lib",
+			"winmm.lib",
+			"dbghelp.lib",
+			"dxguid.lib",
+			"bcrypt.lib",
+			"advapi32.lib"
+		]);
 	}
 
 	/**
@@ -181,4 +251,11 @@ class HlcBuild {
 
 	static function modified(path:String):Float
 		return FileSystem.exists(path) ? FileSystem.stat(path).mtime.getTime() : 0.0;
+}
+
+/** The command line a C compiler takes (`HlcBuild.driverOf`). */
+enum HlcDriver {
+	Gnu;
+	Msvc;
+	ClangCl;
 }

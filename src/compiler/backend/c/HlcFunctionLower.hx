@@ -129,7 +129,15 @@ class HlcFunctionLower {
 		var arguments = [for (index in 0...body.argumentCount()) body.argument(index)];
 		if (arguments.length != signature.arguments.length)
 			throw new InternalError('C lowering of ${body.name}: ${arguments.length} arguments for a slot type of ${signature.arguments.length}');
-		out.add('${module.prototype(slot, [for (argument in arguments) v(argument)])} {\n');
+		// The definition is at its first row's line, so its prologue is a Haxe line too, and a function of one Haxe file has no
+		// line of the C file: a PDB records a function's lines file by file, and some readers (Wine's DbgHelp, LLVM's) look in the
+		// first file only. The first row writes its directive again after the declarations.
+		var first = body.firstRow(0);
+		position(first >= 0 ? first : body.terminatorRow(0));
+		lastLine = -1;
+		// The definition repeats the declaration's section and inlining (`HLC_FUNCTION`): MSVC's `code_seg` applies where a
+		// function is defined.
+		out.add('HLC_FUNCTION ${module.prototype(slot, [for (argument in arguments) v(argument)])} {\n');
 		var isArgument:Map<Int, Bool> = [];
 		for (index in 0...arguments.length)
 			isArgument.set(arguments[index], true);

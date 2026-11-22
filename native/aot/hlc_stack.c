@@ -7,7 +7,8 @@
  * executable's on Linux, or a PE executable's that MinGW built on Windows (GCC writes DWARF there too; the return addresses come
  * from the system unwinder, which reads the SEH unwind tables GCC writes for every function). Where the C compiler inlined
  * generated functions into each other (release builds; development builds define HLC_EXACT_FRAMES and inline none), the DWARF
- * inline records restore their frames. */
+ * inline records restore their frames. With MSVC's compilers (cl, clang-cl) the line tables and inline records are in the PDB
+ * beside the executable, read through DbgHelp. */
 #include <hl.h>
 #include <hlmodule.h>
 
@@ -25,9 +26,14 @@ extern const int hlc_function_name_count;
 #define HLC_STACK_ELF
 #elif defined(_WIN32) && defined(__GNUC__)
 #define HLC_STACK_PE
+#elif defined(_WIN32) && defined(_MSC_VER)
+#define HLC_STACK_PDB
+#endif
+#if defined(HLC_STACK_ELF) || defined(HLC_STACK_PE)
+#define HLC_STACK_DWARF
 #endif
 
-#if defined(HLC_STACK_ELF) || defined(HLC_STACK_PE)
+#if defined(HLC_STACK_DWARF) || defined(HLC_STACK_PDB)
 #ifdef HLC_STACK_ELF
 #include <elf.h>
 #include <execinfo.h>
@@ -48,8 +54,15 @@ extern char __start_hlc_text[], __stop_hlc_text[];
 /* The generated code's section is `.text$hlc.2`; the linker sorts `.text$` sections by the name after `$` (GNU ld's
  * SORT(.text$*), as link.exe groups them), so these two bound it. `.` is in no C symbol name, so no COMDAT section of a
  * function sorts between them. */
+#ifdef HLC_STACK_PE
 __attribute__((section(".text$hlc.1"), used, noinline)) void hlc_text_first( void ) {}
 __attribute__((section(".text$hlc.3"), used, noinline)) void hlc_text_last( void ) {}
+#else
+#include <dbghelp.h>
+// The link folds no identical functions (`/OPT:NOICF`, HlcBuild), so the two stay apart.
+__declspec(code_seg(".text$hlc.1")) __declspec(noinline) void hlc_text_first( void ) {}
+__declspec(code_seg(".text$hlc.3")) __declspec(noinline) void hlc_text_last( void ) {}
+#endif
 #define hlc_text_begin ((char*)hlc_text_first)
 #define hlc_text_end ((char*)hlc_text_last)
 #endif
@@ -59,15 +72,73 @@ typedef struct {
 	int slot;
 } hlc_function_start;
 
+static hl_module *hlc_module;
+static hlc_function_start *hlc_starts;
+static int hlc_start_count;
+
+static bool hlc_in_text( void *address ) {
+	char *a = (char*)address - 1; // a return address can be just past a call that does not return
+	return a >= hlc_text_begin && a < hlc_text_end;
+}
+
+static int hlc_compare_starts( const void *a, const void *b ) {
+	uintptr_t x = ((const hlc_function_start*)a)->start, y = ((const hlc_function_start*)b)->start;
+	return x < y ? -1 : x > y ? 1 : 0;
+}
+
+/* The slot of the generated function whose code holds the call before return address `address`, or -1. */
+static int hlc_function_at( void *address ) {
+	uintptr_t target = (uintptr_t)address - 1;
+	int low = 0, high = hlc_start_count - 1, found = -1;
+	while( low <= high ) {
+		int middle = (low + high) >> 1;
+		if( hlc_starts[middle].start <= target ) { found = middle; low = middle + 1; } else high = middle - 1;
+	}
+	return found < 0 ? -1 : hlc_starts[found].slot;
+}
+
+#if !defined(HLC_EXACT_FRAMES) || defined(HLC_STACK_PDB)
+/* The slot of the generated function of C name `name`, or -1. */
+static int hlc_function_named( const char *name ) {
+	int low = 0, high = hlc_function_name_count - 1;
+	while( low <= high ) {
+		int middle = (low + high) >> 1, order = strcmp(hlc_function_names[middle].name, name);
+		if( order == 0 ) return hlc_function_names[middle].slot;
+		if( order < 0 ) low = middle + 1; else high = middle - 1;
+	}
+	return -1;
+}
+#endif
+
+static uchar *hlc_frame_name( int slot, const char *file, int line, uchar *out, int *outSize ) {
+	hl_code *code = hlc_module->code;
+	hl_function *f = code->functions + hlc_module->functions_indexes[slot];
+	const char *qualified = hl_code_function_name(code, f);
+	int size = *outSize, pos = 0;
+	if( qualified ) pos += hl_from_utf8(out, size, qualified);
+	else if( f->obj ) pos += usprintf(out, size, USTR("%s.%s"), f->obj->name, f->field.name);
+	else pos += usprintf(out, size, USTR("fun$%d"), f->findex);
+	if( file ) {
+		pos += usprintf(out + pos, size - pos, USTR("("));
+		pos += hl_from_utf8(out + pos, size - pos, file);
+		pos += usprintf(out + pos, size - pos, USTR(":%d)"), line);
+	}
+	*outSize = pos;
+	return out;
+}
+
+static void hlc_push_frame( void **stack, int size, int *count, void *frame ) {
+	if( stack && *count < size ) stack[*count] = frame;
+	(*count)++;
+}
+
+#ifdef HLC_STACK_DWARF
 typedef struct {
 	uintptr_t address;
 	int file; // index in hlc_files; -1 ends a sequence
 	int line;
 } hlc_line_row;
 
-static hl_module *hlc_module;
-static hlc_function_start *hlc_starts;
-static int hlc_start_count;
 static hlc_line_row *hlc_rows;
 static int hlc_row_count, hlc_row_capacity;
 static const char **hlc_files;
@@ -83,16 +154,6 @@ typedef struct {
 
 static hlc_line_unit *hlc_line_units;
 static int hlc_line_unit_count, hlc_line_unit_capacity;
-
-static bool hlc_in_text( void *address ) {
-	char *a = (char*)address - 1; // a return address can be just past a call that does not return
-	return a >= hlc_text_begin && a < hlc_text_end;
-}
-
-static int hlc_compare_starts( const void *a, const void *b ) {
-	uintptr_t x = ((const hlc_function_start*)a)->start, y = ((const hlc_function_start*)b)->start;
-	return x < y ? -1 : x > y ? 1 : 0;
-}
 
 static int hlc_compare_rows( const void *a, const void *b ) {
 	const hlc_line_row *x = (const hlc_line_row*)a, *y = (const hlc_line_row*)b;
@@ -347,7 +408,9 @@ static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_
 		}
 		p = program;
 		uint64 address = 0;
-		int file = version >= 5 ? 0 : 1, line = 1;
+		// The file register starts at 1 in every version: in DWARF 5, whose file numbers start at 0, file 1 is the first file the
+		// compiler entered, not always the unit's own (file 0), as when the first row comes after a `#line`.
+		int file = 1, line = 1;
 		(void)default_is_stmt;
 #define HLC_FILE (file >= 0 && file < nfiles ? files[file] : -1)
 		while( p < unit_end ) {
@@ -366,7 +429,7 @@ static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_
 				int sub = len ? *p++ : 0;
 				if( sub == 1 ) {
 					hlc_add_row((uintptr_t)address + bias, -1, 0);
-					address = 0; file = version >= 5 ? 0 : 1; line = 1;
+					address = 0; file = 1; line = 1;
 				} else if( sub == 2 )
 					address = hlc_fixed(&p, address_size);
 				p = next;
@@ -394,16 +457,6 @@ static void hlc_read_line_programs( const unsigned char *data, size_t size, hlc_
 		hlc_line_unit_count++;
 		p = unit_end;
 	}
-}
-
-static int hlc_function_at( void *address ) {
-	uintptr_t target = (uintptr_t)address - 1;
-	int low = 0, high = hlc_start_count - 1, found = -1;
-	while( low <= high ) {
-		int middle = (low + high) >> 1;
-		if( hlc_starts[middle].start <= target ) { found = middle; low = middle + 1; } else high = middle - 1;
-	}
-	return found < 0 ? -1 : hlc_starts[found].slot;
 }
 
 typedef struct {
@@ -1100,17 +1153,6 @@ static int hlc_scope_of_frame( void *address ) {
 	return -1;
 }
 
-/* The slot of the generated function of C name `name`, or -1. */
-static int hlc_function_named( const char *name ) {
-	int low = 0, high = hlc_function_name_count - 1;
-	while( low <= high ) {
-		int middle = (low + high) >> 1, order = strcmp(hlc_function_names[middle].name, name);
-		if( order == 0 ) return hlc_function_names[middle].slot;
-		if( order < 0 ) low = middle + 1; else high = middle - 1;
-	}
-	return -1;
-}
-
 /* The slot of the generated function a scope is a body of, or -1 for any other (an inlined runtime helper). */
 static int hlc_scope_slot( int scope ) {
 	hlc_scope *s = HLC_SCOPE(scope);
@@ -1128,23 +1170,6 @@ static const char *hlc_call_file( hlc_scope *s ) {
 	return NULL;
 }
 #endif
-
-static uchar *hlc_frame_name( int slot, const char *file, int line, uchar *out, int *outSize ) {
-	hl_code *code = hlc_module->code;
-	hl_function *f = code->functions + hlc_module->functions_indexes[slot];
-	const char *qualified = hl_code_function_name(code, f);
-	int size = *outSize, pos = 0;
-	if( qualified ) pos += hl_from_utf8(out, size, qualified);
-	else if( f->obj ) pos += usprintf(out, size, USTR("%s.%s"), f->obj->name, f->field.name);
-	else pos += usprintf(out, size, USTR("fun$%d"), f->findex);
-	if( file ) {
-		pos += usprintf(out + pos, size - pos, USTR("("));
-		pos += hl_from_utf8(out + pos, size - pos, file);
-		pos += usprintf(out + pos, size - pos, USTR(":%d)"), line);
-	}
-	*outSize = pos;
-	return out;
-}
 
 /* Names a frame `hlc_capture_stack` captured: a return address names the innermost generated function at the call, with the
  * line of the call; an inlined scope names its caller, with the line where the caller calls it. */
@@ -1170,11 +1195,6 @@ static uchar *hlc_resolve_symbol( void *address, uchar *out, int *outSize ) {
 	if( slot < 0 ) slot = hlc_function_at(address);
 	if( slot < 0 ) return NULL;
 	return hlc_frame_name(slot, file, line, out, outSize);
-}
-
-static void hlc_push_frame( void **stack, int size, int *count, void *frame ) {
-	if( stack && *count < size ) stack[*count] = frame;
-	(*count)++;
 }
 
 /* The program's frames on the stack, innermost first, as the JIT captures its own: the return address of each generated
@@ -1205,6 +1225,164 @@ static int hlc_capture_stack( void **stack, int size ) {
 	}
 	return stack && count > size ? size : count;
 }
+#endif
+
+#ifdef HLC_STACK_PDB
+/* MSVC writes no DWARF: the line tables and inline records are in the PDB the link writes beside the executable, read through
+ * DbgHelp. It is initialized when first needed (a release build's first capture, a development build's first named frame), and
+ * finds the PDB by the path the link recorded or in the executable's directory; without it, frames are named from the module
+ * image alone (no file and line, no inlined frames). DbgHelp is single-threaded, so every use holds a lock. */
+extern const char *const hlc_source_paths[];
+extern const int hlc_source_path_count;
+
+static SRWLOCK hlc_dbghelp_lock = SRWLOCK_INIT;
+static HANDLE hlc_process;
+static int hlc_dbghelp_state; // 0 not initialized, 1 initialized, -1 unavailable
+
+/* A frame of a function inlined at a return address is that address with its depth in the inline chain (1 for the innermost
+ * inlined function's caller, and so on) in the top byte, which no user-space address has. */
+#define HLC_DEPTH_SHIFT 56
+#define HLC_ADDRESS_MASK (((uintptr_t)1 << HLC_DEPTH_SHIFT) - 1)
+
+static bool hlc_dbghelp( void ) {
+	if( hlc_dbghelp_state ) return hlc_dbghelp_state > 0;
+	hlc_dbghelp_state = -1;
+	wchar_t directory[MAX_PATH * 4];
+	DWORD length = GetModuleFileNameW(NULL, directory, MAX_PATH * 4);
+	if( length == 0 || length >= MAX_PATH * 4 ) return false;
+	wchar_t *slash = wcsrchr(directory, L'\\');
+	if( slash ) *slash = 0;
+	hlc_process = GetCurrentProcess();
+	SymSetOptions(SymGetOptions() | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_NO_PROMPTS);
+	if( !SymInitializeW(hlc_process, directory, TRUE) ) return false;
+	hlc_dbghelp_state = 1;
+	return true;
+}
+
+/* How many functions are inlined at the call before return address `pc` + 1, and the inline context of the innermost: the
+ * contexts of the chain are consecutive, from the innermost inlined function out to the function the code is in. */
+static DWORD hlc_inline_chain( DWORD64 pc, DWORD *context ) {
+	*context = 0;
+#ifdef HLC_EXACT_FRAMES
+	(void)pc;
+	return 0;
+#else
+	DWORD inlined = SymAddrIncludeInlineTrace(hlc_process, pc), index = 0;
+	if( inlined == 0 || !SymQueryInlineTrace(hlc_process, pc, 0, pc, pc, context, &index) ) return 0;
+	return inlined;
+#endif
+}
+
+/* The slot of the generated function at level `depth` of the inline chain at `pc` (0 the innermost), or -1 for any other (an
+ * inlined runtime helper, or no symbol). */
+static int hlc_slot_in_chain( DWORD64 pc, DWORD inlined, DWORD context, DWORD depth ) {
+	struct { SYMBOL_INFO info; char name[256]; } symbol;
+	DWORD64 displacement = 0;
+	memset(&symbol, 0, sizeof(symbol.info));
+	symbol.info.SizeOfStruct = sizeof(symbol.info);
+	symbol.info.MaxNameLen = sizeof(symbol.name);
+	BOOL found = inlined ? SymFromInlineContext(hlc_process, pc, context + depth, &displacement, &symbol.info)
+		: SymFromAddr(hlc_process, pc, &displacement, &symbol.info);
+	return found ? hlc_function_named(symbol.info.Name) : -1;
+}
+
+/* The `#line` path that the PDB's `path` records: the compiler may have made a relative one absolute from its working
+ * directory, so the longest directive path that ends it, by component, with either separator and in any case, as Windows
+ * paths compare. */
+static const char *hlc_directive_path( const char *path ) {
+	size_t length = strlen(path), best = 0;
+	const char *found = NULL;
+	for(int i=0;i<hlc_source_path_count;i++) {
+		const char *candidate = hlc_source_paths[i];
+		size_t n = strlen(candidate);
+		if( n > length || n <= best ) continue;
+		const char *tail = path + length - n;
+		if( tail != path && tail[-1] != '/' && tail[-1] != '\\' ) continue;
+		bool same = true;
+		for(size_t k=0;k<n && same;k++) {
+			char a = tail[k], b = candidate[k];
+			if( a == '\\' ) a = '/';
+			if( b == '\\' ) b = '/';
+			if( a >= 'A' && a <= 'Z' ) a += 'a' - 'A';
+			if( b >= 'A' && b <= 'Z' ) b += 'a' - 'A';
+			same = a == b;
+		}
+		if( same ) { best = n; found = candidate; }
+	}
+	return found;
+}
+
+/* The file and line at level `depth` of the inline chain at `pc`: where the code is for the innermost level, else where the
+ * level calls the one inside it. The file is the `#line` path, or NULL. */
+static const char *hlc_line_in_chain( DWORD64 pc, DWORD inlined, DWORD context, DWORD depth, int *line ) {
+	IMAGEHLP_LINEW64 record;
+	DWORD displacement = 0;
+	memset(&record, 0, sizeof(record));
+	record.SizeOfStruct = sizeof(record);
+	BOOL found = inlined ? SymGetLineFromInlineContextW(hlc_process, pc, context + depth, 0, &displacement, &record)
+		: SymGetLineFromAddrW64(hlc_process, pc, &displacement, &record);
+	if( !found || !record.FileName ) return NULL;
+	char path[MAX_PATH * 4];
+	if( !WideCharToMultiByte(CP_UTF8, 0, record.FileName, -1, path, sizeof(path), NULL, NULL) ) return NULL;
+	*line = (int)record.LineNumber;
+	return hlc_directive_path(path);
+}
+
+/* Names a frame `hlc_capture_stack` captured: the generated function at its depth in the inline chain of its return address,
+ * with the line of the call. */
+static uchar *hlc_resolve_symbol( void *frame, uchar *out, int *outSize ) {
+	if( !out ) return NULL;
+	void *address = (void*)((uintptr_t)frame & HLC_ADDRESS_MASK);
+	DWORD depth = (DWORD)((uintptr_t)frame >> HLC_DEPTH_SHIFT);
+	if( !hlc_in_text(address) ) return NULL;
+	DWORD64 pc = (DWORD64)(uintptr_t)address - 1;
+	const char *file = NULL;
+	int line = 0, slot = -1;
+	AcquireSRWLockExclusive(&hlc_dbghelp_lock);
+	if( hlc_dbghelp() ) {
+		DWORD context, inlined = hlc_inline_chain(pc, &context);
+		if( depth <= inlined ) {
+			slot = hlc_slot_in_chain(pc, inlined, context, depth);
+			file = hlc_line_in_chain(pc, inlined, context, depth, &line);
+		}
+	}
+	ReleaseSRWLockExclusive(&hlc_dbghelp_lock);
+	if( slot < 0 && depth == 0 ) slot = hlc_function_at(address);
+	if( slot < 0 ) return NULL;
+	return hlc_frame_name(slot, file, line, out, outSize);
+}
+
+/* The program's frames on the stack, innermost first, as the JIT captures its own: the return address of each generated
+ * function's frame, preceded by the frames of the generated functions the C compiler inlined at the call. A level of the chain
+ * that is not a generated function (an inlined runtime helper) has no frame of its own. */
+static int hlc_capture_stack( void **stack, int size ) {
+	void *frames[HL_EXC_MAX_STACK + 64];
+	int captured = RtlCaptureStackBackTrace(0, HL_EXC_MAX_STACK + 64, frames, NULL), count = 0;
+#ifndef HLC_EXACT_FRAMES
+	AcquireSRWLockExclusive(&hlc_dbghelp_lock);
+	bool symbols = hlc_dbghelp();
+#endif
+	for(int i=0;i<captured;i++) {
+		if( !hlc_in_text(frames[i]) ) continue;
+#ifndef HLC_EXACT_FRAMES
+		DWORD64 pc = (DWORD64)(uintptr_t)frames[i] - 1;
+		DWORD context, inlined = symbols ? hlc_inline_chain(pc, &context) : 0;
+		int pushed = 0;
+		for(DWORD depth=0;inlined && depth<=inlined && depth<64;depth++)
+			if( hlc_slot_in_chain(pc, inlined, context, depth) >= 0 ) {
+				hlc_push_frame(stack, size, &count, (void*)((uintptr_t)frames[i] | ((uintptr_t)depth << HLC_DEPTH_SHIFT)));
+				pushed++;
+			}
+		if( pushed ) continue;
+#endif
+		hlc_push_frame(stack, size, &count, frames[i]);
+	}
+#ifndef HLC_EXACT_FRAMES
+	ReleaseSRWLockExclusive(&hlc_dbghelp_lock);
+#endif
+	return stack && count > size ? size : count;
+}
+#endif
 
 void hlc_stack_init( hl_module *m, void **functions, int count ) {
 	hlc_module = m;
@@ -1232,7 +1410,7 @@ static int hlc_capture_stack( void **stack, int size ) {
 	return 0;
 }
 
-/* Elsewhere frames are not captured yet: exceptions carry no stack (macOS and MSVC: see docs/design/AOT_BACKEND.md). */
+/* Elsewhere frames are not captured yet: exceptions carry no stack (macOS: see docs/design/AOT_BACKEND.md). */
 void hlc_stack_init( hl_module *m, void **functions, int count ) {
 	(void)m; (void)functions; (void)count;
 	hl_setup.resolve_symbol = hlc_resolve_symbol;

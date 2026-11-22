@@ -495,13 +495,18 @@ class HlcModule {
 		buffer.add("#endif\n\n");
 		// The program's functions are in a section of their own, which tells the stack capture its frames (`hlc_stack.c`). A
 		// development build (HLC_EXACT_FRAMES, `HlcBuild`) does not let the C compiler inline them into each other, so a Haxe stack
-		// trace has the JIT's frames exactly; a release build does, and the stack capture restores the inlined frames from DWARF.
+		// trace has the JIT's frames exactly; a release build does, and the stack capture restores the inlined frames from the
+		// debug information (DWARF, or the PDB with MSVC). MSVC's compilers (cl, clang-cl) do not define __GNUC__ and take the
+		// same requests as __declspec.
 		buffer.add("#if defined(HLC_EXACT_FRAMES) && defined(__GNUC__)\n#define HLC_NOINLINE __attribute__((noinline))\n");
+		buffer.add("#elif defined(HLC_EXACT_FRAMES) && defined(_MSC_VER)\n#define HLC_NOINLINE __declspec(noinline)\n");
 		buffer.add("#else\n#define HLC_NOINLINE\n#endif\n");
 		buffer.add("#if defined(__ELF__) && defined(__GNUC__)\n");
 		buffer.add("#define HLC_FUNCTION __attribute__((section(\"hlc_text\"))) HLC_NOINLINE\n");
 		buffer.add("#elif defined(_WIN32) && defined(__GNUC__)\n");
 		buffer.add("#define HLC_FUNCTION __attribute__((section(\".text$hlc.2\"))) HLC_NOINLINE\n");
+		buffer.add("#elif defined(_WIN32) && defined(_MSC_VER)\n");
+		buffer.add("#define HLC_FUNCTION __declspec(code_seg(\".text$hlc.2\")) HLC_NOINLINE\n");
 		buffer.add("#else\n#define HLC_FUNCTION HLC_NOINLINE\n#endif\n\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
 		buffer.add("typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;\n");
@@ -527,9 +532,10 @@ class HlcModule {
 	}
 
 	/**
-	 * A native under a name of its own (`functionPointer`): with gcc and clang a native of the VM or the runtime is its C symbol,
-	 * else the native is the pointer the runtime resolved for its slot, which the entry point copies to `hlc_np_` before anything
-	 * runs (`image`).
+	 * A native under a name of its own (`functionPointer`): with gcc and clang a native of the VM or the runtime is its C symbol
+	 * (an asm label), with MSVC's compilers on 64-bit Windows the linker binds the name to it (`/alternatename`, as C symbols
+	 * there have no prefix), else the native is the pointer the runtime resolved for its slot, which the entry point copies to
+	 * `hlc_np_` before anything runs (`image`).
 	 */
 	function nativeDeclaration(slot:Int, buffer:StringBuf):Void {
 		var signature = types.signature(slotTypes[slot]);
@@ -540,7 +546,9 @@ class HlcModule {
 		var name = nativeNames[slot], pointer = nativePointers[slot];
 		buffer.add('extern void *$pointer;\n');
 		if (nativeSymbols[slot] != null)
-			buffer.add('#if defined(__GNUC__)\nextern $result $name($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n#else\n');
+			buffer.add('#if defined(__GNUC__)\nextern $result $name($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n'
+				+ '#elif defined(_MSC_VER) && defined(_WIN64)\nextern $result $name($arguments);\n'
+				+ '#pragma comment(linker, "/alternatename:$name=${nativeSymbols[slot]}")\n#else\n');
 		buffer.add('#define $name (($result (*)($arguments))$pointer)\n');
 		if (nativeSymbols[slot] != null)
 			buffer.add("#endif\n");
