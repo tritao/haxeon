@@ -317,6 +317,7 @@ foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
 endforeach()
 
 add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} ${HAXEON_CLI_BYTECODE} hldump hlvm jit_native_properties
+  haxeon-hlc-sdk
   haxeon-native-tests)
 # What the haxeon launchers bring up to date before running it: the command and the CLI's bytecode.
 if(TARGET haxeon)
