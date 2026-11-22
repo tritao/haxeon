@@ -417,6 +417,8 @@ in_background run_compile_failure structure-open-literal-returned
 in_background run_compile_failure structure-declared-no-gain
 in_background run_case structure-function-fields 0
 in_background run_compile_failure structure-function-field-rebind
+in_background run_case structure-property-fields 0
+in_background run_compile_failure structure-property-field-write
 # A class instance as a structure waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4).
 in_background run_known_divergence structure-from-class
 in_background run_compile_failure generic-enum-constructor-mixed-arguments

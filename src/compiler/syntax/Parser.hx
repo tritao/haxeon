@@ -3093,6 +3093,23 @@ class Parser {
 				if (method)
 					type = parseMethodFieldType();
 				else {
+					// A property field `var x(default, null):T` is read like any field; one written only by its owner or never
+					// is read-only. A structure has no accessor methods, so get, set and dynamic wait for class instances as
+					// structures (docs/design/STRUCTURE_VALUES.md, step 4).
+					if (match(TokenKind.LeftParen)) {
+						var read = parseFieldAccess();
+						consume(TokenKind.Comma);
+						var write = parseFieldAccess();
+						consume(TokenKind.RightParen);
+						switch [read, write] {
+							case [DefaultAccess, DefaultAccess]:
+							case [DefaultAccess, NullAccess | NeverAccess]:
+								isFinal = true;
+							default:
+								fail(name,
+									'Structure field "${textOf(name)}" only supports (default, default), (default, null) and (default, never) access');
+						}
+					}
 					consume(TokenKind.Colon);
 					type = parseType();
 				}
