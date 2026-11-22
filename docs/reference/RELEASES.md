@@ -11,22 +11,22 @@ A release is one archive per platform that holds everything the `haxeon` command
 | --- | --- |
 | `haxeon-release.txt` | The marker that makes the directory a release: `version`, `commit`, `platform` and `compiler-sources` (the digest of the compiler's sources and standard library the release was made from), one `NAME=VALUE` per line. |
 | `bin/hl`, `bin/haxeon` | The VM, and the VM with the CLI as its entry point (`native/haxeon_main.c`). |
-| `bin/haxeon-cli.hl` | The CLI's bytecode, which `bin/haxeon` runs. |
-| `bin/haxeon-compiler`, `bin/haxeon-compiler.sources` | The compiler built ahead of time, one executable for a compile, the compile server and the language server, with its stamp (docs/design/AOT_BACKEND.md), and with MSVC its `haxeon-compiler.pdb`, which its stack traces read. Present where the release job builds it. |
-| `bin/haxeon-compiler.hl`, `bin/haxeon-compiler.hl.sources` | The same compiler as bytecode, with its stamp: what the VM runs when there is no executable. |
+| `bin/haxeon-cli.hl` | The CLI's bytecode, which `bin/haxeon` runs when there is no executable built ahead of time. |
+| `bin/haxeon-aot`, `bin/haxeon-aot.sources` | The CLI and the compiler built ahead of time, one executable for the CLI (which `bin/haxeon` runs), a compile, the compile server and the language server, with its stamp (docs/design/AOT_BACKEND.md), and with MSVC its `haxeon-aot.pdb`, which its stack traces read. Present where the release job builds it. |
+| `bin/haxeon-compiler.hl`, `bin/haxeon-compiler.hl.sources` | The compiler's roles as bytecode, with its stamp: what the VM runs when there is no executable. |
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
 | `stdlib/` | The standard library. |
 | `LICENSE`, `NOTICE`, `README.md` | |
 
 Platforms:
 
-- **Linux x86-64**: with the compiler built ahead of time.
+- **Linux x86-64**: with the CLI and the compiler built ahead of time.
 - **Windows x86-64**: built with MSVC, as `ci.yml` builds it. The release job does not build the compiler ahead of time there
-  until the MSVC AOT build has passed on CI, so the archive has no `bin/haxeon-compiler` and the compiler runs on the VM from
-  `bin/haxeon-compiler.hl`: the same compiler with a slower start. `haxeon doctor` says `not built: compiler built ahead of
-  time`. Turning it on is `aot: true` for the job in `release.yml`: `haxeon dev package` takes the executable, and its
-  `haxeon-compiler.pdb`, whenever they are built.
-- **macOS arm64**: experimental. It has the compiler built ahead of time, whose stack traces are not verified on macOS.
+  until the MSVC AOT build has passed on CI, so the archive has no `bin/haxeon-aot` and the CLI and the compiler run on the VM from
+  `bin/haxeon-cli.hl` and `bin/haxeon-compiler.hl`: the same programs with a slower start. `haxeon doctor` says `not built: CLI
+  and compiler built ahead of time`. Turning it on is `aot: true` for the job in `release.yml`: `haxeon dev package` takes the executable, and its
+  `haxeon-aot.pdb`, whenever they are built.
+- **macOS arm64**: experimental. It has the CLI and the compiler built ahead of time, whose stack traces are not verified on macOS.
 
 ## How an unpacked release finds itself
 
@@ -49,7 +49,7 @@ What a release does not do yet, as it needs a checkout's tools or sources: `haxe
 From a checkout with the native build done (`scripts/build-native.sh`, or `scripts/setup.ps1` on Windows):
 
 ```sh
-scripts/haxeon dev aot-compiler                # optional: the compiler built ahead of time, included when current
+scripts/haxeon dev aot                         # optional: the CLI and compiler built ahead of time, included when current
 scripts/haxeon dev package [--version=V] [--output=DIR] [--no-archive]
 scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot for an archive without it
 ```
@@ -58,13 +58,13 @@ scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --n
 pinned Haxe (`tools.CompilerExecutable`, through the tool cache), stages the directory in `out/release` with the bytecode's
 stamp and the sources' digest in the marker, checks that the sources still have that digest once the standard library is
 copied, and archives it with `cmake -E tar`. The compiler's sources are not shipped. It changes
-nothing in the checkout's VM directory. A stale `haxeon-compiler` is an error, since the release would never run it: rebuild it or remove it.
+nothing in the checkout's VM directory. A stale `haxeon-aot` is an error, since the release would never run it: rebuild it or remove it.
 The version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
 
 `scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
 starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script. It checks that no
 compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler. With
-`--aot` it times the same cold build without `bin/haxeon-compiler`, which also exercises the bytecode fallback.
+`--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
 
 ## The release workflow
 
@@ -77,10 +77,10 @@ run's artifacts. A tag's version must be the CLI's version, optionally with a su
 
 ## A checkout's stale compiler
 
-In a checkout the executable is current only until the compiler's sources change. A build with a stale one prints one line,
+In a checkout the executable is current only until the sources change. A build with a stale one prints one line,
 
 ```
-note: haxeon-compiler is older than the compiler sources, so the compiler runs on the VM (a slower start); rebuild it with "haxeon dev aot-compiler"
+note: haxeon-aot is older than the sources, so the CLI and the compiler run on the VM (a slower start); rebuild it with "haxeon dev aot"
 ```
 
 unless it prints no progress (`--quiet`, `--verbosity quiet`, a script), and `haxeon doctor` reports it as stale with the same

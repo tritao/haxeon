@@ -4,10 +4,10 @@
 # archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, and checks that
 # the compiles ran the compiler the archive is meant to run:
 #
-#   scripts/smoke-test-release.sh ARCHIVE --aot      the compiler built ahead of time (bin/haxeon-compiler)
+#   scripts/smoke-test-release.sh ARCHIVE --aot      the CLI and compiler built ahead of time (bin/haxeon-aot)
 #   scripts/smoke-test-release.sh ARCHIVE --no-aot   the compiler's bytecode on the VM (bin/haxeon-compiler.hl)
 #
-# With --aot it then times the same cold build on the VM (the archive without bin/haxeon-compiler), which also checks the
+# With --aot it then times the same cold build on the VM (the archive without bin/haxeon-aot), which also checks the
 # bytecode a release falls back to. The release workflow runs it on each platform's archive.
 set -euo pipefail
 
@@ -88,7 +88,7 @@ check_compiler() {
 	if [[ $windows == 0 ]]; then
 		local worker
 		if [[ $aot == 1 ]]; then
-			worker=$(pgrep -f "$root/bin/haxeon-compiler serve" || true)
+			worker=$(pgrep -f "$root/bin/haxeon-aot serve" || true)
 		else
 			worker=$(pgrep -f "$root/bin/hl $root/bin/haxeon-compiler.hl serve" || true)
 		fi
@@ -110,9 +110,9 @@ echo "== haxeon doctor"
 doctor=$("$haxeon" doctor) || { echo "$doctor"; fail "haxeon doctor"; }
 echo "$doctor"
 if [[ $expect_aot == 1 ]]; then
-	grep -q '^ok: compiler built ahead of time' <<<"$doctor" || fail "doctor does not report the AOT compiler current"
+	grep -q '^ok: CLI and compiler built ahead of time' <<<"$doctor" || fail "doctor does not report the AOT compiler current"
 else
-	grep -q '^not built: compiler built ahead of time' <<<"$doctor" || fail "doctor does not report the AOT compiler not built"
+	grep -q '^not built: CLI and compiler built ahead of time' <<<"$doctor" || fail "doctor does not report the AOT compiler not built"
 	grep -q '^ok: compiler bytecode' <<<"$doctor" || fail "doctor does not report the compiler bytecode"
 fi
 
@@ -127,9 +127,9 @@ output=$(cd "$work/projects" && "$haxeon" hello-script.hx a b) || fail "script r
 [[ $output == "script ok a b" ]] || fail "the script printed: $output"
 
 if [[ $expect_aot == 1 ]]; then
-	echo "== the same cold build on the VM (without bin/haxeon-compiler)"
+	echo "== the same cold build on the VM (without bin/haxeon-aot)"
 	jit_root=$(unpack "$work/jit")
-	rm -f "$jit_root/bin/haxeon-compiler$suffix"
+	rm -f "$jit_root/bin/haxeon-aot$suffix"
 	isolate "$work/jit-home"
 	project_round "$jit_root" "$work/jit-projects/hello"
 	check_compiler "$jit_root" 0

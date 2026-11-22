@@ -15,7 +15,7 @@ import sys.io.File;
  * `.zip` (docs/reference/RELEASES.md). The layout is defined here and nowhere else:
  *
  *   haxeon-release.txt              the marker that makes the directory a release (`build.HaxeonRelease`)
- *   bin/                            the VM's directory: hl, haxeon, the CLI's bytecode (haxeon-cli.hl), the compiler built
+ *   bin/                            the VM's directory: hl, haxeon, the CLI's bytecode (haxeon-cli.hl), the CLI and compiler built
  *                                   ahead of time with its stamp (and its .pdb with MSVC) when it is built and current, the
  *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
  *   stdlib/                         the standard library
@@ -23,7 +23,7 @@ import sys.io.File;
  *
  * It builds what a checkout's native build does not, the compiler's bytecode: `tools.CompilerExecutable` with the pinned Haxe, as the
  * CLI builds the compiler in a checkout, stamped with the sources' digest (`AotCompiler.bytecode`). It packages the compiler built
- * ahead of time when `haxeon dev aot-compiler` built it from these sources, and goes without it when there is none; a stale one is
+ * ahead of time when `haxeon dev aot` built it from these sources, and goes without it when there is none; a stale one is
  * an error, as the release would never run it. The compiler's sources stay behind: the marker records their digest, which the
  * stamps must hold.
  */
@@ -51,7 +51,7 @@ class ReleasePackage {
 			bytecode = new ToolArtifacts(home).resolve({main: "tools.CompilerExecutable", classPaths: [], defines: []});
 
 		if (FileSystem.exists(native) && AotCompiler.current(home, compilerSource) == null)
-			throw new InternalError('$native is stale: rebuild it with "haxeon dev aot-compiler", or remove it to package without it');
+			throw new InternalError('$native is stale: rebuild it with "haxeon dev aot", or remove it to package without it');
 
 		var name = 'haxeon-$version-${platform()}', root = Path.join([output, name]);
 		var bin = Path.join([root, HaxeonRelease.BIN]);
@@ -90,7 +90,7 @@ class ReleasePackage {
 			HaxeonRelease.marker(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
 			platform(), digest));
 		Sys.println('Staged $root' + (FileSystem.exists(native)
-			? "" : ' (without $native: run "haxeon dev aot-compiler" first to include it)'));
+			? "" : ' (without $native: run "haxeon dev aot" first to include it)'));
 		if (!archive)
 			return 0;
 		var file = name + (Sys.systemName() == "Windows" ? ".zip" : ".tar.gz");

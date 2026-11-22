@@ -56,14 +56,18 @@ endif()
 # Keep all built VM binaries in this checkout, away from the shared toolchain.
 set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
 # Files earlier layouts built that nothing uses now. A stale libhl shared library beside libhl.a would be what `-lhl`
-# links, and a stale haxeon_runtime.hdll reads as if the VM loaded it.
+# links, and a stale haxeon_runtime.hdll reads as if the VM loaded it. haxeon-compiler was the executable built ahead of
+# time before it held the CLI (now haxeon-aot), with its C build in out/aot-compiler.
 file(GLOB _haxeon_stale_files
   "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.so*" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl*.dylib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.dll"
   "${CMAKE_BINARY_DIR}/runtime/haxeon_runtime.hdll" "${CMAKE_SOURCE_DIR}/out/haxeon_runtime.hdll"
-  "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl" "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl.inputs")
+  "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl" "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl.inputs"
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler" "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler.exe"
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler.sources" "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler.pdb")
 if(_haxeon_stale_files)
   file(REMOVE ${_haxeon_stale_files})
 endif()
+file(REMOVE_RECURSE "${CMAKE_SOURCE_DIR}/out/aot-compiler")
 
 # Test libraries the driver loads into hl (by name, from the library path).
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")

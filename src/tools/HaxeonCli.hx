@@ -145,11 +145,14 @@ class HaxeonCli {
 		return environment;
 	}
 
-	public static function main():Void {
+	public static function main():Void
+		run(Sys.args());
+
+	/** The CLI with `arguments` (a command and its own), from the VM (`main`) or the executable built ahead of time. */
+	public static function run(arguments:Array<String>):Void {
 		invokedFrom = Sys.getCwd();
 		while (invokedFrom.length > 1 && StringTools.endsWith(invokedFrom, "/"))
 			invokedFrom = invokedFrom.substr(0, invokedFrom.length - 1);
-		var arguments = Sys.args();
 		if (arguments.length == 0) {
 			usage();
 			Sys.exit(2);
@@ -493,10 +496,10 @@ class HaxeonCli {
 			reportPath("self-hosted compiler", compilerPath, false);
 		var aot = AotCompiler.executable(home);
 		if (FileSystem.exists(aot) && AotCompiler.current(home, compilerSource) == null)
-			Sys.println('stale: compiler built ahead of time ($aot), not built from these sources; the VM runs the compiler. '
-				+ 'Rebuild it with "haxeon dev aot-compiler"');
+			Sys.println('stale: CLI and compiler built ahead of time ($aot), not built from these sources; the VM runs them. '
+				+ 'Rebuild it with "haxeon dev aot"');
 		else
-			reportPath("compiler built ahead of time", aot, false);
+			reportPath("CLI and compiler built ahead of time", aot, false);
 		var bytecode = AotCompiler.bytecode(home);
 		if (FileSystem.exists(bytecode))
 			Sys.println(AotCompiler.currentBytecode(home, compilerSource) != null

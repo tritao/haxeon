@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# The compiler built ahead of time (build.AotCompiler, docs/design/AOT_BACKEND.md "Shipping the compiler"): builds it and publishes
-# it beside the VM as a release ships it, checks that the CLI runs it in each role (one compile, the compile server, the language
-# server), then runs integration suites that build through the CLI with it in place. A checkout that had no current one is left
+# The CLI and the compiler built ahead of time (build.AotCompiler, docs/design/AOT_BACKEND.md "Shipping the compiler and the CLI"):
+# builds the executable and publishes it beside the VM as a release ships it, checks that the haxeon command runs the CLI in it,
+# and the CLI's bytecode when its stamp is stale, and that the CLI runs it in each role (one compile, the compile server, the
+# language server), then runs integration suites that build through the CLI with it in place. A checkout that had no current one is left
 # without one, so the suites after this one keep testing the compiler on the VM.
 #
 #   tests/aot/test-aot-compiler.sh [jobs]
@@ -10,20 +11,23 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 jobs=${1:-4}
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
-executable=$hashlink_dir/haxeon-compiler
+executable=$hashlink_dir/haxeon-aot
 stamp=$executable.sources
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-aot-compiler.XXXXXX")
 
 current() {
 	local report
 	report=$("$root_dir/scripts/haxeon" doctor 2>/dev/null || true)
-	grep -q '^ok: compiler built ahead of time' <<<"$report"
+	grep -q '^ok: CLI and compiler built ahead of time' <<<"$report"
 }
 had_current=0
 if current; then
 	had_current=1
 fi
 cleanup() {
+	if [[ -f $work/stamp ]]; then
+		cp "$work/stamp" "$stamp"
+	fi
 	if [[ $had_current == 0 ]]; then
 		rm -f "$stamp" "$executable" "$executable.exe"
 	fi
@@ -31,11 +35,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ! "$root_dir/scripts/haxeon" dev aot-compiler > "$work/build.log" 2>&1; then
+if ! "$root_dir/scripts/haxeon" dev aot > "$work/build.log" 2>&1; then
 	cat "$work/build.log"
 	exit 1
 fi
 current || { echo "FAIL: haxeon doctor does not report a current compiler built ahead of time" >&2; exit 1; }
+
+# The haxeon command runs the CLI in the executable, or on the VM while the stamp is stale.
+version=$("$root_dir/scripts/haxeon" --version)
+cp "$stamp" "$work/stamp"
+echo stale > "$stamp"
+stale_version=$("$root_dir/scripts/haxeon" --version)
+mv "$work/stamp" "$stamp"
+if [[ $version != haxeon* || $stale_version != "$version" ]]; then
+	echo "FAIL: haxeon --version printed \"$version\", and \"$stale_version\" with a stale stamp" >&2
+	exit 1
+fi
 
 # A project build starts a compile server that is the executable: no worker bytecode is built in the session directory.
 mkdir -p "$work/app/src"

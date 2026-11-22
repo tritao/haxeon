@@ -81,7 +81,7 @@ jobs:
 
       - name: Build the compiler ahead of time
         if: matrix.aot
-        run: ${{ steps.version.outputs.haxeon }} dev aot-compiler
+        run: ${{ steps.version.outputs.haxeon }} dev aot
 
       - name: Package
         run: ${{ steps.version.outputs.haxeon }} dev package --version=${{ steps.version.outputs.version }} --output=out/release
@@ -151,11 +151,11 @@ jobs:
           {
             echo "Haxeon $version: unpack the archive for your platform anywhere and run \`bin/haxeon\` (docs/reference/RELEASES.md)."
             echo
-            echo "- **Linux (x86_64)**: with the compiler built ahead of time (\`bin/haxeon-compiler\`)."
-            echo "- **Windows (x86_64)**: built with MSVC, without the compiler built ahead of time for now: the compiler runs on"
-            echo "  the VM from its bytecode (\`bin/haxeon-compiler.hl\`), a slower start with the same compiler."
+            echo "- **Linux (x86_64)**: with the CLI and the compiler built ahead of time (\`bin/haxeon-aot\`)."
+            echo "- **Windows (x86_64)**: built with MSVC, without the CLI and compiler built ahead of time for now: they run on"
+            echo "  the VM from their bytecode (\`bin/haxeon-cli.hl\`, \`bin/haxeon-compiler.hl\`), a slower start."
             if [[ $macos != 0 ]]; then
-              echo "- **macOS (arm64)**: experimental. It has the compiler built ahead of time, whose stack traces are not verified"
+              echo "- **macOS (arm64)**: experimental. It has the CLI and compiler built ahead of time, whose stack traces are not verified"
               echo "  on macOS yet."
             fi
             echo

@@ -265,7 +265,7 @@ Pinned tool versions, archive checksums, extraction, and submodule setup are
 defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are thin
 launchers for that shared bootstrap rather than separate installers.
 
-`scripts/haxeon dev aot-compiler` builds the compiler ahead of time beside the VM,
+`scripts/haxeon dev aot` builds the CLI and the compiler ahead of time beside the VM,
 which the CLI runs while it is built from the current sources; after a compiler
 edit, builds say once that it is stale and `haxeon doctor` reports it. A release
 archive for this platform is `scripts/haxeon dev package`, checked with

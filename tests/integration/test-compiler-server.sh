@@ -43,7 +43,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         # The worker program: the compiler built ahead of time when it is current (build.AotCompiler), which needs no bytecode
         # in the session directory, else the VM with the worker bytecode built there.
         programs = list(states.glob('*.hl'))
-        command = [str(programs[0])] if programs else [str(hashlink / 'haxeon-compiler'), 'serve']
+        command = [str(programs[0])] if programs else [str(hashlink / 'haxeon-aot'), 'serve']
         return subprocess.Popen(([str(hashlink / 'hl')] if programs else []) + command + [str(state)], env=env,
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     def run(expected, output='host/main.hl'):

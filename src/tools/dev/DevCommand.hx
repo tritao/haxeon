@@ -36,9 +36,9 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *   haxeon dev bootstrap [--self]
  *       Refresh the checked-in compiler, or check it against the sources (build.HaxeonBuild). scripts/bootstrap-compiler.sh runs it.
  *
- *   haxeon dev aot-compiler [--toolchain=NAME]
- *       Build the compiler ahead of time to C and publish it beside the VM, where the CLI runs it while it is current
- *       (build.AotCompiler, AotCompilerBuild): what a release ships prebuilt.
+ *   haxeon dev aot [--toolchain=NAME]
+ *       Build the CLI and the compiler ahead of time to C, one executable, and publish it beside the VM, where the haxeon
+ *       command and the CLI run it while it is current (build.AotCompiler, AotBuild): what a release ships prebuilt.
  *
  *   haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]
  *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/reference/RELEASES.md).
@@ -62,7 +62,7 @@ class DevCommand {
 			case "test-driver": TestDriverCommand.run(arguments, home);
 			case "native": native(arguments, home);
 			case "bootstrap": bootstrap(arguments, home);
-			case "aot-compiler": AotCompilerBuild.run(arguments, home);
+			case "aot": AotBuild.run(arguments, home);
 			case "package": ReleasePackage.run(arguments, home);
 			case "help", "--help", "-h", "": usage(command == "" ? 2 : 0);
 			case _:
@@ -197,8 +197,8 @@ class DevCommand {
 		out.writeString("      Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)\n");
 		out.writeString("  bootstrap [--self]\n");
 		out.writeString("      Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically\n");
-		out.writeString("  aot-compiler [--toolchain=NAME]\n");
-		out.writeString("      Build the compiler to C (default toolchain: the hlc SDK's target's) and publish it beside the VM\n");
+		out.writeString("  aot [--toolchain=NAME]\n");
+		out.writeString("      Build the CLI and the compiler to C (default toolchain: the hlc SDK's target's) and publish them beside the VM\n");
 		out.writeString("  package [--output=DIR] [--version=VERSION] [--no-archive]\n");
 		out.writeString("      Stage this platform's release in DIR (default out/release) and archive it\n");
 		out.writeString("  check-tests\n");

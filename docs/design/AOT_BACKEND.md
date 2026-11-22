@@ -327,56 +327,73 @@ label. Plain `cl` has no flag for wrapping arithmetic or for keeping sibling cal
 overflow, and a release build may lose the frame of a function that ends in a tail call, which clang-cl keeps; clang-cl is
 the compiler the Windows release uses.
 
-## Shipping the compiler
+## Shipping the compiler and the CLI
 
 The CLI (`haxeon`, the VM running `haxeon-cli.hl`) runs the compiler in three roles: one compile (`compiler.tools.HaxeonCompiler`,
 the one-shot fallback), a compile server per project (`compiler.tools.CompilerServer`, which `build.execution.CompilerClient`
 starts and reuses) and the language server (`LspMain`, `haxeon lsp`). Under the JIT each is a bytecode build of its own, made from
 the checkout's sources with the pinned Haxe and cached (the session directory, `out/tools`), and every start of one JITs all of its
-functions first (about a second for the compiler).
+functions first (about a second for the compiler, and over a second for the CLI itself, on every command).
 
-Built ahead of time, the three are one executable, `haxeon-compiler` beside the VM (`HashLinkPath.directory`), whose entry point
-`tools.CompilerExecutable` takes the role from its first argument (`serve STATE`, `lsp`, else the compiler's own arguments): ahead
-of time, code a role does not use costs nothing at start-up, and one file is what a release ships. `build.AotCompiler` says where
-it is and whether it is current, and the CLI asks it at each place it would start the compiler on the VM:
+Built ahead of time, the CLI and the three roles are one executable, `haxeon-aot` beside the VM (`HashLinkPath.directory`), whose
+entry point `tools.CompilerExecutable` takes the role from its first argument (`cli ARGUMENTS`, `serve STATE`, `lsp`, else the
+compiler's own arguments): ahead of time, code a role does not use costs nothing at start-up, and one file is what a release
+ships. One executable rather than a CLI beside a compiler: the CLI's sources are the compiler's (`src` and `lib/haxeon-io`, and
+the CLI imports much of the compiler), so the two are always current together and one stamp covers both; a second executable
+would double the build (about two minutes) and the size for no case where one is current without the other. `build.AotCompiler`
+says where it is and whether it is current, and each place that would start the CLI or the compiler on the VM asks it:
 
-- `CompilerClient.run` starts `haxeon-compiler serve STATE` instead of `hl worker.hl STATE`, under a worker version of its own
+- The `haxeon` launcher (native/haxeon_main.c) runs `haxeon-aot cli ARGUMENTS` when the executable is there (by `execv`; on
+  Windows as a child it waits for, with the command line as typed), and the CLI's bytecode on the VM otherwise. The launcher does
+  not read the sources: the executable checks its own stamp first and, when it is stale, runs the CLI's bytecode on the VM
+  instead (`hl haxeon-cli.hl ARGUMENTS`), so an edit to the CLI never runs an older CLI. Only the stamp check of a stale
+  executable runs, which compares the digest of the sources as they are now with the one it was built from. `HAXEON_CLI_HL`
+  (other CLI bytecode) skips the executable.
+- `CompilerClient.run` starts `haxeon-aot serve STATE` instead of `hl worker.hl STATE`, under a worker version of its own
   (`compiler-session-v9:aot`), so a bytecode worker of the same sources is not reused once the executable is installed. A worker
   profiled with `HAXEON_COMPILER_PROFILE_PORT` stays on the VM, whose diagnostics port it is.
-- `CompilerClient.runOneShot` runs `haxeon-compiler ARGUMENTS` instead of `hl compiler.hl ARGUMENTS`, on every platform.
-- `haxeon lsp` runs `haxeon-compiler lsp`.
+- `CompilerClient.runOneShot` runs `haxeon-aot ARGUMENTS` instead of `hl compiler.hl ARGUMENTS`, on every platform.
+- `haxeon lsp` runs `haxeon-aot lsp`.
+
+The executable was `haxeon-compiler` before it held the CLI. It has a new name because the launcher cannot ask an executable which
+roles it has: an older one would take `cli ARGUMENTS` for a compile's arguments, and every `haxeon` command, `haxeon dev aot`
+included, would fail. The native build removes a `haxeon-compiler` left in the VM's directory.
 
 Nothing else chooses between the two: no option, no environment variable. The executable is used while it is current, that is
-built from the compiler sources the CLI would otherwise build to bytecode. Its stamp, `haxeon-compiler.sources`, holds the
-digest of those sources (`CompilerSources.roots` and the standard library, by relative path and content, so it does not depend on
-where the files are unpacked); when the executable or the stamp is missing, or the digest differs, the CLI runs the compiler on
-the VM as before. So an edit to the compiler in a checkout never runs an older compiler. A release ships no compiler sources,
-as its compiler cannot change: its marker (`haxeon-release.txt`, `build.HaxeonRelease`) records the digest of the sources it was
-made from, and the stamps are matched against that, so a release always runs what it ships. `haxeon doctor` says which: ok,
-stale or not built.
+built from the sources the CLI would otherwise build to bytecode. Its stamp, `haxeon-aot.sources`, holds the digest of those
+sources (`CompilerSources.roots` and the standard library, by relative path and content, so it does not depend on where the files
+are unpacked); when the executable or the stamp is missing, or the digest differs, the CLI and the compiler run on the VM as
+before. So an edit in a checkout never runs an older CLI or compiler. A release ships no compiler sources, as its compiler cannot
+change: its marker (`haxeon-release.txt`, `build.HaxeonRelease`) records the digest of the sources it was made from, and the stamps
+are matched against that, so a release always runs what it ships. `haxeon doctor` says which: ok, stale or not built. A build with
+a stale executable says so once, with the command that rebuilds it. Every command asks, so the digest is kept in
+`out/haxeon-aot.sources-digest` with the stat signature of the files it covers (each one's device, inode, size and times) and
+reused while no file changed: the check then reads no file (as `ContentDigestCache`, only once every file is older than the digest
+by a few seconds, since timestamps are whole seconds).
 
 A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler
-(docs/reference/RELEASES.md). It also ships the same entry point as bytecode with a stamp of its own (`haxeon-compiler.hl`),
-which `AotCompiler.program` runs on the VM when there is no current executable: a release has
-no pinned Haxe to build the compiler from its sources, and the Windows release does not build the executable yet. A build
-with a stale executable says so once, with the command that rebuilds it. They are
-made by `haxeon dev aot-compiler [--toolchain=NAME]` (`tools.dev.AotCompilerBuild`): the native build (for the hlc SDK), the
-checkout's compiler built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`)
-with the SDK's default toolchain or the one given, then the executable published by rename (`cmake/haxeon-replace.cmake`, so a running worker
-keeps its file) and the stamp written last. The C sources and objects stay in `out/aot-compiler`, so a rebuild compiles only the
-C files that changed. The hlc build links libhl statically, so the executable needs nothing beside it; the stack traces read its
-own DWARF (`-g1`), which is most of its 39 MB. On Linux the CLI with the executable builds a one-file project cold (CLI start,
-compile server start, compile) in 1.2 s against 2.3 s with the bytecode worker, and a language server session starts in 0.6 s
-against 2.1 s. The `aot-compiler` suite builds it, checks each role and runs the suites that compile through the CLI with it.
+(docs/reference/RELEASES.md). It also ships the compiler's roles as bytecode with a stamp of its own (`haxeon-compiler.hl`), which
+`AotCompiler.program` runs on the VM when there is no current executable, as the launcher then runs the CLI's bytecode
+(`haxeon-cli.hl`): a release has no pinned Haxe to build them from its sources, and the Windows release does not build the
+executable yet. The executable is made by `haxeon dev aot [--toolchain=NAME]` (`tools.dev.AotBuild`): the native build (for the hlc SDK), the checkout's compiler
+built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`) with the SDK's
+default toolchain or the one given, then the executable published by rename (`cmake/haxeon-replace.cmake`, so a running worker,
+or the running CLI, keeps its file) and the stamp written last. The C sources and objects stay in `out/aot`, so a rebuild
+compiles only the C files that changed. The hlc build links libhl statically, so the executable needs nothing beside it; the stack
+traces read its own DWARF (`-g1`), which is most of its size. On Linux the CLI with the executable builds a one-file project cold
+(CLI start, compile server start, compile) in 1.2 s against 2.3 s with the bytecode worker, and a language server session starts
+in 0.6 s against 2.1 s. With the CLI in it too, `haxeon --version` takes 0.13 s against 1.3 s, and the cold build of the
+perf guard's small project 7.2 G instructions against 14.0 G (its check 3.3 G against 9.8 G). The `aot-compiler` suite builds it,
+checks each role and runs the suites that compile through the CLI with it.
 
 On Windows the release builds the executable with clang-cl (the default toolchain of an MSVC SDK, MSVC's ABI and C runtime, as the VM is
-built), and ships its PDB, `haxeon-compiler.pdb`, beside it. Without the PDB a trace names each frame's function from the module
+built), and ships its PDB, `haxeon-aot.pdb`, beside it. Without the PDB a trace names each frame's function from the module
 image but gives no file and line, and loses the frames of the functions the C compiler inlined, where the other platforms give
 both from the DWARF their executables keep: a trace of an internal error is what a user sends back, so it is worth the size.
 The PDB keeps only line tables and inline sites (clang-cl's `-gline-tables-only`): built from this tree, about 21 MB beside a
-14 MB executable, 5 MB compressed in the archive. DbgHelp finds it in the executable's directory. `haxeon dev aot-compiler`
+14 MB executable, 5 MB compressed in the archive. DbgHelp finds it in the executable's directory. `haxeon dev aot`
 publishes the executable only (in a checkout the PDB is found where the link wrote it, by the path the executable records), so
-the release copies `out/aot-compiler/haxeon-compiler.pdb` beside the published executable.
+the release copies `out/aot/haxeon-aot.pdb` beside the published executable.
 
 ## Testing
 
@@ -522,7 +539,7 @@ digit. The C is byte-identical; the emission went from 7.1 s to 5.3 s on the JIT
 builds a release's: the C build's compile from 17.1 s to 14.8 s, main-thread instructions 79 G to 64 G (its HashLink build of
 the same sources: 10.4 s, 44 G). What is left of the difference: the C emission (3.9 s built ahead of time), and the bytecode
 lowering of function bodies the C backend does not read (1.4 s), which needs `HlLower` to intern without lowering (the types,
-constants and natives a body names are interned as it is lowered). The `aot-compiler` build of `tools.CompilerExecutable` also
+constants and natives a body names are interned as it is lowered). The `haxeon dev aot` build of `tools.CompilerExecutable` also
 pays a frontend restart (graph 8.6 s against 1.5 s) for standard library modules only typing finds (`haxe.io.BytesHex`,
 `haxeon.DynamicOps`); that is the frontend's, not the C backend's.
 
