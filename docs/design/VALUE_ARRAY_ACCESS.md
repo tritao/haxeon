@@ -1,6 +1,7 @@
 # Reading value arrays at the cost of a field
 
-Status: proposed; steps 1 to 4 implemented on HashLink (`HlLower.lowerValueArrayRead`, `valueArrayView`, the validity lane in `value_arrays.c`).
+Status: steps 1 to 4 are done on HashLink (`HlLower.lowerValueArrayRead`, `valueArrayView`, the validity lane in
+`value_arrays.c`); step 5, reads and writes as IR operations with their layout, is open.
 
 ## Problem
 

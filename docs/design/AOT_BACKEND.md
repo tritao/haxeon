@@ -1,7 +1,8 @@
 # AOT backend: C from Haxeon's IR on the HashLink runtime
 
-Status: proposed; milestones 1 to 5 implemented (`--target=hlc`). Depends on the columnar IR (`IR_CORE_COLUMNS.md`): the backend
-reads the inliner's bodies as `HlLower` does.
+Status: milestones 1 to 5 are done (`--target=hlc`, the compiler built with `hlc`; see State); milestone 6, values
+unboxed across calls, is open. Depends on the columnar IR (`IR_CORE_COLUMNS.md`): the backend reads the inliner's bodies
+as `HlLower` does.
 
 ## Problem
 

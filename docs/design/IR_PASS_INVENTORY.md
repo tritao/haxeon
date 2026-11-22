@@ -1,10 +1,12 @@
 # IR pass inventory and pass interface (ADR 0003, M2)
 
-Status: proposal; the pass order of the frontend is in one place (`compiler.ir.pipeline.IrPipeline`), the per-pass interface below is not
-written yet. Since 2026-11-19 it is built on the query engine ([QUERY_ENGINE.md](QUERY_ENGINE.md), ADR 0003 M4a): `view`
-is the engine's read interface, and contributions, summaries and rewrites are query kinds. What a warm build reuses today is in
-[`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
-Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so they will change first).
+Status: the pass order is in one place (`compiler.ir.pipeline.IrPipeline`), and the passes are in subpackages by layer
+and family (`compiler.ir.passes.*`). The per-function interface exists as `IrFunctionPass` (summarize, prepare, transform
+through `IrFactReader`, finish), with eight passes on it: constant branches, the enum and value dynamic dispatch, enum tag
+lowering, override bridges, value interface boxes, typed interface dispatch and checked dynamic casts. What a warm build
+reuses today is in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md). This document adds the measured edit-build cost per
+pass and the order. Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so
+they will change first).
 
 ## Internal marker migration (a1)
 

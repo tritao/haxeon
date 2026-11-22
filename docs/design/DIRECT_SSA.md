@@ -1,6 +1,7 @@
 # Direct SSA: build SSA while generating IR
 
-Status: accepted 2026-11-20 (overnight plan, `COMPILER_DATA_LAYOUT.md` step 6).
+Status: done (22d0bcd95): the IR generator builds SSA directly, and the CFG stage is deleted. `COMPILER_DATA_LAYOUT.md`
+step 6.
 
 ## Problem
 

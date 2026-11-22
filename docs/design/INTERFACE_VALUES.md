@@ -1,6 +1,7 @@
 # Interface values: one model on every backend
 
-Status: design note for review (no code yet). Direction from dev-71: **an interface value is the object itself, and a call dispatches through the
+Status: plan step 0 (the call-cost measurements) and the IR's `ClassId` with persistent class ids (`IrClassIds`,
+implementation log 1) are done; the dispatch change (plan steps 1 to 5) is not started. Direction from dev-71: **an interface value is the object itself, and a call dispatches through the
 class**, as the Wasm backends already do. HashLink virtuals stay only for structural and anonymous types and for Dynamic views that need them.
 Target: `InterfaceMountRepro` allocates 0 bytes for the conversions on HashLink, Wasm32 and Wasm GC.
 

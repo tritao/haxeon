@@ -1,8 +1,9 @@
 # Type values: classes and enums as runtime values (design note)
 
-Status: proposal, reviewed by haxeon-e4 (2026-11-19, folded in below); not started. Phase 2 of the `Type` API entry
-in `TODO.md`; phase 1 (`Type.enumConstructor`, `Type.enumParameters`, Haxe's `EnumValueTools`) has landed and needs no
-runtime type information. The decisions left are the user's (end of the note). No phase 2 code is written yet.
+Status: proposal, reviewed by haxeon-e4 (2026-11-19, folded in below); phase 2 is not started. Phase 1
+(`Type.enumConstructor`, `Type.enumParameters`, Haxe's `EnumValueTools`) has landed, and so have `Type.createEnum`,
+`Type.createEnumIndex` and `Type.allEnums` on a named enum (5b77054c4), none of which needs runtime type information. The
+decisions left are the user's (end of the note).
 
 ## Scope
 

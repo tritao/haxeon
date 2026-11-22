@@ -1,8 +1,9 @@
 # Query engine (design note)
 
-Status: proposed design for ADR 0003 M4a (the engine core), 2026-11-19. ADR 0003 decisions 1, 10 and 14 are the
-requirements; this note is how. It replaces the per-pass reuse mechanism sketched in `IR_PASS_INVENTORY.md` (Interface),
-whose rules it keeps: the pass framework (M2) is built on this engine.
+Status: step 1, the engine core, is in `compiler.query` (35dd6970c), unit-tested on synthetic queries; no compiler stage
+reads through it yet. The IR stages before the encode point get per-function reuse in pipeline order through their own memos
+(`IrFunctionPass`, `IrStageMemo`; `IR_CORE_COLUMNS.md`, session caching model). ADR 0003 decisions 1, 10 and 14 are the
+requirements; this note is how. The pass framework (M2) is built on this engine.
 
 ## Why now
 
