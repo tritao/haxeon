@@ -19,6 +19,17 @@
       "path": "../editor"
     }
   },
+  "native": {
+    "cmake": {
+      "source": ".",
+      "target": "nativekit_ui",
+      "libraries": [
+        "nativekit",
+        "nativekit_gpu",
+        "nativekit_ui"
+      ]
+    }
+  },
   "ffi": {
     "interfaces": [
       "bindings/nativekit-ui.hxi"
