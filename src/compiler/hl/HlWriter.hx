@@ -382,18 +382,28 @@ class HlWriter {
 		}
 	}
 
-	/** A section's header flags and payload as the module stores them: compressed when it asks to be and the natives are there. */
+	/**
+	 * A section's header flags and payload as the module stores them: compressed when it asks to be and the natives are there. With a
+	 * cache, a payload the same as last time's is not compressed again.
+	 */
 	static function storedSection(section:HlDebugSection, cache:Null<HlWriterCache>):HlStoredSection {
 		var payload = section.payloadFor(cache), level = section.compression;
 		if (level == null)
 			return {flags: section.flags, payload: payload};
-		var decoded = payload.flatten(), block = HlLz4.compress(decoded, level);
+		var decoded = payload.flatten();
+		var known = cache == null ? null : cache.compressedSection(section.kind, level, decoded);
+		if (known != null)
+			return {flags: section.flags | COMPRESSED, payload: known};
+		var block = HlLz4.compress(decoded, level);
 		if (block == null)
 			return {flags: section.flags, payload: payload};
 		var writer = new HlWriter();
 		writer.writeUnsignedIndex(decoded.length);
 		writer.writeShared(block);
-		return {flags: section.flags | COMPRESSED, payload: writer.output.finish()};
+		var stored = writer.output.finish();
+		if (cache != null)
+			cache.setCompressedSection(section.kind, level, decoded, stored);
+		return {flags: section.flags | COMPRESSED, payload: stored};
 	}
 
 	public static function encodeFunctionIdentities(identities:Array<compiler.hl.HlCode.HlFunctionIdentity>):HaxeBytes {

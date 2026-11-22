@@ -3,6 +3,7 @@ package compiler.hl;
 import compiler.hl.HlFunction.HlDebugLocation;
 import haxe.ds.ObjectMap;
 import haxe.io.Bytes;
+import haxeon.io.SegmentedBytes;
 
 /** Encoded function bodies that remain valid while the debug-file table is stable. */
 class HlWriterCache {
@@ -23,7 +24,19 @@ class HlWriterCache {
 	var prefixConstants = -1;
 	var prefixEntryPoint = -1;
 
+	/** By debug section kind, the last payload compressed and what it was stored as (`HlWriter.storedSection`). */
+	var compressed:Map<Int, CompressedSection> = [];
+
 	public function new() {}
+
+	/** What the section of `kind` was stored as when its payload was `decoded`, compressed at `level`; null if it was not. */
+	public function compressedSection(kind:Int, level:Int, decoded:Bytes):Null<SegmentedBytes> {
+		var known = compressed.get(kind);
+		return known != null && known.level == level && known.decoded.compare(decoded) == 0 ? known.stored : null;
+	}
+
+	public function setCompressedSection(kind:Int, level:Int, decoded:Bytes, stored:SegmentedBytes):Void
+		compressed.set(kind, new CompressedSection(level, decoded, stored));
 
 	public function prepare(files:Array<String>):Void {
 		if (sameStrings(debugFiles, files))
@@ -186,5 +199,18 @@ private class SpanGroupBytes {
 		this.bytes = bytes;
 		this.paths = paths;
 		this.indices = indices;
+	}
+}
+
+/** A debug section's payload and the compressed form the writer stored it as. */
+private class CompressedSection {
+	public final level:Int;
+	public final decoded:Bytes;
+	public final stored:SegmentedBytes;
+
+	public function new(level:Int, decoded:Bytes, stored:SegmentedBytes) {
+		this.level = level;
+		this.decoded = decoded;
+		this.stored = stored;
 	}
 }
