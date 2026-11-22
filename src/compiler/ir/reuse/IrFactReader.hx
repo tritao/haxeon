@@ -6,6 +6,7 @@ import compiler.ir.model.Ir.IrType;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 /** What a rewrite reads about the program and the helpers it asks for, recorded for its memo entry when it has one. */
+@:nullSafety(Strict)
 class IrFactReader {
 	final pass:IrFunctionPass;
 	final facts:Null<IrFacts>;

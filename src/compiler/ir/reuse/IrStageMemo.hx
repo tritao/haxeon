@@ -7,6 +7,7 @@ import compiler.ir.passes.objects.IrTypedInterfaceDispatch.IrTypedInterfaceReque
 import compiler.ir.pipeline.IrFunctionPass.IrStageRequest;
 
 /** What one stage made of one function in a build, and what that rested on (`IrStageMemo`). */
+@:nullSafety(Strict)
 class IrStageEntry {
 	/** The version of the function the stage was given (`IrLineage`); 0 for one the stage added. */
 	public final input:Int;
@@ -45,6 +46,7 @@ class IrStageEntry {
  * (`IrStageEntry`). An entry reused is not written again; one the stage did not use in its last run is dropped as the next run
  * starts, so a function the program lost drops out one build later.
  */
+@:nullSafety(Strict)
 class IrStageMemo {
 	final entries:Map<String, IrStageEntry> = [];
 
@@ -96,6 +98,7 @@ class IrStageMemo {
  * session state share them: an entry holds only while its input version and the prints of its facts are the ones it recorded,
  * and neither is ever given twice, so what a rolled-back build left is never wrongly reused.
  */
+@:nullSafety(Strict)
 class IrStageMemos {
 	public final facts = new IrFacts();
 	public final versions:IrFunctionVersions;
@@ -197,6 +200,7 @@ class IrStageMemos {
 }
 
 /** A function's place in the lineage: the function a name stands for in this build, and its version. */
+@:nullSafety(Strict)
 class IrLineageCell {
 	public var fn:IrFunction;
 	public var version:Int;
@@ -218,6 +222,7 @@ class IrLineageCell {
  * what it made, or a new one. The session keeps one (`IrStageMemos.lineage`), whose cells each build updates in place; a version
  * names one function object, so a cell left from another build is never wrong.
  */
+@:nullSafety(Strict)
 class IrLineage {
 	@:processWide("a shared empty list of facts, only ever read")
 	public static final NO_FACTS:Array<Int> = [];
@@ -350,9 +355,9 @@ class IrLineage {
 		for (index in 0...functions.length) {
 			var fn = functions[index], cell = cells.get(fn.name);
 			if (bodies) {
-				var body = fn.body;
-				if (cell == null || cell.fn != fn || cell.build != memos.build || body == null || !body.frozen) {
-					set(fn, body != null && body.frozen ? handedOn(stage, fn) : memos.versions.next());
+				var body = fn.body, frozen = body != null && body.frozen;
+				if (cell == null || cell.fn != fn || cell.build != memos.build || !frozen) {
+					set(fn, frozen ? handedOn(stage, fn) : memos.versions.next());
 					cell = cells.get(fn.name);
 				}
 			} else if (cell == null || cell.fn != fn || cell.build != memos.build) {
@@ -399,6 +404,7 @@ class IrLineage {
 }
 
 /** A contribution a memo keeps, with the last build that used it. */
+@:nullSafety(Strict)
 class IrContribution<T> {
 	public final value:T;
 	public var used:Int;
@@ -414,6 +420,7 @@ class IrContribution<T> {
  * gives the same version has the same contribution, so it is not read again. A version names one function, so the versions a
  * function has at different stages are different entries. What a build did not use is dropped when the next one starts.
  */
+@:nullSafety(Strict)
 class IrContributionMemo<T> {
 	final entries:Map<Int, IrContribution<T>> = [];
 	var build = 0;

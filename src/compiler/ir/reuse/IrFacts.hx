@@ -12,6 +12,7 @@ import compiler.ir.pipeline.IrFunctionPass;
  * A fact is computed again at most once per stage run, when an entry or a rewrite first asks for it (`begin` starts a run). The
  * copies of the session state share the table, as they share the memos: a print names one value whatever build made it.
  */
+@:nullSafety(Strict)
 class IrFacts {
 	/** A value never equal to itself: a fact the stage cannot state per key, so every entry that read it is recomputed. */
 	public static inline final UNKNOWN = -0x7fffffff;

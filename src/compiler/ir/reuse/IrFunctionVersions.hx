@@ -5,6 +5,7 @@ package compiler.ir.reuse;
  * a version names one IR. A number is never given twice in a session, not even after a build that is rolled back, since the
  * copies of the session state a build works on share this counter; a memo keyed on a version (`IrStageMemo`) can trust it.
  */
+@:nullSafety(Strict)
 class IrFunctionVersions {
 	var last = 0;
 
