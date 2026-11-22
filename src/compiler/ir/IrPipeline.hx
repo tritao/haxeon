@@ -426,13 +426,14 @@ class IrPipeline {
 	static function encodeMade(stage:String, functions:Array<IrFunction>, context:IrPipelineContext):Array<IrFunction> {
 		var cache = context.inlineCache, retained = context.options.keepSession;
 		var made = [for (fn in functions) if (fn.body == null) fn];
-		if (retained && cache != null) {
-			var stable = cache.stableGenerated(stage, made);
-			if (made.length > 0) {
-				var index = 0;
-				functions = [for (fn in functions) fn.body == null ? stable[index++] : fn];
-			}
-		}
+		if (retained && cache != null && made.length > 0) {
+			// The stable functions are encoded as the cache takes them, so the ones to replace are told apart before.
+			var isMade = [for (fn in functions) fn.body == null];
+			var stable = cache.stableGenerated(stage, made, context.passScratch.bodyBuilder), index = 0;
+			functions = [for (position in 0...functions.length) isMade[position]
+				? stable[index++] : functions[position]];
+		} else if (retained && cache != null)
+			cache.stableGenerated(stage, made, context.passScratch.bodyBuilder);
 		encodeAll(functions, context);
 		return functions;
 	}
@@ -452,9 +453,7 @@ class IrPipeline {
 				fn.releaseDecoded();
 			return output;
 		}
-		var stable = cache.stableGenerated(stage, changed);
-		for (fn in stable)
-			fn.freezeBody(context.passScratch.bodyBuilder);
+		var stable = cache.stableGenerated(stage, changed, context.passScratch.bodyBuilder);
 		if (changed.length == 0)
 			return output;
 		var index = 0;
@@ -508,7 +507,7 @@ class IrPipeline {
 	static function encodeBodies(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var cache = context.inlineCache, retained = context.options.keepSession;
 		if (retained && cache != null)
-			assembly.functions = cache.stableBodySources(assembly.functions);
+			assembly.functions = cache.stableBodySources(assembly.functions, context.passScratch.bodyBuilder);
 		encodeAll(assembly.functions, context);
 		var enumInput = assembly.enumInput;
 		if (enumInput != null)
@@ -626,6 +625,12 @@ class IrPipeline {
 			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
 			context.instrumentScope);
+		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
+		if (context.options.checkReuse && context.options.keepSession) {
+			var unfrozen = cache.unfrozen();
+			if (unfrozen != null)
+				throw new InternalError('--check-reuse: the inline cache keeps $unfrozen with a body that is not frozen');
+		}
 		return program;
 	}
 

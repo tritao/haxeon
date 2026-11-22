@@ -170,36 +170,95 @@ class IrInlineCache {
 	 */
 	var generatedSources:Map<String, Map<String, IrFunction>> = [];
 
-	public function stableSources(functions:Array<IrFunction>):Array<IrFunction> {
-		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next);
+	public function stableSources(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
+		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next, builder);
 		sources = next;
 		return result;
 	}
 
-	public function stableBodySources(functions:Array<IrFunction>):Array<IrFunction> {
-		var next:Map<String, IrFunction> = [], result = stable(functions, bodySources, next);
+	public function stableBodySources(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
+		var next:Map<String, IrFunction> = [], result = stable(functions, bodySources, next, builder);
 		bodySources = next;
 		return result;
 	}
 
-	public function stableGenerated(stage:String, functions:Array<IrFunction>):Array<IrFunction> {
+	public function stableGenerated(stage:String, functions:Array<IrFunction>,
+			?builder:IrBodyBuilder):Array<IrFunction> {
 		var previous = generatedSources.get(stage), next:Map<String, IrFunction> = [];
-		var result = stable(functions, previous == null ? [] : previous, next);
+		var result = stable(functions, previous == null ? [] : previous, next, builder);
 		generatedSources.set(stage, next);
 		return result;
 	}
 
-	static function stable(functions:Array<IrFunction>, previous:Map<String, IrFunction>,
-			next:Map<String, IrFunction>):Array<IrFunction> {
+	/**
+	 * `functions`, each replaced by `previous`'s function of its name when that is the same; every function kept in `next` has its
+	 * body frozen (encoded first with the session's table when it has none), as a cache holds it, so a stage given it edits a copy.
+	 */
+	function stable(functions:Array<IrFunction>, previous:Map<String, IrFunction>, next:Map<String, IrFunction>,
+			?builder:IrBodyBuilder):Array<IrFunction> {
 		var result:Array<IrFunction> = [];
 		for (fn in functions) {
 			var known = previous.get(fn.name);
 			if (known == null || !compiler.ir.codec.IrFunctionStateEquality.same(known, fn))
 				known = fn;
+			if (known.body == null)
+				known.bodyIn(types, builder);
+			known.freezeBody(builder);
 			next.set(fn.name, known);
 			result.push(known);
 		}
 		return result;
+	}
+
+	/** Where the cache keeps a function or body that is not frozen, or null when everything it keeps is (`--check-reuse`). */
+	public function unfrozen():Null<String> {
+		function fn(where:String, f:Null<IrFunction>):Null<String> {
+			if (f == null)
+				return null;
+			var body = f.body;
+			return body != null && !body.frozen ? '$where ${f.name}' : null;
+		}
+		function body(where:String, b:Null<IrBody>):Null<String>
+			return b != null && !b.frozen ? '$where ${b.name}' : null;
+		var found:Null<String> = null;
+		inline function note(result:Null<String>):Void
+			if (found == null)
+				found = result;
+		for (f in sources)
+			note(fn("source", f));
+		for (f in bodySources)
+			note(fn("body source", f));
+		for (stage => made in generatedSources)
+			for (f in made)
+				note(fn('generated ($stage)', f));
+		for (entry in originals) {
+			note(fn("original's source", entry.source));
+			note(body("original", entry.body));
+		}
+		for (entry in memo) {
+			note(fn("memo's source", entry.source));
+			note(body("inlined form", entry.inlined));
+			note(fn("cleaned form", entry.cleaned));
+			for (dependency in entry.dependencies)
+				note(fn("memo's dependency", dependency));
+		}
+		for (f in published)
+			note(fn("published", f));
+		for (entry in arrayFactories) {
+			note(fn("array factory source", entry.source));
+			note(fn("array factory lowering", entry.result));
+		}
+		for (entry in staticChecks.copies) {
+			note(fn("static check source", entry.source));
+			note(fn("static check copy", entry.result));
+		}
+		for (f in staticChecks.helpers)
+			note(fn("static check", f));
+		for (entry in instrumented) {
+			note(fn("instrumented source", entry.source));
+			note(fn("instrumented", entry.result));
+		}
+		return found;
 	}
 
 	/** Lets the sources go, for a compile no next one reuses: they are the objects the stage's bodies were made from. */
@@ -609,8 +668,11 @@ class IrInliner {
 	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile,
 			?options:compiler.CompileOptions,
 			?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
-		program.functions = cache.stableSources(program.functions);
-		var inliner = new IrInliner(program, cache, profile, options == null ? new compiler.CompileOptions() : options),
+		var settings = options == null ? new compiler.CompileOptions() : options;
+		// A compile that keeps no session has no next compile to reuse a source in, and edits the sources in place.
+		if (settings.keepSession)
+			program.functions = cache.stableSources(program.functions);
+		var inliner = new IrInliner(program, cache, profile, settings),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [],
 			relocated:Array<String> = [];

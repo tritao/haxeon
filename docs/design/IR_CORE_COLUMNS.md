@@ -138,8 +138,14 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
 (the encode point is the assembly's `encode-bodies` stage, on every target). Every body a cache holds is
 frozen, where the cache takes its function (`IrFunction.freezeBody`), the function a cache keeps as the source of an entry
-included; a body no cache holds is the stages' own (`ofOwnedBody`), in a session as in a one-shot compile. Keys are function
-names; reuse is by object identity of the `IrFunction` an entry was made from.
+included; a body no cache holds is the stages' own (`ofOwnedBody`), in a session as in a one-shot compile. Freezing a body that
+edits left garbage in replaces the function's body with a compacted copy (`IrFunction.freezeBody` sets `fn.body`): the function
+keeps its identity, but a holder of the old body object has a body the function no longer is, so code that takes a function's
+body to edit it reads `fn.body` again after a cache froze it. The inline cache freezes what it keeps where it takes it
+(`IrInlineCache.stable` and each cache's insertion), and `--check-reuse` checks that everything it keeps is frozen at the end of
+the inliner stage (`IrInlineCache.unfrozen`). Every body of a program reads its types from one table (the session's
+`IrInlineCache.types`), checked after every stage (`IrStageHooks`) and where a body is asked for (`IrFunction.bodyIn`). Keys are
+function names; reuse is by object identity of the `IrFunction` an entry was made from.
 
 - **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
   has its objects (the stages before still read them) and its frozen encoding. A rebuilt function equal to it
