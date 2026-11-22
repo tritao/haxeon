@@ -25,6 +25,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * the rewrite reads, for each cast it meets, what the program declares of the object it casts to (`DECLARATION`), and asks
  * for the cast's helper.
  */
+@:nullSafety(Strict)
 class IrCheckedDynamicCasts implements IrFunctionPass {
 	public static inline final PREFIX = "$checked-dynamic-cast:";
 
@@ -139,9 +140,12 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 			for (block in 0...edited.blockCount()) {
 				var row = edited.firstRow(block);
 				while (row >= 0) {
-					if (checked(edited, row))
-						edited.setOperation(row, IrOpcode.Call,
-							IrSymbol.of(pass.helperFor(edited.valueType(edited.output(row)))).id);
+					if (checked(edited, row)) {
+						var helper = pass.helperFor(edited.valueType(edited.output(row)));
+						if (helper == null)
+							throw new InternalError("A checked cast has no checking helper");
+						edited.setOperation(row, IrOpcode.Call, IrSymbol.of(helper).id);
+					}
 					row = edited.nextRow(row);
 				}
 			}
@@ -159,16 +163,20 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 	/** What a checked cast from `Dyn` to `type` tests: the type, its name and whether null passes; null when it is not checked. */
 	function target(type:IrType):Null<{checked:IrType, name:String, allowNull:Bool}>
 		return switch type {
-			case Obj(name) if (declarations.exists(name)
-				&& (checkObjects || (checkValueObjects && declarations.get(name).isValue))):
+			case Obj(name):
 				var declaration = declarations.get(name);
-				if (declaration == null) throw new InternalError('Missing cast target "$name"');
-				{
-					checked:type, name:name, allowNull:!declaration.isValue
-				};
-			case Nullable(Obj(name)) if (checkValueObjects && declarations.exists(name)
-				&& declarations.get(name).isValue):
-				{checked: Obj(name), name: name, allowNull: true};
+				declaration != null && (checkObjects || (checkValueObjects && declaration.isValue)) ? {
+					checked: type,
+					name: name,
+					allowNull: !declaration.isValue
+				} : null;
+			case Nullable(Obj(name)):
+				var declaration = declarations.get(name);
+				checkValueObjects && declaration != null && declaration.isValue ? {
+					checked: Obj(name),
+					name: name,
+					allowNull: true
+				} : null;
 			case RawPtr:
 				{checked: type, name: "hl.Bytes", allowNull: true};
 			case Function(_, _) if (checkFunctionCasts):

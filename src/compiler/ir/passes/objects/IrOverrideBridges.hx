@@ -29,6 +29,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * class or below, goes through a call adapter that converts to and from the slot's signature around the virtual call.
  * Direct calls of the override keep its own signature.
  */
+@:nullSafety(Strict)
 class IrOverrideBridges implements IrFunctionPass {
 	public static inline final BRIDGE_PREFIX = "$override-bridge:";
 	public static inline final CALL_PREFIX = "$override-call:";
@@ -59,7 +60,7 @@ class IrOverrideBridges implements IrFunctionPass {
 		return {functions: result, objects: pass.objects};
 	}
 
-	function signatureOf(object:IrObject, method:String):Null<IrFunction> {
+	function signatureOf(object:Null<IrObject>, method:String):Null<IrFunction> {
 		var root:Null<IrFunction> = null, current:Null<IrObject> = object, functions = index;
 		while (current != null && functions != null) {
 			for (entry in current.methods)
@@ -81,12 +82,14 @@ class IrOverrideBridges implements IrFunctionPass {
 		var functionIndex = names, bridged:Map<String, Bool> = [];
 		index = functionIndex;
 		var rewritten = [for (object in objects) {
-			if (object.base == null || object.methods.length == 0) object;
+			var base = object.base;
+			if (base == null || object.methods.length == 0) object;
 			else {
 				var changed = false, methods = [for (entry in object.methods) {
 					var implementation = functionIndex.get(entry.functionName.name),
-						root = signatureOf(byName.get(object.base), entry.name);
-					if (implementation == null || root == null || sameSignature(implementation, root)) entry;
+						root = signatureOf(byName.get(base), entry.name);
+					if (implementation == null || root == null) entry;
+					else if (sameSignature(implementation, root)) entry;
 					else {
 						var name = BRIDGE_PREFIX + implementation.name;
 						if (!bridged.exists(name)) {
@@ -119,7 +122,7 @@ class IrOverrideBridges implements IrFunctionPass {
 
 	function slotSignature(receiver:IrType, method:String):Null<IrFunction>
 		return switch receiver {
-			case Obj(name) if (byName.exists(name)): signatureOf(byName.get(name), method);
+			case Obj(name): signatureOf(byName.get(name), method);
 			default: null;
 		};
 
@@ -147,10 +150,12 @@ class IrOverrideBridges implements IrFunctionPass {
 	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		if (bridges.length == 0)
 			return functions;
-		var names = [for (name in adapters.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names)
-			functions.push(adapters.get(name));
+		var made = [for (name => adapter in adapters) {
+			name:name, adapter:adapter
+		}];
+		made.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in made)
+			functions.push(entry.adapter);
 		return functions.concat(bridges);
 	}
 

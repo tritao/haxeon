@@ -28,6 +28,7 @@ typedef IrErasureRequest = {
 }
 
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
+@:nullSafety(Strict)
 class IrGenericOwnerErasure {
 	public static inline final METHOD_REFERENCE = 0;
 	public static inline final ERASED = 1;
@@ -72,9 +73,10 @@ class IrGenericOwnerErasure {
 	static function readRequests(fn:IrFunction):Array<IrErasureRequest> {
 		var found:Null<Array<IrErasureRequest>> = null;
 		function add(kind:Int, name:String, arguments:Array<IrType>, result:IrType):Void {
-			if (found == null)
-				found = [];
-			found.push({kind: kind, name: name, arguments: arguments, result: result});
+			var list = found;
+			if (list == null)
+				found = list = [];
+			list.push({kind: kind, name: name, arguments: arguments, result: result});
 		}
 		function call(name:String, arguments:Array<IrType>, result:IrType):Void
 			if (GeneratedNames.isErasedOperation(name))
@@ -150,11 +152,15 @@ class IrGenericOwnerErasure {
 				}
 		var byName = [for (object in objects) object.name => object],
 			byFunction = new IrFunctionIndex("generic-owner-erasure", functions);
-		var names = [for (name in requests.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names) {
-			var parts = GeneratedNames.erasedOperationPath(name).split(":"), signature = requests.get(name);
-			if (parts.length != 3 || signature == null || signature.arguments.length == 0
+		var sorted = [for (name => signature in requests) {
+			name:name, signature:signature
+		}];
+		sorted.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in sorted) {
+			var name = entry.name,
+				signature = entry.signature,
+				parts = GeneratedNames.erasedOperationPath(name).split(":");
+			if (parts.length != 3 || signature.arguments.length == 0
 				|| (switch (signature.arguments[0]) {
 					case Dyn: false;
 					default: true;

@@ -24,6 +24,7 @@ private typedef ReflectedLayout = {
  * that tests the value against every reflectable object type, most derived first, and calls that
  * layout's generated function to compare field names. HashLink reflects through its own runtime and never declares these natives.
  */
+@:nullSafety(Strict)
 class IrObjectReflection {
 	/**
 	 * With `tableDispatch`, only the per-layout functions are generated and each native stays declared, listing them as
@@ -121,8 +122,8 @@ class IrObjectReflection {
 					result.set(RECORD_CREATION, true);
 				case "__reflect_set_field", "__reflect_delete_field", "__reflect_object_set_field",
 					"__reflect_object_delete_field":
-					if (layout.observableBits != null
-						&& Lambda.exists(layout.fields, field -> layout.observableBits.exists(field.name)))
+					var bits = layout.observableBits;
+					if (bits != null && Lambda.exists(layout.fields, field -> bits.exists(field.name)))
 						result.set(WRITE_STATUS, true);
 				default:
 			}
@@ -376,12 +377,12 @@ class IrObjectReflection {
 			var fields:Array<IrObjectField> = [];
 			// Observable by the one definition the walk uses too (`isObservableClass`): the class or one it extends, or a box's payload.
 			var observable = isObservableClass(byName, payload == null ? name : payload);
-			var fieldOwners = payload == null ? chain : [byName.get(payload)];
+			var boxed = payload == null ? null : byName.get(payload),
+				fieldOwners = payload == null ? chain : boxed == null ? [] : [boxed];
 			for (owner in fieldOwners)
-				if (owner != null)
-					for (field in owner.fields)
-						if (field.name != "$haxeonObservableState")
-							fields.push(field);
+				for (field in owner.fields)
+					if (field.name != "$haxeonObservableState")
+						fields.push(field);
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
 				for (method in owner.methods) {
@@ -394,14 +395,14 @@ class IrObjectReflection {
 								type: Function([for (a in fn.arguments.slice(1)) a.type], fn.result)
 							});
 				}
-			var names = [for (name in methods.keys()) name];
-			names.sort(Reflect.compare);
+			var sortedMethods = [for (method in methods) method];
+			sortedMethods.sort((a, b) -> Reflect.compare(a.name, b.name));
 			result.push({
 				layout: {
 					name: name,
 					isValue: object.isValue,
 					fields: fields,
-					methods: [for (name in names) methods.get(name)],
+					methods: sortedMethods,
 					payload: payload,
 					observable: observable,
 					observableBits: facts.observableFieldBits.get(name)
