@@ -135,10 +135,24 @@ to run the CLI on; its `doctor` checks for git, cmake, ninja and the pinned Haxe
 
 ## Scripts
 
+A command of this tree is a `haxeon` command (`haxeon dev ...`, `haxeon lsp`, `haxeon ffi ...`), a check is a suite of
+`tests/suites.txt`, a benchmark lives under `benchmarks/` with its driver, and a build step is CMake. `scripts/` keeps what
+none of those can be, and no alias for any of them:
+
+- what runs before `haxeon` exists: `bootstrap-tools.sh`/`setup.ps1`, `build-native.sh`/`.ps1`, `bootstrap-compiler.sh`
+  (the checked-in compiler, with the pinned Haxe only), and `build-libffi.sh` with `libffi-libtool-compat.m4`, which
+  `cmake/Bootstrap.cmake` runs;
+- the launchers of the checkout's builds: `haxeon` (`haxeon.cmd`, `haxeon.ps1`), `hl`, `hlprof-live`, with
+  `hashlink-launch.sh` and `hashlink-path.sh` under them; `android-env.sh`, sourced to put the Android tools on `PATH`;
+- the test entry points: `test.sh`, `test-driver.sh`, `check-self-hosting.hx`, `perf-guard.py`, `smoke-test-release.sh`,
+  `test-cli-launcher.sh` (the suite runner's `cli-launcher` option), `hooks/pre-push`, and `lib/`, which test scripts source;
+- tools that read what a run wrote: `alloc-sites.py` (the allocation census), `peak-timeline.py`, `check-pftrace.py`,
+  `hlprof-report.py`, `hlprof-spans.py`, `report-binary-size.py`; and `compiler-class-paths.sh` for tools outside the tree,
+  `generate-ryu-table-data.py` for the checked-in table it generates.
+
 New scripts for this tree are Haxe, run by `haxeon` ([CLI.md](reference/CLI.md#scripts)): `scripts/check-self-hosting.hx`
 and `tests/integration/test-haxeon-script.hx` are examples. They run the same on every platform, which the Bash scripts
-in `scripts/` and `tests/integration/` do not; those are ported as they are touched. What runs before `haxeon` exists
-stays as shell: `bootstrap-tools.sh`/`setup.ps1`, `build-native.sh`/`.ps1` and the `haxeon` launchers.
+in `scripts/` and `tests/integration/` do not; those are ported as they are touched.
 
 ## Formatting
 
