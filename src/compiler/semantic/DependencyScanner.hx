@@ -193,6 +193,9 @@ class DependencyScanner {
 			case Call(name, args, _):
 				if (compiler.runtime.ArrayLibrary.providesLastOf(name))
 					dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+				// The stdlib may implement it in Haxe (`RuntimeType.STRING_FROM_CHAR_CODE`).
+				if (name == "String.fromCharCode")
+					dependencies.set(OPTIONAL_PREFIX + compiler.runtime.RuntimeType.STRING_CODES, true);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);

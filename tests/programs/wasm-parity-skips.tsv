@@ -12,8 +12,6 @@ native-memory-flat-struct	skip	The parity harness does not provide a native allo
 jit-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
 gc-controls	skip	Uses HashLink GC natives that have no Wasm counterpart
 sys-println-dynamic	skip	Prints through the host print import, which this suite does not provide (covered by wasm-host-services)
-string-buffer-unicode	skip	String.fromCharCode for a character beyond ASCII is wrong on Wasm (its charCodeAt differs from the literal)
-string-from-char-code-supplementary	skip	String.fromCharCode for a character beyond ASCII is wrong on Wasm (its charCodeAt differs from the literal)
 thread-gc-stress	skip	Threads are not implemented on Wasm
 test-shards	skip	A harness for HashLink test programs: it reads Sys.args and times its groups, which the Wasm hosts do not provide
 sha256	gc-linear-memory	C crypto uses validated linear scratch memory on the GC backend

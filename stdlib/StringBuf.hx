@@ -44,8 +44,9 @@ class StringBuf {
 	}
 
 	public inline function addChar(c:Int):Void {
-		parts.push(String.fromCharCode(c));
-		totalLength++;
+		var value = String.fromCharCode(c);
+		parts.push(value);
+		totalLength += value.length;
 	}
 
 	public inline function addSub(s:String, pos:Int, ?len:Int):Void {

@@ -2388,6 +2388,14 @@ class CallResolver {
 		if (name == "String.fromCharCode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.fromCharCode" expects 1 argument, got ${arguments.length}', span);
+			// Where the runtime has no native for it (Wasm), the stdlib implements it in Haxe.
+			var library = session.signatures.get(RuntimeType.STRING_FROM_CHAR_CODE);
+			if (library != null) {
+				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STRING_CODES);
+				return new TypedExpression(TCall(RuntimeType.STRING_FROM_CHAR_CODE,
+					typeDeclaredCallArguments(arguments, library, scope, RuntimeType.STRING_FROM_CHAR_CODE, span)),
+					TString, span);
+			}
 			var code = ConversionResolver.plainValue(bodyTyper.typeExpression(arguments[0], scope, TInt),
 				bodyTyper);
 			if (!sameType(code.type, TInt))

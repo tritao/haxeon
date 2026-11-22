@@ -29,6 +29,12 @@ class RuntimeType {
 	public static function companionModules(module:String):Array<String>
 		return module == OBSERVABLE ? [OBSERVABLE_SOURCE, REACTIVE_RUNTIME] : PlatformAbi.implementationModules(module);
 
+	/** The stdlib module that implements `String.fromCharCode` in Haxe on a target whose runtime does not (Wasm). */
+	public static inline final STRING_CODES = "haxe.StringCodes";
+
+	/** `String.fromCharCode` in `STRING_CODES`, which the typer calls where that module defines it. */
+	public static inline final STRING_FROM_CHAR_CODE = "haxe.StringCodes.fromCharCode";
+
 	/** The class whose statics turn a thrown value into what a catch clause tests (`TypedCatchSubject`). */
 	public static inline final EXCEPTION = "haxe.Exception";
 

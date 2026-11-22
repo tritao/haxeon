@@ -129,30 +129,14 @@ class JsonParser {
 						position += 2;
 						var low = hex4();
 						if (low < 0xdc00 || low > 0xdfff) throw invalid("invalid low surrogate");
-						addUnicode(output, 0x10000 + ((high - 0xd800) << 10) + low - 0xdc00);
+						output.addChar(0x10000 + ((high - 0xd800) << 10) + low - 0xdc00);
 					} else if (high >= 0xdc00 && high <= 0xdfff) throw invalid("unpaired low surrogate");
-					else addUnicode(output, high);
+					else output.addChar(high);
 				default: throw invalid("invalid escape");
 			}
 			start = position;
 		}
 		throw invalid("unclosed string");
-	}
-
-	static function addUnicode(output:StringBuf, code:Int):Void {
-		#if wasm
-		// String.fromCharCode currently constructs one byte on Wasm. Encode JSON escapes as UTF-8.
-		var length = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
-		var encoded = haxe.io.Bytes.alloc(length);
-		if (length == 1) encoded.set(0, code);
-		else {
-			for (index in 1...length) encoded.set(index, 0x80 | ((code >>> ((length - index - 1) * 6)) & 63));
-			encoded.set(0, (length == 2 ? 0xc0 : length == 3 ? 0xe0 : 0xf0) | (code >>> ((length - 1) * 6)));
-		}
-		output.add(encoded.getString(0, length));
-		#else
-		output.addChar(code);
-		#end
 	}
 
 	function parseNumber():Dynamic {
