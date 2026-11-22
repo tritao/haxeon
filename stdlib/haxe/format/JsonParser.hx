@@ -151,11 +151,7 @@ class JsonParser {
 		}
 		output.add(encoded.getString(0, length));
 		#else
-		if (code <= 0xffff) output.addChar(code);
-		else {
-			output.addChar(0xd800 + ((code - 0x10000) >>> 10));
-			output.addChar(0xdc00 + ((code - 0x10000) & 1023));
-		}
+		output.addChar(code);
 		#end
 	}
 

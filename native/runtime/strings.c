@@ -318,9 +318,21 @@ HL_PRIM vstring *HL_NAME(__string_char_at)( vstring *value, int index ) {
 	return present ? realtime_single_char_string(value->bytes[index]) : realtime_string_copy(NULL,0);
 }
 
+/* As Haxe's String.fromCharCode on HashLink: a code point above U+FFFF is a surrogate pair, and a surrogate or a code past
+ * U+10FFFF is an error (a negative code is made a pair the same way, as Haxe does). */
 HL_PRIM vstring *HL_NAME(__string_from_char_code)( int code ) {
-	if( (uchar)code == 0 ) hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
-	return realtime_single_char_string((uchar)code);
+	if( code == 0 ) hl_error("HashLink String cannot contain NUL; use Bytes for binary data");
+	if( code > 0 && code < 0x10000 && (code < 0xD800 || code > 0xDFFF) )
+		return realtime_single_char_string((uchar)code);
+	if( (code >= 0xD800 && code <= 0xDFFF) || code >= 0x110000 ) {
+		// Thrown as a String, as Haxe's `throw "Invalid unicode char " + code`, so `catch (e:String)` catches it.
+		char message[48];
+		snprintf(message, sizeof(message), "Invalid unicode char %d", code);
+		hl_throw((vdynamic *)realtime_string_from_utf8(message));
+	}
+	int offset = (int)((unsigned int)code - 0x10000u);
+	uchar pair[2] = { (uchar)((offset >> 10) + 0xD800), (uchar)((offset & 1023) + 0xDC00) };
+	return realtime_string_copy(pair,2);
 }
 
 HL_PRIM vstring *HL_NAME(__string_from_bytes)( vbyte *value, int length ) {

@@ -370,13 +370,7 @@ class Parser {
 							} else
 								buf.addChar(c);
 							#else
-							// HashLink strings hold UTF-16 code units, and `String.fromCharCode` takes one unit, so a
-							// supplementary character is added as a surrogate pair.
-							if (c > 0xFFFF && c <= 0x10FFFF) {
-								buf.addChar(0xD800 | ((c - 0x10000) >> 10));
-								buf.addChar(0xDC00 | ((c - 0x10000) & 0x3FF));
-							} else
-								buf.addChar(c);
+							buf.addChar(c);
 							#end
 						} else if (!escapes.exists(s)) {
 							if (strict)
