@@ -1,9 +1,9 @@
 import compiler.core.AllocationMeter;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunctionRewrite;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.IrFunctionRewrite;
 
 /**
  * IrFunctionRewrite is copy-on-write: a rule that replaces nothing gets the same function back and allocates nothing; a rule that

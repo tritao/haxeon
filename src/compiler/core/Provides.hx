@@ -71,7 +71,7 @@ class ProviderOperations {
 
 /**
  * Whether a function is a helper that serves an operation on a type, and which: the view of `IrFunction.kind` that the provider table
- * (`IrProviders`) reads. `K` is how the type is named; on a function it is `compiler.ir.TypeKey`.
+ * (`IrProviders`) reads. `K` is how the type is named; on a function it is `compiler.ir.model.TypeKey`.
  */
 enum Provides<K> {
 	/** Not a helper for a type: a user function, a lambda, a clone of another function, an adapter, a marker. */

@@ -1,8 +1,8 @@
 import compiler.backend.wasm.WasmBackend;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.verify.IrVerifier;
 class WasmGcSinglePhiMain {
 	static function main():Void {
 		var root = Sys.getEnv("TMPDIR");
@@ -114,9 +114,9 @@ class GcPhiThrowProbe {
 				after = b.createBlock(),
 				throwBlock = b.createBlock(),
 				diamond = b.createBlock();
-			var where = compiler.ir.SourceProvenance.generated("phi-exception");
+			var where = compiler.ir.model.SourceProvenance.generated("phi-exception");
 			b.currentBlock().instructions
-				.push(new compiler.ir.SourceProvenance.Located(BeginTry(handler.id, after.id, false),
+				.push(new compiler.ir.model.SourceProvenance.Located(BeginTry(handler.id, after.id, false),
 				where));
 			b.jump(split);
 			b.select(split);
@@ -133,11 +133,11 @@ class GcPhiThrowProbe {
 			b.jump(join);
 			b.select(join);
 			var value = b.phi(I32, [{block: yes.id, value: y}, {block: no.id, value: n}]);
-			join.instructions.push(new compiler.ir.SourceProvenance.Located(EndTry(handler.id, false), where));
+			join.instructions.push(new compiler.ir.model.SourceProvenance.Located(EndTry(handler.id, false), where));
 			b.jump(after);
 			b.select(handler);
 			handler.instructions
-				.push(new compiler.ir.SourceProvenance.Located(Catch(b.freshValue("caught", Dyn)),
+				.push(new compiler.ir.model.SourceProvenance.Located(Catch(b.freshValue("caught", Dyn)),
 				where));
 			b.returnValue(b.constInt(99));
 			b.select(after);

@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
 
 /** Presence, deletion and copying do not inspect a tag field's logical value. */
 class ReflectionTagProjectionMain {
@@ -74,7 +74,8 @@ class ReflectionTagProjectionMain {
 			}
 		];
 		var functions:Array<IrFunction> = [],
-			remaining = compiler.ir.ObjectReflection.generate(compiler.ir.ProgramFacts.empty(), natives, objects,
+			remaining = compiler.ir.passes.objects.ObjectReflection.generate(compiler.ir.pipeline.ProgramFacts.empty(),
+				natives, objects,
 				["Holder"], functions);
 		var generated = [for (fn in functions) fn.name => true];
 		for (name in ["read", "write", "count", "name", "has", "delete", "copy"])

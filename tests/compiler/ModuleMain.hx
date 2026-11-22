@@ -7,7 +7,7 @@ import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.hl.lower.HlLower;
 import compiler.hl.patch.HlPatchReader;
-import compiler.ir.IrInliner;
+import compiler.ir.passes.inlining.IrInliner;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.types.Type.CompilerType;
 import sys.io.File;

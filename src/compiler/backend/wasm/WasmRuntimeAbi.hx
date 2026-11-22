@@ -1,7 +1,7 @@
 package compiler.backend.wasm;
 
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrProgram;
 
 /** Semantic operations shared by linear-memory and future Wasm-GC runtimes. */
 enum WasmRuntimeOperation {

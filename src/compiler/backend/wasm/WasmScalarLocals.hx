@@ -1,8 +1,8 @@
 package compiler.backend.wasm;
 
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOperands;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 
 typedef WasmScalarLocal = {
@@ -25,7 +25,7 @@ class WasmScalarLocals {
 			for (located in block.instructions)
 				switch located.value {
 					case ValueInit(out) if (isValue(out.type)):
-						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
+						var name = compiler.ir.model.IrTypeTools.valueObjectName(out.type);
 						roots.set(out.id, name);
 						valid.set(out.id, true);
 					default:
@@ -44,7 +44,7 @@ class WasmScalarLocals {
 					if (roots.exists(input.id)) {
 						var allowed = switch instruction {
 							case FieldGet(_, owner, name) if (owner.id == input.id): name
-								== compiler.ir.IrReceiverCheck.CHECK_FIELD
+								== compiler.ir.names.IrReceiverCheck.CHECK_FIELD
 								|| hasField(physicalFields(roots.get(input.id)),
 								name);
 							case FieldSet(owner, name, value) if (owner.id == input.id && value.id != input.id):
@@ -68,7 +68,7 @@ class WasmScalarLocals {
 			for (located in block.instructions)
 				switch located.value {
 					case ValueInit(out) if (roots.exists(out.id) && valid.get(out.id) == true):
-						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
+						var name = compiler.ir.model.IrTypeTools.valueObjectName(out.type);
 						var fields:Map<String, Int> = [],
 							declarations = physicalFields(name);
 						for (field in declarations)

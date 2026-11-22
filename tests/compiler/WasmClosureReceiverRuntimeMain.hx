@@ -5,7 +5,7 @@ import compiler.backend.wasm.WasmTypeIdPlan;
 import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
-import compiler.ir.Ir;
+import compiler.ir.model.Ir;
 
 /** Nominal query signatures retain their checks but share one physical native operation. */
 class WasmClosureReceiverRuntimeMain {
@@ -62,7 +62,7 @@ class WasmClosureReceiverRuntimeMain {
 		for (index in 0...32) {
 			if (functions.get("query" + index) != first)
 				throw "Closure receiver aliases duplicated the physical native body";
-			if (!compiler.ir.IrVerifier.sameType(program.natives[index].arguments[0],
+			if (!compiler.ir.verify.IrVerifier.sameType(program.natives[index].arguments[0],
 				Function([EnumTag("Tag" + index)], EnumTag("Tag" + index))))
 				throw "Sharing a physical native erased its nominal signature";
 		}

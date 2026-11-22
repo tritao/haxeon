@@ -1,0 +1,72 @@
+package compiler.ir.model;
+
+import compiler.core.InternalError;
+import compiler.ir.model.Ir.IrType;
+
+/** Rules about IR types that more than one stage needs. */
+class IrTypeTools {
+	/** The nominal class of a verified value initializer. */
+	public static function valueObjectName(type:IrType):String
+		return switch type {
+			case Obj(name): name;
+			default: throw new InternalError('Value initializer requires an object type');
+		};
+	/** Whether values currently use a boxed dynamic representation: `Dyn` or a nullable. */
+	public static function isDynamic(type:IrType):Bool
+		return switch type {
+			case Dyn, Nullable(_): true;
+			default: false;
+		};
+
+	/** The value a `Nullable` holds, or null for any other type. */
+	public static function nullableElement(type:IrType):Null<IrType>
+		return switch type {
+			case Nullable(element): element;
+			default: null;
+		};
+
+	/** The type with every `Nullable` replaced by `Dyn`, which is what backends without a nullable representation use. */
+	public static function erase(type:IrType):IrType
+		return switch type {
+			case Nullable(_): Dyn;
+			case Array(element): changed(type, Array(erase(element)), element);
+			case Iterator(element): changed(type, Iterator(erase(element)), element);
+			case Function(arguments, result):
+				var erasedArguments = [for (argument in arguments) erase(argument)],
+					erasedResult = erase(result);
+				var same = IrTypeIdentity.same(erasedResult, result);
+				for (index in 0...arguments.length)
+					if (!IrTypeIdentity.same(erasedArguments[index], arguments[index]))
+						same = false;
+				same ? type : Function(erasedArguments, erasedResult);
+			default: type;
+		};
+
+	/** Whether the type mentions `Nullable` anywhere. */
+	public static function containsNullable(type:IrType):Bool
+		return switch type {
+			case Nullable(_): true;
+			case Array(element), Iterator(element): containsNullable(element);
+			case Function(arguments, result):
+				var found = containsNullable(result);
+				for (argument in arguments)
+					if (containsNullable(argument))
+						found = true;
+				found;
+			default: false;
+		};
+
+	/**
+	 * Whether a value of type `actual` may stand where `expected` is required without an operation. Equal types may, and a
+	 * nullable may stand where a `Dyn` is required. The reverse needs a `SafeCast`, which also converts a box of
+	 * another kind, so that a value typed as `Null<Int>` really is an Int box (or null).
+	 */
+	public static function compatible(expected:IrType, actual:IrType):Bool
+		return IrTypeIdentity.same(expected, actual) || ((switch (expected) {
+			case Dyn: true;
+			default: false;
+		}) && nullableElement(actual) != null);
+
+	static function changed(original:IrType, replacement:IrType, element:IrType):IrType
+		return IrTypeIdentity.same(erase(element), element) ? original : replacement;
+}

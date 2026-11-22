@@ -8,11 +8,11 @@ import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.hl.incremental.HlSymbolTable;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBodyBuilder;
-import compiler.ir.IrTypeIds;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBodyBuilder;
+import compiler.ir.model.IrTypeIds;
 
 /** One generated C file: its path in the output directory and its text. */
 typedef HlcFile = {
@@ -53,7 +53,7 @@ class HlcModule {
 	public final view:compiler.hl.lower.HlLoweringView;
 
 	/** The program's ordinary C functions by name (`CNativeCall`). */
-	public final cNatives:Map<String, compiler.ir.Ir.IrCNative> = [];
+	public final cNatives:Map<String, compiler.ir.model.Ir.IrCNative> = [];
 
 	/** Whether a function reads value arrays inline, which `hlc.h`'s view helper serves. */
 	public var readsValueArrays = false;
@@ -336,7 +336,7 @@ class HlcModule {
 	}
 
 	/** The native storage of field `name` of object type `type` or a base (`IrFieldStorage.scalar`), or null. */
-	public function fieldStorage(type:IrType, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
+	public function fieldStorage(type:IrType, name:String):Null<compiler.ir.model.Ir.IrScalarStorage> {
 		var owner = switch type {
 			case Obj(objectName): objects.get(objectName);
 			default: null;
@@ -344,7 +344,7 @@ class HlcModule {
 		while (owner != null) {
 			for (field in owner.fields)
 				if (field.name == name)
-					return compiler.ir.IrFieldStorage.scalar(field);
+					return compiler.ir.model.IrFieldStorage.scalar(field);
 			owner = owner.base == null ? null : objects.get(Std.string(owner.base));
 		}
 		return null;
@@ -448,7 +448,7 @@ class HlcModule {
 	static inline final FILE_SIZE = 600000;
 
 	/** Each function's file: the Haxe source most of its rows come from, so functions group by module. */
-	function sourceFiles(bodies:Array<compiler.ir.IrBody>):Array<String> {
+	function sourceFiles(bodies:Array<compiler.ir.model.IrBody>):Array<String> {
 		var paths:Array<String> = [];
 		for (body in bodies) {
 			var counts:Map<String, Int> = [], best = "", bestCount = 0;

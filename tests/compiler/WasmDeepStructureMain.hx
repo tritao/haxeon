@@ -1,9 +1,9 @@
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import sys.io.File;
 import sys.io.Process;
 

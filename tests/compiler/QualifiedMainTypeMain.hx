@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 class QualifiedMainTypeMain {
 	static function main():Void {

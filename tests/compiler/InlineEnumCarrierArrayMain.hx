@@ -1,11 +1,11 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrValueLaneReference;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.passes.values.IrValueLaneReference;
 /** Internal packet storage only: public source enum array descriptors are not activated. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumCarrierArrayMain {
 	static function tempRoot():String {
 		var root = Sys.getEnv("TMPDIR");
@@ -34,10 +34,11 @@ class InlineEnumCarrierArrayMain {
 				{name: "reference0", type: IrValueLaneReference.type()}
 			]
 		};
-		var table = compiler.ir.IrObjectTable.of([owner.name => owner, packet.name => packet]),
+		var table = compiler.ir.model.IrObjectTable.of([owner.name => owner, packet.name => packet]),
 			type:IrType = Obj(packet.name),
 			arrayType:IrType = Array(type);
-		var factory = new compiler.ir.IrValueArrayFactory(table, type, target == HashLink ? 64 : 32, target, 0),
+		var factory = new compiler.ir.passes.arrays.IrValueArrayFactory(table, type, target == HashLink ? 64 : 32,
+			target, 0),
 			helpers = factory.helpers;
 		var prepare = new IrBuilder(), reference = prepare.newObject("Owner"), shape = factory.layout.lanes;
 		var array = prepare.call(factory.natives()[0].name, [
@@ -73,13 +74,14 @@ class InlineEnumCarrierArrayMain {
 		p.staticFields = [{name: "array", type: arrayType}, {name: "owner", type: Obj("Owner")}];
 		p.functions = [
 			new IrFunction("prepare", prepare.arguments, Void, prepare.blocks, Ordinary, null, false,
-				compiler.ir.IrFunction.IrRetention.Expose),
+				compiler.ir.model.IrFunction.IrRetention.Expose),
 			new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)
 		].concat(helpers.functions());
 		p.natives = factory.natives().concat(helpers.natives());
-		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.inlining.IrInliner.run(p, new compiler.ir.passes.inlining.IrInliner.IrInlineCache(),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var entry = new IrBuilder(), captures:Array<{path:String, count:Int}>= [];
 		entry.call("prepare", [], Void);
 		var result = entry.call("main", [], I32);

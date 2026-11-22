@@ -5,8 +5,8 @@ import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.persistence.HlTypeDefStateCodec;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.model.Ir.IrType;
 import runtime.PatchSet;
 import runtime.Runtime;
 

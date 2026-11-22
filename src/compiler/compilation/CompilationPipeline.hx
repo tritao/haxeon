@@ -4,7 +4,7 @@ import compiler.Compiler.CompileResult;
 import compiler.core.AllocationMeter;
 import compiler.core.CancellationToken;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrType;
 import compiler.modules.ModuleState;
 import compiler.types.TypeRegistry;
 import compiler.types.Typer;

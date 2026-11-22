@@ -1,9 +1,9 @@
 import compiler.Compiler;
 import compiler.backend.wasm.WasmScalarAbi;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.verify.IrVerifier;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 

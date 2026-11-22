@@ -1,8 +1,8 @@
 package compiler.hl.incremental;
 
-import compiler.ir.Ir.IrNative;
-import compiler.ir.IrFunctionMemo;
-import compiler.ir.IrReachability.IrTrimSummary;
+import compiler.ir.analysis.IrReachability.IrTrimSummary;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.reuse.IrFunctionMemo;
 
 /**
  * What the whole-program steps around HashLink lowering work out from each function alone, kept while the function is the same

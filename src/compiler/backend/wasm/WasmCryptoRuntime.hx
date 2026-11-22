@@ -2,7 +2,7 @@ package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 
 /** Object-model-neutral C kernels linked through the existing C ABI, on both browser backends. */
 class WasmCryptoRuntime {

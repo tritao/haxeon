@@ -1,6 +1,6 @@
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** Folding a checked abstract constant must retain its semantic type without opening the abstract to raw values. */
 class InlineEnumAbstractConstantMain {

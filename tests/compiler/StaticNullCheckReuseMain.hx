@@ -1,11 +1,11 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrStaticNullChecks;
-import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.nullability.IrStaticNullChecks;
+import compiler.ir.passes.nullability.IrStaticNullChecks.IrStaticCheckCache;
 
 /** The static null-check pass must give an unchanged function the same object every compile, and the same result as a pass with no cache. */
 class StaticNullCheckReuseMain {
@@ -116,7 +116,8 @@ class StaticNullCheckReuseMain {
 		var b = new IrBuilder(), dst = new IrValue(100, "dst", Obj("Box")), src = new IrValue(101, "src", Obj("Box"));
 		b.blocks[0].instructions.push(new Located(GlobalGet(dst, "S.dst"), SourceProvenance.generated("test")));
 		b.blocks[0].instructions.push(new Located(GlobalGet(src, "S.src"), SourceProvenance.generated("test")));
-		b.call(compiler.ir.IrOptionalFieldStorage.copyName("Box", "v", "Box", "v"), [dst, src], Void);
+		b.call(compiler.ir.passes.nullability.IrOptionalFieldStorage.copyName("Box", "v", "Box", "v"), [dst, src],
+			Void);
 		b.returnValue(b.constVoid());
 		var init = new IrFunction("__init", [], Void, b.blocks, Ordinary),
 			checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");

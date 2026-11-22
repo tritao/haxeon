@@ -6,8 +6,8 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmReflectionTable;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrProgram;
 
 /**
  * Wasm GC's side of field reflection over object layouts: the table (see WasmReflectionTable) in an immutable i32 array

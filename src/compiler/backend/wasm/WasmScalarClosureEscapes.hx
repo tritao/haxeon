@@ -1,14 +1,14 @@
 package compiler.backend.wasm;
-import compiler.ir.IrSymbol;
+import compiler.ir.model.IrSymbol;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrCheckedDynamicCasts;
-import compiler.ir.IrFunction;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrValueInterfaceBoxes;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.objects.IrCheckedDynamicCasts;
+import compiler.ir.passes.values.IrValueInterfaceBoxes;
 
 /** Adapts scalar closures only at Dynamic and exported host boundaries. */
 class WasmScalarClosureEscapes {
@@ -83,7 +83,7 @@ class WasmScalarClosureEscapes {
 		result.parameterDefaults = program.parameterDefaults;
 		result.positionalPlaces = program.positionalPlaces;
 		result.positionalSources = program.positionalSources;
-		compiler.ir.IrEnumTagLowering.escapes(result);
+		compiler.ir.passes.enums.IrEnumTagLowering.escapes(result);
 		return result;
 	}
 

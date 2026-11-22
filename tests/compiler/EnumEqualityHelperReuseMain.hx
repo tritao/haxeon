@@ -3,7 +3,7 @@ import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlBackend;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 

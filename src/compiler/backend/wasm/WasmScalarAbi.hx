@@ -1,17 +1,17 @@
 package compiler.backend.wasm;
-import compiler.ir.IrSymbol;
+import compiler.ir.model.IrSymbol;
 
 import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
-import compiler.ir.IrProgramIndex;
-import compiler.ir.IrReachability;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.analysis.IrReachability;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOperands;
+import compiler.ir.model.IrProgramIndex;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.verify.IrVerifier;
 
 /** Source signature retained while a direct function uses scalar Wasm parameters and results. */
 typedef WasmScalarSignature = {
@@ -89,7 +89,7 @@ class WasmScalarAbi {
 				default:
 			}
 		for (fn in program.functions) {
-			var declared = compiler.ir.IrScalarAbiEligibility.permits(fn.kind, true)
+			var declared = compiler.ir.passes.scalars.IrScalarAbiEligibility.permits(fn.kind, true)
 				&& !instanceMethods.exists(fn.name);
 			if (!declared)
 				continue;
@@ -1278,7 +1278,7 @@ class WasmScalarAbi {
 	}
 
 	function readLeaf(instructions:Array<Located<IrInstruction>>, root:IrValue, path:Array<String>,
-			provenance:compiler.ir.SourceProvenance,
+			provenance:compiler.ir.model.SourceProvenance,
 			next:Int):{
 				value:IrValue,
 				next:Int
@@ -1294,7 +1294,7 @@ class WasmScalarAbi {
 	}
 
 	function writeLeaf(instructions:Array<Located<IrInstruction>>, root:IrValue, path:Array<String>, value:IrValue,
-			provenance:compiler.ir.SourceProvenance,
+			provenance:compiler.ir.model.SourceProvenance,
 			next:Int):Int {
 		var current = root;
 		for (index in 0...path.length) {

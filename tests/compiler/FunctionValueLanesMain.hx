@@ -1,11 +1,11 @@
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueArrayAccess;
-import compiler.ir.IrValueArrayFactory;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.arrays.IrValueArrayAccess;
+import compiler.ir.passes.arrays.IrValueArrayFactory;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Independently resolved callback signatures address the same inline value slots. */
 class FunctionValueLanesMain {
@@ -47,7 +47,7 @@ class FunctionValueLanesMain {
 			for (native in factory.natives().concat(factory.helpers.natives()).concat(access.natives()))
 				natives.set(native.name, native);
 			program.natives = [for (native in natives) native];
-			compiler.ir.IrVerifier.verify(program);
+			compiler.ir.verify.IrVerifier.verify(program);
 			if (target == HashLink) {
 				var wrapper = new IrBuilder(), result = wrapper.call("main", [], I32);
 				wrapper.call("exit", [result], Void);

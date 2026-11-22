@@ -1,7 +1,7 @@
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction.IrFunctionKind;
-import compiler.ir.IrScalarAbiEligibility;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction.IrFunctionKind;
+import compiler.ir.passes.scalars.IrScalarAbiEligibility;
 import sys.io.File;
 
 /** Scalar ABI selection is a declared role, not a property of a linkage name. */
@@ -16,18 +16,18 @@ class ScalarAbiEligibilityMain {
 			Ordinary,
 			GenericSpecialization,
 			SourceLambda,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Equals),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Hash),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.KeyPath),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Equals),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Hash),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.KeyPath),
 			IterationAdapter,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InlineEnumHelper),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.TypedInterfaceEntry),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InterfaceUnbox),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.MethodReference),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InlineEnumHelper),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.TypedInterfaceEntry),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InterfaceUnbox),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.MethodReference),
 			OptionalScalar(null),
 			OptionalScalar("original"),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.OptionalBox),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.ValueArrayElement)
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.OptionalBox),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.ValueArrayElement)
 		]) check(kind, true, true);
 		for (kind in [NullableScalarArguments, WasmClosureRestore]) check(kind, false, true);
 		for (kind in [GeneratedHelper, ScalarArguments]) check(kind, false, false);

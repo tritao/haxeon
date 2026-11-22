@@ -1,7 +1,7 @@
 package compiler.hl.incremental;
 
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrReachability;
+import compiler.ir.analysis.IrReachability;
+import compiler.ir.model.Ir.IrProgram;
 
 /**
  * A plain HashLink build, which no running module addresses by slot or stable id: it writes only what the entry reaches, from a

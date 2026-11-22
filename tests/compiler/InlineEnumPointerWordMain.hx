@@ -1,13 +1,13 @@
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumWordAccess;
-import compiler.ir.IrScalarWordBits;
-import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.enums.IrInlineEnumWordAccess;
+import compiler.ir.passes.scalars.IrScalarWordBits;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneSlot;
 
 /** Physical pointer/type-ID words are never managed-reference casts or Dynamic boxes. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumPointerWordMain {
 	static function tempRoot():String {
 		var root = Sys.getEnv("TMPDIR");
@@ -110,10 +110,10 @@ class InlineEnumPointerWordMain {
 			}]}];
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		p.natives = IrInlineEnumWordAccess.natives();
-		var table = compiler.ir.IrObjectTable.of([for (o in p.objects) o.name => o]);
+		var table = compiler.ir.model.IrObjectTable.of([for (o in p.objects) o.name => o]);
 		p.functions = [
 			for (fn in p.functions)
-				compiler.ir.IrScalarReplacement.rewrite(fn, table, false)
+				compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, table, false)
 		];
 		var entry = new IrBuilder(),
 			warm = entry.call("main", [], I32),
@@ -171,7 +171,7 @@ class InlineEnumPointerWordMain {
 		entry.returnValue(entry.constVoid());
 		p.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 		p.entryPoint = target == HashLink ? "entry" : "main";
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 			target: target,
 			debugNames: true

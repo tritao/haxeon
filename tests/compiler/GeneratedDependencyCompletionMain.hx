@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 

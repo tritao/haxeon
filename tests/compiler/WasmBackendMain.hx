@@ -29,20 +29,20 @@ import compiler.hl.HlBackend;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.lower.HlLower;
-import compiler.ir.Ir.IrBlock;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrReachability;
-import compiler.ir.IrSymbol;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.analysis.IrReachability;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.ir.model.Ir.IrBlock;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrTerminator;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.tools.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -118,8 +118,8 @@ class WasmBackendMain {
 					for (located in block.instructions)
 						switch located.value {
 							case ValueInit(out)
-								if (StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type),
-								compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+								if (StringTools.startsWith(compiler.ir.model.IrTypeTools.valueObjectName(out.type),
+								compiler.ir.passes.nullability.IrOptionalScalarFlow.WRAPPER)):
 								if (locals.get(out) == null)
 									throw "optional value place still allocates in the Wasm GC scalar clone";
 							default:
@@ -154,9 +154,9 @@ class WasmBackendMain {
 					for (located in block.instructions)
 						switch located.value {
 							case ValueInit(out)
-								if (compiler.ir.IrTypeTools.valueObjectName(out.type) == "V"
-								|| StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type),
-								compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+								if (compiler.ir.model.IrTypeTools.valueObjectName(out.type) == "V"
+								|| StringTools.startsWith(compiler.ir.model.IrTypeTools.valueObjectName(out.type),
+								compiler.ir.passes.nullability.IrOptionalScalarFlow.WRAPPER)):
 								if (locals.get(out) == null)
 									throw "nullable value equality still allocates on Wasm GC";
 							default:
@@ -193,7 +193,7 @@ class WasmBackendMain {
 			throw "A field-only value copy should have a flat Wasm GC layout";
 		var copyLayout = new compiler.backend.wasm.WasmValueLayout(flatCopies),
 			flatPlan = new WasmGcTypePlan(flatCopies, true),
-			copyObjects = compiler.ir.IrObjectTable.of([for (object in flatCopies.objects)
+			copyObjects = compiler.ir.model.IrObjectTable.of([for (object in flatCopies.objects)
 				object.name => {
 					name:object.name,
 						isValue:object.isValue,
@@ -209,7 +209,7 @@ class WasmBackendMain {
 		for (fn in flatCopies.functions)
 			if (fn.name == "work") {
 				foundCopyWork = true;
-				var lowered = compiler.ir.IrScalarReplacement.rewrite(fn, copyObjects, true);
+				var lowered = compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, copyObjects, true);
 				for (block in lowered.blocks)
 					for (located in block.instructions)
 						switch located.value {
@@ -230,7 +230,7 @@ class WasmBackendMain {
 		}
 		deep.returnValue(deep.fieldGet(deepValue, "x", I32));
 		var deepFunction = new IrFunction("deep-value-flow", deep.arguments, I32, deep.blocks, Ordinary),
-			deepResult = compiler.ir.IrScalarReplacement.rewrite(deepFunction, copyObjects, true);
+			deepResult = compiler.ir.passes.scalars.IrScalarReplacement.rewrite(deepFunction, copyObjects, true);
 		for (block in deepResult.blocks)
 			for (located in block.instructions)
 				switch located.value {
@@ -245,7 +245,7 @@ class WasmBackendMain {
 					for (located in block.instructions)
 						switch located.value {
 							case FieldGet(_, _,
-								name) if (name == compiler.ir.IrReceiverCheck.CHECK_FIELD):
+								name) if (name == compiler.ir.names.IrReceiverCheck.CHECK_FIELD):
 								holderChecks++;
 							case FieldGet(_, _, _):
 								fieldReads++;
@@ -352,7 +352,7 @@ class WasmBackendMain {
 		var intrinsicCompiler = new Compiler(null, CompilerIntrinsics.configuration());
 		intrinsicCompiler.update("Main.hx", "function main():Int { var text = \"value=\" + 42; return text.length; }");
 		var intrinsicProgram = intrinsicCompiler.compile("Main").ir;
-		var intrinsicNative:Null<compiler.ir.Ir.IrNative> = null;
+		var intrinsicNative:Null<compiler.ir.model.Ir.IrNative> = null;
 		for (native in intrinsicProgram.natives)
 			if (native.name == "__std_string")
 				intrinsicNative = native;
@@ -363,7 +363,7 @@ class WasmBackendMain {
 			|| intrinsicNative.generatedFunctionDependencies[1] != "Std.arrayString")
 			throw "Core native metadata must describe functions generated by backend lowering";
 		var intrinsicRoundTrip = CanonicalIrCodec.decode(CanonicalIrCodec.encode(intrinsicProgram));
-		var roundTripNative:Null<compiler.ir.Ir.IrNative> = null;
+		var roundTripNative:Null<compiler.ir.model.Ir.IrNative> = null;
 		for (native in intrinsicRoundTrip.natives)
 			if (native.name == "__std_string")
 				roundTripNative = native;

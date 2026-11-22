@@ -1,6 +1,6 @@
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** A loop condition proves facts about its variables for the body, until the body reassigns them. */
 class LoopNarrowingMain {

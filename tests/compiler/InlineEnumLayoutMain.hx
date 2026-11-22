@@ -1,9 +1,9 @@
-import compiler.ir.Ir;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueLaneLayout;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.passes.values.IrValueLaneLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.verify.IrVerifier;
 
 /** Representation decisions must agree across targets, even where pointers and scalar words differ. */
 class InlineEnumLayoutMain {

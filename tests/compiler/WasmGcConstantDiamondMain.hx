@@ -1,8 +1,8 @@
 import compiler.backend.wasm.WasmBackend;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.verify.IrVerifier;
 
 /** Constant diamonds preserve Boolean normalization and extra-predecessor fallback. */
 class WasmGcConstantDiamondMain {

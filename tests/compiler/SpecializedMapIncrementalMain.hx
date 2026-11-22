@@ -28,7 +28,7 @@ class SpecializedMapIncrementalMain {
 		Sys.println("PASS: specialized map type dependencies and incremental pruning");
 	}
 
-	static function assertOwner(program:compiler.ir.Ir.IrProgram, expected:Bool):Void {
+	static function assertOwner(program:compiler.ir.model.Ir.IrProgram, expected:Bool):Void {
 		var found = false;
 		for (object in program.objects) {
 			if (StringTools.startsWith(object.name, "__haxeon_hashable_map_")) throw "old generated map object remains";

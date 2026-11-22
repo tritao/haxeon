@@ -1,9 +1,9 @@
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
-import compiler.ir.IrVerifyMemo;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.verify.IrVerifier;
+import compiler.ir.verify.IrVerifyMemo;
 
 /**
  * Verification that reuses an earlier build's acceptance of a function is as strict as verifying it again. `f` calls `g(1)`; the same `f`

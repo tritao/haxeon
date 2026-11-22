@@ -5,13 +5,13 @@ import compiler.core.InternalError;
 import compiler.hl.HlType;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.hl.lower.HlLower;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBody;
-import compiler.ir.IrBodyGraph;
-import compiler.ir.IrOpcode;
-import compiler.ir.IrPassScratch.IrNonNullScratch;
-import compiler.ir.IrPassScratch.IrValueMarks;
-import compiler.ir.IrValueId;
+import compiler.ir.cfg.IrBodyGraph;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBody;
+import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrPassScratch.IrNonNullScratch;
+import compiler.ir.model.IrPassScratch.IrValueMarks;
+import compiler.ir.model.IrValueId;
 
 /** An IR construct the C backend does not lower yet: the compile stops with what and where (docs/design/AOT_BACKEND.md). */
 class HlcUnsupported extends InternalError {}
@@ -56,7 +56,7 @@ class HlcFunctionLower {
 	final provenInRange:Map<String, Bool> = [];
 
 	/** The loops' proofs of array indices in range (`IrLoopBounds`), made when an access first asks. */
-	var loopBounds:Null<compiler.ir.IrLoopBounds> = null;
+	var loopBounds:Null<compiler.ir.analysis.IrLoopBounds> = null;
 
 	/** The block being lowered, by id. */
 	var currentBlock = -1;
@@ -81,7 +81,7 @@ class HlcFunctionLower {
 		lastPath = "";
 		directive = "";
 		linesSinceDirective = 0;
-		nonNull = compiler.ir.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch);
+		nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch);
 		var limit = body.valueLimit();
 		valueTypes.resize(0);
 		nullValues.resize(0);
@@ -238,8 +238,8 @@ class HlcFunctionLower {
 
 	/** The runtime call `name` is, or is the shared helper of (`IrSharedRuntimeCalls`). */
 	static function fastPathBase(name:String):String {
-		var suffix = name.indexOf(compiler.ir.IrSharedRuntimeCalls.SUFFIX);
-		return suffix > 0 && compiler.ir.IrSharedRuntimeCalls.isHelper(name) ? name.substr(0, suffix) : name;
+		var suffix = name.indexOf(compiler.hl.IrSharedRuntimeCalls.SUFFIX);
+		return suffix > 0 && compiler.hl.IrSharedRuntimeCalls.isHelper(name) ? name.substr(0, suffix) : name;
 	}
 
 	/**
@@ -712,14 +712,14 @@ class HlcFunctionLower {
 		};
 
 	/** The native storage of an integer field (`HlLower.internNativeStorage` has one only for those), or null. */
-	function integerStorage(type:IrType, name:String, fieldType:Int):Null<compiler.ir.Ir.IrScalarStorage>
+	function integerStorage(type:IrType, name:String, fieldType:Int):Null<compiler.ir.model.Ir.IrScalarStorage>
 		return switch types.kind(fieldType) {
 			case Ui8, Ui16, I32, I64: module.fieldStorage(type, name);
 			default: null;
 		};
 
 	/** The C integer type of a native storage width and signedness. */
-	static function storageType(storage:compiler.ir.Ir.IrScalarStorage):String
+	static function storageType(storage:compiler.ir.model.Ir.IrScalarStorage):String
 		return switch storage.size {
 			case 1: storage.signed ? "signed char" : "unsigned char";
 			case 2: storage.signed ? "short" : "unsigned short";
@@ -741,14 +741,14 @@ class HlcFunctionLower {
 		var bounds = loopBounds;
 		if (bounds == null) {
 			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new compiler.ir.IrLoopBounds(body.toFunction(), noPureCalls);
+			bounds = new compiler.ir.analysis.IrLoopBounds(body.toFunction(), noPureCalls);
 			loopBounds = bounds;
 		}
 		return bounds.proven(valueOf(array), valueOf(index), currentBlock);
 	}
 
-	function valueOf(value:IrValueId):compiler.ir.Ir.IrValue
-		return new compiler.ir.Ir.IrValue(value, body.valueName(value), body.valueType(value));
+	function valueOf(value:IrValueId):compiler.ir.model.Ir.IrValue
+		return new compiler.ir.model.Ir.IrValue(value, body.valueName(value), body.valueType(value));
 
 	function requireArray(array:IrValueId):Void
 		if (types.kind(typeOf(array)) != HlType.Array)
@@ -910,28 +910,28 @@ class HlcFunctionLower {
 	function lowerCall(row:Int):Void {
 		var name = body.symbol(row).name, output = body.output(row);
 		switch name {
-			case compiler.ir.IrReceiverCheck.NAME:
+			case compiler.ir.names.IrReceiverCheck.NAME:
 				nullCheck(row, body.operand(row, 0));
 				return;
-			case compiler.ir.IrReferenceIdentity.NAME:
+			case compiler.ir.names.IrReferenceIdentity.NAME:
 				line('${v(output)} = (void*)${v(body.operand(row, 0))} == (void*)${v(body.operand(row, 1))};');
 				return;
-			case compiler.ir.IrExactTypeFacts.TEST:
+			case compiler.ir.analysis.IrExactTypeFacts.TEST:
 				var object = v(body.operand(row, 0));
 				line('${v(output)} = ($object ? ((vdynamic*)$object)->t : &hlt_void) == ${v(body.operand(row, 1))};');
 				return;
-			case compiler.ir.IrScalarWordBits.PACK, compiler.ir.IrScalarWordBits.UNPACK,
-				compiler.ir.IrValueLaneReference.PACK,
-				compiler.ir.IrValueLaneReference.UNPACK:
+			case compiler.ir.passes.scalars.IrScalarWordBits.PACK, compiler.ir.passes.scalars.IrScalarWordBits.UNPACK,
+				compiler.ir.passes.values.IrValueLaneReference.PACK,
+				compiler.ir.passes.values.IrValueLaneReference.UNPACK:
 				line('${v(output)} = (${types.cType(typeOf(output))})${v(body.operand(row, 0))};');
 				return;
-			case compiler.ir.IrHlScalarRef.ADDRESS:
+			case compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS:
 				line('${v(output)} = (${types.cType(typeOf(output))})&${v(body.operand(row, 0))};');
 				return;
-			case compiler.ir.IrHlScalarRef.LOAD:
+			case compiler.ir.passes.scalars.IrHlScalarRef.LOAD:
 				assign(row, '*${v(body.operand(row, 0))}', types.parameter(typeOf(body.operand(row, 0))));
 				return;
-			case compiler.ir.IrHlScalarRef.STORE:
+			case compiler.ir.passes.scalars.IrHlScalarRef.STORE:
 				var reference = body.operand(row, 0), element = types.parameter(typeOf(reference));
 				store('*${v(reference)}', operandAs(row, 1, element), element);
 				return;

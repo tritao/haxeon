@@ -1,16 +1,16 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.IrProgramIndex;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.Ir.IrBlock;
-import compiler.ir.IrFunction;
-import compiler.ir.IrSwitch;
+import compiler.ir.model.IrProgramIndex;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrTerminator;
+import compiler.ir.model.Ir.IrBlock;
+import compiler.ir.model.IrFunction;
+import compiler.ir.cfg.IrSwitch;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.gc.WasmGcMaps;
@@ -103,13 +103,13 @@ private class StructuredEmission {
 
 class WasmFunctionLower {
 	final context:WasmFunctionLowerContext;
-	final nonNull:compiler.ir.IrNonNullFacts;
+	final nonNull:compiler.ir.analysis.IrNonNullFacts;
 	final nullValues:Map<Int, Bool> = [];
-	var diamondGraph:Null<compiler.ir.IrGraph>;
+	var diamondGraph:Null<compiler.ir.cfg.IrGraph>;
 
 	function new(context:WasmFunctionLowerContext) {
 		this.context = context;
-		this.nonNull = new compiler.ir.IrNonNullFacts(context.irFunction);
+		this.nonNull = new compiler.ir.analysis.IrNonNullFacts(context.irFunction);
 		for (block in context.irFunction.blocks) for (instruction in block.instructions) switch instruction.value {
 			case ConstNull(output):
 				nullValues.set(output.id, true);
@@ -514,7 +514,7 @@ class WasmFunctionLower {
 					true;
 				default:
 					false;
-			})): if (diamondGraph == null) diamondGraph = new compiler.ir.IrGraph(context.irFunction);
+			})): if (diamondGraph == null) diamondGraph = new compiler.ir.cfg.IrGraph(context.irFunction);
 			var graph = diamondGraph;
 			var first = graph.block(inputs[0].block), second = graph.block(inputs[1].block);
 			if (graph.predecessorCount(block.id) != 2 || graph.predecessorCount(first.id) != 1
@@ -1164,7 +1164,7 @@ class WasmFunctionLower {
 					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case CallClosure(output, closure, arguments):
-				var typeInfo = closureTypes.get(compiler.ir.IrTypeIdentity.text(closure.type));
+				var typeInfo = closureTypes.get(compiler.ir.model.IrTypeIdentity.text(closure.type));
 				if (typeInfo == null)
 					throw new InternalError('Wasm closure type ${Std.string(closure.type)} has no indirect signature');
 				var model = context.representation.model;
@@ -1566,10 +1566,11 @@ class WasmFunctionLower {
 				emit(body, context.representation.aggregates.newObject(typeName, requiredLocal(values, output.id)));
 			case ValueInit(output):
 				emit(body,
-					context.representation.aggregates.newObject(compiler.ir.IrTypeTools.valueObjectName(output.type),
+					context.representation.aggregates
+					.newObject(compiler.ir.model.IrTypeTools.valueObjectName(output.type),
 					requiredLocal(values, output.id)));
 			case FieldGet(output,
-				object, fieldName) if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD):
+				object, fieldName) if (fieldName == compiler.ir.names.IrReceiverCheck.CHECK_FIELD):
 				var check:Array<WasmInstruction> = [
 					LocalGet(requiredLocal(values, object.id)),
 					context.representation.model.nullTest(object.type),
@@ -1903,12 +1904,12 @@ class WasmFunctionLower {
 						return;
 					}
 				}
-				if (name.name == compiler.ir.IrReferenceIdentity.NAME) {
+				if (name.name == compiler.ir.names.IrReferenceIdentity.NAME) {
 					emit(body, model.referenceIdentity([for (argument in arguments) requiredLocal(values, argument.id)],
 						requiredLocal(values, output.id)));
 					return;
 				}
-				if (name.name == compiler.ir.IrReceiverCheck.NAME) {
+				if (name.name == compiler.ir.names.IrReceiverCheck.NAME) {
 					var check:Array<WasmInstruction> = [
 						LocalGet(requiredLocal(values, arguments[0].id)),
 						model.nullTest(arguments[0].type),
@@ -1917,8 +1918,8 @@ class WasmFunctionLower {
 					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
-				if (compiler.ir.IrScalarWordBits.matches(name.name)) {
-					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name.name,
+				if (compiler.ir.passes.scalars.IrScalarWordBits.matches(name.name)) {
+					if (arguments.length != 1 || !compiler.ir.passes.scalars.IrScalarWordBits.valid(name.name,
 						arguments[0].type, output.type))
 						throw new InternalError("Invalid scalar word transport signature");
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
@@ -1932,16 +1933,17 @@ class WasmFunctionLower {
 							true;
 						default:
 							false;
-					}))) body.push(name.name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
+					}))) body.push(name.name == compiler.ir.passes.scalars.IrScalarWordBits.PACK
+						? I64ExtendI32U : I32WrapI64);
 					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
-				if (name.name == compiler.ir.IrValueLaneReference.PACK
-					|| name.name == compiler.ir.IrValueLaneReference.UNPACK) {
+				if (name.name == compiler.ir.passes.values.IrValueLaneReference.PACK
+					|| name.name == compiler.ir.passes.values.IrValueLaneReference.UNPACK) {
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
-					emit(body, model.referenceLane(name.name == compiler.ir.IrValueLaneReference.PACK
+					emit(body, model.referenceLane(name.name == compiler.ir.passes.values.IrValueLaneReference.PACK
 						? arguments[0].type : output.type,
-						name.name == compiler.ir.IrValueLaneReference.UNPACK));
+						name.name == compiler.ir.passes.values.IrValueLaneReference.UNPACK));
 					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
@@ -2454,7 +2456,7 @@ class WasmFunctionLower {
 	 */
 	function adaptInterfaceValue(sourceType:IrType,
 			targetType:IrType, source:Int, allocator:Int, dispatchDepth:Int):Array<WasmInstruction> {
-		if (compiler.ir.IrVerifier.sameType(sourceType, targetType)) return [LocalGet(source)];
+		if (compiler.ir.verify.IrVerifier.sameType(sourceType, targetType)) return [LocalGet(source)];
 		if (isBoxedPrimitive(sourceType) && (switch (targetType) {
 			case Dyn:
 				true;

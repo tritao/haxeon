@@ -9,7 +9,7 @@ import compiler.compilation.BackendSession.BackendTimings;
 import compiler.core.AllocationMeter;
 import compiler.core.CancellationToken;
 import compiler.hl.incremental.HlPlainBuild;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 
 /**
  * The C backend of a compilation session (`--target=hlc`, docs/design/AOT_BACKEND.md). A build assembles the program as a

@@ -2,7 +2,7 @@ using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
-import compiler.ir.IrInliner;
+import compiler.ir.passes.inlining.IrInliner;
 import runtime.PatchSet;
 import runtime.Runtime;
 

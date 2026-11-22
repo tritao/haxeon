@@ -1,9 +1,9 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.verify.IrVerifier;
 
 /** A missed physical rewrite must fail even when it occurs in an unselected cached body. */
 class InlineEnumInvariantMain {

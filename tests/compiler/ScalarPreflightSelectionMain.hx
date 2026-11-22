@@ -1,11 +1,11 @@
 import compiler.core.AllocationMeter;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrNullableScalarFlow;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrScalarReplacement;
-import compiler.ir.IrValuePhiScalarization;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.nullability.IrNullableScalarFlow;
+import compiler.ir.passes.scalars.IrScalarReplacement;
+import compiler.ir.passes.values.IrValuePhiScalarization;
 
 /** A value declaration must not make unrelated scalar CFGs pay for value analyses. */
 class ScalarPreflightSelectionMain {
@@ -50,7 +50,7 @@ class ScalarPreflightSelectionMain {
 			for (i in 0...original.length)
 				if (program.functions[i] != original[i])
 					throw "Unrelated function identity changed";
-			compiler.ir.IrVerifier.verify(program);
+			compiler.ir.verify.IrVerifier.verify(program);
 		}
 		Sys.println("PASS: scalar analyses skip unrelated CFGs without changing their IR or identity");
 	}

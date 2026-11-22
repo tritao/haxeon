@@ -4,7 +4,7 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNative;
 
 /** One scalar of the C signature descriptor, and how it moves between a register and memory. */
 class WasmCScalar {

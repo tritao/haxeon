@@ -4,9 +4,9 @@ import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneRuntime;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.values.IrValueLaneRuntime;
 
 /** Link the portable lane policy before the representation-specific storage and Dynamic array paths. */
 class WasmValueLaneRuntime {

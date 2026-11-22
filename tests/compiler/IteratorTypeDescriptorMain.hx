@@ -1,13 +1,13 @@
 import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 import sys.io.File;
 
 /** The Wasm iterator header retains its semantic element type without another allocation. */
@@ -109,7 +109,7 @@ class IteratorTypeDescriptorMain {
 			},
 			// The erased-owner accessors test exact classes first (GenericOwnerErasure); the assembler declares it in a build.
 			{
-				name: compiler.ir.IrExactTypeFacts.TEST,
+				name: compiler.ir.analysis.IrExactTypeFacts.TEST,
 				library: "haxeon_runtime",
 				symbol: "__std_is_exact_type",
 				arguments: [Dyn, TypeRef],
@@ -157,7 +157,8 @@ class IteratorTypeDescriptorMain {
 		write.select(after);
 		write.returnValue(write.constInt(1));
 		program.functions.push(new IrFunction("erasedWrite", [], I32, write.blocks, Ordinary));
-		compiler.ir.GenericOwnerErasure.generate(compiler.ir.ProgramFacts.empty(), program.functions, program.objects);
+		compiler.ir.passes.objects.GenericOwnerErasure.generate(compiler.ir.pipeline.ProgramFacts.empty(),
+			program.functions, program.objects);
 		IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42) throw "interpreter lost an iterator element type";
 		if (new IrInterpreter(program).run("erasedWrite") != 42)
@@ -231,18 +232,21 @@ class IteratorTypeDescriptorMain {
 					arguments: [Dyn, TypeRef],
 					result: Bool
 				});
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(program, 32, target == Wasm32 ? Wasm32 : WasmGc);
-			compiler.ir.IrValueConstructors.rewrite(program);
-			compiler.ir.IrValuePhiScalarization.rewrite(program);
-			compiler.ir.IrScalarArguments.rewrite(program, true);
-			compiler.ir.IrValuePhiScalarization.rewrite(program);
-			var objects = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
-			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects,
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(program, 32,
+				target == Wasm32 ? Wasm32 : WasmGc);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(program);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+			compiler.ir.passes.scalars.IrScalarArguments.rewrite(program, true);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+			var objects = compiler.ir.model.IrObjectTable.of([for (object in program.objects) object.name => object]);
+			program.functions =
+				[for (fn in program.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects,
 				false, true)];
-			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program,
-				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
+			compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(program);
+			compiler.ir.passes.inlining.IrInliner.run(program,
+				new compiler.ir.passes.inlining.IrInliner
+				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,
 				debugNames: true,
@@ -273,9 +277,10 @@ class IteratorTypeDescriptorMain {
 			runtime.addStandardLibrarySourceRoot("stdlib");
 			runtime.update("Main.hx", source);
 			var program = runtime.compile("Main").ir;
-			compiler.ir.IrInliner.run(program,
-				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
+			compiler.ir.passes.inlining.IrInliner.run(program,
+				new compiler.ir.passes.inlining.IrInliner
+				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,
 				debugNames: true,

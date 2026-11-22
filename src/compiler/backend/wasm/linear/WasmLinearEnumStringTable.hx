@@ -4,7 +4,7 @@ import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrType;
 
 private typedef LinearEnumStringCase = {
 	final name:Int;

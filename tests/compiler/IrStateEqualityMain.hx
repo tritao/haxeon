@@ -1,11 +1,11 @@
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunction.IrValueArraySlotOperation;
-import compiler.ir.IrSymbol;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.codec.IrFunctionStateEquality;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrValueArraySlotOperation;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
 
 class IrStateEqualityMain {
 	static function fn(instruction:IrInstruction, ?where:SourceProvenance):IrFunction {
@@ -57,21 +57,21 @@ class IrStateEqualityMain {
 		for (kind in [
 			GenericSpecialization,
 			SourceLambda,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Equals),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Hash),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.KeyPath),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Equals),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Hash),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.KeyPath),
 			IterationAdapter,
 			GeneratedHelper,
 			ScalarArguments,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InlineEnumHelper),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.TypedInterfaceEntry),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InterfaceUnbox),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.MethodReference),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InlineEnumHelper),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.TypedInterfaceEntry),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InterfaceUnbox),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.MethodReference),
 			OptionalScalar(null),
 			OptionalScalar("owner.method"),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.OptionalBox),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.OptionalBox),
 			NullableScalarArguments,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.ValueArrayElement),
+			Provider(compiler.ir.model.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.ValueArrayElement),
 			WasmClosureRestore,
 			EnumEquality(true),
 			EnumEquality(false),
@@ -558,7 +558,7 @@ class IrStateEqualityMain {
 				original.debugBindings, true),
 			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary,
 				original.debugBindings, false,
-				compiler.ir.IrFunction.IrRetention.Keep),
+				compiler.ir.model.IrFunction.IrRetention.Keep),
 			fn(ConstInt(v, 42), SourceProvenance.generated("first")),
 			fn(ConstInt(v, 42), SourceProvenance.generated("second"))
 		]) {

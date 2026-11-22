@@ -1,13 +1,13 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBody;
-import compiler.ir.IrBodyBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrSymbol;
-import compiler.ir.IrTypeIds;
-import compiler.ir.IrValueId;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateEquality;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBody;
+import compiler.ir.model.IrBodyBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.model.IrTypeIds;
+import compiler.ir.model.IrValueId;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
 
 /**
  * Every instruction and terminator kind round-trips through an `IrBody`, and the body's accessors read what was encoded. The
@@ -157,7 +157,7 @@ class IrBodyMain {
 		var body = IrBodyBuilder.encode(fn, types);
 		for (row in 0...body.rowLimit())
 			opcodes.set(body.opcode(row), true);
-		for (opcode in 0...compiler.ir.IrOpcode.COUNT)
+		for (opcode in 0...compiler.ir.model.IrOpcode.COUNT)
 			if (!opcodes.exists(opcode))
 				throw 'The test covers no row with opcode $opcode';
 		expect(body.blockCount() == blocks.length, "block count");
@@ -165,11 +165,11 @@ class IrBodyMain {
 			&& body.firstRow(blocks.length - 1) == -1
 			&& body.terminatorRow(blocks.length - 1) == -1, "blocks without terminators");
 		var branch = body.terminatorRow(0);
-		expect(body.opcode(branch) == compiler.ir.IrOpcode.Branch && body.successorCount(branch) == 2
+		expect(body.opcode(branch) == compiler.ir.model.IrOpcode.Branch && body.successorCount(branch) == 2
 			&& body.successor(branch, 0) == 1
 			&& body.successor(branch, 1) == 2, "branch successors");
 		var switchRow = body.terminatorRow(6);
-		expect(body.opcode(switchRow) == compiler.ir.IrOpcode.Switch && body.successorCount(switchRow) == 4
+		expect(body.opcode(switchRow) == compiler.ir.model.IrOpcode.Switch && body.successorCount(switchRow) == 4
 			&& body.successor(switchRow, 2) == 5 && body.successor(switchRow, 3) == 6, "switch successors");
 		expect(body.definingRow(IrValueId.of(phi.id)) == 0 && body.definingRow(IrValueId.of(a.id)) == -1,
 			"defining rows");
@@ -179,7 +179,7 @@ class IrBodyMain {
 			"phi inputs");
 		var methodRow = -1, row = body.firstRow(0);
 		while (row >= 0 && methodRow < 0) {
-			if (body.opcode(row) == compiler.ir.IrOpcode.MethodCall)
+			if (body.opcode(row) == compiler.ir.model.IrOpcode.MethodCall)
 				methodRow = row;
 			row = body.nextRow(row);
 		}
@@ -216,8 +216,8 @@ class IrBodyMain {
 	 * decodes to the same function.
 	 */
 	static function editsSoundly(what:String, fn:IrFunction,
-			bodyPass:(IrBody, compiler.ir.IrPassScratch) -> Bool):IrFunction {
-		var scratch = new compiler.ir.IrPassScratch(), body = IrBodyBuilder.encode(fn, new IrTypeIds());
+			bodyPass:(IrBody, compiler.ir.model.IrPassScratch) -> Bool):IrFunction {
+		var scratch = new compiler.ir.model.IrPassScratch(), body = IrBodyBuilder.encode(fn, new IrTypeIds());
 		if (!bodyPass(body, scratch))
 			throw 'IrBody: the $what test function must change';
 		var layout = body.layoutDifference();
@@ -242,9 +242,9 @@ class IrBodyMain {
 	 * compacts to an equal function.
 	 */
 	static function samePass(what:String, fn:IrFunction, objectPass:IrFunction->IrFunction,
-			bodyPass:(IrBody, compiler.ir.IrPassScratch) -> Bool):Void {
+			bodyPass:(IrBody, compiler.ir.model.IrPassScratch) -> Bool):Void {
 		var types = new IrTypeIds(),
-			scratch = new compiler.ir.IrPassScratch(),
+			scratch = new compiler.ir.model.IrPassScratch(),
 			body = IrBodyBuilder.encode(fn, types),
 			expected = objectPass(fn);
 		if (expected == fn || !bodyPass(body, scratch))
@@ -266,8 +266,8 @@ class IrBodyMain {
 	 * to the object result but for how values are numbered; and it gives back a function it leaves as it was as the same object.
 	 */
 	static function sameStage(what:String, fn:IrFunction, expected:IrFunction,
-			stage:(IrFunction, IrTypeIds, compiler.ir.IrPassScratch) -> IrFunction):Void {
-		var types = new IrTypeIds(), scratch = new compiler.ir.IrPassScratch();
+			stage:(IrFunction, IrTypeIds, compiler.ir.model.IrPassScratch) -> IrFunction):Void {
+		var types = new IrTypeIds(), scratch = new compiler.ir.model.IrPassScratch();
 		var result = stage(fn, types, scratch);
 		if (expected == fn || result == fn)
 			throw 'IrBody: the $what test function must change';
@@ -317,7 +317,7 @@ class IrBodyMain {
 		var where = SourceProvenance.generated("construction-test"), int = body.typeId(I32);
 		var made = body.newValue("made", int);
 		body.beginRow();
-		var row = body.endRow(compiler.ir.IrOpcode.ConstInt, made, 42, where);
+		var row = body.endRow(compiler.ir.model.IrOpcode.ConstInt, made, 42, where);
 		var first = body.firstRow(0);
 		body.linkBefore(0, body.nextRow(first), row);
 		expect(body.nextRow(first) == row && body.definingRow(made) == row && body.layoutDifference() == null,
@@ -326,7 +326,7 @@ class IrBodyMain {
 		body.beginRow();
 		body.pushOperand(made);
 		body.pushOperand(made);
-		var add = body.endRow(compiler.ir.IrOpcode.Add, sum, 0, where);
+		var add = body.endRow(compiler.ir.model.IrOpcode.Add, sum, 0, where);
 		body.linkAfter(0, row, add);
 		var values = [for (_ in 0...body.valueLimit()) -1];
 		var copiedValue = body.newValue("copied", int);
@@ -393,11 +393,11 @@ class IrBodyMain {
 	static function renumbering(body:IrBody):Void {
 		// A value made now takes the next id, above every other, though its row goes first.
 		var first = body.firstRow(0);
-		while (body.opcode(first) == compiler.ir.IrOpcode.Phi)
+		while (body.opcode(first) == compiler.ir.model.IrOpcode.Phi)
 			first = body.nextRow(first);
 		var made = body.newValue("made", body.typeId(I32));
 		body.beginRow();
-		body.linkBefore(0, first, body.endRow(compiler.ir.IrOpcode.ConstInt, made, 3, body.provenance(first)));
+		body.linkBefore(0, first, body.endRow(compiler.ir.model.IrOpcode.ConstInt, made, 3, body.provenance(first)));
 		var renumbered = IrBodyBuilder.renumbered(body), next = 0, ordered = true, named = false;
 		for (index in 0...renumbered.argumentCount())
 			ordered = ordered && (renumbered.argument(index):Int) == next++;
@@ -429,7 +429,7 @@ class IrBodyMain {
 			kept = value("kept", I32);
 		expect(instructionCount(editsSoundly("dead pure values", new IrFunction("Main.dead", [condition, x], I32, [
 			block(0, [ConstInt(dead, 1), Add(deadSum, dead, x), Add(kept, x, x)], Return(kept))
-		], Ordinary), (body, scratch) -> compiler.ir.IrDeadPureValues.runBody(body, scratch))) == 1,
+		], Ordinary), (body, scratch) -> compiler.ir.passes.cleanup.IrDeadPureValues.runBody(body, scratch))) == 1,
 			"dead pure values leave the one used");
 		editsSoundly("jump threading", new IrFunction("Main.bridges", [condition, x], I32, [
 			block(0, [], Branch(condition, 1, 2)),
@@ -437,7 +437,7 @@ class IrBodyMain {
 			block(2, [], Jump(4)),
 			block(4, [], Jump(3)),
 			block(3, [], Return(x))
-		], Ordinary), (body, scratch) -> compiler.ir.IrJumpThreading.runBody(body, scratch));
+		], Ordinary), (body, scratch) -> compiler.ir.passes.cleanup.IrJumpThreading.runBody(body, scratch));
 		var yes = value("yes", Bool),
 			no = value("no", Bool),
 			joined = value("joined", Bool),
@@ -450,13 +450,14 @@ class IrBodyMain {
 			block(3, [Phi(joined, [{block: 1, value: yes}, {block: 2, value: no}])], Branch(joined, 4, 5)),
 			block(4, [ConstInt(one, 1)], Return(one)),
 			block(5, [ConstInt(two, 2)], Return(two))
-		], Ordinary), (body, scratch) -> compiler.ir.IrJumpThreading.threadConstantBranchesBody(body, scratch));
+		], Ordinary),
+			(body, scratch) -> compiler.ir.passes.cleanup.IrJumpThreading.threadConstantBranchesBody(body, scratch));
 		var reference = value("reference", RawPtr),
 			stored = value("stored", Void),
 			loaded = value("loaded", I32),
-			address = IrSymbol.of(compiler.ir.IrHlScalarRef.ADDRESS),
-			store = IrSymbol.of(compiler.ir.IrHlScalarRef.STORE),
-			load = IrSymbol.of(compiler.ir.IrHlScalarRef.LOAD);
+			address = IrSymbol.of(compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS),
+			store = IrSymbol.of(compiler.ir.passes.scalars.IrHlScalarRef.STORE),
+			load = IrSymbol.of(compiler.ir.passes.scalars.IrHlScalarRef.LOAD);
 		expect(instructionCount(editsSoundly("scalar reference promotion", new IrFunction("Main.reference", [
 			condition,
 			x
@@ -466,12 +467,12 @@ class IrBodyMain {
 				Call(stored, store, [reference, x]),
 				Call(loaded, load, [reference])
 			], Return(loaded))
-		], Ordinary), (body, scratch) -> compiler.ir.IrScalarRefPromotion.runBody(body, scratch))) == 0,
+		], Ordinary), (body, scratch) -> compiler.ir.passes.scalars.IrScalarRefPromotion.runBody(body, scratch))) == 0,
 			"a promoted reference leaves no call");
 		var receiver = value("receiver", Obj("Point")),
 			firstCheck = value("firstCheck", Void),
 			secondCheck = value("secondCheck", Void),
-			check = IrSymbol.of(compiler.ir.IrReceiverCheck.NAME);
+			check = IrSymbol.of(compiler.ir.names.IrReceiverCheck.NAME);
 		expect(instructionCount(editsSoundly("receiver check elision", new IrFunction("Main.checks", [
 			condition,
 			x,
@@ -479,7 +480,8 @@ class IrBodyMain {
 		], I32, [
 			block(0, [Call(firstCheck, check, [receiver])], Jump(1)),
 			block(1, [Call(secondCheck, check, [receiver])], Return(x))
-		], Ordinary), (body, scratch) -> compiler.ir.IrReceiverCheckElision.runBody(body, scratch))) == 1,
+		], Ordinary), (body, scratch) -> compiler.ir.passes.cleanup.IrReceiverCheckElision.runBody(body, scratch)))
+			== 1,
 			"the second receiver check goes");
 		var point = value("point", Obj("Point")), reloaded = value("reloaded", I32);
 		expect(instructionCount(editsSoundly("load-store forwarding", new IrFunction("Main.fields", [
@@ -488,12 +490,13 @@ class IrBodyMain {
 			point
 		], I32, [
 			block(0, [FieldSet(point, "x", x), FieldGet(reloaded, point, "x")], Return(reloaded))
-		], Ordinary), (body, scratch) -> compiler.ir.IrLoadStoreForwarding.runBody(body, null, scratch))) == 1,
+		], Ordinary), (body, scratch) -> compiler.ir.passes.cleanup.IrLoadStoreForwarding.runBody(body, null, scratch)))
+			== 1,
 			"the reload is forwarded");
 		var real = value("real", F64), two = value("two", F64), half = value("half", F64);
 		editsSoundly("strength reduction", new IrFunction("Main.halve", [real], F64, [
 			block(0, [ConstFloat(two, 2.0), Div(half, real, two)], Return(half))
-		], Ordinary), (body, scratch) -> compiler.ir.IrStrengthReduction.runBody(body));
+		], Ordinary), (body, scratch) -> compiler.ir.passes.cleanup.IrStrengthReduction.runBody(body));
 		scalarReplacement();
 		copyElision();
 		var shared = value("shared", F64);
@@ -531,7 +534,7 @@ class IrBodyMain {
 	 */
 	static function scalarReplacement():Void {
 		nextId = 0;
-		var objects = compiler.ir.IrObjectTable.of([
+		var objects = compiler.ir.model.IrObjectTable.of([
 			"Point" => object("Point", true, [field("x", I32, 1), field("y", F32), field("z", I32)]),
 			"Inner" => object("Inner", true, [field("a", I32), field("b", I32)]),
 			"Outer" => object("Outer", true, [field("inner", Obj("Inner")), field("w", I32)]),
@@ -556,8 +559,8 @@ class IrBodyMain {
 			block(3, [FieldGet(readY, point, "y"), FieldGet(readZ, point, "z"), Add(sum, read, readZ)], Return(sum))
 		], Ordinary);
 		samePass("scalar replacement with phis", loop,
-			fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects, true),
-			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch, true));
+			fn -> compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects, true),
+			(body, scratch) -> compiler.ir.passes.scalars.IrScalarReplacement.runBody(body, objects, scratch, true));
 		var declinedPair = value("declinedPair", Obj("Pair")),
 			pairRead = value("pairRead", I32),
 			declined = value("declined", Obj("Outer")),
@@ -583,8 +586,9 @@ class IrBodyMain {
 			block(1, [FieldSet(declinedInner, "a", x), FieldSet(declinedPair, "x", x)], Jump(2)),
 			block(2, [FieldGet(joined, declinedInner, "a"), FieldGet(pairRead, declinedPair, "x")], Return(total))
 		], Ordinary);
-		samePass("nested scalar replacement", nested, fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects),
-			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch));
+		samePass("nested scalar replacement", nested,
+			fn -> compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects),
+			(body, scratch) -> compiler.ir.passes.scalars.IrScalarReplacement.runBody(body, objects, scratch));
 		var holder = value("holder", Obj("Holder")),
 			pair = value("pair", Obj("Pair")),
 			loose = value("loose", Obj("Loose"));
@@ -599,11 +603,13 @@ class IrBodyMain {
 			], Return(x))
 		], Ordinary);
 		samePass("construction in place", construct,
-			fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, true),
-			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch, false, true));
+			fn -> compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects, false, true),
+			(body, scratch) -> compiler.ir.passes.scalars.IrScalarReplacement.runBody(body, objects, scratch, false,
+			true));
 		sameStage("scalar replacement stage", construct,
-			compiler.ir.IrScalarReplacement.rewrite(construct, objects, false, true),
-			(fn, types, scratch) -> compiler.ir.IrScalarReplacement.rewriteBody(fn, objects, types, scratch, true));
+			compiler.ir.passes.scalars.IrScalarReplacement.rewrite(construct, objects, false, true),
+			(fn, types, scratch) -> compiler.ir.passes.scalars.IrScalarReplacement.rewriteBody(fn, objects, types,
+			scratch, true));
 	}
 
 	/** A value copy passed to a callee that only reads it is replaced by its source, and the callee is consulted. */
@@ -627,13 +633,13 @@ class IrBodyMain {
 		var fn = new IrFunction("Main.copies", [source], I32, [main], Ordinary);
 		var consulted:Array<String> = [];
 		var readerBody = IrBodyBuilder.encode(reader, new IrTypeIds());
-		expect(compiler.ir.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(fn, new IrTypeIds()))
-			&& !compiler.ir.IrCopyElision.hasCopiesBody(readerBody), "finding value copies");
+		expect(compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(fn, new IrTypeIds()))
+			&& !compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(readerBody), "finding value copies");
 		var elided = editsSoundly("copy elision", fn,
-			(body, scratch) -> compiler.ir.IrCopyElision.runBody(body,
+			(body, scratch) -> compiler.ir.passes.cleanup.IrCopyElision.runBody(body,
 			name -> name == "Main.reader" ? readerBody : null,
 			(type, method) -> null, name -> consulted.push(name), scratch));
-		expect(!compiler.ir.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(elided, new IrTypeIds()))
+		expect(!compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(elided, new IrTypeIds()))
 			&& consulted.indexOf("Main.reader") >= 0, "copy elision passes the source and consults the callee");
 	}
 

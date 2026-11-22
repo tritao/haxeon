@@ -1,6 +1,6 @@
 package compiler.hl.incremental;
 
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrFunction;
 
 /**
  * A lowered function with everything it leans on outside itself: the requests lowering made to the symbol tables and the function

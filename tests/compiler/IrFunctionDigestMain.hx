@@ -1,7 +1,7 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
 import compiler.ir.codec.IrFunctionDigest;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.query.Digest;
 import compiler.query.QueryDatabase;
 import compiler.query.QueryKind;

@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrVerifier;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 class EnumInterfaceIncrementalMain {
 	static function main():Void {

@@ -3,8 +3,8 @@ import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlBackend;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 class InlineEnumReflectionReachMain {

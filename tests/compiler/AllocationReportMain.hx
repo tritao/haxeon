@@ -1,10 +1,10 @@
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrAllocationReport;
-import compiler.ir.IrAllocationReport.AllocationRootReport;
-import compiler.ir.IrInliner;
-import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.tools.IrAllocationReport;
+import compiler.ir.tools.IrAllocationReport.AllocationRootReport;
 
 class AllocationReportMain {
 	static final source =
@@ -59,7 +59,7 @@ function main():Int { var t = new T(); return t.pure(1) + t.dispatch(new Heavy()
 
 	static function main():Void {
 		var program = Frontend.compile(source);
-		IrInliner.run(program, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(program, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		var before = [for (fn in program.functions) IrFunctionStateCodec.encode(fn)];
 		var rows = IrAllocationReport.analyze(program, ["T.*"]);
 

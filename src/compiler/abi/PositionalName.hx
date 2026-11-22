@@ -41,8 +41,8 @@ class PositionalName {
 	 * Where `fn`'s code starts: the earliest source location among its instructions, in the file most of them come from (code
 	 * inlined from elsewhere aside); null when it has none.
 	 */
-	public static function placeOf(fn:compiler.ir.IrFunction):Null<String> {
-		var counts:Map<String, Int> = [], earliest:Map<String, compiler.ir.SourceProvenance.SourceLocation> = [];
+	public static function placeOf(fn:compiler.ir.model.IrFunction):Null<String> {
+		var counts:Map<String, Int> = [], earliest:Map<String, compiler.ir.model.SourceProvenance.SourceLocation> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions) {
 				var location = instruction.provenance.location;

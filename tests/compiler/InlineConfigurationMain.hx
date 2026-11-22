@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.Ir;
+import compiler.ir.model.Ir;
 import project.PackageManifest;
 
 class InlineConfigurationMain {

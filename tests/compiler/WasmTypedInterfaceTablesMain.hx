@@ -5,8 +5,8 @@ import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmTypeIdPlan;
 import compiler.backend.wasm.WasmTypedInterfaceTables;
 import compiler.backend.wasm.WasmTypes;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrTypedInterfaceDispatch;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 
 class WasmTypedInterfaceTablesMain {
 	static function main():Void {

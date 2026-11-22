@@ -1,7 +1,7 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrScalarWordBits;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.scalars.IrScalarWordBits;
 class InlineEnumScalarWordBoundaryMain {
 	static function tempRoot():String {
 		var root = Sys.getEnv("TMPDIR");
@@ -16,7 +16,7 @@ class InlineEnumScalarWordBoundaryMain {
 		p.objects = [{name: "Owner", isValue: false, base: null, interfaces: [], methods: [], fields: []}];
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		var error = "";
-		try compiler.ir.IrVerifier.verify(p) catch (e:Dynamic) error = Std.string(e);
+		try compiler.ir.verify.IrVerifier.verify(p) catch (e:Dynamic) error = Std.string(e);
 		if (error.indexOf(expected) < 0) throw label + ": " + error;
 		Sys.println("PASS: rejects " + label);
 	}
@@ -41,7 +41,7 @@ class InlineEnumScalarWordBoundaryMain {
 		b.returnValue(b.constInt(42));
 		var p = new IrProgram("main");
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var error = "";
 		try compiler.hl.lower.HlLower.lower(p) catch (e:Dynamic) error = Std.string(e);
 		if (error.indexOf("HashLink callbacks belong in the reference lane") < 0)

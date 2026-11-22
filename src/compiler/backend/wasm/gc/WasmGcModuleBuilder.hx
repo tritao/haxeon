@@ -1,22 +1,22 @@
 package compiler.backend.wasm.gc;
 
 import compiler.core.InternalError;
-import compiler.ir.IrReachability;
+import compiler.ir.analysis.IrReachability;
 import compiler.backend.wasm.WasmScalarClosureEscapes;
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.backend.wasm.WasmFlattenValueFields;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.MemoryContract.MemoryContractCodec;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.IrFunction;
-import compiler.ir.IrGraph;
-import compiler.ir.IrVerifier;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrScalarReplacement;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.IrFunction;
+import compiler.ir.cfg.IrGraph;
+import compiler.ir.verify.IrVerifier;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.scalars.IrScalarReplacement;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmFunctionLower;
@@ -81,7 +81,7 @@ class WasmGcModuleBuilder {
 		scalarAbi.validate(program);
 		var enumDeclarations = program.enums;
 		if (options.developmentMetadata == false)
-			program = compiler.ir.IrEnumRuntimeTypes.physical(program);
+			program = compiler.ir.passes.enums.IrEnumRuntimeTypes.physical(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = exports,
@@ -254,7 +254,8 @@ class WasmGcModuleBuilder {
 			for (method in object.methods)
 				methods.set(object.name + "." + method.name, method.functionName.name);
 		for (fn in program.functions) {
-			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name))
+			if (StringTools.startsWith(fn.name, compiler.ir.passes.values.IrValueLaneRuntime.PREFIX)
+				&& functions.exists(fn.name))
 				continue;
 			if (!reachable.exists(fn.name) || (fn.name == "__entry" && preferredEntry != "__entry"))
 				continue;
@@ -309,7 +310,7 @@ class WasmGcModuleBuilder {
 					}
 			for (block in fn.blocks) {
 				for (located in block.instructions)
-					for (input in compiler.ir.IrOperands.inputs(located.value))
+					for (input in compiler.ir.model.IrOperands.inputs(located.value))
 						if (markers.exists(input.id)) {
 							switch located.value {
 								case Call(_, name, arguments)
@@ -547,11 +548,11 @@ class WasmGcModuleBuilder {
 						case Call(_, name, _)
 							if (name.name == WasmScalarAbi.RETURN_MARKER
 							|| name.name == WasmScalarAbi.RETHROW_MARKER
-							|| name.name == compiler.ir.IrReceiverCheck.NAME
-							|| name.name == compiler.ir.IrReferenceIdentity.NAME
-							|| compiler.ir.IrScalarWordBits.matches(name.name)
-							|| name.name == compiler.ir.IrValueLaneReference.PACK
-							|| name.name == compiler.ir.IrValueLaneReference.UNPACK
+							|| name.name == compiler.ir.names.IrReceiverCheck.NAME
+							|| name.name == compiler.ir.names.IrReferenceIdentity.NAME
+							|| compiler.ir.passes.scalars.IrScalarWordBits.matches(name.name)
+							|| name.name == compiler.ir.passes.values.IrValueLaneReference.PACK
+							|| name.name == compiler.ir.passes.values.IrValueLaneReference.UNPACK
 							|| declaredFunctions.exists(name.name)
 							|| isSupportedGcNative(program, name.name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
@@ -975,7 +976,7 @@ class WasmGcModuleBuilder {
 					})
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
+						|| !compiler.ir.verify.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
 						throw new InternalError('Wasm GC C native "${native.name}" requires byte input with an integer length');
 				case BytesInputOutput(lengthArgument):
 					if ((switch (native.arguments[index]) {
@@ -984,7 +985,7 @@ class WasmGcModuleBuilder {
 					})
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
-						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
+						|| !compiler.ir.verify.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
 						throw new InternalError('Wasm GC C native "${native.name}" requires mutable byte input with an integer length');
 				case BytesOutput(sizeArgument):
 					if ((switch (native.arguments[index]) {
@@ -1308,7 +1309,8 @@ class WasmGcModuleBuilder {
 		}, resultType:IrType = switch closureType {
 			case Function(_, result): result;
 			default: Void;
-		}, key = compiler.ir.IrTypeIdentity.text(closureType), closureSignature = plan.closureFunctionType(closureType),
+		}, key = compiler.ir.model.IrTypeIdentity.text(closureType),
+			closureSignature = plan.closureFunctionType(closureType),
 			staticType = module.typeIndex(closureSignature), existing = closureTypes.get(key);
 		if (existing == null) {
 			existing = {staticType: staticType, instanceType: null};

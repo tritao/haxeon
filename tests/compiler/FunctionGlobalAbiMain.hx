@@ -1,11 +1,11 @@
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlType;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 
 /** Closure data globals must never use the VM's raw function-pointer slot initialization. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class FunctionGlobalAbiMain {
 	static function isInt(type:HlTypeDef):Bool return switch type {
 		case Simple(kind): kind == HlType.I32;
@@ -19,7 +19,7 @@ class FunctionGlobalAbiMain {
 		b.emit(GlobalGet(read, "read"));
 		b.returnValue(b.callClosure(read, [], I32));
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var code = compiler.hl.lower.HlLower.lower(p, new Map()), readSignature = -1;
 		for (index in 0...2) switch code.types[code.globals[index]] {
 			case Parameterized(kind, parameter) if (kind == HlType.Null): switch code.types[parameter] {

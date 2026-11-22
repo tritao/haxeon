@@ -7,10 +7,10 @@ import compiler.backend.wasm.WasmTypeIdPlan;
 import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
-import compiler.ir.Ir;
+import compiler.ir.model.Ir;
 
 /** Finalization fills existing slots: appending an orphan duplicated the whole stringifier. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 @:access(compiler.backend.wasm.gc.WasmGcModuleBuilder)
 class WasmStringFinalizationMain {
 	static function main():Void {
@@ -33,7 +33,7 @@ class WasmStringFinalizationMain {
 	static function checkSharedLinearFormatter():Void {
 		function instructionCount(cases:Int):Int {
 			var program = new IrProgram("main"),
-				constructors:Array<compiler.ir.Ir.IrEnumCase> = [];
+				constructors:Array<compiler.ir.model.Ir.IrEnumCase> = [];
 			for (i in 0...cases)
 				constructors.push({name: "Case" + i, params: [I32]});
 			program.enums = [{name: "Sample", cases: constructors}];
@@ -91,7 +91,7 @@ class WasmStringFinalizationMain {
 	static function checkSharedGcFormatter():Void {
 		function instructionCount(cases:Int, enums:Int):Int {
 			var program = new IrProgram("main"),
-				constructors:Array<compiler.ir.Ir.IrEnumCase> = [];
+				constructors:Array<compiler.ir.model.Ir.IrEnumCase> = [];
 			for (i in 0...cases)
 				constructors.push({name: "Case" + i, params: [I32]});
 			program.enums = [for (i in 0...enums) {
@@ -337,8 +337,8 @@ class WasmStringFinalizationMain {
 			{name: "Dead", cases: [{name: "DeadCase", params: [I32]}]},
 			{name: "TypedOnly", cases: [{name: "TypedCase", params: [I32]}]}
 		];
-		function make(name:String, enumName:String):compiler.ir.IrFunction {
-			var b = new compiler.ir.IrBuilder(),
+		function make(name:String, enumName:String):compiler.ir.model.IrFunction {
+			var b = new compiler.ir.model.IrBuilder(),
 				value = b.constInt(7),
 				result = b.temporary(Enum(enumName));
 			b.emit(MakeEnum(result, enumName, 0, [value]));
@@ -348,17 +348,18 @@ class WasmStringFinalizationMain {
 				b.emit(MakeEnum(typedOnly, "TypedOnly", 0, [value]));
 			}
 			b.returnValue(b.constInt(42));
-			return new compiler.ir.IrFunction(name, b.arguments, I32, b.blocks, Ordinary);
+			return new compiler.ir.model.IrFunction(name, b.arguments, I32, b.blocks, Ordinary);
 		}
 		program.functions = [make("main", "Live"), make("unused", "Dead")];
 		var reached:Map<String, Bool> = ["main" => true];
 		var selected = compiler.backend.wasm.WasmModuleSupport.stringifiableEnums(program, reached);
 		if (!selected.exists("Live") || selected.exists("Dead") || selected.exists("TypedOnly"))
 			throw "enum formatting includes an unreachable or non-escaping enum";
-		var exposed = new compiler.ir.IrBuilder();
+		var exposed = new compiler.ir.model.IrBuilder();
 		exposed.argument("hostValue", Dyn);
 		exposed.returnValue(exposed.constInt(42));
-		program.functions.push(new compiler.ir.IrFunction("entry", exposed.arguments, I32, exposed.blocks, Ordinary,
+		program.functions.push(new compiler.ir.model.IrFunction("entry", exposed.arguments, I32, exposed.blocks,
+			Ordinary,
 			null, false, Expose));
 		reached.set("entry", true);
 		if (!compiler.backend.wasm.WasmModuleSupport.stringifiableEnums(program, reached).exists("Dead"))
@@ -381,14 +382,15 @@ class WasmStringFinalizationMain {
 				result: Bytes
 			}
 		];
-		var b = new compiler.ir.IrBuilder(),
+		var b = new compiler.ir.model.IrBuilder(),
 			tag = b.constNull(EnumTag("TagOnly")),
 			payload = b.temporary(Enum("Payload"));
 		b.emit(MakeEnum(payload, "Payload", 0, [tag]));
 		b.call("__std_string", [b.toDyn(payload)], Bytes);
 		b.returnValue(b.constInt(42));
-		program.functions = [new compiler.ir.IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
-		if (Lambda.exists(compiler.ir.IrEnumRuntimeTypes.physical(program).enums, entry -> entry.name == "TagOnly"))
+		program.functions = [new compiler.ir.model.IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
+		if (Lambda.exists(compiler.ir.passes.enums.IrEnumRuntimeTypes.physical(program).enums,
+			entry -> entry.name == "TagOnly"))
 			throw "the test requires a tag-only enum with no physical descriptor";
 		for (target in ([Wasm32, WasmGc]:Array<BackendTarget>)) {
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {

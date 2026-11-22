@@ -4,7 +4,7 @@ import compiler.Compiler;
 import compiler.hl.HlWriterCache;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.ir.IrInliner.IrInlineCache;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.syntax.TokenTable;
 import sys.FileSystem;
 import sys.io.File;

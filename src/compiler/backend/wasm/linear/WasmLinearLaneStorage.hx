@@ -1,8 +1,8 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrValueLaneRuntime;
+import compiler.ir.model.Ir;
+import compiler.ir.passes.values.IrValueLaneRuntime;
 import compiler.backend.wasm.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmFunction;

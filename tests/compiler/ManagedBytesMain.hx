@@ -1,14 +1,14 @@
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.incremental.HlSymbolTable;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.ir.codec.IrValueTableCodec;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import haxe.io.BytesOutput;
 
 class ManagedBytesMain {

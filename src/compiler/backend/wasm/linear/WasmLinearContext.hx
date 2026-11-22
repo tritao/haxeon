@@ -4,7 +4,7 @@ import compiler.backend.Backend.BackendOptions;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 
 /** Fully prepared module state used while generating Linear32 runtime functions. */
 typedef WasmLinearContextState = {

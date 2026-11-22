@@ -1,11 +1,11 @@
 import compiler.Compiler;
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrVerifier;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.typing.EnumRuntimeType;

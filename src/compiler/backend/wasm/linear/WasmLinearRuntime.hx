@@ -1,10 +1,10 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrReachability;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.analysis.IrReachability;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
 import compiler.backend.wasm.WasmFmod;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
@@ -45,7 +45,7 @@ class WasmLinearRuntime {
 			case F64: [F64Const(0.0)];
 		};
 
-	static function runtimeImport(module:WasmModule, native:compiler.ir.Ir.IrNative):Int {
+	static function runtimeImport(module:WasmModule, native:compiler.ir.model.Ir.IrNative):Int {
 		var existing = runtimeImportIndex(module, native);
 		if (existing != null)
 			return existing;
@@ -58,7 +58,7 @@ class WasmLinearRuntime {
 			});
 	}
 
-	static function runtimeImportIndex(module:WasmModule, native:compiler.ir.Ir.IrNative):Null<Int> {
+	static function runtimeImportIndex(module:WasmModule, native:compiler.ir.model.Ir.IrNative):Null<Int> {
 		var importModule = native.library == null || native.library == "" ? "env" : native.library,
 			importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 		for (index in 0...module.imports.length) {
@@ -438,14 +438,14 @@ class WasmLinearRuntime {
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
-	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int,
+	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.model.Ir.IrNative, allocator:Int,
 			bytesDataPointer:Int,
 			program:IrProgram, failure:WasmLinearFailure):Null<Int> {
 		return switch native.symbol {
 			case "__reflect_is_enum":
 				if (native.arguments.length != 1
-					|| !compiler.ir.IrVerifier.sameType(native.arguments[0], Dyn)
-					|| !compiler.ir.IrVerifier.sameType(native.result, Bool))
+					|| !compiler.ir.verify.IrVerifier.sameType(native.arguments[0], Dyn)
+					|| !compiler.ir.verify.IrVerifier.sameType(native.result, Bool))
 					throw new InternalError("Invalid Wasm32 enum kind query signature");
 				var ids = [for (declaration in program.enums) module.runtimeTypeId(Enum(declaration.name))];
 				ids.sort((left, right) -> left < right ? -1 : left > right ? 1 : 0);

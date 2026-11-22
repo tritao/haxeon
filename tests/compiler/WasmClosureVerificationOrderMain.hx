@@ -3,9 +3,9 @@ import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import sys.io.File;
@@ -56,7 +56,7 @@ class WasmClosureVerificationOrderMain {
 	}
 
 	static function rejectUnadaptedValue(target:BackendTarget):Void {
-		var name = compiler.ir.IrInlineEnumLayout.VALUE_PREFIX + "Forged",
+		var name = compiler.ir.passes.enums.IrInlineEnumLayout.VALUE_PREFIX + "Forged",
 			program = new IrProgram("main");
 		program.objects = [
 			{

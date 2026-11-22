@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** Observable dependency layouts must follow the runtime class across incremental edits. */
 class ObservableLayoutIncrementalMain {

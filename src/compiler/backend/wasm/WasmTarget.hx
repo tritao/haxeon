@@ -2,7 +2,7 @@ package compiler.backend.wasm;
 
 import compiler.backend.Backend.BackendTarget;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrType;
 
 /** Representation selected below canonical Haxeon IR, never in the IR itself. */
 enum WasmReferenceModel {

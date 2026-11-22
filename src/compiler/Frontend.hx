@@ -1,9 +1,9 @@
 package compiler;
 
 import compiler.core.Source.SourceFile;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrProgramAssembler;
-import compiler.ir.TargetProfile;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.pipeline.IrProgramAssembler;
+import compiler.ir.pipeline.TargetProfile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;

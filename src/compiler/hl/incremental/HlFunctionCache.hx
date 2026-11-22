@@ -2,9 +2,9 @@ package compiler.hl.incremental;
 
 import compiler.core.InternalError;
 import compiler.hl.HlWriter;
-import compiler.ir.IrFunction;
-import compiler.ir.IrTypeIdentity;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrTypeIdentity;
 
 /** Serialized SSA body associated with a cached function name. */
 typedef HlCachedFunctionState = {

@@ -3,7 +3,7 @@ package compiler.modules;
 import compiler.core.Diagnostic;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrFunction;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;

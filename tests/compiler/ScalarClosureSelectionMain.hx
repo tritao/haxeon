@@ -1,8 +1,8 @@
 import compiler.core.AllocationMeter;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrScalarClosures;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.scalars.IrScalarClosures;
 
 class ScalarClosureSelectionMain {
 	static function main():Void {
@@ -65,7 +65,7 @@ class ScalarClosureSelectionMain {
 				if (compiler.ir.codec.IrFunctionStateCodec.encode(original[i])
 					.compare(compiler.ir.codec.IrFunctionStateCodec.encode(p.functions[i])) != 0)
 					throw "Unrelated closure body state changed";
-			compiler.ir.IrVerifier.verify(p);
+			compiler.ir.verify.IrVerifier.verify(p);
 		}
 		Sys.println("PASS: scalar closure lowering retains unrelated CFGs and redirects affected closures");
 	}

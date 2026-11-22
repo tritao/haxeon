@@ -1,12 +1,12 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrObjectFieldNativeLayout;
-import compiler.ir.Ir.IrObjectNativeLayout;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrObjectFieldNativeLayout;
+import compiler.ir.model.Ir.IrObjectNativeLayout;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
 
 private typedef WasmInlineSlot = {
 	final path:Array<String>;
@@ -26,7 +26,7 @@ typedef WasmFieldLayout = {
 	final offset:Int;
 	final type:IrType;
 	final nativeLayout:Null<IrObjectFieldNativeLayout>;
-	@:optional final scalarStorage:Null<compiler.ir.Ir.IrScalarStorage>;
+	@:optional final scalarStorage:Null<compiler.ir.model.Ir.IrScalarStorage>;
 }
 
 typedef WasmObjectLayout = {
@@ -314,7 +314,7 @@ class WasmLayout {
 				});
 				offset += nested.size;
 			} else {
-				var storage = compiler.ir.IrFieldStorage.scalar(field),
+				var storage = compiler.ir.model.IrFieldStorage.scalar(field),
 					size = storage == null ? sizeOf(field.type) : storage.size,
 					alignment = size > 8 ? 8 : size;
 				if (alignment < 1) throw new InternalError('Invalid inline field "$name.${field.name}"');

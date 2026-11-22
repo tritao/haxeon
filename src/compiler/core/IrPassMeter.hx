@@ -26,7 +26,7 @@ typedef IrPassStart = {
 /**
  * Time and allocation of each IR pass in one compile, in the order the passes first ran, for the driver's timings line. A pass that runs more
  * than once (value phi scalarization runs between other passes) is summed under one name. A pass costs two meter samples: `start` and
- * `stop`, called by the stages `compiler.ir.IrPipeline` meters. Each compile's pipeline has its own (`IrPipelineContext.meter`).
+ * `stop`, called by the stages `compiler.ir.pipeline.IrPipeline` meters. Each compile's pipeline has its own (`IrPipelineContext.meter`).
  */
 class IrPassMeter {
 	final order:Array<String> = [];
@@ -59,7 +59,7 @@ class IrPassMeter {
 		counts.set(name, (counts.exists(name) ? counts.get(name) : 0.0) + after.count - before.allocation.count);
 	}
 
-	/** Records, under `name`, how many functions a pass read, made and dropped (`compiler.ir.IrStage.IrStageHooks.census`). */
+	/** Records, under `name`, how many functions a pass read, made and dropped (`compiler.ir.pipeline.IrStage.IrStageHooks.census`). */
 	public function functions(name:String, read:Int, madeCount:Int, droppedCount:Int):Void {
 		reads.set(name, (reads.exists(name) ? reads.get(name) : 0) + read);
 		made.set(name, (made.exists(name) ? made.get(name) : 0) + madeCount);

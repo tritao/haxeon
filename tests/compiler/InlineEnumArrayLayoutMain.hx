@@ -1,14 +1,14 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueArrayLayout;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrVerifier;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.arrays.IrValueArrayLayout;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.verify.IrVerifier;
 
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumArrayLayoutMain {
 	static function main():Void {
 		for (target in [HashLink, Wasm32, WasmGc]) {
@@ -69,10 +69,11 @@ class InlineEnumArrayLayoutMain {
 			}
 			var sourceOptional = compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType
 				.TInstance(compiler.types.Type.NominalKind.Enum, declaration.name, []));
-			if (!IrVerifier.sameType(new compiler.ir.IrGenerator(compiler.ir.ProgramFacts.empty(),
-				compiler.ir.TargetProfile.portable).lowerType(sourceOptional), Enum(declaration.name))
-				|| !IrVerifier.sameType(new compiler.ir.IrGenerator(compiler.ir.ProgramFacts.empty(),
-				compiler.ir.TargetProfile.portable).lowerType(compiler.types.Type.CompilerType.TArray(sourceOptional)),
+			if (!IrVerifier.sameType(new compiler.ir.gen.IrGenerator(compiler.ir.pipeline.ProgramFacts.empty(),
+				compiler.ir.pipeline.TargetProfile.portable).lowerType(sourceOptional), Enum(declaration.name))
+				|| !IrVerifier.sameType(new compiler.ir.gen.IrGenerator(compiler.ir.pipeline.ProgramFacts.empty(),
+				compiler.ir.pipeline.TargetProfile.portable)
+				.lowerType(compiler.types.Type.CompilerType.TArray(sourceOptional)),
 				Array(Enum(declaration.name))))
 				throw "Source Null<E> must use the enum's existing null-capable IR type";
 			var objectTable = IrObjectTable.of([for (object in program.objects) object.name => object]);
@@ -80,7 +81,7 @@ class InlineEnumArrayLayoutMain {
 				new IrValueArrayLayout(objectTable, Nullable(Enum(declaration.name)), 64, target, program.enums);
 			}, "canonical Enum IR type");
 			program.staticFields = [{name: "unrelatedOptional", type: Nullable(I32)}];
-			var erased = compiler.ir.IrNullableErasure.run(program);
+			var erased = compiler.backend.wasm.IrNullableErasure.run(program);
 			if (erased == program || erased.enums[0].inlineStorage != shape.valueObject.name
 				|| erased.enums[0].isRecursive != false)
 				throw "Nullable erasure must preserve enum recursion classification and storage";
@@ -95,8 +96,8 @@ class InlineEnumArrayLayoutMain {
 				new IrFunction("main", invoke.arguments, I32, invoke.blocks, Ordinary),
 				new IrFunction("callback", callback.arguments, I32, callback.blocks, Ordinary)
 			];
-			compiler.ir.IrScalarArguments.rewrite(closures);
-			compiler.ir.IrScalarClosures.rewrite(closures);
+			compiler.ir.passes.scalars.IrScalarArguments.rewrite(closures);
+			compiler.ir.passes.scalars.IrScalarClosures.rewrite(closures);
 			if (closures.enums[0].inlineStorage != shape.valueObject.name || closures.enums[0].isRecursive != false)
 				throw "Closure ABI rewriting must preserve enum layout classification and storage";
 			for (nullable in [false, true]) for (operation in 0...4) {

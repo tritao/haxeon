@@ -1,10 +1,10 @@
 package compiler.hl.lower;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrTypedInterfaceDispatch;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
+import compiler.ir.verify.IrVerifier;
 
 /** Class-owned private entries; source methods and interface views retain their semantic ABI. */
 class HlTypedInterfaceTables {
@@ -22,9 +22,10 @@ class HlTypedInterfaceTables {
 			var logical = IrTypedInterfaceDispatch.originalEntryName(fn.name);
 			var prefix = fn.name.substr(0, fn.name.length - logical.length),
 				key = "$typed-method:" + fn.name.length + ":" + fn.name + ":"
-					+ compiler.ir.IrTypeIdentity.listText([for (i in 1...fn.arguments.length) fn.arguments[i].type])
+					+ compiler.ir.model.IrTypeIdentity
+					.listText([for (i in 1...fn.arguments.length) fn.arguments[i].type])
 					+ ":"
-					+ compiler.ir.IrTypeIdentity.text(fn.result),
+					+ compiler.ir.model.IrTypeIdentity.text(fn.result),
 				found = false;
 			for (object in program.objects) if (!object.isValue) {
 				var name = prefix + IrTypedInterfaceDispatch.adapterName(logical, object.name),
@@ -38,7 +39,7 @@ class HlTypedInterfaceTables {
 					throw new InternalError('Wrong private typed interface argument $i in "$name"');
 				var methods = entries.get(object.name);
 				if (methods == null) entries.set(object.name, methods = []);
-				methods.push({name: key, functionName: compiler.ir.IrSymbol.of(name)});
+				methods.push({name: key, functionName: compiler.ir.model.IrSymbol.of(name)});
 				found = true;
 			}
 			if (found) keys.set(fn.name, key);

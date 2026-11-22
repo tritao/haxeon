@@ -23,7 +23,7 @@ class HlLoweredCache {
 	public final summaries:HlFunctionSummaries;
 
 	/** Each function's form with its runtime calls through helpers, while its IR is the same object (`IrSharedRuntimeCalls`). */
-	public var sharedCalls = new compiler.ir.IrSharedRuntimeCalls.IrSharedCallsMemo();
+	public var sharedCalls = new compiler.hl.IrSharedRuntimeCalls.IrSharedCallsMemo();
 
 	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";

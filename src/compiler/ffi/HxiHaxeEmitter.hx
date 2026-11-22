@@ -8,9 +8,9 @@ import compiler.ffi.HxiModel.HxiDocumentation;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiEnumValue;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrCNativeArgumentMode;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNativeArgumentMode;
+import compiler.ir.model.Ir.IrType;
 import compiler.ffi.HxiModel.HxiOwnership;
 import compiler.ffi.HxiModel.HxiHandleDisposition;
 import compiler.ffi.HxiModel.HxiParameter;
@@ -302,7 +302,7 @@ class HxiHaxeEmitter {
 			}
 			var abiResult = fn.result,
 				returnValue = project(abiResult, true),
-				fixedResult:Null<compiler.ir.Ir.IrCNativeFixedLayout> = switch abiResult {
+				fixedResult:Null<compiler.ir.model.Ir.IrCNativeFixedLayout> = switch abiResult {
 					case AggregateValue(_, size, alignment): {
 						size: size,
 						alignment: alignment,

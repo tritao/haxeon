@@ -1,21 +1,21 @@
 import compiler.backend.wasm.WasmTarget;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineValueLayout;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrOptionalFieldStorage;
-import compiler.ir.IrValueArrayAccess;
-import compiler.ir.IrValueArrayLayout;
-import compiler.ir.IrValueArraySlotHelpers;
-import compiler.ir.IrValueLaneLayout;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrValueLaneReference;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.arrays.IrValueArrayAccess;
+import compiler.ir.passes.arrays.IrValueArrayLayout;
+import compiler.ir.passes.arrays.IrValueArraySlotHelpers;
+import compiler.ir.passes.nullability.IrOptionalFieldStorage;
+import compiler.ir.passes.values.IrInlineValueLayout;
+import compiler.ir.passes.values.IrValueLaneLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.passes.values.IrValueLaneReference;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 /** Inline nullable payloads retain every reference and nested presence flag in their holder's layout. */
 class InlineValueLayoutMain {
@@ -633,7 +633,7 @@ class InlineValueLayoutMain {
 			writeClosureType:IrType = Function([allocationType, I32, Dyn, Bool], Void),
 			acceptsClosureType:IrType = Function([Dyn], Bool),
 			allocationBuilder = new IrBuilder(),
-			arrays:Array<compiler.ir.Ir.IrValue> = [];
+			arrays:Array<compiler.ir.model.Ir.IrValue> = [];
 		var readName = "$value-array:bridge:allocation-read",
 			writeName = "$value-array:bridge:allocation-write",
 			acceptsName = "$value-array:bridge:allocation-accepts";
@@ -728,12 +728,12 @@ class InlineValueLayoutMain {
 			IrValueLaneReference.type()),
 			clearedOwner = allocationBuilder.call(IrValueLaneReference.UNPACK, [clearedCarrier],
 				Obj("AllocationOwner"));
-		var lengths:Array<compiler.ir.Ir.IrValue> = [];
+		var lengths:Array<compiler.ir.model.Ir.IrValue> = [];
 		for (index in 0...arrays.length) {
 			var length = allocationBuilder.freshValue("$length", I32);
 			allocationBuilder.currentBlock()
-				.instructions.push(new compiler.ir.SourceProvenance.Located(ArraySize(length, arrays[index]),
-				compiler.ir.SourceProvenance.generated("wasm-value-array-allocation-test")));
+				.instructions.push(new compiler.ir.model.SourceProvenance.Located(ArraySize(length, arrays[index]),
+				compiler.ir.model.SourceProvenance.generated("wasm-value-array-allocation-test")));
 			lengths.push(length);
 		}
 		var identityCheck = allocationBuilder.createBlock(),
@@ -961,8 +961,8 @@ class InlineValueLayoutMain {
 			Obj("AllocationOwner"));
 		var forwardLength = forwardBuilder.freshValue("$forward-length", I32);
 		forwardBuilder.currentBlock()
-			.instructions.push(new compiler.ir.SourceProvenance.Located(ArraySize(forwardLength, originalArray),
-			compiler.ir.SourceProvenance.generated("wasm-value-array-forward-test")));
+			.instructions.push(new compiler.ir.model.SourceProvenance.Located(ArraySize(forwardLength, originalArray),
+			compiler.ir.model.SourceProvenance.generated("wasm-value-array-forward-test")));
 		var forwardCheck = forwardBuilder.createBlock(),
 			forwardOwnerCheck = forwardBuilder.createBlock(),
 			forwardSuccess = forwardBuilder.createBlock(),
@@ -1062,7 +1062,7 @@ class InlineValueLayoutMain {
 			wasmGcAllocationCount: true
 		}).bytes;
 		var scalarBuilder = new IrBuilder(),
-			scalarChecks:Array<compiler.ir.Ir.IrValue> = [];
+			scalarChecks:Array<compiler.ir.model.Ir.IrValue> = [];
 		for (wordBits in [32, 64]) {
 			var mixedInsert = scalarBuilder.call("$value-array:test-allocate", [
 				scalarBuilder.constInt(2),

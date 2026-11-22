@@ -1,9 +1,9 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 /** Payload-free source enums use nominal scalar storage even in fields, reflection and arrays. */
@@ -34,7 +34,8 @@ class SourceEnumTagMain {
 		var holder = Lambda.find(program.objects, object -> object.name == "Holder");
 		if (holder == null
 			|| holder.fields.length != 2
-			|| Lambda.exists(holder.fields, field -> !compiler.ir.IrVerifier.sameType(field.type, EnumTag("Mode"))))
+			|| Lambda.exists(holder.fields,
+			field -> !compiler.ir.verify.IrVerifier.sameType(field.type, EnumTag("Mode"))))
 			throw "Reflected class fields must use four-byte tags, including nullable enum fields";
 		var pair = Lambda.find(program.objects, object -> object.name == "TaggedPair");
 		if (pair == null || pair.nativeLayout == null || pair.nativeLayout.size != 8
@@ -131,7 +132,7 @@ class SourceEnumTagMain {
 			program.functions.push(new IrFunction("cacheEntry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "cacheEntry";
 		}
-		compiler.ir.IrVerifier.verify(program);
+		compiler.ir.verify.IrVerifier.verify(program);
 		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			debugNames: true

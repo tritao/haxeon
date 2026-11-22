@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** A cached caller must pick up a value type's added comparison field. */
 class ValueEqualityIncrementalMain {

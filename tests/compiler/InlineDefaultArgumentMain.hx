@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** Constants substituted for omitted arguments must invalidate callers even without editor semantic indexes. */
 class InlineDefaultArgumentMain {

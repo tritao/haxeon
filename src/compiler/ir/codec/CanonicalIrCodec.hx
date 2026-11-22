@@ -1,21 +1,21 @@
 package compiler.ir.codec;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrEnumCase;
-import compiler.ir.Ir.IrInterface;
-import compiler.ir.Ir.IrInterfaceMethod;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrCNativeArgumentMode;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrObjectField;
-import compiler.ir.Ir.IrObjectMethod;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrStaticField;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.model.Ir.IrEnumCase;
+import compiler.ir.model.Ir.IrInterface;
+import compiler.ir.model.Ir.IrInterfaceMethod;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNativeArgumentMode;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrObjectField;
+import compiler.ir.model.Ir.IrObjectMethod;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrStaticField;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrFunction;
+import compiler.ir.verify.IrVerifier;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -289,7 +289,7 @@ class CanonicalIrCodec {
 				isValue = input.readByte() != 0,
 				base = readNullableString(input, limit),
 				interfaces = readStrings(input, limit),
-				nativeLayout:Null<compiler.ir.Ir.IrObjectNativeLayout> = null;
+				nativeLayout:Null<compiler.ir.model.Ir.IrObjectNativeLayout> = null;
 			if (readByteBool(input))
 				nativeLayout = {
 					target: IrTypeCodec.readString(input, limit),
@@ -301,7 +301,7 @@ class CanonicalIrCodec {
 			for (_ in 0...readCount(input)) {
 				var fieldName = IrTypeCodec.readString(input, limit),
 					fieldType = IrTypeCodec.readType(input, limit, 0),
-					fieldLayout:Null<compiler.ir.Ir.IrObjectFieldNativeLayout> = null;
+					fieldLayout:Null<compiler.ir.model.Ir.IrObjectFieldNativeLayout> = null;
 				if (readByteBool(input))
 					fieldLayout = {
 						offset: input.readInt32(),
@@ -310,10 +310,10 @@ class CanonicalIrCodec {
 						signed: readByteBool(input),
 						inlineRecord: readByteBool(input)
 					};
-				var scalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
+				var scalarStorage:Null<compiler.ir.model.Ir.IrScalarStorage> = null;
 				if (readByteBool(input))
 					scalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
-				var nullableScalarStorage:Null<compiler.ir.Ir.IrScalarStorage> = null;
+				var nullableScalarStorage:Null<compiler.ir.model.Ir.IrScalarStorage> = null;
 				if (readByteBool(input))
 					nullableScalarStorage = {size: input.readInt32(), signed: readByteBool(input)};
 				fields.push({
@@ -327,7 +327,7 @@ class CanonicalIrCodec {
 			for (_ in 0...readCount(input))
 				methods.push({
 					name: IrTypeCodec.readString(input, limit),
-					functionName: compiler.ir.IrSymbol.of(IrTypeCodec.readString(input, limit))
+					functionName: compiler.ir.model.IrSymbol.of(IrTypeCodec.readString(input, limit))
 				});
 			result.push({
 				name: name,
@@ -480,7 +480,7 @@ class CanonicalIrCodec {
 			IrTypeCodec.writeString(output, value);
 	}
 
-	static function writeFixedLayout(output:BytesOutput, value:Null<compiler.ir.Ir.IrCNativeFixedLayout>):Void {
+	static function writeFixedLayout(output:BytesOutput, value:Null<compiler.ir.model.Ir.IrCNativeFixedLayout>):Void {
 		output.writeByte(value == null ? 0 : 1);
 		if (value != null) {
 			output.writeInt32(value.size);
@@ -489,7 +489,7 @@ class CanonicalIrCodec {
 		}
 	}
 
-	static function readFixedLayout(input:BytesInput):Null<compiler.ir.Ir.IrCNativeFixedLayout> {
+	static function readFixedLayout(input:BytesInput):Null<compiler.ir.model.Ir.IrCNativeFixedLayout> {
 		return switch input.readByte() {
 			case 0: null;
 			case 1: {

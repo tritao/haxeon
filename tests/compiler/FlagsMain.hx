@@ -3,9 +3,9 @@ using StringTools;
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 class FlagsMain {
@@ -67,17 +67,17 @@ class FlagsMain {
 		var inherited = makeCompiler("hl", true);
 		inherited.update("Main.hx",
 			'interface LocalFlags extends Flags {} interface LocalRaw extends RawRepresentable {} enum abstract Bits(Int) implements LocalFlags { var A=1; } enum abstract Code(Int) implements LocalRaw { var A=42; } function main():Int { return Bits.A.rawValue() + Code.A.rawValue() - 1; }');
-		if (new compiler.ir.IrInterpreter(inherited.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(inherited.compile("Main").ir).run("main") != 42)
 			throw "Inherited synthesis conformance was not resolved";
 		var defaults = makeCompiler("hl", true);
 		defaults.update("DefaultBits.hx", 'enum abstract DefaultBits(Int) implements Flags { var A=1; }');
 		defaults.update("Defaults.hx",
 			'import DefaultBits; class Defaults { public function new(value:DefaultBits=DefaultBits.empty()) {} public static function raw(value:DefaultBits=DefaultBits.fromRaw(1)):Int return value.rawValue(); }');
 		defaults.update("Main.hx", 'function main():Int { new Defaults(); return Defaults.raw()+41; }');
-		if (new compiler.ir.IrInterpreter(defaults.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(defaults.compile("Main").ir).run("main") != 42)
 			throw "Flags helpers in default arguments lost their module owner";
 		defaults.update("Main.hx", 'function main():Int { new Defaults(); return Defaults.raw()+42-1; }');
-		if (new compiler.ir.IrInterpreter(defaults.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(defaults.compile("Main").ir).run("main") != 42)
 			throw "Retained flags helpers in defaults lost their module owner";
 		incremental();
 		for (target in ["hl", "wasm32", "wasm-gc"])
@@ -92,7 +92,7 @@ class FlagsMain {
 		c.update("Main.hx",
 			'function main():Int { try { return Access.fromRaw(3).rawValue(); }catch(error:Dynamic){return 0;} }');
 		function result():Int
-			return new compiler.ir.IrInterpreter(c.compile("Main").ir).run("main");
+			return new compiler.ir.tools.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
 			throw "Flags accepted unknown bits";
 		c.update("Access.hx", 'enum abstract Access(Int) implements Flags { var A=1; var B=2; }');
@@ -117,7 +117,7 @@ class FlagsMain {
 			'function main():Int { var nativeRejected=false; try { Bits32.fromRaw(2); } catch(error:Dynamic) {nativeRejected=true;} if(!nativeRejected)return -21;');
 		c.update("Main.hx", source);
 		var result = c.compile("Main"), p = result.ir;
-		var interpreted = new compiler.ir.IrInterpreter(p).run("main");
+		var interpreted = new compiler.ir.tools.IrInterpreter(p).run("main");
 		if (interpreted != 42)
 			throw 'Flags interpreter $target inline=$inlining returned $interpreted';
 		// Reference-valued maps use native primitives; the interpreter validates the core flags above.
@@ -135,7 +135,7 @@ class FlagsMain {
 		var holder = Lambda.find(p.objects, o -> o.name == "Holder");
 		if (holder == null
 			|| holder.fields.length != 2
-			|| Lambda.exists(holder.fields, field -> !compiler.ir.IrVerifier.sameType(field.type, I32)))
+			|| Lambda.exists(holder.fields, field -> !compiler.ir.verify.IrVerifier.sameType(field.type, I32)))
 			throw "A raw Int field must stay I32";
 		var pair = Lambda.find(p.objects, o -> o.name == "Pair");
 		if (pair == null || pair.nativeLayout == null || pair.nativeLayout.size != 8)

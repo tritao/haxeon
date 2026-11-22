@@ -1,14 +1,14 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInliner;
-import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.verify.IrVerifier;
 
 /** A resolved enum boundary stays a call to its provider when an adapter is inlined. */
 class InlinerResolvedEnumCallMain {
 	static function main():Void {
-		for (profile in [compiler.ir.TargetProfile.hashLink, compiler.ir.TargetProfile.wasm])
+		for (profile in [compiler.ir.pipeline.TargetProfile.hashLink, compiler.ir.pipeline.TargetProfile.wasm])
 			for (box in [true, false]) {
 				var program = new IrProgram("main");
 				program.enums = [{name: "Choice", cases: [{name: "A", params: []}, {name: "B", params: []}]}];

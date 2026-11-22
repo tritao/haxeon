@@ -1,13 +1,13 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrObjectField;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrInlineValueLayout;
-import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
-import compiler.ir.IrObjectTable;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrObjectField;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.passes.values.IrInlineValueLayout;
+import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
+import compiler.ir.model.IrObjectTable;
 
 /** The scalar storage shape shared by Wasm GC fields and value calling conventions. */
 class WasmValueLayout {
@@ -52,7 +52,7 @@ class WasmValueLayout {
 
 	/** A nested native leaf's offset is relative to every enclosing inline record. */
 	function composedNativeLayout(field:IrObjectField,
-			slot:IrInlineValueSlot):Null<compiler.ir.Ir.IrObjectFieldNativeLayout> {
+			slot:IrInlineValueSlot):Null<compiler.ir.model.Ir.IrObjectFieldNativeLayout> {
 		var root = switch field.type {
 			case Obj(name): objects.get(name);
 			default: null;
@@ -60,7 +60,7 @@ class WasmValueLayout {
 		if (field.nativeLayout == null && (root == null || root.nativeLayout == null)) return slot.nativeLayout;
 		var offset = field.nativeLayout == null ? 0 : field.nativeLayout.offset,
 			type = field.type,
-			leaf:Null<compiler.ir.Ir.IrObjectFieldNativeLayout> = null;
+			leaf:Null<compiler.ir.model.Ir.IrObjectFieldNativeLayout> = null;
 		for (part in slot.path) {
 			var name = switch type {
 				case Obj(value): value;
@@ -78,7 +78,7 @@ class WasmValueLayout {
 		return {offset: offset, size: leaf.size, alignment: leaf.alignment, signed: leaf.signed, inlineRecord: false};
 	}
 
-	public function nativeLeaf(type:IrType, slot:IrInlineValueSlot):Null<compiler.ir.Ir.IrObjectFieldNativeLayout>
+	public function nativeLeaf(type:IrType, slot:IrInlineValueSlot):Null<compiler.ir.model.Ir.IrObjectFieldNativeLayout>
 		return composedNativeLayout({name: "", type: type}, slot);
 
 	public static function fieldName(field:String, slot:IrInlineValueSlot):String

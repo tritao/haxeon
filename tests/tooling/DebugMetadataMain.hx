@@ -7,8 +7,8 @@ import compiler.hl.HlWriterCache;
 import compiler.hl.lower.HlLower;
 import compiler.hl.patch.HlPatchReader;
 import compiler.hl.patch.HlPatchWriter;
-import compiler.ir.IrFunction;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.IrFunction;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 

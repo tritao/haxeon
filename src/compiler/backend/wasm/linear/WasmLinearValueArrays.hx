@@ -1,8 +1,8 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrType;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModuleSupport;

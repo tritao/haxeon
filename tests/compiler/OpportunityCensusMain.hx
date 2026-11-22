@@ -1,14 +1,14 @@
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInliner;
-import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.IrLoopBounds;
-import compiler.ir.IrOpportunityCensus;
+import compiler.ir.analysis.IrLoopBounds;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.tools.IrOpportunityCensus;
 
-@:access(compiler.ir.IrOpportunityCensus)
+@:access(compiler.ir.tools.IrOpportunityCensus)
 class OpportunityCensusMain {
 	static function expect(ok:Bool, message:String):Void {
 		if (!ok)
@@ -19,7 +19,7 @@ class OpportunityCensusMain {
 		var source =
 			'class Box { public var value:Int; public function new() { value=7; } } function scan():Int { var b=new Box(); var sum=0; for(i in 0...10) sum+=b.value; return sum; } function main():Int return 0;';
 		var program = Frontend.compile(source);
-		IrInliner.run(program, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(program, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		var objects:Map<String, IrObject> = [];
 		for (object in program.objects)
 			objects.set(object.name, object);
@@ -65,8 +65,8 @@ class OpportunityCensusMain {
 		expect(flowRow.counts[12] == 1, "count the jump through an empty jump block");
 		b = new IrBuilder();
 		var fresh = b.newObject("Box"), unknown = b.argument("unknown", Obj("Box"));
-		b.call(compiler.ir.IrReceiverCheck.NAME, [fresh], Void);
-		b.call(compiler.ir.IrReceiverCheck.NAME, [unknown], Void);
+		b.call(compiler.ir.names.IrReceiverCheck.NAME, [fresh], Void);
+		b.call(compiler.ir.names.IrReceiverCheck.NAME, [unknown], Void);
 		b.safeCast(fresh, Obj("Box"));
 		b.safeCast(fresh, Dyn);
 		b.returnValue(b.constInt(42));

@@ -1,5 +1,5 @@
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrTypeIdentity;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrTypeIdentity;
 
 /** An IR type's identity text is fixed by the compiler, not by how the runtime that built it prints enums and arrays. */
 class IrTypeIdentityMain {

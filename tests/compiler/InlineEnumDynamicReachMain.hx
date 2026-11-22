@@ -3,8 +3,8 @@ import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlBackend;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 class InlineEnumDynamicReachMain {
@@ -24,12 +24,13 @@ class InlineEnumDynamicReachMain {
 		driver.options = new CompileOptions({inlining: inlining});
 		driver.update("Main.hx", sys.io.File.getContent("tests/programs/inline-enum-dynamic-reach.hx"));
 		var program = driver.compile("Main").ir;
-		var laneTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget = switch target {
+		var laneTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget = switch target {
 			case "hl": HashLink;
 			case "wasm32": Wasm32;
 			default: WasmGc;
-		}, eligibility = new compiler.ir.IrInlineEnumEligibility(program,
-			new compiler.ir.IrInlineEnumLayout(program.enums, program.objects, target == "wasm-gc" ? 64 : 32,
+		}, eligibility = new compiler.ir.passes.enums.IrInlineEnumEligibility(program,
+			new compiler.ir.passes.enums.IrInlineEnumLayout(program.enums, program.objects,
+			target == "wasm-gc" ? 64 : 32,
 			laneTarget));
 		for (name in enums) {
 			var declaration = Lambda.find(program.enums, entry -> entry.name == name);

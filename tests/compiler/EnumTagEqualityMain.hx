@@ -1,8 +1,8 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrInterpreter;
+import compiler.ir.model.Ir;
+import compiler.ir.tools.IrInterpreter;
 import compiler.tools.CompilerDriver;
 
 /** The cost of synthesized tag equality is independent of the number of cases and of inlining. */
@@ -40,11 +40,11 @@ class EnumTagEqualityMain {
 							default: false;
 						})):
 							if (arguments.length == 2
-							&& compiler.ir.IrVerifier.sameType(arguments[0].type, EnumTag("Wide")))
+							&& compiler.ir.verify.IrVerifier.sameType(arguments[0].type, EnumTag("Wide")))
 							throw "Typed tag equality retained a helper call";
 						case Equal(_, left, right) if (fn.name == "Compare.same"):
-							if (!compiler.ir.IrVerifier.sameType(left.type, EnumTag("Wide"))
-								|| !compiler.ir.IrVerifier.sameType(right.type, left.type))
+							if (!compiler.ir.verify.IrVerifier.sameType(left.type, EnumTag("Wide"))
+								|| !compiler.ir.verify.IrVerifier.sameType(right.type, left.type))
 								throw "Tag equality still compares extracted indices";
 							scalarComparisons++;
 						case EnumIndex(_, _) if (fn.name == "Compare.same"):

@@ -1,10 +1,10 @@
 package compiler.backend.wasm;
 
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.IrFunction;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmModule.WasmLocal;

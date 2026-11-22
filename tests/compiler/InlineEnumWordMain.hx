@@ -1,11 +1,11 @@
 import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumWordAccess;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.enums.IrInlineEnumWordAccess;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneSlot;
+import compiler.ir.tools.IrInterpreter;
 
 /** Execute packed payload access, including fields split between two words, on every runtime. */
 class InlineEnumWordMain {
@@ -210,14 +210,15 @@ class InlineEnumWordMain {
 				result: Void
 			}
 		]);
-		var table = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
+		var table = compiler.ir.model.IrObjectTable.of([for (object in program.objects) object.name => object]);
 		program.functions = [
 			for (fn in program.functions)
-				compiler.ir.IrScalarReplacement.rewrite(fn, table, false)
+				compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, table, false)
 		];
-		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.inlining.IrInliner.run(program, new compiler.ir.passes.inlining.IrInliner.IrInlineCache(),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(program);
+		compiler.ir.verify.IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42)
 			throw "packed enum payload changed its bits";
 		for (target in [HashLink, Wasm32, WasmGc]) {

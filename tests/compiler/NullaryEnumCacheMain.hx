@@ -1,9 +1,9 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 /** Boxed nullary cases are immutable module roots, including when all ordinary owners have been cleared. */
@@ -77,7 +77,7 @@ class NullaryEnumCacheMain {
 			program.functions.push(new IrFunction("cacheEntry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "cacheEntry";
 		}
-		compiler.ir.IrVerifier.verify(program);
+		compiler.ir.verify.IrVerifier.verify(program);
 		var bytes = target == "hl"
 			? new compiler.hl.HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes
 			: new compiler.backend.wasm.WasmBackend().compile(program, {

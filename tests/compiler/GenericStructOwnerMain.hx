@@ -1,7 +1,7 @@
 import compiler.CompileOptions;
 import compiler.Frontend;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
+import compiler.ir.model.Ir;
 import sys.io.File;
 
 /** Generic class fields and methods use the concrete value representation, including inherited owners. */
@@ -10,13 +10,13 @@ class GenericStructOwnerMain {
 		var referenceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		referenceRuntime.addStandardLibrarySourceRoot("stdlib");
 		referenceRuntime.update("Main.hx", File.getContent("tests/programs/generic-erased-reference-checks.hx"));
-		if (new compiler.ir.IrInterpreter(referenceRuntime.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(referenceRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased reference writes did not preserve checked value semantics in the interpreter";
 		var arraySource = File.getContent("tests/programs/generic-erased-array-function-checks.hx");
 		arraySource = StringTools.replace(StringTools.replace(StringTools.replace(arraySource, "#if !wasm", ""), "#end",
 			""), "hl.Gc.totalAllocated()", "0");
 		var checkedArrays = Frontend.compile(arraySource);
-		if (new compiler.ir.IrInterpreter(checkedArrays).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(checkedArrays).run("main") != 42)
 			throw "erased array and function writes did not preserve checked value semantics in the interpreter";
 		var pointerSource = File.getContent("tests/programs/generic-erased-raw-pointer.hx"),
 			pointerNative = pointerSource.indexOf("#if !wasm"),
@@ -28,7 +28,7 @@ class GenericStructOwnerMain {
 		var pointerRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		pointerRuntime.addStandardLibrarySourceRoot("stdlib");
 		pointerRuntime.update("Main.hx", pointerSource);
-		if (new compiler.ir.IrInterpreter(pointerRuntime.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(pointerRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased pointer writes and checked casts failed in the interpreter";
 		var callbackSource = File.getContent("tests/programs/generic-erased-native-callback.hx");
 		callbackSource = callbackSource.substring(0, callbackSource.indexOf("function main():Int"))
@@ -36,7 +36,7 @@ class GenericStructOwnerMain {
 		var callbackRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		callbackRuntime.addStandardLibrarySourceRoot("stdlib");
 		callbackRuntime.update("Main.hx", callbackSource);
-		if (new compiler.ir.IrInterpreter(callbackRuntime.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(callbackRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased callback writes and null handling failed in the interpreter";
 		checkTypeHandleDynamic();
 		checkCallbackAllocations();
@@ -46,15 +46,15 @@ class GenericStructOwnerMain {
 		var interfaceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		interfaceRuntime.addStandardLibrarySourceRoot("stdlib");
 		interfaceRuntime.update("Main.hx", interfaceSource);
-		if (new compiler.ir.IrInterpreter(interfaceRuntime.compile("Main").ir).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(interfaceRuntime.compile("Main").ir).run("main") != 42)
 			throw "typed generic interface calls lost their value carriers in the interpreter";
 		var checkedSignatures =
 			Frontend.compile(File.getContent("tests/programs/generic-erased-function-reference-shapes.hx"));
 		var collisionFirst:IrType = Function([Obj("Cba95abb6358835f5")], Bytes),
 			collisionSecond:IrType = Function([Obj("Cefe1ade6cf91fbfe")], Bytes);
-		if (compiler.ir.IrTypeIdentity.id(collisionFirst) != compiler.ir.IrTypeIdentity.id(collisionSecond))
+		if (compiler.ir.model.IrTypeIdentity.id(collisionFirst) != compiler.ir.model.IrTypeIdentity.id(collisionSecond))
 			throw "closure signature collision fixture no longer collides";
-		if (new compiler.ir.IrInterpreter(checkedSignatures).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(checkedSignatures).run("main") != 42)
 			throw "the interpreter did not distinguish reference-shaped closure signatures";
 		var program = Frontend.compile(File.getContent("tests/programs/generic-struct-class.hx"));
 		var payloadOwner:Null<String> = null, otherOwner:Null<String> = null;
@@ -79,7 +79,7 @@ class GenericStructOwnerMain {
 		}
 		if (!derived || !get
 			|| !replace) throw 'specialized inheritance or method ABI is missing: $derived, $get, $replace';
-		var interpreted = new compiler.ir.IrInterpreter(program).run("main");
+		var interpreted = new compiler.ir.tools.IrInterpreter(program).run("main");
 		if (interpreted != 42)
 			throw 'generic value owner or Dynamic view lost value semantics: $interpreted';
 		var source = File.getContent("tests/programs/generic-struct-class.hx"),
@@ -96,7 +96,8 @@ class GenericStructOwnerMain {
 		var runtime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		runtime.addStandardLibrarySourceRoot("stdlib");
 		runtime.update("Main.hx", source);
-		var compiled = runtime.compile("Main"), optimized = new compiler.ir.IrInterpreter(compiled.ir).run("main");
+		var compiled = runtime.compile("Main"),
+			optimized = new compiler.ir.tools.IrInterpreter(compiled.ir).run("main");
 		if (optimized != 42) throw 'optimized generic value owner interpreter returned $optimized';
 		var runtimeResult = GeneratedProgramRunner.exitCode(compiled);
 		if (runtimeResult != 42) throw 'HashLink generic value owner returned $runtimeResult';
@@ -116,9 +117,10 @@ class GenericStructOwnerMain {
 			+ 'function main():Int return 42;';
 		for (inlineEnabled in [false, true]) for (target in [Wasm32, WasmGc]) {
 			var program = Frontend.compile(source);
-			compiler.ir.IrInliner.run(program,
-				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
+			compiler.ir.passes.inlining.IrInliner.run(program,
+				new compiler.ir.passes.inlining.IrInliner
+				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: target,
 				debugNames: true,
@@ -146,7 +148,7 @@ class GenericStructOwnerMain {
 	}
 
 	static function checkTypeHandleDynamic():Void {
-		var builder = new compiler.ir.IrBuilder(),
+		var builder = new compiler.ir.model.IrBuilder(),
 			handle = builder.typeValue(I32),
 			boxed = builder.toDyn(handle),
 			tested = builder.call("__std_is_of_type", [boxed, builder.typeValue(TypeRef)], Bool),
@@ -181,24 +183,27 @@ class GenericStructOwnerMain {
 			arguments: [Dyn, TypeRef],
 			result: Bool
 		});
-		program.functions.push(new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary));
+		program.functions.push(new compiler.ir.model.IrFunction("main", builder.arguments, I32, builder.blocks,
+			Ordinary));
 		for (isNull in [false, true]) {
-			var invalid = new compiler.ir.IrBuilder(),
+			var invalid = new compiler.ir.model.IrBuilder(),
 				wrong = isNull ? invalid.constNull(Dyn) : invalid.toDyn(invalid.constInt(12)),
 				tryBody = invalid.createBlock(),
 				handler = invalid.createBlock(),
 				after = invalid.createBlock(),
-				provenance = compiler.ir.SourceProvenance.generated("type-handle-test");
+				provenance = compiler.ir.model.SourceProvenance.generated("type-handle-test");
 			invalid.currentBlock().instructions
-				.push(new compiler.ir.SourceProvenance.Located(BeginTry(handler.id, after.id, false), provenance));
+				.push(new compiler.ir.model.SourceProvenance.Located(BeginTry(handler.id, after.id, false),
+				provenance));
 			invalid.jump(tryBody);
 			invalid.select(tryBody);
 			var recovered = invalid.safeCast(wrong, TypeRef),
 				nullMatches = isNull ? invalid.equal(invalid.toDyn(recovered), wrong) : null;
-			tryBody.instructions.push(new compiler.ir.SourceProvenance.Located(EndTry(handler.id, false), provenance));
+			tryBody.instructions.push(new compiler.ir.model.SourceProvenance.Located(EndTry(handler.id, false),
+				provenance));
 			invalid.jump(after);
 			invalid.select(handler);
-			handler.instructions.push(new compiler.ir.SourceProvenance
+			handler.instructions.push(new compiler.ir.model.SourceProvenance
 				.Located(Catch(invalid.freshValue("$caught", Dyn)), provenance));
 			invalid.returnValue(invalid.constInt(isNull ? 1 : 42));
 			invalid.select(after);
@@ -210,14 +215,15 @@ class GenericStructOwnerMain {
 				invalid.select(mismatchedNull);
 				invalid.returnValue(invalid.constInt(1));
 			} else invalid.returnValue(invalid.constInt(1));
-			program.functions.push(new compiler.ir.IrFunction(isNull ? "nullHandle" : "invalidHandle", [], I32,
+			program.functions.push(new compiler.ir.model.IrFunction(isNull ? "nullHandle" : "invalidHandle", [], I32,
 				invalid.blocks, Ordinary));
 		}
-		if (new compiler.ir.IrInterpreter(program).run() != 42) throw "interpreter lost a Dynamic type handle";
-		if (new compiler.ir.IrInterpreter(program).run("invalidHandle") != 42)
+		if (new compiler.ir.tools.IrInterpreter(program).run() != 42) throw "interpreter lost a Dynamic type handle";
+		if (new compiler.ir.tools.IrInterpreter(program).run("invalidHandle") != 42)
 			throw "interpreter accepted an invalid type handle";
-		if (new compiler.ir.IrInterpreter(program).run("nullHandle") != 42) throw "interpreter lost a null type handle";
-		var hlProgram = new IrProgram("__entry"), entry = new compiler.ir.IrBuilder();
+		if (new compiler.ir.tools.IrInterpreter(program).run("nullHandle") != 42)
+			throw "interpreter lost a null type handle";
+		var hlProgram = new IrProgram("__entry"), entry = new compiler.ir.model.IrBuilder();
 		hlProgram.natives = program.natives.copy();
 		hlProgram.natives.push({name: "__exit", library: "std", symbol: "sys_exit", arguments: [I32], result: Void});
 		var valid = entry.equal(entry.call("main", [], I32), entry.constInt(42)),
@@ -235,7 +241,7 @@ class GenericStructOwnerMain {
 		entry.call("__exit", [entry.constInt(1)], Void);
 		entry.returnValue(entry.constVoid());
 		hlProgram.functions =
-			program.functions.concat([new compiler.ir.IrFunction("__entry", [], Void, entry.blocks, Ordinary)]);
+			program.functions.concat([new compiler.ir.model.IrFunction("__entry", [], Void, entry.blocks, Ordinary)]);
 		var hashlink = new compiler.hl.HlBackend().compile(hlProgram, {target: HashLink, debugNames: true});
 		var hlDirectory = Sys.getEnv("TMPDIR");
 		if (hlDirectory == null || hlDirectory == "") hlDirectory = Sys.getCwd() + "/out/test-tools";
@@ -290,18 +296,20 @@ class GenericStructOwnerMain {
 			+ 'if(value.owner!=owner) return -1; sum+=value.number; } return sum; } } function main():Int return 42;';
 		for (inlineEnabled in [false, true]) {
 			var program = Frontend.compile(source);
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(program, 32, WasmGc);
-			compiler.ir.IrValueConstructors.rewrite(program);
-			compiler.ir.IrValuePhiScalarization.rewrite(program);
-			compiler.ir.IrScalarArguments.rewrite(program, true);
-			compiler.ir.IrValuePhiScalarization.rewrite(program);
-			var objects = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
-			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects,
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(program, 32, WasmGc);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(program);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+			compiler.ir.passes.scalars.IrScalarArguments.rewrite(program, true);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+			var objects = compiler.ir.model.IrObjectTable.of([for (object in program.objects) object.name => object]);
+			program.functions =
+				[for (fn in program.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects,
 				false, true)];
-			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program,
-				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
+			compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(program);
+			compiler.ir.passes.inlining.IrInliner.run(program,
+				new compiler.ir.passes.inlining.IrInliner
+				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: WasmGc,
 				debugNames: true,
@@ -365,7 +373,7 @@ class GenericStructOwnerMain {
 					&& object.name.indexOf('class:Value') >= 0) found = true;
 			if (found != (expression.indexOf('Box<Value>') >= 0))
 				throw 'stale generic owner after edit: $expression';
-			var interpreted = new compiler.ir.IrInterpreter(compiled.ir).run("Main.main");
+			var interpreted = new compiler.ir.tools.IrInterpreter(compiled.ir).run("Main.main");
 			if (interpreted != 42)
 				throw 'interpreted generic runtime type test after layout edit returned $interpreted';
 		}
@@ -384,7 +392,7 @@ class GenericStructOwnerMain {
 				+ 'class Maker { public static function make():Reader<Int> return new $implementation(); }');
 			var compiled = compiler.compile("Main"),
 				actual = GeneratedProgramRunner.exitCode(compiled),
-				interpreted = new compiler.ir.IrInterpreter(compiled.ir).run("Main.main");
+				interpreted = new compiler.ir.tools.IrInterpreter(compiled.ir).run("Main.main");
 			if (actual != number || interpreted != number)
 				throw 'typed interface dispatch after implementation edit: expected $number, got $actual and $interpreted';
 		}

@@ -1,6 +1,6 @@
 package compiler.ir.codec;
 
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrFunction;
 import compiler.query.Digest;
 
 /**

@@ -1,14 +1,14 @@
 package compiler.backend.wasm.gc;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrReachability;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.analysis.IrReachability;
 import haxe.io.Bytes as HaxeBytes;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrObjectField;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrObjectField;
+import compiler.ir.model.IrFunction;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmModuleSupport;
@@ -136,7 +136,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				I32Const(plan.runtimeTypeIds.id(Obj(typeName))),
 				StructSet(typeIndex, 0)
 			];
-		var declaration:Null<compiler.ir.Ir.IrObject> = null;
+		var declaration:Null<compiler.ir.model.Ir.IrObject> = null;
 		for (object in plan.program.objects)
 			if (object.name == typeName)
 				declaration = object;
@@ -167,7 +167,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		}
 		var objectName = requireObjectName(object.type),
 			typeIndex = plan.objectType(objectName);
-		if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD)
+		if (fieldName == compiler.ir.names.IrReceiverCheck.CHECK_FIELD)
 			return [LocalGet(objectLocal), StructGet(typeIndex, 0), Drop];
 		var field:IrObjectField = plan.objectField(objectName, fieldName);
 		if (plan.usesBytePayload(objectName) && field.nativeLayout != null)
@@ -463,7 +463,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	static function appendFieldNarrowing(body:Array<WasmInstruction>, field:IrObjectField):Void {
-		var native = compiler.ir.IrFieldStorage.scalar(field);
+		var native = compiler.ir.model.IrFieldStorage.scalar(field);
 		if ((switch (field.type) {
 			case F32: true;
 			default: false;
@@ -506,7 +506,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case FieldGet(out, owner, name):
 				var candidate = functionState().scalarLocals.get(owner);
 				if (candidate == null) null;
-				else if (name == compiler.ir.IrReceiverCheck.CHECK_FIELD)[];
+				else if (name == compiler.ir.names.IrReceiverCheck.CHECK_FIELD)[];
 				else [
 					LocalGet(scalarFieldLocal(candidate, name)),
 					LocalSet(scalarValueLocal(locals, out.id))
@@ -826,7 +826,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	public function safeCast(output:IrValue, value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
 		switch output.type {
 			case EnumTag(name):
-				if (compiler.ir.IrVerifier.sameType(output.type, value.type))
+				if (compiler.ir.verify.IrVerifier.sameType(output.type, value.type))
 					return [LocalGet(valueLocal), LocalSet(destination)];
 				return [
 					LocalGet(valueLocal),
@@ -953,7 +953,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			}
 			case Dyn, Abstract(_):
 				[LocalGet(valueLocal), LocalSet(destination)];
-			case _ if (compiler.ir.IrVerifier.sameType(output.type, value.type)):
+			case _ if (compiler.ir.verify.IrVerifier.sameType(output.type, value.type)):
 				[LocalGet(valueLocal), LocalSet(destination)];
 			default:
 				throw new InternalError('Wasm GC cannot cast ${Std.string(value.type)} to ${Std.string(output.type)} yet');
@@ -2411,9 +2411,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		}
 		// Float32 values live in f64 locals, so a Float rounded to 32 bits (FloatBits.toInt32) converts the same way.
 		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == "runtime.FloatBits.toInt32") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, I32)
+			if (!compiler.ir.verify.IrVerifier.sameType(output.type, I32)
 				|| arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
 				|| argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm Float32 bit conversion signature");
 			return [
@@ -2424,9 +2424,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			];
 		}
 		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == "runtime.FloatBits.fromInt32") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
+			if (!compiler.ir.verify.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
 				|| arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, I32)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, I32)
 				|| argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm Float32 bit conversion signature");
 			return [
@@ -2690,8 +2690,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		}
 		if (name == "__reflect_is_enum") {
 			if (arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, Dyn)
-				|| !compiler.ir.IrVerifier.sameType(output.type, Bool))
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, Dyn)
+				|| !compiler.ir.verify.IrVerifier.sameType(output.type, Bool))
 				throw new InternalError("Invalid Wasm GC enum kind query signature");
 			return plan.enumRootTypeIndex < 0 ? [I32Const(0), LocalSet(outputLocal)] : [
 				LocalGet(argumentLocals[0]),
@@ -2859,9 +2859,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		}
 		// Wasm strings are UTF-8 already: their length is the UTF-8 size, and writing one into bytes is a copy.
 		if (name == "__string_utf8_length") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, I32)
+			if (!compiler.ir.verify.IrVerifier.sameType(output.type, I32)
 				|| arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, Bytes)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, Bytes)
 				|| argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm GC String UTF-8 length signature");
 			return [
@@ -2871,11 +2871,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			];
 		}
 		if (name == "__bytes_set_utf8") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, Void)
+			if (!compiler.ir.verify.IrVerifier.sameType(output.type, Void)
 				|| arguments.length != 3
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, ManagedBytes)
-				|| !compiler.ir.IrVerifier.sameType(arguments[1].type, I32)
-				|| !compiler.ir.IrVerifier.sameType(arguments[2].type, Bytes)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, ManagedBytes)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[1].type, I32)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[2].type, Bytes)
 				|| argumentLocals.length != 3)
 				throw new InternalError("Invalid Wasm GC Bytes UTF-8 write signature");
 			var length = allocateLocal(I32);

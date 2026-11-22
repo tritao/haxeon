@@ -1793,7 +1793,7 @@ mismatches are rejected, and regenerated bodies do not retain a removed implemen
 unchanged and remains in roadmap item a2. Source inline-enum activation and UI conversions remain unfinished.
 
 The first self-hosting attempt rejected an implementation check with
-`IrTypedInterfaceDispatch.hx:42:10: E1025: Enum "compiler.ir.IrInstruction" does not conform to Equatable`.
+`IrTypedInterfaceDispatch.hx:42:10: E1025: Enum "compiler.ir.model.IrInstruction" does not conform to Equatable`.
 Host Haxe accepted an enum-identity comparison used to detect replacements; the compiler's own value-equality rules
 correctly rejected it. Normalization now records an explicit replacement flag. No enum conformance or equality rule
 was changed. The failed source/logs are retained; affected gates run again on the corrected source.

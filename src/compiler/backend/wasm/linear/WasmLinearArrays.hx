@@ -1,6 +1,6 @@
 package compiler.backend.wasm.linear;
 
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrType;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;

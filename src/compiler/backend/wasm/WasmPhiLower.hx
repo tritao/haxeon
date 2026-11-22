@@ -2,7 +2,7 @@ package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrPhiInput;
+import compiler.ir.model.Ir.IrPhiInput;
 
 /** Captures phi operands before any destination is overwritten on an edge. */
 class WasmPhiLower {

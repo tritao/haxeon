@@ -1,6 +1,6 @@
 package compiler.hl.lower;
 
-import compiler.ir.Ir.IrObject;
+import compiler.ir.model.Ir.IrObject;
 
 /**
  * The facts lowering reads about entities other than the function it lowers, numbered, with a print per fact that changes exactly
@@ -89,7 +89,7 @@ class HlFactPrints {
 				return false;
 		for (index in 0...a.fields.length) {
 			var left = a.fields[index], right = b.fields[index];
-			if (left.name != right.name || !compiler.ir.IrTypeIdentity.same(left.type, right.type)
+			if (left.name != right.name || !compiler.ir.model.IrTypeIdentity.same(left.type, right.type)
 				|| !sameFieldLayout(left.nativeLayout, right.nativeLayout)
 				|| !sameStorage(left.scalarStorage, right.scalarStorage)
 				|| !sameStorage(left.nullableScalarStorage, right.nullableScalarStorage))
@@ -103,17 +103,18 @@ class HlFactPrints {
 		return true;
 	}
 
-	static function sameNativeLayout(a:Null<compiler.ir.Ir.IrObjectNativeLayout>,
-			b:Null<compiler.ir.Ir.IrObjectNativeLayout>):Bool
+	static function sameNativeLayout(a:Null<compiler.ir.model.Ir.IrObjectNativeLayout>,
+			b:Null<compiler.ir.model.Ir.IrObjectNativeLayout>):Bool
 		return a == null ? b == null : b != null && a.target == b.target && a.size == b.size
 			&& a.alignment == b.alignment;
 
-	static function sameFieldLayout(a:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>,
-			b:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Bool
+	static function sameFieldLayout(a:Null<compiler.ir.model.Ir.IrObjectFieldNativeLayout>,
+			b:Null<compiler.ir.model.Ir.IrObjectFieldNativeLayout>):Bool
 		return a == null ? b == null : b != null && a.offset == b.offset && a.size == b.size
 			&& a.alignment == b.alignment && a.signed == b.signed && a.inlineRecord == b.inlineRecord;
 
-	static function sameStorage(a:Null<compiler.ir.Ir.IrScalarStorage>, b:Null<compiler.ir.Ir.IrScalarStorage>):Bool
+	static function sameStorage(a:Null<compiler.ir.model.Ir.IrScalarStorage>,
+			b:Null<compiler.ir.model.Ir.IrScalarStorage>):Bool
 		return a == null ? b == null : b != null && a.size == b.size && a.signed == b.signed;
 
 	public function describe(id:Int):String

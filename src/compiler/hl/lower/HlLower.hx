@@ -3,11 +3,11 @@ package compiler.hl.lower;
 import compiler.core.PeakProbe;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrBody;
-import compiler.ir.IrFunction;
-import compiler.ir.IrOpcode;
-import compiler.ir.IrValueId;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.IrBody;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrValueId;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
@@ -19,16 +19,16 @@ import compiler.hl.HlLz4;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolTable;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.verify.IrVerifier;
 import compiler.hl.incremental.HlSymbolRequest;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
-import compiler.ir.SourceProvenance;
+import compiler.ir.model.SourceProvenance;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
 
@@ -90,7 +90,7 @@ class HlLower {
 	 * The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`): the program's, so every
 	 * body of the program shares one table.
 	 */
-	var bodyTypes = new compiler.ir.IrTypeIds();
+	var bodyTypes = new compiler.ir.model.IrTypeIds();
 
 	/** `allocateTemporary`, made once: the scalar locals of each function take their registers through it. */
 	final allocateRegister:IrType->Int;
@@ -340,14 +340,15 @@ class HlLower {
 	 * rows need. `memo` keeps each function's own list (`functionNatives`) while the function is the same object.
 	 */
 	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>,
-			?selected:Array<String>, ?memo:compiler.ir.IrFunctionMemo<Array<IrNative>>):Array<IrNative> {
+			?selected:Array<String>, ?memo:compiler.ir.reuse.IrFunctionMemo<Array<IrNative>>):Array<IrNative> {
 		var runtimeNatives = baseline == null ? program.natives.copy() : baseline.copy(),
 			selectedNames:Map<String, Bool> = [];
 		if (baseline != null)
 			for (native in program.natives)
 				ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library,
 					native.symbol);
-		if (Lambda.exists(program.functions, fn -> compiler.ir.IrTypedInterfaceDispatch.isDispatchEntry(fn.name))) {
+		if (Lambda.exists(program.functions,
+			fn -> compiler.ir.passes.objects.IrTypedInterfaceDispatch.isDispatchEntry(fn.name))) {
 			ensureNative(runtimeNatives, HlTypedInterfaceTables.SLOT_NATIVE, [IrType.TypeRef],
 				IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE), "std",
 				"typed_method_slot");
@@ -360,13 +361,13 @@ class HlLower {
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
-		var types:Null<compiler.ir.IrTypeIds> = null;
+		var types:Null<compiler.ir.model.IrTypeIds> = null;
 		for (fn in program.functions)
 			if (selected == null || selectedNames.exists(fn.name)) {
 				var own = memo == null ? null : memo.get(fn);
 				if (own == null) {
 					if (types == null)
-						types = compiler.ir.IrTypeIds.ofFunctions(program.functions);
+						types = compiler.ir.model.IrTypeIds.ofFunctions(program.functions);
 					own = functionNatives(fn, types);
 					if (memo != null)
 						memo.set(fn, own);
@@ -379,9 +380,9 @@ class HlLower {
 	}
 
 	/** The runtime natives lowering the rows of `fn` calls, each once, in the order they come; they depend on nothing else. */
-	static function functionNatives(fn:IrFunction, types:compiler.ir.IrTypeIds):Array<IrNative> {
+	static function functionNatives(fn:IrFunction, types:compiler.ir.model.IrTypeIds):Array<IrNative> {
 		var own:Array<IrNative> = [],
-			valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id,
+			valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id,
 			body = fn.bodyIn(types);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
@@ -425,7 +426,7 @@ class HlLower {
 		}
 
 	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Void {
-		bodyTypes = compiler.ir.IrTypeIds.ofFunctions(program.functions);
+		bodyTypes = compiler.ir.model.IrTypeIds.ofFunctions(program.functions);
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var hasFunctionIndices = false;
@@ -453,7 +454,8 @@ class HlLower {
 		}
 		// Patches cannot add object types, so every base module carries String.
 		internType(IrType.Bytes);
-		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program,
+		var runtimeEnums = developmentMetadata
+			? program.enums : compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program,
 			loweredCache == null ? null : loweredCache.summaries.enumUses);
 		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
 		for (declaration in program.enums)
@@ -478,7 +480,7 @@ class HlLower {
 		var pendingInterfaces = program.interfaces.copy();
 		while (pendingInterfaces.length > 0) {
 			var progressed = false;
-			var remainingInterfaces:Array<compiler.ir.Ir.IrInterface> = [];
+			var remainingInterfaces:Array<compiler.ir.model.Ir.IrInterface> = [];
 			for (interfaceDecl in pendingInterfaces) {
 				var ready = true;
 				for (base in interfaceDecl.bases)
@@ -1157,15 +1159,15 @@ class HlLower {
 				nextLabel = body.blockId(block) + 1;
 		// The analyses read the body as it is, so they share its graph.
 		var graph = scratch.graph.reset(body),
-			nonNull = compiler.ir.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull),
+			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull),
 			exactTypes = scratch.exactTypes.reset(body, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
 		var valueLimit = body.valueLimit();
-		var registers = compiler.ir.IrPassScratch.filledInts(scratch.registers, valueLimit, -1);
+		var registers = compiler.ir.model.IrPassScratch.filledInts(scratch.registers, valueLimit, -1);
 		var registerTypes = scratch.registerTypes;
 		registerTypes.resize(0);
-		var nullValues = compiler.ir.IrPassScratch.filledBools(scratch.nullValues, valueLimit, false);
+		var nullValues = compiler.ir.model.IrPassScratch.filledBools(scratch.nullValues, valueLimit, false);
 		var hasPointerOffsets = false;
 		hasFoldedAddresses = false;
 		for (index in 0...body.argumentCount())
@@ -1188,7 +1190,7 @@ class HlLower {
 		}
 		var scalarOptionals = scratch.scalarLocals;
 		scalarOptionals.reset(body, view, allocateRegister);
-		var uses = compiler.ir.IrPassScratch.filledInts(scratch.uses, valueLimit, 0);
+		var uses = compiler.ir.model.IrPassScratch.filledInts(scratch.uses, valueLimit, 0);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -1201,7 +1203,7 @@ class HlLower {
 			foldPointerOffsets(uses);
 		// An array boxed only to be cast back to an array, as a coercion between array types does, is the same HashLink array
 		// (`HlType.Array` carries no element type): the cast takes the array itself unchecked, and the box is not made.
-		var arrayRecasts = compiler.ir.IrPassScratch.filledInts(scratch.arrayRecasts, valueLimit, -1),
+		var arrayRecasts = compiler.ir.model.IrPassScratch.filledInts(scratch.arrayRecasts, valueLimit, -1),
 			unboxedArrays = scratch.unboxedArrays;
 		unboxedArrays.clear();
 		for (block in 0...body.blockCount()) {
@@ -1221,7 +1223,7 @@ class HlLower {
 				row = next;
 			}
 		}
-		var catchValues = compiler.ir.IrPassScratch.filledInts(scratch.catchValues, nextLabel, -1);
+		var catchValues = compiler.ir.model.IrPassScratch.filledInts(scratch.catchValues, nextLabel, -1);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
 			while (row >= 0 && row != terminator) {
@@ -1239,8 +1241,8 @@ class HlLower {
 		groupPhiMoves();
 
 		// Each value's debug bindings, in the order the body has them: the first, and from each the next for the same value.
-		var firstBinding = compiler.ir.IrPassScratch.filledInts(scratch.firstBinding, valueLimit, -1),
-			nextBinding = compiler.ir.IrPassScratch.filledInts(scratch.nextBinding, body.bindingCount(), -1),
+		var firstBinding = compiler.ir.model.IrPassScratch.filledInts(scratch.firstBinding, valueLimit, -1),
+			nextBinding = compiler.ir.model.IrPassScratch.filledInts(scratch.nextBinding, body.bindingCount(), -1),
 			index = body.bindingCount();
 		while (index > 0) {
 			index--;
@@ -1264,7 +1266,7 @@ class HlLower {
 		definedViews.clear();
 		hasViewedArrays = false;
 		loopBounds = null;
-		var valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
+		var valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -1318,8 +1320,8 @@ class HlLower {
 						case IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal:
 							fusedCondition = condition;
 						case IrOpcode.Call if (body.operandCount(last) == 2
-							&& (body.symbol(last).name == compiler.ir.IrExactTypeFacts.TEST
-							|| body.symbol(last).name == compiler.ir.IrReferenceIdentity.NAME)):
+							&& (body.symbol(last).name == compiler.ir.analysis.IrExactTypeFacts.TEST
+							|| body.symbol(last).name == compiler.ir.names.IrReferenceIdentity.NAME)):
 							fusedCondition = condition;
 						default:
 					}
@@ -1447,7 +1449,7 @@ class HlLower {
 		}
 
 		var scopedAssignments:Array<HlDebugAssignment> = [],
-			scopeEnds = compiler.ir.IrPassScratch.filledInts(scratch.scopeEnds, body.bindingCount(), -2);
+			scopeEnds = compiler.ir.model.IrPassScratch.filledInts(scratch.scopeEnds, body.bindingCount(), -2);
 		for (index in 0...debugAssignments.length) {
 			var assignment = debugAssignments[index];
 			scopedAssignments.push({
@@ -1552,7 +1554,7 @@ class HlLower {
 	/** Lowers instruction row `row` of block `block`, which has opcode `opcode` and defines `output`. */
 	function lowerRow(row:Int, opcode:IrOpcode, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
-			nonNull:compiler.ir.IrPassScratch.IrValueMarks, exactTypes:compiler.ir.IrExactTypeFacts,
+			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, exactTypes:compiler.ir.analysis.IrExactTypeFacts,
 			firstBinding:Array<Int>, arrayRecasts:Array<Int>, catchValues:Array<Int>):Void {
 		var scalarOptionals = scratch.scalarLocals;
 		switch opcode {
@@ -1798,7 +1800,7 @@ class HlLower {
 					}
 				} else
 					instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
-						requireObjectType(compiler.ir.IrTypeTools.valueObjectName(body.valueType(output))), 0));
+						requireObjectType(compiler.ir.model.IrTypeTools.valueObjectName(body.valueType(output))), 0));
 			case IrOpcode.NewObject:
 				instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
 					requireObjectType(body.symbol(row).name), 0));
@@ -1888,9 +1890,9 @@ class HlLower {
 
 	function lowerCall(row:Int, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
-			nonNull:compiler.ir.IrPassScratch.IrValueMarks, firstBinding:Array<Int>):Void {
+			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, firstBinding:Array<Int>):Void {
 		var functionName = body.symbol(row).name;
-		if ((output:Int) == fusedCondition && functionName == compiler.ir.IrReferenceIdentity.NAME) {
+		if ((output:Int) == fusedCondition && functionName == compiler.ir.names.IrReferenceIdentity.NAME) {
 			// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
 			var pointers = identityPointers(row, instructions, registers, registerTypes);
 			fusedPending = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
@@ -1907,7 +1909,7 @@ class HlLower {
 			return;
 		}
 		var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(body, row) : null;
-		if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(row)) {
+		if (functionName == compiler.ir.names.IrReceiverCheck.NAME && nonNull.has(row)) {
 			// A previous successful dereference or check already proved this SSA receiver non-null.
 		} else if (StringTools.startsWith(functionName, VALUE_ARRAY_READ) && uses[output] == 0
 			&& firstBinding[output] < 0 && usedReadNearby(body, row, uses)) {
@@ -2139,7 +2141,7 @@ class HlLower {
 	// The last location made, and what it was made from: consecutive instructions mostly share their source.
 	var lastProvenance:Null<SourceProvenance> = null;
 
-	var lastSource:Null<compiler.ir.SourceProvenance.SourceLocation> = null;
+	var lastSource:Null<compiler.ir.model.SourceProvenance.SourceLocation> = null;
 	var lastFlags = -1;
 	var lastLocation:Null<HlDebugLocation> = null;
 
@@ -2215,7 +2217,7 @@ class HlLower {
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= size)
 				size = body.blockId(block) + 1;
-		var byId = compiler.ir.IrPassScratch.filledInts(scratch.blocksById, size, -1), layout = scratch.layout;
+		var byId = compiler.ir.model.IrPassScratch.filledInts(scratch.blocksById, size, -1), layout = scratch.layout;
 		for (block in 0...body.blockCount())
 			byId[body.blockId(block)] = block;
 		scratch.laidOut.clear();
@@ -2230,7 +2232,7 @@ class HlLower {
 			if (body.firstRow(block) >= 0)
 				layout[kept++] = block;
 		layout.resize(kept);
-		var positions = compiler.ir.IrPassScratch.filledInts(scratch.layoutPositions, size, -1);
+		var positions = compiler.ir.model.IrPassScratch.filledInts(scratch.layoutPositions, size, -1);
 		for (index in 0...kept)
 			positions[body.blockId(layout[index])] = index;
 		return layout;
@@ -2346,9 +2348,9 @@ class HlLower {
 				row = body.nextRow(row);
 			}
 		}
-		var starts = compiler.ir.IrPassScratch.filledInts(scratch.moveStart, size, 0),
-			counts = compiler.ir.IrPassScratch.filledInts(scratch.moveCount, size, 0),
-			targets = compiler.ir.IrPassScratch.filledInts(scratch.moveTarget, size, -1);
+		var starts = compiler.ir.model.IrPassScratch.filledInts(scratch.moveStart, size, 0),
+			counts = compiler.ir.model.IrPassScratch.filledInts(scratch.moveCount, size, 0),
+			targets = compiler.ir.model.IrPassScratch.filledInts(scratch.moveTarget, size, -1);
 		for (block in 0...body.blockCount()) {
 			var id = body.blockId(block), row = body.firstRow(block);
 			while (row >= 0) {
@@ -2369,8 +2371,8 @@ class HlLower {
 			offset += counts[id];
 			counts[id] = 0;
 		}
-		var destinations = compiler.ir.IrPassScratch.filledInts(scratch.moveDestinations, total, -1),
-			sources = compiler.ir.IrPassScratch.filledInts(scratch.moveSources, total, -1);
+		var destinations = compiler.ir.model.IrPassScratch.filledInts(scratch.moveDestinations, total, -1),
+			sources = compiler.ir.model.IrPassScratch.filledInts(scratch.moveSources, total, -1);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -2551,9 +2553,9 @@ class HlLower {
 	 */
 	function foldPointerOffsets(uses:Array<Int>):Void {
 		var limit = body.valueLimit(),
-			pointers = compiler.ir.IrPassScratch.filledInts(scratch.foldedPointers, limit, -1),
-			offsets = compiler.ir.IrPassScratch.filledInts(scratch.foldedOffsets, limit, -1),
-			addressUses = compiler.ir.IrPassScratch.filledInts(scratch.addressUses, limit, 0);
+			pointers = compiler.ir.model.IrPassScratch.filledInts(scratch.foldedPointers, limit, -1),
+			offsets = compiler.ir.model.IrPassScratch.filledInts(scratch.foldedOffsets, limit, -1),
+			addressUses = compiler.ir.model.IrPassScratch.filledInts(scratch.addressUses, limit, 0);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -2667,7 +2669,7 @@ class HlLower {
 	var hasViewedArrays = false;
 
 	/** The proofs of the loops' array indices of the function being lowered, made when a read first asks for one. */
-	var loopBounds:Null<compiler.ir.IrLoopBounds> = null;
+	var loopBounds:Null<compiler.ir.analysis.IrLoopBounds> = null;
 
 	@:processWide("an empty set of calls known not to resize arrays, never added to")
 	static final noPureCalls:Map<String, Bool> = [];
@@ -2677,7 +2679,7 @@ class HlLower {
 		var bounds = loopBounds;
 		if (bounds == null) {
 			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new compiler.ir.IrLoopBounds(body.toFunction(), noPureCalls);
+			bounds = new compiler.ir.analysis.IrLoopBounds(body.toFunction(), noPureCalls);
 			loopBounds = bounds;
 		}
 		return bounds.proven(valueOf(array), valueOf(index), block);
@@ -2775,24 +2777,25 @@ class HlLower {
 
 	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, instructions:Array<HlInstruction>,
 			registers:Array<Int>, registerTypes:Array<Int>):Bool {
-		if (compiler.ir.IrScalarWordBits.matches(name)) {
-			if (body.operandCount(row) != 1 || !compiler.ir.IrScalarWordBits.valid(name,
+		if (compiler.ir.passes.scalars.IrScalarWordBits.matches(name)) {
+			if (body.operandCount(row) != 1 || !compiler.ir.passes.scalars.IrScalarWordBits.valid(name,
 				body.valueType(body.operand(row, 0)), body.valueType(output)))
 				throw new InternalError("Invalid scalar word transport signature");
-			var scalar = name == compiler.ir.IrScalarWordBits.PACK
+			var scalar = name == compiler.ir.passes.scalars.IrScalarWordBits.PACK
 				? body.valueType(body.operand(row, 0)) : body.valueType(output);
-			if (compiler.ir.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
+			if (compiler.ir.verify.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
 				throw new InternalError("HashLink callbacks belong in the reference lane");
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
 				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
-		if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
+		if (name == compiler.ir.passes.values.IrValueLaneReference.PACK
+			|| name == compiler.ir.passes.values.IrValueLaneReference.UNPACK) {
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
 				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
-		if (name == compiler.ir.IrExactTypeFacts.TEST) {
+		if (name == compiler.ir.analysis.IrExactTypeFacts.TEST) {
 			// A plain object of exactly the class: its type pointer equals the class's. Null reads as `void`, a virtual as its own
 			// virtual type and a boxed value as its scalar type, so none of them matches an object class.
 			var actual = temporaryRegister(IrType.TypeRef, registerTypes),
@@ -2808,7 +2811,7 @@ class HlLower {
 			instructions.push(HlInstruction.Label(done));
 			return true;
 		}
-		if (name == compiler.ir.IrReferenceIdentity.NAME) {
+		if (name == compiler.ir.names.IrReferenceIdentity.NAME) {
 			var pointers = identityPointers(row, instructions, registers, registerTypes);
 			var result = defineRegister(output, registers, registerTypes),
 				yes = freshLabel(),
@@ -2821,21 +2824,21 @@ class HlLower {
 			instructions.push(HlInstruction.Label(done));
 			return true;
 		}
-		if (name == compiler.ir.IrReceiverCheck.NAME) {
+		if (name == compiler.ir.names.IrReceiverCheck.NAME) {
 			instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
-		if (name == compiler.ir.IrHlScalarRef.ADDRESS) {
+		if (name == compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS) {
 			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
 				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
-		if (name == compiler.ir.IrHlScalarRef.LOAD) {
+		if (name == compiler.ir.passes.scalars.IrHlScalarRef.LOAD) {
 			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
 				requireRegister(body.operand(row, 0), registers)));
 			return true;
 		}
-		if (name == compiler.ir.IrHlScalarRef.STORE) {
+		if (name == compiler.ir.passes.scalars.IrHlScalarRef.STORE) {
 			instructions.push(HlInstruction.Setref(requireRegister(body.operand(row, 0), registers),
 				requireRegister(body.operand(row, 1), registers)));
 			return true;
@@ -3003,7 +3006,7 @@ class HlLower {
 		return index;
 	}
 
-	function internNativeStorage(type:IrType, layout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
+	function internNativeStorage(type:IrType, layout:Null<compiler.ir.model.Ir.IrScalarStorage>):Null<Int> {
 		var index = symbols.internNativeFieldStorageType(type, layout);
 		if (recordedKeys != null && layout != null)
 			record(NativeStorage(type, layout, index));
@@ -3220,7 +3223,7 @@ class HlLower {
 		return visible;
 	}
 
-	function objectFieldNativeLayout(objectType:IrType, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
+	function objectFieldNativeLayout(objectType:IrType, name:String):Null<compiler.ir.model.Ir.IrScalarStorage> {
 		var typeName = switch objectType {
 			case Obj(value): value;
 			default: return null;
@@ -3228,13 +3231,13 @@ class HlLower {
 		return objectFieldNativeLayoutForType(typeName, name);
 	}
 
-	function objectFieldNativeLayoutForType(typeName:String, name:String):Null<compiler.ir.Ir.IrScalarStorage> {
+	function objectFieldNativeLayoutForType(typeName:String, name:String):Null<compiler.ir.model.Ir.IrScalarStorage> {
 		var descriptor = view.object(typeName);
 		if (descriptor == null)
 			return null;
 		for (field in descriptor.fields)
 			if (field.name == name)
-				return compiler.ir.IrFieldStorage.scalar(field);
+				return compiler.ir.model.IrFieldStorage.scalar(field);
 		return descriptor.base == null ? null : objectFieldNativeLayoutForType(Std.string(descriptor.base), name);
 	}
 

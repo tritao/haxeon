@@ -4,7 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
-import compiler.ir.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNative;
 
 typedef FfiInterfaceSource = {
 	final path:String;

@@ -1,9 +1,9 @@
 import compiler.core.AllocationMeter;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrNullableScalarFields;
-import compiler.ir.IrOptionalFieldStorage;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.nullability.IrNullableScalarFields;
+import compiler.ir.passes.nullability.IrOptionalFieldStorage;
 
 class FieldStorageSelectionMain {
 	static function main():Void {
@@ -55,7 +55,7 @@ class FieldStorageSelectionMain {
 					p.functions.push(new IrFunction("f" + i, b.arguments, I32, b.blocks, Ordinary));
 				}
 				// Encoded first, as the pipeline's functions are when the nullable scalar fields run on their bodies.
-				var types = new compiler.ir.IrTypeIds();
+				var types = new compiler.ir.model.IrTypeIds();
 				for (fn in p.functions)
 					fn.bodyIn(types);
 				var original = p.functions.copy(),
@@ -70,7 +70,7 @@ class FieldStorageSelectionMain {
 				for (i in 1...original.length)
 					if (original[i] != p.functions[i])
 						throw "An unrelated function lost its identity";
-				compiler.ir.IrVerifier.verify(p);
+				compiler.ir.verify.IrVerifier.verify(p);
 			}
 		checkDiagnostics();
 		Sys.println("PASS: optional and nullable field lowering skips unrelated bodies and retains diagnostics");

@@ -1,11 +1,11 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumCaseAccess;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.enums.IrInlineEnumCaseAccess;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 
 class InlineEnumPayloadMain {
 	static function tempRoot():String {
@@ -67,13 +67,13 @@ class InlineEnumPayloadMain {
 		b.fieldSet(record, "tiny", b.constInt(-2));
 		b.fieldSet(record, "owner", owner);
 		var f32 = b.constFloat(-0.125, F32),
-			raw = b.call(compiler.ir.IrScalarWordBits.UNPACK, [b.constInt(0x12345678, I64)], RawPtr),
+			raw = b.call(compiler.ir.passes.scalars.IrScalarWordBits.UNPACK, [b.constInt(0x12345678, I64)], RawPtr),
 			type = b.typeValue(Obj("Source")),
 			callback = b.constNull(Abstract("native_callback"));
 		var optional = b.toDyn(b.constInt(-7), Nullable(I32)),
 			none = b.constNull(Nullable(Obj("Small")));
 		var value = access.construct(b, 1, [b.constInt(1234), record, optional, none, f32]);
-		var relayed = b.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [value],
+		var relayed = b.call(compiler.ir.passes.enums.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [value],
 			Obj(mixed.valueObject.name));
 		var wrapped = outside.construct(b, 0, [relayed]),
 			restored = outside.field(b, wrapped, 0, 0);
@@ -100,22 +100,26 @@ class InlineEnumPayloadMain {
 		checks.push(b.equal(access.field(b, other, 1, 2), b.constNull(Nullable(I32))));
 		for (number in [-12.5, -0.0, Math.NaN]) {
 			var floating = b.constFloat(number),
-				wide = b.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [access.construct(b, 2, [
-					floating,
-					raw,
-					type,
-					callback
-				])],
+				wide = b.call(compiler.ir.passes.enums.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward",
+					[access.construct(b, 2, [
+						floating,
+						raw,
+						type,
+						callback
+					])],
 					Obj(mixed.valueObject.name));
-			checks.push(b.equal(b.call(compiler.ir.IrScalarWordBits.PACK, [access.field(b, wide, 2, 1)], I64),
-				b.call(compiler.ir.IrScalarWordBits.PACK, [raw], I64)));
-			checks.push(b.equal(b.call(compiler.ir.IrScalarWordBits.PACK, [access.field(b, wide, 2, 2)], I64),
-				b.call(compiler.ir.IrScalarWordBits.PACK, [type], I64)));
+			checks.push(b.equal(b.call(compiler.ir.passes.scalars.IrScalarWordBits.PACK, [access.field(b, wide, 2, 1)],
+				I64),
+				b.call(compiler.ir.passes.scalars.IrScalarWordBits.PACK, [raw], I64)));
+			checks.push(b.equal(b.call(compiler.ir.passes.scalars.IrScalarWordBits.PACK, [access.field(b, wide, 2, 2)],
+				I64),
+				b.call(compiler.ir.passes.scalars.IrScalarWordBits.PACK, [type], I64)));
 			checks.push(b.equal(access.field(b, wide, 2, 3), callback));
 			checks.push(b.equal(b.call("__f64_to_i64_bits", [access.field(b, wide, 2, 0)], I64),
 				b.call("__f64_to_i64_bits", [floating], I64)));
 			for (index in 0...mixed.references)
-				checks.push(b.equal(compiler.ir.IrInlineEnumReferenceAccess.read(b, wide, index, Obj("Source")),
+				checks.push(b.equal(compiler.ir.passes.enums.IrInlineEnumReferenceAccess.read(b, wide, index,
+					Obj("Source")),
 					b.constNull(Obj("Source"))));
 		}
 		var bad = b.createBlock();
@@ -130,49 +134,54 @@ class InlineEnumPayloadMain {
 		var p = new IrProgram("main");
 		p.objects = objects;
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
-		p.natives = compiler.ir.IrInlineEnumWordAccess.natives();
+		p.natives = compiler.ir.passes.enums.IrInlineEnumWordAccess.natives();
 		var relay = new IrBuilder(),
 			input = relay.argument("value", Obj(mixed.valueObject.name)),
 			output = relay.valueInit(mixed.valueObject.name);
 		for (field in mixed.valueObject.fields)
 			relay.fieldSet(output, field.name, relay.fieldGet(input, field.name, field.type));
 		relay.returnValue(output);
-		p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay", relay.arguments,
+		p.functions.push(new IrFunction(compiler.ir.passes.enums.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay",
+			relay.arguments,
 			Obj(mixed.valueObject.name),
 			relay.blocks,
-			Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)),
+			Provider(compiler.ir.model.TypeKey.of(Obj(mixed.valueObject.name)),
 			compiler.core.Provides.ProviderOperations
 			.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper,
 			"relay"))));
 		var forward = new IrBuilder(),
 			input = forward.argument("value", Obj(mixed.valueObject.name));
-		forward.returnValue(forward.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay", [input],
+		forward.returnValue(forward.call(compiler.ir.passes.enums.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay",
+			[input],
 			Obj(mixed.valueObject.name)));
-		p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", forward.arguments,
+		p.functions.push(new IrFunction(compiler.ir.passes.enums.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward",
+			forward.arguments,
 			Obj(mixed.valueObject.name),
 			forward.blocks,
-			Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)),
+			Provider(compiler.ir.model.TypeKey.of(Obj(mixed.valueObject.name)),
 			compiler.core.Provides.ProviderOperations
 			.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper,
 			"forward"))));
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		// Raw host pointers are intentionally not interpreted in target-independent IR.
-		p.functions = new compiler.ir.IrOptionalScalarFlow(p.objects).rewrite(p.objects, p.functions);
-		p.functions = compiler.ir.IrOptionalValueFlow.addHelpers(p.functions, p.objects);
-		compiler.ir.IrValueConstructors.rewrite(p);
-		compiler.ir.IrValuePhiScalarization.rewrite(p);
-		compiler.ir.IrScalarArguments.rewrite(p, target != HashLink);
+		p.functions = new compiler.ir.passes.nullability.IrOptionalScalarFlow(p.objects).rewrite(p.objects,
+			p.functions);
+		p.functions = compiler.ir.passes.nullability.IrOptionalValueFlow.addHelpers(p.functions, p.objects);
+		compiler.ir.passes.values.IrValueConstructors.rewrite(p);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(p);
+		compiler.ir.passes.scalars.IrScalarArguments.rewrite(p, target != HashLink);
 		var table = IrObjectTable.of([for (o in p.objects) o.name => o]);
 		p.functions = [
 			for (fn in p.functions)
-				compiler.ir.IrScalarReplacement.rewrite(fn, table, false, target == HashLink)
+				compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, table, false, target == HashLink)
 		];
-		compiler.ir.IrNullableScalarFlow.rewrite(p);
-		compiler.ir.IrInliner.run(p,
-			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(p.functions)),
-			compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(p);
+		compiler.ir.passes.inlining.IrInliner.run(p,
+			new compiler.ir.passes.inlining.IrInliner
+			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(p.functions)),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var entry = new IrBuilder(),
 			censusPaths:Array<{path:String, count:Int}> = [];
 		var result = entry.call("main", [], I32);

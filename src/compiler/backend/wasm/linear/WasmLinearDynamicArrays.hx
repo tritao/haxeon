@@ -1,9 +1,9 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -1280,7 +1280,7 @@ class WasmLinearDynamicArrays {
 			builder.emitAll([
 				LocalGet(left),
 				LocalGet(right),
-				Call(concrete(compiler.ir.IrValueLaneRuntime.PRIMITIVE + "compatible"))
+				Call(concrete(compiler.ir.passes.values.IrValueLaneRuntime.PRIMITIVE + "compatible"))
 			]);
 			builder.emitAll([
 				If(null),

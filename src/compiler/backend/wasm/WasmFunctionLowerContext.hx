@@ -6,8 +6,8 @@ import compiler.backend.wasm.WasmRepresentation.WasmFunctionRepresentationContex
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.gc.WasmGcRoots.WasmSafepoint;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.IrFunction;
 
 typedef WasmFunctionArrayTemps = {
 	final len:Int;

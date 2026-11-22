@@ -1,8 +1,8 @@
 package compiler.abi;
 
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrTypeIdentity;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrTypeIdentity;
 
 /** Deterministic semantic descriptions of every runtime-visible declaration. */
 typedef RuntimeAbiDescriptor = {
@@ -32,7 +32,7 @@ typedef RuntimeAbiDescriptor = {
 class RuntimeAbi {
 	/** `signatures` keeps each function's signature text while the function is the same object. */
 	public static function describe(program:IrProgram,
-			?signatures:compiler.ir.IrFunctionMemo<String>):RuntimeAbiDescriptor {
+			?signatures:compiler.ir.reuse.IrFunctionMemo<String>):RuntimeAbiDescriptor {
 		var functions:Map<String, String> = [],
 			objects:Map<String, String> = [],
 			interfaces:Map<String, String> = [],

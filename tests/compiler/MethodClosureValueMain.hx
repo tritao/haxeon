@@ -6,13 +6,13 @@ import compiler.hl.HlWriter;
 import compiler.tools.CompilerDriver;
 
 class MethodClosureValueMain {
-	static function checkMismatchedOverride(program:compiler.ir.Ir.IrProgram):Void {
-		var key = Std.string(compiler.ir.Ir.IrType.Function([compiler.ir.Ir.IrType.Obj("CallbackRecord")],
-			compiler.ir.Ir.IrType.I32));
+	static function checkMismatchedOverride(program:compiler.ir.model.Ir.IrProgram):Void {
+		var key = Std.string(compiler.ir.model.Ir.IrType.Function([compiler.ir.model.Ir.IrType.Obj("CallbackRecord")],
+			compiler.ir.model.Ir.IrType.I32));
 		var before = new compiler.backend.wasm.WasmScalarAbi(program, [], true);
 		if (!before.scalarClosures.exists(key))
 			throw "Typed callback argument was not scalar";
-		var altered = new compiler.ir.Ir.IrProgram(program.entryPoint);
+		var altered = new compiler.ir.model.Ir.IrProgram(program.entryPoint);
 		altered.objects = program.objects;
 		altered.interfaces = program.interfaces;
 		altered.enums = program.enums;
@@ -23,8 +23,9 @@ class MethodClosureValueMain {
 		altered.functions = [for (fn in program.functions) {
 			if (fn.name == "OverridingRelay.records") {
 				var args = fn.arguments.copy(), arg = args[1];
-				args[1] = new compiler.ir.Ir.IrValue(arg.id, arg.name,
-					compiler.ir.Ir.IrType.Function([compiler.ir.Ir.IrType.Dyn], compiler.ir.Ir.IrType.I32));
+				args[1] = new compiler.ir.model.Ir.IrValue(arg.id, arg.name,
+					compiler.ir.model.Ir.IrType.Function([compiler.ir.model.Ir.IrType.Dyn],
+					compiler.ir.model.Ir.IrType.I32));
 				changed = true;
 				fn.withBlocks(fn.blocks, null, args);
 			} else fn;

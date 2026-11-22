@@ -1,0 +1,134 @@
+package compiler.ir.passes.arrays;
+
+import compiler.core.InternalError;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.passes.scalars.IrScalarWordBits;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneSlot;
+import compiler.ir.passes.values.IrValueLaneReference;
+import compiler.ir.verify.IrVerifier;
+
+/** Emit typed access to one leaf of an inline array element without materializing the containing value. */
+class IrValueArrayAccess {
+	final wordBits:Int;
+	final declarations:Map<String, IrNative> = [];
+
+	public function new(wordBits:Int) {
+		if (wordBits != 32 && wordBits != 64) throw new InternalError('Unsupported value lane word width $wordBits');
+		this.wordBits = wordBits;
+	}
+
+	/** The caller validates optional ancestors before reading their payload slots. */
+	public function read(builder:IrBuilder, array:IrValue, index:IrValue, slot:IrValueLaneSlot):IrValue {
+		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
+		if (slot.isReference) {
+			declare(IrValueLaneReference.READ, [Array(Dyn), I32, I32], IrValueLaneReference.type());
+			var carrier = builder.call(IrValueLaneReference.READ, args, IrValueLaneReference.type());
+			return IrValueLaneReference.isCarrier(slot.type) ? carrier : builder.call(IrValueLaneReference.UNPACK,
+				[carrier], slot.type);
+		}
+		var suffix = scalarSuffix(slot.type), name = '__value_array_read_$suffix';
+		var types:Array<IrType> = [Array(Dyn), I32, I32];
+		if (suffix == "i32" || suffix == "i64" || suffix == "ptr" || suffix == "type") {
+			args.push(builder.constInt(slot.bitWidth));
+			types.push(I32);
+		}
+		if (suffix == "i32" || suffix == "i64") {
+			args.push(builder.constBool(slot.signed));
+			types.push(Bool);
+		}
+		var physical = switch slot.type {
+			case EnumTag(_): I32;
+			default: slot.type;
+		};
+		declare(name, types, physical);
+		var value = builder.call(name, args, physical);
+		return switch slot.type {
+			case EnumTag(_): builder.call(IrScalarWordBits.UNPACK, [value], slot.type);
+			default: value;
+		};
+	}
+
+	/** The caller grows the array before writing and marks the element initialized after all leaves are written. */
+	public function write(builder:IrBuilder, array:IrValue, index:IrValue, slot:IrValueLaneSlot, value:IrValue):Void {
+		if (!IrVerifier.sameType(value.type, slot.type))
+			throw new InternalError('Wrong value lane slot type: ${value.type}, expected ${slot.type}');
+		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
+		if (slot.isReference) {
+			declare(IrValueLaneReference.WRITE, [Array(Dyn), I32, I32, IrValueLaneReference.type()], Void);
+			args.push(IrValueLaneReference.isCarrier(value.type) ? value : builder.call(IrValueLaneReference.PACK,
+				[value], IrValueLaneReference.type()));
+			builder.call(IrValueLaneReference.WRITE, args, Void);
+			return;
+		}
+		var suffix = scalarSuffix(slot.type), name = '__value_array_write_$suffix';
+		var types:Array<IrType> = [Array(Dyn), I32, I32];
+		if (suffix == "i32" || suffix == "i64" || suffix == "ptr" || suffix == "type") {
+			args.push(builder.constInt(slot.bitWidth));
+			types.push(I32);
+		}
+		var stored = switch slot.type {
+			case EnumTag(_): builder.call(IrScalarWordBits.PACK, [value], I32);
+			default: value;
+		};
+		args.push(stored);
+		types.push(stored.type);
+		declare(name, types, Void);
+		builder.call(name, args, Void);
+	}
+
+	/** Clear one leaf without inventing a typed zero for pointers or runtime type handles. */
+	public function clear(builder:IrBuilder, array:IrValue, index:IrValue, slot:IrValueLaneSlot):Void {
+		var name = slot.isReference ? "__value_array_clear_ref" : "__value_array_clear_scalar";
+		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
+		var types:Array<IrType> = [Array(Dyn), I32, I32];
+		if (!slot.isReference) {
+			args.push(builder.constInt(slot.bitWidth));
+			types.push(I32);
+		}
+		declare(name, types, Void);
+		builder.call(name, args, Void);
+	}
+
+	public function natives():Array<IrNative> {
+		var names = [for (name in declarations.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) declarations.get(name)];
+	}
+
+	function scalarOffset(slot:IrValueLaneSlot):Int {
+		var offset = slot.index * 1.0 * wordBits + slot.bitOffset;
+		if (offset > 0x7fffffff) throw new InternalError('Value lane offset is too large');
+		return Std.int(offset);
+	}
+
+	static function scalarSuffix(type:IrType):String return switch type {
+		case I32, EnumTag(_): "i32";
+		case I64: "i64";
+		case Bool: "bool";
+		case F32: "f32";
+		case F64: "f64";
+		case RawPtr: "ptr";
+		case TypeRef: "type";
+		case Abstract("native_callback"): "callback";
+		default: throw new InternalError('Unsupported scalar value lane type $type');
+	};
+
+	function declare(name:String, arguments:Array<IrType>, result:IrType):Void {
+		var previous = declarations.get(name);
+		if (previous != null) {
+			if (!IrVerifier.sameType(previous.result, result) || previous.arguments.length != arguments.length)
+				throw new InternalError('Conflicting value lane native "$name"');
+			for (i in 0...arguments.length) if (!IrVerifier.sameType(previous.arguments[i], arguments[i]))
+				throw new InternalError('Conflicting value lane native "$name"');
+			return;
+		}
+		declarations.set(name, {
+			name: name,
+			library: "haxeon_runtime",
+			symbol: name,
+			arguments: arguments,
+			result: result
+		});
+	}
+}

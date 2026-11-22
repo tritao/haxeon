@@ -340,8 +340,9 @@ class NativeLayoutMain {
 			&& changedFloat32Compile.retyped.indexOf("Main.main") >= 0,
 			"changing a nested Float32 default must round to its declared precision and invalidate descriptor callers");
 		if ([
-			for (object in compiler.ir.IrProgramAssembler.objectsFrom(compiler.ir.IrGenerator.forProgram(typed,
-				compiler.ir.TargetProfile.portable), typed))
+			for (object in compiler.ir.pipeline.IrProgramAssembler
+				.objectsFrom(compiler.ir.gen.IrGenerator.forProgram(typed,
+				compiler.ir.pipeline.TargetProfile.portable), typed))
 				if (object.name == "Pair" || object.name == "Outer") object
 		].length != 0)
 			throw "native value records must not be emitted as HashLink objects or HSTRUCT values";
@@ -448,13 +449,13 @@ class NativeLayoutMain {
 	}
 
 	/** Whether the final IR of `name` loads `value` as a constant: a Wasm build lowers the IR, with no HashLink constant table. */
-	static function hasIntConstant(program:compiler.ir.Ir.IrProgram, name:String, value:Int):Bool {
+	static function hasIntConstant(program:compiler.ir.model.Ir.IrProgram, name:String, value:Int):Bool {
 		for (fn in program.functions)
 			if (fn.name == name)
 				for (block in fn.blocks)
 					for (instruction in block.instructions)
 						switch instruction.value {
-							case compiler.ir.Ir.IrInstruction.ConstInt(_, constant) if (constant == value):
+							case compiler.ir.model.Ir.IrInstruction.ConstInt(_, constant) if (constant == value):
 								return true;
 							case _:
 						}

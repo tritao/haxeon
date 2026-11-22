@@ -1,7 +1,7 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** Compiler-generated Observable field reads and writes use one shared source per object. */
 class ObservableTrackingMain {

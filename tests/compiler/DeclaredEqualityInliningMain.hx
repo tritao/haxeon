@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** Declared conformance helpers keep their semantics when the optimizer is toggled. */
 class DeclaredEqualityInliningMain {

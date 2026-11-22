@@ -14,8 +14,8 @@ import compiler.core.PeakProbe;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;
-import compiler.ir.Ir.IrProgram;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.ir.model.Ir.IrProgram;
 import compiler.types.NativeTypeDescriptorCodec;
 import haxe.Json;
 import haxe.crypto.Base64;
@@ -335,13 +335,13 @@ class CompilerDriver {
 
 	/** The stable ID of the entry's `main():Void`, by which an embedded host calls it, with no arguments and no result. */
 	static function entryId(result:CompileResult, entry:String):Int {
-		var main:Null<compiler.ir.IrFunction> = null;
+		var main:Null<compiler.ir.model.IrFunction> = null;
 		for (fn in result.ir.functions)
 			if (fn.name == "main")
 				main = fn;
 		if (main == null)
 			throw new InternalError('Entry module "$entry" must define a top-level main():Void function');
-		if (main.arguments.length != 0 || main.result != compiler.ir.Ir.IrType.Void)
+		if (main.arguments.length != 0 || main.result != compiler.ir.model.Ir.IrType.Void)
 			throw new InternalError('Entry function "main" must have signature main():Void');
 		var id = BackendArtifacts.hashLink(result.artifact).functionIds.get("main");
 		if (id == null)

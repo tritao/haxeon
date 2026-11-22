@@ -1,7 +1,7 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrReachability;
+import compiler.ir.analysis.IrReachability;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 
 /**
  * `IrReachability.trimTables` writes a module from the reached program: a class a reached function names only through a type value stays, and an unreferenced

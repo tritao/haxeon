@@ -1,14 +1,14 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrStrengthReduction;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.cleanup.IrStrengthReduction;
 import haxe.io.FPHelper;
 
 class StrengthReductionMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function reduce(fn:IrFunction):IrFunction {
-		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
 		return IrStrengthReduction.runBody(body) ? body.toFunction() : fn;
 	}
 

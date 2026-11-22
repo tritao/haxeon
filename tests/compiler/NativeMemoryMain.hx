@@ -1,8 +1,8 @@
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrType;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrType;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -17,7 +17,7 @@ class NativeMemoryMain {
 			sawLoad = false,
 			sawStore = false,
 			sawF32Load = false,
-			mainFunction:Null<compiler.ir.IrFunction> = null;
+			mainFunction:Null<compiler.ir.model.IrFunction> = null;
 		for (fn in result.ir.functions)
 			if (fn.name == "main")
 				mainFunction = fn;
@@ -61,8 +61,8 @@ class NativeMemoryMain {
 		u32Compiler.addStandardLibrarySourceRoot("stdlib");
 		u32Compiler.update("NativeU32RuntimeValues.hx", File.getContent("tests/programs/NativeU32RuntimeValues.hx"));
 		var u32Result = u32Compiler.compile("NativeU32RuntimeValues"),
-			u32RoundTrip:Null<compiler.ir.IrFunction> = null,
-			u32ArrayRoundTrip:Null<compiler.ir.IrFunction> = null;
+			u32RoundTrip:Null<compiler.ir.model.IrFunction> = null,
+			u32ArrayRoundTrip:Null<compiler.ir.model.IrFunction> = null;
 		for (fn in u32Result.ir.functions)
 			if (StringTools.endsWith(fn.name, "roundTripTick"))
 				u32RoundTrip = fn;

@@ -1,19 +1,19 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrReceiverCheck;
-import compiler.ir.IrReceiverCheckElision;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.names.IrReceiverCheck;
+import compiler.ir.passes.cleanup.IrReceiverCheckElision;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 class ReceiverCheckElisionMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function elideChecks(fn:IrFunction):IrFunction {
-		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
-		return IrReceiverCheckElision.runBody(body, new compiler.ir.IrPassScratch()) ? body.toFunction() : fn;
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		return IrReceiverCheckElision.runBody(body, new compiler.ir.model.IrPassScratch()) ? body.toFunction() : fn;
 	}
 
 	static function expect(value:Bool, message:String):Void {

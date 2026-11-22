@@ -14,7 +14,7 @@ import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlPlainBuild;
 import compiler.hl.patch.HlPatchWriter;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 import compiler.core.CancellationToken;
 import haxe.io.Bytes;
 import compiler.hl.HlCode;
@@ -141,7 +141,7 @@ class HashLinkBackendSession implements BackendSession {
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
-		compiler.ir.IrReachabilityReport.report("final program", ir);
+		compiler.ir.analysis.IrReachabilityReport.report("final program", ir);
 		var summaries = this.loweredCache.summaries;
 		var nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir, summaries.abiSignatures) : null,
 			previousAbi = context.state.publishedAbi,

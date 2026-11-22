@@ -1,8 +1,8 @@
 import compiler.core.AllocationMeter;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrValueArrayProgramRewrite;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.arrays.IrValueArrayProgramRewrite;
 
 /** Adding element shapes must not multiply allocation for bodies with no array operations. */
 class ValueArrayLoweringSelectionMain {
@@ -69,7 +69,7 @@ class ValueArrayLoweringSelectionMain {
 		var before = AllocationMeter.sample();
 		IrValueArrayProgramRewrite.rewriteAll(program, 64, HashLink);
 		var bytes = AllocationMeter.sample().bytes - before.bytes;
-		compiler.ir.IrVerifier.verify(program);
+		compiler.ir.verify.IrVerifier.verify(program);
 		return bytes;
 	}
 }

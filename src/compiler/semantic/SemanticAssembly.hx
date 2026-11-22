@@ -1035,7 +1035,7 @@ class SemanticAssembly {
 		if (GeneratedNames.isSpecialization(target))
 			return enclosingFunction(target);
 		// A bound method (a method value): made from its owner's method.
-		var reference = compiler.ir.IrMethodReferences.of(target);
+		var reference = compiler.ir.gen.IrMethodReferences.of(target);
 		return reference == null ? null : reference.owner + "." + reference.member;
 	}
 

@@ -4,15 +4,15 @@ import compiler.backend.Backend;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrBodyBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrNullableErasure;
-import compiler.ir.IrPipelineContext;
-import compiler.ir.IrStage;
-import compiler.ir.IrStage.IrStageList;
-import compiler.ir.TargetProfile;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.IrBodyBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.backend.wasm.IrNullableErasure;
+import compiler.ir.pipeline.IrPipelineContext;
+import compiler.ir.pipeline.IrStage;
+import compiler.ir.pipeline.IrStage.IrStageList;
+import compiler.ir.pipeline.TargetProfile;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmPatch.WasmPatchState;
 import compiler.backend.wasm.WasmPatch;
@@ -59,14 +59,14 @@ class WasmBackend implements Backend {
 
 	/** Wasm has no virtuals: the exact object test is its runtime's exact type test. */
 	static function exactObjectTests(program:IrProgram, context:IrPipelineContext):IrProgram
-		return compiler.ir.IrExactTypeFacts.asStdExactTest(program);
+		return compiler.ir.analysis.IrExactTypeFacts.asStdExactTest(program);
 
 	static function arrayFactory(program:IrProgram, context:IrPipelineContext):IrProgram
-		return compiler.ir.IrArrayFactory.physical(program);
+		return compiler.ir.passes.arrays.IrArrayFactory.physical(program);
 
 	/** Profiler probes record nothing on Wasm yet. */
 	static function stripInstrumentation(program:IrProgram, context:IrPipelineContext):IrProgram
-		return compiler.ir.IrInstrumentation.strip(program);
+		return compiler.ir.tools.IrInstrumentation.strip(program);
 
 	static function nullableErasure(program:IrProgram, context:IrPipelineContext):IrProgram
 		return IrNullableErasure.run(program);

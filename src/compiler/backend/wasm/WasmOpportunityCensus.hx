@@ -1,6 +1,6 @@
 package compiler.backend.wasm;
 
-import compiler.ir.IrOpportunityCensus;
+import compiler.ir.tools.IrOpportunityCensus;
 
 /** The Wasm part of the `IrOpportunityCensus`: what the module builders emitted. */
 class WasmOpportunityCensus {

@@ -177,7 +177,7 @@ and a failed or rejected build (the snapshot, a refused publication) puts the pr
 
 ## Where the IR pass order lives
 
-`compiler.ir.IrPipeline` holds the order of the whole-program IR passes as two named stage lists. `assembly` runs inside
+`compiler.ir.pipeline.IrPipeline` holds the order of the whole-program IR passes as two named stage lists. `assembly` runs inside
 `IrProgramAssembler.assemble`, from the generated functions and the declaration tables to the finished program (the runtime surface and
 the entry function are its `runtime-surface` stage). `target` runs from `FrontendCompilation.run` after the frontend has recorded its
 positional and live metadata, from the closed enum tag ABI to the inliner and the frontend verifier. A stage wraps an existing pass as it is;

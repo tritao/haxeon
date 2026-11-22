@@ -3,13 +3,13 @@ package compiler.hl.lower;
 import compiler.hl.HlFunction.HlDebugAssignment;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlFunction.HlInstruction;
-import compiler.ir.IrBodyBuilder;
-import compiler.ir.IrBodyGraph;
-import compiler.ir.IrExactTypeFacts;
-import compiler.ir.IrPassScratch.IrNonNullScratch;
-import compiler.ir.IrPassScratch.IrValueMarks;
-import compiler.ir.IrTypeIds;
-import compiler.ir.PhiEdges;
+import compiler.ir.analysis.IrExactTypeFacts;
+import compiler.ir.cfg.IrBodyGraph;
+import compiler.ir.cfg.PhiEdges;
+import compiler.ir.model.IrBodyBuilder;
+import compiler.ir.model.IrPassScratch.IrNonNullScratch;
+import compiler.ir.model.IrPassScratch.IrValueMarks;
+import compiler.ir.model.IrTypeIds;
 
 /**
  * The tables `HlLower` fills for each function it lowers, kept from one function to the next so that lowering a program

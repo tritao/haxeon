@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** A frontend restart must retain metadata changes discovered before the restart. */
 class ObservableRestartMetadataMain {

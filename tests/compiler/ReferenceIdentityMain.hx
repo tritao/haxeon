@@ -1,12 +1,12 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrReferenceIdentity;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.names.IrReferenceIdentity;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 class ReferenceIdentityMain {
 	static function make(source:String):Compiler {

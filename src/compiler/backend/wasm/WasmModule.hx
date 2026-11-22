@@ -72,7 +72,7 @@ class WasmModule {
 	/** Runtime type IDs belong to this module, not to the compiler process. */
 	public var runtimeTypeIds:Null<WasmTypeIdPlan>;
 
-	public function runtimeTypeId(type:compiler.ir.Ir.IrType):Int {
+	public function runtimeTypeId(type:compiler.ir.model.Ir.IrType):Int {
 		if (runtimeTypeIds == null) throw new InternalError("Wasm module has no runtime type ID plan");
 		return runtimeTypeIds.id(type);
 	}

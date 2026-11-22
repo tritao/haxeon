@@ -8,7 +8,7 @@ import compiler.tools.CompilerDriver;
 class NullStringMapMain {
 	static function main():Void {
 		var source = sys.io.File.getContent("tests/programs/map-null-string-keys.hx");
-		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(source)).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(compiler.Frontend.compile(source)).run("main") != 42)
 			throw "Interpreter String map null-key semantics differ";
 		Sys.println("PASS: String map null keys interpreter");
 		var exports = ["NullStringMapCensus.prepare", "NullStringMapCensus.perform"];

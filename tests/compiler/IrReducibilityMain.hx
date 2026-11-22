@@ -1,8 +1,8 @@
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.verify.IrVerifier;
 
 /** `IrVerifier` accepts a loop entered through its header and rejects a cycle with two entries (`IrReducibility`). */
 class IrReducibilityMain {

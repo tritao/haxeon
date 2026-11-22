@@ -2,16 +2,16 @@ package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.core.InternalError;
-import compiler.ir.IrProgramIndex;
-import compiler.ir.IrTypeIdentity;
+import compiler.ir.model.IrProgramIndex;
+import compiler.ir.model.IrTypeIdentity;
 
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrObjectField;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrOperands;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrObjectField;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrOperands;
+import compiler.ir.model.IrFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmCompositeType;
 import compiler.backend.wasm.WasmTypes.WasmFieldType;

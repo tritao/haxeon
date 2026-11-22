@@ -1,7 +1,7 @@
 package compiler.hl.lower;
 
 import compiler.hl.HlCode.HlFunctionIdentity;
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrFunction;
 import haxe.ds.ObjectMap;
 
 /**

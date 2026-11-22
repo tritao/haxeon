@@ -4,8 +4,8 @@ import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
 import compiler.core.InternalError;
-import compiler.ir.IrFunction;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.codec.IrTypeCodec;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
@@ -144,8 +144,9 @@ class WasmPatch {
 	}
 
 	static function signature(fn:IrFunction):String
-		return "(" + [for (argument in fn.arguments) compiler.ir.IrTypeIdentity.text(argument.type)].join(",") + ")->"
-			+ compiler.ir.IrTypeIdentity.text(fn.result);
+		return "(" + [for (argument in fn.arguments) compiler.ir.model.IrTypeIdentity.text(argument.type)].join(",")
+			+ ")->"
+			+ compiler.ir.model.IrTypeIdentity.text(fn.result);
 
 	static function stableId(name:String):Int {
 		var hash:Int = -2128831035;

@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 
 /** Editing handwritten enum equality must invalidate callers and their generated helper. */

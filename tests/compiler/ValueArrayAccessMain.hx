@@ -1,21 +1,21 @@
 import compiler.CompileOptions;
 import compiler.hl.HlWriter;
 import compiler.hl.lower.HlLower;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrScalarReplacement;
-import compiler.ir.IrValueArrayBridge;
-import compiler.ir.IrValueArrayElements;
-import compiler.ir.IrValueArrayFactory;
-import compiler.ir.IrValueArrayPlaceMethods;
-import compiler.ir.IrValueArraySlotHelpers;
-import compiler.ir.IrValueLaneLayout;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.arrays.IrValueArrayBridge;
+import compiler.ir.passes.arrays.IrValueArrayElements;
+import compiler.ir.passes.arrays.IrValueArrayFactory;
+import compiler.ir.passes.arrays.IrValueArrayPlaceMethods;
+import compiler.ir.passes.arrays.IrValueArraySlotHelpers;
+import compiler.ir.passes.scalars.IrScalarReplacement;
+import compiler.ir.passes.values.IrValueLaneLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.verify.IrVerifier;
 
 /** Execute compiler-generated lane operations through the production HashLink native ABI. */
 class ValueArrayAccessMain {
@@ -24,7 +24,7 @@ class ValueArrayAccessMain {
 			+ 'function main():Int { var source:Array<BoxedPoint>=[new BoxedPoint(1),new BoxedPoint(2)]; '
 			+ 'var copied=source.copy(); var sliced=source.slice(0,1); var joined=source.concat(source); source[0].x=9; '
 			+ 'return copied[0].x==1 && sliced[0].x==1 && joined[0].x==1 ? 42 : 0; }';
-		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(boxedRangeSource)).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(compiler.Frontend.compile(boxedRangeSource)).run("main") != 42)
 			throw "Portable boxed array copies must retain value semantics";
 		var nestedRangeSource = 'class RangeReference { public function new() {} } '
 			+ 'struct RangeLeaf { public var x:Int; public function new(x:Int) this.x=x; } '
@@ -33,7 +33,7 @@ class ValueArrayAccessMain {
 			+ 'function main():Int { var o=new RangeReference(); var a=[new RangeRecord(1,o)]; var b=a.copy(); '
 			+ 'var c=a.slice(0,1); var d=a.concat(a); a[0].leaf.x=9; '
 			+ 'return b[0].leaf.x==1 && c[0].leaf.x==1 && d[0].leaf.x==1 && b[0].owner==o ? 42 : 1; }';
-		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(nestedRangeSource)).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(compiler.Frontend.compile(nestedRangeSource)).run("main") != 42)
 			throw "Portable array ranges must copy nested values and retain reference identity";
 		var frontendSource =
 			'struct PlaceLeaf { public var x:Int; public function new(x:Int) this.x = x; public function bump(n:Int):Void x += n; } '
@@ -87,30 +87,32 @@ class ValueArrayAccessMain {
 			nullableElementAst =
 				new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableElementFile).tokenize()).parseProgram();
 		var nullableElementChecked =
-			compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(nullableElementAst),
-			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
+			compiler.ir.pipeline.IrProgramAssembler.generate(compiler.types.Typer.type(nullableElementAst),
+			compiler.ir.pipeline.TargetProfile.portable.withNativeArrayChecks(true));
 		var nullableFile = new compiler.core.Source.SourceFile("<nullable-array>", nullableSource),
 			nullableAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableFile).tokenize()).parseProgram();
-		var nullableCheckedFrontend = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(nullableAst),
-			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
+		var nullableCheckedFrontend =
+			compiler.ir.pipeline.IrProgramAssembler.generate(compiler.types.Typer.type(nullableAst),
+			compiler.ir.pipeline.TargetProfile.portable.withNativeArrayChecks(true));
 		var typedFile = new compiler.core.Source.SourceFile("<typed-array>", frontendSource),
 			typedAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(typedFile).tokenize()).parseProgram();
-		var typedFrontend = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(typedAst),
-			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
+		var typedFrontend = compiler.ir.pipeline.IrProgramAssembler.generate(compiler.types.Typer.type(typedAst),
+			compiler.ir.pipeline.TargetProfile.portable.withNativeArrayChecks(true));
 		var hasTypedAllocation = false;
 		for (fn in typedFrontend.functions)
 			if (fn.name == "main")
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case Call(_, callTarget, _) if (callTarget.name == compiler.ir.IrArrayFactory.NAME):
+							case Call(_, callTarget,
+								_) if (callTarget.name == compiler.ir.passes.arrays.IrArrayFactory.NAME):
 								hasTypedAllocation = true;
 							default:
 						}
 		if (!hasTypedAllocation)
 			throw "Checked frontend did not generate a typed array allocation";
 		var frontendMain = [for (fn in frontend.functions) if (fn.name == "main") fn][0],
-			frontendRoots = compiler.ir.IrValueArrayPlaceRewrite.roots(frontendMain, Obj("PlaceRoot")),
+			frontendRoots = compiler.ir.passes.arrays.IrValueArrayPlaceRewrite.roots(frontendMain, Obj("PlaceRoot")),
 			markedRoots = 0,
 			ordinaryReads = 0;
 		for (_ in frontendRoots.keys())
@@ -128,7 +130,8 @@ class ValueArrayAccessMain {
 		var frontendObjects = IrObjectTable.of([for (object in frontend.objects) object.name => object]);
 		var frontendFactory = new IrValueArrayFactory(frontendObjects, Obj("PlaceRoot"), 64, HashLink, 0);
 		var frontendMethods = new IrValueArrayPlaceMethods(frontendObjects, Obj("PlaceRoot"), frontendFactory.helpers);
-		var loweredFrontendPlace = compiler.ir.IrValueArrayPlaceRewrite.rewrite(frontendMain, Obj("PlaceRoot"),
+		var loweredFrontendPlace = compiler.ir.passes.arrays.IrValueArrayPlaceRewrite.rewrite(frontendMain,
+			Obj("PlaceRoot"),
 			frontendObjects, frontendFactory.helpers,
 			frontendMethods, frontendRoots);
 		if (loweredFrontendPlace == frontendMain)
@@ -183,7 +186,7 @@ class ValueArrayAccessMain {
 			methods: [],
 			fields: [{name: "value", type: I32}, {name: "label", type: Obj("LaneOwner")}]
 		};
-		var pairWrapperName = compiler.ir.IrOptionalScalarFlow.wrapperName("LanePair");
+		var pairWrapperName = compiler.ir.passes.nullability.IrOptionalScalarFlow.wrapperName("LanePair");
 		var pairWrapperDescriptor:IrObject = {
 			name: pairWrapperName,
 			isValue: true,
@@ -215,7 +218,7 @@ class ValueArrayAccessMain {
 			methods: [],
 			fields: [{name: "nested", type: Obj("LanePair")}, {name: "optional", type: Nullable(I32)}]
 		};
-		innerDescriptor.methods.push({name: "adjust", functionName: compiler.ir.IrSymbol.of("LaneInner.adjust")});
+		innerDescriptor.methods.push({name: "adjust", functionName: compiler.ir.model.IrSymbol.of("LaneInner.adjust")});
 		var objects:Map<String, IrObject> = [
 			"LaneElement" => descriptor,
 			"LaneInner" => innerDescriptor,
@@ -250,7 +253,8 @@ class ValueArrayAccessMain {
 		var optionalPairHelpers = new IrValueArraySlotHelpers(2, optionalPairType, optionalPairShape);
 		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, optionalPairType, IrObjectTable.of(objects),
 			optionalPairHelpers);
-		var optionalPairComponents = new compiler.ir.IrValueArrayOptionalComponents(IrObjectTable.of(objects),
+		var optionalPairComponents =
+			new compiler.ir.passes.arrays.IrValueArrayOptionalComponents(IrObjectTable.of(objects),
 			optionalPairType, optionalPairHelpers);
 		var optionalPairBridgeFunctions = optionalPairBridge.functions().concat(optionalPairComponents.functions()),
 			optionalPairHelperFunctions = optionalPairHelpers.functions();
@@ -264,10 +268,11 @@ class ValueArrayAccessMain {
 			.instructions.push(new Located(ArrayGet(optionalSnapshotRaw, optionalSnapshotArray, optionalSnapshotIndex),
 			SourceProvenance.generated("optional-array-snapshot")));
 		optionalSnapshot.callClosure(optionalSnapshotCallback, [optionalSnapshotArray], Void);
-		var optionalSnapshotParts = optionalSnapshot.call(compiler.ir.IrOptionalValueFlow.unboxName("LanePair"),
+		var optionalSnapshotParts =
+			optionalSnapshot.call(compiler.ir.passes.nullability.IrOptionalValueFlow.unboxName("LanePair"),
 			[optionalSnapshotRaw], Obj(pairWrapperName));
 		optionalSnapshot.returnValue(optionalSnapshot.fieldGet(optionalSnapshotParts, "$slot1", I32));
-		var rewrittenOptionalSnapshot = compiler.ir.IrValueArrayOptionalRewrite
+		var rewrittenOptionalSnapshot = compiler.ir.passes.arrays.IrValueArrayOptionalRewrite
 			.rewrite(new IrFunction("array_optional_snapshot", optionalSnapshot.arguments,
 			I32, optionalSnapshot.blocks, Ordinary), optionalPairType,
 			optionalPairComponents);
@@ -355,7 +360,8 @@ class ValueArrayAccessMain {
 			builder.fieldSet(components, "$slot0", builder.constBool(i % 2 == 1));
 			builder.fieldSet(components, "$slot1", builder.constInt(i));
 			builder.fieldSet(components, "$slot2", owner);
-			var value = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [components],
+			var value = builder.call(compiler.ir.passes.nullability.IrOptionalValueFlow.boxName("LanePair"),
+				[components],
 				optionalPairType);
 			builder.call("__array_push_ref", [optionalPushArray, value], I32);
 		}
@@ -363,14 +369,16 @@ class ValueArrayAccessMain {
 		builder.fieldSet(absentComponents, "$slot0", builder.constBool(false));
 		builder.fieldSet(absentComponents, "$slot1", builder.constInt(777));
 		builder.fieldSet(absentComponents, "$slot2", owner);
-		var absentValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [absentComponents],
+		var absentValue = builder.call(compiler.ir.passes.nullability.IrOptionalValueFlow.boxName("LanePair"),
+			[absentComponents],
 			optionalPairType);
 		builder.call("__array_unshift_any", [optionalPushArray, absentValue], I32);
 		var insertedComponents = builder.valueInit(pairWrapperName);
 		builder.fieldSet(insertedComponents, "$slot0", builder.constBool(true));
 		builder.fieldSet(insertedComponents, "$slot1", builder.constInt(42));
 		builder.fieldSet(insertedComponents, "$slot2", otherOwner);
-		var insertedValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [insertedComponents],
+		var insertedValue = builder.call(compiler.ir.passes.nullability.IrOptionalValueFlow.boxName("LanePair"),
+			[insertedComponents],
 			optionalPairType);
 		builder.call("__array_insert_ref", [optionalPushArray, builder.constInt(1), insertedValue], Void);
 		var afterOptionalPush = builder.call("std.gc_total_allocated", [], F64);
@@ -881,7 +889,8 @@ class ValueArrayAccessMain {
 		placeCaller.currentBlock().instructions.push(new Located(ArraySet(placeArray, placeIndex, placeRoot),
 			placeProvenance));
 		placeCaller.returnValue(placeCaller.fieldGet(placeChild, "value", I32));
-		var rewrittenPlaceCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("array_place_caller",
+		var rewrittenPlaceCaller =
+			compiler.ir.passes.arrays.IrValueArrayPlaceRewrite.rewrite(new IrFunction("array_place_caller",
 			placeCaller.arguments, I32,
 			placeCaller.blocks, Ordinary), element, IrObjectTable.of(objects), helpers,
 			methodRewriter, [placeRoot.id => true]);
@@ -903,7 +912,7 @@ class ValueArrayAccessMain {
 		growthCaller.currentBlock().instructions.push(new Located(ArraySet(growthArray, growthIndex, growthRoot),
 			placeProvenance));
 		growthCaller.returnValue(growthCaller.constVoid());
-		var rewrittenGrowthCaller = compiler.ir.IrValueArrayPlaceRewrite
+		var rewrittenGrowthCaller = compiler.ir.passes.arrays.IrValueArrayPlaceRewrite
 			.rewrite(new IrFunction("array_place_growth_caller", growthCaller.arguments, Void,
 			growthCaller.blocks, Ordinary), element, IrObjectTable.of(objects),
 			helpers, methodRewriter, [growthRoot.id => true]);
@@ -918,7 +927,7 @@ class ValueArrayAccessMain {
 		valueCaller.currentBlock().instructions.push(new Located(ArraySet(valueArray, valueIndex, valueRoot),
 			placeProvenance));
 		valueCaller.returnValue(valueCaller.constVoid());
-		var rewrittenValueCaller = compiler.ir.IrValueArrayPlaceRewrite
+		var rewrittenValueCaller = compiler.ir.passes.arrays.IrValueArrayPlaceRewrite
 			.rewrite(new IrFunction("array_place_value_caller", valueCaller.arguments, Void,
 			valueCaller.blocks, Ordinary), element, IrObjectTable.of(objects),
 			helpers, methodRewriter, [valueRoot.id => true]);
@@ -931,7 +940,8 @@ class ValueArrayAccessMain {
 		escapingPlace.returnValue(escapingRoot);
 		var rejectedEscape = false;
 		try {
-			compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("escaping_place", escapingPlace.arguments,
+			compiler.ir.passes.arrays.IrValueArrayPlaceRewrite.rewrite(new IrFunction("escaping_place",
+				escapingPlace.arguments,
 				element, escapingPlace.blocks, Ordinary),
 				element, IrObjectTable.of(objects), helpers, methodRewriter, [escapingRoot.id => true]);
 		} catch (_:Dynamic)
@@ -1937,20 +1947,22 @@ class ValueArrayAccessMain {
 		scalarException.call("std.sys_exit", [scalarException.constInt(1)], Void);
 		scalarException.returnValue(scalarException.constVoid());
 		program.functions.push(new IrFunction("scalar_exception", [], Void, scalarException.blocks, Ordinary));
-		var optionalStorage = new compiler.ir.IrOptionalFieldStorage(program.objects);
+		var optionalStorage = new compiler.ir.passes.nullability.IrOptionalFieldStorage(program.objects);
 		program.functions = optionalStorage.rewrite(program.functions);
 		program.objects = optionalStorage.physicalObjects(program.objects);
 		objects = [for (object in program.objects) object.name => object];
-		program.functions = new compiler.ir.IrNullableScalarFields(program.objects).rewrite(program.functions);
+		program.functions =
+			new compiler.ir.passes.nullability.IrNullableScalarFields(program.objects).rewrite(program.functions);
 		program.functions = [
 			for (fn in program.functions)
-				compiler.ir.IrValueArrayOptionalRewrite.rewrite(fn, optionalPairType, optionalPairComponents)
+				compiler.ir.passes.arrays.IrValueArrayOptionalRewrite.rewrite(fn, optionalPairType,
+				optionalPairComponents)
 		];
 		program.functions = [
 			for (fn in program.functions)
-				compiler.ir.IrValueArrayElementRewrite.rewrite(fn, pairType, pairElements, [])
+				compiler.ir.passes.arrays.IrValueArrayElementRewrite.rewrite(fn, pairType, pairElements, [])
 		];
-		compiler.ir.IrScalarArguments.rewrite(program);
+		compiler.ir.passes.scalars.IrScalarArguments.rewrite(program);
 		program.functions = [
 			for (fn in program.functions)
 				IrScalarReplacement.rewrite(fn, IrObjectTable.of(objects), false, true)
@@ -1972,22 +1984,28 @@ class ValueArrayAccessMain {
 							case ValueInit(out) if (Type.enumEq(out.type, Obj(pairWrapperName))):
 								throw "Nullable array mutations must not allocate component wrappers";
 							case Call(_, name,
-								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + rewrittenArgument.name):
+								_) if (name.name
+								== compiler.ir.passes.scalars.IrScalarArguments.PREFIX + rewrittenArgument.name):
 								scalarArgumentCall = true;
 							case Call(_, name,
-								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.getName()):
+								_) if (name.name
+								== compiler.ir.passes.scalars.IrScalarArguments.PREFIX + pairElements.getName()):
 								scalarElementGet = true;
 							case Call(_, name,
-								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.setName()):
+								_) if (name.name
+								== compiler.ir.passes.scalars.IrScalarArguments.PREFIX + pairElements.setName()):
 								scalarElementSet = true;
 							case Call(_, name,
-								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.pushName()):
+								_) if (name.name
+								== compiler.ir.passes.scalars.IrScalarArguments.PREFIX + pairElements.pushName()):
 								scalarElementPush = true;
 							case Call(_, name,
-								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.insertName()):
+								_) if (name.name
+								== compiler.ir.passes.scalars.IrScalarArguments.PREFIX + pairElements.insertName()):
 								scalarElementInsert = true;
 							case Call(_, name,
-								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.unshiftName()):
+								_) if (name.name
+								== compiler.ir.passes.scalars.IrScalarArguments.PREFIX + pairElements.unshiftName()):
 								scalarElementUnshift = true;
 							default:
 						}
@@ -2011,9 +2029,9 @@ class ValueArrayAccessMain {
 			+ ".hl";
 		try {
 			var linearFrontend = compiler.Frontend.compile(frontendSource);
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(linearFrontend, 32, Wasm32);
-			compiler.ir.IrValueConstructors.rewrite(linearFrontend);
-			compiler.ir.IrValuePhiScalarization.rewrite(linearFrontend);
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(linearFrontend, 32, Wasm32);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(linearFrontend);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(linearFrontend);
 			var linearTable = IrObjectTable.of([for (object in linearFrontend.objects) object.name => object]);
 			linearFrontend.functions = [
 				for (fn in linearFrontend.functions)
@@ -2059,9 +2077,9 @@ class ValueArrayAccessMain {
 				{source: multipleArraySource, element: Obj("MultiA")}
 			]) {
 				var linearNullable = compiler.Frontend.compile(test.source);
-				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(linearNullable, 32, Wasm32);
-				compiler.ir.IrValueConstructors.rewrite(linearNullable);
-				compiler.ir.IrValuePhiScalarization.rewrite(linearNullable);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(linearNullable, 32, Wasm32);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(linearNullable);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(linearNullable);
 				var table = IrObjectTable.of([for (object in linearNullable.objects) object.name => object]);
 				linearNullable.functions = [
 					for (fn in linearNullable.functions)
@@ -2091,9 +2109,9 @@ class ValueArrayAccessMain {
 				if (sys.FileSystem.exists(linearPath))
 					sys.FileSystem.deleteFile(linearPath);
 			}
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(wasmFrontend, 32, WasmGc);
-			compiler.ir.IrValueConstructors.rewrite(wasmFrontend);
-			compiler.ir.IrValuePhiScalarization.rewrite(wasmFrontend);
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(wasmFrontend, 32, WasmGc);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(wasmFrontend);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(wasmFrontend);
 			var wasmTable = IrObjectTable.of([for (object in wasmFrontend.objects) object.name => object]);
 			wasmFrontend.functions = [
 				for (fn in wasmFrontend.functions)
@@ -2170,13 +2188,13 @@ class ValueArrayAccessMain {
 				if (test.checked) {
 					var file = new compiler.core.Source.SourceFile("<linear-dynamic-array>", test.source),
 						ast = new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenize()).parseProgram();
-					linearDynamic = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(ast),
-						compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
+					linearDynamic = compiler.ir.pipeline.IrProgramAssembler.generate(compiler.types.Typer.type(ast),
+						compiler.ir.pipeline.TargetProfile.portable.withNativeArrayChecks(true));
 				} else
 					linearDynamic = compiler.Frontend.compile(test.source);
-				compiler.ir.IrValueArrayProgramRewrite.rewrite(linearDynamic, test.element, 32, Wasm32);
-				compiler.ir.IrValueConstructors.rewrite(linearDynamic);
-				compiler.ir.IrValuePhiScalarization.rewrite(linearDynamic);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(linearDynamic, test.element, 32, Wasm32);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(linearDynamic);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(linearDynamic);
 				var table = IrObjectTable.of([for (object in linearDynamic.objects) object.name => object]);
 				linearDynamic.functions = [
 					for (fn in linearDynamic.functions)
@@ -2222,13 +2240,13 @@ class ValueArrayAccessMain {
 				if (test.checked) {
 					var file = new compiler.core.Source.SourceFile("<escape-array>", test.source),
 						ast = new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenize()).parseProgram();
-					nullableWasm = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(ast),
-						compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
+					nullableWasm = compiler.ir.pipeline.IrProgramAssembler.generate(compiler.types.Typer.type(ast),
+						compiler.ir.pipeline.TargetProfile.portable.withNativeArrayChecks(true));
 				} else
 					nullableWasm = compiler.Frontend.compile(test.source);
-				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(nullableWasm, 32, WasmGc);
-				compiler.ir.IrValueConstructors.rewrite(nullableWasm);
-				compiler.ir.IrValuePhiScalarization.rewrite(nullableWasm);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(nullableWasm, 32, WasmGc);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(nullableWasm);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nullableWasm);
 				var table = IrObjectTable.of([for (object in nullableWasm.objects) object.name => object]);
 				nullableWasm.functions = [
 					for (fn in nullableWasm.functions)
@@ -2266,7 +2284,7 @@ class ValueArrayAccessMain {
 			for (target in [Wasm32, WasmGc])
 				for (inlineEnabled in [false, true]) {
 					var rangeProgram = compiler.Frontend.compile(rangeSource);
-					compiler.ir.IrValueArrayProgramRewrite.rewriteAll(rangeProgram, 32, target);
+					compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(rangeProgram, 32, target);
 					var rangeCalls = 0;
 					for (fn in rangeProgram.functions)
 						if (fn.name == "RangeCensus.perform")
@@ -2280,19 +2298,19 @@ class ValueArrayAccessMain {
 									}
 					if (rangeCalls != 3)
 						throw 'Expected three direct lane range operations for $target, got $rangeCalls';
-					compiler.ir.IrValueConstructors.rewrite(rangeProgram);
-					compiler.ir.IrValuePhiScalarization.rewrite(rangeProgram);
-					compiler.ir.IrScalarArguments.rewrite(rangeProgram, true);
-					compiler.ir.IrValuePhiScalarization.rewrite(rangeProgram);
+					compiler.ir.passes.values.IrValueConstructors.rewrite(rangeProgram);
+					compiler.ir.passes.values.IrValuePhiScalarization.rewrite(rangeProgram);
+					compiler.ir.passes.scalars.IrScalarArguments.rewrite(rangeProgram, true);
+					compiler.ir.passes.values.IrValuePhiScalarization.rewrite(rangeProgram);
 					var table = IrObjectTable.of([for (object in rangeProgram.objects) object.name => object]);
 					rangeProgram.functions = [
 						for (fn in rangeProgram.functions)
 							IrScalarReplacement.rewrite(fn, table, false, true)
 					];
-					compiler.ir.IrNullableScalarFlow.rewrite(rangeProgram);
-					compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner
-						.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(rangeProgram.functions)),
-						compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
+					compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(rangeProgram);
+					compiler.ir.passes.inlining.IrInliner.run(rangeProgram, new compiler.ir.passes.inlining.IrInliner
+						.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(rangeProgram.functions)),
+						compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(rangeProgram, {
 						target: backendTarget,
@@ -2330,9 +2348,9 @@ class ValueArrayAccessMain {
 				+ 'function main():Int { var points:Array<CensusPoint> = []; for (i in 0...100) points.push(new CensusPoint(i)); '
 				+ 'var sum = 0; for (point in points) sum += point.x; return sum; }';
 			var linearCensus = compiler.Frontend.compile(censusSource);
-			compiler.ir.IrValueArrayProgramRewrite.rewrite(linearCensus, Obj("CensusPoint"), 32, Wasm32);
-			compiler.ir.IrValueConstructors.rewrite(linearCensus);
-			compiler.ir.IrValuePhiScalarization.rewrite(linearCensus);
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(linearCensus, Obj("CensusPoint"), 32, Wasm32);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(linearCensus);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(linearCensus);
 			var linearCensusTable = IrObjectTable.of([for (object in linearCensus.objects) object.name => object]);
 			linearCensus.functions = [
 				for (fn in linearCensus.functions)
@@ -2366,9 +2384,9 @@ class ValueArrayAccessMain {
 			if (sys.FileSystem.exists(wasmPath))
 				sys.FileSystem.deleteFile(wasmPath);
 			var census = compiler.Frontend.compile(censusSource);
-			compiler.ir.IrValueArrayProgramRewrite.rewrite(census, Obj("CensusPoint"), 32, WasmGc);
-			compiler.ir.IrValueConstructors.rewrite(census);
-			compiler.ir.IrValuePhiScalarization.rewrite(census);
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(census, Obj("CensusPoint"), 32, WasmGc);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(census);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(census);
 			var censusTable = IrObjectTable.of([for (object in census.objects) object.name => object]);
 			census.functions = [
 				for (fn in census.functions)
@@ -2406,10 +2424,11 @@ class ValueArrayAccessMain {
 				+ 'for (i in 0...100) points.push(new CensusOptional(i, owner)); var sum=0; '
 				+ 'for (point in points) if (point != null && point.owner == owner) sum += point.x; return sum; }';
 			var linearOptionalCensus = compiler.Frontend.compile(optionalCensusSource);
-			compiler.ir.IrValueArrayProgramRewrite.rewrite(linearOptionalCensus, Nullable(Obj("CensusOptional")), 32,
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(linearOptionalCensus,
+				Nullable(Obj("CensusOptional")), 32,
 				Wasm32);
-			compiler.ir.IrValueConstructors.rewrite(linearOptionalCensus);
-			compiler.ir.IrValuePhiScalarization.rewrite(linearOptionalCensus);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(linearOptionalCensus);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(linearOptionalCensus);
 			var linearOptionalTable =
 				IrObjectTable.of([for (object in linearOptionalCensus.objects) object.name => object]);
 			linearOptionalCensus.functions = [
@@ -2445,9 +2464,10 @@ class ValueArrayAccessMain {
 			if (sys.FileSystem.exists(wasmPath))
 				sys.FileSystem.deleteFile(wasmPath);
 			var optionalCensus = compiler.Frontend.compile(optionalCensusSource);
-			compiler.ir.IrValueArrayProgramRewrite.rewrite(optionalCensus, Nullable(Obj("CensusOptional")), 32, WasmGc);
-			compiler.ir.IrValueConstructors.rewrite(optionalCensus);
-			compiler.ir.IrValuePhiScalarization.rewrite(optionalCensus);
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(optionalCensus,
+				Nullable(Obj("CensusOptional")), 32, WasmGc);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(optionalCensus);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(optionalCensus);
 			var optionalCensusTable = IrObjectTable.of([for (object in optionalCensus.objects) object.name => object]);
 			optionalCensus.functions = [
 				for (fn in optionalCensus.functions)
@@ -2499,15 +2519,15 @@ class ValueArrayAccessMain {
 					var nestedCensus = compiler.Frontend.compile(source),
 						label = source == nestedCensusSource ? "nullable element" : source == nonoptionalCensusSource
 							? "struct element" : "nullable removals";
-					compiler.ir.IrValueArrayProgramRewrite.rewriteAll(nestedCensus, 32, target);
-					compiler.ir.IrValueConstructors.rewrite(nestedCensus);
-					compiler.ir.IrValuePhiScalarization.rewrite(nestedCensus);
+					compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(nestedCensus, 32, target);
+					compiler.ir.passes.values.IrValueConstructors.rewrite(nestedCensus);
+					compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nestedCensus);
 					var table = IrObjectTable.of([for (object in nestedCensus.objects) object.name => object]);
 					nestedCensus.functions = [
 						for (fn in nestedCensus.functions)
 							IrScalarReplacement.rewrite(fn, table, false, true)
 					];
-					compiler.ir.IrNullableScalarFlow.rewrite(nestedCensus);
+					compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(nestedCensus);
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(nestedCensus, {
 						target: backendTarget,
@@ -2542,17 +2562,17 @@ class ValueArrayAccessMain {
 			for (source in [nestedCensusSource, nonoptionalCensusSource, removalCensusSource]) {
 				var hlCensus = compiler.Frontend.compile(StringTools.replace(source, "return total;",
 					"return total == 4950 ? 42 : 0;"));
-				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(hlCensus, 64, HashLink);
-				compiler.ir.IrValueConstructors.rewrite(hlCensus);
-				compiler.ir.IrValuePhiScalarization.rewrite(hlCensus);
-				compiler.ir.IrScalarArguments.rewrite(hlCensus);
-				compiler.ir.IrValuePhiScalarization.rewrite(hlCensus);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(hlCensus, 64, HashLink);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(hlCensus);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(hlCensus);
+				compiler.ir.passes.scalars.IrScalarArguments.rewrite(hlCensus);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(hlCensus);
 				var table = IrObjectTable.of([for (object in hlCensus.objects) object.name => object]);
 				hlCensus.functions = [
 					for (fn in hlCensus.functions)
 						IrScalarReplacement.rewrite(fn, table, false, true)
 				];
-				compiler.ir.IrNullableScalarFlow.rewrite(hlCensus);
+				compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(hlCensus);
 				for (fn in hlCensus.functions)
 					if (fn.name == "main")
 						for (block in fn.blocks)
@@ -2577,14 +2597,14 @@ class ValueArrayAccessMain {
 				+ 'for(i in 0...100) if(values[0]!=null) values[0].x += 1; var result=values[0]; return result==null ? 0 : result.x; }';
 			for (target in [Wasm32, WasmGc]) {
 				var census = compiler.Frontend.compile(placeCensusSource);
-				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(census, 32, target);
-				compiler.ir.IrValueConstructors.rewrite(census);
-				compiler.ir.IrValuePhiScalarization.rewrite(census);
-				compiler.ir.IrScalarArguments.rewrite(census, true);
-				compiler.ir.IrValuePhiScalarization.rewrite(census);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(census, 32, target);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(census);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(census);
+				compiler.ir.passes.scalars.IrScalarArguments.rewrite(census, true);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(census);
 				var table = IrObjectTable.of([for (object in census.objects) object.name => object]);
 				census.functions = [for (fn in census.functions) IrScalarReplacement.rewrite(fn, table, false, true)];
-				compiler.ir.IrNullableScalarFlow.rewrite(census);
+				compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(census);
 				var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 				var bytes = new compiler.backend.wasm.WasmBackend().compile(census, {
 					target: backendTarget,
@@ -2628,15 +2648,15 @@ class ValueArrayAccessMain {
 				for (target in [Wasm32, WasmGc]) {
 					var census = compiler.Frontend.compile(source),
 						label = source == equalityCensusSource ? "scalar" : "nullable scalar";
-					compiler.ir.IrValueArrayProgramRewrite.rewriteAll(census, 32, target);
-					compiler.ir.IrValueConstructors.rewrite(census);
-					compiler.ir.IrValuePhiScalarization.rewrite(census);
-					compiler.ir.IrScalarArguments.rewrite(census, true);
-					compiler.ir.IrValuePhiScalarization.rewrite(census);
+					compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(census, 32, target);
+					compiler.ir.passes.values.IrValueConstructors.rewrite(census);
+					compiler.ir.passes.values.IrValuePhiScalarization.rewrite(census);
+					compiler.ir.passes.scalars.IrScalarArguments.rewrite(census, true);
+					compiler.ir.passes.values.IrValuePhiScalarization.rewrite(census);
 					var table = IrObjectTable.of([for (object in census.objects) object.name => object]);
 					census.functions = [for (fn in census.functions) IrScalarReplacement.rewrite(fn, table, false,
 						true)];
-					compiler.ir.IrNullableScalarFlow.rewrite(census);
+					compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(census);
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(census, {
 						target: backendTarget,
@@ -2672,11 +2692,12 @@ class ValueArrayAccessMain {
 			if (success.status != 42)
 				throw 'Generated inline array access returned ${success.status}: ${success.error}';
 			for (frontendProgram in [frontend, typedFrontend]) {
-				compiler.ir.IrValueArrayProgramRewrite.rewrite(frontendProgram, Obj("PlaceRoot"), 64, HashLink);
-				compiler.ir.IrValueConstructors.rewrite(frontendProgram);
-				compiler.ir.IrValuePhiScalarization.rewrite(frontendProgram);
-				compiler.ir.IrScalarArguments.rewrite(frontendProgram);
-				compiler.ir.IrValuePhiScalarization.rewrite(frontendProgram);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(frontendProgram, Obj("PlaceRoot"), 64,
+					HashLink);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(frontendProgram);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(frontendProgram);
+				compiler.ir.passes.scalars.IrScalarArguments.rewrite(frontendProgram);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(frontendProgram);
 				var frontendTable = IrObjectTable.of([for (object in frontendProgram.objects) object.name => object]);
 				frontendProgram.functions = [
 					for (fn in frontendProgram.functions)
@@ -2701,11 +2722,12 @@ class ValueArrayAccessMain {
 					throw 'Frontend inline array returned ${frontendResult.status}: ${frontendResult.error}';
 			}
 			for (nullableProgram in [nullableFrontend, nullableCheckedFrontend]) {
-				compiler.ir.IrValueArrayProgramRewrite.rewrite(nullableProgram, Obj("OptionalParent"), 64, HashLink);
-				compiler.ir.IrValueConstructors.rewrite(nullableProgram);
-				compiler.ir.IrValuePhiScalarization.rewrite(nullableProgram);
-				compiler.ir.IrScalarArguments.rewrite(nullableProgram);
-				compiler.ir.IrValuePhiScalarization.rewrite(nullableProgram);
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(nullableProgram, Obj("OptionalParent"), 64,
+					HashLink);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(nullableProgram);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nullableProgram);
+				compiler.ir.passes.scalars.IrScalarArguments.rewrite(nullableProgram);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nullableProgram);
 				var nullableTable = IrObjectTable.of([for (object in nullableProgram.objects) object.name => object]);
 				nullableProgram.functions = [
 					for (fn in nullableProgram.functions)
@@ -2736,12 +2758,13 @@ class ValueArrayAccessMain {
 				"__array_unshift_ref", "__array_insert_ref"
 			];
 			for (nullableElementProgram in [nullableElementFrontend, nullableElementChecked]) {
-				compiler.ir.IrValueArrayProgramRewrite.rewrite(nullableElementProgram, nullableElementType, 64,
+				compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(nullableElementProgram,
+					nullableElementType, 64,
 					HashLink);
-				compiler.ir.IrValueConstructors.rewrite(nullableElementProgram);
-				compiler.ir.IrValuePhiScalarization.rewrite(nullableElementProgram);
-				compiler.ir.IrScalarArguments.rewrite(nullableElementProgram);
-				compiler.ir.IrValuePhiScalarization.rewrite(nullableElementProgram);
+				compiler.ir.passes.values.IrValueConstructors.rewrite(nullableElementProgram);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nullableElementProgram);
+				compiler.ir.passes.scalars.IrScalarArguments.rewrite(nullableElementProgram);
+				compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nullableElementProgram);
 				var nullableElementTable =
 					IrObjectTable.of([for (object in nullableElementProgram.objects) object.name => object]);
 				nullableElementProgram.functions = [
@@ -2758,8 +2781,10 @@ class ValueArrayAccessMain {
 										|| Type.enumEq(out.type, Obj("$optional-components:OptionalElement"))):
 										throw "Nullable array elements must stay scalar";
 									case Call(_, name, _)
-										if (name.name == compiler.ir.IrOptionalValueFlow.boxName("OptionalElement")
-										|| name.name == compiler.ir.IrOptionalValueFlow.unboxName("OptionalElement")):
+										if (name.name
+										== compiler.ir.passes.nullability.IrOptionalValueFlow.boxName("OptionalElement")
+										|| name.name == compiler.ir.passes.nullability.IrOptionalValueFlow
+										.unboxName("OptionalElement")):
 										throw "Nullable array elements must not cross a boxed boundary";
 									case Call(_, target, args)
 										if (dynamicArrayAccess.indexOf(target.name) >= 0 && args.length > 0

@@ -1,12 +1,13 @@
 package compiler.ir.codec;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrIntrinsic;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.ir.codec.IrValueTableCodec;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrIntrinsic;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.IrSymbol;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -599,7 +600,7 @@ class IrInstructionCodec {
 		return IrTypeCodec.readType(input, total, 0);
 	}
 
-	static function readPhiInputs(input:BytesInput, values:Map<Int, IrValue>):Array<compiler.ir.Ir.IrPhiInput> {
+	static function readPhiInputs(input:BytesInput, values:Map<Int, IrValue>):Array<compiler.ir.model.Ir.IrPhiInput> {
 		expectTag(input, 5);
 		var count = input.readInt32();
 		if (count < 0 || count > 0x100000)
@@ -675,7 +676,7 @@ class IrInstructionCodec {
 			writeValue(output, value);
 	}
 
-	static function writePhiInputs(output:BytesOutput, inputs:Array<compiler.ir.Ir.IrPhiInput>):Void {
+	static function writePhiInputs(output:BytesOutput, inputs:Array<compiler.ir.model.Ir.IrPhiInput>):Void {
 		if (inputs.length > 0x100000)
 			throw new InternalError("Invalid IR operand array");
 		output.writeByte(5);

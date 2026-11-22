@@ -1,5 +1,5 @@
 import compiler.Frontend;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 class ValueDynamicEqualityInterpreterMain {
 	static function main():Void run();

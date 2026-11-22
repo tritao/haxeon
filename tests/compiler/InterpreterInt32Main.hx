@@ -1,9 +1,9 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 class InterpreterInt32Main {
@@ -32,7 +32,7 @@ class InterpreterInt32Main {
 			b.returnValue(values[index]);
 			p.functions = [fn];
 			var expected = index == 0 ? 2147483647 : index == 1 ? -2147483648 : 0;
-			if (new compiler.ir.IrInterpreter(p).run("main") != expected)
+			if (new compiler.ir.tools.IrInterpreter(p).run("main") != expected)
 				throw 'Int32 wrapping case $index';
 		}
 	}
@@ -46,7 +46,7 @@ class InterpreterInt32Main {
 		c.update("Main.hx",
 			'function sub(value:Int):Int return value-1; function add(value:Int):Int return value+1; function mul(value:Int):Int return value*65536; function concat(a:String,b:String,c:String):String return a+b+c; function main():Int { if(sub(-2147483648)!=2147483647)return 1; if(add(2147483647)!=-2147483648)return 2; if(mul(65536)!=0)return 3; if(concat("one","two","three")!="onetwothree")return 4; return 42; }');
 		var p = c.compile("Main").ir;
-		if (new compiler.ir.IrInterpreter(p).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(p).run("main") != 42)
 			throw "Interpreter scalar result";
 		var stem = "out/interpreter-int32-" + target + inlining + "-" + Std.random(0x7fffffff),
 			path = stem + (target == "hl" ? ".hl" : ".wasm");

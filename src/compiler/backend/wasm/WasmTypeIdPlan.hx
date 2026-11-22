@@ -1,9 +1,9 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrOperands;
-import compiler.ir.IrTypeIdentity;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrOperands;
+import compiler.ir.model.IrTypeIdentity;
 
 /** Module-owned, collision-free identifiers for runtime types. */
 class WasmTypeIdPlan {

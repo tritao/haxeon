@@ -1,8 +1,8 @@
 package compiler.ffi;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrType;
 
 /** Emits the C-facing contract for one typed HashLink native library. */
 class CHeaderEmitter {

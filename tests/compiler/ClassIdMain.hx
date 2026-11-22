@@ -1,8 +1,8 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrClassIds;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInterpreter;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.objects.IrClassIds;
+import compiler.ir.tools.IrInterpreter;
 
 /** `ClassId` and the persistent class ids (docs/design/INTERFACE_VALUES.md): the instruction verifies, round trips and runs, and the ids are stable. */
 class ClassIdMain {
@@ -64,7 +64,7 @@ class ClassIdMain {
 
 	static function instruction():Void {
 		var original = program();
-		compiler.ir.IrVerifier.verify(original);
+		compiler.ir.verify.IrVerifier.verify(original);
 		expect(new IrInterpreter(original).run("main") == 7,
 			"the interpreter returns the class id of the object's class");
 		var decoded = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(original));
@@ -79,7 +79,7 @@ class ClassIdMain {
 		broken.functions = [new IrFunction("main", bad.arguments, I32, bad.blocks, Ordinary)];
 		var refused = false;
 		try
-			compiler.ir.IrVerifier.verify(broken)
+			compiler.ir.verify.IrVerifier.verify(broken)
 		catch (error:Dynamic)
 			refused = true;
 		expect(refused, "a class id whose output is not an I32 is refused");

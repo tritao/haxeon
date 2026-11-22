@@ -1,7 +1,7 @@
 package compiler.hl.incremental;
 
-import compiler.ir.Ir.IrScalarStorage;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrScalarStorage;
+import compiler.ir.model.Ir.IrType;
 
 /**
  * One question lowering put to the symbol tables or the function layout while it lowered a function, with the answer it got. The

@@ -1,15 +1,15 @@
 package compiler.backend.wasm.gc;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrBlock;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.IrFunction;
-import compiler.ir.IrGraph;
-import compiler.ir.IrOperands;
+import compiler.ir.cfg.IrGraph;
 import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.model.Ir.IrBlock;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrTerminator;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOperands;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 

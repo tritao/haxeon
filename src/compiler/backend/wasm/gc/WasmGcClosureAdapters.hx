@@ -1,11 +1,11 @@
 package compiler.backend.wasm.gc;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
+import compiler.ir.model.IrTypeIdentity;
 
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmModule.WasmLocal;
@@ -307,7 +307,7 @@ class WasmGcClosureAdapters {
 			case [EnumTag(_), _] | [_, EnumTag(_)]: true;
 			default: false;
 		};
-		if (compiler.ir.IrVerifier.sameType(from, to)
+		if (compiler.ir.verify.IrVerifier.sameType(from, to)
 			|| (!tagBoundary && Type.enumEq(plan.valueType(from), plan.valueType(to))))
 			return local;
 		var boxed = local;

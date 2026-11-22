@@ -1,10 +1,10 @@
 package compiler.compilation;
 
 import compiler.compilation.BackendSession.BackendAssemblyResult;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrFunction;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.ir.codec.IrFunctionStateEquality;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.IrFunction;
 import haxe.io.Bytes;
 
 /**

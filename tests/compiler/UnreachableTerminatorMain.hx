@@ -1,7 +1,7 @@
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 
 /**
  * The `Unreachable` terminator (a method nothing can receive a call for, see the declaration-only slot in docs/design/REACHABILITY_WALK.md) is a
@@ -21,7 +21,7 @@ class UnreachableTerminatorMain {
 			new IrFunction("main", main.arguments, I32, main.blocks, Ordinary),
 			new IrFunction("stub", stub.arguments, I32, stub.blocks, Ordinary)
 		];
-		compiler.ir.IrVerifier.verify(program);
+		compiler.ir.verify.IrVerifier.verify(program);
 		return program;
 	}
 

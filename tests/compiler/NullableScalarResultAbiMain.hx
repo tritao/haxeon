@@ -1,8 +1,8 @@
 import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 /** Nullable argument expansion must preserve the scalar ABI used for value results. */
 class NullableScalarResultAbiMain {
 	static function main():Void {
@@ -23,22 +23,24 @@ class NullableScalarResultAbiMain {
 			+ 'function make(v:Null<Int>):Pair { var x=v==null?0:v; return new Pair(x,2); } '
 			+ 'function forward(v:Null<Int>):Pair return make(v); '
 			+ 'function main():Int { var a=forward(40); var b=forward(null); return a.a+a.b+b.a==42?42:1; }';
-		var p = compiler.Frontend.compile(source), interpreter = new compiler.ir.IrInterpreter(p);
+		var p = compiler.Frontend.compile(source), interpreter = new compiler.ir.tools.IrInterpreter(p);
 		if (managed) interpreter.run("Census.prepare");
 		if (interpreter.run("main") != 42) throw "Nullable source result";
-		compiler.ir.IrValueConstructors.rewrite(p);
-		compiler.ir.IrValuePhiScalarization.rewrite(p);
-		compiler.ir.IrScalarArguments.rewrite(p, target != HashLink);
-		var objects = compiler.ir.IrObjectTable.of([for (object in p.objects) object.name => object]);
-		p.functions = [for (fn in p.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false,
+		compiler.ir.passes.values.IrValueConstructors.rewrite(p);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(p);
+		compiler.ir.passes.scalars.IrScalarArguments.rewrite(p, target != HashLink);
+		var objects = compiler.ir.model.IrObjectTable.of([for (object in p.objects) object.name => object]);
+		p.functions = [for (fn in p.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects,
+			false,
 			target == HashLink)];
-		compiler.ir.IrNullableScalarFlow.rewrite(p);
-		compiler.ir.IrVerifier.verify(p);
-		compiler.ir.IrInliner.run(p,
-			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(p.functions)),
-			compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(p);
+		compiler.ir.verify.IrVerifier.verify(p);
+		compiler.ir.passes.inlining.IrInliner.run(p,
+			new compiler.ir.passes.inlining.IrInliner
+			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(p.functions)),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var root = Sys.getEnv("TMPDIR");
 		if (root == null) root = "/tmp";
 		var stem = root + "/nullable-scalar-result-" + Std.random(0x7fffffff);

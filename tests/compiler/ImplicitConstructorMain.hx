@@ -1,7 +1,7 @@
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 import compiler.semantic.ImplicitConstructors;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;

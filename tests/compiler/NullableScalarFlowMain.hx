@@ -1,8 +1,8 @@
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrNullableScalarFlow;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.passes.nullability.IrNullableScalarFlow;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 class NullableScalarFlowMain {
 	static function main():Void {
@@ -28,12 +28,12 @@ class NullableScalarFlowMain {
 		Sys.println("PASS: nullable scalar joins stay unboxed and dynamic escapes retain their box");
 	}
 
-	static function find(program:IrProgram, name:String):compiler.ir.IrFunction {
+	static function find(program:IrProgram, name:String):compiler.ir.model.IrFunction {
 		for (fn in program.functions) if (fn.name == name) return fn;
 		throw 'Missing function $name';
 	}
 
-	static function countBoxes(fn:compiler.ir.IrFunction):Int {
+	static function countBoxes(fn:compiler.ir.model.IrFunction):Int {
 		var count = 0;
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case ToDyn(out, value) if (Type.enumEq(out.type, Nullable(I32)) && value.type == I32): count++;

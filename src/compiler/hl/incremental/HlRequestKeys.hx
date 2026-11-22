@@ -1,7 +1,7 @@
 package compiler.hl.incremental;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeMap;
+import compiler.ir.model.IrTypeMap;
 
 /**
  * Dense numbers for the questions lowering puts to the symbol tables and the function layout (`HlSymbolRequest`): one number per
@@ -66,7 +66,7 @@ class HlRequestKeys {
 		return interning[key];
 
 	/** The symbol table's key of the type request `key` names (a `TypeOf` or `RefTo`). */
-	public function typeKey(key:Int, type:compiler.ir.Ir.IrType):String {
+	public function typeKey(key:Int, type:compiler.ir.model.Ir.IrType):String {
 		var known = typeKeys[key];
 		if (known == null) {
 			known = HlSymbolTable.typeKey(type);
@@ -160,9 +160,9 @@ class HlRequestKeys {
 		return switch request {
 			case RuntimeHeader(kind, _): "header\n" + Std.string(kind);
 			case NativeStorage(type, layout,
-				_): "storage\n" + compiler.ir.IrTypeIdentity.text(type) + "\n" + layout.size + "\n"
+				_): "storage\n" + compiler.ir.model.IrTypeIdentity.text(type) + "\n" + layout.size + "\n"
 				+ layout.signed;
-			case GlobalSlot(name, type, _): "global\n" + name + "\n" + compiler.ir.IrTypeIdentity.text(type);
+			case GlobalSlot(name, type, _): "global\n" + name + "\n" + compiler.ir.model.IrTypeIdentity.text(type);
 			case EnumValue(enumName, constructor, _): "enum\n" + enumName + "\n" + constructor;
 			case FieldSlot(owner, name, _): "field\n" + owner + "\n" + name;
 			case MethodSlot(typeName, name, _): "method\n" + typeName + "\n" + name;

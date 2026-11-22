@@ -4,7 +4,7 @@ import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
-import compiler.ir.IrFunction.IrRetention;
+import compiler.ir.model.IrFunction.IrRetention;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;

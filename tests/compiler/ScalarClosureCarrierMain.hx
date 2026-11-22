@@ -1,11 +1,11 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrScalarArguments;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrValueLaneReference;
-@:access(compiler.ir.IrBuilder)
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.scalars.IrScalarArguments;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.passes.values.IrValueLaneReference;
+@:access(compiler.ir.model.IrBuilder)
 class ScalarClosureCarrierMain {
 	static function global(b:IrBuilder, name:String, type:IrType):IrValue {
 		var v = b.temporary(type);
@@ -21,7 +21,7 @@ class ScalarClosureCarrierMain {
 		var p = new IrProgram("main");
 		build(p);
 		var message = "";
-		try compiler.ir.IrVerifier.verify(p) catch (error:Dynamic) message = Std.string(error);
+		try compiler.ir.verify.IrVerifier.verify(p) catch (error:Dynamic) message = Std.string(error);
 		if (message.indexOf(expected) < 0) throw label + ": " + message;
 		Sys.println("PASS: " + label);
 	}
@@ -39,11 +39,11 @@ class ScalarClosureCarrierMain {
 			new IrFunction(name, callee.arguments, I32, callee.blocks, Ordinary),
 			new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)
 		];
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		Sys.println("PASS: exact carrier argument through verified scalar closure");
 		for (stack in [false, true]) reject(stack ? "native borrowing scalar prefix with stack reference"
 			: "native borrowing scalar prefix with carrier", function(p) {
-				var type:IrType = stack ? compiler.ir.IrHlScalarRef.type(I32) : carrier,
+				var type:IrType = stack ? compiler.ir.passes.scalars.IrHlScalarRef.type(I32) : carrier,
 					signature:IrType = Function([type], I32);
 				p.natives = [{name: name, library: "test", symbol: "not_verified", arguments: [type], result: I32}];
 				var b = new IrBuilder();
@@ -52,9 +52,10 @@ class ScalarClosureCarrierMain {
 				p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 			}, "A scalar closure must target a verified scalar function");
 		reject("native prefix cannot consume a scalar stack reference directly", function(p) {
-			var type = compiler.ir.IrHlScalarRef.type(I32);
+			var type = compiler.ir.passes.scalars.IrHlScalarRef.type(I32);
 			p.natives = [{name: name, library: "test", symbol: "not_verified", arguments: [type], result: Void}];
-			var b = new IrBuilder(), reference = b.call(compiler.ir.IrHlScalarRef.ADDRESS, [b.constInt(42)], type);
+			var b = new IrBuilder(),
+				reference = b.call(compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS, [b.constInt(42)], type);
 			b.call(name, [reference], Void);
 			b.returnValue(b.constInt(42));
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
@@ -112,7 +113,7 @@ class ScalarClosureCarrierMain {
 		},
 			carrier = IrValueLaneReference.type(),
 			signature:IrType = Function([I32, carrier], I32),
-			name = compiler.ir.IrScalarArguments.PREFIX + "carrier-callback";
+			name = compiler.ir.passes.scalars.IrScalarArguments.PREFIX + "carrier-callback";
 		var p = new IrProgram("main");
 		p.objects = [owner];
 		p.staticFields = [{name: "owner", type: Obj(owner.name)}, {name: "callback", type: signature}];
@@ -161,9 +162,10 @@ class ScalarClosureCarrierMain {
 		var main = new IrBuilder();
 		main.returnValue(main.constInt(42));
 		p.functions.push(new IrFunction("main", main.arguments, I32, main.blocks, Ordinary));
-		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.inlining.IrInliner.run(p, new compiler.ir.passes.inlining.IrInliner.IrInlineCache(),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verify(p);
 		var root = Sys.getEnv("TMPDIR");
 		if (root == null) root = "/tmp";
 		var stem = root + "/scalar-carrier-closure-" + Std.random(0x7fffffff), captures:Array<String>= [];

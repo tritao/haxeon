@@ -1,8 +1,8 @@
 package compiler.ir.codec;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.Ir.IrTerminator;
+import compiler.ir.model.Ir.IrValue;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 

@@ -3,8 +3,8 @@ package compiler.backend.wasm;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmTypes;
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrTypedInterfaceDispatch;
+import compiler.ir.model.Ir;
+import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 
 private typedef Entry = {
 	final id:Int;

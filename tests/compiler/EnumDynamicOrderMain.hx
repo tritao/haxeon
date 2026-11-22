@@ -12,7 +12,7 @@ class EnumDynamicOrderMain {
 			Frontend.compile('@:hlNative("haxeon_runtime", "__reflect_is_enum") extern function kind(value:Dynamic):Bool; '
 			+ 'enum Event { Item(value:Int); } class Holder { public function new() {} } '
 			+ 'function main():Int { var item:Dynamic = Event.Item(7); return kind(item) && !kind(null) && !kind(new Holder()) && !kind("enum") && !kind(7) ? 42 : 1; }');
-		if (new compiler.ir.IrInterpreter(semantic).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(semantic).run("main") != 42)
 			throw "Incorrect interpreter enum kind";
 
 		var temp = Sys.getEnv("TMPDIR");
@@ -66,7 +66,7 @@ class EnumDynamicOrderMain {
 	}
 
 	static function checkEnumFreeModule(target:String, path:String):Void {
-		var program = new compiler.ir.Ir.IrProgram("main"), builder = new compiler.ir.IrBuilder();
+		var program = new compiler.ir.model.Ir.IrProgram("main"), builder = new compiler.ir.model.IrBuilder();
 		var isEnum = builder.call("enumKind", [builder.constNull(Dyn)], Bool),
 			invalid = builder.createBlock(),
 			valid = builder.createBlock();
@@ -75,7 +75,8 @@ class EnumDynamicOrderMain {
 		builder.returnValue(builder.constInt(1));
 		builder.select(valid);
 		builder.returnValue(builder.constInt(42));
-		program.functions = [new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
+		program.functions = [new compiler.ir.model.IrFunction("main", builder.arguments, I32, builder.blocks,
+			Ordinary)];
 		program.natives = [{
 			name: "enumKind",
 			library: "haxeon_runtime",

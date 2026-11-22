@@ -68,7 +68,7 @@ class StructSyntaxMain {
 		var boxed = compiler.Frontend
 			.compile("interface HasX { function xValue():Int; } struct Point implements HasX { public function xValue():Int return 42; } "
 			+ "function take(value:HasX):Int return value.xValue(); function main():Int return take(new Point());");
-		if (new compiler.ir.IrInterpreter(boxed).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(boxed).run("main") != 42)
 			throw "struct interface conversion did not dispatch";
 		for (operation in ["indexOf", "contains", "remove"])
 			expectTypingError('struct Point { public var x:Int; public function new(x:Int) this.x=x; } '

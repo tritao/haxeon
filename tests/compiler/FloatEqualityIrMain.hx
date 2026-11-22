@@ -1,5 +1,5 @@
 import compiler.Frontend;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** The reference interpreter must use IEEE equality even when an SSA value compares with itself. */
 class FloatEqualityIrMain {

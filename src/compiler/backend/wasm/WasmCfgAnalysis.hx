@@ -1,8 +1,8 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.IrFunction;
-import compiler.ir.IrGraph;
+import compiler.ir.cfg.IrGraph;
+import compiler.ir.model.IrFunction;
 
 typedef WasmCfgScc = {
 	final blocks:Array<Int>;

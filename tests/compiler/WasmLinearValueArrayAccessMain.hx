@@ -3,12 +3,12 @@ import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTarget;
 import compiler.backend.wasm.linear.WasmLinearValueArrays;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneReference;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.values.IrValueLaneReference;
 
 /** Run the Wasm32 lane primitives on packed storage, including validity and adjacent fields. */
 class WasmLinearValueArrayAccessMain {

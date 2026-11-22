@@ -1,13 +1,13 @@
 package compiler.backend.wasm;
-import compiler.ir.IrSymbol;
+import compiler.ir.model.IrSymbol;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.SourceProvenance.Located;
-import compiler.ir.SourceProvenance;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.model.SourceProvenance;
 
 /**
  * Normalize calls before either Wasm representation is chosen, without modifying cached frontend IR.
@@ -59,7 +59,7 @@ class WasmDynamicCalls {
 						case SafeCast(out, _) if (switch out.type {
 							case Function(_, _): true;
 							default: false;
-						}): targets.set(compiler.ir.IrTypeIdentity.text(out.type), out.type);
+						}): targets.set(compiler.ir.model.IrTypeIdentity.text(out.type), out.type);
 						copy.instructions.push(ins);
 						case Call(out, name, args) if (makers.exists(name.name)):
 							varargs = true;
@@ -83,8 +83,9 @@ class WasmDynamicCalls {
 							var key = (dynamicCall ? "dynamic:" : "typed:") + IrTypeIdentity.text(signature);
 							if (!helpers.exists(key)) {
 								var privateAbi = !dynamicCall
-									&& compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
-									prefix = privateAbi ? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:"
+									&& compiler.ir.passes.scalars.IrScalarArguments.isPrivateClosureType(signature),
+									prefix = privateAbi
+										? compiler.ir.passes.scalars.IrScalarArguments.PREFIX + "$wasm:closure-check:"
 										: "__haxeon_invoke_";
 								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature,
 									dynamicCall, isFunction, privateAbi));

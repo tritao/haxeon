@@ -1,10 +1,10 @@
 package compiler.runtime;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
-import compiler.ir.IrValueLaneRuntime;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOperands;
+import compiler.ir.passes.values.IrValueLaneRuntime;
 
 /**
  * Emit the lane policy SSA as native C, without maintaining another implementation of that policy.
@@ -14,7 +14,7 @@ import compiler.ir.IrValueLaneRuntime;
 class ValueLaneNativeSource {
 	public static function generate(roundSparseCapacity:Bool = true):String {
 		var functions = IrValueLaneRuntime.program(roundSparseCapacity).functions, out = new StringBuf();
-		out.add("/* Generated from compiler.ir.IrValueLaneRuntime. Do not edit. */\n");
+		out.add("/* Generated from compiler.ir.passes.values.IrValueLaneRuntime. Do not edit. */\n");
 		for (fn in functions) out.add(signature(fn) + ";\n");
 		for (fn in functions) emitFunction(out, fn);
 		return out.toString();

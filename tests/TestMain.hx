@@ -28,22 +28,22 @@ import compiler.hl.persistence.HlAssemblerStateCodec;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.persistence.HlTypeDefStateCodec;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrGenerator;
-import compiler.ir.IrGraph;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrLocalsBuilder;
-import compiler.ir.IrSsaVariables.IrSsaScratch;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.cfg.IrGraph;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.codec.IrInstructionCodec;
 import compiler.ir.codec.IrTerminatorCodec;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.ir.codec.IrValueTableCodec;
+import compiler.ir.gen.IrGenerator;
+import compiler.ir.gen.IrLocalsBuilder;
+import compiler.ir.gen.IrSsaVariables.IrSsaScratch;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.tools.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticSignature;
@@ -86,7 +86,7 @@ class TestMain {
 			"function nested():String return 'value ${true ? 'nested' : 'other'}';")).tokenize()).parseProgram();
 		for (compilerSource in [
 			"src/compiler/ffi/HxiHaxeEmitter.hx",
-			"src/compiler/ir/IrGenerator.hx",
+			"src/compiler/ir/gen/IrGenerator.hx",
 			"src/compiler/backend/wasm/WasmFunctionLower.hx",
 			"src/compiler/backend/wasm/WasmRepresentation.hx",
 			"src/compiler/types/typing/BodyTyper.hx",
@@ -301,7 +301,7 @@ class TestMain {
 				for (block in fn.blocks)
 					for (instruction in block.instructions)
 						switch instruction.value {
-							case compiler.ir.Ir.IrInstruction.IntToInt64(_, _):
+							case compiler.ir.model.Ir.IrInstruction.IntToInt64(_, _):
 								wideningLowered = true;
 							default:
 						}
@@ -805,7 +805,7 @@ class TestMain {
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
-						case compiler.ir.Ir.IrInstruction.Phi(_, _):
+						case compiler.ir.model.Ir.IrInstruction.Phi(_, _):
 							hasPhi = true;
 						default:
 					}
@@ -817,7 +817,7 @@ class TestMain {
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
-						case compiler.ir.Ir.IrInstruction.Phi(_, _):
+						case compiler.ir.model.Ir.IrInstruction.Phi(_, _):
 							conditionalHasPhi = true;
 						default:
 					}
@@ -843,12 +843,12 @@ class TestMain {
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
 		var typed = Typer.type(ast),
 			built = IrGenerator.forProgram(typed,
-				compiler.ir.TargetProfile.portable).generateFunction(typed.functions[0]),
+				compiler.ir.pipeline.TargetProfile.portable).generateFunction(typed.functions[0]),
 			phis = 0;
 		for (block in built.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
-					case compiler.ir.Ir.IrInstruction.Phi(_, _):
+					case compiler.ir.model.Ir.IrInstruction.Phi(_, _):
 						phis++;
 					default:
 				}
@@ -949,21 +949,21 @@ class TestMain {
 		for (block in loopBlocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
-					case compiler.ir.Ir.IrInstruction.Phi(_, inputs) if (inputs.length == 2):
+					case compiler.ir.model.Ir.IrInstruction.Phi(_, inputs) if (inputs.length == 2):
 						loopPhis++;
-					case compiler.ir.Ir.IrInstruction.Phi(_, _):
+					case compiler.ir.model.Ir.IrInstruction.Phi(_, _):
 						throw "A loop phi must have one input per predecessor";
 					default:
 				}
 		if (loopPhis != 1)
 			throw 'An open loop header expected one phi, got $loopPhis';
 		Sys.println("PASS: the locals builder rejects late edges and undefined locals, and closes loops");
-		var mismatchedIterator = new compiler.ir.Ir.IrValue(0, "iterator", Iterator(I32)),
-			wrongIteratorElement = new compiler.ir.Ir.IrValue(1, "wrongElement", Bytes),
-			mismatchedIteratorBlock = new compiler.ir.Ir.IrBlock(0);
+		var mismatchedIterator = new compiler.ir.model.Ir.IrValue(0, "iterator", Iterator(I32)),
+			wrongIteratorElement = new compiler.ir.model.Ir.IrValue(1, "wrongElement", Bytes),
+			mismatchedIteratorBlock = new compiler.ir.model.Ir.IrBlock(0);
 		mismatchedIteratorBlock.instructions
-			.push(located(compiler.ir.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
-		mismatchedIteratorBlock.terminator = located(compiler.ir.Ir.IrTerminator.Return(wrongIteratorElement));
+			.push(located(compiler.ir.model.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
+		mismatchedIteratorBlock.terminator = located(compiler.ir.model.Ir.IrTerminator.Return(wrongIteratorElement));
 		var mismatchedIteratorProgram = new IrProgram("main");
 		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes,
 			[mismatchedIteratorBlock], Ordinary));
@@ -1001,9 +1001,9 @@ class TestMain {
 		expectStringError(function() IrTypeCodec.decode(unknownType), "Unknown IR type tag");
 		Sys.println("PASS: IR types persist deterministically and reject malformed state");
 		var persistedValues = [
-			new compiler.ir.Ir.IrValue(9, "result", I32),
-			new compiler.ir.Ir.IrValue(2, "input", Array(Bytes)),
-			new compiler.ir.Ir.IrValue(12, "iterator", Iterator(I32))
+			new compiler.ir.model.Ir.IrValue(9, "result", I32),
+			new compiler.ir.model.Ir.IrValue(2, "input", Array(Bytes)),
+			new compiler.ir.model.Ir.IrValue(12, "iterator", Iterator(I32))
 		],
 			persistedValueBytes = IrValueTableCodec.encode(persistedValues),
 			decodedValues = IrValueTableCodec.decode(persistedValueBytes);
@@ -1025,7 +1025,7 @@ class TestMain {
 			Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function widen(value:Int):haxe.Int64 return value; function iterate(values:Array<Int>):Int { var sum = 0; for (value in values.iterator()) sum += value; return sum; } function main():Int { return add(20, 22); }");
 		var decodedFunctions = [];
 		for (fn in instructionProgram.functions) {
-			var instructionValues:Map<Int, compiler.ir.Ir.IrValue> = [];
+			var instructionValues:Map<Int, compiler.ir.model.Ir.IrValue> = [];
 			for (argument in fn.arguments)
 				instructionValues.set(argument.id, argument);
 			for (block in fn.blocks)
@@ -2175,7 +2175,7 @@ class TestMain {
 		for (block in genericAbiMain.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
-					case compiler.ir.Ir.IrInstruction.Call(output, name,
+					case compiler.ir.model.Ir.IrInstruction.Call(output, name,
 						arguments) if (name.name.indexOf("$generic:Main.identity") == 0):
 						if (output.type == IrType.Dyn && arguments.length == 1 && arguments[0].type == IrType.Dyn)
 							dynamicCallFound = true;
@@ -2295,8 +2295,8 @@ class TestMain {
 			"function main():Int { var value = 40; var read = () -> { return value + 2; }; return read(); }"))
 			.tokenize()).parseProgram(),
 			captureTyped = Typer.type(captureProgram),
-			captureObjects = compiler.ir.IrProgramAssembler.objectsFrom(IrGenerator.forProgram(captureTyped,
-				compiler.ir.TargetProfile.portable), captureTyped);
+			captureObjects = compiler.ir.pipeline.IrProgramAssembler.objectsFrom(IrGenerator.forProgram(captureTyped,
+				compiler.ir.pipeline.TargetProfile.portable), captureTyped);
 		if (captureTyped.classes.length != 0 || captureTyped.closurePlan.environments.length != 1)
 			throw "Semantic typing manufactured a runtime helper class";
 		if ([for (object in captureObjects) object.name].indexOf(captureTyped.closurePlan.environments[0].name) < 0)
@@ -2496,7 +2496,7 @@ class TestMain {
 
 	static function expectIrError(program:IrProgram, expected:String):Void {
 		try {
-			compiler.ir.IrVerifier.verify(program);
+			compiler.ir.verify.IrVerifier.verify(program);
 			throw 'IR verifier accepted invalid program; expected "$expected"';
 		} catch (error:InternalError) {
 			if (error.message != expected)
@@ -2524,9 +2524,9 @@ class TestMain {
 		}
 	}
 
-	static function collectInstructionValues(value:Dynamic, values:Map<Int, compiler.ir.Ir.IrValue>):Void {
-		if (Std.isOfType(value, compiler.ir.Ir.IrValue)) {
-			var irValue:compiler.ir.Ir.IrValue = cast value;
+	static function collectInstructionValues(value:Dynamic, values:Map<Int, compiler.ir.model.Ir.IrValue>):Void {
+		if (Std.isOfType(value, compiler.ir.model.Ir.IrValue)) {
+			var irValue:compiler.ir.model.Ir.IrValue = cast value;
 			values.set(irValue.id, irValue);
 		} else if (Std.isOfType(value, std.Array)) // `Array` alone is IrType.Array here
 			for (item in (cast value:Array<Dynamic>))

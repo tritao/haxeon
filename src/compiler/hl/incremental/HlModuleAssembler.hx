@@ -1,15 +1,15 @@
 package compiler.hl.incremental;
 
 import compiler.core.InternalError;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrProgramAssembler;
-import compiler.ir.IrFunction;
-import compiler.ir.Ir.IrDefault;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.pipeline.IrProgramAssembler;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.Ir.IrDefault;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
 import compiler.semantic.LambdaName;
 import compiler.hl.lower.HlLower;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.abi.NameRewrite;
 import compiler.abi.RetiredName;
@@ -18,13 +18,13 @@ import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.patch.HlObjectLayout;
-import compiler.ir.Ir.IrObject;
+import compiler.ir.model.Ir.IrObject;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.patch.HlPatchWriter;
-import compiler.ir.Ir.IrNative;
+import compiler.ir.model.Ir.IrNative;
 import compiler.hl.lower.HlDebugMetadataCache;
 import compiler.core.AllocationMeter.PhaseAllocation;
 
@@ -429,8 +429,8 @@ class HlModuleAssembler {
 	}
 
 	static function sameType(a:IrType, b:IrType):Bool
-		return IrTypeCodec.withoutOrdinals(compiler.ir.IrTypeIdentity.text(a))
-			== IrTypeCodec.withoutOrdinals(compiler.ir.IrTypeIdentity.text(b));
+		return IrTypeCodec.withoutOrdinals(compiler.ir.model.IrTypeIdentity.text(a))
+			== IrTypeCodec.withoutOrdinals(compiler.ir.model.IrTypeIdentity.text(b));
 
 	/** `value` as a `type` that holds every value of its own, or null when `type` does not. */
 	static function widen(builder:IrBuilder, value:IrValue, type:IrType):Null<IrValue> {
@@ -663,7 +663,7 @@ class HlModuleAssembler {
 			}
 		for (field in object.fields) {
 			var fieldType = symbols.internObjectFieldType(field.type, valueObjects,
-				compiler.ir.IrFieldStorage.scalar(field)),
+				compiler.ir.model.IrFieldStorage.scalar(field)),
 				slot = -1,
 				own = ownFields(type);
 			for (index in 0...own.length)
@@ -776,7 +776,7 @@ class HlModuleAssembler {
 		var startedAt = Sys.time() * 1000.0;
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
 		// has not published yet is new code, which a patch must carry.
-		var shared = compiler.ir.IrSharedRuntimeCalls.apply(program,
+		var shared = compiler.hl.IrSharedRuntimeCalls.apply(program,
 			loweredCache == null ? null : loweredCache.sharedCalls),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;

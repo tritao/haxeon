@@ -4,7 +4,7 @@ import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 import compiler.tools.CompilerDriver;
 
 class NominalInterfaceTypeMain {

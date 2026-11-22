@@ -1,7 +1,7 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.IrReachability;
+import compiler.ir.analysis.IrReachability;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.MemoryContract.MemoryContract;
 import compiler.backend.MemoryContract.MemoryContractCodec;
@@ -29,9 +29,9 @@ import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearContext.WasmLinearContextState;
 import compiler.backend.wasm.linear.WasmLinearGc;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.verify.IrVerifier;
 import compiler.backend.wasm.WasmFlattenValueFields;
 import compiler.backend.wasm.WasmValueLayout;
 
@@ -138,8 +138,10 @@ class WasmLinearModuleBuilder {
 			adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures, entry, roots),
 			existing = logical.functions.slice(0, originalCount),
 			generated = logical.functions.slice(originalCount);
-		generated = compiler.ir.IrValueInterfaceBoxes.rewrite(generated, logical.objects, logical.interfaces, existing);
-		generated = compiler.ir.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true, existing);
+		generated = compiler.ir.passes.values.IrValueInterfaceBoxes.rewrite(generated, logical.objects,
+			logical.interfaces, existing);
+		generated = compiler.ir.passes.objects.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true,
+			existing);
 		logical.functions = existing.concat(generated);
 		while (true) {
 			var missing = WasmDynamicCalls.missingVarargsAdapters(logical.functions, logical.enums);
@@ -150,7 +152,7 @@ class WasmLinearModuleBuilder {
 		// Interface/cast adapters may have been generated after the initial
 		// signature rewrite. Keep their checked closure casts on the target ABI too.
 		adapters.rewriteSignatureChecks();
-		compiler.ir.IrEnumTagLowering.escapes(logical);
+		compiler.ir.passes.enums.IrEnumTagLowering.escapes(logical);
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({
 				name: "__std_is_of_type",
@@ -194,17 +196,19 @@ class WasmLinearModuleBuilder {
 					fields:values.fields(object.fields),
 					methods:object.methods
 			}];
-		var physicalObjects = compiler.ir.IrObjectTable.of([for (object in flattened.objects) object.name => object]);
+		var physicalObjects =
+			compiler.ir.model.IrObjectTable.of([for (object in flattened.objects) object.name => object]);
 		flattened.functions = [for (fn in flattened.functions) {
 			var signature = abi.signatures.get(fn.name);
 			signature != null
-				&& signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
+				&& signature.throwsReceiver ? fn : compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn,
+				physicalObjects, true);
 		}];
 		abi.validate(flattened);
 		var enumDeclarations = logical.enums;
 		if (options.developmentMetadata == false) {
-			flattened = compiler.ir.IrEnumRuntimeTypes.physical(flattened);
-			logical = compiler.ir.IrEnumRuntimeTypes.physical(logical);
+			flattened = compiler.ir.passes.enums.IrEnumRuntimeTypes.physical(flattened);
+			logical = compiler.ir.passes.enums.IrEnumRuntimeTypes.physical(logical);
 		}
 		var builder = new WasmLinearModuleBuilder(flattened, logical, enumDeclarations, options, patchChanged, target);
 		builder.boundaryExportNames = boundaryExports;
@@ -534,7 +538,8 @@ class WasmLinearModuleBuilder {
 			for (method in object.methods)
 				methods.set(object.name + "." + method.name, method.functionName.name);
 		for (fn in program.functions) {
-			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name))
+			if (StringTools.startsWith(fn.name, compiler.ir.passes.values.IrValueLaneRuntime.PREFIX)
+				&& functions.exists(fn.name))
 				continue;
 			if (!reachable.exists(fn.name))
 				continue;

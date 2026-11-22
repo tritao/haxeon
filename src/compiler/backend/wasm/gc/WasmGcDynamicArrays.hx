@@ -1,10 +1,10 @@
 package compiler.backend.wasm.gc;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
@@ -968,7 +968,7 @@ class WasmGcDynamicArrays {
 				LocalGet(left),
 				LocalGet(right),
 				Call(WasmModuleSupport.requiredFunctionIndex(functions,
-					compiler.ir.IrValueLaneRuntime.PRIMITIVE + "compatible"))
+					compiler.ir.passes.values.IrValueLaneRuntime.PRIMITIVE + "compatible"))
 			]);
 			push([
 				If(null),

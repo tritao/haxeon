@@ -1,9 +1,9 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
 
 enum EnumStringFieldKind {
 	EnumReference;

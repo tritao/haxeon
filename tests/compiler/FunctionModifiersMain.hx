@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 /**

@@ -6,19 +6,19 @@ import compiler.core.AllocationMeter;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrInterface;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrStaticField;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrInstrumentation.IrInstrumentationScope;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrEnum;
+import compiler.ir.model.Ir.IrInterface;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrStaticField;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.abi.PositionalName;
-import compiler.ir.IrFunction;
-import compiler.ir.IrGenerator;
-import compiler.ir.IrProgramAssembler;
+import compiler.ir.model.IrFunction;
+import compiler.ir.gen.IrGenerator;
+import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
 import compiler.semantic.LambdaName;
@@ -419,7 +419,7 @@ class FrontendCompilation {
 			graph.rebuild(modules);
 			// Haxe's type order: modules by path, each module's classes as it declares them (`StaticInitializationOrder`).
 			var initializationNames = names.copy();
-			initializationNames.sort(compiler.ir.StaticInitializationOrder.compareModules);
+			initializationNames.sort(compiler.ir.pipeline.StaticInitializationOrder.compareModules);
 			for (name in initializationNames) {
 				var state = modules.get(name), ast = state.parsedAst();
 				for (classDecl in ast.classes)
@@ -504,7 +504,7 @@ class FrontendCompilation {
 			build.typedNew = typedNew;
 			build.nativeTypeDescriptors = typedNew.nativeTypeDescriptors;
 			context.frontendPassFunctions.push(typedNew.functions.length);
-			build.generator = new IrGenerator(compiler.ir.ProgramFacts.of(typedNew), context.targetProfile());
+			build.generator = new IrGenerator(compiler.ir.pipeline.ProgramFacts.of(typedNew), context.targetProfile());
 			build.typerMetrics = typedResult.metrics;
 			var runtimeDependencies = typedResult.runtimeDependencies;
 			build.runtimeDependencies = runtimeDependencies;
@@ -724,7 +724,7 @@ class FrontendCompilation {
 		if (printsStructures(context))
 			for (fn in IrProgramAssembler.anonymousStringsFrom(generator, typedNew))
 				context.state.anonymousStrings.set(fn.name, fn);
-		var canonicalAbi = compiler.ir.IrInlineEnumLayout.CANONICAL_ABI;
+		var canonicalAbi = compiler.ir.passes.enums.IrInlineEnumLayout.CANONICAL_ABI;
 		if (typedNew.nativeAbiTarget == canonicalAbi) {
 			for (object in typedObjects)
 				if (object.isValue && object.nativeLayout != null)
@@ -1370,7 +1370,7 @@ class FrontendCompilation {
 					continue;
 				var rehashed:Map<String, IrFunction> = [];
 				for (functionName => fn in state.irFunctions) {
-					var replacement = compiler.ir.IrSourceRehash.of(fn, currentHashes);
+					var replacement = compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes);
 					if (replacement != fn)
 						rehashed.set(functionName, replacement);
 				}
@@ -1403,7 +1403,7 @@ class FrontendCompilation {
 				if (holder == null)
 					throw new InternalError('--check-reuse: cached function "$functionName" has no owning module');
 				var held = holder.irFunctions.get(functionName);
-				if (compiler.ir.IrSourceRehash.of(held, currentHashes) != held)
+				if (compiler.ir.pipeline.IrSourceRehash.of(held, currentHashes) != held)
 					throw new InternalError('--check-reuse: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one');
 			}
 		dropUnusedKeyPathFields(build.typed(), cached);
@@ -1437,7 +1437,7 @@ class FrontendCompilation {
 		var instrumentScope = context.instrumentScope();
 		build.instrumentScope = instrumentScope;
 		if (instrumentScope != null)
-			for (native in compiler.ir.IrInstrumentation.natives())
+			for (native in compiler.ir.tools.IrInstrumentation.natives())
 				if (![for (existing in irNatives) existing.name].contains(native.name))
 					irNatives.push(native);
 		var irCNatives = context.ffi.cNatives();
@@ -1463,7 +1463,7 @@ class FrontendCompilation {
 		build.initializers = [
 			for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
 				build.cached, generationWarnings))
-				compiler.ir.IrSourceRehash.of(fn, currentHashes)
+				compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes)
 		].concat(liveInitializers);
 		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
 		// The printers made with the objects (`context.state.anonymousStrings`), for every structure the program has.
@@ -1560,7 +1560,8 @@ class FrontendCompilation {
 			if (context.livePatching && !context.isWasmTarget() && semantic != null)
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 			// The passes and their order are `IrPipeline.target`, from the closed enum tag ABI to the frontend verifier.
-			var passes = new compiler.ir.IrPipelineContext(context.targetProfile(), context.valueArrayTarget());
+			var passes = new compiler.ir.pipeline.IrPipelineContext(context.targetProfile(),
+				context.valueArrayTarget());
 			passes.livePatching = context.livePatching;
 			passes.developmentMetadata = context.developmentMetadata;
 			passes.reflectable = build.reflectable;
@@ -1576,7 +1577,7 @@ class FrontendCompilation {
 				cached = [];
 				context.state.releaseGeneratedIr();
 			}
-			ir = compiler.ir.IrPipeline.target.run(ir, passes);
+			ir = compiler.ir.pipeline.IrPipeline.target.run(ir, passes);
 			for (entry in meter.entries())
 				context.irPassCosts.push(entry);
 			inlinerChanged = passes.inlinerChanged;
@@ -1587,7 +1588,7 @@ class FrontendCompilation {
 			}
 			// The prune ran early: after the last pass nothing may call what it removed (`IrEntryPrune`).
 			if (checkingReuse)
-				compiler.ir.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
+				compiler.ir.analysis.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
 			context.state.pipelineSnapshot = context.livePatching
 				|| inputs == null ? null : new PipelineSnapshot(inputs, ir);
 		}
@@ -1663,11 +1664,13 @@ class FrontendCompilation {
 
 	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */
 	static function pipelineInputs(context:CompilationContext, generator:IrGenerator,
-			instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>, functions:Array<IrFunction>,
+			instrumentScope:Null<compiler.ir.tools.IrInstrumentation.IrInstrumentationScope>,
+			functions:Array<IrFunction>,
 			initializers:Array<IrFunction>,
-			natives:Array<compiler.ir.Ir.IrNative>, cNatives:Array<compiler.ir.Ir.IrCNative>, objects:Array<IrObject>,
-			interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>,
-			staticFields:Array<compiler.ir.Ir.IrStaticField>,
+			natives:Array<compiler.ir.model.Ir.IrNative>, cNatives:Array<compiler.ir.model.Ir.IrCNative>,
+			objects:Array<IrObject>,
+			interfaces:Array<compiler.ir.model.Ir.IrInterface>, enums:Array<compiler.ir.model.Ir.IrEnum>,
+			staticFields:Array<compiler.ir.model.Ir.IrStaticField>,
 			entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
 		var objectNames:Map<String, Bool> = [for (object in objects) object.name => true];
 		var tables = new IrProgram(entryPoint == null ? "" : entryPoint);
@@ -1917,10 +1920,10 @@ class FrontendCompilation {
 			for (block in fn.blocks)
 				for (located in block.instructions) {
 					var instruction = located.value,
-						output = compiler.ir.IrOperands.output(instruction);
+						output = compiler.ir.model.IrOperands.output(instruction);
 					if (output != null)
 						visitType(output.type);
-					for (input in compiler.ir.IrOperands.inputs(instruction))
+					for (input in compiler.ir.model.IrOperands.inputs(instruction))
 						visitType(input.type);
 					switch instruction {
 						case TypeValue(_, type):
@@ -2239,16 +2242,16 @@ class FrontendCompilation {
 
 	/** The literal defaults of the optional parameters of `ir`'s functions (`IrProgram.parameterDefaults`). */
 	static function parameterDefaults(ir:IrProgram,
-			signatures:Map<String, compiler.syntax.Ast.AstFunction>):Map<String, Map<String, compiler.ir.Ir.IrDefault>> {
-		var result:Map<String, Map<String, compiler.ir.Ir.IrDefault>> = [];
+			signatures:Map<String, compiler.syntax.Ast.AstFunction>):Map<String, Map<String, compiler.ir.model.Ir.IrDefault>> {
+		var result:Map<String, Map<String, compiler.ir.model.Ir.IrDefault>> = [];
 		for (fn in ir.functions) {
 			var signature = signatures.get(fn.name);
 			if (signature == null)
 				continue;
-			var defaults:Map<String, compiler.ir.Ir.IrDefault> = [];
+			var defaults:Map<String, compiler.ir.model.Ir.IrDefault> = [];
 			for (argument in signature.arguments) {
 				var value = argument.defaultValue;
-				var literal:Null<compiler.ir.Ir.IrDefault> = value == null
+				var literal:Null<compiler.ir.model.Ir.IrDefault> = value == null
 					? (argument.optional == true ? NullDefault : null) : switch value {
 						case IntegerLiteral(number, _): IntDefault(number);
 						case FloatLiteral(number, _): FloatDefault(number);

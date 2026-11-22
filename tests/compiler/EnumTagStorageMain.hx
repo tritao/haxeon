@@ -1,15 +1,15 @@
 import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrEnumTagLowering;
-import compiler.ir.IrEnumTagStorage;
-import compiler.ir.IrFunction;
-import compiler.ir.IrScalarWordBits;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.enums.IrEnumTagLowering;
+import compiler.ir.passes.enums.IrEnumTagStorage;
+import compiler.ir.passes.scalars.IrScalarWordBits;
+import compiler.ir.verify.IrVerifier;
 
 /** The tag retains nominal identity while its physical carrier is exactly I32. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class EnumTagStorageMain {
 	static function declaration():IrEnum
 		return {name: "Mode", cases: [{name: "Off", params: []}, {name: "On", params: []}]};
@@ -55,12 +55,12 @@ class EnumTagStorageMain {
 			}
 		];
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
-		if (new compiler.ir.IrInterpreter(p).run() != 42) throw "Interpreter failed typed enum tag roundtrip";
+		if (new compiler.ir.tools.IrInterpreter(p).run() != 42) throw "Interpreter failed typed enum tag roundtrip";
 		IrEnumTagLowering.escapes(p);
 		return p;
 	}
 
-	static function arrayProgram(target:compiler.ir.IrValueLaneLayout.IrValueLaneTarget):IrProgram {
+	static function arrayProgram(target:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget):IrProgram {
 		var p = program(),
 			b = new IrBuilder(),
 			array = b.call("__array_alloc_ref", [b.constInt(2)], Array(EnumTag("Mode"))),
@@ -126,7 +126,8 @@ class EnumTagStorageMain {
 			arguments: [I32],
 			result: Array(EnumTag("Mode"))
 		});
-		compiler.ir.IrValueArrayProgramRewrite.rewrite(p, EnumTag("Mode"), target == HashLink ? 64 : 32, target);
+		compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewrite(p, EnumTag("Mode"), target == HashLink ? 64 : 32,
+			target);
 		IrVerifier.verifyValueArraysLowered(p);
 		return p;
 	}
@@ -152,8 +153,8 @@ class EnumTagStorageMain {
 		b.emit(EnumIndex(index, returned));
 		b.returnValue(b.add(index, b.constInt(41)));
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
-		compiler.ir.IrEnumTagLowering.run(p);
-		compiler.ir.IrEnumTagLowering.escapes(p);
+		compiler.ir.passes.enums.IrEnumTagLowering.run(p);
+		compiler.ir.passes.enums.IrEnumTagLowering.escapes(p);
 		// Supply a deterministic boxed-ABI stub so the same wrapper executes on every target.
 		p.natives = [for (native in p.natives) if (native.name != "nativeRoundtrip") native];
 		var stub = new IrBuilder(),
@@ -213,10 +214,10 @@ class EnumTagStorageMain {
 		body.emit(EnumIndex(logicalIndex, roundtrip));
 		body.returnValue(body.add(logicalIndex, body.constInt(41)));
 		logical.functions = [new IrFunction("logical", body.arguments, I32, body.blocks, Ordinary)];
-		compiler.ir.IrEnumTagLowering.run(logical);
-		compiler.ir.IrEnumTagLowering.escapes(logical);
+		compiler.ir.passes.enums.IrEnumTagLowering.run(logical);
+		compiler.ir.passes.enums.IrEnumTagLowering.escapes(logical);
 		IrVerifier.verify(logical);
-		if (new compiler.ir.IrInterpreter(logical).run() != 42)
+		if (new compiler.ir.tools.IrInterpreter(logical).run() != 42)
 			throw "Logical tag lowering failed";
 		if (IrVerifier.sameType(EnumTag("Mode"), I32) || IrVerifier.sameType(EnumTag("Mode"), EnumTag("Other")))
 			throw "Tag identity erased";
@@ -225,13 +226,13 @@ class EnumTagStorageMain {
 			Function([Array(EnumTag("Mode"))], EnumTag("Mode"))))
 			throw "Tag codec lost identity";
 		var nullCheck = program(), checkBody = new IrBuilder();
-		checkBody.call(compiler.ir.IrReceiverCheck.NAME, [checkBody.constNull(EnumTag("Mode"))], Void);
+		checkBody.call(compiler.ir.names.IrReceiverCheck.NAME, [checkBody.constNull(EnumTag("Mode"))], Void);
 		checkBody.returnValue(checkBody.constInt(42));
 		nullCheck.functions.push(new IrFunction("nullCheck", checkBody.arguments, I32, checkBody.blocks, Ordinary));
 		IrVerifier.verify(nullCheck);
 		var nullMessage = "";
 		try
-			new compiler.ir.IrInterpreter(nullCheck).run("nullCheck")
+			new compiler.ir.tools.IrInterpreter(nullCheck).run("nullCheck")
 		catch (error:Dynamic)
 			nullMessage = Std.string(error);
 		if (nullMessage.indexOf("Null access") < 0)
@@ -245,12 +246,12 @@ class EnumTagStorageMain {
 			methods: [],
 			fields: []
 		});
-		referenceBody.call(compiler.ir.IrReceiverCheck.NAME, [referenceBody.newObject("Reference")], Void);
+		referenceBody.call(compiler.ir.names.IrReceiverCheck.NAME, [referenceBody.newObject("Reference")], Void);
 		referenceBody.returnValue(referenceBody.constInt(42));
 		referenceCheck.functions.push(new IrFunction("referenceCheck", referenceBody.arguments, I32,
 			referenceBody.blocks, Ordinary));
 		IrVerifier.verify(referenceCheck);
-		if (new compiler.ir.IrInterpreter(referenceCheck).run("referenceCheck") != 42)
+		if (new compiler.ir.tools.IrInterpreter(referenceCheck).run("referenceCheck") != 42)
 			throw "Interpreter reinterpreted a reference receiver as a numeric tag";
 		for (size in [0, 1, 2, 8]) {
 			var malformed = program();
@@ -309,7 +310,7 @@ class EnumTagStorageMain {
 			for (inlineEnabled in [false, true])
 				for (variant in 0...3) {
 					var arrays = variant == 1;
-					var laneTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget = switch target {
+					var laneTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget = switch target {
 						case HashLink: HashLink;
 						case Wasm32: Wasm32;
 						case WasmGc: WasmGc;
@@ -317,19 +318,21 @@ class EnumTagStorageMain {
 					};
 					var p = arrays ? arrayProgram(laneTarget) : variant == 2 ? nativeProgram() : program();
 					p = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(p));
-					compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(),
-						target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm,
+					compiler.ir.passes.inlining.IrInliner.run(p,
+						new compiler.ir.passes.inlining.IrInliner.IrInlineCache(),
+						target == HashLink
+						? compiler.ir.pipeline.TargetProfile.hashLink : compiler.ir.pipeline.TargetProfile.wasm,
 						new CompileOptions({inlining: inlineEnabled}));
 					IrVerifier.verify(p);
-					if (!arrays && new compiler.ir.IrInterpreter(p).run() != 42)
+					if (!arrays && new compiler.ir.tools.IrInterpreter(p).run() != 42)
 						throw "Interpreter tag roundtrip failed";
-					var laneTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget = switch target {
+					var laneTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget = switch target {
 						case HashLink: HashLink;
 						case Wasm32: Wasm32;
 						case WasmGc: WasmGc;
 						case Wasm64 | HashLinkC: throw "Unsupported target";
 					};
-					var shape = new compiler.ir.IrValueLaneLayout(compiler.ir.IrObjectTable.of([]),
+					var shape = new compiler.ir.passes.values.IrValueLaneLayout(compiler.ir.model.IrObjectTable.of([]),
 						target == HashLink ? 64 : 32,
 						laneTarget).shape(EnumTag("Mode"));
 					if (shape.scalarStrideBits != 32 || shape.references != 0 || shape.slots.length != 1

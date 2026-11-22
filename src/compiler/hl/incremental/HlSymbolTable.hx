@@ -2,8 +2,8 @@ package compiler.hl.incremental;
 
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrTypeMap;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.IrTypeMap;
 import compiler.abi.NameRewrite;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
@@ -11,10 +11,10 @@ import compiler.hl.HlCode.HlObjectMethod;
 import compiler.hl.HlCode.HlObjectField;
 import compiler.hl.HlCode.HlEnumConstructor;
 import compiler.hl.HlType;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrInterface;
-import compiler.ir.Ir.IrEnum;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrInterface;
+import compiler.ir.model.Ir.IrEnum;
 
 /** Persisted association between a semantic name and an append-only index. */
 typedef HlNamedIndex = {
@@ -333,8 +333,8 @@ class HlSymbolTable {
 			return typeIndices.get(key);
 		ensureWritable();
 		switch type {
-			case Abstract(_) if (compiler.ir.IrHlScalarRef.element(type) != null):
-				var index = internReference(compiler.ir.IrHlScalarRef.element(type));
+			case Abstract(_) if (compiler.ir.passes.scalars.IrHlScalarRef.element(type) != null):
+				var index = internReference(compiler.ir.passes.scalars.IrHlScalarRef.element(type));
 				typeIndices.set(key, index);
 				return index;
 			case EnumTag(name):
@@ -566,14 +566,14 @@ class HlSymbolTable {
 	 */
 	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>,
 			?interfaceSlots:Array<String>,
-			reserve:Int = 0, ?typedEntries:Array<compiler.ir.Ir.IrObjectMethod>):Int {
+			reserve:Int = 0, ?typedEntries:Array<compiler.ir.model.Ir.IrObjectMethod>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
 		var fields:Array<HlObjectField> = [for (field in object.fields)
 			{
 				name:internString(field.name),
-					type:internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field))
+					type:internObjectFieldType(field.type, valueObjects, compiler.ir.model.IrFieldStorage.scalar(field))
 			}];
 		if (interfaceSlots != null)
 			for (slot in interfaceSlots) {
@@ -754,7 +754,7 @@ class HlSymbolTable {
 		};
 
 	public function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>,
-			nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Int {
+			nativeLayout:Null<compiler.ir.model.Ir.IrScalarStorage>):Int {
 		return switch type {
 			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
 				var parameter = internType(type), key = 'packed:obj:$name';
@@ -773,7 +773,7 @@ class HlSymbolTable {
 
 	/** Returns the HashLink type used for native field storage when it is narrower than the IR value type. */
 	public function internNativeFieldStorageType(type:IrType,
-			nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
+			nativeLayout:Null<compiler.ir.model.Ir.IrScalarStorage>):Null<Int> {
 		if (nativeLayout == null)
 			return null;
 		return switch type {

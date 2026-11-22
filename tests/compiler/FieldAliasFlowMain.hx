@@ -1,6 +1,6 @@
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 
 /** A write through one name invalidates refinements of the same field through aliases. */

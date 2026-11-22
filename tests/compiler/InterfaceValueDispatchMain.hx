@@ -1,12 +1,13 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrTypedInterfaceDispatch;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
+import compiler.ir.verify.IrVerifier;
 
 class InterfaceValueDispatchMain {
 	static function main():Void {
-		var nested = compiler.ir.IrScalarArguments.PREFIX + compiler.ir.IrOptionalScalarFlow.PREFIX;
+		var nested = compiler.ir.passes.scalars.IrScalarArguments.PREFIX
+			+ compiler.ir.passes.nullability.IrOptionalScalarFlow.PREFIX;
 		if (!IrTypedInterfaceDispatch.isDispatchEntry(nested + IrTypedInterfaceDispatch.PREFIX + "Reader:read:key")
 			|| !IrTypedInterfaceDispatch.isAdapterEntry(nested
 			+ IrTypedInterfaceDispatch.adapterName(IrTypedInterfaceDispatch.PREFIX + "Reader:read:key", "Owner")))
@@ -26,9 +27,9 @@ class InterfaceValueDispatchMain {
 			interfaces: ["Derived"],
 			fields: [{name: "value", type: Obj("Value")}],
 			methods: [
-				{name: "read", functionName: compiler.ir.IrSymbol.of("Owner.read")},
-				{name: "accept", functionName: compiler.ir.IrSymbol.of("Owner.accept")},
-				{name: "plain", functionName: compiler.ir.IrSymbol.of("Owner.plain")}
+				{name: "read", functionName: compiler.ir.model.IrSymbol.of("Owner.read")},
+				{name: "accept", functionName: compiler.ir.model.IrSymbol.of("Owner.accept")},
+				{name: "plain", functionName: compiler.ir.model.IrSymbol.of("Owner.plain")}
 			]
 		};
 		var interfaces:Array<IrInterface>= [

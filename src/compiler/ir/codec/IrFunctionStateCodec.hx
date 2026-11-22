@@ -1,24 +1,24 @@
 package compiler.ir.codec;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrBlock;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.Ir.IrBlock;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrTerminator;
+import compiler.ir.model.Ir.IrValue;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunction.IrValueArraySlotOperation;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.codec.IrInstructionCodec;
 import compiler.ir.codec.IrTerminatorCodec;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.ir.codec.IrValueTableCodec;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
-import compiler.ir.SourceProvenance.SourceLocation;
-import compiler.ir.SourceProvenance.SourceOrigin;
+import compiler.ir.verify.IrVerifier;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.model.SourceProvenance.SourceLocation;
+import compiler.ir.model.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
@@ -185,10 +185,10 @@ class IrFunctionStateCodec {
 				throw new InternalError("Invalid IR function argument count");
 			var arguments = [for (_ in 0...argumentCount) IrValueTableCodec.readReference(input, values)],
 				result = IrTypeCodec.readType(input, bytes.length, 0),
-				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
+				debugBindings:Array<compiler.ir.model.IrFunction.IrDebugBinding> = [];
 			var inlineHint = version >= 9 && input.readByte() != 0,
-				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
-			var kind:compiler.ir.IrFunction.IrFunctionKind = switch input.readByte() {
+				retention:compiler.ir.model.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
+			var kind:compiler.ir.model.IrFunction.IrFunctionKind = switch input.readByte() {
 				case 0: Ordinary;
 				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0),
 					IrTypeCodec.readType(input, bytes.length, 0));
@@ -224,7 +224,7 @@ class IrFunctionStateCodec {
 						throw new InternalError("Invalid enum tag adapter role");
 					EnumTagAdapter(type, flag == 1);
 				case 26:
-					var subject = compiler.ir.TypeKey.fromPersisted(IrTypeCodec.readString(input, bytes.length));
+					var subject = compiler.ir.model.TypeKey.fromPersisted(IrTypeCodec.readString(input, bytes.length));
 					Provider(subject, cast IrTypeCodec.readString(input, bytes.length));
 				default: throw new InternalError("Invalid IR function kind");
 			};
@@ -342,8 +342,8 @@ class IrFunctionStateCodec {
 			input.readInt32()) : new SourceLocation(path, start, end, line);
 	}
 
-	public static function verify(functions:Array<IrFunction>, context:compiler.ir.Ir.IrProgram):Void {
-		var program = new compiler.ir.Ir.IrProgram(context.entryPoint);
+	public static function verify(functions:Array<IrFunction>, context:compiler.ir.model.Ir.IrProgram):Void {
+		var program = new compiler.ir.model.Ir.IrProgram(context.entryPoint);
 		program.natives = context.natives;
 		program.cNatives = context.cNatives;
 		program.objects = context.objects;
@@ -435,7 +435,7 @@ class IrFunctionStateCodec {
 		if (values.exists(id)) {
 			var previous = values.get(id);
 			if (previous != value
-				&& (previous.name != value.name || !compiler.ir.IrTypeIdentity.same(previous.type, value.type)))
+				&& (previous.name != value.name || !compiler.ir.model.IrTypeIdentity.same(previous.type, value.type)))
 				throw new InternalError("Conflicting IR value identity");
 		}
 		values.set(id, value);

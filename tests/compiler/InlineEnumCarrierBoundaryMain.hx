@@ -1,10 +1,10 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrHlScalarRef;
-import compiler.ir.IrScalarArguments;
-import compiler.ir.IrValueLaneReference;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.scalars.IrHlScalarRef;
+import compiler.ir.passes.scalars.IrScalarArguments;
+import compiler.ir.passes.values.IrValueLaneReference;
+import compiler.ir.verify.IrVerifier;
 
 /** Private payload references may cross only a verified scalar ABI. */
 class InlineEnumCarrierBoundaryMain {
@@ -174,9 +174,9 @@ class InlineEnumCarrierBoundaryMain {
 						{name: "owner", type: IrValueLaneReference.type()}
 					]
 				};
-				var objects = compiler.ir.IrObjectTable.of([packet.name => packet]),
-					shape = new compiler.ir.IrValueLaneLayout(objects, 64, HashLink).shape(element);
-				var helpers = new compiler.ir.IrValueArraySlotHelpers(0, element, shape),
+				var objects = compiler.ir.model.IrObjectTable.of([packet.name => packet]),
+					shape = new compiler.ir.passes.values.IrValueLaneLayout(objects, 64, HashLink).shape(element);
+				var helpers = new compiler.ir.passes.arrays.IrValueArraySlotHelpers(0, element, shape),
 					slot = helpers.slot(["owner"]),
 					name = helpers.getter(slot);
 				var b = new IrBuilder();

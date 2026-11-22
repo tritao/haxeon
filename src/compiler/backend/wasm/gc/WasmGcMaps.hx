@@ -8,8 +8,8 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrType;
 
 /** The functions every operation on one map type shares: all take the map first and work through its hash index. */
 typedef WasmGcMapHelpers = {
@@ -896,7 +896,7 @@ class WasmGcMaps {
 				StructNew(array),
 				LocalSet(1)
 			];
-		if (compiler.ir.IrVerifier.sameType(sourceElement, element)) {
+		if (compiler.ir.verify.IrVerifier.sameType(sourceElement, element)) {
 			appendArrayCopy(body, storage, [
 				LocalGet(1),
 				StructGet(array, WasmGcTypePlan.arrayDataFieldIndex()),

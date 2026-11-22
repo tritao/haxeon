@@ -1,14 +1,14 @@
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrHlScalarRef;
-import compiler.ir.IrSymbol;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.scalars.IrHlScalarRef;
+import compiler.ir.verify.IrVerifier;
 
 class AuditVerifierMain {
 	static function verifyLaneArrayInvariant():Void {
@@ -106,7 +106,7 @@ class AuditVerifierMain {
 	static function verifyInlineEnumIntrinsics():Void {
 		var first:IrEnum = {name: "InlineFirst", cases: [{name: "Value", params: [I32]}]},
 			second:IrEnum = {name: "InlineSecond", cases: [{name: "Value", params: [I32]}]},
-			planner = new compiler.ir.IrInlineEnumLayout([first, second], [], 64, HashLink),
+			planner = new compiler.ir.passes.enums.IrInlineEnumLayout([first, second], [], 64, HashLink),
 			firstShape = planner.shape(first.name),
 			secondShape = planner.shape(second.name);
 		if (firstShape == null || secondShape == null)
@@ -232,7 +232,7 @@ class AuditVerifierMain {
 			input = builder.argument("input", I32),
 			dropped = new IrValue(40, "dropped", Obj("Gone"));
 		builder.returnValue(input);
-		function binding(value:IrValue):compiler.ir.IrFunction.IrDebugBinding
+		function binding(value:IrValue):compiler.ir.model.IrFunction.IrDebugBinding
 			return {
 				identity: "local:dropped",
 				name: "dropped",
@@ -273,7 +273,7 @@ class AuditVerifierMain {
 		rejected(intrinsicProgram, "Invalid IR enum Dynamic box signature");
 		var dispatchRejected = false;
 		try
-			compiler.ir.IrEnumDynamicDispatch.rewrite(intrinsicProgram.functions)
+			compiler.ir.passes.enums.IrEnumDynamicDispatch.rewrite(intrinsicProgram.functions)
 		catch (error:InternalError) {
 			if (error.message.indexOf("Invalid enum Dynamic box signature") < 0)
 				throw error;
@@ -288,9 +288,10 @@ class AuditVerifierMain {
 		reserved.returnValue(reserved.constVoid());
 		var collision = new IrProgram("main");
 		collision.enums = [{name: "Example", cases: [{name: "Only", params: []}]}];
-		collision.functions = compiler.ir.IrEnumDynamicDispatch.rewrite([
+		collision.functions = compiler.ir.passes.enums.IrEnumDynamicDispatch.rewrite([
 			new IrFunction("main", validBox.arguments, Dyn, validBox.blocks, Ordinary),
-			new IrFunction(compiler.ir.IrEnumDynamicDispatch.boxName(Enum("Example")), reserved.arguments, Void,
+			new IrFunction(compiler.ir.passes.enums.IrEnumDynamicDispatch.boxName(Enum("Example")), reserved.arguments,
+				Void,
 				reserved.blocks, Ordinary)
 		]);
 		IrVerifier.verify(collision);
@@ -309,7 +310,7 @@ class AuditVerifierMain {
 		rejected(invalidTag, "Invalid IR enum tag box signature");
 		var tagLoweringRejected = false;
 		try
-			compiler.ir.IrEnumTagLowering.escapes(invalidTag)
+			compiler.ir.passes.enums.IrEnumTagLowering.escapes(invalidTag)
 		catch (error:InternalError) {
 			if (error.message.indexOf("Invalid enum tag box signature") < 0)
 				throw error;

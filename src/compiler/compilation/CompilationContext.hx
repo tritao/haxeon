@@ -116,14 +116,14 @@ class CompilationContext {
 	public function describesRuntimeAbi():Bool
 		return livePatching || options.keepSession || isWasmTarget();
 
-	public function targetProfile():compiler.ir.TargetProfile
-		return isWasmTarget() ? compiler.ir.TargetProfile.wasm : compiler.ir.TargetProfile.hashLink;
+	public function targetProfile():compiler.ir.pipeline.TargetProfile
+		return isWasmTarget() ? compiler.ir.pipeline.TargetProfile.wasm : compiler.ir.pipeline.TargetProfile.hashLink;
 
-	public function valueArrayTarget():compiler.ir.IrValueLaneLayout.IrValueLaneTarget
+	public function valueArrayTarget():compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget
 		return switch owner.backendTarget {
-			case WasmGc: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.WasmGc;
-			case Wasm32: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.Wasm32;
-			case HashLink | HashLinkC | Wasm64: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.HashLink;
+			case WasmGc: compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget.WasmGc;
+			case Wasm32: compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget.Wasm32;
+			case HashLink | HashLinkC | Wasm64: compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget.HashLink;
 		};
 
 	public function exportedFunctions():Array<String>
@@ -134,15 +134,15 @@ class CompilationContext {
 	 * The functions an instrumented build probes, or null for an ordinary build. `haxeon-instrument=1` turns
 	 * instrumentation on; `haxeon-instrument-include` and `haxeon-instrument-exclude` hold comma-separated patterns.
 	 */
-	public function instrumentScope():Null<compiler.ir.IrInstrumentation.IrInstrumentationScope> {
+	public function instrumentScope():Null<compiler.ir.tools.IrInstrumentation.IrInstrumentationScope> {
 		var option = defines.get("haxeon-instrument");
 		if (option == null || option == "0")
 			return null;
 		if (option != "1")
 			throw new InternalError("haxeon-instrument must be 0 or 1");
-		return new compiler.ir.IrInstrumentation.IrInstrumentationScope(compiler.ir.IrInstrumentation
+		return new compiler.ir.tools.IrInstrumentation.IrInstrumentationScope(compiler.ir.tools.IrInstrumentation
 			.IrInstrumentationScope.patterns(defines.get("haxeon-instrument-include")),
-			compiler.ir.IrInstrumentation.IrInstrumentationScope
+			compiler.ir.tools.IrInstrumentation.IrInstrumentationScope
 			.patterns(defines.get("haxeon-instrument-exclude")));
 	}
 

@@ -1,12 +1,12 @@
 package compiler.backend.wasm.gc;
-import compiler.ir.IrSymbol;
+import compiler.ir.model.IrSymbol;
 
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueArrayLayout;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.arrays.IrValueArrayLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Facts already fixed by a typed array place, before target-specific field flattening. */
 typedef WasmGcValueArrayScalarAccess = {
@@ -113,7 +113,7 @@ class WasmGcValueArrayAccessors {
 				var object = objects.get(name);
 				if (object == null || !object.isValue) return null;
 			case Enum(name), Nullable(Enum(name)):
-				if (compiler.ir.IrInlineEnumStorage.resolve(enums, objects, name) == null) return null;
+				if (compiler.ir.passes.enums.IrInlineEnumStorage.resolve(enums, objects, name) == null) return null;
 			default: return null;
 		}
 		var key = haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), layout = layouts.get(key);

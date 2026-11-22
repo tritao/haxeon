@@ -7,8 +7,8 @@ import compiler.ffi.HxiProjectionProfile;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 import compiler.ffi.HxiValidator;
-import compiler.ir.Ir.IrCNativeArgumentMode;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrCNativeArgumentMode;
+import compiler.ir.model.Ir.IrType;
 
 class HxiAbiMain {
 	static function main():Void {

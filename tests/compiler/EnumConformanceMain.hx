@@ -1,6 +1,6 @@
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 class EnumConformanceMain {
 	static function main():Void {

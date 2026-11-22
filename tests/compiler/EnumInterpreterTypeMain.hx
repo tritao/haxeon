@@ -1,8 +1,8 @@
 import compiler.Frontend;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrSymbol;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.tools.IrInterpreter;
 
 class EnumInterpreterTypeMain {
 	static function main():Void {

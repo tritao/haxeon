@@ -1,8 +1,8 @@
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrLoopBounds;
+import compiler.ir.analysis.IrLoopBounds;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
 
 class LoopBoundsMain {
 	static function expect(ok:Bool, message:String):Void {

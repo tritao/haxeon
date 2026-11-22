@@ -1,6 +1,6 @@
 package compiler.backend.wasm;
 
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrFunction;
 
 /**
  * The facts needed to emit a reducible CFG as structured Wasm control flow, after Ramsey, "Beyond Relooper" (ICFP

@@ -12,10 +12,10 @@ import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrCNativeArgumentMode;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNativeArgumentMode;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
 
 /** HXI and C-native ABI conversion for native Wasm GC values. */
 class WasmGcInterop implements WasmInteropRepresentation {

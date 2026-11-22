@@ -1,11 +1,11 @@
 import compiler.core.Provides.ProviderOperation;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunction.IrFunctionKind;
-import compiler.ir.IrProviders;
-import compiler.ir.IrTypeAwareWalk;
-import compiler.ir.TypeKey;
+import compiler.ir.analysis.IrTypeAwareWalk;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrFunctionKind;
+import compiler.ir.model.IrProviders;
+import compiler.ir.model.TypeKey;
 
 /** The type-aware reachability walk on small IR graphs (docs/design/REACHABILITY_WALK.md). */
 class TypeAwareWalkMain {
@@ -31,7 +31,7 @@ class TypeAwareWalkMain {
 			interfaces: interfaces,
 			fields: [],
 			methods: [for (method in methods) {
-				name:method, functionName:compiler.ir.IrSymbol.of(name + "." + method)
+				name:method, functionName:compiler.ir.model.IrSymbol.of(name + "." + method)
 			}]};
 
 	static function empty(name:String, kind:IrFunctionKind, ?arguments:Array<IrType>, result:IrType = Void):IrFunction {

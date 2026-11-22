@@ -4,7 +4,7 @@ import compiler.backend.wasm.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmReflectionTable;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
-import compiler.ir.Ir.IrNative;
+import compiler.ir.model.Ir.IrNative;
 
 /**
  * Linear Wasm's side of field reflection over object layouts: a lookup that binary-searches the table in memory by the type

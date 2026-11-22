@@ -6,7 +6,7 @@ import compiler.backend.Backend.BackendTarget;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 
 /** What a backend made of one build's IR. */
 typedef BackendAssemblyResult = {

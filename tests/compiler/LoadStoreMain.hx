@@ -1,20 +1,21 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInliner;
-import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.IrLoadStoreForwarding;
-import compiler.ir.IrObjectTable;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.cleanup.IrLoadStoreForwarding;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 
 class LoadStoreMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function forward(fn:IrFunction, ?objects:IrObjectTable):IrFunction {
-		var body = compiler.ir.IrBodyBuilder.encode(fn, new compiler.ir.IrTypeIds());
-		return IrLoadStoreForwarding.runBody(body, objects, new compiler.ir.IrPassScratch()) ? body.toFunction() : fn;
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		return IrLoadStoreForwarding.runBody(body, objects, new compiler.ir.model.IrPassScratch())
+			? body.toFunction() : fn;
 	}
 
 	static function located(i:IrInstruction):Located<IrInstruction>
@@ -178,7 +179,7 @@ class LoadStoreMain {
 		fieldCase("other field", function(b, o, a) b.fieldSet(a, "m", b.constInt(8)), 1);
 		fieldCase("call", function(b, o, a) b.call("mutate", [o], Void), 2);
 		fieldCase("receiver check preserves loaded fields",
-			function(b, o, a) b.call(compiler.ir.IrReceiverCheck.NAME, [a], Void), 1);
+			function(b, o, a) b.call(compiler.ir.names.IrReceiverCheck.NAME, [a], Void), 1);
 		fieldCase("native call", function(b, o, a) b.cNativeCall("mutate", [o], Void), 2);
 		fieldCase("closure", function(b, o, a) b.callClosure(b.argument("closure", Function([], Void)), [], Void), 2);
 		fieldCase("method", function(b, o, a) b.blocks[0].instructions
@@ -305,13 +306,13 @@ class LoadStoreMain {
 			notForwarding = new CompileOptions({inlining: false, loadStoreForwarding: false});
 		var program = new IrProgram("test"), cache = new IrInlineCache();
 		program.functions = [fn];
-		IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm, forwarding);
+		IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm, forwarding);
 		expect(loads(program.functions[0]) == 0, "forward with inliner off");
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm,
+		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm,
 			forwarding).length == 0, "memo unchanged");
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm,
+		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm,
 			notForwarding).indexOf("test") >= 0,
 			"switch changes published bytes");
 		expect(program.functions[0] == fn, "disabled pass identity");

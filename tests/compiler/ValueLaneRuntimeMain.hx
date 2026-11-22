@@ -1,7 +1,7 @@
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrValueLaneRuntime;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.passes.values.IrValueLaneRuntime;
 import compiler.runtime.ValueLaneNativeSource;
 import sys.io.File;
 
@@ -24,16 +24,17 @@ class ValueLaneRuntimeMain {
 			fields: [{name: "type", type: TypeRef}]
 		};
 		for (target in ([HashLink, Wasm32, WasmGc]:Array<IrValueLaneTarget>)) {
-			var factory = new compiler.ir.IrValueArrayFactory(compiler.ir.IrObjectTable.of([handle.name => handle]),
+			var factory = new compiler.ir.passes.arrays
+				.IrValueArrayFactory(compiler.ir.model.IrObjectTable.of([handle.name => handle]),
 				Nullable(Obj(handle.name)), target == HashLink ? 64 : 32, target, 0),
 				program = new IrProgram("main"),
-				body = new compiler.ir.IrBuilder();
+				body = new compiler.ir.model.IrBuilder();
 			body.returnValue(body.constInt(42));
 			program.objects = [handle];
 			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks,
 				Ordinary)].concat(factory.functions()).concat(factory.helpers.functions());
 			program.natives = factory.natives().concat(factory.helpers.natives());
-			compiler.ir.IrVerifier.verify(program);
+			compiler.ir.verify.IrVerifier.verify(program);
 		}
 		Sys.println("PASS: portable lane policy verifies and its native C artifact is current and deterministic");
 	}

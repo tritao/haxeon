@@ -1,11 +1,11 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrNonNullFacts;
-import compiler.ir.IrReceiverCheck;
-import compiler.ir.IrSymbol;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.analysis.IrNonNullFacts;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.names.IrReceiverCheck;
 
 class NonNullFactsMain {
 	static function expect(value:Bool, message:String):Void

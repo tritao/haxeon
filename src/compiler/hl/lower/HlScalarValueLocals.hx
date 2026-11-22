@@ -1,11 +1,11 @@
 package compiler.hl.lower;
 
-import compiler.ir.Ir;
-import compiler.ir.IrBody;
-import compiler.ir.IrOpcode;
-import compiler.ir.IrScalarValuePlaces;
-import compiler.ir.IrTypeTools;
-import compiler.ir.IrValueId;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBody;
+import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrTypeTools;
+import compiler.ir.model.IrValueId;
+import compiler.ir.passes.scalars.IrScalarValuePlaces;
 
 typedef HlScalarValueLocal = {
 	final fields:Map<String, Int>;
@@ -65,7 +65,7 @@ class HlScalarValueLocals {
 		}
 		if (rootRows.length == 0)
 			return;
-		compiler.ir.IrPassScratch.filledInts(rootIndices, body.valueLimit(), -1);
+		compiler.ir.model.IrPassScratch.filledInts(rootIndices, body.valueLimit(), -1);
 		for (index in 0...rootRows.length)
 			rootIndices[body.output(rootRows[index])] = index;
 		for (block in 0...body.blockCount()) {

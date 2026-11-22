@@ -29,7 +29,7 @@ class KeyPathTypingMain {
 			'\\Model.point.x', 'nullable intermediate');
 		var read = compiler.Frontend.compile(node
 			+ 'function main():Int { var n = new Node(); return (\\Node.width).get(n) + 41; }');
-		if (new compiler.ir.IrInterpreter(read).run('main') != 42)
+		if (new compiler.ir.tools.IrInterpreter(read).run('main') != 42)
 			throw 'Known class-root path did not read its stored field';
 		var writes = compiler.Frontend.compile(node
 			+ 'struct Point { public var x:Int; public function new(x:Int) this.x=x; } '
@@ -37,7 +37,7 @@ class KeyPathTypingMain {
 			+ 'function update(p:WritableKeyPath<Point,Int>, n:Point):Point { p.set(n,21); return n; } '
 			+ 'function main():Int { var n=new Node(); (\\Node.width).set(n,21); '
 			+ 'var point=update(\\Point.x,new Point(0)); return read(\\Node.width,n)+(\\Point.x).get(point); }');
-		if (new compiler.ir.IrInterpreter(writes).run('main') != 42)
+		if (new compiler.ir.tools.IrInterpreter(writes).run('main') != 42)
 			throw 'Escaped class read or escaped struct write did not preserve its root';
 		var composition = compiler.Frontend
 			.compile('class Child { public var x:Int=21; } class Root { public var child:Child=new Child(); } '
@@ -46,19 +46,19 @@ class KeyPathTypingMain {
 			+ 'p.set(r,42); if(p != \\Root.child.x) return 1; '
 			+ 'if(haxeon.Hashing.hash(p) != haxeon.Hashing.hash(\\Root.child.x)) return 2; '
 			+ 'if(p.toString() != "\\\\Root.child.x") return 3; return p.get(r); }');
-		if (new compiler.ir.IrInterpreter(composition).run('main') != 42)
+		if (new compiler.ir.tools.IrInterpreter(composition).run('main') != 42)
 			throw 'Escaped composition or identity failed';
 		var granted = compiler.Frontend.compile('struct Point { public var x:Int=0; } '
 			+ 'class Root { public var point(default,null):Point=new Point(); '
 			+ 'public static function run():Int return update(\\Root.point,\\Point.x,new Root()); } '
 			+ 'function update<R,V>(p:WritableKeyPath<R,V>,q:WritableKeyPath<V,Int>,r:R):Int { var path=p.then(q); path.set(r,42); return path.get(r); } '
 			+ 'function main():Int return Root.run();');
-		if (new compiler.ir.IrInterpreter(granted).run('main') != 42)
+		if (new compiler.ir.tools.IrInterpreter(granted).run('main') != 42)
 			throw 'Composition lost the granted setter capability';
 		var friend = compiler.Frontend.compile('@:allow(Friend) class Item { public var value(default,null):Int=0; } '
 			+ 'class Friend { public static function run():Int { var item=new Item(); (\\Item.value).set(item,42); return item.value; } } '
 			+ 'function main():Int return Friend.run();');
-		if (new compiler.ir.IrInterpreter(friend).run('main') != 42)
+		if (new compiler.ir.tools.IrInterpreter(friend).run('main') != 42)
 			throw 'Friend lost the key-path setter capability';
 		expectType('class Item { public var value(default,null):Int=0; } ', '\\Item.value', 'KeyPath<Item,Int>');
 		expectError(node, '(\\Node.height).set(new Node(),3)', 'not writable');
@@ -89,7 +89,7 @@ class KeyPathTypingMain {
 			c.configure(inlineEnabled ? 'inline-on' : 'inline-off', 'test',
 				[]);
 			c.options = new CompileOptions({inlining: inlineEnabled});
-			if (new compiler.ir.IrInterpreter(c.compile('Main').ir).run('main') != 42)
+			if (new compiler.ir.tools.IrInterpreter(c.compile('Main').ir).run('main') != 42)
 				throw 'Qualified generic-root path failed with inline=' + inlineEnabled;
 		}
 		Sys.println('PASS: key path formation resolves fields, capabilities and diagnostics');

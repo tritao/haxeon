@@ -1,6 +1,6 @@
 package compiler.backend.wasm;
 
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 
 private typedef ReflectionRow = {
 	final typeId:Int;

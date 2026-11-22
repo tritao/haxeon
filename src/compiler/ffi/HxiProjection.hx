@@ -5,7 +5,7 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiProjectedModule;
 import compiler.ffi.HxiProjectionProfile;
-import compiler.ir.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNative;
 
 /** Public entry points for HXI projection planning and emission. */
 class HxiProjection {

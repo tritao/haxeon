@@ -1,9 +1,9 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInliner;
-import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.TargetProfile;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.pipeline.TargetProfile;
 
 /**
  * Functions in a call cycle are not inlined into each other, so their inlined form depends only on their own source and on callees

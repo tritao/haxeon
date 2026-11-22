@@ -1,7 +1,7 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
+import compiler.ir.model.Ir;
 
 /** One paired release program: fields, scalar calls, closures and arrays have no tag representation cost. */
 class EnumTagReleaseSizeMain {
@@ -41,7 +41,7 @@ class EnumTagReleaseSizeMain {
 			+ '\nfunction main():Int { var x:Dynamic=17, y:Dynamic=18; var h=new Holder(On), a:Array<Mode>=[Off,On,Hot], f:Mode->Mode=function(v:Mode):Mode return v; '
 			+ 'a[0]=h.mode; return x!=y && same(a[0],f(On)) && a[2]==Hot ? 42 : 1; }');
 		var program = session.compile("Main").ir;
-		if (nominal && compiler.ir.IrEnumRuntimeTypes.declarations(program).length != 0)
+		if (nominal && compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program).length != 0)
 			throw "Unobserved tag retained a boxed descriptor";
 		return encode(program, target);
 	}
@@ -61,7 +61,8 @@ class EnumTagReleaseSizeMain {
 			+ '\nvar values:Array<Mode>=[Off,On], erased:Dynamic=values, view:Array<Dynamic>=cast erased;'
 			+ '\nvar recovered:Mode=cast view[1]; if(Type.enumIndex(recovered)!=1) return 3; view[0]=Hot; return values[0]==Hot ? 42 : 4; }');
 		var program = session.compile("Main").ir;
-		if (!Lambda.exists(compiler.ir.IrEnumRuntimeTypes.declarations(program), entry -> entry.name == "Mode"))
+		if (!Lambda.exists(compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program),
+			entry -> entry.name == "Mode"))
 			throw "Transitive reflection lost its boxed enum descriptor";
 		run(target, encode(program, target));
 		Sys.println("PASS: release tag reflection " + target + " inline=" + inlining);

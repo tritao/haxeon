@@ -1,5 +1,5 @@
 import compiler.Frontend;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** The reference interpreter retains the semantic type of an adapted closure. */
 class InterpreterClosureCastMain {

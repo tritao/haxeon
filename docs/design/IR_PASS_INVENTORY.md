@@ -1,6 +1,6 @@
 # IR pass inventory and pass interface (ADR 0003, M2)
 
-Status: proposal; the pass order of the frontend is in one place (`compiler.ir.IrPipeline`), the per-pass interface below is not
+Status: proposal; the pass order of the frontend is in one place (`compiler.ir.pipeline.IrPipeline`), the per-pass interface below is not
 written yet. Since 2026-11-19 it is built on the query engine ([QUERY_ENGINE.md](QUERY_ENGINE.md), ADR 0003 M4a): `view`
 is the engine's read interface, and contributions, summaries and rewrites are query kinds. Builds on section B of [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) (pass interface, name families,
 file:line evidence). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
@@ -264,7 +264,7 @@ By edit cost, with what must come first:
 
 0. **The 3.4M floor.** Profile one of the five passes in finding 2 and remove the shared cause. No interface needed; up to 17M (14%).
 1. **The framework commit**: the interface, the view, the opaque step, check mode. No pass moves in it.
-   Landed in part: `compiler.ir.IrPipeline` runs every frontend pass as an opaque, named stage in one ordered list per phase
+   Landed in part: `compiler.ir.pipeline.IrPipeline` runs every frontend pass as an opaque, named stage in one ordered list per phase
    (`assembly`, `target`), with the target differences as stage predicates and the pass meter and the early prune's
    check hooks as stage properties. The interface, the view and the reuse check mode of rule 5 are still to come; the Wasm builders'
    passes are outside the lists.

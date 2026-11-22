@@ -388,7 +388,7 @@ the `.hl` by receiver register type; the IR census agrees, 62,099 `FieldGet` aga
 | class | 63,689 | 69.4% | 46,688 (71.8%) | 64.9% |
 
 - 9,654 of the 9,687 structure writes are constructor stores, which the model never guards.
-- 519 structure types; 339 are named `typedef`s (438 in `src/`). IR records (`ir/Ir.hx` and other `ir/` files) and
+- 519 structure types; 339 are named `typedef`s (438 in `src/`). IR records (`ir/model/Ir.hx` and other `ir/` files) and
   AST records are 42% of the static and 79% of the weighted structure accesses; `IrInlineValueSlot`, `IrObjectField`,
   `IrPhiInput` and `AstFunction` lead the weighted list. `TypedAst` records are 8%.
 - A sampling profile of a self-compile (`hlprof-live`, 2 kHz, 55,603 samples) puts structure accesses at about 9% of

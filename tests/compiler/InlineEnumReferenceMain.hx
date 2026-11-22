@@ -1,12 +1,12 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumReferenceAccess;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrValueLaneReference;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.enums.IrInlineEnumReferenceAccess;
+import compiler.ir.passes.values.IrValueLaneReference;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumReferenceMain {
 	static function tempRoot():String {
 		var root = Sys.getEnv("TMPDIR");
@@ -216,7 +216,7 @@ class InlineEnumReferenceMain {
 			check.returnValue(check.fieldGet(restored, "code", I32));
 			p.functions = [
 				new IrFunction("prepareRoot", prepare.arguments, Void, prepare.blocks, Ordinary, null, false,
-					compiler.ir.IrFunction.IrRetention.Expose),
+					compiler.ir.model.IrFunction.IrRetention.Expose),
 				new IrFunction("checkRoot", check.arguments, I32, check.blocks, Ordinary)
 			];
 			if (target == HashLink) {

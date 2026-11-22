@@ -3,8 +3,8 @@ package compiler.runtime;
 import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrNative;
+import compiler.ir.model.Ir.IrType;
 
 /** Source signature and HashLink binding for one immutable host native. */
 typedef NativeDefinition = {

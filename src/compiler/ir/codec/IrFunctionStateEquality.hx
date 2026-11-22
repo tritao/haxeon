@@ -1,14 +1,14 @@
 package compiler.ir.codec;
 
-import compiler.ir.Ir;
-import compiler.ir.IrBody;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunction.IrValueArraySlotOperation;
-import compiler.ir.IrOpcode;
-import compiler.ir.IrValueId;
-import compiler.ir.IrVerifier;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.SourceOrigin;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBody;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrValueArraySlotOperation;
+import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrValueId;
+import compiler.ir.verify.IrVerifier;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.SourceOrigin;
 
 /**
  * Conservative, allocation-light equality of all state encoded by IrFunctionStateCodec.
@@ -214,7 +214,8 @@ class IrFunctionStateEquality {
 	static function describe(value:IrValue):String
 		return 'value ${value.id} "${value.name}" ${value.type}';
 
-	static function sameKind(a:compiler.ir.IrFunction.IrFunctionKind, b:compiler.ir.IrFunction.IrFunctionKind):Bool
+	static function sameKind(a:compiler.ir.model.IrFunction.IrFunctionKind,
+			b:compiler.ir.model.IrFunction.IrFunctionKind):Bool
 		return switch [a, b] {
 			case [Ordinary, Ordinary]: true;
 			case [GenericSpecialization, GenericSpecialization]: true;

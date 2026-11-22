@@ -3,10 +3,10 @@ package compiler.compilation;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.QualifiedName;
 import compiler.core.Source.SourceSpan;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.IrVerifyMemo;
+import compiler.ir.model.Ir.IrObject;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.verify.IrVerifyMemo;
 import compiler.modules.ModuleState;
 import compiler.semantic.DeclarationOwners;
 import compiler.semantic.GenericSpecializationRegistry;
@@ -45,7 +45,7 @@ class SessionState {
 	 * The `__string` of each anonymous structure type a build has made (IrProgramAssembler.anonymousStringsFrom), by function name:
 	 * a warm build takes objects typed by earlier builds from `objectCache`, and each needs its printer too.
 	 */
-	public var anonymousStrings(default, null):Map<String, compiler.ir.IrFunction> = [];
+	public var anonymousStrings(default, null):Map<String, compiler.ir.model.IrFunction> = [];
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
@@ -60,13 +60,14 @@ class SessionState {
 	public var inlineCache(default, null):IrInlineCache = new IrInlineCache();
 
 	/** The numbers the modules' IR versions are taken from (`ModuleState.irVersions`); every copy shares it. */
-	public var irVersions(default, null):compiler.ir.IrFunctionVersions = new compiler.ir.IrFunctionVersions();
+	public var irVersions(default,
+		null):compiler.ir.reuse.IrFunctionVersions = new compiler.ir.reuse.IrFunctionVersions();
 
 	/**
 	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions `irVersions`
 	 * gives; every copy shares it, as an entry holds only for the versions and fact prints it recorded.
 	 */
-	public var stageMemos(default, null):compiler.ir.IrStageMemo.IrStageMemos;
+	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
@@ -107,7 +108,7 @@ class SessionState {
 		lastTypedProgram = null;
 		semanticProgram = null;
 		inlineCache = new IrInlineCache();
-		stageMemos = new compiler.ir.IrStageMemo.IrStageMemos(irVersions);
+		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
 		pipelineSnapshot = null;
 		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
@@ -181,7 +182,7 @@ class SessionState {
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
 			backend:BackendSession) {
 		semanticWorkspace = new SemanticWorkspace(modules);
-		stageMemos = new compiler.ir.IrStageMemo.IrStageMemos(irVersions);
+		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
 		this.backend = backend;
@@ -274,7 +275,7 @@ class SessionState {
 		var baseline = rehydrationBaseline;
 		if (baseline == null)
 			return regenerated;
-		var current:Map<String, compiler.ir.IrFunction> = [], changed = [];
+		var current:Map<String, compiler.ir.model.IrFunction> = [], changed = [];
 		for (fn in program.functions)
 			current.set(fn.name, fn);
 		for (name in regenerated) {

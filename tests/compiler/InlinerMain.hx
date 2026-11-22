@@ -1,13 +1,13 @@
 import compiler.CompileOptions;
 import compiler.Frontend;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInliner;
-import compiler.ir.IrInliner.InlineMemo;
-import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.IrScalarArguments;
-import compiler.ir.IrVerifier;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.inlining.IrInliner.InlineMemo;
+import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
+import compiler.ir.passes.scalars.IrScalarArguments;
+import compiler.ir.verify.IrVerifier;
 
 class InlinerMain {
 	static function main():Void {
@@ -17,7 +17,7 @@ class InlinerMain {
 			+ "function loop(value:Pair):Int { var total = 0; for (i in 0...4) total += read(value); return total; } "
 			+ "function main():Int return loop(new Pair(1, 2));");
 		IrScalarArguments.rewrite(scalarCalls);
-		IrInliner.run(scalarCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+		IrInliner.run(scalarCalls, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink,
 			new CompileOptions({inlining: false}));
 		IrVerifier.verify(scalarCalls);
 		expect(allocations(programFunction(scalarCalls, "loop")) == 0,
@@ -32,7 +32,7 @@ class InlinerMain {
 			+ "return value.inner.n + value.inner.label.length; } "
 			+ "function main():Int return read(new Outer(new Inner(1, 'a')));");
 		IrScalarArguments.rewrite(nestedCalls);
-		IrInliner.run(nestedCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+		IrInliner.run(nestedCalls, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink,
 			new CompileOptions({inlining: false}));
 		IrVerifier.verify(nestedCalls);
 		expect(allocations(programFunction(nestedCalls, "$scalar-arguments:read")) == 0,
@@ -42,27 +42,27 @@ class InlinerMain {
 			+ "public function doubled():Int return n * 2; public function inspect():Int return observe(doubled()); } "
 			+ "function observe(n:Int):Int return n; function make():Value return new Value(21); "
 			+ "function read():Int return make().inspect(); function main():Int return read();");
-		compiler.ir.IrValueConstructors.rewrite(receiverProgram);
-		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
+		compiler.ir.passes.values.IrValueConstructors.rewrite(receiverProgram);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(receiverProgram);
 		IrScalarArguments.rewrite(receiverProgram);
-		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
-		IrInliner.run(receiverProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(receiverProgram);
+		IrInliner.run(receiverProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink,
 			new CompileOptions({inlining: false}));
 		IrVerifier.verify(receiverProgram);
 		expect(allocations(programFunction(receiverProgram, "read")) == 0,
 			"a fresh receiver stays scalar through a read-only method that calls out");
 		expect(allocations(programFunction(receiverProgram, "$scalar-arguments:Value.inspect")) == 0,
 			"a read-only receiver stays scalar through its own nested method");
-		expect(new compiler.ir.IrInterpreter(receiverProgram).run("main") == 42,
+		expect(new compiler.ir.tools.IrInterpreter(receiverProgram).run("main") == 42,
 			"a scalar fresh receiver preserves its result");
 		var nestedConstructors =
 			Frontend.compile("struct Child { public final text:String; public function new(text:String) this.text = text; } "
 			+ "struct Parent { public final child:Child; public function new(text:String) child = new Child(text); } "
 			+ "function make():Parent return new Parent('managed'); function main():Int return make().child.text.length;");
-		compiler.ir.IrValueConstructors.rewrite(nestedConstructors);
-		compiler.ir.IrValuePhiScalarization.rewrite(nestedConstructors);
+		compiler.ir.passes.values.IrValueConstructors.rewrite(nestedConstructors);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nestedConstructors);
 		IrScalarArguments.rewrite(nestedConstructors);
-		IrInliner.run(nestedConstructors, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+		IrInliner.run(nestedConstructors, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink,
 			new CompileOptions({inlining: false}));
 		IrVerifier.verify(nestedConstructors);
 		expect(allocations(programFunction(nestedConstructors, "$scalar-arguments:make")) == 0,
@@ -74,16 +74,16 @@ class InlinerMain {
 			+ "inline function get_value():Value return exact == null ? new Value(4) : exact.v; } "
 			+ "function same(a:Holder, b:Holder):Bool return haxeon.Equality.equals(a.value, b.value); "
 			+ "function main():Int return same(new Holder(), new Holder()) ? 42 : 0;");
-		compiler.ir.IrValueConstructors.rewrite(equality);
-		compiler.ir.IrValuePhiScalarization.rewrite(equality);
+		compiler.ir.passes.values.IrValueConstructors.rewrite(equality);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(equality);
 		IrScalarArguments.rewrite(equality);
-		compiler.ir.IrValuePhiScalarization.rewrite(equality);
-		IrInliner.run(equality, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(equality);
+		IrInliner.run(equality, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink,
 			new CompileOptions({inlining: false}));
 		IrVerifier.verify(equality);
 		expect(allocations(programFunction(equality, "same")) == 0,
 			"generated equality accepts scalar getter results without allocating with inlining disabled");
-		expect(new compiler.ir.IrInterpreter(equality).run("main") == 42,
+		expect(new compiler.ir.tools.IrInterpreter(equality).run("main") == 42,
 			"scalar generated equality preserves its result");
 		var capturedValue =
 			Frontend.compile("struct Child { public final text:String; public function new(text:String) this.text = text; } "
@@ -96,11 +96,11 @@ class InlinerMain {
 			+ "function escape():Dynamic { var value = make(); var f = function() return value.number; "
 			+ "if (f() == 0) return null; return value; } "
 			+ "function main():Int return capture(true)() + capture(false)();");
-		compiler.ir.IrValueConstructors.rewrite(capturedValue);
-		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
+		compiler.ir.passes.values.IrValueConstructors.rewrite(capturedValue);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(capturedValue);
 		IrScalarArguments.rewrite(capturedValue);
-		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
-		IrInliner.run(capturedValue, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(capturedValue);
+		IrInliner.run(capturedValue, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink,
 			new CompileOptions({inlining: false}));
 		IrVerifier.verify(capturedValue);
 		expect(allocations(programFunction(capturedValue, "capture")) == 2,
@@ -115,8 +115,8 @@ class InlinerMain {
 			+ "public function narrow(v:Narrow, callback:Void->Void):Int { try { callback(); return cast v.n; } catch (_:Dynamic) return 0; } } "
 			+ "function noop():Void {} function main():Int { var h = new Handler(); "
 			+ "return h.read(new Full(42), noop) == 42 && h.narrow(new Narrow(), noop) == 0 ? 42 : 0; }");
-		compiler.ir.IrValueConstructors.rewrite(nativeHandler);
-		compiler.ir.IrValuePhiScalarization.rewrite(nativeHandler);
+		compiler.ir.passes.values.IrValueConstructors.rewrite(nativeHandler);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(nativeHandler);
 		IrScalarArguments.rewrite(nativeHandler);
 		IrVerifier.verify(nativeHandler);
 		var nativeClone = false, narrowClone = false;
@@ -141,7 +141,7 @@ class InlinerMain {
 		for (fn in program.functions)
 			before.set(fn.name, fn);
 		var originals = program.functions.copy(), cache = new IrInlineCache();
-		var changed = IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length;
+		var changed = IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length;
 		IrVerifier.verify(program);
 		var after:Map<String, IrFunction> = [];
 		for (fn in program.functions)
@@ -164,7 +164,7 @@ class InlinerMain {
 			+ "public function sum():Int return a + b; } function keep(p:P):Int { var t = 0; for (i in 0...3) t += p.a * i; return t; } "
 			+ "function gone():Int { var p = new P(1, 2); return p.sum(); } "
 			+ "function escapes():Int { var p = new P(1, 2); return keep(p); } function main():Int return gone() + escapes();");
-		IrInliner.run(scalarProgram, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(scalarProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		IrVerifier.verify(scalarProgram);
 		expect(allocations(programFunction(scalarProgram, "gone")) == 0,
 			"an object used only through fields in one block should be scalar replaced");
@@ -183,7 +183,7 @@ class InlinerMain {
 			+ "function late(n:Int):Int { var a = new Acc(); for (i in 0...n) a.add(i); return keep(a); } "
 			+ "function guarded(n:Int):Int { var a = new Acc(); try { a.add(n); } catch (e:Dynamic) { return -1; } return a.total; } "
 			+ "function main():Int return branches(true) + loops(3) + perIteration(4) + perIterationNested(2) + late(3) + guarded(2);");
-		IrInliner.run(flowProgram, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(flowProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		IrVerifier.verify(flowProgram);
 		for (name in ["branches", "loops"])
 			expect(allocations(programFunction(flowProgram, name)) == 1,
@@ -195,8 +195,8 @@ class InlinerMain {
 			Frontend.compile("@:value class Box { public var value:Int; public function new(value:Int) this.value = value; } "
 			+ "function identity(box:Box):Box return box; function main():Int { var original = new Box(1); var copy = original; copy.value = 2; "
 			+ "var returned = identity(copy); returned.value = 3; return original.value; }");
-		IrInliner.run(returnedValue, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
-		if (new compiler.ir.IrInterpreter(returnedValue).run("main") != 1)
+		IrInliner.run(returnedValue, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
+		if (new compiler.ir.tools.IrInterpreter(returnedValue).run("main") != 1)
 			throw "a value copy returned by a read-only callee must remain independent of its source";
 		for (name in ["perIteration", "perIterationNested"])
 			expect(allocations(programFunction(flowProgram, name)) == 0,
@@ -209,7 +209,7 @@ class InlinerMain {
 			+ "class H { public var s:S; public function new() { s = new S(0, 0); } public function set(a:Int):Void { s = new S(a, 1); } } "
 			+ "function main():Int { var h = new H(); h.set(3); return h.s.a; }";
 		var slotProgram = Frontend.compile(slotSource);
-		IrInliner.run(slotProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink);
+		IrInliner.run(slotProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink);
 		IrVerifier.verify(slotProgram);
 		expect(allocations(programFunction(slotProgram, "H.set")) == 0,
 			"storing a new value into an inline field should not allocate");
@@ -218,12 +218,12 @@ class InlinerMain {
 			+ "class Holder { public var value:Outer; public function new() {} public function set(a:Int):Void { value = new Outer(a); } } "
 			+ "function main():Int { var h = new Holder(); h.set(3); return h.value.inner.a; }";
 		var nestedSlotProgram = Frontend.compile(nestedSlotSource);
-		IrInliner.run(nestedSlotProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink);
+		IrInliner.run(nestedSlotProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.hashLink);
 		IrVerifier.verify(nestedSlotProgram);
 		expect(allocations(programFunction(nestedSlotProgram, "Holder.set")) == 0,
 			"constructing a nested value into an inline field should not allocate");
 		var boxedProgram = Frontend.compile(slotSource);
-		IrInliner.run(boxedProgram, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(boxedProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		expect(allocations(programFunction(boxedProgram, "H.set")) == 1,
 			"a target without inline value fields keeps the allocation");
 		// A copy stays whenever the callee could observe the difference.
@@ -247,7 +247,7 @@ class InlinerMain {
 		var elisionProgram = Frontend.compile(elisionSource(readsOnlyBody));
 		var elisionOriginals = elisionProgram.functions.copy(),
 			elisionCache = new IrInlineCache();
-		IrInliner.run(elisionProgram, elisionCache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(elisionProgram, elisionCache, compiler.ir.pipeline.TargetProfile.wasm);
 		IrVerifier.verify(elisionProgram);
 		expect(allocations(programFunction(elisionProgram, "pureCaller")) == 0,
 			"a read-only, store-free callee gets the source itself");
@@ -259,7 +259,7 @@ class InlinerMain {
 		for (fn in elisionOriginals)
 			elisionHybrid.push(fn.name == "readsOnly" ? programFunction(editedElision, "readsOnly") : fn);
 		elisionProgram.functions = elisionHybrid;
-		var elisionChanged = IrInliner.run(elisionProgram, elisionCache, compiler.ir.TargetProfile.wasm);
+		var elisionChanged = IrInliner.run(elisionProgram, elisionCache, compiler.ir.pipeline.TargetProfile.wasm);
 		expect(elisionChanged.indexOf("pureCaller") >= 0,
 			"a caller whose callee started writing its parameter is reported as changed");
 		expect(allocations(programFunction(elisionProgram, "pureCaller")) == 1,
@@ -276,21 +276,21 @@ class InlinerMain {
 		var editBase =
 			"function stay(x:Int):Int return x + 1; function edit(x:Int):Int return x + 2; function main():Int return stay(1) + edit(1);";
 		var editCache = new IrInlineCache();
-		IrInliner.run(Frontend.compile(editBase), editCache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(Frontend.compile(editBase), editCache, compiler.ir.pipeline.TargetProfile.wasm);
 		var tailEdit = IrInliner.run(Frontend.compile(editBase + " function extra():Int return 5;"), editCache,
-			compiler.ir.TargetProfile.wasm);
+			compiler.ir.pipeline.TargetProfile.wasm);
 		expect(tailEdit.indexOf("stay") < 0 && tailEdit.indexOf("edit") < 0,
 			"an edit after a function leaves it unchanged");
 		expect(tailEdit.indexOf("extra") >= 0, "an added function is reported as changed");
 		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2",
 			"x + 3") + " function extra():Int return 5;"), editCache,
-			compiler.ir.TargetProfile.wasm);
+			compiler.ir.pipeline.TargetProfile.wasm);
 		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
 		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
 		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase,
 			"x + 2", "x + 3")
 			+ " function extra():Int return 5;"),
-			editCache, compiler.ir.TargetProfile.wasm);
+			editCache, compiler.ir.pipeline.TargetProfile.wasm);
 		expect(shifted.indexOf("stay") >= 0,
 			"a function whose positions shifted is reported as changed so its line information is refreshed");
 		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
@@ -300,21 +300,21 @@ function stay(x:Int):Int return x + 1;
 function main():Int return stay(1);
 ";
 		var lineCache = new IrInlineCache();
-		IrInliner.run(Frontend.compile(linesFor("// a")), lineCache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(Frontend.compile(linesFor("// a")), lineCache, compiler.ir.pipeline.TargetProfile.wasm);
 		var offsetProgram = Frontend.compile(linesFor("// a longer comment"));
-		var offsetEdit = IrInliner.run(offsetProgram, lineCache, compiler.ir.TargetProfile.wasm);
+		var offsetEdit = IrInliner.run(offsetProgram, lineCache, compiler.ir.pipeline.TargetProfile.wasm);
 		expect(offsetEdit.indexOf("stay") < 0,
 			"a function whose lines and columns held is unchanged when only byte offsets moved");
 		expect(lineCache.relocated.indexOf("stay") >= 0, "a function that only moved within its file is lowered again");
 		// It keeps the new positions, so a warm build names the same source snapshot as a cold one.
 		var coldProgram = Frontend.compile(linesFor("// a longer comment"));
-		IrInliner.run(coldProgram, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(coldProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		expect(IrFunctionStateCodec.encode(programFunction(offsetProgram, "stay"))
 			.compare(IrFunctionStateCodec.encode(programFunction(coldProgram, "stay"))) == 0,
 			"a function that only moved carries the positions a cold compile gives it");
 		var lineEdit = IrInliner.run(Frontend.compile(linesFor("// a
 // b")), lineCache,
-			compiler.ir.TargetProfile.wasm);
+			compiler.ir.pipeline.TargetProfile.wasm);
 		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");
 		// A lambda's code fingerprint is remembered by its IR function, also in the copy a compile runs on, and taken again
 		// for a new function object or a different set of C natives.
@@ -350,7 +350,7 @@ function main():Int return stay(1);
 			+ "public function value():Int return v; } class LeafChild extends Leaf { public function new(v:Int) super(v); } "
 			+ "function viaBase(b:Base):Int return b.get() + b.twice(); function viaLeaf(l:Leaf):Int return l.value() + 1; "
 			+ "function main():Int return viaBase(new Derived(1)) + viaLeaf(new LeafChild(2));");
-		IrInliner.run(hierarchy, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
+		IrInliner.run(hierarchy, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		IrVerifier.verify(hierarchy);
 		var baseCalls = callsIn(programFunction(hierarchy, "viaBase"));
 		expect(baseCalls.indexOf("get") >= 0, "an overridden method must stay a virtual call");
@@ -369,7 +369,7 @@ function main():Int return stay(1);
 		var grownPristine = grown.functions.copy(),
 			grownObjects = grown.objects.copy(),
 			grownCache = new IrInlineCache();
-		IrInliner.run(grown, grownCache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(grown, grownCache, compiler.ir.pipeline.TargetProfile.wasm);
 		var memosBefore:Map<String, InlineMemo> = [for (name => memo in grownCache.memo) name => memo];
 		grown.functions = grownPristine.copy();
 		grown.objects = grownObjects.concat([
@@ -382,7 +382,7 @@ function main():Int return stay(1);
 				methods: []
 			}
 		]);
-		expect(IrInliner.run(grown, grownCache, compiler.ir.TargetProfile.wasm).length == 0,
+		expect(IrInliner.run(grown, grownCache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
 			"a new class changes no function");
 		for (name => memo in memosBefore)
 			expect(grownCache.memo.get(name) == memo, 'a new class that $name never looked at must not redo it');
@@ -394,7 +394,7 @@ function main():Int return stay(1);
 			narrowFunctions = narrowProgram.functions.copy(),
 			narrowObjects = narrowProgram.objects.copy(),
 			narrowCache = new IrInlineCache();
-		IrInliner.run(narrowProgram, narrowCache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(narrowProgram, narrowCache, compiler.ir.pipeline.TargetProfile.wasm);
 		var narrowMemo = narrowCache.memo.get("writeAndRead");
 		expect(narrowMemo != null, "the narrow-field function should be memoized");
 		narrowProgram.functions = narrowFunctions.copy();
@@ -414,7 +414,7 @@ function main():Int return stay(1);
 							scalarStorage:{size:1, signed:true}
 					}]
 			}];
-		IrInliner.run(narrowProgram, narrowCache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(narrowProgram, narrowCache, compiler.ir.pipeline.TargetProfile.wasm);
 		expect(narrowCache.memo.get("writeAndRead") != narrowMemo,
 			"a width or signedness change must invalidate forwarding");
 
@@ -427,10 +427,10 @@ function main():Int return stay(1);
 				base: "Base",
 				interfaces: [],
 				fields: [],
-				methods: [{name: "twice", functionName: compiler.ir.IrSymbol.of("Override.twice")}]
+				methods: [{name: "twice", functionName: compiler.ir.model.IrSymbol.of("Override.twice")}]
 			}
 		]);
-		var overridden = IrInliner.run(grown, grownCache, compiler.ir.TargetProfile.wasm);
+		var overridden = IrInliner.run(grown, grownCache, compiler.ir.pipeline.TargetProfile.wasm);
 		expect(overridden.indexOf("viaBase") >= 0,
 			"a function that resolved a method through the base is redone when a subclass overrides it");
 		expect(callsIn(programFunction(grown, "viaBase")).indexOf("twice") >= 0,
@@ -442,7 +442,7 @@ function main():Int return stay(1);
 		var inlinedMain = after.get("main"),
 			cleanedMain = cache.memo.get("main").cleaned;
 		program.functions = originals.copy();
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0,
+		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
 			"an unchanged program must report no changed functions");
 		expect(programFunction(program, "main") == inlinedMain, "an unchanged caller keeps its inlined identity");
 		expect(cleanedMain != null && cache.memo.get("main").cleaned == cleanedMain
@@ -455,7 +455,7 @@ function main():Int return stay(1);
 		for (fn in originals)
 			hybrid.push(fn.name == "twice" ? programFunction(edited, "twice") : fn);
 		program.functions = hybrid;
-		var names = IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm);
+		var names = IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm);
 		expect(names.indexOf("twice") >= 0, "the edited callee is reported as changed");
 		expect(names.indexOf("main") >= 0, "a caller that inlined the edited callee is reported as changed");
 		expect(names.indexOf("fib") < 0 && names.indexOf("loops") < 0,
@@ -466,16 +466,16 @@ function main():Int return stay(1);
 			&& !(IrFunctionStateCodec.encode(editedMain).compare(IrFunctionStateCodec.encode(inlinedMain)) == 0),
 			"the inlined caller carries the edited callee");
 		program.functions = hybrid;
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0,
+		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
 			"a repeated compile of the edit reports no changed functions");
 		expect(programFunction(program, "main") == editedMain,
 			"the caller keeps the identity of the edited inlined form");
 		// A rolled-back candidate must not disturb the published cache.
 		var branch = cache.copy();
 		program.functions = originals.copy();
-		IrInliner.run(program, branch, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(program, branch, compiler.ir.pipeline.TargetProfile.wasm);
 		program.functions = hybrid;
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0,
+		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
 			"the published cache is unaffected by a discarded copy");
 		Sys.println("PASS: inliner replaces small calls, keeps recursion and handlers, verifies, and leaves cached IR alone");
 	}

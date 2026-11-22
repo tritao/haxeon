@@ -6,7 +6,7 @@ import compiler.hl.HlWriter;
 import compiler.tools.CompilerDriver;
 
 class SourceInlineEnumMain {
-	static function assertInline(program:compiler.ir.Ir.IrProgram, expected:Bool) {
+	static function assertInline(program:compiler.ir.model.Ir.IrProgram, expected:Bool) {
 		for (declaration in program.enums)
 			if (declaration.name == "Packet") {
 				if ((declaration.inlineStorage != null) != expected)
@@ -16,9 +16,9 @@ class SourceInlineEnumMain {
 		throw "Missing Packet declaration";
 	}
 
-	static function rejectPointerNull(program:compiler.ir.Ir.IrProgram) {
-		var invalid = new compiler.ir.Ir.IrProgram("invalidInlineNull"),
-			b = new compiler.ir.IrBuilder();
+	static function rejectPointerNull(program:compiler.ir.model.Ir.IrProgram) {
+		var invalid = new compiler.ir.model.Ir.IrProgram("invalidInlineNull"),
+			b = new compiler.ir.model.IrBuilder();
 		b.returnValue(b.constNull(Obj("$inline-enum:Packet")));
 		invalid.objects = program.objects;
 		invalid.enums = program.enums;
@@ -27,11 +27,12 @@ class SourceInlineEnumMain {
 		invalid.natives = program.natives;
 		invalid.cNatives = program.cNatives;
 		invalid.functions = program.functions.concat([
-			new compiler.ir.IrFunction("invalidInlineNull", b.arguments, Obj("$inline-enum:Packet"), b.blocks, Ordinary)
+			new compiler.ir.model.IrFunction("invalidInlineNull", b.arguments, Obj("$inline-enum:Packet"), b.blocks,
+				Ordinary)
 		]);
 		var error = "";
 		try
-			compiler.ir.IrVerifier.verifyFunctions(invalid, ["invalidInlineNull" => true])
+			compiler.ir.verify.IrVerifier.verifyFunctions(invalid, ["invalidInlineNull" => true])
 		catch (failure:Dynamic)
 			error = Std.string(failure);
 		if (error.indexOf("inline enum null must use a tag-zero packet") < 0)
@@ -39,7 +40,7 @@ class SourceInlineEnumMain {
 	}
 
 	static function rejectStaleNativeLayout():Void {
-		var program = new compiler.ir.Ir.IrProgram("unused");
+		var program = new compiler.ir.model.Ir.IrProgram("unused");
 		program.enums = [{name: "Value", cases: [{name: "Code", params: [I32]}]}];
 		program.objects = [
 			{
@@ -52,8 +53,8 @@ class SourceInlineEnumMain {
 				fields: [{name: "value", type: Enum("Value")}]
 			}
 		];
-		var planner = new compiler.ir.IrInlineEnumLayout(program.enums, program.objects, 64, HashLink),
-			eligibility = new compiler.ir.IrInlineEnumEligibility(program, planner);
+		var planner = new compiler.ir.passes.enums.IrInlineEnumLayout(program.enums, program.objects, 64, HashLink),
+			eligibility = new compiler.ir.passes.enums.IrInlineEnumEligibility(program, planner);
 		if (eligibility.allowed.exists("Value") || eligibility.reasons.get("Value") != "enclosing native layout")
 			throw "Inline selection reused boxed native field offsets";
 	}

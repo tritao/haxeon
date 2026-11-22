@@ -4,10 +4,10 @@ import compiler.core.InternalError;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrType;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.semantic.GenericSpecializationRegistry;
@@ -207,10 +207,10 @@ class Compiler {
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram(get, never):Null<TypedProgram>;
 
-	public var inlineCache(get, never):compiler.ir.IrInliner.IrInlineCache;
+	public var inlineCache(get, never):compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 	public var pipelineSnapshot(get, never):Null<compiler.compilation.PipelineSnapshot>;
 	public var backend(get, never):BackendSession;
-	public var verifyMemo(get, never):compiler.ir.IrVerifyMemo;
+	public var verifyMemo(get, never):compiler.ir.verify.IrVerifyMemo;
 	public var configurationIdentity(default, null):String = "default";
 
 	var configurationScopeIdentity:String = "default";
@@ -766,7 +766,7 @@ class Compiler {
 	function get_lastTypedProgram():Null<TypedProgram>
 		return state.lastTypedProgram;
 
-	function get_inlineCache():compiler.ir.IrInliner.IrInlineCache
+	function get_inlineCache():compiler.ir.passes.inlining.IrInliner.IrInlineCache
 		return state.inlineCache;
 
 	function get_pipelineSnapshot():Null<compiler.compilation.PipelineSnapshot>
@@ -775,7 +775,7 @@ class Compiler {
 	function get_backend():BackendSession
 		return state.backend;
 
-	function get_verifyMemo():compiler.ir.IrVerifyMemo
+	function get_verifyMemo():compiler.ir.verify.IrVerifyMemo
 		return state.verifyMemo;
 
 	function identitySalt():String {

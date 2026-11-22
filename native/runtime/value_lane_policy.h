@@ -1,4 +1,4 @@
-/* Generated from compiler.ir.IrValueLaneRuntime. Do not edit. */
+/* Generated from compiler.ir.passes.values.IrValueLaneRuntime. Do not edit. */
 static int32_t realtime_lane_capacity_for(varray * v0, int32_t v1);
 static void realtime_lane_reserve(varray * v0, int32_t v1);
 static int32_t realtime_lane_prepare_write(varray * v0, int32_t v1, bool v2, bool v3);

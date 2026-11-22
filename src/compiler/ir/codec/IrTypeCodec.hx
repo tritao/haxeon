@@ -1,7 +1,7 @@
 package compiler.ir.codec;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrType;
+import compiler.ir.model.Ir.IrType;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 

@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrVerifier;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 /**
  * Without a semantic index to rebuild (command-line builds), editing one module must not retype or regenerate the

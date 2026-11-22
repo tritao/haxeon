@@ -1,15 +1,15 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumCaseAccess;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.enums.IrInlineEnumCaseAccess;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.types.typing.EnumEqualityGenerator;
 
 /** Generated equality participates in the ordinary value ABI, including genuine escape round trips. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumEqualityAbiMain {
 	static function get(builder:IrBuilder, name:String, type:IrType):IrValue {
 		var value = builder.temporary(type);
@@ -61,7 +61,7 @@ class InlineEnumEqualityAbiMain {
 		program.staticFields = [for (name in ["first", "same", "different", "empty", "nil"]) {
 			name:name, type:storage
 		}];
-		program.natives = compiler.ir.IrInlineEnumWordAccess.natives();
+		program.natives = compiler.ir.passes.enums.IrInlineEnumWordAccess.natives();
 		for (field in ["tag", "number", "owner"]) {
 			var b = new IrBuilder(), value = b.argument("value", storage), result = switch field {
 				case "tag": b.fieldGet(value, "tag", I32);
@@ -71,7 +71,8 @@ class InlineEnumEqualityAbiMain {
 			b.returnValue(result);
 			program.functions.push(new IrFunction(field == "tag" ? tagName : field == "number" ? numberName : ownerName,
 				b.arguments, result.type, b.blocks,
-				compiler.ir.IrFunction.IrFunctionKind.Provider(compiler.ir.TypeKey.of(Obj(shape.valueObject.name)),
+				compiler.ir.model.IrFunction.IrFunctionKind
+				.Provider(compiler.ir.model.TypeKey.of(Obj(shape.valueObject.name)),
 				compiler.core.Provides.ProviderOperations
 				.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper,
 				field))));
@@ -99,7 +100,7 @@ class InlineEnumEqualityAbiMain {
 			b.select(owners);
 			b.returnValue(b.equal(b.call(ownerName, [a], Obj(owner.name)), b.call(ownerName, [z], Obj(owner.name))));
 			program.functions.push(new IrFunction(name, b.arguments, Bool, b.blocks,
-				Provider(compiler.ir.TypeKey.of(Enum(declaration.name)),
+				Provider(compiler.ir.model.TypeKey.of(Enum(declaration.name)),
 				name == equality
 				? compiler.core.Provides.ProviderOperation.Equals
 				: compiler.core.Provides.ProviderOperation.ReflectEquals)));
@@ -134,10 +135,12 @@ class InlineEnumEqualityAbiMain {
 			b.select(body);
 			var first = get(b, "first", storage), same = get(b, "same", storage);
 			if (dynamicEscape) {
-				first = b.call(compiler.ir.IrInlineEnumEscapes.unboxName(declaration.name),
-					[b.call(compiler.ir.IrInlineEnumEscapes.boxName(declaration.name), [first], Dyn)], storage);
-				same = b.call(compiler.ir.IrInlineEnumEscapes.unboxName(declaration.name),
-					[b.call(compiler.ir.IrInlineEnumEscapes.boxName(declaration.name), [same], Dyn)], storage);
+				first = b.call(compiler.ir.passes.enums.IrInlineEnumEscapes.unboxName(declaration.name),
+					[b.call(compiler.ir.passes.enums.IrInlineEnumEscapes.boxName(declaration.name), [first], Dyn)],
+					storage);
+				same = b.call(compiler.ir.passes.enums.IrInlineEnumEscapes.unboxName(declaration.name),
+					[b.call(compiler.ir.passes.enums.IrInlineEnumEscapes.boxName(declaration.name), [same], Dyn)],
+					storage);
 			}
 			var ownerAlive = b.createBlock();
 			b.branch(b.equal(b.fieldGet(b.call(ownerName, [first], Obj(owner.name)), "id", I32), b.constInt(2)),
@@ -173,18 +176,21 @@ class InlineEnumEqualityAbiMain {
 		var main = new IrBuilder();
 		main.returnValue(main.constInt(42));
 		program.functions.push(new IrFunction("main", main.arguments, I32, main.blocks, Ordinary));
-		program.functions = program.functions.concat(compiler.ir.IrInlineEnumEscapes.functions(program.enums, table,
+		program.functions =
+			program.functions.concat(compiler.ir.passes.enums.IrInlineEnumEscapes.functions(program.enums, table,
 			planner));
-		compiler.ir.IrVerifier.verify(program);
-		compiler.ir.IrValuePhiScalarization.rewrite(program);
-		compiler.ir.IrScalarArguments.rewrite(program, target != HashLink);
-		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false,
+		compiler.ir.verify.IrVerifier.verify(program);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+		compiler.ir.passes.scalars.IrScalarArguments.rewrite(program, target != HashLink);
+		program.functions = [for (fn in program.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn,
+			table, false,
 			target == HashLink)];
-		compiler.ir.IrInliner.run(program,
-			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-			target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.inlining.IrInliner.run(program,
+			new compiler.ir.passes.inlining.IrInliner
+			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+			target == HashLink ? compiler.ir.pipeline.TargetProfile.hashLink : compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(program);
+		compiler.ir.verify.IrVerifier.verify(program);
 		run(program, target, inlineEnabled);
 	}
 

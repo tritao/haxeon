@@ -1,16 +1,16 @@
 import compiler.CompileOptions;
 import compiler.Frontend;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumCaseAccess;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.passes.enums.IrInlineEnumCaseAccess;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.verify.IrVerifier;
 
 /** Reference cycles have finite inline size; their payloads remain traced through a carrier's only root. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumReferenceCycleMain {
 	static final source =
 		'
@@ -45,7 +45,8 @@ function main():Int return 42;
 
 	static function check(target:BackendTarget, inlineEnabled:Bool):Void {
 		var program = Frontend.compile(source);
-		var laneTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget = target == HashLink ? HashLink : target
+		var laneTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget = target == HashLink
+			? HashLink : target
 			== Wasm32 ? Wasm32 : WasmGc;
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, laneTarget);
 		var shape = planner.shape("Links");
@@ -89,11 +90,13 @@ function main():Int return 42;
 			Expose));
 		program.functions.push(new IrFunction("probeRoots", probe.arguments, I32, probe.blocks, Ordinary));
 		var table = IrObjectTable.of([for (object in program.objects) object.name => object]);
-		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false,
+		program.functions = [for (fn in program.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn,
+			table, false,
 			target == HashLink)];
-		compiler.ir.IrInliner.run(program,
-			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-			compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.inlining.IrInliner.run(program,
+			new compiler.ir.passes.inlining.IrInliner
+			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		IrVerifier.verify(program);
 		var temp = Sys.getEnv("TMPDIR"), directory = temp == null ? "/tmp" : temp;

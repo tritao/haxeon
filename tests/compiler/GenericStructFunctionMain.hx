@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Frontend;
-import compiler.ir.Ir;
+import compiler.ir.model.Ir;
 import sys.io.File;
 
 /** Managed values need their own generic ABI while ordinary references continue to share one. */
@@ -34,7 +34,7 @@ class GenericStructFunctionMain {
 		}
 		if (!point || !other || !reference || !constrained)
 			throw 'missing specialization: point=$point other=$other reference=$reference constrained=$constrained';
-		if (new compiler.ir.IrInterpreter(program).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(program).run("main") != 42)
 			throw "generic struct value semantics failed";
 		var incremental = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		for (expected in [42, 41, 42]) {
@@ -59,18 +59,20 @@ class GenericStructFunctionMain {
 			+ 'if(value.owner!=owner) return -1; sum+=apply(value,operation); } return sum; } } function main():Int return 42;';
 		for (inlineEnabled in [false, true]) {
 			var program = Frontend.compile(source);
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(program, 32, WasmGc);
-			compiler.ir.IrValueConstructors.rewrite(program);
-			compiler.ir.IrValuePhiScalarization.rewrite(program);
-			compiler.ir.IrScalarArguments.rewrite(program, true);
-			compiler.ir.IrValuePhiScalarization.rewrite(program);
-			var objects = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
-			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects,
+			compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(program, 32, WasmGc);
+			compiler.ir.passes.values.IrValueConstructors.rewrite(program);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+			compiler.ir.passes.scalars.IrScalarArguments.rewrite(program, true);
+			compiler.ir.passes.values.IrValuePhiScalarization.rewrite(program);
+			var objects = compiler.ir.model.IrObjectTable.of([for (object in program.objects) object.name => object]);
+			program.functions =
+				[for (fn in program.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, objects,
 				false, true)];
-			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program,
-				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
-				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
+			compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(program);
+			compiler.ir.passes.inlining.IrInliner.run(program,
+				new compiler.ir.passes.inlining.IrInliner
+				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: WasmGc,
 				debugNames: true,

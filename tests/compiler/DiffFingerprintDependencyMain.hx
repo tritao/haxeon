@@ -1,6 +1,6 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
+import compiler.ir.tools.IrInterpreter;
 
 /** Fingerprinting is self-contained even when the source never imports or calls Hashing. */
 class DiffFingerprintDependencyMain {

@@ -335,7 +335,7 @@ in_background run_case abstract-module-members 0
 in_background run_case type-check 0
 in_background run_compile_failure type-check-mismatch
 in_background run_compile_failure type-check-downcast
-# Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
+# Static initialization in Haxe's order (src/compiler/ir/pipeline/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0
 in_background run_case static-init-order-reach 0
 # A loop in that order warns as Haxe does ("maybe loop in static generation of"), at the class.

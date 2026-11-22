@@ -1,7 +1,7 @@
 import compiler.Frontend;
 import compiler.core.Source.SourceFile;
-import compiler.ir.IrProgramAssembler;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;
@@ -15,7 +15,7 @@ class IrProgramAssemblerMain {
 			Frontend.compile("function same(a:Dynamic, b:Dynamic):Bool return a == b; function main():Int return 0;");
 		expect(hasNative(dynamicEquality, "__dynamic_equal"),
 			"generated dynamic equality must select its runtime native");
-		compiler.ir.IrVerifier.verify(dynamicEquality);
+		compiler.ir.verify.IrVerifier.verify(dynamicEquality);
 		var storageSource =
 			"class Storage { public final length:Int; public function new(length:Int) this.length = length; } "
 			+ "@:forward(length) abstract Buffer(Storage) { public function new(length:Int) this = new Storage(length); } ";
@@ -100,8 +100,8 @@ class IrProgramAssemblerMain {
 		expect(restoredByte.scalarStorage != null && restoredByte.scalarStorage.size == 1
 			&& !restoredByte.scalarStorage.signed,
 			"canonical IR must preserve managed scalar storage metadata");
-		var optionalSlot = compiler.ir.IrInlineValueLayout.slotName("optional", {
-			path: ["byte"], type: compiler.ir.Ir.IrType.I32, isPresence: false, nativeLayout: null
+		var optionalSlot = compiler.ir.passes.values.IrInlineValueLayout.slotName("optional", {
+			path: ["byte"], type: compiler.ir.model.Ir.IrType.I32, isPresence: false, nativeLayout: null
 		});
 		var optionalByte = findObjectField(findObject(managedRoundTrip.objects, "ManagedWidthHolder"), optionalSlot);
 		expect(optionalByte.scalarStorage != null && optionalByte.scalarStorage.size == 1
@@ -125,13 +125,13 @@ class IrProgramAssemblerMain {
 					}]
 			}];
 		var rejectedStorage = false;
-		try compiler.ir.IrVerifier.verify(managedRoundTrip) catch (_:Dynamic) rejectedStorage = true;
+		try compiler.ir.verify.IrVerifier.verify(managedRoundTrip) catch (_:Dynamic) rejectedStorage = true;
 		expect(rejectedStorage, "IR verification must reject invalid scalar storage widths");
 		var interpretedNarrow =
 			Frontend.compile('struct InterpretedWidth { public var text:String; public var value:UInt8; '
 			+ 'public function new() { text = "x"; value = 0; } } '
 			+ 'function main():Int { var item = new InterpretedWidth(); item.value = cast 257; return cast item.value; }');
-		expect(new compiler.ir.IrInterpreter(interpretedNarrow).run("main") == 1,
+		expect(new compiler.ir.tools.IrInterpreter(interpretedNarrow).run("main") == 1,
 			"IR interpretation must apply the same narrow field stores as the backends");
 		var nullableWidth =
 			Frontend.compile('struct NullableWidth { public var text:String; public var value:Null<UInt8>; '
@@ -145,7 +145,7 @@ class IrProgramAssemblerMain {
 		var restoredNullable = findObjectField(findObject(nullableRoundTrip.objects, "NullableWidth"), "value");
 		expect(restoredNullable.nullableScalarStorage != null && restoredNullable.nullableScalarStorage.size == 1,
 			"canonical IR must preserve nullable scalar payload metadata");
-		expect(new compiler.ir.IrInterpreter(nullableWidth).run("main") == 1,
+		expect(new compiler.ir.tools.IrInterpreter(nullableWidth).run("main") == 1,
 			"IR interpretation must normalize nullable narrow payloads");
 
 		var source = new SourceFile("Box.hx", "class Box { public var value:Int; } function main():Int return 0;"),
@@ -157,32 +157,34 @@ class IrProgramAssemblerMain {
 		Sys.println("PASS: IR program assembly and runtime selection");
 	}
 
-	static function objectsOf(typed:compiler.types.TypedAst.TypedProgram):Array<compiler.ir.Ir.IrObject>
-		return IrProgramAssembler.objectsFrom(compiler.ir.IrGenerator.forProgram(typed,
-			compiler.ir.TargetProfile.portable), typed);
+	static function objectsOf(typed:compiler.types.TypedAst.TypedProgram):Array<compiler.ir.model.Ir.IrObject>
+		return IrProgramAssembler.objectsFrom(compiler.ir.gen.IrGenerator.forProgram(typed,
+			compiler.ir.pipeline.TargetProfile.portable), typed);
 
-	static function hasNative(program:compiler.ir.Ir.IrProgram, name:String):Bool {
+	static function hasNative(program:compiler.ir.model.Ir.IrProgram, name:String):Bool {
 		for (native in program.natives)
 			if (native.name == name)
 				return true;
 		return false;
 	}
 
-	static function findObject(objects:Array<compiler.ir.Ir.IrObject>, name:String):compiler.ir.Ir.IrObject {
+	static function findObject(objects:Array<compiler.ir.model.Ir.IrObject>,
+			name:String):compiler.ir.model.Ir.IrObject {
 		for (object in objects)
 			if (object.name == name)
 				return object;
 		throw 'Missing IR object "$name"';
 	}
 
-	static function findObjectField(object:compiler.ir.Ir.IrObject, name:String):compiler.ir.Ir.IrObjectField {
+	static function findObjectField(object:compiler.ir.model.Ir.IrObject,
+			name:String):compiler.ir.model.Ir.IrObjectField {
 		for (field in object.fields)
 			if (field.name == name)
 				return field;
 		throw 'Missing IR field "${object.name}.$name"';
 	}
 
-	static function hasCNativeCall(program:compiler.ir.Ir.IrProgram, name:String):Bool {
+	static function hasCNativeCall(program:compiler.ir.model.Ir.IrProgram, name:String):Bool {
 		for (fn in program.functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)

@@ -1,17 +1,17 @@
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrEnumTagLowering;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunction.IrRetention;
-import compiler.ir.IrInlineEnumEscapes;
-import compiler.ir.IrInlineEnumLayout;
-import compiler.ir.IrInlineEnumRequests;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrProviders;
-import compiler.ir.TypeKey;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrRetention;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.model.IrProviders;
+import compiler.ir.model.TypeKey;
+import compiler.ir.passes.enums.IrEnumTagLowering;
+import compiler.ir.passes.enums.IrInlineEnumEscapes;
+import compiler.ir.passes.enums.IrInlineEnumLayout;
+import compiler.ir.passes.enums.IrInlineEnumRequests;
 
 class InlineRequestModelMain {
 	static function main():Void {
@@ -50,7 +50,8 @@ class InlineRequestModelMain {
 		];
 		var objects = IrObjectTable.of([for (object in program.objects) object.name => object]);
 		// The bridge must request both conversions itself, before any escape pass scans the program.
-		var factory = new compiler.ir.IrValueArrayFactory(objects, logical, 64, HashLink, 0, program.enums);
+		var factory = new compiler.ir.passes.arrays.IrValueArrayFactory(objects, logical, 64, HashLink, 0,
+			program.enums);
 		var bridgeBoxes = 0, bridgeUnboxes = 0;
 		for (fn in factory.bridge.functions())
 			for (block in fn.blocks)
@@ -58,14 +59,15 @@ class InlineRequestModelMain {
 					switch located.value {
 						case Intrinsic(out, InlineEnumBox(Enum("Payload")), arguments):
 							if (arguments.length != 1
-								|| !compiler.ir.IrVerifier.sameType(arguments[0].type, Obj(shape.valueObject.name))
-								|| !compiler.ir.IrVerifier.sameType(out.type, Dyn))
+								|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type,
+								Obj(shape.valueObject.name))
+								|| !compiler.ir.verify.IrVerifier.sameType(out.type, Dyn))
 								throw "Incorrect value-array box request";
 							bridgeBoxes++;
 						case Intrinsic(out, InlineEnumUnbox(Enum("Payload")), arguments):
 							if (arguments.length != 1
-								|| !compiler.ir.IrVerifier.sameType(arguments[0].type, Dyn)
-								|| !compiler.ir.IrVerifier.sameType(out.type, Obj(shape.valueObject.name)))
+								|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, Dyn)
+								|| !compiler.ir.verify.IrVerifier.sameType(out.type, Obj(shape.valueObject.name)))
 								throw "Incorrect value-array unbox request";
 							bridgeUnboxes++;
 						default:
@@ -140,8 +142,8 @@ class InlineRequestModelMain {
 			new IrFunction("hl-main", hlMain.arguments, Dyn, hlMain.blocks, Ordinary),
 			new IrFunction("hl-source", hlSource.arguments, physical, hlSource.blocks, Ordinary)
 		];
-		compiler.ir.IrScalarArguments.rewrite(hlProgram);
-		compiler.ir.IrScalarClosures.rewrite(hlProgram);
+		compiler.ir.passes.scalars.IrScalarArguments.rewrite(hlProgram);
+		compiler.ir.passes.scalars.IrScalarClosures.rewrite(hlProgram);
 		var hlBoxes = 0, hlUnboxes = 0;
 		for (fn in hlProgram.functions)
 			for (block in fn.blocks)
@@ -195,7 +197,7 @@ class InlineRequestModelMain {
 					}
 		if (wasmBoxes == 0 || wasmUnboxes == 0)
 			throw 'Wasm scalar closure did not resolve its declared providers: $wasmBoxes/$wasmUnboxes';
-		compiler.ir.IrVerifier.verifyInlineEnumsLowered(wasmResult);
+		compiler.ir.verify.IrVerifier.verifyInlineEnumsLowered(wasmResult);
 		var box = new IrBuilder(),
 			value = box.argument("value", Obj(shape.valueObject.name));
 		box.returnValue(box.intrinsic(InlineEnumBox(logical), [value], Dyn));
@@ -218,16 +220,17 @@ class InlineRequestModelMain {
 			unboxProvider
 		];
 		var originalLocated = program.functions[0].blocks[0].instructions[0];
-		var provenance = compiler.ir.SourceProvenance.user(new compiler.core.Source.SourceFile("fixture.hx",
+		var provenance = compiler.ir.model.SourceProvenance.user(new compiler.core.Source.SourceFile("fixture.hx",
 			"x").span(0,
 			1));
-		program.functions[0].blocks[0].instructions[0] = new compiler.ir.SourceProvenance.Located(originalLocated.value,
+		program.functions[0].blocks[0].instructions[0] =
+			new compiler.ir.model.SourceProvenance.Located(originalLocated.value,
 			provenance);
 		var originalTerminator = program.functions[0].blocks[0].terminator;
 		for (fn in [program.functions[0], program.functions[1]]) {
 			var unresolvedRejected = false;
 			try
-				compiler.ir.IrVerifier.verifyResolvedEnumOperations([fn])
+				compiler.ir.verify.IrVerifier.verifyResolvedEnumOperations([fn])
 			catch (error:InternalError) {
 				if (error.message.indexOf("unresolved typed enum conversion") < 0)
 					throw error;
@@ -296,7 +299,7 @@ class InlineRequestModelMain {
 					}
 		if (calls.join(",") != "opaque_box,opaque_unbox")
 			throw 'Wrong resolved providers: $calls';
-		compiler.ir.IrVerifier.verifyInlineEnumsLowered(program);
+		compiler.ir.verify.IrVerifier.verifyInlineEnumsLowered(program);
 		var impostor = program.copy(), originalBox = program.functions[2];
 		impostor.functions = [
 			program.functions[0],
@@ -306,7 +309,7 @@ class InlineRequestModelMain {
 		];
 		var rejectedImpostor = false;
 		try
-			compiler.ir.IrVerifier.verifyInlineEnumsLowered(impostor)
+			compiler.ir.verify.IrVerifier.verifyInlineEnumsLowered(impostor)
 		catch (error:InternalError) {
 			if (error.message.indexOf('IR inline enum "Payload" retains nominal value storage') < 0)
 				throw error;

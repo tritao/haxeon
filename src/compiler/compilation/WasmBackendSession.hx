@@ -12,7 +12,7 @@ import compiler.compilation.BackendSession.BackendTimings;
 import compiler.core.AllocationMeter;
 import compiler.core.CancellationToken;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrProgram;
+import compiler.ir.model.Ir.IrProgram;
 import haxe.Json;
 import haxe.io.Bytes;
 
@@ -75,7 +75,7 @@ class WasmBackendSession implements BackendSession {
 			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
-		compiler.ir.IrReachabilityReport.report("final program", ir);
+		compiler.ir.analysis.IrReachabilityReport.report("final program", ir);
 		var abi = RuntimeAbi.describe(ir), abiPlanningDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAbi = AllocationMeter.sample();
 		var chosen = options(context), key = Json.stringify(chosen), last = encoded, known = last;

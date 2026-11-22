@@ -1,9 +1,9 @@
 package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrFunction;
 
 /** State whose lifetime is limited to one native Wasm GC function lowering. */
 class WasmGcFunctionContext {

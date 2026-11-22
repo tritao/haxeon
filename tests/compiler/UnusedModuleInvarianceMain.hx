@@ -25,7 +25,7 @@ class UnusedModuleInvarianceMain {
 		return c.compile("Main");
 	}
 
-	static function dump(fn:compiler.ir.IrFunction):String
+	static function dump(fn:compiler.ir.model.IrFunction):String
 		return [
 			for (block in fn.blocks)
 				for (located in block.instructions)

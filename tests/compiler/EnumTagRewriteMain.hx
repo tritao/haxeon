@@ -1,14 +1,14 @@
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrEnumTagLowering;
-import compiler.ir.IrEnumTagStorage;
-import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOperands;
+import compiler.ir.passes.enums.IrEnumTagLowering;
+import compiler.ir.passes.enums.IrEnumTagStorage;
+import compiler.ir.verify.IrVerifier;
 
 /** Tag storage rewrites only the values and escapes that change representation. */
-@:access(compiler.ir.IrBuilder)
-@:access(compiler.ir.IrInlineEnumEligibility)
+@:access(compiler.ir.model.IrBuilder)
+@:access(compiler.ir.passes.enums.IrInlineEnumEligibility)
 class EnumTagRewriteMain {
 	static function plain(name:String, index:Int):IrFunction {
 		var b = new IrBuilder();
@@ -62,7 +62,8 @@ class EnumTagRewriteMain {
 			if (p.functions.length != count) throw "Repeated escape lowering duplicated helpers";
 			for (i in 0...before.length) if (escaped.blocks[0].instructions[i]
 				!= before[i]) throw "An already-lowered escape was rebuilt";
-			if (new compiler.ir.IrInterpreter(p).run() != 42) throw "Selective rewriting changed unrelated execution";
+			if (new compiler.ir.tools.IrInterpreter(p).run() != 42)
+				throw "Selective rewriting changed unrelated execution";
 		}
 
 		// An arbitrary number of nominal tags must not enlarge the payload escape graph.
@@ -73,13 +74,13 @@ class EnumTagRewriteMain {
 				name:"Tag" + index, cases:[{name: "Only", params: []}]
 			}];
 		tagProgram.enums.push({name: "Payload", cases: [{name: "Some", params: [I32]}]});
-		var planner = new compiler.ir.IrInlineEnumLayout(tagProgram.enums, [], 64,
-			compiler.ir.IrValueLaneLayout.IrValueLaneTarget.HashLink);
-		var eligibility = new compiler.ir.IrInlineEnumEligibility(tagProgram, planner);
+		var planner = new compiler.ir.passes.enums.IrInlineEnumLayout(tagProgram.enums, [], 64,
+			compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget.HashLink);
+		var eligibility = new compiler.ir.passes.enums.IrInlineEnumEligibility(tagProgram, planner);
 		if (eligibility.words != 1 || eligibility.allowed.exists("Tag0") || !eligibility.allowed.exists("Payload"))
 			throw "Payload-free tags entered the payload escape graph";
 		tagProgram.enums.pop();
-		eligibility = new compiler.ir.IrInlineEnumEligibility(tagProgram, planner);
+		eligibility = new compiler.ir.passes.enums.IrInlineEnumEligibility(tagProgram, planner);
 		if (eligibility.words != 0 || eligibility.allowed.keys().hasNext())
 			throw "A tags-only program needs no payload eligibility scan";
 

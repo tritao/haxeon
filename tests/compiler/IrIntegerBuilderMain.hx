@@ -1,12 +1,12 @@
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlBackend;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInterpreter;
-import compiler.ir.IrVerifier;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.tools.IrInterpreter;
+import compiler.ir.verify.IrVerifier;
 
 class IrIntegerBuilderMain {
 	static function main():Void {
@@ -54,7 +54,7 @@ class IrIntegerBuilderMain {
 	}
 
 	static function checkWideArithmetic():Void {
-		var b = new IrBuilder(), checks:Array<compiler.ir.Ir.IrValue> = [];
+		var b = new IrBuilder(), checks:Array<compiler.ir.model.Ir.IrValue> = [];
 		var high = b.shiftLeft(b.constInt(1, I64), b.constInt(40)),
 			low = b.shiftLeft(b.constInt(1, I64), b.constInt(8));
 		checks.push(b.equal(b.equal(high, low), b.constBool(false)));
@@ -71,7 +71,7 @@ class IrIntegerBuilderMain {
 		checks.push(b.equal(b.intToInt64(b.constInt(-1)), b.constInt(-1, I64)));
 		checks.push(b.call("__dynamic_equal", [b.toDyn(high), b.toDyn(b.shiftLeft(b.constInt(1, I64), b.constInt(40)))],
 			Bool));
-		var array = b.call("__array_alloc_i64", [b.constInt(1)], compiler.ir.Ir.IrType.Array(I64));
+		var array = b.call("__array_alloc_i64", [b.constInt(1)], compiler.ir.model.Ir.IrType.Array(I64));
 		checks.push(b.equal(b.arrayGet(array, b.constInt(0), I64), b.constInt(0, I64)));
 		var owner = b.newObject("WideDefault");
 		checks.push(b.equal(b.fieldGet(owner, "word", I64), b.constInt(0, I64)));
@@ -109,7 +109,7 @@ class IrIntegerBuilderMain {
 				library: "haxeon_runtime",
 				symbol: "__array_alloc_i64",
 				arguments: [I32],
-				result: compiler.ir.Ir.IrType.Array(I64)
+				result: compiler.ir.model.Ir.IrType.Array(I64)
 			},
 			{
 				name: "__dynamic_equal",

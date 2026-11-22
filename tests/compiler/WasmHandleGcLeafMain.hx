@@ -1,9 +1,9 @@
 import compiler.backend.wasm.WasmBackend;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.SourceProvenance;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.SourceProvenance;
+import compiler.ir.model.SourceProvenance.Located;
 import sys.io.File;
 
 /** Numeric handles held in Dynamic must not retain an object whose address equals the handle. */

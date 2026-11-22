@@ -1,16 +1,16 @@
 package compiler.backend.wasm;
-import compiler.ir.IrSymbol;
+import compiler.ir.model.IrSymbol;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir;
-import compiler.ir.IrFunction;
-import compiler.ir.IrInliner;
-import compiler.ir.IrObjectTable;
-import compiler.ir.IrOperands;
-import compiler.ir.IrReceiverCheck;
-import compiler.ir.IrScalarReplacement;
-import compiler.ir.PhiEdges;
-import compiler.ir.SourceProvenance.Located;
+import compiler.ir.cfg.PhiEdges;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrObjectTable;
+import compiler.ir.model.IrOperands;
+import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.names.IrReceiverCheck;
+import compiler.ir.passes.inlining.IrInliner;
+import compiler.ir.passes.scalars.IrScalarReplacement;
 
 private typedef FlattenedPlace = {
 	final owner:IrValue;

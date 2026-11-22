@@ -1,17 +1,17 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.IrProgramIndex;
-import compiler.ir.IrReachability;
-import compiler.ir.IrEnumEscapeReach;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrTerminator;
-import compiler.ir.IrFunction;
-import compiler.ir.IrFunction.IrRetention;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.IrProgramIndex;
+import compiler.ir.analysis.IrReachability;
+import compiler.ir.analysis.IrEnumEscapeReach;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrCNative;
+import compiler.ir.model.Ir.IrTerminator;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrRetention;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -278,7 +278,7 @@ class WasmModuleSupport {
 									var type = closureFunctionType(closure.type, arguments, resultType, abi);
 									// Any closure may be an instance closure: a cast adapts closures as instance closures
 									// (WasmLinearClosureAdapters).
-									var key = compiler.ir.IrTypeIdentity.text(closure.type);
+									var key = compiler.ir.model.IrTypeIdentity.text(closure.type);
 									if (!result.exists(key)) result.set(key, {
 										staticType: module.typeIndex(type),
 										instanceType: module.typeIndex({
@@ -308,7 +308,7 @@ class WasmModuleSupport {
 										.concat(closureSignature.parameters),
 									results: closureSignature.results
 								});
-							var key = compiler.ir.IrTypeIdentity.text(output.type),
+							var key = compiler.ir.model.IrTypeIdentity.text(output.type),
 								existing = result.get(key);
 							if (existing == null)
 								result.set(key, {staticType: staticType, instanceType: instanceType});

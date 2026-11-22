@@ -1,8 +1,8 @@
 import compiler.Frontend;
 import compiler.core.Source.SourceFile;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrInlineValueLayout;
-import compiler.ir.IrProgramAssembler;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.passes.values.IrInlineValueLayout;
+import compiler.ir.pipeline.IrProgramAssembler;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;
@@ -45,13 +45,13 @@ class NullableStructIrMain {
 		if (holder == null || holder.fields.length != 2 || holder.fields[0].name != flag
 			|| holder.fields[1].name != payload)
 			throw "nullable field was not expanded into inline flag and payload slots";
-		var alreadyPublished = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed,
-			compiler.ir.TargetProfile.portable), typed,
+		var alreadyPublished = IrProgramAssembler.liveInitializersFrom(compiler.ir.gen.IrGenerator.forProgram(typed,
+			compiler.ir.pipeline.TargetProfile.portable), typed,
 			_ -> true, (_, field) -> field == flag);
 		if (alreadyPublished.length != 0)
 			throw "an existing optional field was treated as a newly published field";
-		var added = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed,
-			compiler.ir.TargetProfile.portable), typed, _ -> true,
+		var added = IrProgramAssembler.liveInitializersFrom(compiler.ir.gen.IrGenerator.forProgram(typed,
+			compiler.ir.pipeline.TargetProfile.portable), typed, _ -> true,
 			(_, _) -> false);
 		if (added.length != 1)
 			throw "a new optional field did not get its live initializer";

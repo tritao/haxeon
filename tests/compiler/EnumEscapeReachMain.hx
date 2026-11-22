@@ -1,12 +1,12 @@
-import compiler.ir.Ir;
-import compiler.ir.IrArrayFactory;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrEnumEscapeReach;
-import compiler.ir.IrFunction;
-import compiler.ir.IrSymbol;
+import compiler.ir.analysis.IrEnumEscapeReach;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrSymbol;
+import compiler.ir.passes.arrays.IrArrayFactory;
 
 /** Both enum storage decisions consume the same reference, container and capture reach. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class EnumEscapeReachMain {
 	static function object(name:String, fields:Array<IrObjectField>, ?base:String, ?interfaces:Array<String>):IrObject
 		return {
@@ -52,7 +52,7 @@ class EnumEscapeReachMain {
 			throw "Lost inherited static layout";
 		if (!reach.collect([Abstract("probe-map")], _ -> false).exists("Tag"))
 			throw "Lost erased map contents";
-		if (compiler.ir.IrArrayRuntimeNatives.isStorage("__array_user_extension"))
+		if (compiler.ir.passes.enums.IrArrayRuntimeNatives.isStorage("__array_user_extension"))
 			throw "Array classification must fail closed";
 		program.enums = [
 			{name: "Tag", cases: [{name: "Only", params: []}]},
@@ -63,12 +63,12 @@ class EnumEscapeReachMain {
 		escaped.toDyn(owner);
 		escaped.returnValue(escaped.constInt(42));
 		program.functions.push(new IrFunction("escape", escaped.arguments, I32, escaped.blocks, Ordinary));
-		var eligibility = new compiler.ir.IrInlineEnumEligibility(program,
-			new compiler.ir.IrInlineEnumLayout(program.enums, program.objects, 64, HashLink));
+		var eligibility = new compiler.ir.passes.enums.IrInlineEnumEligibility(program,
+			new compiler.ir.passes.enums.IrInlineEnumLayout(program.enums, program.objects, 64, HashLink));
 		if (eligibility.allowed.exists("Payload"))
 			throw "Inline eligibility ignored transitive escape";
-		var projected = compiler.ir.IrClosedEnumTagAbi.run(program);
-		if (!compiler.ir.IrVerifier.sameType(Lambda.find(projected.objects,
+		var projected = compiler.ir.passes.enums.IrClosedEnumTagAbi.run(program);
+		if (!compiler.ir.verify.IrVerifier.sameType(Lambda.find(projected.objects,
 			entry -> entry.name == "Leaf").fields[0].type, EnumTag("Tag")))
 			throw "Closed-tag ABI ignored the same transitive escape";
 		var nativeRoots:Array<IrType> = [];
@@ -117,13 +117,13 @@ class EnumEscapeReachMain {
 		builder.call("__array_user_extension", [array, tag], Void);
 		builder.returnValue(builder.constVoid());
 		program.functions = [new IrFunction("main", builder.arguments, Void, builder.blocks, Ordinary)];
-		compiler.ir.IrEnumTagLowering.escapes(program);
+		compiler.ir.passes.enums.IrEnumTagLowering.escapes(program);
 		var adapted = false;
 		for (block in program.functions[0].blocks)
 			for (located in block.instructions)
 				switch located.value {
 					case Call(_, callTarget, arguments) if (callTarget.name == "__array_user_extension"):
-						adapted = compiler.ir.IrVerifier.sameType(arguments[1].type, Dyn);
+						adapted = compiler.ir.verify.IrVerifier.sameType(arguments[1].type, Dyn);
 					default:
 				}
 		if (!adapted)
@@ -140,10 +140,10 @@ class EnumEscapeReachMain {
 		builder.emit(ArraySize(size, array));
 		builder.returnValue(size);
 		program.functions = [new IrFunction("main", [], I32, builder.blocks, Ordinary)];
-		compiler.ir.IrVerifier.verify(program);
-		if (new compiler.ir.IrInterpreter(program).run("main") != 3)
+		compiler.ir.verify.IrVerifier.verify(program);
+		if (new compiler.ir.tools.IrInterpreter(program).run("main") != 3)
 			throw "Semantic array factory interpreter result";
-		program = compiler.ir.IrClosedEnumTagAbi.run(program);
+		program = compiler.ir.passes.enums.IrClosedEnumTagAbi.run(program);
 		IrArrayFactory.lower(program);
 		var found = false;
 		for (fn in program.functions)
@@ -151,7 +151,8 @@ class EnumEscapeReachMain {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(out, callTarget, arguments) if (callTarget.name == "__array_alloc_i32"):
-							found = arguments.length == 1 && compiler.ir.IrVerifier.sameType(out.type, Array(I32));
+							found = arguments.length == 1
+								&& compiler.ir.verify.IrVerifier.sameType(out.type, Array(I32));
 						case Call(_, callTarget, _) if (callTarget.name == IrArrayFactory.NAME):
 							throw "Logical factory survived allocation emission";
 						case TypeValue(_, _), ToDyn(_, _), SafeCast(_, _):
@@ -169,7 +170,7 @@ class EnumEscapeReachMain {
 		program.functions = [new IrFunction("main", [], I32, invalid.blocks, Ordinary)];
 		var rejected = false;
 		try
-			compiler.ir.IrVerifier.verify(program)
+			compiler.ir.verify.IrVerifier.verify(program)
 		catch (error:Dynamic) {
 			if (Std.string(error) != "IR verification failed for main: Invalid typed array factory signature")
 				throw error;

@@ -3,7 +3,7 @@ package compiler.hl.persistence;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlModuleAssembler.HlAssemblerState;
-import compiler.ir.Ir.IrNative;
+import compiler.ir.model.Ir.IrNative;
 import compiler.ir.codec.IrTypeCodec;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;

@@ -16,14 +16,15 @@ class GeneratedEqualityProvenanceMain {
 	}
 
 	static function main():Void {
-		var user = compiler.ir.SourceProvenance.user(new compiler.core.Source.SourceFile("empty-user.hx", "").span(0,
+		var user = compiler.ir.model.SourceProvenance.user(new compiler.core.Source.SourceFile("empty-user.hx",
+			"").span(0,
 			0));
 		var generatedSpan = compiler.core.Source.SourceSpan.generated("test-helper");
-		var generated = compiler.ir.SourceProvenance.user(generatedSpan.merge(generatedSpan));
+		var generated = compiler.ir.model.SourceProvenance.user(generatedSpan.merge(generatedSpan));
 		if (user.location.sourceHash == 0
 			|| generated.location.sourceHash != 0
 			|| !Type.enumEq(generated.origin,
-			compiler.ir.SourceProvenance.SourceOrigin.CompilerGenerated("test-helper")))
+			compiler.ir.model.SourceProvenance.SourceOrigin.CompilerGenerated("test-helper")))
 			throw "Generated spans must have explicit provenance without pretending to name a user snapshot";
 		for (valueType in [
 			"enum Value implements Equatable { Item(value:Int); }",

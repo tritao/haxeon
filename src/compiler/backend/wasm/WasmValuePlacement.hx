@@ -5,11 +5,11 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmHeapType;
 import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrTerminator;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOperands;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrTerminator;
 
 private typedef WasmInterval = {
 	final valueId:Int;
@@ -139,7 +139,7 @@ class WasmValuePlacement {
 		return requiredPosition(values, valueId);
 	}
 
-	static function terminatorInputs(terminator:IrTerminator):Array<compiler.ir.Ir.IrValue>
+	static function terminatorInputs(terminator:IrTerminator):Array<compiler.ir.model.Ir.IrValue>
 		return switch terminator {
 			case Return(value), Throw(value), Rethrow(value): [value];
 			case Jump(_), Unreachable: [];

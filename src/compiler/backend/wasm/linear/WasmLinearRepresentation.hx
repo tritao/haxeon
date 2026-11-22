@@ -1,15 +1,15 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrObjectField;
-import compiler.ir.IrFunction;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.Ir.IrValue;
+import compiler.ir.model.Ir.IrInstruction;
+import compiler.ir.model.Ir.IrObjectField;
+import compiler.ir.model.IrFunction;
 import compiler.backend.wasm.WasmScalarAbi;
 import compiler.backend.wasm.WasmScalarLocals;
-import compiler.ir.Ir.IrCNative;
+import compiler.ir.model.Ir.IrCNative;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
@@ -116,7 +116,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			case FieldGet(out, owner, name):
 				var candidate = scalarLocals.get(owner);
 				if (candidate == null) null;
-				else if (name == compiler.ir.IrReceiverCheck.CHECK_FIELD)[];
+				else if (name == compiler.ir.names.IrReceiverCheck.CHECK_FIELD)[];
 				else [
 					LocalGet(requiredScalarField(candidate.fields, name)),
 					LocalSet(requiredScalarValue(locals, out.id))
@@ -255,7 +255,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				throw new InternalError('Missing scalar Wasm call result $fieldName');
 			return [LocalGet(results[index]), LocalSet(destination)];
 		}
-		if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD)
+		if (fieldName == compiler.ir.names.IrReceiverCheck.CHECK_FIELD)
 			return [LocalGet(objectLocal), I32Load(0), LocalSet(destination)];
 		var field = objectField(object, fieldName);
 		if (field.nativeLayout != null) {
@@ -889,9 +889,9 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		}
 		// Float32 values live in f64 locals, so a Float rounded to 32 bits (FloatBits.toInt32) converts the same way.
 		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == "runtime.FloatBits.toInt32") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, I32)
+			if (!compiler.ir.verify.IrVerifier.sameType(output.type, I32)
 				|| arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
 				|| argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm Float32 bit conversion signature");
 			return [
@@ -902,9 +902,9 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			];
 		}
 		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == "runtime.FloatBits.fromInt32") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
+			if (!compiler.ir.verify.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
 				|| arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, I32)
+				|| !compiler.ir.verify.IrVerifier.sameType(arguments[0].type, I32)
 				|| argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm Float32 bit conversion signature");
 			return [

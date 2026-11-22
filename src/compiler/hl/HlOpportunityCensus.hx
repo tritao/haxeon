@@ -1,6 +1,6 @@
 package compiler.hl;
 
-import compiler.ir.IrOpportunityCensus;
+import compiler.ir.tools.IrOpportunityCensus;
 
 /** The HashLink part of the `IrOpportunityCensus`: what lowering emitted. */
 class HlOpportunityCensus {

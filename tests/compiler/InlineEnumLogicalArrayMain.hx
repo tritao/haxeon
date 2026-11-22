@@ -1,11 +1,11 @@
 import compiler.CompileOptions;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
-import compiler.ir.IrValueLaneReference;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
+import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.passes.values.IrValueLaneReference;
 /** Logical enum array descriptors with private lanes; source enum activation remains separate. */
-@:access(compiler.ir.IrBuilder)
+@:access(compiler.ir.model.IrBuilder)
 class InlineEnumLogicalArrayMain {
 	static function tempRoot():String {
 		var root = Sys.getEnv("TMPDIR");
@@ -33,17 +33,19 @@ class InlineEnumLogicalArrayMain {
 			name: "Element",
 			cases: [{name: "Empty", params: []}, {name: "Data", params: [I32, Obj("Owner")]}]
 		};
-		var planner = new compiler.ir.IrInlineEnumLayout([declaration], [owner], target == HashLink ? 64 : 32, target),
+		var planner = new compiler.ir.passes.enums.IrInlineEnumLayout([declaration], [owner],
+			target == HashLink ? 64 : 32, target),
 			packet = planner.shape("Element").valueObject;
 		var declarations:Array<IrEnum>= [{name: declaration.name, cases: declaration.cases,
 			inlineStorage: packet.name}];
-		var table = compiler.ir.IrObjectTable.of([owner.name => owner, packet.name => packet]),
+		var table = compiler.ir.model.IrObjectTable.of([owner.name => owner, packet.name => packet]),
 			type:IrType = Enum("Element"),
 			arrayType:IrType = Array(type);
-		var factory = new compiler.ir.IrValueArrayFactory(table, type, target == HashLink ? 64 : 32, target, 0,
+		var factory = new compiler.ir.passes.arrays.IrValueArrayFactory(table, type, target == HashLink ? 64 : 32,
+			target, 0,
 			declarations),
 			helpers = factory.helpers;
-		var elements = new compiler.ir.IrValueArrayElements(type, helpers, factory.bridge);
+		var elements = new compiler.ir.passes.arrays.IrValueArrayElements(type, helpers, factory.bridge);
 		elements.useIterator();
 		var prepare = new IrBuilder(), reference = prepare.newObject("Owner"), shape = factory.layout.lanes;
 		prepare.fieldSet(reference, "code", prepare.constInt(42));
@@ -98,7 +100,7 @@ class InlineEnumLogicalArrayMain {
 		});
 		p.functions = [
 			new IrFunction("prepare", prepare.arguments, Void, prepare.blocks, Ordinary, null, false,
-				compiler.ir.IrFunction.IrRetention.Expose),
+				compiler.ir.model.IrFunction.IrRetention.Expose),
 			new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)
 		];
 		var boxedRead = new IrBuilder(),
@@ -107,10 +109,11 @@ class InlineEnumLogicalArrayMain {
 		boxedRead.emit(ArrayGet(boxedValue, boxedArray, boxedRead.constInt(0)));
 		boxedRead.returnValue(boxedValue);
 		p.functions.push(new IrFunction("boxedRead", boxedRead.arguments, Enum("BoxedElement"), boxedRead.blocks,
-			Ordinary, null, false, compiler.ir.IrFunction.IrRetention.Expose));
+			Ordinary, null, false, compiler.ir.model.IrFunction.IrRetention.Expose));
 		var mutation = new IrBuilder(), mutationOwner = mutation.newObject("Owner");
 		mutation.fieldSet(mutationOwner, "code", mutation.constInt(42));
-		var mutationValue = new compiler.ir.IrInlineEnumCaseAccess(planner.shape("Element"), table).construct(mutation,
+		var mutationValue = new compiler.ir.passes.enums.IrInlineEnumCaseAccess(planner.shape("Element"),
+			table).construct(mutation,
 			1, [
 				mutation.constInt(37),
 				mutationOwner
@@ -137,7 +140,7 @@ class InlineEnumLogicalArrayMain {
 		mutation.select(mutationBad);
 		mutation.returnValue(mutation.constInt(1));
 		p.functions.push(new IrFunction("mutationCheck", mutation.arguments, I32, mutation.blocks, Ordinary, null,
-			false, compiler.ir.IrFunction.IrRetention.Expose));
+			false, compiler.ir.model.IrFunction.IrRetention.Expose));
 		var dynamicCheck = new IrBuilder(),
 			dynamicArray = global(dynamicCheck, "array", arrayType),
 			zero = dynamicCheck.constInt(0);
@@ -152,14 +155,14 @@ class InlineEnumLogicalArrayMain {
 			bad = dynamicCheck.createBlock();
 		dynamicCheck.branch(dynamicCheck.equal(empty, dynamicCheck.constNull(Dyn)), good, bad);
 		dynamicCheck.select(good);
-		var caseAccess = new compiler.ir.IrInlineEnumCaseAccess(planner.shape("Element"), table);
-		var boxed = dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.boxName("Element"),
+		var caseAccess = new compiler.ir.passes.enums.IrInlineEnumCaseAccess(planner.shape("Element"), table);
+		var boxed = dynamicCheck.call(compiler.ir.passes.enums.IrInlineEnumEscapes.boxName("Element"),
 			[caseAccess.construct(dynamicCheck, 1, [
 				dynamicCheck.constInt(37),
 				savedOwner
 			])], Dyn);
 		dynamicCheck.call("__array_set_any", [dynamicArray, zero, boxed], Void);
-		var escaped = dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.unboxName("Element"),
+		var escaped = dynamicCheck.call(compiler.ir.passes.enums.IrInlineEnumEscapes.unboxName("Element"),
 			[dynamicCheck.call("__array_get_any", [
 				dynamicArray,
 				zero
@@ -172,7 +175,7 @@ class InlineEnumLogicalArrayMain {
 		], arrayType);
 		dynamicCheck.call("__array_set_any", [nativeArray, zero, boxed], Void);
 		var migrated = dynamicCheck.call(factory.retypeName(), [nativeArray], arrayType);
-		var migratedValue = dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.unboxName("Element"),
+		var migratedValue = dynamicCheck.call(compiler.ir.passes.enums.IrInlineEnumEscapes.unboxName("Element"),
 			[dynamicCheck.call("__array_get_any", [
 				migrated,
 				zero
@@ -181,7 +184,7 @@ class InlineEnumLogicalArrayMain {
 		var migratedOK = dynamicCheck.createBlock();
 		dynamicCheck.branch(dynamicCheck.equal(migratedNumber, dynamicCheck.constInt(37)), migratedOK, bad);
 		dynamicCheck.select(migratedOK);
-		var emptyCase = dynamicCheck.call(compiler.ir.IrInlineEnumEscapes.boxName("Element"),
+		var emptyCase = dynamicCheck.call(compiler.ir.passes.enums.IrInlineEnumEscapes.boxName("Element"),
 			[caseAccess.construct(dynamicCheck, 0, [])], Dyn);
 		dynamicCheck.call("__array_set_any", [nativeArray, zero, emptyCase], Void);
 		var aliasTag = dynamicCheck.call(helpers.getter(helpers.slot(["tag"])), [migrated, zero], I32),
@@ -195,7 +198,7 @@ class InlineEnumLogicalArrayMain {
 		dynamicCheck.select(bad);
 		dynamicCheck.returnValue(dynamicCheck.constInt(1));
 		p.functions.push(new IrFunction("dynamicCheck", dynamicCheck.arguments, I32, dynamicCheck.blocks, Ordinary,
-			null, false, compiler.ir.IrFunction.IrRetention.Expose));
+			null, false, compiler.ir.model.IrFunction.IrRetention.Expose));
 		var build = new IrBuilder(),
 			count = build.argument("count", I32),
 			baseArray = global(build, "array", arrayType);
@@ -215,7 +218,7 @@ class InlineEnumLogicalArrayMain {
 		var indices:Array<IrPhiInput>= [{block: initial.id, value: start}], position = build.phi(I32, indices);
 		build.branch(build.less(position, count), fillBody, filled);
 		build.select(fillBody);
-		var caseAccess = new compiler.ir.IrInlineEnumCaseAccess(planner.shape("Element"), table),
+		var caseAccess = new compiler.ir.passes.enums.IrInlineEnumCaseAccess(planner.shape("Element"), table),
 			value = caseAccess.construct(build, 1, [
 				build.constInt(37),
 				ownerValue
@@ -253,7 +256,7 @@ class InlineEnumLogicalArrayMain {
 		build.select(doneRead);
 		build.returnValue(sum);
 		p.functions.push(new IrFunction("buildAndIterate", build.arguments, I32, build.blocks, Ordinary, null, false,
-			compiler.ir.IrFunction.IrRetention.Expose));
+			compiler.ir.model.IrFunction.IrRetention.Expose));
 		var churn = new IrBuilder();
 		for (_ in 0...128) {
 			var garbage = churn.newObject("Owner");
@@ -261,11 +264,12 @@ class InlineEnumLogicalArrayMain {
 		}
 		churn.returnValue(churn.constVoid());
 		p.functions.push(new IrFunction("churn", churn.arguments, Void, churn.blocks, Ordinary, null, false,
-			compiler.ir.IrFunction.IrRetention.Expose));
-		p.functions = p.functions.concat(compiler.ir.IrInlineEnumEscapes.functions(declarations, table, planner));
+			compiler.ir.model.IrFunction.IrRetention.Expose));
+		p.functions = p.functions.concat(compiler.ir.passes.enums.IrInlineEnumEscapes.functions(declarations, table,
+			planner));
 		// The manually built calls above own their helper definitions; the program rewrite creates its own helpers.
 		p.functions = p.functions.concat(helpers.functions());
-		p.natives = compiler.ir.IrInlineEnumWordAccess.natives();
+		p.natives = compiler.ir.passes.enums.IrInlineEnumWordAccess.natives();
 		p.natives.push({
 			name: "__array_set_any",
 			library: "haxeon_runtime",
@@ -288,8 +292,8 @@ class InlineEnumLogicalArrayMain {
 			result: arrayType
 		});
 		p.natives = p.natives.concat(helpers.natives());
-		compiler.ir.IrProgramAssembler.ensureArrayRuntime(p, false, false, false);
-		compiler.ir.IrValueArrayProgramRewrite.rewriteAll(p, target == HashLink ? 64 : 32, target);
+		compiler.ir.pipeline.IrProgramAssembler.ensureArrayRuntime(p, false, false, false);
+		compiler.ir.passes.arrays.IrValueArrayProgramRewrite.rewriteAll(p, target == HashLink ? 64 : 32, target);
 		var boxedStillUsesReferences = false;
 		for (fn in p.functions) if (fn.name == "boxedRead") for (block in fn.blocks) for (item in block.instructions)
 			switch item.value {
@@ -305,7 +309,8 @@ class InlineEnumLogicalArrayMain {
 			else invalid.emit(ArrayGet(out, container, invalid.constInt(0)));
 			invalid.returnValue(out);
 			var rejected = false;
-			try compiler.ir.IrValueArrayElementRewrite.rewrite(new IrFunction("invalid", invalid.arguments, type,
+			try compiler.ir.passes.arrays.IrValueArrayElementRewrite.rewrite(new IrFunction("invalid",
+				invalid.arguments, type,
 				invalid.blocks, Ordinary), type, elements, [])
 			catch (error:Dynamic) {
 				if (Std.string(error).indexOf("Wrong inline array") < 0) throw error;
@@ -313,19 +318,21 @@ class InlineEnumLogicalArrayMain {
 			}
 			if (!rejected) throw "Logical enum used in place of physical element storage";
 		}
-		compiler.ir.IrValueConstructors.rewrite(p);
-		compiler.ir.IrValuePhiScalarization.rewrite(p);
-		compiler.ir.IrScalarArguments.rewrite(p, target != HashLink);
-		var scalarObjects = compiler.ir.IrObjectTable.of([for (object in p.objects) object.name => object]);
-		p.functions = [for (fn in p.functions) compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false,
+		compiler.ir.passes.values.IrValueConstructors.rewrite(p);
+		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(p);
+		compiler.ir.passes.scalars.IrScalarArguments.rewrite(p, target != HashLink);
+		var scalarObjects = compiler.ir.model.IrObjectTable.of([for (object in p.objects) object.name => object]);
+		p.functions = [for (fn in p.functions) compiler.ir.passes.scalars.IrScalarReplacement.rewrite(fn, scalarObjects,
+			false,
 			target == HashLink)];
-		compiler.ir.IrNullableScalarFlow.rewrite(p);
-		compiler.ir.IrInliner.run(p,
-			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(p.functions)),
-			compiler.ir.TargetProfile.wasm,
+		compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(p);
+		compiler.ir.passes.inlining.IrInliner.run(p,
+			new compiler.ir.passes.inlining.IrInliner
+			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(p.functions)),
+			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
-		compiler.ir.IrVerifier.verify(p);
-		compiler.ir.IrVerifier.verifyValueArraysLowered(p);
+		compiler.ir.verify.IrVerifier.verify(p);
+		compiler.ir.verify.IrVerifier.verifyValueArraysLowered(p);
 		var entry = new IrBuilder(), captures:Array<{path:String, count:Int, build:Bool}>= [];
 		entry.call("prepare", [], Void);
 		if (target == HashLink) {

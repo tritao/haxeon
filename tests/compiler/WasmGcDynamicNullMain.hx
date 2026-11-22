@@ -1,8 +1,8 @@
 import compiler.backend.wasm.WasmBackend;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir.IrProgram;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 
 /** Dynamic null checks keep both equality semantics and host-reference traps. */
 class WasmGcDynamicNullMain {

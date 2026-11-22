@@ -1,9 +1,9 @@
 import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.ir.model.Ir;
+import compiler.ir.model.IrBuilder;
+import compiler.ir.model.IrFunction;
 import compiler.tools.CompilerDriver;
 
 class RawRepresentableMain {
@@ -66,7 +66,7 @@ class RawRepresentableMain {
 		c.update("Main.hx",
 			'function main():Int { var value=Code.fromRaw(7); return value==null ? 0 : value.rawValue(); }');
 		function result():Int
-			return new compiler.ir.IrInterpreter(c.compile("Main").ir).run("main");
+			return new compiler.ir.tools.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
 			throw "Unknown initial raw value";
 		c.update("Code.hx", 'enum abstract Code(Int) implements RawRepresentable { var A=4; var B=7; }');
@@ -83,7 +83,7 @@ class RawRepresentableMain {
 			'package wire; enum abstract Code(Int) implements RawRepresentable { var A=4; }');
 		imported.update("Main.hx",
 			'import wire.Code as WireCode; function main():Int { var value=WireCode.fromRaw(4); return value==null ? 0 : value.rawValue(); }');
-		if (new compiler.ir.IrInterpreter(imported.compile("Main").ir).run("main") != 4)
+		if (new compiler.ir.tools.IrInterpreter(imported.compile("Main").ir).run("main") != 4)
 			throw "Imported raw conformance";
 
 		Sys.println("PASS: incremental raw conversion uses current constants");
@@ -93,7 +93,7 @@ class RawRepresentableMain {
 		var c = makeCompiler(target, inlining);
 		c.update("Main.hx", sys.io.File.getContent("tests/programs/raw-representable.hx"));
 		var result = c.compile("Main"), p = result.ir;
-		if (new compiler.ir.IrInterpreter(p).run("main") != 42)
+		if (new compiler.ir.tools.IrInterpreter(p).run("main") != 42)
 			throw "Raw interpreter result";
 		var raw32 = Lambda.find(p.functions, f -> f.name == "$raw-representable:Code32:fromRaw");
 		if (raw32 != null) {
@@ -107,7 +107,8 @@ class RawRepresentableMain {
 			Sys.println('CODE fromRaw32 $target inline=$inlining blocks=${raw32.blocks.length} conditional-branches=$branches');
 		}
 		var holder = Lambda.find(p.objects, o -> o.name == "Holder");
-		if (holder == null || holder.fields.length != 1 || !compiler.ir.IrVerifier.sameType(holder.fields[0].type, I32))
+		if (holder == null || holder.fields.length != 1
+			|| !compiler.ir.verify.IrVerifier.sameType(holder.fields[0].type, I32))
 			throw "A raw Int field must stay I32";
 		var pair = Lambda.find(p.objects, o -> o.name == "Pair");
 		if (pair == null || pair.nativeLayout == null || pair.nativeLayout.size != 8)
