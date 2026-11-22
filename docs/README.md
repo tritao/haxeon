@@ -70,6 +70,7 @@ Language:
 - [VALUE_CONSTRUCTOR_DESTINATION.md](design/VALUE_CONSTRUCTOR_DESTINATION.md): value constructors that return their value.
 - [ERROR_MODEL.md](design/ERROR_MODEL.md): `Result` and error enums for expected failures, exceptions for bugs.
 - [PURITY.md](design/PURITY.md), [SCOPED_PLACES.md](design/SCOPED_PLACES.md), [SHADERS.md](design/SHADERS.md): deferred.
+- [FUTURE_LANGUAGE.md](design/FUTURE_LANGUAGE.md): idea for a language of our own after Haxe, as a second dialect.
 
 Compiler (ADR 0003 and its follow-ups):
 
