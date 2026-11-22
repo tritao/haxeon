@@ -87,9 +87,6 @@ class TypingSession {
 
 	final mergedUnits:Map<String, Bool> = [];
 
-	/** The shared units typed inside an arena, by name, until the work that typed them copies their outputs out. */
-	final sharedInArena:Array<String> = [];
-
 	/** Closure conversion for the unit being typed. */
 	public var closureConversion(get, never):ClosureConversion;
 
@@ -112,17 +109,6 @@ class TypingSession {
 		output = unit;
 		return unit;
 	}
-
-	/** The shared units typed inside an arena since the last call, with their outputs; the list starts over. */
-	public function takeSharedInArena():Array<SharedUnit> {
-		var units = [for (name in sharedInArena) new SharedUnit(name, sharedOutputs.get(name))];
-		sharedInArena.resize(0);
-		return units;
-	}
-
-	/** Puts the output of the shared unit `name` back, once copied out of the arena it was typed in. */
-	public function replaceSharedOutput(name:String, output:TypingOutput):Void
-		sharedOutputs.set(name, output);
 
 	public function endUnit(unit:TypingOutput):Void {
 		if (output != unit)
@@ -149,8 +135,6 @@ class TypingSession {
 		}
 		var unit = new TypingOutput(true, bodyContexts.length, checkOnly);
 		sharedOutputs.set(name, unit);
-		if (compiler.core.Arena.depth > 0)
-			sharedInArena.push(name);
 		outputs.push(output);
 		output = unit;
 		try {
@@ -771,15 +755,4 @@ class TypingSession {
 
 	static inline function parentPath(path:String):Null<String>
 		return compiler.core.QualifiedName.parent(path);
-}
-
-/** A shared unit's output with its name, handed out of the arena that typed it. */
-class SharedUnit {
-	public final name:String;
-	public final output:Null<TypingOutput>;
-
-	public function new(name:String, output:Null<TypingOutput>) {
-		this.name = name;
-		this.output = output;
-	}
 }

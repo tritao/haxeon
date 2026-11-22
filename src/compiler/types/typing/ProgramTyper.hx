@@ -62,16 +62,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	/** Make a generic class's erased code by elaborating its own-parameter typing; see `CompileOptions.elaborateGenerics`. */
 	final elaborateGenerics:Bool;
 
-	/** Type each class's methods in an arena of its own; see `CompileOptions.typingArenas`. */
-	final typingArenas:compiler.CompileOptions.TypingArenas;
-
-	/** The classes whose arena was kept, with the references that kept it. */
-	final keptArenas:Array<String> = [];
-
-	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false,
-			typingArenas:compiler.CompileOptions.TypingArenas = Off) {
+	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false) {
 		this.bodyTyper = bodyTyper;
-		this.typingArenas = typingArenas;
 		this.reverseTypingOrder = reverseTypingOrder;
 		this.elaborateGenerics = elaborateGenerics;
 		bodyTyper.genericInstantiation.elaborateGenerics = elaborateGenerics;
@@ -1594,20 +1586,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>, selected:Null<Map<String, Bool>>,
 			units:Array<TypingOutput>):Array<TypedClass> {
-		var released = compiler.core.Arena.released,
-			kept = compiler.core.Arena.kept,
-			references = compiler.core.Arena.references,
-			releaseSeconds = compiler.core.Arena.releaseSeconds,
-			evacuated = compiler.core.Arena.evacuated(),
-			evacuatedBytes = compiler.core.Arena.evacuatedBytes();
 		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration],
 			methods:Array<Null<Array<TypedFunction>>> = [for (_ in classes) null],
 			outputs:Array<Array<TypingOutput>> = [for (_ in classes)[]];
 		for (index in typingOrder(classes.length)) {
 			var declaration = byName.get(classes[index].name);
 			if (declaration != null) {
-				methods[index] = typeClassMethodsInArena(declaration, classes[index].fields, selected,
-					session.representation.erasedNominalSubstitutions(declaration.name), outputs[index]);
+				methods[index] = typeClassMethods(declaration, classes[index].fields, selected, false,
+					session.representation.erasedNominalSubstitutions(declaration.name), null, outputs[index]);
 				if (declaration.isExtern != true
 					&& externTyper.nativeLibrary(declaration.name, declaration.metadata) == null)
 					for (method in declaration.methods) {
@@ -1618,12 +1604,6 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					}
 			}
 		}
-		if ((typingArenas == Check || typingArenas == Strict) && keptArenas.length > 0)
-			throw new compiler.core
-				.InternalError('--typing-arenas: ${keptArenas.length} arenas typing classes were kept, e.g. ${keptArenas.slice(0, 5).join(", ")}; HL_GC_ARENA_SITES=1 names what kept them');
-		if (typingArenas != Off)
-			Sys.stderr()
-				.writeString('typing arenas: ${compiler.core.Arena.released - released} released (${compiler.core.Arena.evacuated() - evacuated} by evacuating ${Math.round((compiler.core.Arena.evacuatedBytes() - evacuatedBytes) / 1024)} KB), ${compiler.core.Arena.kept - kept} kept, ${compiler.core.Arena.references - references} references, ${Math.round((compiler.core.Arena.releaseSeconds - releaseSeconds) * 1000)} ms\n');
 		for (classUnits in outputs)
 			for (unit in classUnits)
 				units.push(unit);
@@ -1646,32 +1626,6 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				};
 			}
 		}];
-	}
-
-	/**
-	 * A declared class's method bodies, typed in an arena of their own with `typingArenas` (docs/design/ARENAS.md): what typing
-	 * them leaves behind is released with it, and their outputs are built outside it.
-	 */
-	function typeClassMethodsInArena(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>,
-			substitutions:Map<String, CompilerType>, units:Array<TypingOutput>):Array<TypedFunction> {
-		if (typingArenas == Off)
-			return typeClassMethods(classDecl, fields, selected, false, substitutions, null, units);
-		compiler.core.Arena.evacuate(typingArenas != Strict);
-		function kept(references:Int):Void
-			keptArenas.push('${classDecl.name} ($references)');
-		// The shared units typed with the class are the session's: their outputs, copied out, take the originals' place.
-		function publish(typed:ClassMethodsTyped):Void
-			for (shared in typed.shared)
-				if (shared.output != null)
-					session.replaceSharedOutput(shared.name, shared.output);
-		var typed = compiler.core.Arena.unit(() -> {
-			var classUnits:Array<TypingOutput> = [];
-			var methods = typeClassMethods(classDecl, fields, selected, false, substitutions, null, classUnits);
-			new ClassMethodsTyped(methods, classUnits, session.takeSharedInArena());
-		}, publish, kept);
-		for (unit in typed.units)
-			units.push(unit);
-		return typed.methods;
 	}
 
 	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>,
@@ -2181,21 +2135,5 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					BodyTyper.fail("E1021",
 						'@:${entry.name} binds only an extern function; "$name" has a body, which would run instead',
 						entry.span);
-	}
-}
-
-/** A class's typed methods and the outputs of their units, which an arena's work hands out together. */
-private class ClassMethodsTyped {
-	public final methods:Array<TypedFunction>;
-	public final units:Array<TypingOutput>;
-
-	/** The shared units typed with them, which the session keeps. */
-	public final shared:Array<TypingSession.SharedUnit>;
-
-	public function new(methods:Array<TypedFunction>, units:Array<TypingOutput>,
-			shared:Array<TypingSession.SharedUnit>) {
-		this.methods = methods;
-		this.units = units;
-		this.shared = shared;
 	}
 }
