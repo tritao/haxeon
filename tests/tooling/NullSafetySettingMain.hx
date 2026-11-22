@@ -91,14 +91,16 @@ class NullSafetySettingMain {
 				}
 			throw "the plan has no compile";
 		}
-		var flags = [for (argument in compileArguments(false)) if (StringTools.startsWith(argument, "--null-safety="))
-			argument];
+		function nullSafetyFlags(selfHosted:Bool):Array<String>
+			return [for (argument in compileArguments(selfHosted)) if (StringTools.startsWith(argument,
+				"--null-safety=")) argument];
+		var flags = nullSafetyFlags(false);
 		expect(flags.join(" ")
 			== "--null-safety=warn:lib --null-safety=warn:Example --null-safety=strict:Main --null-safety=strict:Util --null-safety=strict:ui",
 			"the compile request passes the rules: " + flags.join(" "));
 		expect(CompileOptions.fromArguments(flags).nullSafety.length == 5, "the compiler reads the flags back");
-		expect(!Lambda.exists(compileArguments(true), argument -> StringTools.startsWith(argument, "--null-safety=")),
-			"a self-hosted compile, by the bootstrap compiler, goes without");
+		expect(nullSafetyFlags(true).join(" ") == flags.join(" "),
+			"a self-hosted compile, by the bootstrap compiler, passes the same rules");
 		// The editor's compiler gets the same rules, so it reports what the build reports.
 		var service = new LanguageService(), workspace = new ProjectWorkspace();
 		workspace.initialize({rootUri: "file://" + app}, service);
