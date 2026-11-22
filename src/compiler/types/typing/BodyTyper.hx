@@ -2649,10 +2649,6 @@ class BodyTyper implements BodyTyping {
 		return callResolver.coerceArguments(arguments, expected, name);
 	}
 
-	function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope,
-			name:String):Array<TypedExpression> {
-		return callResolver.typeCallArguments(arguments, expected, scope, name);
-	}
 
 	/**
 	 * `fn`'s argument types through the declaration query, in `substitutions` or, when none are given, the current body's: the

@@ -69,7 +69,9 @@ class CallResolver {
 	}
 
 	public function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope,
-			name:String):Array<TypedExpression> {
+			name:String, span:SourceSpan):Array<TypedExpression> {
+		if (arguments.length != expected.length)
+			fail("E1008", '"$name" expects ${expected.length} arguments, got ${arguments.length}', span);
 		var typed = [
 			for (i in 0...arguments.length)
 				bodyTyper.typeExpression(arguments[i], scope, expected[i])
@@ -449,7 +451,7 @@ class CallResolver {
 		// A method written in Haxe is typed against its declaration once its module is loaded, which gives it optional arguments.
 		var declared = module == null ? null : session.signatures.get(method.nativeName);
 		var call = declared == null ? [receiver].concat(typeCallArguments(arguments, method.arguments, scope,
-			name)) : typeDeclaredCallArguments(arguments, declared, scope, method.nativeName, span, null, false,
+			name, span)) : typeDeclaredCallArguments(arguments, declared, scope, method.nativeName, span, null, false,
 			receiver);
 		if (!PlatformAbi.signalsOutsideBounds(method.nativeName))
 			return new TypedExpression(TCall(method.nativeName, call), method.result, span);
@@ -470,7 +472,7 @@ class CallResolver {
 		if (synthesized != null) {
 			if (arguments.length != synthesized.arguments.length)
 				fail("E1008", '$name expects ${synthesized.arguments.length} arguments, got ${arguments.length}', span);
-			typeCallArguments(arguments, synthesized.arguments, scope, name);
+			typeCallArguments(arguments, synthesized.arguments, scope, name, span);
 			return new TypedExpression(TCast(receiver), synthesized.result, span);
 		}
 		receiver = TypeParameterMembers.receiver(session, bodyTyper, receiver, name, span);
@@ -1154,7 +1156,7 @@ class CallResolver {
 		if (rawDeclaration != null && FlagsGenerator.conforms(session, rawDeclaration)
 			&& FlagsGenerator.isMember(name, false)) {
 			var info = FlagsGenerator.signature(abstractName, name),
-				typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name);
+				typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name, span);
 			return new TypedExpression(TCall(FlagsGenerator.request(session, abstractName, name, span),
 				[receiver].concat(typed)), info.result, span);
 		}
@@ -1587,7 +1589,7 @@ class CallResolver {
 				span);
 		var typed = traced ? [traceLine(arguments, scope, span)] : hasSignature ? typeDeclaredCallArguments(arguments,
 			requiredMapValue(session.signatures, name), scope, name,
-			span) : typeCallArguments(arguments, expectedArguments, scope, name);
+			span) : typeCallArguments(arguments, expectedArguments, scope, name, span);
 		var call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name,
 			typed), result, span);
 		session.invalidateCallEffects(name, scope);
@@ -1686,7 +1688,7 @@ class CallResolver {
 			if (declaration != null && FlagsGenerator.conforms(session, declaration)
 				&& FlagsGenerator.isMember(member, true)) {
 				var info = FlagsGenerator.signature(owner, member),
-					typed = typeCallArguments(arguments, info.arguments, scope, name);
+					typed = typeCallArguments(arguments, info.arguments, scope, name, span);
 				return new TypedExpression(TCall(FlagsGenerator.request(session, owner, member, span), typed),
 					info.result, span);
 			}
@@ -2051,7 +2053,7 @@ class CallResolver {
 		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments,
 			requiredMapValue(session.signatures, constructorName), scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope,
-			constructorName),
+			constructorName, span),
 			method = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
 			physicalArguments = session.representation.adaptConstructorArguments(baseInstance, resolvedBase, method,
 				semanticArguments);
@@ -3170,7 +3172,7 @@ class CallResolver {
 				'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 		var typed = hasConstructor ? typeDeclaredCallArguments(arguments,
 			requiredMapValue(session.signatures, constructorName), scope,
-			constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
+			constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName, span),
 			nativeConstructor = PlatformAbi.constructorNative(typeName),
 			valueType = PlatformAbi.valueType(typeName);
 		return nativeConstructor == null
