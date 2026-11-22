@@ -18,6 +18,14 @@ class DirectoryWatcher {
 	static function nativeAdd(handle:WatchHandle, path:String, recursive:Bool):Bool
 		return false;
 
+	@:hlNative("haxeon_runtime", "__dir_watch_exclude")
+	static function nativeExclude(handle:WatchHandle, path:String):Bool
+		return false;
+
+	@:hlNative("haxeon_runtime", "__dir_watch_count")
+	static function nativeCount(handle:WatchHandle):Int
+		return 0;
+
 	@:hlNative("haxeon_runtime", "__dir_watch_wait")
 	static function nativeWait(handle:WatchHandle, milliseconds:Int):Int
 		return 2;
@@ -28,14 +36,39 @@ class DirectoryWatcher {
 	var handle:Null<WatchHandle>;
 	#end
 
+	/** The watcher's backend on this platform (native/watch/haxeon_watch.c), which the watch loop names. */
+	public static final BACKEND = switch Sys.systemName() {
+		case "Windows": "ReadDirectoryChangesW";
+		case "Linux": "inotify";
+		case _: "none";
+	};
+
 	function new() {}
 
-	/** Watches each directory (a recursive one with everything under it), or returns null when they cannot all be watched. */
-	public static function create(directories:Array<{path:String, recursive:Bool}>):Null<DirectoryWatcher> {
+	/** How many directories are watched: each one under a recursive root with inotify, each root with ReadDirectoryChangesW. */
+	public function directories():Int {
+		#if hl
+		return handle == null ? 0 : nativeCount(handle);
+		#else
+		return 0;
+		#end
+	}
+
+	/**
+		Watches each directory (a recursive one with everything under it) but the `excluded` subtrees, or returns null when
+		they cannot all be watched.
+	**/
+	public static function create(directories:Array<{path:String, recursive:Bool}>,
+			excluded:Array<String>):Null<DirectoryWatcher> {
 		#if hl
 		var handle = try nativeOpen() catch (error:Dynamic) null;
 		if (handle == null)
 			return null;
+		for (path in excluded)
+			if (!nativeExclude(handle, path)) {
+				nativeClose(handle);
+				return null;
+			}
 		for (directory in directories)
 			if (!nativeAdd(handle, directory.path, directory.recursive)) {
 				nativeClose(handle);
@@ -68,6 +101,6 @@ class DirectoryWatcher {
 }
 
 #if hl
-/** The runtime's watch (native/runtime/dir_watch.c), opaque here. */
-private typedef WatchHandle = hl.Abstract<"realtime_dir_watch">;
+/** The runtime's watch (native/watch/haxeon_watch.h), opaque here. */
+private typedef WatchHandle = hl.Abstract<"haxeon_watch">;
 #end

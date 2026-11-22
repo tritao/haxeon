@@ -976,7 +976,7 @@ class HaxeonCli {
 							OutputCapture.record("haxeon: " + Std.string(error) + "\n");
 							return null;
 						}
-					}, session);
+					}, options.verbosity, session);
 			}
 			if (options.profile) {
 				var capture = options.profileOutput == null ? ProfileCapture.nextCapture(Path.join([

@@ -95,6 +95,8 @@ Runtime and tools:
 - [ANDROID_BUILD.md](design/ANDROID_BUILD.md): haxeon compiles the Android module, Gradle packages it.
 - [PROFILER_DESIGN.md](design/PROFILER_DESIGN.md): the instrumenting profiler.
 - [PROFILER_DESIGN_POSIX.md](design/PROFILER_DESIGN_POSIX.md): native instrumentation on Linux and macOS (proposal).
+- [DIRECTORY_WATCH.md](design/DIRECTORY_WATCH.md): change notifications for the watch loop, a C component NativeKit is to
+  share.
 
 ## Decisions
 

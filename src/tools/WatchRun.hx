@@ -2,6 +2,7 @@ package tools;
 
 import build.execution.OutputCapture;
 import compiler.core.InternalError;
+import compiler.tools.Verbosity;
 import haxe.Json;
 import haxe.io.Path;
 import project.ResolvedProject;
@@ -30,7 +31,7 @@ typedef WatchChange = {
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
 			liveHost:Null<String>, entry:String,
-			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>,
+			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, verbosity:Verbosity,
 			?session:build.BuildSession):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw new InternalError("haxeon run --watch currently requires Linux, macOS or Windows");
@@ -47,6 +48,10 @@ class WatchRun {
 			logOffset = 0,
 			result = 0;
 		var watcher = openWatcher(project, baseline);
+		if (verbosity.atLeast(Verbosity.Detailed))
+			Sys.println(watcher == null
+				? 'haxeon: polling every $POLL_SECONDS s' : 'haxeon: watching ${watcher.directories()} '
+				+ 'directories (${DirectoryWatcher.BACKEND})');
 		try {
 			while (true) {
 				// A notification wakes the loop at once; the timeout is the poll that backs it up, covering anything not watched.
@@ -215,7 +220,10 @@ class WatchRun {
 				directories.push({path: directory, recursive: false});
 			}
 		}
-		return DirectoryWatcher.create(directories);
+		// The build's own output changes on every build and is never an edit.
+		var output = project.manifest.outputDir;
+		return DirectoryWatcher.create(directories,
+			[Path.isAbsolute(output) ? output : Path.join([project.root, output])]);
 	}
 
 	static function normalize(path:String):String {

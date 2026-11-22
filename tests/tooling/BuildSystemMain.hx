@@ -956,7 +956,7 @@ class BuildSystemMain {
 					default:
 						return null;
 				}
-			});
+			}, compiler.tools.Verbosity.Minimal);
 		expect(status == 0, "the watched app exits normally");
 		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
 		expect(builds[2] == File.getContent(source), "the last build saw the last save");
@@ -1072,7 +1072,8 @@ class BuildSystemMain {
 		FileSystem.createDirectory(Path.join([root, "src"]));
 		var target = Path.join([root, "src", "A.hx"]);
 		File.saveContent(target, "one");
-		var watcher = DirectoryWatcher.create([{path: root, recursive: true}]);
+		FileSystem.createDirectory(Path.join([root, "build"]));
+		var watcher = DirectoryWatcher.create([{path: root, recursive: true}], [Path.join([root, "build"])]);
 		if (watcher == null) {
 			FileTree.remove(root);
 			return;
@@ -1090,6 +1091,15 @@ class BuildSystemMain {
 		while (watcher.wait(0.05)) {}
 		File.saveContent(Path.join([root, "src", "B.hx"]), "new");
 		expect(watcher.wait(2.0), "a new file is reported");
+		while (watcher.wait(0.05)) {}
+		FileSystem.createDirectory(Path.join([root, "src", "late", "deeper"]));
+		expect(watcher.wait(2.0), "a new directory is reported");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(Path.join([root, "src", "late", "deeper", "C.hx"]), "nested");
+		expect(watcher.wait(2.0), "a file in a directory created after the watch started is reported");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(Path.join([root, "build", "out.hl"]), "output");
+		expect(!watcher.wait(0.2), "a change in an excluded directory is not reported");
 		watcher.close();
 		FileTree.remove(root);
 	}
