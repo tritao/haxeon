@@ -270,7 +270,7 @@ class HlLower {
 		// it reads none about fields, which an edit elsewhere can change.
 		if (!trustCache)
 			view.useNonNullFields(compiler.ir.analysis.IrNonNullFields.of(program,
-				loweredCache == null ? null : loweredCache.nonNullStores));
+				loweredCache == null ? null : loweredCache.nonNullStores, checkingLinks));
 		var runtimeNatives = preparedRuntimeNatives == null
 			? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {

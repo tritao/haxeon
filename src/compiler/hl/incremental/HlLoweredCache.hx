@@ -20,7 +20,7 @@ class HlLoweredCache {
 	public final facts:compiler.hl.lower.HlLoweringView.HlFactPrints;
 
 	/** The field stores each final function makes (`IrNonNullFields`), while it is the same object; shared by the copies like `keys`. */
-	public final nonNullStores:compiler.ir.reuse.IrFunctionMemo<compiler.ir.analysis.IrNonNullFields.IrFieldStores>;
+	public final nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo;
 
 	/** What the steps around lowering work out from each function alone, shared by the copies like `keys`. */
 	public final summaries:HlFunctionSummaries;
@@ -33,8 +33,9 @@ class HlLoweredCache {
 
 	public function new(?debug:HlDebugMetadataCache, ?keys:HlRequestKeys,
 			?facts:compiler.hl.lower.HlLoweringView.HlFactPrints, ?summaries:HlFunctionSummaries,
-			?nonNullStores:compiler.ir.reuse.IrFunctionMemo<compiler.ir.analysis.IrNonNullFields.IrFieldStores>) {
-		this.nonNullStores = nonNullStores == null ? new compiler.ir.reuse.IrFunctionMemo() : nonNullStores;
+			?nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo) {
+		this.nonNullStores = nonNullStores == null
+			? new compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo() : nonNullStores;
 		this.summaries = summaries == null ? new HlFunctionSummaries() : summaries;
 		this.debug = debug == null ? new HlDebugMetadataCache() : debug;
 		this.keys = keys == null ? new HlRequestKeys() : keys;

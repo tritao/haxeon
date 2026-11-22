@@ -13,12 +13,17 @@ import compiler.ir.model.Ir.IrObject;
  * `--check-reuse` the two objects' texts are compared too, so a part `sameObject` does not know of is caught.
  */
 class HlFactPrints {
-	final ids:Map<String, Int> = [];
-	final names:Array<String> = [];
-	final isObject:Array<Bool> = [];
+	/** The kinds of fact: an object type, the typed-interface key of a dispatch function, the non-null fields of a class. */
+	static inline final OBJECT = 0;
 
-	/** Whether a fact that is no object's is the non-null fields of a class (`nonNullFact`) rather than a typed-interface key. */
-	final isNonNull:Array<Bool> = [];
+	static inline final TYPED = 1;
+	static inline final NON_NULL = 2;
+
+	/** By kind, the number of each name's fact: asking for one makes no key. */
+	final ids:Array<Map<String, Int>> = [[], [], []];
+
+	final names:Array<String> = [];
+	final kinds:Array<Int> = [];
 	final answers:Array<String> = [];
 	final objects:Array<Null<IrObject>> = [];
 	final prints:Array<Int> = [];
@@ -37,23 +42,22 @@ class HlFactPrints {
 		lowering++;
 
 	public function objectFact(name:String):Int
-		return id("object:" + name, name, true);
+		return id(OBJECT, name);
 
 	public function typedFact(name:String):Int
-		return id("typed:" + name, name, false);
+		return id(TYPED, name);
 
 	public function nonNullFact(name:String):Int
-		return id("nonnull:" + name, name, false, true);
+		return id(NON_NULL, name);
 
-	function id(key:String, name:String, object:Bool, nonNull = false):Int {
-		var known = ids.get(key);
+	function id(kind:Int, name:String):Int {
+		var byName = ids[kind], known = byName.get(name);
 		if (known != null)
 			return known;
 		var made = names.length;
-		ids.set(key, made);
+		byName.set(name, made);
 		names.push(name);
-		isObject.push(object);
-		isNonNull.push(nonNull);
+		kinds.push(kind);
 		answers.push(null);
 		objects.push(null);
 		prints.push(0);
@@ -66,7 +70,8 @@ class HlFactPrints {
 		if (worked[id] == lowering)
 			return prints[id];
 		worked[id] = lowering;
-		if (isObject[id]) {
+		var kind = kinds[id];
+		if (kind == OBJECT) {
 			var found = view.currentObject(names[id]), last = objects[id];
 			var same = prints[id] != 0 && (found == last || found != null && last != null && sameObject(found, last));
 			if (same && checkObjects && found != last && Std.string(found) != Std.string(last))
@@ -77,7 +82,7 @@ class HlFactPrints {
 				prints[id] = ++lastPrint;
 			return prints[id];
 		}
-		var key = isNonNull[id] ? view.currentNonNull(names[id]) : view.currentTypedKey(names[id]),
+		var key = kind == NON_NULL ? view.currentNonNull(names[id]) : view.currentTypedKey(names[id]),
 			answer = key == null ? "-" : key;
 		if (prints[id] == 0 || answer != answers[id]) {
 			answers[id] = answer;
@@ -126,7 +131,7 @@ class HlFactPrints {
 		return a == null ? b == null : b != null && a.size == b.size && a.signed == b.signed;
 
 	public function describe(id:Int):String
-		return (isObject[id] ? "object:" : isNonNull[id] ? "nonnull:" : "typed:") + names[id];
+		return (kinds[id] == OBJECT ? "object:" : kinds[id] == NON_NULL ? "nonnull:" : "typed:") + names[id];
 }
 
 /**
