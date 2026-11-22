@@ -107,10 +107,9 @@ class CompilerDriver {
 			var stampedAt = -1.0;
 			var publishPatch = function() {
 				var build = BackendArtifacts.hashLink(result.artifact);
-				var identities = [for (name => id in build.functionIds) {
-					name:name, id:id
-				}];
-				identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
+				var identities = session == null
+					? identitiesJson(build.functionIds) : session.functionIds.of(build.functionIds,
+					identitiesJson);
 				var patch = build.patchBytes;
 				if (patch != null)
 					File.saveBytes(request.output + ".hlp", patch);
@@ -131,7 +130,8 @@ class CompilerDriver {
 				replaceFile(summary + ".tmp", summary);
 				var manifest = request.output + ".live.json";
 				var temporary = manifest + ".tmp";
-				File.saveContent(temporary, Json.stringify({
+				// The identities come last, as their cached text.
+				var head = Json.stringify({
 					revision: result.revision,
 					baseRevision: result.baseRevision,
 					unchanged: result.unchanged,
@@ -139,9 +139,9 @@ class CompilerDriver {
 					requiresReload: result.requiresReload,
 					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
 					patchAvailable: patch != null,
-					changedFunctions: result.changedFunctions,
-					identities: identities
-				}));
+					changedFunctions: result.changedFunctions
+				});
+				File.saveContent(temporary, head.substr(0, head.length - 1) + ',"identities":' + identities + "}");
 				replaceFile(temporary, manifest);
 				// The live host reads this small stamp every tick, and the description only when the stamp changes.
 				var stamp = request.output + ".live.stamp";
@@ -168,7 +168,8 @@ class CompilerDriver {
 					compiler.acknowledgePublication(result.revision);
 			}
 			if (!isWasm)
-				File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
+				File.saveBytes(request.output + ".functions", Bytes.ofString(session == null
+					? functionMap(outputIndices) : session.functionMap.of(outputIndices, functionMap)));
 			if (publishes) {
 				File.saveBytes(request.output + ".hli", BackendArtifacts.hashLink(result.artifact).runtimeIdentity);
 				if (!deferFullModule)
@@ -489,6 +490,15 @@ class CompilerDriver {
 				for (instructionIndex in 0...fn.opcodes.length)
 					report('$instructionIndex\t${Std.string(fn.opcodes[instructionIndex])}');
 			}
+
+	/** The live manifest's identities: every function's stable id, by name, in name order, as JSON. */
+	static function identitiesJson(ids:Map<String, Int>):String {
+		var identities = [for (name => id in ids) {
+			name:name, id:id
+		}];
+		identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
+		return Json.stringify(identities);
+	}
 
 	static function functionMap(indices:Map<String, Int>):String {
 		var names = [for (name in indices.keys()) name];

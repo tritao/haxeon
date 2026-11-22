@@ -46,6 +46,12 @@ class CompilerSession {
 	 */
 	var writtenBaseline:Null<String>;
 
+	/** The `.functions` map of the module last written (`CompilerDriver.functionMap`). */
+	public var functionMap = new IndexText();
+
+	/** The stable function ids of the module last written, as the live manifest lists them (`CompilerDriver.identitiesJson`). */
+	public var functionIds = new IndexText();
+
 	public function reset():Void {
 		compiler = null;
 		writtenBaseline = null;
@@ -53,6 +59,8 @@ class CompilerSession {
 		configuration = null;
 		writerCache = new HlWriterCache();
 		encodedModule = null;
+		functionMap = new IndexText();
+		functionIds = new IndexText();
 	}
 
 	/**
