@@ -57,8 +57,8 @@ class IrFunctionStages {
 			if (entry != null && facts.hold(entry.facts, pass)) {
 				var requests = entry.requests;
 				if (requests != null)
-					for (type in requests)
-						pass.request(type);
+					for (request in requests)
+						pass.request(request.kind, request.type);
 				if (checks)
 					check(name, pass, reader, fn, entry);
 			} else {
@@ -96,13 +96,7 @@ class IrFunctionStages {
 		var made = pass.transform(fn, summary, reader);
 		if (!compiler.ir.codec.IrFunctionStateEquality.same(made, entry.output))
 			throw new InternalError('--check-reuse: stage $name reused what it made of ${fn.name} (${Std.int(entry.facts.length / 2)} facts), which differs from what it makes now');
-		var now = reader.requests(), reused = entry.requests;
-		var nowCount = now == null ? 0 : now.length, reusedCount = reused == null ? 0 : reused.length;
-		var same = nowCount == reusedCount;
-		if (same && now != null && reused != null)
-			for (index in 0...nowCount)
-				if (!IrVerifier.sameType(now[index], reused[index]))
-					same = false;
+		var same = IrFunctionPass.IrStageRequest.same(reader.requests(), entry.requests);
 		if (!same)
 			throw new InternalError('--check-reuse: stage $name reused the helper requests of ${fn.name}, which differ from what it asks for now');
 	}

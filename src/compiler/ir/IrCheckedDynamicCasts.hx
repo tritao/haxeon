@@ -68,7 +68,7 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 					reader.read(DECLARATION, castObject(out.type));
 					if (target(out.type) == null) null;
 					else {
-						reader.request(out.type);
+						reader.request(0, out.type);
 						[
 							new Located(Call(out, IrSymbol.of(PREFIX + IrTypeIdentity.text(out.type)), [input]),
 								located.provenance)
@@ -79,7 +79,7 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		return IrFunctionRewrite.instructions(fn, replacement);
 	}
 
-	public function request(type:IrType):Void
+	public function request(kind:Int, type:IrType):Void
 		helperFor(type);
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>

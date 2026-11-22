@@ -27,9 +27,32 @@ interface IrFunctionPass {
 	/** `fn` rewritten: `fn` itself when the stage leaves it alone. */
 	function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction;
 
-	/** Makes the helper that `type` asks for, when it is not made yet; called in the order the rewrites asked. */
-	function request(type:IrType):Void;
+	/** Makes the helper of `kind` (the stage's own numbering) for `type`, when it is not made yet; called in the order the rewrites asked. */
+	function request(kind:Int, type:IrType):Void;
 
 	/** The program's functions from the rewritten ones, in program order: the helpers the stage made added. */
 	function finish(functions:Array<IrFunction>):Array<IrFunction>;
+}
+
+/** A helper a rewrite asked for (`IrFactReader.request`): the kind the stage numbers its helpers by, and the type it is for. */
+class IrStageRequest {
+	public final kind:Int;
+	public final type:IrType;
+
+	public function new(kind:Int, type:IrType) {
+		this.kind = kind;
+		this.type = type;
+	}
+
+	/** Whether two lists of requests ask for the same helpers in the same order, for `--check-reuse`. */
+	public static function same(left:Null<Array<IrStageRequest>>, right:Null<Array<IrStageRequest>>):Bool {
+		var leftCount = left == null ? 0 : left.length, rightCount = right == null ? 0 : right.length;
+		if (leftCount != rightCount)
+			return false;
+		if (left != null && right != null)
+			for (index in 0...leftCount)
+				if (left[index].kind != right[index].kind || !IrVerifier.sameType(left[index].type, right[index].type))
+					return false;
+		return true;
+	}
 }

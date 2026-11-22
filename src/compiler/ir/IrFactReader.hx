@@ -11,7 +11,7 @@ class IrFactReader {
 	final stage:String;
 	var number = 0;
 	var reads:Array<Int> = [];
-	var asked:Null<Array<IrType>> = null;
+	var asked:Null<Array<IrFunctionPass.IrStageRequest>> = null;
 
 	/** Records without making the helpers: a check-mode rewrite whose result is compared, not used. */
 	var checking = false;
@@ -40,16 +40,16 @@ class IrFactReader {
 		return table.value(id);
 	}
 
-	/** Asks for the helper of `type` (`IrFunctionPass.request`). */
-	public function request(type:IrType):Void {
+	/** Asks for the helper of `kind` for `type` (`IrFunctionPass.request`). */
+	public function request(kind:Int, type:IrType):Void {
 		if (facts != null) {
 			var list = asked;
 			if (list == null)
 				asked = list = [];
-			list.push(type);
+			list.push(new IrFunctionPass.IrStageRequest(kind, type));
 		}
 		if (!checking)
-			pass.request(type);
+			pass.request(kind, type);
 	}
 
 	/** Starts the reads of one rewrite. */
@@ -67,6 +67,6 @@ class IrFactReader {
 		return reads.length == 0 ? IrLineage.NO_FACTS : reads;
 
 	/** The helpers asked for since `begin`, or null. */
-	public function requests():Null<Array<IrType>>
+	public function requests():Null<Array<IrFunctionPass.IrStageRequest>>
 		return asked;
 }

@@ -38,7 +38,8 @@ class IrPipeline {
 		IrFunctionStages.stage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects),
 		IrFunctionStages.stage("override-bridges", overrideBridges, bridgedObjects).when(hasObjects),
 		new IrAssemblyStage("entry-prune", entryPrune).when(pruning).prunes(),
-		new IrAssemblyStage("value-interface-boxes", valueInterfaceBoxes).when(hasInterfaces).checksPrune(),
+		IrFunctionStages.stage("value-interface-boxes", valueInterfaceBoxes,
+			addBoxObjects).when(hasInterfaces).checksPrune(),
 		IrFunctionStages.stage("typed-interface-calls", typedInterfaceCalls, generatedFromHere).when(hasInterfaces),
 		new IrAssemblyStage("typed-interface-generate", typedInterfaceGenerate).when(hasInterfaces),
 		new IrAssemblyStage("typed-interface-boxes", typedInterfaceBoxes).when(hasInterfaces),
@@ -276,9 +277,15 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function valueInterfaceBoxes(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = IrValueInterfaceBoxes.rewrite(assembly.functions, assembly.objects, assembly.interfaces);
-		return assembly;
+	static function valueInterfaceBoxes(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrValueInterfaceBoxes(assembly.objects, assembly.interfaces);
+
+	/** The box objects the value interface boxes made join the program's objects. */
+	static function addBoxObjects(assembly:IrAssembly, pass:IrFunctionPass):Void {
+		var objects = assembly.objects;
+		if (objects != null)
+			for (box in cast(pass, IrValueInterfaceBoxes).made)
+				objects.push(box);
 	}
 
 	static function typedInterfaceCalls(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass

@@ -20,13 +20,13 @@ class IrStageEntry {
 	public final summary:Int;
 
 	/** The helpers the rewrite asked for, in order (`IrFactReader.request`); null for none. */
-	public final requests:Null<Array<IrType>>;
+	public final requests:Null<Array<IrFunctionPass.IrStageRequest>>;
 
 	/** The last build its memo used it in (`IrStageMemo.keep`): the only field that changes. */
 	public var used = 0;
 
 	public function new(input:Int, facts:Array<Int>, output:IrFunction, outputVersion:Int, summary:Int,
-			requests:Null<Array<IrType>>) {
+			requests:Null<Array<IrFunctionPass.IrStageRequest>>) {
 		this.input = input;
 		this.facts = facts;
 		this.output = output;
