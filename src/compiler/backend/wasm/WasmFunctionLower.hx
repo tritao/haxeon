@@ -110,7 +110,8 @@ class WasmFunctionLower {
 	function new(context:WasmFunctionLowerContext) {
 		this.context = context;
 		var resolution = compiler.ir.analysis.IrMethodResolution.of(context.program);
-		this.nonNull = new compiler.ir.analysis.IrNonNullFacts(context.irFunction, false, resolution.object);
+		this.nonNull = new compiler.ir.analysis.IrNonNullFacts(context.irFunction, false, resolution.object,
+			compiler.ir.analysis.IrNonNullFields.of(context.program).fieldsOf);
 		for (block in context.irFunction.blocks) for (instruction in block.instructions) switch instruction.value {
 			case ConstNull(output):
 				nullValues.set(output.id, true);

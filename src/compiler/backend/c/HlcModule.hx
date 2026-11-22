@@ -104,6 +104,13 @@ class HlcModule {
 	/** Whether objects are allocated inline (`CompileOptions.inlineAllocation`), else by `hl_alloc_obj`. */
 	public final inlineAllocation:Bool;
 
+	/** The fields of the program never null once constructed. */
+	final nonNullFields:compiler.ir.analysis.IrNonNullFields;
+
+	/** The fields of class `name` never null once constructed (`IrNonNullFields.fieldsOf`). */
+	public function nonNullFieldsOf(name:String):Map<String, Bool>
+		return nonNullFields.fieldsOf(name);
+
 	public function new(code:HlCode, symbols:HlSymbolTable, program:IrProgram, slots:Map<String, Int>,
 			inlineAllocation:Bool) {
 		this.code = code;
@@ -119,6 +126,7 @@ class HlcModule {
 		typeRef = symbols.internType(IrType.TypeRef);
 		for (object in program.objects)
 			objects.set(object.name, object);
+		nonNullFields = compiler.ir.analysis.IrNonNullFields.of(program);
 		view = new compiler.hl.lower.HlLoweringView(new compiler.hl.lower.HlTypedInterfaceTables(program).keys,
 			objects);
 		for (native in program.cNatives)

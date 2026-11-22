@@ -120,6 +120,7 @@ class IrNonNullScratch {
 	public final incoming:Array<Int> = [];
 	public final outgoing:Array<Int> = [];
 	public final fresh:Array<Int> = [];
+	public final fromFields:Array<Bool> = [];
 
 	/** The facts of the last analysis (`IrNonNullFacts.has`). */
 	public final provenStart:Array<Int> = [];

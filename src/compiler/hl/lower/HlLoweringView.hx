@@ -16,6 +16,9 @@ class HlFactPrints {
 	final ids:Map<String, Int> = [];
 	final names:Array<String> = [];
 	final isObject:Array<Bool> = [];
+
+	/** Whether a fact that is no object's is the non-null fields of a class (`nonNullFact`) rather than a typed-interface key. */
+	final isNonNull:Array<Bool> = [];
 	final answers:Array<String> = [];
 	final objects:Array<Null<IrObject>> = [];
 	final prints:Array<Int> = [];
@@ -39,7 +42,10 @@ class HlFactPrints {
 	public function typedFact(name:String):Int
 		return id("typed:" + name, name, false);
 
-	function id(key:String, name:String, object:Bool):Int {
+	public function nonNullFact(name:String):Int
+		return id("nonnull:" + name, name, false, true);
+
+	function id(key:String, name:String, object:Bool, nonNull = false):Int {
 		var known = ids.get(key);
 		if (known != null)
 			return known;
@@ -47,6 +53,7 @@ class HlFactPrints {
 		ids.set(key, made);
 		names.push(name);
 		isObject.push(object);
+		isNonNull.push(nonNull);
 		answers.push(null);
 		objects.push(null);
 		prints.push(0);
@@ -70,7 +77,8 @@ class HlFactPrints {
 				prints[id] = ++lastPrint;
 			return prints[id];
 		}
-		var key = view.currentTypedKey(names[id]), answer = key == null ? "-" : key;
+		var key = isNonNull[id] ? view.currentNonNull(names[id]) : view.currentTypedKey(names[id]),
+			answer = key == null ? "-" : key;
 		if (prints[id] == 0 || answer != answers[id]) {
 			answers[id] = answer;
 			prints[id] = ++lastPrint;
@@ -118,7 +126,7 @@ class HlFactPrints {
 		return a == null ? b == null : b != null && a.size == b.size && a.signed == b.signed;
 
 	public function describe(id:Int):String
-		return (isObject[id] ? "object:" : "typed:") + names[id];
+		return (isObject[id] ? "object:" : isNonNull[id] ? "nonnull:" : "typed:") + names[id];
 }
 
 /**
@@ -131,6 +139,9 @@ class HlLoweringView {
 	final objects:Map<String, IrObject>;
 	final typedKeys:Map<String, String>;
 	final prints:HlFactPrints;
+
+	/** The fields of the program never null once constructed, by class (`IrNonNullFields`); null when lowering has none. */
+	var nonNullFields:Null<compiler.ir.analysis.IrNonNullFields> = null;
 	var reads:Null<Array<Int>>;
 	var readMarks:Map<Int, Bool> = [];
 
@@ -177,6 +188,21 @@ class HlLoweringView {
 	public function hasObject(name:String):Bool
 		return object(name) != null;
 
+	/** Gives lowering the program's non-null fields (`nonNullFields`). */
+	public function useNonNullFields(fields:compiler.ir.analysis.IrNonNullFields):Void
+		nonNullFields = fields;
+
+	/** The fields of class `name` never null once constructed (`IrNonNullFields.fieldsOf`). */
+	public function nonNull(name:String):Map<String, Bool> {
+		if (reads != null)
+			read(prints.nonNullFact(name));
+		var fields = nonNullFields;
+		return fields == null ? NO_FIELDS : fields.fieldsOf(name);
+	}
+
+	@:processWide("an empty set of fields, only ever read")
+	static final NO_FIELDS:Map<String, Bool> = [];
+
 	/** The key under which dispatch function `name` registers its method table, or null for any other function. */
 	public function typedInterfaceKey(name:String):Null<String> {
 		if (reads != null)
@@ -187,6 +213,12 @@ class HlLoweringView {
 	/** The object named `name` as this view has it, unrecorded: for `HlFactPrints` only. */
 	public inline function currentObject(name:String):Null<IrObject>
 		return objects.get(name);
+
+	/** The non-null fields of class `name` as text, unrecorded: for `HlFactPrints` only. */
+	public function currentNonNull(name:String):String {
+		var fields = nonNullFields;
+		return fields == null ? "" : fields.describe(name);
+	}
 
 	/** The typed-interface key of `name` as this view has it, unrecorded: for `HlFactPrints` only. */
 	public inline function currentTypedKey(name:String):Null<String>

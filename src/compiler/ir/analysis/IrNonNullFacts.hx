@@ -25,15 +25,17 @@ class IrNonNullFacts {
 
 	/**
 	 * The facts of `fn`, by block id and instruction index, from the analysis of its body (`analyzeBody`); one that has none is
-	 * encoded for it. `objectNamed` looks up the class its first argument names (`isMethodReceiver`).
+	 * encoded for it. `objectNamed` looks up the class its first argument names (`isMethodReceiver`); `fields` is as
+	 * `analyzeBody` takes it.
 	 */
-	public function new(fn:IrFunction, checkedDereferences = false, ?objectNamed:String->Null<IrObject>) {
+	public function new(fn:IrFunction, checkedDereferences = false, ?objectNamed:String->Null<IrObject>,
+			?fields:String->Map<String, Bool>) {
 		var body = fn.body != null ? fn.body : IrBodyBuilder.encode(fn, IrTypeIds.ofFunctions([fn])),
 			tables = new IrNonNullScratch(),
 			receiverClass = receiverClass(body),
 			receiver = receiverClass != null && objectNamed != null
 				&& isMethodReceiver(body, objectNamed(receiverClass)),
-			proven = analyzeBody(body, checkedDereferences, new IrBodyGraph().reset(body), tables, receiver),
+			proven = analyzeBody(body, checkedDereferences, new IrBodyGraph().reset(body), tables, receiver, fields),
 			blockCount = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= blockCount)
@@ -79,11 +81,12 @@ class IrNonNullFacts {
 	/**
 	 * The analysis on a body: the rows whose receiver is proven non-null on entry, marked in `scratch.provenRows` (cleared first),
 	 * which holds them until it is next given to an analysis. `graph` is the body's. With `receiver`, the first argument is
-	 * non-null on entry (`isMethodReceiver`).
+	 * non-null on entry (`isMethodReceiver`). `fields` gives the fields never null once constructed on a receiver of a class
+	 * (`IrNonNullFields.fieldsOf`): a value read from one is non-null.
 	 */
 	public static function analyzeBody(body:IrBody, checkedDereferences:Bool, graph:IrBodyGraph,
 			scratch:IrNonNullScratch,
-			receiver = false):IrValueMarks {
+			receiver = false, ?fields:String->Map<String, Bool>):IrValueMarks {
 		scratch.provenRows.clear();
 		var any = false;
 		for (block in 0...body.blockCount()) {
@@ -94,7 +97,7 @@ class IrNonNullFacts {
 			}
 		}
 		if (any)
-			new NonNullBodyFlow(body, checkedDereferences, graph, scratch, receiver).run();
+			new NonNullBodyFlow(body, checkedDereferences, graph, scratch, receiver, fields).run();
 		return scratch.provenRows;
 	}
 
@@ -156,12 +159,20 @@ private class NonNullBodyFlow {
 	final outgoing:Array<Int>;
 	final receiverCheck:Int;
 	final receiver:Bool;
+	final fields:Null<String->Map<String, Bool>>;
+
+	/** Per value id, whether it is read from a field never null once constructed. */
+	final fromFields:Array<Bool>;
+
 	var words = 0;
 	var hasRows = false;
 
 	public function new(body:IrBody, checkedDereferences:Bool, graph:IrBodyGraph, scratch:IrNonNullScratch,
-			receiver:Bool) {
+			receiver:Bool,
+			fields:Null<String->Map<String, Bool>>) {
 		this.receiver = receiver;
+		this.fields = fields;
+		fromFields = scratch.fromFields;
 		this.body = body;
 		this.checkedDereferences = checkedDereferences;
 		this.graph = graph;
@@ -190,6 +201,8 @@ private class NonNullBodyFlow {
 		fresh.resize(0);
 		if (receiver)
 			fresh.push(body.argument(0));
+		var lookup = fields;
+		filledBools(fromFields, lookup == null ? 0 : valueCount, false);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
 			while (row >= 0 && row != terminator) {
@@ -201,6 +214,13 @@ private class NonNullBodyFlow {
 						nulls[out] = true;
 					case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
 						fresh.push(out);
+					case IrOpcode.FieldGet if (lookup != null):
+						switch body.valueType(body.operand(row, 0)) {
+							case Obj(type) if (lookup(type).exists(body.symbol(row).name)):
+								fromFields[out] = true;
+								fresh.push(out);
+							default:
+						}
 					case IrOpcode.BeginTry, IrOpcode.EndTry, IrOpcode.Catch:
 						hasTry = true;
 					default:
@@ -356,6 +376,8 @@ private class NonNullBodyFlow {
 			set(facts, receiver, true);
 		switch opcode {
 			case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+				set(facts, body.output(row), true);
+			case IrOpcode.FieldGet if (fields != null && fromFields[body.output(row)]):
 				set(facts, body.output(row), true);
 			// A cast of a non-null value is non-null: it returns the value or throws.
 			case IrOpcode.Upcast, IrOpcode.SafeCast:

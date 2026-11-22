@@ -405,6 +405,9 @@ class IrProgram {
 
 	public var methodResolution:Null<compiler.ir.analysis.IrMethodResolution> = null;
 
+	/** The fields of the final program never null once constructed (`IrNonNullFields.of`). */
+	public var nonNullFields:Null<compiler.ir.analysis.IrNonNullFields> = null;
+
 	/** The HaxeonHost C function each runtime native calls on Wasm, by native name (`WasmModuleSupport.hostCNative`). */
 	public var hostCNatives:Null<Map<String, IrCNative>> = null;
 

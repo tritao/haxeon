@@ -266,6 +266,11 @@ class HlLower {
 		if (facts != null)
 			facts.checkObjects = checkingLinks;
 		view = new HlLoweringView(typedInterfaces.keys, null, facts);
+		// A live build keeps the code of the functions it does not regenerate without asking whether their facts still hold, so
+		// it reads none about fields, which an edit elsewhere can change.
+		if (!trustCache)
+			view.useNonNullFields(compiler.ir.analysis.IrNonNullFields.of(program,
+				loweredCache == null ? null : loweredCache.nonNullStores));
 		var runtimeNatives = preparedRuntimeNatives == null
 			? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
@@ -1162,7 +1167,8 @@ class HlLower {
 			receiverClass = compiler.ir.analysis.IrNonNullFacts.receiverClass(body),
 			receiver = receiverClass != null
 				&& compiler.ir.analysis.IrNonNullFacts.isMethodReceiver(body, view.object(receiverClass)),
-			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull, receiver),
+			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull, receiver,
+				view.nonNull),
 			exactTypes = scratch.exactTypes.reset(body, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.

@@ -19,6 +19,9 @@ class HlLoweredCache {
 	/** The facts the entries read, with their prints (`HlLoweredFunction.facts`), shared by the copies like `keys`. */
 	public final facts:compiler.hl.lower.HlLoweringView.HlFactPrints;
 
+	/** The field stores each final function makes (`IrNonNullFields`), while it is the same object; shared by the copies like `keys`. */
+	public final nonNullStores:compiler.ir.reuse.IrFunctionMemo<compiler.ir.analysis.IrNonNullFields.IrFieldStores>;
+
 	/** What the steps around lowering work out from each function alone, shared by the copies like `keys`. */
 	public final summaries:HlFunctionSummaries;
 
@@ -29,7 +32,9 @@ class HlLoweredCache {
 	public var environment = "";
 
 	public function new(?debug:HlDebugMetadataCache, ?keys:HlRequestKeys,
-			?facts:compiler.hl.lower.HlLoweringView.HlFactPrints, ?summaries:HlFunctionSummaries) {
+			?facts:compiler.hl.lower.HlLoweringView.HlFactPrints, ?summaries:HlFunctionSummaries,
+			?nonNullStores:compiler.ir.reuse.IrFunctionMemo<compiler.ir.analysis.IrNonNullFields.IrFieldStores>) {
+		this.nonNullStores = nonNullStores == null ? new compiler.ir.reuse.IrFunctionMemo() : nonNullStores;
 		this.summaries = summaries == null ? new HlFunctionSummaries() : summaries;
 		this.debug = debug == null ? new HlDebugMetadataCache() : debug;
 		this.keys = keys == null ? new HlRequestKeys() : keys;
@@ -37,7 +42,7 @@ class HlLoweredCache {
 	}
 
 	public function copy():HlLoweredCache {
-		var result = new HlLoweredCache(debug, keys, facts, summaries);
+		var result = new HlLoweredCache(debug, keys, facts, summaries, nonNullStores);
 		result.entries = [for (name => entry in entries) name => entry];
 		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;

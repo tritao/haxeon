@@ -223,25 +223,33 @@ class NonNullFactsMain {
 		}
 	}
 
-	/** A method's or a constructor's receiver needs no check; another function's first argument does. */
+	/** A method's receiver and a value read from a field never null once constructed need no check; other values do. */
 	static function checkProgramFacts():Void {
 		var box:IrObject = {
 			name: "Box",
 			isValue: false,
 			base: null,
 			interfaces: [],
-			fields: [{name: "next", type: Obj("Box")}],
+			fields: [{name: "next", type: Obj("Box")}, {name: "other", type: Obj("Box")}],
 			methods: [{name: "read", functionName: IrSymbol.of("Box.read")}]
 		};
-		var objects:Map<String, IrObject> = ["Box" => box];
+		var objects:Map<String, IrObject> = ["Box" => box], none:Map<String, Bool> = [];
+		function fields(type:String):Map<String, Bool>
+			return type == "Box" ? ["next" => true] : none;
 		for (name in ["Box.read", "Box.new", "helper"]) {
 			var b = new IrBuilder(), receiver = b.argument("this", Obj("Box"));
-			var first = check(b, receiver);
+			var first = check(b, receiver),
+				next = b.fieldGet(receiver, "next", Obj("Box")),
+				fromField = check(b, next),
+				other = b.fieldGet(receiver, "other", Obj("Box")),
+				unknown = check(b, other);
 			b.returnValue(b.constInt(42));
-			var facts = new IrNonNullFacts(new IrFunction(name, b.arguments, I32, b.blocks, Ordinary), false,
-				objects.get);
+			var fn = new IrFunction(name, b.arguments, I32, b.blocks, Ordinary),
+				facts = new IrNonNullFacts(fn, false, objects.get, fields);
 			expect(facts.has(first.block, first.index) == (name != "helper"),
 				'the receiver of $name is known non-null only for a method or a constructor');
+			expect(facts.has(fromField.block, fromField.index), "a value read from a non-null field needs no check");
+			expect(!facts.has(unknown.block, unknown.index), "a value read from another field is checked");
 		}
 	}
 }

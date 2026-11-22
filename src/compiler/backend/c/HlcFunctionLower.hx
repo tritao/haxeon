@@ -101,7 +101,7 @@ class HlcFunctionLower {
 				receiver = receiverClass != null
 					&& compiler.ir.analysis.IrNonNullFacts.isMethodReceiver(body, module.object(receiverClass));
 			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch,
-				receiver);
+				receiver, module.nonNullFieldsOf);
 		}
 		var limit = body.valueLimit();
 		valueTypes.resize(0);

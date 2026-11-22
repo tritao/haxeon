@@ -383,6 +383,7 @@ nested-call-stack
 nested-mutable-capture
 nested-value-scalar-replace
 non-null-facts
+null-check-facts
 nullable-abstract-cast
 nullable-abstract-places
 nullable-abstract-value
