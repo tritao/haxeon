@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=$(cd "$(dirname "$0")/../../.." && pwd)
+root=$(cd "$(dirname "$0")/../.." && pwd)
 output=${1:-$root/out/bench/gc-first-scan}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/first-scan.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/first-scan"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/benchmarks/incremental-gc/first-scan.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/first-scan"
 export LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export HL_GC_THREADS=1 HL_GC_SCAN_PROFILE=0 HL_GC_LATENCY_TRACE=0 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_INCREMENTAL_VALIDATE=0
 mib=${GC_FIRST_SCAN_MIB:-64}
@@ -15,7 +15,7 @@ runtime_hash=$(sha256sum "$library/libhl.a")
 {
  uname -a
  printf 'mib=%s cycles=%s repeats=%s budget_us=1000\n' "$mib" "$cycles" "$repeats"
- sha256sum "$library/libhl.a" "$root/vendor/hashlink/src/allocator.c" "$root/vendor/hashlink/src/gc_incremental.c" "$root/tests/bench/incremental-gc/first-scan.c"
+ sha256sum "$library/libhl.a" "$root/vendor/hashlink/src/allocator.c" "$root/vendor/hashlink/src/gc_incremental.c" "$root/benchmarks/incremental-gc/first-scan.c"
 } > "$output/environment.txt"
 for ((repeat=1;repeat<=repeats;repeat++)); do
  modes=(local scattered interior invalid null)

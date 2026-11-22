@@ -9,7 +9,7 @@ for size in [16,24,40]:
 for name,n in [('binarytrees','18'),('merkletrees','16')]:commands[name]=[str(w/'baseline/hl'),str(r/f'out/optimization-next/{name}/app.hl'),n]
 results={k:[] for k in commands}; refs={}
 for size in [16,24,40]:
- refs[size]=float(subprocess.check_output([str(r/'.tools/haxe/haxe'),'-cp','tests/bench/bump-allocation','--run','AllocationBench',str(size),'1000'],text=True))
+ refs[size]=float(subprocess.check_output([str(r/'.tools/haxe/haxe'),'-cp','benchmarks/bump-allocation','--run','AllocationBench',str(size),'1000'],text=True))
  for lang in ['haxeon','dart','csharp']:
   c=commands[f'{lang}-{size}'][:-1]+['1000'];assert float(subprocess.check_output(c,env=env,text=True))==refs[size]
 for k,c in commands.items():subprocess.run(['taskset','-c','0',*c],env=env,stdout=subprocess.DEVNULL,check=True)

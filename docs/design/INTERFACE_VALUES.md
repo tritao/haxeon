@@ -54,8 +54,9 @@ receiver is lowered by selecting the implementation from the receiver's class:
    natives that touch virtuals (`native/runtime/reflection.c` unwraps a `HVIRTUAL`) keep handling them for structural types; with interfaces as
    objects they see fewer. The nativekit callbacks that take an interface-typed Haxe argument receive the object. To audit: each `HVIRTUAL` use in
    `native/runtime` (11 sites) for an interface assumption.
-6. **Call cost.** Measured with `benchmarks/interface-call-cost/Main.hx` (HashLink, best of 5 runs of 20M calls, machine load about 7.5 on 20
-   cores, so figures are preliminary; repeat on a quiet machine before relying on the third digit):
+6. **Call cost.** Measured with a four-class benchmark now folded into `benchmarks/interface-dispatch/generate.py` (its `direct`, `today`,
+   `virtual` and `linear` rows at 1 and 4 implementors; HashLink, best of 5 runs of 20M calls, machine load about 7.5 on 20 cores, so figures
+   are preliminary; repeat on a quiet machine before relying on the third digit):
 
    | call | ns per call |
    |---|---|

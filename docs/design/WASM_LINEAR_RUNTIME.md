@@ -132,5 +132,5 @@ implementation for differential testing and benchmarking.
 Run `tests/integration/test-sha256-runtime.sh` after building the native runtime.
 It checks known digests, padding boundaries, a million-byte input, unaligned byte
 views, input preservation, and reference parity on all three backends. It needs
-Node with Wasm GC support. `tests/bench/sha256/Sha256Benchmark.hx` provides native
+Node with Wasm GC support. `benchmarks/sha256/Sha256Benchmark.hx` provides native
 and exported browser benchmarks; timings depend on the engine and ABI copy cost.

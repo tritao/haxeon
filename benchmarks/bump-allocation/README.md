@@ -9,12 +9,12 @@ escaping to heap memory; the checksum consumes the objects. This includes initia
 loop work and GC, so ns/iteration is not isolated allocator latency. Verify actual allocation instructions in
 optimized code before comparing. The programs are benchmarks, not normal test-suite fixtures.
 
-Compile Haxeon with the usual compiler CLI, entry `AllocationBench`, root `tests/bench/bump-allocation`.
+Compile Haxeon with the usual compiler CLI, entry `AllocationBench`, root `benchmarks/bump-allocation`.
 For the independent reference:
 
 ```sh
-.tools/haxe/haxe -cp tests/bench/bump-allocation --run AllocationBench 24 1000
-.tools/dart-sdk/bin/dart compile exe tests/bench/bump-allocation/allocation.dart -o /tmp/allocation-dart
+.tools/haxe/haxe -cp benchmarks/bump-allocation --run AllocationBench 24 1000
+.tools/dart-sdk/bin/dart compile exe benchmarks/bump-allocation/allocation.dart -o /tmp/allocation-dart
 /tmp/allocation-dart 24 1000
 ```
 
@@ -23,7 +23,7 @@ Use a Release net9.0 executable project containing `Allocation.cs` for C#. All t
 core 0, load <=4 before and after, a discarded warmup, and frozen binaries. Measure a zero-iteration process
 separately to show startup overhead. Collect `perf stat` instructions/cycles separately from wall-time runs.
 
-The Stage 0 report is [BUMP_ALLOCATION_PROFILE.md](../../../docs/reports/2026-10-bump-allocation-profile.md).
+The Stage 0 report is [BUMP_ALLOCATION_PROFILE.md](../../docs/reports/2026-10-bump-allocation-profile.md).
 
 `measure.py` reproduces the nine-round census after preparing the frozen binaries under
 `out/bump-allocation/` as described in the report. It records load, RSS, timing, counters and runtime hashes.

@@ -11,7 +11,7 @@ Build the stock-Haxe seed compiler, then run paired measurements:
 export LD_LIBRARY_PATH=$PWD/out:$(scripts/hashlink-path.sh)
 mkdir -p out/regalloc
 .tools/haxe/haxe --cwd . common.hxml -hl out/regalloc/compiler.hl -main compiler.tools.HaxeonCompiler
-python3 tests/bench/jit-regalloc/run.py --modes 0,4
+python3 benchmarks/jit-regalloc/run.py --modes 0,4
 ```
 
 The runner disables Haxeon's inliner when compiling the micros, checks all small

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=$(cd "$(dirname "$0")/../../.." && pwd)
+root=$(cd "$(dirname "$0")/../.." && pwd)
 output=${1:-$root/out/bench/gc-frame-budget}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/convergence"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/benchmarks/incremental-gc/convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/convergence"
 export LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export HL_GC_INCREMENTAL=1 HL_GC_THREADS=1 HL_GC_MIN_TRIGGER=67108864 HL_GC_LATENCY_TRACE=0
 export HL_GC_INCREMENTAL_START_PERCENT=100 HL_GC_INCREMENTAL_STEP_BYTES=262144
@@ -17,7 +17,7 @@ hash=$(sha256sum "$library/libhl.a")
  uname -a
  printf 'frames=%s nodes=%s repeats=%s cpu=%s validate=%s retention=%s software=%s auto=2\n' "$frames" "$nodes" "$repeats" "${GC_FRAME_CPU:-unrestricted}" "$HL_GC_INCREMENTAL_VALIDATE" "$HL_GC_RETENTION_PROFILE" "$HL_GC_INCREMENTAL_TEST_SOFTWARE"
  printf '%s\n' "$hash"
- sha256sum "$root/vendor/hashlink/src/gc.c" "$root/tests/bench/incremental-gc/convergence.c"
+ sha256sum "$root/vendor/hashlink/src/gc.c" "$root/benchmarks/incremental-gc/convergence.c"
 } > "$output/environment.txt"
 for ((repeat=1;repeat<=repeats;repeat++)); do
  policies=(unlimited one-ms two-ms)

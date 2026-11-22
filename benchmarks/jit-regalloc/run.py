@@ -8,7 +8,7 @@ import statistics
 import subprocess
 import time
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 PATTERNS = ['baseline', 'hot', 'cold', 'pressure', 'nested', 'conditional']
 
 
@@ -44,14 +44,14 @@ def main():
     haxe = str(ROOT / '.tools/haxe/haxe')
     bytecode = work / 'micro.hl'
     build = run([hl, args.compiler, '--target=hl', f'--output={bytecode}', '--no-inline',
-                 '--entry=RegallocBench', '--root=tests/bench/jit-regalloc',
-                 'tests/bench/jit-regalloc/RegallocBench.hx'], env)
+                 '--entry=RegallocBench', '--root=benchmarks/jit-regalloc',
+                 'benchmarks/jit-regalloc/RegallocBench.hx'], env)
     (work / 'compile.log').write_text(build.stdout + build.stderr)
     rows = []
     for pattern in args.patterns.split(','):
         if pattern not in PATTERNS:
             parser.error(f'unknown pattern {pattern}')
-        oracle = run([haxe, '-cp', 'tests/bench/jit-regalloc', '--run',
+        oracle = run([haxe, '-cp', 'benchmarks/jit-regalloc', '--run',
                       'RegallocBench', pattern, '1000'], env).stdout
         for mode in modes:
             actual = run([hl, str(bytecode), pattern, '1000'], dict(env, HL_JIT_REGOPT=str(mode))).stdout

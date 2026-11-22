@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=$(cd "$(dirname "$0")/../../.." && pwd)
+root=$(cd "$(dirname "$0")/../.." && pwd)
 output=${1:-$root/out/bench/gc-retention}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
@@ -20,9 +20,9 @@ assert any(r['black']=='1' and r['reachable']=='0' and r['age_bucket']=='1' and 
 PY
 done
 export HL_GC_INCREMENTAL_TEST_SOFTWARE=0
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/boundary"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/benchmarks/incremental-gc/convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/boundary"
 sha256sum "$library/libhl.a" "$root/vendor/hashlink/src/gc_incremental.c" > "$output/environment.txt"
 for kind in refs zeros bytes; do
  "$output/boundary" "boundary-$kind" "${GC_RETENTION_FRAMES:-600}" "${GC_RETENTION_NODES:-100000}" 1 1000 0 1048576 4194304 > "$output/$kind.csv" 2> "$output/$kind.log"
 done
-python3 "$root/tests/bench/incremental-gc/summarize-retention.py" "$output"
+python3 "$root/benchmarks/incremental-gc/summarize-retention.py" "$output"

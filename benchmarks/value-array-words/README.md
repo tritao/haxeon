@@ -11,7 +11,7 @@ Repeat with and without `--no-inline`.
 Run with Node supporting Wasm GC:
 
 ```sh
-node tests/bench/value-array-words/run.mjs control.wasm candidate.wasm 4096 8 9
+node benchmarks/value-array-words/run.mjs control.wasm candidate.wasm 4096 8 9
 ```
 
 Preparation and three warmup calls are outside the measured windows. Each pair
