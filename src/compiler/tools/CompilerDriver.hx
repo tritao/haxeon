@@ -70,7 +70,7 @@ class CompilerDriver {
 			warned(printer.warning(warning));
 		try {
 			if (target == HashLinkC)
-				return writeC(compiler, result, request, report);
+				return writeC(compiler, result, request, report, preparedAt);
 			// Checked before anything is written: a module its host cannot call is not published.
 			var entryIdOutput = request.entryIdOutput,
 				mainId = entryIdOutput == null ? -1 : entryId(result, request.entry);
@@ -277,9 +277,11 @@ class CompilerDriver {
 	 * at `OUTPUT`. Like a Wasm module, it has no live host: writing it publishes it.
 	 */
 	static function writeC(owner:compiler.Compiler, result:CompileResult, request:CompilerRequest,
-			report:String->Void):CompileResult {
+			report:String->Void, preparedAt:Float):CompileResult {
+		var compiledAt = Sys.time() * 1000.0;
 		var files = BackendArtifacts.c(result.artifact).files, directory = request.output + ".c";
 		var changed = HlcBuild.write(files, directory);
+		var writtenAt = Sys.time() * 1000.0;
 		var options = request.options, cCompiler = options.cCompiler, sdk = options.cSdk;
 		if (cCompiler != null) {
 			if (sdk == null)
@@ -288,6 +290,9 @@ class CompilerDriver {
 				request.buildMode == "development");
 			report('compiled $compiled C files');
 		}
+		report("driver phases (ms): compile=" + milliseconds(compiledAt - preparedAt) + " write-c="
+			+ milliseconds(writtenAt - compiledAt) + " c-compiler=" + milliseconds(Sys.time() * 1000.0 - writtenAt));
+		report(phaseReport(result, 0));
 		var status = owner.publicationStatus();
 		if (status.hasPendingRevision && status.pendingRevision == result.revision)
 			owner.acknowledgePublication(result.revision);
