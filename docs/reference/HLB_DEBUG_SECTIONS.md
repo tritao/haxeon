@@ -14,6 +14,8 @@ compiler compresses the function identities with LZ4 HC (level 9) and the
 development sections with LZ4's fast mode, through HashLink's `bytes_lz4_compress`
 native over its vendored lz4, so every build of the compiler writes the same bytes.
 Under the Haxe interpreter, which has no natives, sections are written uncompressed.
+Why LZ4 here and zlib for an AOT executable's DWARF: see "Compression" in
+`docs/design/AOT_BACKEND.md`.
 
 Section kinds are independently versioned:
 

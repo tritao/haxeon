@@ -198,9 +198,17 @@ include(vendor/hashlink/cmake/hl-sources.cmake)
 add_library(hlvm_jit_none OBJECT ${HL_NO_JIT_SOURCES})
 target_include_directories(hlvm_jit_none PRIVATE vendor/hashlink/src)
 set_target_properties(hlvm_jit_none PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+# zlib's inflate, with which the stack traces read the compressed DWARF of release executables (native/aot/hlc_stack.c): prefixed
+# and hidden, so it never meets another zlib a native library brings.
+add_library(hlc_zlib OBJECT
+  vendor/hashlink/include/zlib/adler32.c vendor/hashlink/include/zlib/crc32.c vendor/hashlink/include/zlib/inffast.c
+  vendor/hashlink/include/zlib/inflate.c vendor/hashlink/include/zlib/inftrees.c vendor/hashlink/include/zlib/zutil.c)
+target_compile_definitions(hlc_zlib PRIVATE Z_PREFIX)
+set_target_properties(hlc_zlib PROPERTIES C_VISIBILITY_PRESET hidden POSITION_INDEPENDENT_CODE ON)
 add_library(hlvm_aot STATIC
   "$<FILTER:$<TARGET_OBJECTS:hl>,EXCLUDE,/src/(main|jit[a-z0-9_]*)\\.c\\.(o|obj)$>"
   $<TARGET_OBJECTS:hlvm_jit_none>
+  $<TARGET_OBJECTS:hlc_zlib>
   $<TARGET_OBJECTS:libhl>
   $<TARGET_OBJECTS:haxeon_runtime_objects>
 )
@@ -211,7 +219,8 @@ set_target_properties(hlvm_aot PROPERTIES OUTPUT_NAME hl-aot)
 set(HAXEON_HLC_SDK_DIR "${CMAKE_BINARY_DIR}/hlc-sdk")
 set(_hlc_sdk_headers
   vendor/hashlink/src/hl.h vendor/hashlink/src/hlc.h vendor/hashlink/src/hlmodule.h vendor/hashlink/src/hlsystem.h
-  vendor/hashlink/src/opcodes.h vendor/hashlink/src/gc_write.h vendor/hashlink/src/hl_ffi.h)
+  vendor/hashlink/src/opcodes.h vendor/hashlink/src/gc_write.h vendor/hashlink/src/hl_ffi.h
+  vendor/hashlink/include/zlib/zlib.h vendor/hashlink/include/zlib/zconf.h)
 list(TRANSFORM _hlc_sdk_headers PREPEND "${CMAKE_SOURCE_DIR}/")
 add_custom_target(haxeon-hlc-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_HLC_SDK_DIR}/include" "${HAXEON_HLC_SDK_DIR}/lib"

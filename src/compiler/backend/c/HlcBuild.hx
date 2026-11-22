@@ -52,9 +52,11 @@ class HlcBuild {
 		// lose the inlined frames of the others.
 		// Debug information is the line tables and the inline records the stack traces read (`-g1`), not the variables and types
 		// a debugger shows, which are most of its compile time. A development build is not optimized, so it builds quickly.
+		// The generated functions are not exported: the loader finds natives in libhl by name, never a generated function, and an
+		// exported name costs the dynamic symbol table and string table an entry each.
 		var flags = [
 			"-std=gnu11", exactFrames ? "-O0" : "-O2", "-g1", "-fwrapv", "-fno-strict-aliasing",
-			"-fno-optimize-sibling-calls",
+			"-fno-optimize-sibling-calls", "-fvisibility=hidden",
 			"-w", '-I$directory', '-I$sdk/include'
 		];
 		if (exactFrames)
@@ -119,7 +121,7 @@ class HlcBuild {
 				"-lbcrypt",
 				"-ladvapi32"
 			]);
-		else
+		else {
 			link = link.concat([
 				"-Wl,--whole-archive",
 				'$sdk/lib/libhl.a',
@@ -130,10 +132,37 @@ class HlcBuild {
 				"-ldl",
 				"-Wl,--export-dynamic"
 			]);
+			// A release build's DWARF is compressed with zlib (SHF_COMPRESSED), which the stack traces inflate at the first one and gdb,
+			// perf and addr2line read as it is.
+			if (!exactFrames)
+				link.push("-Wl,--compress-debug-sections=zlib");
+		}
 		var result = ProcessOutputCapture.capture(cCompiler, link, ProcessOutputCapture.defaultDiagnosticLimit);
 		if (result.exitCode != 0)
 			throw new InternalError('C link failed:\n${result.stderr}');
+		if (!exactFrames && Sys.systemName() == "Linux")
+			stripSymbols(cCompiler, output);
 		return pending.length;
+	}
+
+	/**
+	 * Drops a release executable's symbol table and `.debug_aranges`: the stack traces name frames from the module image and read
+	 * the DWARF line tables and inline records, which stay, as do the dynamic symbols the loader resolves natives by. gdb and
+	 * addr2line find functions from the DWARF. A development build keeps everything.
+	 */
+	static function stripSymbols(cCompiler:String, output:String):Void {
+		var found = ProcessOutputCapture.capture(cCompiler, ["-print-prog-name=objcopy"], 0);
+		var objcopy = found.exitCode == 0
+			&& StringTools.trim(found.stdout) != "" ? StringTools.trim(found.stdout) : "objcopy";
+		var result = ProcessOutputCapture.capture(objcopy, [
+			"--strip-all",
+			"--keep-section=!.debug_aranges",
+			"--keep-section=.debug_*",
+			output
+		],
+			ProcessOutputCapture.defaultDiagnosticLimit);
+		if (result.exitCode != 0)
+			throw new InternalError('Stripping the symbol table of $output failed:\n${result.stderr}');
 	}
 
 	/** The processors this process may run on, each a C compile at a time. */

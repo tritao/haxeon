@@ -2,7 +2,8 @@
  * section (`hlc_text` in ELF, `.text$hlc.2` in PE), so a captured frame is the program's exactly when its return address is in
  * that section, as a JIT frame is when it is in the module's code. A frame is named as the JIT names it: the function's identity
  * from the module image, and the Haxe file and line the C compiler's line table gives for the call (`#line` in the generated
- * code). The line table is read from the executable's own DWARF `.debug_line` the first time a frame is resolved: an ELF
+ * code). The line table is read from the executable's own DWARF `.debug_line` the first time a frame is resolved (inflated
+ * first where a release build compressed its DWARF, SHF_COMPRESSED with zlib): an ELF
  * executable's on Linux, or a PE executable's that MinGW built on Windows (GCC writes DWARF there too; the return addresses come
  * from the system unwinder, which reads the SEH unwind tables GCC writes for every function). Where the C compiler inlined
  * generated functions into each other (release builds; development builds define HLC_EXACT_FRAMES and inline none), the DWARF
@@ -35,6 +36,8 @@ extern const int hlc_function_name_count;
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#define Z_PREFIX
+#include <zlib.h>
 
 extern char __start_hlc_text[], __stop_hlc_text[];
 #define hlc_text_begin __start_hlc_text
@@ -422,21 +425,35 @@ typedef struct {
 } hlc_abbrev;
 
 static hlc_debug_sections hlc_debug;
+#ifdef HLC_STACK_ELF
+static const unsigned char *hlc_line_compressed; // a compressed .debug_line, inflated the first time a frame is named
+static size_t hlc_line_compressed_size;
+#endif
 static uintptr_t hlc_bias;
 static int hlc_image_state; // 0 not mapped, 1 mapped, -1 unavailable
 
+/* The slot of debug section `name` if the stack traces read it, else NULL. */
+static const unsigned char **hlc_debug_slot( const char *name, size_t **size ) {
+	hlc_debug_sections *d = &hlc_debug;
+#define HLC_SECTION(text, field) if( strcmp(name, text) == 0 ) { *size = &d->field##_size; return &d->field; }
+	HLC_SECTION(".debug_line", line)
+	HLC_SECTION(".debug_line_str", line_str)
+	HLC_SECTION(".debug_str", str)
+	HLC_SECTION(".debug_info", info)
+	HLC_SECTION(".debug_abbrev", abbrev)
+	HLC_SECTION(".debug_rnglists", rnglists)
+	HLC_SECTION(".debug_ranges", ranges)
+	HLC_SECTION(".debug_addr", addr)
+	HLC_SECTION(".debug_str_offsets", str_offsets)
+#undef HLC_SECTION
+	return NULL;
+}
+
 /* Keeps a debug section the stack traces read. */
 static void hlc_debug_section( const char *name, const unsigned char *data, size_t size ) {
-	hlc_debug_sections *d = &hlc_debug;
-	if( strcmp(name, ".debug_line") == 0 ) { d->line = data; d->line_size = size; }
-	else if( strcmp(name, ".debug_line_str") == 0 ) { d->line_str = data; d->line_str_size = size; }
-	else if( strcmp(name, ".debug_str") == 0 ) { d->str = data; d->str_size = size; }
-	else if( strcmp(name, ".debug_info") == 0 ) { d->info = data; d->info_size = size; }
-	else if( strcmp(name, ".debug_abbrev") == 0 ) { d->abbrev = data; d->abbrev_size = size; }
-	else if( strcmp(name, ".debug_rnglists") == 0 ) { d->rnglists = data; d->rnglists_size = size; }
-	else if( strcmp(name, ".debug_ranges") == 0 ) { d->ranges = data; d->ranges_size = size; }
-	else if( strcmp(name, ".debug_addr") == 0 ) { d->addr = data; d->addr_size = size; }
-	else if( strcmp(name, ".debug_str_offsets") == 0 ) { d->str_offsets = data; d->str_offsets_size = size; }
+	size_t *size_slot;
+	const unsigned char **slot = hlc_debug_slot(name, &size_slot);
+	if( slot ) { *slot = data; *size_slot = size; }
 }
 
 #ifdef HLC_STACK_ELF
@@ -446,7 +463,28 @@ static int hlc_find_bias( struct dl_phdr_info *info, size_t size, void *data ) {
 	return 1; // the first object is the executable
 }
 
-/* Maps the executable and finds its debug sections; nothing is read until a frame needs it. */
+/* A compressed debug section's contents (SHF_COMPRESSED: an Elf64_Chdr, then the data), inflated with the zlib libhl carries; null
+ * for another codec or a damaged section. Release builds compress their DWARF (`HlcBuild`), as gdb, perf and addr2line read it. */
+static unsigned char *hlc_inflate_section( const unsigned char *data, size_t size, size_t *out_size ) {
+	if( size < sizeof(Elf64_Chdr) ) return NULL;
+	const Elf64_Chdr *header = (const Elf64_Chdr*)data;
+	if( header->ch_type != ELFCOMPRESS_ZLIB || header->ch_size == 0 ) return NULL;
+	unsigned char *out = (unsigned char*)malloc(header->ch_size);
+	if( out == NULL ) return NULL;
+	z_stream z;
+	memset(&z, 0, sizeof(z));
+	z.next_in = (Bytef*)(data + sizeof(Elf64_Chdr));
+	z.avail_in = (uInt)(size - sizeof(Elf64_Chdr));
+	z.next_out = out;
+	z.avail_out = (uInt)header->ch_size;
+	bool done = inflateInit(&z) == Z_OK && inflate(&z, Z_FINISH) == Z_STREAM_END && z.total_out == header->ch_size;
+	inflateEnd(&z);
+	if( !done ) { free(out); return NULL; }
+	*out_size = header->ch_size;
+	return out;
+}
+
+/* Maps the executable and finds its debug sections, inflating the compressed ones; nothing is read until a frame needs it. */
 static bool hlc_open_image( void ) {
 	if( hlc_image_state ) return hlc_image_state > 0;
 	hlc_image_state = -1;
@@ -462,9 +500,19 @@ static bool hlc_open_image( void ) {
 	const Elf64_Shdr *sections = (const Elf64_Shdr*)(image + header->e_shoff);
 	const char *names = (const char*)image + sections[header->e_shstrndx].sh_offset;
 	for(int i=0;i<header->e_shnum;i++) {
-		// Compressed debug sections are not read: frames then have no line.
-		if( sections[i].sh_flags & SHF_COMPRESSED ) continue;
-		hlc_debug_section(names + sections[i].sh_name, image + sections[i].sh_offset, sections[i].sh_size);
+		const unsigned char *data = image + sections[i].sh_offset;
+		size_t size = sections[i].sh_size;
+		const char *name = names + sections[i].sh_name;
+		if( sections[i].sh_flags & SHF_COMPRESSED ) {
+			// Only the sections the traces read are inflated; one that cannot be leaves frames without lines. The line table, the
+			// largest, waits until a frame is named, as an uncompressed one is read then.
+			size_t *unused;
+			if( hlc_debug_slot(name, &unused) == NULL ) continue;
+			if( strcmp(name, ".debug_line") == 0 ) { hlc_line_compressed = data; hlc_line_compressed_size = size; continue; }
+			data = hlc_inflate_section(data, size, &size);
+			if( data == NULL ) continue;
+		}
+		hlc_debug_section(name, data, size);
 	}
 	dl_iterate_phdr(hlc_find_bias, &hlc_bias);
 	hlc_image_state = 1; // the mapping stays: file and function names point into it
@@ -519,7 +567,12 @@ static bool hlc_open_image( void ) {
 /* Reads the executable's line table, the first time a frame is named. */
 static void hlc_read_lines( void ) {
 	hlc_lines_state = -1;
-	if( !hlc_open_image() || !hlc_debug.line ) return;
+	if( !hlc_open_image() ) return;
+#ifdef HLC_STACK_ELF
+	if( !hlc_debug.line && hlc_line_compressed )
+		hlc_debug.line = hlc_inflate_section(hlc_line_compressed, hlc_line_compressed_size, &hlc_debug.line_size);
+#endif
+	if( !hlc_debug.line ) return;
 	hlc_strings strings = { hlc_debug.line_str, hlc_debug.str, hlc_debug.line_str_size, hlc_debug.str_size };
 	hlc_read_line_programs(hlc_debug.line, hlc_debug.line_size, &strings, hlc_bias);
 	hlc_sort_rows(hlc_rows, hlc_row_count);

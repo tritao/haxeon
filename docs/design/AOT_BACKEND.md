@@ -214,6 +214,21 @@ from. Whether it inlines generated functions into each other follows the build m
   is named. Reading all of `.debug_info` at the first throw cost the AOT-built compiler half a second at start-up, as it
   throws early and catches.
 
+**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/reference/HLB_DEBUG_SECTIONS.md`) are written
+on every development rebuild and decoded at every load, where speed matters. Platform formats use the platform's standard
+codec, so standard tools keep working: an ELF executable's DWARF is compressed with zlib (`SHF_COMPRESSED`,
+`ELFCOMPRESS_ZLIB`), which gdb, perf and addr2line read; Windows and macOS will follow PDB and dSYM conventions when those
+builds come. Both libraries are already vendored in the fork, so no other codec (zstd) is added. A release build on Linux
+links with `--compress-debug-sections=zlib`; the stack capture inflates the sections it reads with the fork's zlib (linked
+into the SDK's `libhl.a` with prefixed, hidden symbols): the inline records' sections at the first capture, the line table
+when a frame is first named.
+
+**What a release executable keeps.** The generated C is compiled with `-fvisibility=hidden`, so the dynamic symbol table
+lists only what the loader needs, libhl's natives (it resolves them by name in the executable). A release build on Linux then
+drops the symbol table and `.debug_aranges` (`objcopy --strip-all`, keeping the other DWARF sections): traces name frames
+from the module image and read only the line tables and inline records, and gdb and addr2line find functions from the
+DWARF. A development build keeps all of it, uncompressed.
+
 Each mode keeps its objects (`OUTPUT.c/obj-development`, `obj-release`), made again when the compiler or its flags change;
 the C text is the same. Where the C compiler has the flag (gcc), it compiles with `-fno-crossjumping`: it would otherwise
 merge identical calls of different Haxe lines, throws most often, also in inlined copies of one function, into one call
