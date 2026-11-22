@@ -1,0 +1,76 @@
+name: aot-msvc
+
+# Programs compiled to C with MSVC's toolchain on Windows (docs/design/AOT_BACKEND.md): the stack-trace programs and a few others,
+# built with clang-cl and with cl in both build modes and each compared with the JIT (tests/aot/test-aot-programs.sh), so a
+# trace named through DbgHelp from the PDB, inlined frames included, is checked on real Windows. Run by hand:
+# `gh workflow run aot-msvc.yml`, or with `-f programs="NAME ..."` for other tests/programs files.
+on:
+  workflow_dispatch:
+    inputs:
+      programs:
+        description: tests/programs names, space-separated (empty runs the default list)
+        type: string
+        default: ''
+
+jobs:
+  aot-msvc:
+    name: ${{ matrix.compiler }}
+    runs-on: windows-2022
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [clang-cl, cl]
+    defaults:
+      run:
+        shell: bash
+    env:
+      TEST_JOBS: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Builds the VM and the hlc SDK with MSVC (the windows-msvc preset), with MSVC's environment set.
+      - uses: ./.github/actions/setup-host
+
+      # A program that cannot start or crashes fails with its status, instead of waiting on an error dialog (as ci.yml).
+      - name: No error dialogs
+        shell: pwsh
+        run: |
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Windows' -Name ErrorMode -Value 2 -Type DWord
+          New-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Force | Out-Null
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Name DontShowUI -Value 1 -Type DWord
+
+      # The compiler as bytecode, built with the pinned Haxe as ci.yml's Windows steps run it.
+      - name: Compiler
+        shell: pwsh
+        run: ./.tools/haxe/haxe.exe common.hxml -main compiler.tools.HaxeonCompiler -hl out/aot-msvc/compiler.hl
+
+      - name: AOT programs
+        env:
+          CC: ${{ matrix.compiler }}
+          PROGRAMS: ${{ inputs.programs }}
+        run: |
+          # Git Bash has a coreutils link.exe: MSVC's goes first, as cl runs the first one on PATH.
+          export PATH="$(dirname "$(command -v cl)"):$PATH"
+          export HAXEON_COMPILER_HL=$PWD/out/aot-msvc/compiler.hl
+          programs=${PROGRAMS:-"defer-exception-stack exception-structured jit-stack-trace nested-call-stack package-stack-trace
+            switch-expression-throw-arm throw-expression throw-lambda throw-string trace try-rethrow messagepack-codec
+            specialized-map-scalar-keys string-interpolation struct-closure-abi"}
+          status=0
+          for mode in development release; do
+            echo "::group::$CC, $mode"
+            HLC_BUILD_MODE=$mode HAXEON_AOT_OUTPUT_DIR=$PWD/out/aot-msvc/$CC-$mode bash tests/aot/test-aot-programs.sh -v $programs \
+              || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Keep the outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aot-msvc-${{ matrix.compiler }}
+          path: out/aot-msvc
+          if-no-files-found: ignore

@@ -4,7 +4,8 @@
 # the C backend stops with "C backend:" counts as unsupported, not as a failure.
 #   tests/aot/test-aot-programs.sh [-v] [--all] [NAME...]
 # NAME is a tests/programs file without .hx, or a path to a .hx file; --all takes every program of expected-exits.tsv.
-# TEST_JOBS programs run at once (default 4); CC names the C compiler (default cc).
+# TEST_JOBS programs run at once (default 4); CC names the C compiler (default cc: clang-cl or cl build with MSVC's toolchain);
+# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines).
 set -uo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
@@ -26,6 +27,7 @@ fi
 out_dir=${HAXEON_AOT_OUTPUT_DIR:-$haxeon_suite_out/aot-tests}
 sdk=${HAXEON_HLC_SDK:-$(dirname "$hashlink_dir")/hlc-sdk}
 cc=${CC:-cc}
+build_mode=${HLC_BUILD_MODE:-development}
 jobs=${TEST_JOBS:-4}
 mkdir -p "$out_dir"
 export TZ=Asia/Kolkata
@@ -49,7 +51,7 @@ check_program() {
 		return
 	fi
 	run hl "$haxeon_hl" "$work/$name.hl"
-	if ! haxeon_compile --target=hlc --c-compiler="$cc" --c-sdk="$sdk" --output="$work/$name" --entry="$name" --root="$root" \
+	if ! haxeon_compile --target=hlc --build-mode="$build_mode" --c-compiler="$cc" --c-sdk="$sdk" --output="$work/$name" --entry="$name" --root="$root" \
 		--root=stdlib "$source_file" > "$work/hlc.log" 2>&1; then
 		if grep -q "C backend:" "$work/hlc.log"; then
 			echo "UNSUPPORTED $name: $(grep -o 'C backend: .*' "$work/hlc.log" | head -1 | cut -c1-160)" > "$work/result"
