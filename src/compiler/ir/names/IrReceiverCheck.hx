@@ -15,6 +15,10 @@ class IrReceiverCheck {
 	 * checks the array as a receiver. An allocation has no array yet and a cast passes null through.
 	 */
 	public static function readsArray(name:String):Bool
-		return StringTools.startsWith(name, "__array_") && !StringTools.startsWith(name, "__array_alloc_")
-			&& name != "__array_check_cast" && compiler.ir.passes.enums.IrArrayRuntimeNatives.isStorage(name);
+		return StringTools.startsWith(name, "__array_") && !allocatesArray(name) && name != "__array_check_cast"
+			&& compiler.ir.passes.enums.IrArrayRuntimeNatives.isStorage(name);
+
+	/** Whether a call of `name` makes a new array, which is never null. */
+	public static function allocatesArray(name:String):Bool
+		return StringTools.startsWith(name, "__array_alloc_");
 }

@@ -214,6 +214,8 @@ private class NonNullBodyFlow {
 					case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure,
 						IrOpcode.ConstString:
 						fresh.push(out);
+					case IrOpcode.Call if (out.exists() && IrReceiverCheck.allocatesArray(body.symbol(row).name)):
+						fresh.push(out);
 					case IrOpcode.FieldGet if (lookup != null):
 						switch body.valueType(body.operand(row, 0)) {
 							case Obj(type) if (lookup(type).exists(body.symbol(row).name)):
@@ -377,6 +379,8 @@ private class NonNullBodyFlow {
 		switch opcode {
 			case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure,
 				IrOpcode.ConstString:
+				set(facts, body.output(row), true);
+			case IrOpcode.Call if (body.output(row).exists() && IrReceiverCheck.allocatesArray(body.symbol(row).name)):
 				set(facts, body.output(row), true);
 			case IrOpcode.FieldGet if (fields != null && fromFields[body.output(row)]):
 				set(facts, body.output(row), true);
