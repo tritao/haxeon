@@ -10,46 +10,62 @@ import compiler.ir.SourceProvenance.Located;
  * bindings that named them, and the reachability walks after it never see the calls those blocks made, so a dead branch
  * no longer links its callees (or their imports and runtime needs) into the program.
  *
- * A function is rewritten only when a branch in it folds; the input functions are never changed.
+ * A function is rewritten only when a branch in it folds; the input functions are never changed. Per function
+ * (`IrFunctionPass`): a function's summary is the constant it returns, and the rewrite reads, for each callee a branch
+ * condition calls, the constant that callee returns (`CONSTANT`).
  */
-class IrConstantBranches {
-	/** Replaces, in `functions`, each function in which a branch folds by its folded copy; the functions themselves are not changed. */
-	public static function run(functions:Array<IrFunction>):Void {
-		var constants = constantFunctions(functions);
-		for (index in 0...functions.length) {
-			var fn = functions[index], folded = fold(fn, constants);
-			if (folded != fn)
-				functions[index] = folded;
+class IrConstantBranches implements IrFunctionPass {
+	/** The fact of a callee: 1 when it returns true, 0 false, -1 when it is not a constant function. */
+	static inline final CONSTANT = 0;
+
+	static inline final NOT_CONSTANT = -1;
+
+	/** The functions whose whole body returns a Bool constant, with that constant (1 for true). */
+	var constants:Map<String, Int> = [];
+
+	public function new() {}
+
+	public function summarize(fn:IrFunction):Int {
+		if (fn.result != Bool || fn.blocks.length != 1)
+			return NOT_CONSTANT;
+		var block = fn.blocks[0], value:Null<Bool> = null, id = -1;
+		if (block.instructions.length != 1 || block.terminator == null)
+			return NOT_CONSTANT;
+		switch block.instructions[0].value {
+			case ConstBool(output, constant):
+				value = constant;
+				id = output.id;
+			default:
+		}
+		if (value == null)
+			return NOT_CONSTANT;
+		return switch block.terminator.value {
+			case Return(returned) if (returned.id == id): value ? 1 : 0;
+			default: NOT_CONSTANT;
 		}
 	}
 
-	/** The functions whose whole body returns a Bool constant, with that constant. */
-	static function constantFunctions(functions:Array<IrFunction>):Map<String, Bool> {
-		var result:Map<String, Bool> = [];
-		for (fn in functions) {
-			if (fn.blocks.length != 1 || fn.result != Bool)
-				continue;
-			var block = fn.blocks[0], value:Null<Bool> = null, id = -1;
-			if (block.instructions.length != 1 || block.terminator == null)
-				continue;
-			switch block.instructions[0].value {
-				case ConstBool(output, constant):
-					value = constant;
-					id = output.id;
-				default:
-			}
-			if (value == null)
-				continue;
-			switch block.terminator.value {
-				case Return(returned) if (returned.id == id):
-					result.set(fn.name, value);
-				default:
-			}
-		}
-		return result;
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {
+		constants = [];
+		for (index in 0...functions.length)
+			if (summaries[index] != NOT_CONSTANT)
+				constants.set(functions[index].name, summaries[index]);
 	}
 
-	static function fold(fn:IrFunction, constants:Map<String, Bool>):IrFunction {
+	public function fact(kind:Int, key:String):Int {
+		var constant = constants.get(key);
+		return constant == null ? NOT_CONSTANT : constant;
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
+		return fold(fn, reader);
+
+	public function request(type:IrType):Void {}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions;
+
+	static function fold(fn:IrFunction, constants:IrFactReader):IrFunction {
 		// A condition is computed in the block that branches on it, so each branch looks there for what defines it; nothing is
 		// allocated until a branch folds.
 		var targets:Null<Map<Int, Int>> = null;
@@ -97,14 +113,14 @@ class IrConstantBranches {
 	 * What the value `id`, defined in `block`, is known to be: 1 for true, 0 for false, -1 when not known. A Bool constant, a
 	 * call to a constant function, or an equality of two such values (`!x` as a value is `x == false`).
 	 */
-	static function knownValue(block:IrBlock, id:Int, constants:Map<String, Bool>, depth:Int):Int {
+	static function knownValue(block:IrBlock, id:Int, constants:IrFactReader, depth:Int):Int {
 		var index = block.instructions.length;
 		while (index-- > 0)
 			switch block.instructions[index].value {
 				case ConstBool(output, value) if (output.id == id):
 					return value ? 1 : 0;
 				case Call(output, name, _) if (output.id == id):
-					return constants.exists(name.name) ? (constants.get(name.name) ? 1 : 0) : -1;
+					return constants.read(CONSTANT, name.name);
 				case Equal(output, left, right) if (output.id == id):
 					if (depth > 0 || left.type != Bool || right.type != Bool)
 						return -1;

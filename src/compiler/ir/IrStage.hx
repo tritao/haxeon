@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrEntryPrune.IrPruneWatch;
+import compiler.ir.IrStageMemo.IrLineage;
 
 /**
  * One named step of an `IrPipeline` stage list: an existing pass (or a group of calls that ran back to back) wrapped as it is, from
@@ -50,39 +51,34 @@ class IrStageHooks {
 		prunePoint = true;
 
 	/**
-	 * The stage census: a copy of a stage's input with every function marked as input and not read (`IrFunction.census`), taken
-	 * before the stage runs, as a stage may replace functions in the array it is given.
+	 * The stage census: marks every function of a stage's input as input and not read (`IrFunction.census`) before the stage runs;
+	 * returns how many there are.
 	 */
-	public static function censusStart(functions:Array<IrFunction>):Array<IrFunction> {
+	public static function censusStart(functions:Array<IrFunction>):Int {
 		for (fn in functions)
 			fn.census = IrFunction.CENSUS_INPUT;
-		return functions.copy();
+		return functions.length;
 	}
 
 	/**
 	 * Records in `meter` what the stage did to the functions: how many it read, made (an object not in its input) and dropped (an
-	 * input function not in its output), and clears the marks.
+	 * input function not in its output), and clears the marks of its output. A dropped function counts as read, as a stage reads
+	 * what it replaces; its marks stay until a stage is given it again.
 	 */
-	public static function census(name:String, input:Array<IrFunction>, output:Array<IrFunction>,
+	public static function census(name:String, inputCount:Int, output:Array<IrFunction>,
 			meter:compiler.core.IrPassMeter):Void {
 		var read = 0, made = 0, kept = 0;
 		for (fn in output) {
 			var marks = fn.census;
 			if (marks & IrFunction.CENSUS_INPUT != 0)
 				kept++;
-			else {
+			else
 				made++;
-				if (marks & IrFunction.CENSUS_READ != 0)
-					read++;
-				fn.census = 0;
-			}
-		}
-		for (fn in input) {
-			if (fn.census & IrFunction.CENSUS_READ != 0)
+			if (marks & IrFunction.CENSUS_READ != 0)
 				read++;
 			fn.census = 0;
 		}
-		meter.functions(name, read, made, input.length - kept);
+		meter.functions(name, read + inputCount - kept, made, inputCount - kept);
 	}
 
 	/** The check-mode hooks after `stage`, whether it ran or not; `functions` are the program's after it. */
@@ -155,6 +151,30 @@ class IrAssemblyStage extends IrStageHooks {
 		setPrunePoint();
 		return this;
 	}
+
+	/** The stage keeps the lineage of the functions itself (`IrFunctionStages`), so the list does not settle after it. */
+	public var memoizes(default, null) = false;
+
+	/** The encode point: the lineage of the functions (`IrLineage`) ends after this stage, as the stages after it edit bodies. */
+	public var encodePoint(default, null) = false;
+
+	public function memoized():IrAssemblyStage {
+		memoizes = true;
+		return this;
+	}
+
+	public function encodes():IrAssemblyStage {
+		encodePoint = true;
+		return this;
+	}
+
+	/** Runs the stage; before the encode point of a session, its changes are settled into the lineage (`IrLineage.settle`). */
+	public function runSettled(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+		var result = run(assembly, context), lineage = context.lineage;
+		if (lineage != null && !memoizes)
+			lineage.settle(name, result.functions);
+		return result;
+	}
 }
 
 /** An ordered list of program stages and the loop that runs them, with the metering the stages declare. */
@@ -202,7 +222,15 @@ class IrAssemblyStageList {
 	}
 
 	public function run(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var watches = false;
+		var watches = false, memos = context.stageMemos, generated = context.generatedVersion;
+		// A session reuses what the stages before the encode point made of each function (`IrStageMemos`).
+		context.lineage = null;
+		if (memos != null && generated != null && context.options.keepSession) {
+			var meter = context.meter, before = meter == null ? null : meter.start();
+			context.lineage = IrLineage.start(memos, assembly.functions, generated);
+			if (meter != null && before != null)
+				meter.stop(IrLineage.INPUT, before);
+		}
 		try {
 			for (stage in stages) {
 				var enabled = stage.enabled;
@@ -211,17 +239,20 @@ class IrAssemblyStageList {
 						var meter:compiler.core.IrPassMeter = context.meter,
 							input = IrStageHooks.censusStart(assembly.functions),
 							before = meter.start();
-						assembly = stage.run(assembly, context);
+						assembly = stage.runSettled(assembly, context);
 						meter.stop(stage.name, before);
 						IrStageHooks.census(stage.name, input, assembly.functions, meter);
 					} else
-						assembly = stage.run(assembly, context);
+						assembly = stage.runSettled(assembly, context);
 					IrStageHooks.release(assembly.functions, context);
 				}
+				if (stage.encodePoint)
+					context.lineage = null;
 				IrStageHooks.after(stage, assembly.functions, context);
 				watches = watches || stage.prunePoint;
 			}
 		} catch (error:haxe.Exception) {
+			context.lineage = null;
 			// A pass that throws ends the run, and the watch with it: the next compile on this thread must not inherit it.
 			if (watches)
 				IrEntryPrune.watching(null);

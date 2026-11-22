@@ -18,36 +18,62 @@ import compiler.ir.SourceProvenance.Located;
  * class or below, goes through a call adapter that converts to and from the slot's signature around the virtual call.
  * Direct calls of the override keep its own signature.
  */
-class IrOverrideBridges {
+class IrOverrideBridges implements IrFunctionPass {
 	public static inline final BRIDGE_PREFIX = "$override-bridge:";
 	public static inline final CALL_PREFIX = "$override-call:";
+
+	/**
+	 * The program-wide fact a rewrite reads: 0 when no slot needs a bridge, so no call changes. With bridges it is not stated per
+	 * call (`IrFacts.UNKNOWN`): every function is rewritten again, and the call adapters are made as the rewrites meet the calls.
+	 */
+	static inline final BRIDGED = 0;
+
+	/** The objects, with the slots of the bridged overrides pointing at their bridges after `prepare`. */
+	public var objects(default, null):Array<IrObject>;
+
+	var byName:Map<String, IrObject> = [];
+	var index:Null<IrFunctionIndex> = null;
+	var bridges:Array<IrFunction> = [];
+	var rewrittenByName:Map<String, IrObject> = [];
+	var adapters:Map<String, IrFunction> = [];
+
+	public function new(objects:Array<IrObject>)
+		this.objects = objects;
 
 	public static function apply(functions:Array<IrFunction>, objects:Array<IrObject>):{
 		functions:Array<IrFunction>,
 		objects:Array<IrObject>
 	} {
-		var byName = [for (object in objects) object.name => object],
-			index = new IrFunctionIndex("override-bridges", functions),
-			bridges:Array<IrFunction> = [],
-			bridged:Map<String, Bool> = [];
-		function signatureOf(object:IrObject, method:String):Null<IrFunction> {
-			var root:Null<IrFunction> = null, current:Null<IrObject> = object;
-			while (current != null) {
-				for (entry in current.methods)
-					if (entry.name == method) {
-						var fn = index.get(entry.functionName.name);
-						if (fn != null)
-							root = fn;
-					}
-				current = current.base == null ? null : byName.get(current.base);
-			}
-			return root;
+		var pass = new IrOverrideBridges(objects), result = IrFunctionStages.apply("override-bridges", pass, functions);
+		return {functions: result, objects: pass.objects};
+	}
+
+	function signatureOf(object:IrObject, method:String):Null<IrFunction> {
+		var root:Null<IrFunction> = null, current:Null<IrObject> = object, functions = index;
+		while (current != null && functions != null) {
+			for (entry in current.methods)
+				if (entry.name == method) {
+					var fn = functions.get(entry.functionName.name);
+					if (fn != null)
+						root = fn;
+				}
+			current = current.base == null ? null : byName.get(current.base);
 		}
+		return root;
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {
+		byName = [for (object in objects) object.name => object];
+		var functionIndex = new IrFunctionIndex("override-bridges", functions), bridged:Map<String, Bool> = [];
+		index = functionIndex;
 		var rewritten = [for (object in objects) {
 			if (object.base == null || object.methods.length == 0) object;
 			else {
 				var changed = false, methods = [for (entry in object.methods) {
-					var implementation = index.get(entry.functionName.name),
+					var implementation = functionIndex.get(entry.functionName.name),
 						root = signatureOf(byName.get(object.base), entry.name);
 					if (implementation == null || root == null || sameSignature(implementation, root)) entry;
 					else {
@@ -66,38 +92,55 @@ class IrOverrideBridges {
 			}
 		}];
 		if (bridges.length == 0)
-			return {functions: functions, objects: objects};
-		var rewrittenByName = [for (object in rewritten) object.name => object],
-			adapters:Map<String, IrFunction> = [];
-		function slotSignature(receiver:IrType, method:String):Null<IrFunction>
-			return switch receiver {
-				case Obj(name) if (byName.exists(name)): signatureOf(byName.get(name), method);
-				default: null;
-			};
-		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
-			return switch located.value {
-				case MethodCall(output, receiver, method, arguments, terminal):
-					var slot = slotSignature(receiver.type, method);
-					if (slot == null || callMatches(slot, arguments, output.type)) null;
-					else {
-						var argumentTypes = [for (argument in arguments) argument.type],
-							name = callAdapterName(receiver.type, method, argumentTypes, output.type);
-						if (!adapters.exists(name))
-							adapters.set(name, callAdapter(name, receiver.type, method, argumentTypes, output.type,
-								slot, rewrittenByName));
-						[
-							new Located(Call(output, IrSymbol.of(name), [receiver].concat(arguments)),
-								located.provenance)
-						];
-					}
-				default: null;
-			};
-		var result = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
+			return;
+		rewrittenByName = [for (object in rewritten) object.name => object];
+		objects = rewritten;
+	}
+
+	public function fact(kind:Int, key:String):Int
+		return bridges.length == 0 ? 0 : IrFacts.UNKNOWN;
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		if (reader.read(BRIDGED, "") == 0)
+			return fn;
+		return IrFunctionRewrite.instructions(fn, adapted);
+	}
+
+	function slotSignature(receiver:IrType, method:String):Null<IrFunction>
+		return switch receiver {
+			case Obj(name) if (byName.exists(name)): signatureOf(byName.get(name), method);
+			default: null;
+		};
+
+	function adapted(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+		return switch located.value {
+			case MethodCall(output, receiver, method, arguments, terminal):
+				var slot = slotSignature(receiver.type, method);
+				if (slot == null || callMatches(slot, arguments, output.type)) null;
+				else {
+					var argumentTypes = [for (argument in arguments) argument.type],
+						name = callAdapterName(receiver.type, method, argumentTypes, output.type);
+					if (!adapters.exists(name))
+						adapters.set(name, callAdapter(name, receiver.type, method, argumentTypes, output.type,
+							slot, rewrittenByName));
+					[
+						new Located(Call(output, IrSymbol.of(name), [receiver].concat(arguments)),
+							located.provenance)
+					];
+				}
+			default: null;
+		};
+
+	public function request(type:IrType):Void {}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		if (bridges.length == 0)
+			return functions;
 		var names = [for (name in adapters.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names)
-			result.push(adapters.get(name));
-		return {functions: result.concat(bridges), objects: rewritten};
+			functions.push(adapters.get(name));
+		return functions.concat(bridges);
 	}
 
 	/** One adapter per receiver class, method and caller signature. */

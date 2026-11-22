@@ -5,23 +5,30 @@ import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
-/** Check Dynamic-to-reference casts before target-specific casts, so failure remains catchable. */
-class IrCheckedDynamicCasts {
+/**
+ * Check Dynamic-to-reference casts before target-specific casts, so failure remains catchable. Per function (`IrFunctionPass`):
+ * the rewrite reads, for each cast it meets, what the program declares of the object it casts to (`DECLARATION`), and asks
+ * for the cast's helper.
+ */
+class IrCheckedDynamicCasts implements IrFunctionPass {
 	public static inline final PREFIX = "$checked-dynamic-cast:";
+
+	/** The fact of an object name: whether it is declared and a value object, with the flags of which casts are checked. */
+	static inline final DECLARATION = 0;
 
 	final declarations:Map<String, IrObject>;
 	final helpers:Map<String, String> = [];
 	final generated:Array<IrFunction> = [];
-	final known:IrFunctionIndex;
+	final existingFunctions:Null<Array<IrFunction>>;
+	var known:Null<IrFunctionIndex> = null;
 	final checkObjects:Bool;
 	final checkValueObjects:Bool;
 	final checkFunctionCasts:Bool;
 
-	function new(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool,
-			existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool, checkFunctionCasts:Bool) {
+	public function new(objects:Array<IrObject>, checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>,
+			checkValueObjects:Bool, checkFunctionCasts:Bool) {
 		declarations = [for (object in objects) object.name => object];
-		known = new IrFunctionIndex("checked-dynamic-casts",
-			existingFunctions == null ? functions : existingFunctions.concat(functions));
+		this.existingFunctions = existingFunctions;
 		this.checkObjects = checkObjects;
 		this.checkValueObjects = checkValueObjects;
 		this.checkFunctionCasts = checkFunctionCasts;
@@ -29,19 +36,58 @@ class IrCheckedDynamicCasts {
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool,
 			?existingFunctions:Array<IrFunction>,
-			checkValueObjects:Bool = false, checkFunctionCasts:Bool = false):Array<IrFunction> {
-		var pass = new IrCheckedDynamicCasts(functions, objects, checkObjects, existingFunctions, checkValueObjects,
-			checkFunctionCasts);
+			checkValueObjects:Bool = false, checkFunctionCasts:Bool = false):Array<IrFunction>
+		return IrFunctionStages.apply("checked-dynamic-casts", new IrCheckedDynamicCasts(objects, checkObjects,
+			existingFunctions, checkValueObjects, checkFunctionCasts), functions);
+
+	/** The functions the helpers must not be made again for: `functions`, after the existing ones. */
+	function index(functions:Array<IrFunction>):Void {
+		var existing = existingFunctions;
+		known = new IrFunctionIndex("checked-dynamic-casts", existing == null ? functions : existing.concat(functions));
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void
+		index(functions);
+
+	public function fact(kind:Int, key:String):Int {
+		var declaration = declarations.get(key),
+			flags = (checkObjects ? 1 : 0) | (checkValueObjects ? 2 : 0) | (checkFunctionCasts ? 4 : 0);
+		return flags * 3 + (declaration == null ? 0 : declaration.isValue ? 2 : 1);
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
 			return switch located.value {
 				case SafeCast(out, input) if (isDyn(input.type)):
-					var helper = pass.helperFor(out.type);
-					helper == null ? null : [new Located(Call(out, IrSymbol.of(helper), [input]), located.provenance)];
+					reader.read(DECLARATION, castObject(out.type));
+					if (target(out.type) == null) null;
+					else {
+						reader.request(out.type);
+						[
+							new Located(Call(out, IrSymbol.of(PREFIX + IrTypeIdentity.text(out.type)), [input]),
+								located.provenance)
+						];
+					}
 				default: null;
 			};
-		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
-		return rewritten.concat(pass.generated);
+		return IrFunctionRewrite.instructions(fn, replacement);
 	}
+
+	public function request(type:IrType):Void
+		helperFor(type);
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions.concat(generated);
+
+	/** The object whose declaration decides a cast to `type`; empty for a type that names none. */
+	static function castObject(type:IrType):String
+		return switch type {
+			case Obj(name), Nullable(Obj(name)): name;
+			default: "";
+		};
 
 	/**
 	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types`: a checked cast becomes a call of its
@@ -50,8 +96,9 @@ class IrCheckedDynamicCasts {
 	public static function rewriteBodies(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool,
 			existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool, checkFunctionCasts:Bool, types:IrTypeIds,
 			builder:IrBodyBuilder):Array<IrFunction> {
-		var pass = new IrCheckedDynamicCasts(functions, objects, checkObjects, existingFunctions, checkValueObjects,
+		var pass = new IrCheckedDynamicCasts(objects, checkObjects, existingFunctions, checkValueObjects,
 			checkFunctionCasts);
+		pass.index(functions);
 		var dyn = types.id(Dyn), rewritten:Array<IrFunction> = [];
 		inline function checked(body:IrBody, row:Int):Bool
 			return body.opcode(row) == IrOpcode.SafeCast
@@ -129,7 +176,9 @@ class IrCheckedDynamicCasts {
 			accepted = builder.createBlock(),
 			rejected = builder.createBlock();
 		helpers.set(key, name);
-		if (known.exists(name)) return name;
+		var functions = known;
+		if (functions == null) throw new InternalError("Checked casts made a helper before indexing the program");
+		if (functions.exists(name)) return name;
 		if (!request.allowNull) builder.jump(check);
 		else builder.branch(builder.equal(input, builder.constNull(Dyn)), accepted, check);
 		builder.select(check);

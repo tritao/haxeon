@@ -1265,6 +1265,18 @@ class FrontendCompilation {
 		build.irGenerationDoneAt = now();
 	}
 
+	/** The generator's version of each function of the program (`ModuleState.irVersions`), 0 for one it does not hold. */
+	static function generatedVersions(build:FrontendBuild):String->Int {
+		var modules = build.context.state.modules, owners = build.semanticAssembly.owners;
+		return function(name:String):Int {
+			var owner = owners.get(name), state = owner == null ? null : modules.get(owner);
+			if (state == null || !state.irFunctions.exists(name))
+				return 0;
+			var version = state.irVersions.get(name);
+			return version == null ? 0 : version;
+		};
+	}
+
 	/** This pass's line in `CompilationContext.frontendPassReports`. */
 	static function reportPass(build:FrontendBuild):Void {
 		var context = build.context;
@@ -1520,7 +1532,7 @@ class FrontendCompilation {
 							throw new InternalError('Missing canonical layout for "${object.name}"');
 						canonical;
 					} else object;
-				}], context.options, meter);
+				}], context.options, meter, context.state.stageMemos, generatedVersions(build));
 			// The fingerprints go into the runtime ABI only.
 			if (context.describesRuntimeAbi()) {
 				var cNativeNames = [for (native in irCNatives) native.name].join(","),

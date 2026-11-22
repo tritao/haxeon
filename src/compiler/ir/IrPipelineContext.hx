@@ -2,6 +2,8 @@ package compiler.ir;
 
 import compiler.ir.Ir.IrObject;
 import compiler.ir.IrInliner.IrInlineCache;
+import compiler.ir.IrStageMemo.IrLineage;
+import compiler.ir.IrStageMemo.IrStageMemos;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.TargetProfile.TargetKind;
 
@@ -20,6 +22,15 @@ class IrPipelineContext {
 	public var staticInitializers:Null<Array<IrFunction>> = null;
 	public var exportedFunctions:Null<Array<String>> = null;
 	public var canonicalObjects:Null<Array<IrObject>> = null;
+
+	/** The session's per-function memos of the stages before the encode point; null in a compile that keeps none. */
+	public var stageMemos:Null<IrStageMemos> = null;
+
+	/** The generator's version of each function it holds (`ModuleState.irVersions`), 0 for another; with `stageMemos`. */
+	public var generatedVersion:Null<String->Int> = null;
+
+	/** The versions of the functions as the stages before the encode point stand, in a session (`IrLineage`); null elsewhere. */
+	public var lineage:Null<IrLineage> = null;
 
 	/** The roots of the early prune: the entry function, the static initializers and the exported functions. */
 	public var pruneRoots:Array<String> = [];

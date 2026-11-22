@@ -2,14 +2,31 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
-import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
-/** Select a boxed struct's declared equality at a Dynamic boundary. */
-class IrValueDynamicDispatch {
+/**
+ * Select a boxed struct's declared equality at a Dynamic boundary. Per function (`IrFunctionPass`): a function's summary says
+ * whether it calls `__dynamic_equal`, and the rewrite of one that does reads whether any struct registers (`REGISTERED`).
+ */
+class IrValueDynamicDispatch implements IrFunctionPass {
 	static inline final EQUAL = "$value-dynamic-equal";
 	static inline final EQUALITY_PREFIX = "$value$equality:";
+
+	/** The summary of a function that calls `__dynamic_equal`. */
+	static inline final CALLS_EQUAL = 1;
+
+	/** The program-wide fact: 1 when a struct registers a Dynamic equality, so `__dynamic_equal` calls the dispatcher. */
+	static inline final REGISTERED = 0;
+
+	final objects:Array<IrObject>;
+	final unreached:Null<Map<String, Bool>>;
+	final createdClasses:Null<Map<String, Bool>>;
+	var requests:Map<String, IrType> = [];
+	var suffixes:Array<String> = [];
+	var needsEqual = false;
+	var names:Null<IrFunctionIndex> = null;
+	var objectsByName:Map<String, IrObject> = [];
 
 	static function isValueEquality(fn:IrFunction):Bool
 		return switch fn.provides {
@@ -18,25 +35,33 @@ class IrValueDynamicDispatch {
 		};
 
 	/** With `unreached` (the functions a plain build's walk did not reach) and `createdClasses`, only reached equality helpers and structs that can exist register; otherwise every one does. */
+	public function new(objects:Array<IrObject>, ?unreached:Map<String, Bool>, ?createdClasses:Map<String, Bool>) {
+		this.objects = objects;
+		this.unreached = unreached;
+		this.createdClasses = createdClasses;
+	}
+
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, ?unreached:Map<String, Bool>,
-			?createdClasses:Map<String, Bool>):Array<IrFunction> {
+			?createdClasses:Map<String, Bool>):Array<IrFunction>
+		return IrFunctionStages.apply("value-dynamic-dispatch", new IrValueDynamicDispatch(objects, unreached,
+			createdClasses), functions);
+
+	public function summarize(fn:IrFunction):Int {
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case Call(_, callTarget, _) if (callTarget.name == "__dynamic_equal"):
+						return CALLS_EQUAL;
+					default:
+				}
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
-		var names = new IrFunctionIndex("value-dynamic-dispatch", functions);
-		var objectsByName:Map<String, IrObject> = [for (object in objects) object.name => object];
-		// A struct that declares Equatable has an equality provider; one that does not must still throw at run time when compared.
-		function declaredEquatable(type:IrType):Bool {
-			var current = switch type {
-				case Obj(name): objectsByName.get(name);
-				default: null;
-			};
-			while (current != null) {
-				if (current.interfaces.indexOf("Equatable") >= 0)
-					return true;
-				current = current.base == null ? null : objectsByName.get(current.base);
-			}
-			return false;
-		}
-		var requests:Map<String, IrType> = [], registeredValues:Map<String, Bool> = [], needsEqual = false;
+		names = new IrFunctionIndex("value-dynamic-dispatch", functions);
+		objectsByName = [for (object in objects) object.name => object];
+		var registeredValues:Map<String, Bool> = [];
 		function valueType(type:IrType):Null<IrType> return switch type {
 			case Nullable(inner): valueType(inner);
 			case Obj(name) if (values.exists(name)): type;
@@ -64,27 +89,55 @@ class IrValueDynamicDispatch {
 				default: false;
 			}))
 				register(fn.name.substr(EQUALITY_PREFIX.length), fn.arguments[0].type);
-		for (fn in functions) if (unreached == null || !unreached.exists(fn.name)) for (block in fn.blocks)
-			for (located in block.instructions) switch located.value {
-			case Call(_, callTarget, _) if (callTarget.name == "__dynamic_equal"): needsEqual = true;
-			default:
-		}
+		for (index in 0...functions.length)
+			if (summaries[index] == CALLS_EQUAL && (unreached == null || !unreached.exists(functions[index].name)))
+				needsEqual = true;
 		// A reflected value need not appear in any explicit Dynamic conversion.
 		// Still reject equality for a nonconforming reflected struct.
 		for (object in objects) if (object.isValue && !registeredValues.exists(object.name)
 			&& (createdClasses == null || createdClasses.exists(object.name)))
 			register("$reflected:" + object.name, Obj(object.name));
-		var suffixes = [for (suffix in requests.keys()) suffix];
+		suffixes = [for (suffix in requests.keys()) suffix];
 		suffixes.sort(Reflect.compare);
-		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
-			return switch located.value {
-				case Call(output, target, arguments) if (target.name == "__dynamic_equal" && suffixes.length > 0)
-					: [new Located(Call(output, IrSymbol.of(EQUAL), arguments), located.provenance)];
-				default: null;
-			};
-		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
-		if (needsEqual && suffixes.length > 0) rewritten.push(dispatcher(suffixes, requests, names, declaredEquatable));
-		return rewritten;
+	}
+
+	public function fact(kind:Int, key:String):Int
+		return suffixes.length > 0 ? 1 : 0;
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		if (summary != CALLS_EQUAL || reader.read(REGISTERED, "") == 0)
+			return fn;
+		return IrFunctionRewrite.instructions(fn, dispatched);
+	}
+
+	static function dispatched(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+		return switch located.value {
+			case Call(output, target, arguments) if (target.name == "__dynamic_equal"):
+				[new Located(Call(output, IrSymbol.of(EQUAL), arguments), located.provenance)];
+			default: null;
+		};
+
+	public function request(type:IrType):Void {}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		var index = names;
+		if (needsEqual && suffixes.length > 0 && index != null)
+			functions.push(dispatcher(suffixes, requests, index, declaredEquatable));
+		return functions;
+	}
+
+	/** A struct that declares Equatable has an equality provider; one that does not must still throw at run time when compared. */
+	function declaredEquatable(type:IrType):Bool {
+		var current = switch type {
+			case Obj(name): objectsByName.get(name);
+			default: null;
+		};
+		while (current != null) {
+			if (current.interfaces.indexOf("Equatable") >= 0)
+				return true;
+			current = current.base == null ? null : objectsByName.get(current.base);
+		}
+		return false;
 	}
 
 	static function dispatcher(suffixes:Array<String>, requests:Map<String, IrType>, names:IrFunctionIndex,

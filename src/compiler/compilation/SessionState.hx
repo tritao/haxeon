@@ -63,6 +63,12 @@ class SessionState {
 	public var irVersions(default, null):compiler.ir.IrFunctionVersions = new compiler.ir.IrFunctionVersions();
 
 	/**
+	 * What the assembly stages before the encode point made of each function (`IrStageMemos`), keyed on the versions `irVersions`
+	 * gives; every copy shares it, as an entry holds only for the versions and fact prints it recorded.
+	 */
+	public var stageMemos(default, null):compiler.ir.IrStageMemo.IrStageMemos;
+
+	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
 	 * reuses both.
 	 */
@@ -101,6 +107,7 @@ class SessionState {
 		lastTypedProgram = null;
 		semanticProgram = null;
 		inlineCache = new IrInlineCache();
+		stageMemos = new compiler.ir.IrStageMemo.IrStageMemos(irVersions);
 		pipelineSnapshot = null;
 		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
@@ -174,6 +181,7 @@ class SessionState {
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
 			backend:BackendSession) {
 		semanticWorkspace = new SemanticWorkspace(modules);
+		stageMemos = new compiler.ir.IrStageMemo.IrStageMemos(irVersions);
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
 		this.backend = backend;
@@ -199,6 +207,7 @@ class SessionState {
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
 		result.irVersions = irVersions;
+		result.stageMemos = stageMemos;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = copyReachabilityCache(reachabilityCache);

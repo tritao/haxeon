@@ -27,7 +27,7 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 class IrPipeline {
 	/** From the generated functions to the finished program (`IrProgramAssembler.assemble`). */
 	public static final assembly:IrAssemblyStageList = new IrAssemblyStageList("assembly", [
-		new IrAssemblyStage("constant-branches", constantBranches),
+		IrFunctionStages.stage("constant-branches", constantBranches),
 		// Erased dispatch can reach a specialized body that the original callers do not name.
 		// Expose those targets before the walk filters typed enum/value conversions.
 		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects),
@@ -35,18 +35,18 @@ class IrPipeline {
 		new IrAssemblyStage("enum-dynamic-dispatch-input", enumDynamicDispatchInput).when(hasObjects),
 		new IrAssemblyStage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects),
 		new IrAssemblyStage("reachability-report", reachabilityReport).when(reportsReachability),
-		new IrAssemblyStage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects),
-		new IrAssemblyStage("override-bridges", overrideBridges).when(hasObjects),
+		IrFunctionStages.stage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects),
+		IrFunctionStages.stage("override-bridges", overrideBridges, bridgedObjects).when(hasObjects),
 		new IrAssemblyStage("entry-prune", entryPrune).when(pruning).prunes(),
 		new IrAssemblyStage("value-interface-boxes", valueInterfaceBoxes).when(hasInterfaces).checksPrune(),
-		new IrAssemblyStage("typed-interface-calls", typedInterfaceCalls).when(hasInterfaces),
+		IrFunctionStages.stage("typed-interface-calls", typedInterfaceCalls, generatedFromHere).when(hasInterfaces),
 		new IrAssemblyStage("typed-interface-generate", typedInterfaceGenerate).when(hasInterfaces),
 		new IrAssemblyStage("typed-interface-boxes", typedInterfaceBoxes).when(hasInterfaces),
-		new IrAssemblyStage("checked-dynamic-casts", checkedDynamicCasts).when(hasObjects).checksPrune(),
+		IrFunctionStages.stage("checked-dynamic-casts", checkedDynamicCasts).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("exported-functions", exportedFunctions).when(exportsFunctions),
 		new IrAssemblyStage("enum-specializations", enumSpecializations).when(lowersEnums),
 		new IrAssemblyStage("enum-tag-lowering", enumTagLowering).when(lowersEnums),
-		new IrAssemblyStage("encode-bodies", encodeBodies),
+		new IrAssemblyStage("encode-bodies", encodeBodies).encodes(),
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
 		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
@@ -139,10 +139,8 @@ class IrPipeline {
 	// Assembly stages.
 
 	/** Before anything walks the program, so a branch that cannot be taken links nothing it calls. */
-	static function constantBranches(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		IrConstantBranches.run(assembly.functions);
-		return assembly;
-	}
+	static function constantBranches(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrConstantBranches();
 
 	/** What the prune walks: the program as it stands, with `functions`. */
 	static function pruneInputOf(assembly:IrAssembly, context:IrPipelineContext,
@@ -239,11 +237,10 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function valueDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+	static function valueDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass {
 		var walk = assembly.dispatchWalk;
-		assembly.functions = IrValueDynamicDispatch.rewrite(assembly.functions, assembly.objects, assembly.unreached,
+		return new IrValueDynamicDispatch(assembly.objects, assembly.unreached,
 			walk == null ? null : walk.createdClasses);
-		return assembly;
 	}
 
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -254,12 +251,11 @@ class IrPipeline {
 	}
 
 	/** Every method slot keeps its topmost declaration's signature; overrides that lower to another get a bridge in the slot. */
-	static function overrideBridges(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var bridged = IrOverrideBridges.apply(assembly.functions, assembly.objects);
-		assembly.functions = bridged.functions;
-		assembly.objects = bridged.objects;
-		return assembly;
-	}
+	static function overrideBridges(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrOverrideBridges(assembly.objects);
+
+	static function bridgedObjects(assembly:IrAssembly, pass:IrFunctionPass):Void
+		assembly.objects = cast(pass, IrOverrideBridges).objects;
 
 	/**
 	 * The prune point (docs/design/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and the
@@ -284,12 +280,12 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function typedInterfaceCalls(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = IrTypedInterfaceDispatch.rewriteValueCalls(assembly.functions, assembly.objects,
-			assembly.interfaces);
+	static function typedInterfaceCalls(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrTypedInterfaceDispatch.IrTypedInterfaceCalls(assembly.objects, assembly.interfaces);
+
+	/** The functions a later stage generates start after the program as it stands. */
+	static function generatedFromHere(assembly:IrAssembly, pass:IrFunctionPass):Void
 		assembly.generatedStart = assembly.functions.length;
-		return assembly;
-	}
 
 	static function typedInterfaceGenerate(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		IrTypedInterfaceDispatch.generate(assembly.functions, assembly.objects, assembly.interfaces);
@@ -307,11 +303,10 @@ class IrPipeline {
 	}
 
 	/** HashLink checks object casts itself, but interface casts need checks on every target. */
-	static function checkedDynamicCasts(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = IrCheckedDynamicCasts.rewrite(assembly.functions, assembly.objects,
-			assembly.generator.profile.nativeReflectionDispatch);
-		return assembly;
-	}
+	static function checkedDynamicCasts(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrCheckedDynamicCasts(assembly.objects, assembly.generator.profile.nativeReflectionDispatch, null,
+			false,
+			false);
 
 	/** An exported function is exposed; one already exposed is kept as it is, so it keeps its identity from build to build. */
 	static function exportedFunctions(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {

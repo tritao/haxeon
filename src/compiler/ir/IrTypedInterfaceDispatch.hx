@@ -35,45 +35,9 @@ class IrTypedInterfaceDispatch {
 
 	/** Select the value ABI after physical value layouts are known, including nongeneric contracts. */
 	public static function rewriteValueCalls(functions:Array<IrFunction>, objects:Array<IrObject>,
-			interfaces:Array<IrInterface>):Array<IrFunction> {
-		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true],
-			contracts:Map<String, Bool> = [for (entry in interfaces) entry.name => true];
-		function isValue(type:IrType):Bool return switch type {
-			case Obj(name): values.exists(name);
-			default: false;
-		};
-		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
-			return isValue(result) || Lambda.exists(arguments, isValue);
-		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
-			return switch located.value {
-				case MethodCall(output, receiver, method, arguments, _):
-					switch receiver.type {
-						case Virtual(name):
-							var carriesValue = isValue(output.type);
-							for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
-							if (!carriesValue) null;
-							else [new Located(Call(output,
-								IrSymbol.of(callName(name, method, [for (argument in arguments) argument.type],
-								output.type)),
-								[receiver].concat(arguments)),
-								located.provenance)];
-						default: null;
-					}
-				case InstanceClosure(output, target, receiver) if (!StringTools.startsWith(target.name, PREFIX)):
-					var name = target.name, separator = name.lastIndexOf(".");
-					if (separator < 0 || !contracts.exists(name.substr(0, separator))) null;
-					else switch [receiver.type, output.type] {
-						case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
-							[new Located(InstanceClosure(output,
-								IrSymbol.of(callName(owner, name.substr(separator + 1), arguments,
-								result)), receiver), located.provenance)];
-						default: null;
-					}
-				default: null;
-			};
-		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
-		return rewritten;
-	}
+			interfaces:Array<IrInterface>):Array<IrFunction>
+		return IrFunctionStages.apply("typed-interface-calls", new IrTypedInterfaceCalls(objects, interfaces),
+			functions);
 
 	/**
 	 * `rewriteValueCalls` on one body, in place: an interface call or method value that carries a value object (`values`, by
@@ -324,4 +288,72 @@ class IrTypedInterfaceDispatch {
 			}
 		}
 	}
+}
+
+/**
+ * `IrTypedInterfaceDispatch.rewriteValueCalls` per function (`IrFunctionPass`): the rewrite reads, for each object a call's types
+ * name, whether it is a value object (`VALUE`), and for each method value's interface whether it is one (`CONTRACT`).
+ */
+class IrTypedInterfaceCalls implements IrFunctionPass {
+	static inline final VALUE = 0;
+	static inline final CONTRACT = 1;
+
+	final values:Map<String, Bool>;
+	final contracts:Map<String, Bool>;
+
+	public function new(objects:Array<IrObject>, interfaces:Array<IrInterface>) {
+		values = [for (object in objects) if (object.isValue) object.name => true];
+		contracts = [for (entry in interfaces) entry.name => true];
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {}
+
+	public function fact(kind:Int, key:String):Int
+		return (kind == VALUE ? values : contracts).exists(key) ? 1 : 0;
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		function isValue(type:IrType):Bool return switch type {
+			case Obj(name): reader.read(VALUE, name) == 1;
+			default: false;
+		};
+		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
+			return isValue(result) || Lambda.exists(arguments, isValue);
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case MethodCall(output, receiver, method, arguments, _):
+					switch receiver.type {
+						case Virtual(name):
+							var carriesValue = isValue(output.type);
+							for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
+							if (!carriesValue) null;
+							else [new Located(Call(output,
+								IrSymbol.of(IrTypedInterfaceDispatch.callName(name, method,
+								[for (argument in arguments) argument.type], output.type)),
+								[receiver].concat(arguments)),
+								located.provenance)];
+						default: null;
+					}
+				case InstanceClosure(output, target, receiver)
+					if (!StringTools.startsWith(target.name, IrTypedInterfaceDispatch.PREFIX)):
+					var name = target.name, separator = name.lastIndexOf(".");
+					if (separator < 0 || reader.read(CONTRACT, name.substr(0, separator)) == 0) null;
+					else switch [receiver.type, output.type] {
+						case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
+							[new Located(InstanceClosure(output,
+								IrSymbol.of(IrTypedInterfaceDispatch.callName(owner, name.substr(separator + 1),
+								arguments, result)), receiver), located.provenance)];
+						default: null;
+					}
+				default: null;
+			};
+		return IrFunctionRewrite.instructions(fn, replacement);
+	}
+
+	public function request(type:IrType):Void {}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions;
 }
