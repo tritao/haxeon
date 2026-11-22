@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "package": { "name": "perf-small-project" },
+  "entry": "Main",
+  "sourceRoots": ["src"],
+  "target": "host",
+  "outputDir": "build"
+}

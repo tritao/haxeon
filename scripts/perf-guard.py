@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
-"""Guards the cost of the compiler compiling a frozen copy of its sources, once and in a compile server, against
-tests/perf/*-baseline.json.
+"""Guards the cost of the compiler against tests/perf/*-baseline.json: compiling a frozen copy of its sources once and in a
+compile server, and building a small project from a cold start.
 
     scripts/perf-guard.py                          measure, compare, fail on a regression beyond a metric's tolerance
     scripts/perf-guard.py --update                 measure and write the measured values into the baselines (tolerances are kept)
-    scripts/perf-guard.py --only=incremental       only one part (self-compile or incremental), with or without --update
+    scripts/perf-guard.py --only=incremental       only one part (self-compile, incremental or small-project), with or
+                                                   without --update
+
+Every metric fails the run beyond its tolerance, but they do not weigh the same. In order, the compiler is optimized for:
+  1. edit latency in the compile server: main-thread instructions of a body edit and of a signature edit
+  2. startup, which dominates a small project's build: instructions of a cold small-project build and check
+  3. the compile server's live data, weighted above the one-shot compile's peak
+These are the primary metrics: marked `*` where compared, and summed up in the first line of the summary the run ends with.
+The cold self-compile (instructions, wall, peak RSS, allocation, live data) and the incremental part's allocation and function
+counts are regression guards: they keep a change from making the rest worse, and are not themselves the target.
 
 Two compiles, both in release mode: the tool-cache compiler builds the compiler from the checkout, and that build, which carries
 the checkout's own code generation, compiles the frozen input: the compiler's sources at the revision the self-compile baseline
@@ -27,13 +36,27 @@ regenerated (deterministic), and wall (reported). A heap census after each build
 session's live bytes after the last body edit before the signature edit and their growth over the last of those, which stays
 near zero unless the session keeps something from every build.
 
+A second session of that server, without the census and the invalidation reports, measures edit latency: main-thread
+instructions:u (cycles:u reported) of the body edit (the median of three) and of the signature edit, from perf --per-thread
+attached to the server around each build. The server compiles on a thread of its own, which inherits the main thread's
+counters, so the main thread's row holds the build's work. Skipped where perf is not available.
+
+The small-project part (tests/perf/small-project-baseline.json) runs the CLI built from the checkout (`haxeon build` and
+`haxeon check` of tests/perf/small-project) as a user does, from no compile server running: the CLI starts the project's
+server (the compiler built ahead of time when it is current, else the VM running the compiler's bytecode, compiled once into
+the guard's session directory) and asks it to compile. It reads instructions:u of every process the command starts, counted
+until the server leaves (perf cannot follow a detached server per thread), and the bytes the server allocated for the
+request (its worker allocations); wall of the CLI is reported, never compared.
+
 Measures on Linux x86-64 only, where the baseline was taken; elsewhere it says so and passes. A metric beyond its tolerance
 below the baseline passes and asks for the baseline to be updated, so gains are locked in.
 """
 import json
 import os
 import platform
+import select
 import shutil
+import signal
 import socket
 import struct
 import subprocess
@@ -43,6 +66,8 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASELINE = os.path.join(ROOT, "tests", "perf", "self-compile-baseline.json")
 INCREMENTAL_BASELINE = os.path.join(ROOT, "tests", "perf", "incremental-baseline.json")
+SMALL_PROJECT_BASELINE = os.path.join(ROOT, "tests", "perf", "small-project-baseline.json")
+SMALL_PROJECT = os.path.join(ROOT, "tests", "perf", "small-project")
 SOURCE_ROOTS = ["src", "lib/haxeon-io", "stdlib"]
 ENTRY = "compiler.tools.HaxeonCompiler"
 SERVER_ENTRY = "compiler.tools.CompilerServer"
@@ -108,17 +133,26 @@ def perf_unavailable():
     return None
 
 
+def performance_cores():
+    """The command prefix and perf event prefix that keep a measured process on one core type and count its counter.
+
+    On a hybrid CPU each core type has its own counter, multiplexed and extrapolated when the thread moves between them: keep the
+    process on the performance cores and count theirs."""
+    hybrid = "/sys/bus/event_source/devices/cpu_core/cpus"
+    if os.path.exists(hybrid):
+        with open(hybrid) as source:
+            return ["taskset", "-c", source.read().strip()], "cpu_core/"
+    return [], ""
+
+
 def measure(hl, compiler, sources, output, log_path, cwd):
     """Runs one compile in `cwd`; returns its metrics."""
     env = dict(os.environ, HL_GC_MARK_SERIAL="1")
     skip = perf_unavailable()
     command, prefix = compile_command(hl, compiler, sources, output), ""
-    # On a hybrid CPU each core type has its own counter, multiplexed and extrapolated when the thread moves between them:
-    # keep the compile on the performance cores and count theirs.
-    hybrid = "/sys/bus/event_source/devices/cpu_core/cpus"
-    if skip is None and os.path.exists(hybrid):
-        with open(hybrid) as source:
-            command, prefix = ["taskset", "-c", source.read().strip()] + command, "cpu_core/"
+    if skip is None:
+        pin, prefix = performance_cores()
+        command = pin + command
     events = {prefix + "instructions/u": "main_thread_instructions", prefix + "cycles/u": "main_thread_cycles"}
     started = time.monotonic()
     with open(log_path, "w") as log:
@@ -195,20 +229,35 @@ GROWTH_BUILDS = 2
 LATE_BODY_EDITS = 2
 
 
+def server_request(state, body):
+    """Sends one request to the compile server that `state` (its state file's contents) describes; returns its responses."""
+    payload = json.dumps(dict(body, token=state["token"])).encode()
+    with socket.create_connection(("127.0.0.1", state["port"]), timeout=600) as client:
+        client.sendall(struct.pack("<i", len(payload)) + payload)
+        data = b""
+        while True:
+            chunk = client.recv(1 << 16)
+            if not chunk:
+                break
+            data += chunk
+    return [json.loads(line) for line in data.decode().splitlines() if line]
+
+
 class CompileServer:
     """A compile server on a copy of the sources, driven over its protocol (compiler.tools.CompilerServerProtocol)."""
 
-    def __init__(self, hl, server, tree, log_path):
-        self.tree, self.log_path = tree, log_path
+    def __init__(self, hl, server, tree, log_path, reports=True, pin=()):
+        self.tree, self.log_path, self.reports = tree, log_path, reports
         state = os.path.join(tree, "server.json")
-        # The census at the end of each build (`write-done`) collects first and reports the live data per size class only;
-        # the explanation of each build's invalidation names what it retyped and regenerated.
-        env = dict(os.environ, HL_GC_MARK_SERIAL="1", HAXEON_PEAK_CENSUS="write-done", HL_GC_CENSUS_PAGES_ONLY="1",
-                   HAXEON_EXPLAIN_INVALIDATION="1", HAXEON_COMPILER_IDLE_SECONDS="900")
+        env = dict(os.environ, HL_GC_MARK_SERIAL="1", HAXEON_COMPILER_IDLE_SECONDS="900")
+        if reports:
+            # The census at the end of each build (`write-done`) collects first and reports the live data per size class only;
+            # the explanation of each build's invalidation names what it retyped and regenerated.
+            env.update(HAXEON_PEAK_CENSUS="write-done", HL_GC_CENSUS_PAGES_ONLY="1", HAXEON_EXPLAIN_INVALIDATION="1")
         self.log = open(log_path, "w")
         self.offset = 0
-        self.process = subprocess.Popen([hl, server, state], cwd=tree, env=env, stdin=subprocess.DEVNULL, stdout=self.log,
-                                        stderr=subprocess.STDOUT)
+        self.process = subprocess.Popen(list(pin) + [hl, server, state], cwd=tree, env=env, stdin=subprocess.DEVNULL,
+                                        stdout=self.log, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 60
         while not os.path.exists(state):
             if self.process.poll() is not None or time.monotonic() > deadline:
@@ -218,16 +267,7 @@ class CompileServer:
             self.state = json.load(source)
 
     def request(self, body):
-        payload = json.dumps(dict(body, token=self.state["token"])).encode()
-        with socket.create_connection(("127.0.0.1", self.state["port"]), timeout=600) as client:
-            client.sendall(struct.pack("<i", len(payload)) + payload)
-            data = b""
-            while True:
-                chunk = client.recv(1 << 16)
-                if not chunk:
-                    break
-                data += chunk
-        return [json.loads(line) for line in data.decode().splitlines() if line]
+        return server_request(self.state, body)
 
     def compile(self, label):
         started = time.monotonic()
@@ -261,7 +301,7 @@ class CompileServer:
             elif len(words) > 3 and words[0] == "census" and words[2] == "total" and "live" in words:
                 build["live_bytes"] = round(float(words[words.index("live") + 1]) * 1024 * 1024)
         missing = [name for name in ("retyped_functions", "regenerated_functions", "live_bytes") if name not in build]
-        if missing:
+        if missing and self.reports:
             raise SystemExit(f"perf-guard: the {label} build reported no {', '.join(missing)}; server log: {self.log_path}")
         return build
 
@@ -297,12 +337,7 @@ def measure_incremental(hl, compiler, out, frozen):
                                 cwd=ROOT, stdout=log, stderr=subprocess.STDOUT).returncode
     if status != 0:
         raise SystemExit(f"perf-guard: building the compile server failed (exit {status}); log: {os.path.join(out, 'server-build.log')}")
-    tree = os.path.join(out, "incremental")
-    shutil.rmtree(tree, ignore_errors=True)
-    os.makedirs(tree)
-    for root in SOURCE_ROOTS:
-        shutil.copytree(os.path.join(frozen, root), os.path.join(tree, root))
-    shutil.copyfile(os.path.join(frozen, "sources.txt"), os.path.join(tree, "sources.txt"))
+    tree = copy_frozen(frozen, os.path.join(out, "incremental"))
     open(os.path.join(out, "server-messages.log"), "w").close()
     session = CompileServer(hl, server, tree, os.path.join(out, "server.log"))
     try:
@@ -330,14 +365,250 @@ def measure_incremental(hl, compiler, out, frozen):
             metrics[f"{prefix}_{name}"] = named[label][name]
     metrics["server_live_bytes"] = settled[-1]["live_bytes"]
     metrics["server_live_growth_bytes"] = settled[-1]["live_bytes"] - settled[0]["live_bytes"]
+    skip = perf_unavailable()
+    if skip is None:
+        metrics.update(measure_edit_latency(hl, server, frozen, out))
+    else:
+        print(f"perf-guard: edit latency skipped: {skip}")
     return metrics
 
 
-def compare(path, metrics, update):
-    """Compares `metrics` with the baseline at `path`, writing them into it on `update`; returns (failures, improvements)."""
+def copy_frozen(frozen, tree):
+    """A fresh copy of the frozen input at `tree`, for a compile server to edit."""
+    shutil.rmtree(tree, ignore_errors=True)
+    os.makedirs(tree)
+    for root in SOURCE_ROOTS:
+        shutil.copytree(os.path.join(frozen, root), os.path.join(tree, root))
+    shutil.copyfile(os.path.join(frozen, "sources.txt"), os.path.join(tree, "sources.txt"))
+    return tree
+
+
+class ThreadCounter:
+    """perf stat --per-thread attached to a running process, counting only while enabled over its control fifos.
+
+    A thread the process starts while counted (the server's compile thread, the threads it starts in turn) inherits its
+    creator's counters, so the main thread's row holds the work of every thread it started."""
+
+    def __init__(self, pid, prefix, directory):
+        self.pid = pid
+        self.events = {prefix + "instructions/u": "instructions", prefix + "cycles/u": "cycles"}
+        self.control, self.ack = os.path.join(directory, "perf-control.fifo"), os.path.join(directory, "perf-ack.fifo")
+        for path in (self.control, self.ack):
+            if os.path.exists(path):
+                os.remove(path)
+            os.mkfifo(path)
+        self.process = subprocess.Popen(["perf", "stat", "--per-thread", "-x,", "-e", ",".join(self.events), "-p", str(pid),
+                                         "--delay=-1", f"--control=fifo:{self.control},{self.ack}"],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        # Opened for reading and writing, as perf opens them, so neither side waits for the other to open.
+        self.control_fd, self.ack_fd = os.open(self.control, os.O_RDWR), os.open(self.ack, os.O_RDWR)
+
+    def command(self, word):
+        os.write(self.control_fd, (word + "\n").encode())
+        if not select.select([self.ack_fd], [], [], 60)[0] or not os.read(self.ack_fd, 64).startswith(b"ack"):
+            self.process.kill()
+            raise SystemExit(f"perf-guard: perf did not acknowledge {word!r}: " + self.process.communicate()[1][:200])
+
+    def counts(self):
+        """Stops counting; returns the main thread's counts by event name."""
+        self.command("disable")
+        self.process.send_signal(signal.SIGINT)
+        _, errors = self.process.communicate()
+        os.close(self.control_fd)
+        os.close(self.ack_fd)
+        rows = [row.split(",") for row in errors.splitlines()]
+        counts = {}
+        for event, name in self.events.items():
+            found = [int(row[1]) for row in rows
+                     if len(row) > 3 and row[0].endswith(f"-{self.pid}") and row[1].isdigit() and row[3] == event]
+            if found:
+                counts[name] = sum(found)
+        if "instructions" not in counts:
+            raise SystemExit("perf-guard: perf counted nothing: " + errors.strip().replace("\n", " ")[:200])
+        return counts
+
+
+# The edit-latency session measures each body edit this many times (made and taken back) and keeps the median.
+LATENCY_BODY_EDITS = 3
+
+
+def measure_edit_latency(hl, server, frozen, out):
+    """Main-thread instructions of a body edit and of the signature edit, as a user's edit pays them: in a session of their own,
+    without the incremental part's census and invalidation reports, whose work would count in them."""
+    tree = copy_frozen(frozen, os.path.join(out, "edit-latency"))
+    pin, prefix = performance_cores()
+    session = CompileServer(hl, server, tree, os.path.join(out, "edit-latency-server.log"), reports=False, pin=pin)
+
+    def counted(label):
+        counter = ThreadCounter(session.process.pid, prefix, out)
+        counter.command("enable")
+        build = session.compile(label)
+        build.update(counter.counts())
+        return build
+
+    try:
+        session.compile("latency cold")
+        session.compile("latency no-op")
+        body = []
+        for index in range(LATENCY_BODY_EDITS):
+            edit(tree, BODY_EDIT, forward=index % 2 == 0)
+            body.append(counted(f"latency body edit {index + 1}"))
+        if LATENCY_BODY_EDITS % 2:
+            edit(tree, BODY_EDIT, forward=False)
+            session.compile("latency body edit undone")
+        edit(tree, SIGNATURE_EDIT)
+        signature = counted("latency signature edit")
+    finally:
+        session.stop()
+    for build in body + [signature]:
+        print(f"perf-guard: {build['label']:24} wall {build['wall']:6.2f} s, cycles {build.get('cycles', 0) / 1e9:6.2f}G "
+              f"(not compared), instructions {build['instructions'] / 1e9:6.2f}G")
+    return {"body_edit_instructions": sorted(build["instructions"] for build in body)[len(body) // 2],
+            "signature_edit_instructions": signature["instructions"]}
+
+
+# The small project's builds run the CLI as a user does, with the compile servers it starts kept in a session directory of the
+# guard's. The command runs in a shell that waits for the server to leave after the build (HAXEON_COMPILER_IDLE_SECONDS) so that
+# perf, counting the shell and everything it starts, counts the server's work too, and that records the CLI's own wall time and
+# which program served the compile. perf puts its own directory on PATH, which the CLI's choice of server program depends on, so
+# the shell puts the user's back.
+SMALL_PROJECT_SHELL = """export PATH="$PERF_GUARD_PATH"
+started=$(date +%s%N)
+"$@" > "$PERF_GUARD_LOG" 2>&1
+status=$?
+echo $(( $(date +%s%N) - started )) > "$PERF_GUARD_WALL"
+for state in "$HAXEON_COMPILER_SESSION_DIR"/*.json; do
+    pid=$(sed -n 's/.*"pid":\\([0-9]*\\).*/\\1/p' "$state" 2>/dev/null)
+    if [ -n "$pid" ]; then
+        readlink "/proc/$pid/exe" > "$PERF_GUARD_SERVER"
+        tail --pid="$pid" -s 0.05 -f /dev/null
+    fi
+done
+exit $status
+"""
+
+
+def stop_workers(session):
+    """Shuts down the compile servers the CLI started with `session` as its session directory, and waits for them to leave."""
+    for name in sorted(os.listdir(session)):
+        path = os.path.join(session, name)
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(path) as source:
+                state = json.load(source)
+            server_request(state, {"shutdown": True})
+        except (OSError, ValueError, KeyError):
+            continue
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            try:
+                os.kill(state["pid"], 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.05)
+        else:
+            os.kill(state["pid"], signal.SIGKILL)
+        if os.path.exists(path):
+            os.remove(path)
+
+
+def measure_small_project(hl, out):
+    """A cold `haxeon build` and `haxeon check` of tests/perf/small-project, as a user starts one: the CLI, which starts the
+    project's compile server (the compiler built ahead of time when it is current, else the VM running the compiler's bytecode),
+    and the compile; returns their metrics."""
+    work = os.path.join(out, "small-project")
+    # Kept between runs, as a user's is: it holds the server program the CLI builds once for the checkout's compiler.
+    session = os.path.join(work, "session")
+    project = os.path.join(work, "project")
+    os.makedirs(session, exist_ok=True)
+    shutil.rmtree(project, ignore_errors=True)
+    shutil.copytree(SMALL_PROJECT, project)
+    haxeon = os.path.join(ROOT, "scripts", "haxeon")
+    env = dict(os.environ, HAXEON_COMPILER_SESSION_DIR=session, HL_GC_MARK_SERIAL="1", HAXEON_COMPILER_IDLE_SECONDS="1",
+               PERF_GUARD_LOG=os.path.join(work, "command.log"), PERF_GUARD_WALL=os.path.join(work, "wall"),
+               PERF_GUARD_SERVER=os.path.join(work, "server"), PERF_GUARD_PATH=os.environ.get("PATH", ""))
+    stop_workers(session)
+    # Unmeasured: builds the server program when the session has none for this compiler yet, and warms the file cache.
+    with open(os.path.join(work, "warm-up.log"), "w") as log:
+        status = subprocess.run([haxeon, "build", "--project", "haxeon.json"], cwd=project, env=env, stdout=log,
+                                stderr=subprocess.STDOUT).returncode
+    stop_workers(session)
+    if status != 0:
+        raise SystemExit(f"perf-guard: the small project's warm-up build failed (exit {status}); log: {log.name}")
+    # The CLI is current now; the measured commands skip bringing it up to date.
+    env["HAXEON_NATIVE_READY"] = "1"
+    skip = perf_unavailable()
+    pin, prefix = performance_cores() if skip is None else ([], "")
+    events = {prefix + "instructions/u": "instructions", prefix + "cycles/u": "cycles"}
+    metrics = {}
+    for command in ("build", "check"):
+        shutil.rmtree(os.path.join(project, "build"), ignore_errors=True)
+        shell = pin + ["sh", "-c", SMALL_PROJECT_SHELL, "sh", haxeon, command, "--project", "haxeon.json", "-v", "detailed"]
+        if skip is None:
+            shell = ["perf", "stat", "-x,", "-e", ",".join(events), "--"] + shell
+        process = subprocess.run(shell, cwd=project, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        stop_workers(session)
+        with open(env["PERF_GUARD_LOG"]) as source:
+            log = source.read()
+        if process.returncode != 0:
+            sys.stderr.write(log[-4000:] + process.stderr[-2000:])
+            raise SystemExit(f"perf-guard: the small project's {command} failed (exit {process.returncode}); "
+                             f"log: {env['PERF_GUARD_LOG']}")
+        # `worker allocations: bytes=B count=C heap=H`, what the server allocated for the request; a check reports no driver
+        # allocation phases, and the compiler built ahead of time no worker allocations.
+        line = next((line for line in log.splitlines() if line.startswith("worker allocations: ")), None)
+        if line is not None:
+            fields = dict(field.split("=", 1) for field in line.split(":", 1)[1].split())
+            metrics[f"{command}_allocated_bytes"] = int(fields["bytes"])
+        counts = {}
+        for row in (row.split(",") for row in process.stderr.splitlines()):
+            if len(row) > 2 and row[0].isdigit() and row[2] in events:
+                counts[events[row[2]]] = int(row[0])
+        if "instructions" in counts:
+            metrics[f"{command}_instructions"] = counts["instructions"]
+        with open(env["PERF_GUARD_WALL"]) as source:
+            wall = int(source.read()) / 1e9
+        with open(env["PERF_GUARD_SERVER"]) as source:
+            server = os.path.basename(source.read().strip())
+        print(f"perf-guard: small project cold {command:5} wall {wall:5.2f} s"
+              + (f", cycles {counts['cycles'] / 1e9:.2f}G" if "cycles" in counts else "") + " (not compared), "
+              + (f"instructions {counts['instructions'] / 1e9:.2f}G, " if "instructions" in counts else "")
+              + f"served by {server}")
+    if skip:
+        print(f"perf-guard: small project instructions skipped: {skip}")
+    return metrics
+
+
+# The metrics the compiler is optimized for, in the order of the priorities, and those that only guard against regressions:
+# each is (baseline, metric, label) and appears in the summary the run ends with. A primary metric's row is marked with `*`.
+PRIMARY = [(INCREMENTAL_BASELINE, "body_edit_instructions", "body edit"),
+           (INCREMENTAL_BASELINE, "signature_edit_instructions", "signature edit"),
+           (SMALL_PROJECT_BASELINE, "build_instructions", "small-project cold build"),
+           (SMALL_PROJECT_BASELINE, "check_instructions", "check"),
+           (INCREMENTAL_BASELINE, "server_live_bytes", "server live")]
+REGRESSION_GUARDS = [(BASELINE, "main_thread_instructions", "self-compile"), (BASELINE, "peak_rss_bytes", "self-compile peak")]
+
+
+def summary(heading, metrics, compared):
+    """One line of the metrics in `metrics` that were measured, with their change from the baseline."""
+    parts = []
+    for path, name, label in metrics:
+        if (path, name) in compared:
+            value, change = compared[(path, name)]
+            amount = f"{value / 1e9:.2f}G instructions" if name.endswith("instructions") else f"{value / 1048576.0:.0f} MB"
+            parts.append(f"{label} {amount} ({change:+.1f}%)")
+    if parts:
+        print(f"perf-guard: {heading}: " + ", ".join(parts))
+
+
+def compare(path, metrics, update, compared):
+    """Compares `metrics` with the baseline at `path`, writing them into it on `update` and each compared value and its change
+    into `compared`, by (path, name); returns (failures, improvements)."""
     with open(path) as source:
         baseline = json.load(source)
     failures, improvements = [], []
+    primary = {name for baseline_path, name, _ in PRIMARY if baseline_path == path}
     for name, entry in baseline["metrics"].items():
         if name not in metrics:
             continue
@@ -351,7 +622,9 @@ def compare(path, metrics, update):
         elif value < expected - slack:
             verdict = "improved: update the baseline"
             improvements.append(name)
-        print(f"  {name:34} {value:>16} baseline {expected:>16} {change:+7.2f}% (allowed +-{slack:.0f})  {verdict}")
+        compared[(path, name)] = (value, change)
+        print(f"{'*' if name in primary else ' '} {name:34} {value:>16} baseline {expected:>16} {change:+7.2f}% "
+              f"(allowed +-{slack:.0f})  {verdict}")
         if update:
             entry["value"] = value
     if update:
@@ -364,7 +637,7 @@ def compare(path, metrics, update):
 
 def main(arguments):
     update = "--update" in arguments
-    parts = ["self-compile", "incremental"]
+    parts = ["self-compile", "incremental", "small-project"]
     for argument in arguments:
         if argument.startswith("--only=") and argument[len("--only="):] in parts:
             parts = [argument[len("--only="):]]
@@ -376,16 +649,19 @@ def main(arguments):
     out = os.environ.get("HAXEON_SUITE_OUT") or os.path.join(ROOT, "out", "perf-guard")
     os.makedirs(out, exist_ok=True)
     hl = hashlink()
-    tool = os.environ.get("HAXEON_COMPILER_HL") or run([os.path.join(ROOT, "scripts", "haxeon"), "dev", "tool-path", ENTRY]).strip()
-    sources = os.path.join(out, "sources.txt")
-    list_sources(ROOT, sources)
-    frozen, frozen_sources = frozen_input(out)
-    compiler = os.path.join(out, "compiler.hl")
-    with open(os.path.join(out, "build.log"), "w") as log:
-        status = subprocess.run(compile_command(hl, tool, sources, compiler), cwd=ROOT, stdout=log, stderr=subprocess.STDOUT).returncode
-    if status != 0:
-        raise SystemExit(f"perf-guard: building the compiler failed (exit {status}); log: {os.path.join(out, 'build.log')}")
-    failures, improvements = [], []
+    failures, improvements, compared = [], [], {}
+    if "self-compile" in parts or "incremental" in parts:
+        tool = os.environ.get("HAXEON_COMPILER_HL") or run([os.path.join(ROOT, "scripts", "haxeon"), "dev", "tool-path",
+                                                            ENTRY]).strip()
+        sources = os.path.join(out, "sources.txt")
+        list_sources(ROOT, sources)
+        frozen, frozen_sources = frozen_input(out)
+        compiler = os.path.join(out, "compiler.hl")
+        with open(os.path.join(out, "build.log"), "w") as log:
+            status = subprocess.run(compile_command(hl, tool, sources, compiler), cwd=ROOT, stdout=log,
+                                    stderr=subprocess.STDOUT).returncode
+        if status != 0:
+            raise SystemExit(f"perf-guard: building the compiler failed (exit {status}); log: {os.path.join(out, 'build.log')}")
     if "self-compile" in parts:
         metrics, skip = measure(hl, compiler, frozen_sources, os.path.join(out, "self-compile.hl"),
                                 os.path.join(out, "self-compile.log"), frozen)
@@ -396,16 +672,22 @@ def main(arguments):
               + (f", main-thread cycles {cycles / 1e9:.2f}G" if cycles else "") + " (not compared)")
         if skip:
             print(f"perf-guard: instructions skipped: {skip}")
-        found = compare(BASELINE, metrics, update)
+        found = compare(BASELINE, metrics, update, compared)
         failures += found[0]
         improvements += found[1]
     if "incremental" in parts:
         started = time.monotonic()
         metrics = measure_incremental(hl, compiler, out, frozen)
         print(f"perf-guard: incremental builds wall {time.monotonic() - started:.1f} s (not compared)")
-        found = compare(INCREMENTAL_BASELINE, metrics, update)
+        found = compare(INCREMENTAL_BASELINE, metrics, update, compared)
         failures += found[0]
         improvements += found[1]
+    if "small-project" in parts:
+        found = compare(SMALL_PROJECT_BASELINE, measure_small_project(hl, out), update, compared)
+        failures += found[0]
+        improvements += found[1]
+    summary("primary", PRIMARY, compared)
+    summary("regression guards", REGRESSION_GUARDS, compared)
     if update:
         return 0
     if improvements:

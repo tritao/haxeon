@@ -1,0 +1,25 @@
+{
+	"about": "scripts/perf-guard.py, small-project part: a cold haxeon build and haxeon check of tests/perf/small-project with the CLI built from the checkout, from no compile server running to the server's exit: the CLI's start and its project resolution, the server's start (the VM running the compiler's bytecode; this baseline was taken without a current compiler built ahead of time) and the compile. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
+	"metrics": {
+		"build_instructions": {
+			"value": 18820437739,
+			"tolerance": 0.03,
+			"why": "Instructions of every process the build starts, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
+		},
+		"build_allocated_bytes": {
+			"value": 59316240,
+			"tolerance": 0.02,
+			"why": "What the compile server allocated for the build (its worker allocations): deterministic for a given compiler and project."
+		},
+		"check_instructions": {
+			"value": 14683878131,
+			"tolerance": 0.03,
+			"why": "As build_instructions, for a check, which types the project without writing a module."
+		},
+		"check_allocated_bytes": {
+			"value": 64348224,
+			"tolerance": 0.02,
+			"why": "What the compile server allocated for the check: deterministic for a given compiler and project."
+		}
+	}
+}

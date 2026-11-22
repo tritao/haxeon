@@ -69,10 +69,24 @@ keeps its state, on a copy of the frozen input, through a cold build, two no-op 
 and taken back six times, and an optional argument added to `InternalError`'s constructor, which most modules call. For each it
 gates allocated bytes and the functions retyped, artifacts invalidated and functions regenerated (the `HAXEON_EXPLAIN_INVALIDATION`
 counts); wall is printed. A heap census at the end of every build gives the session's live data after the last body edit and its
-growth over the last two, which stays near zero unless the session keeps something from every build. This part adds about two
-and a half minutes; `--only=self-compile` or `--only=incremental` runs one part.
+growth over the last two, which stays near zero unless the session keeps something from every build. A second session of the
+server, without those reports, gates edit latency: main-thread `instructions:u` of the body edit and of the signature edit, from
+`perf stat --per-thread` attached to the server around each build (skipped where perf is not available). This part adds about
+three minutes.
 
-Each metric is compared with `tests/perf/self-compile-baseline.json` or `tests/perf/incremental-baseline.json`, which hold its
+The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
+no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
+instructions of every process the command starts and the bytes the server allocated for the request; the CLI's wall is printed.
+`--only=self-compile`, `--only=incremental` or `--only=small-project` runs one part.
+
+Every metric fails the run beyond its tolerance, but the primary ones are what the compiler is optimized for, in this order:
+edit latency in the compile server, startup (the small project's cold build and check), and the server's live data, weighted
+above the one-shot peak. They are marked `*` and summed up in the first line of the summary the run ends with. The cold
+self-compile (instructions, wall, peak, allocation, live data) and the incremental allocation and function counts are regression
+guards.
+
+Each metric is compared with `tests/perf/self-compile-baseline.json`, `tests/perf/incremental-baseline.json` or
+`tests/perf/small-project-baseline.json`, which hold its
 value and tolerance and why the tolerance is what it is. Above the tolerance the suite fails; below it the suite passes and asks
 for the baseline to be updated, so a gain is locked in. Moving `input_revision` (when the old sources no longer compile, or to
 follow the compiler's growth) re-baselines every metric in the same commit. A change that moves the values on purpose (a feature that costs memory, an optimization) updates the baseline in the same
