@@ -1,5 +1,6 @@
 package compiler.hl.lower;
 
+import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrValueId;
@@ -36,6 +37,26 @@ class HlLoweringDecisions {
 				IrOpcode.BitXor, IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight,
 				IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal, IrOpcode.FieldGet, IrOpcode.ArrayGet,
 				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.Phi: true;
+			default: false;
+		};
+
+	/**
+	 * Whether row `row` boxes an array (`ToDyn`) only for the next row to cast it back to an array (`SafeCast`), as a coercion
+	 * between array types does: HashLink arrays carry no element type, so the cast takes the array itself and the box is not
+	 * made. `uses` counts the operands that read each value.
+	 */
+	public static function isArrayRecast(body:IrBody, row:Int, uses:Array<Int>):Bool {
+		if (body.opcode(row) != IrOpcode.ToDyn)
+			return false;
+		var boxed = body.output(row), next = body.nextRow(row);
+		return next >= 0 && body.opcode(next) == IrOpcode.SafeCast && (body.operand(next, 0):Int) == (boxed:Int)
+			&& uses[boxed] == 1 && isArray(body.valueType(body.operand(row, 0)))
+			&& isArray(body.valueType(body.output(next)));
+	}
+
+	static function isArray(type:IrType):Bool
+		return switch type {
+			case Array(_): true;
 			default: false;
 		};
 }

@@ -1217,18 +1217,11 @@ class HlLower {
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
 			while (row >= 0 && row != terminator) {
-				var next = body.nextRow(row);
-				if (next < 0 || next == terminator)
-					break;
-				if (body.opcode(row) == IrOpcode.ToDyn) {
-					var boxed = body.output(row), value = body.operand(row, 0);
-					if (isArray(body.valueType(value)) && uses[boxed] == 1 && body.opcode(next) == IrOpcode.SafeCast
-						&& (body.operand(next, 0):Int) == (boxed:Int) && isArray(body.valueType(body.output(next)))) {
-						arrayRecasts[body.output(next)] = value;
-						unboxedArrays.add(boxed);
-					}
+				if (HlLoweringDecisions.isArrayRecast(body, row, uses)) {
+					arrayRecasts[body.output(body.nextRow(row))] = body.operand(row, 0);
+					unboxedArrays.add(body.output(row));
 				}
-				row = next;
+				row = body.nextRow(row);
 			}
 		}
 		var catchValues = compiler.ir.model.IrPassScratch.filledInts(scratch.catchValues, nextLabel, -1);
@@ -2500,12 +2493,6 @@ class HlLower {
 			case JumpNull(value, _): HlInstruction.JumpNotNull(value, target);
 			case JumpEqual(left, right, _): HlInstruction.JumpNotEqual(left, right, target);
 			default: throw new InternalError("Not a comparison jump");
-		};
-
-	static function isArray(type:IrType):Bool
-		return switch type {
-			case Array(_): true;
-			default: false;
 		};
 
 	static function isFloat(type:IrType):Bool

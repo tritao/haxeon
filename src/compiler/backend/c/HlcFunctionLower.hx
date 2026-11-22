@@ -448,7 +448,7 @@ class HlcFunctionLower {
 				assign(row, typeAddress(module.typeIndex(body.typeOperand(row))), module.typeRef);
 			case IrOpcode.ToDyn:
 				var value = body.operand(row, 0), from = typeOf(value);
-				if (arrayRecast(row))
+				if (HlLoweringDecisions.isArrayRecast(body, row, uses))
 					return;
 				if (isDynamic(from))
 					line('${v(output)} = (vdynamic*)${v(value)};');
@@ -660,23 +660,6 @@ class HlcFunctionLower {
 			default: false;
 		};
 
-	/**
-	 * Whether ToDyn row `row` boxes an array only for the next row to cast it back to an array, as a coercion between array
-	 * types does: as in `HlLower`, the cast takes the array itself and no box is made (HashLink arrays carry no element type).
-	 */
-	function arrayRecast(row:Int):Bool {
-		var boxed = body.output(row), next = body.nextRow(row);
-		return isArrayType(body.valueType(body.operand(row, 0))) && next >= 0 && body.opcode(next) == IrOpcode.SafeCast
-			&& (body.operand(next, 0):Int) == (boxed:Int) && isArrayType(body.valueType(body.output(next)))
-			&& uses[boxed] == 1;
-	}
-
-	static function isArrayType(type:IrType):Bool
-		return switch type {
-			case Array(_): true;
-			default: false;
-		};
-
 	/** The native storage of an integer field (`HlLower.internNativeStorage` has one only for those), or null. */
 	function integerStorage(type:IrType, name:String, fieldType:Int):Null<compiler.ir.model.Ir.IrScalarStorage>
 		return switch types.kind(fieldType) {
@@ -739,7 +722,7 @@ class HlcFunctionLower {
 	/** `HlLower`'s `SafeCast`, as the JIT does it: a checked cast through the runtime's `hl_dyn_cast*` (`emit_dyn_cast`). */
 	function lowerCast(row:Int):Void {
 		var value = body.operand(row, 0), output = body.output(row), previous = body.previousRow(row);
-		if (previous >= 0 && body.opcode(previous) == IrOpcode.ToDyn && arrayRecast(previous)) {
+		if (previous >= 0 && HlLoweringDecisions.isArrayRecast(body, previous, uses)) {
 			line('${v(output)} = (varray*)${v(body.operand(previous, 0))};');
 			return;
 		}
