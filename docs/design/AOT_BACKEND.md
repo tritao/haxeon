@@ -366,10 +366,10 @@ are unpacked); when the executable or the stamp is missing, or the digest differ
 before. So an edit in a checkout never runs an older CLI or compiler. A release ships no compiler sources, as its compiler cannot
 change: its marker (`haxeon-release.txt`, `build.HaxeonRelease`) records the digest of the sources it was made from, and the stamps
 are matched against that, so a release always runs what it ships. `haxeon doctor` says which: ok, stale or not built. A build with
-a stale executable says so once, with the command that rebuilds it. Every command asks, so the digest is kept in
-`out/haxeon-aot.sources-digest` with the stat signature of the files it covers (each one's device, inode, size and times) and
-reused while no file changed: the check then reads no file (as `ContentDigestCache`, only once every file is older than the digest
-by a few seconds, since timestamps are whole seconds).
+a stale executable says so once, with the command that rebuilds it. Every command asks, so each file's digest comes from the
+user's store of content digests (`build.execution.DigestStore`, behind every `ContentDigestCache`), kept with the file's stat
+signature (device, inode, size and times) and reused while it holds: the check then reads no file, only once a file is older than
+its digest by a few seconds, since timestamps are whole seconds.
 
 A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler
 (docs/reference/RELEASES.md). It also ships the compiler's roles as bytecode with a stamp of its own (`haxeon-compiler.hl`), which

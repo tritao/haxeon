@@ -1,9 +1,7 @@
 package build;
 
-import build.execution.ContentDigest;
 import build.execution.ContentDigestCache;
 import haxe.crypto.Sha256;
-import haxe.io.Bytes;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -39,9 +37,6 @@ class AotCompiler {
 	public static var announceStale = false;
 
 	static var staleAnnounced = false;
-
-	/** How long before a digest a file must have last changed for the digest to be kept (`ContentDigestCache.racyMarginSeconds`). */
-	static inline final RACY_MARGIN_SECONDS = 3.0;
 
 	/** Where the executable is, whether or not it exists. */
 	public static function executable(home:String):String
@@ -105,75 +100,31 @@ class AotCompiler {
 	 * The digest of every file of the compiler's sources (`CompilerSources.roots`) and of the standard library it is built with, by
 	 * path relative to its root and content, so it does not depend on where a checkout or a release is unpacked.
 	 *
-	 * Every start of the CLI asks, so the digest is kept in `out` with the stat signature of the files it was made from (each one's
-	 * device, inode, size and times, and the list of them) and read back while that signature holds: then no file is read. As in
-	 * `ContentDigestCache`, it is kept only when no file changed within `RACY_MARGIN_SECONDS` of the hash, since timestamps are whole
-	 * seconds and an edit that keeps the size within the same second would not change the signature.
+	 * Every command asks, through the executable's stamp. A file unchanged since a process hashed it is not read again: its digest
+	 * comes from the user's `DigestStore`, behind every `ContentDigestCache`, so the check costs a walk of the trees.
 	 */
 	public static function sourcesDigest(home:String, compilerSource:String, ?digests:ContentDigestCache):String {
-		var started = Sys.time(),
-			roots = CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]),
-			files:Array<SourceFile> = [],
-			signature = new StringBuf();
-		signature.add('format $FORMAT\n');
-		for (index in 0...roots.length) {
-			signature.add('root $index ${roots[index]}\n');
-			listTree(roots[index], "", index, files, signature);
-		}
-		var key = ContentDigest.makeHex(Bytes.ofString(signature.toString())), cache = digestCache(home);
-		try {
-			var fields = StringTools.trim(File.getContent(cache)).split(" ");
-			if (fields.length == 2 && fields[0] == key && fields[1].length == key.length)
-				return fields[1];
-		} catch (_:Dynamic) {}
 		if (digests == null)
 			digests = new ContentDigestCache();
-		var text = new StringBuf(), root = -1, settled = true, limit = (started - RACY_MARGIN_SECONDS) * 1000.0;
+		var text = new StringBuf();
 		text.add('format $FORMAT\n');
-		for (file in files) {
-			for (index in root + 1...file.root + 1)
-				text.add('root $index\n');
-			root = file.root;
-			text.add('${file.relative} ${digests.file(file.path)}\n');
-			settled = settled && file.changed <= limit;
-		}
-		for (index in root + 1...roots.length)
+		var roots = CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]);
+		for (index in 0...roots.length) {
 			text.add('root $index\n');
-		var digest = Sha256.encode(text.toString());
-		if (settled)
-			try {
-				// Written aside under a name of its own and renamed, so a concurrent reader or writer never sees part of it.
-				var temporary = cache + ".tmp." + Std.random(1000000000);
-				FileSystem.createDirectory(Path.directory(cache));
-				File.saveContent(temporary, '$key $digest\n');
-				FileSystem.rename(temporary, cache);
-			} catch (_:Dynamic) {}
-		return digest;
+			digestTree(roots[index], "", text, digests);
+		}
+		return Sha256.encode(text.toString());
 	}
 
-	/** Where `sourcesDigest` keeps its last digest. */
-	static function digestCache(home:String):String
-		return Path.join([home, "out", NAME + ".sources-digest"]);
-
-	/** The files below `relative` in `root`, in the digest's order, each with its stat signature in `signature`. */
-	static function listTree(root:String, relative:String, rootIndex:Int, into:Array<SourceFile>,
-			signature:StringBuf):Void {
+	static function digestTree(root:String, relative:String, into:StringBuf, digests:ContentDigestCache):Void {
 		var entries = FileSystem.readDirectory(relative == "" ? root : Path.join([root, relative]));
 		entries.sort((left, right) -> left < right ? -1 : (left > right ? 1 : 0));
 		for (entry in entries) {
 			var child = relative == "" ? entry : relative + "/" + entry, path = Path.join([root, child]);
 			if (FileSystem.isDirectory(path))
-				listTree(root, child, rootIndex, into, signature);
-			else {
-				var stat = FileSystem.stat(path), modified = stat.mtime.getTime(), changed = stat.ctime.getTime();
-				signature.add('$child ${stat.dev}:${stat.ino}:${stat.size}:$modified:$changed\n');
-				into.push({
-					root: rootIndex,
-					relative: child,
-					path: path,
-					changed: Math.max(modified, changed)
-				});
-			}
+				digestTree(root, child, into, digests);
+			else
+				into.add('$child ${digests.file(path)}\n');
 		}
 	}
 }
@@ -216,14 +167,4 @@ typedef CompilerProgram = {
 
 	/** The executable built ahead of time, rather than the VM running bytecode. */
 	final native:Bool;
-}
-
-/** A file `AotCompiler.sourcesDigest` covers. */
-private typedef SourceFile = {
-	final root:Int;
-	final relative:String;
-	final path:String;
-
-	/** The later of its modification and status change times, in milliseconds. */
-	final changed:Float;
 }
