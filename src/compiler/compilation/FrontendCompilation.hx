@@ -1468,9 +1468,10 @@ class FrontendCompilation {
 		var generationWarnings:Array<compiler.core.Diagnostic> = [];
 		build.initializers = [
 			for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
-				build.cached, generationWarnings))
+				build.cached, generationWarnings, context.state.staticReferences))
 				compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes)
 		].concat(liveInitializers);
+		context.state.staticReferences.endBuild();
 		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
 		// The printers made with the objects (`context.state.anonymousStrings`), for every structure the program has.
 		if (printsStructures(context)) {

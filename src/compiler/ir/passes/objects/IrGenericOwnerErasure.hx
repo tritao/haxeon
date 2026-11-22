@@ -14,8 +14,108 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.ProgramFacts;
 import compiler.semantic.GeneratedNames;
 
+/**
+ * What one function asks the generic owner stage for (`IrGenericOwnerErasure.requestsOf`): a method reference
+ * (`METHOD_REFERENCE`: its receiver type as the one argument, its closure type as the result), an erased operation (`ERASED`: its
+ * call's argument and result types) or an erased owner's type test (`TYPE_TEST`: the name alone).
+ */
+typedef IrErasureRequest = {
+	final kind:Int;
+	final name:String;
+	final arguments:Array<IrType>;
+	final result:IrType;
+}
+
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
 class IrGenericOwnerErasure {
+	public static inline final METHOD_REFERENCE = 0;
+	public static inline final ERASED = 1;
+	public static inline final TYPE_TEST = 2;
+
+	@:processWide("a shared empty list of requests, only ever read")
+	static final NO_REQUESTS:Array<IrErasureRequest> = [];
+
+	/**
+	 * What `fn` asks for, in the order it asks: kept by the session for `fn`'s version with `lineage`
+	 * (`IrStageMemos.erasureRequests`), else read now, from the function's body when it is one, without decoding it.
+	 */
+	public static function requestsOf(fn:IrFunction,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Array<IrErasureRequest> {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return readRequests(fn);
+		var memo = lineage.memos.erasureRequests, known = memo.get(version);
+		if (known == null) {
+			known = readRequests(fn);
+			memo.keep(version, known);
+		} else if (lineage.checks && !sameRequests(readRequests(fn), known))
+			throw new InternalError('--check-reuse: the generic owner requests reused for ${fn.name} differ from its code');
+		return known;
+	}
+
+	static function sameRequests(left:Array<IrErasureRequest>, right:Array<IrErasureRequest>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length) {
+			var a = left[index], b = right[index];
+			if (a.kind != b.kind || a.name != b.name || !Type.enumEq(a.result, b.result)
+				|| !sameTypes(a.arguments, b.arguments))
+				return false;
+		}
+		return true;
+	}
+
+	static function readRequests(fn:IrFunction):Array<IrErasureRequest> {
+		var found:Null<Array<IrErasureRequest>> = null;
+		function add(kind:Int, name:String, arguments:Array<IrType>, result:IrType):Void {
+			if (found == null)
+				found = [];
+			found.push({kind: kind, name: name, arguments: arguments, result: result});
+		}
+		function call(name:String, arguments:Array<IrType>, result:IrType):Void
+			if (GeneratedNames.isErasedOperation(name))
+				add(ERASED, name, arguments, result);
+			else if (StringTools.startsWith(name, TYPE_TEST_PREFIX))
+				add(TYPE_TEST, name, [], Void);
+		var body = fn.body;
+		if (body != null)
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case compiler.ir.model.IrOpcode.Call:
+							var name = body.symbol(row).name;
+							if (GeneratedNames.isErasedOperation(name)
+								|| StringTools.startsWith(name, TYPE_TEST_PREFIX))
+								call(name, [for (index in 0...body.operandCount(row)) body.valueType(body.operand(row,
+									index))],
+									body.valueType(body.output(row)));
+						case compiler.ir.model.IrOpcode.InstanceClosure:
+							var name = body.symbol(row).name;
+							if (compiler.ir.gen.IrMethodReferences.isReference(name))
+								add(METHOD_REFERENCE, name, [body.valueType(body.operand(row, 0))],
+									body.valueType(body.output(row)));
+						default:
+					}
+					row = body.nextRow(row);
+				}
+			}
+				else
+				for (block in fn.blocks)
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case Call(output, name, arguments):
+								if (GeneratedNames.isErasedOperation(name.name)
+									|| StringTools.startsWith(name.name, TYPE_TEST_PREFIX))
+									call(name.name, [for (argument in arguments) argument.type], output.type);
+							case InstanceClosure(output, name,
+								receiver) if (compiler.ir.gen.IrMethodReferences.isReference(name.name)):
+								add(METHOD_REFERENCE, name.name, [receiver.type], output.type);
+							default:
+						}
+		return found == null ? NO_REQUESTS : found;
+	}
+
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
 	/** Whether `name` is an operation through an erased generic owner (`$generic-erased:Owner:get|set|call:member`). */
 	public static inline function isOperation(name:String):Bool
@@ -29,20 +129,21 @@ class IrGenericOwnerErasure {
 		return TYPE_TEST_PREFIX + (exact ? "exact:" : "instance:") + owner;
 
 	/** Generate only the operations that occur in typed code, before value-field lowering. */
-	public static function generate(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>):Void {
-		generateTypeTests(facts, functions, objects);
+	public static function generate(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+		generateTypeTests(facts, functions, objects, lineage);
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
-		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
-			switch instruction.value {
-			case Call(output, name, arguments) if (GeneratedNames.isErasedOperation(name.name)):
-				var signature = {arguments: [for (argument in arguments) argument.type], result: output.type},
-					previous = requests.get(name.name);
-				if (previous != null && (!Type.enumEq(previous.result, signature.result)
-					|| !sameTypes(previous.arguments, signature.arguments)))
-					throw new InternalError('Conflicting erased generic operation "$name"');
-				requests.set(name.name, signature);
-			default:
-		}
+		for (fn in functions)
+			for (request in requestsOf(fn, lineage))
+				if (request.kind == ERASED) {
+					var name = request.name,
+						signature = {arguments: request.arguments, result: request.result},
+						previous = requests.get(name);
+					if (previous != null && (!Type.enumEq(previous.result, signature.result)
+						|| !sameTypes(previous.arguments, signature.arguments)))
+						throw new InternalError('Conflicting erased generic operation "$name"');
+					requests.set(name, signature);
+				}
 		var byName = [for (object in objects) object.name => object],
 			byFunction = new IrFunctionIndex("generic-owner-erasure", functions);
 		var names = [for (name in requests.keys()) name];
@@ -157,14 +258,13 @@ class IrGenericOwnerErasure {
 	}
 
 	/** Regenerate type tests from the current layouts, including layouts added by an incremental edit. */
-	static function generateTypeTests(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>):Void {
+	static function generateTypeTests(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Void {
 		var requests:Map<String, Bool> = [];
-		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
-			switch instruction.value {
-			case Call(_, name, _) if (StringTools.startsWith(name.name, TYPE_TEST_PREFIX)): requests.set(name.name,
-				true);
-			default:
-		}
+		for (fn in functions)
+			for (request in requestsOf(fn, lineage))
+				if (request.kind == TYPE_TEST)
+					requests.set(request.name, true);
 		var names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {

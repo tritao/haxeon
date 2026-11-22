@@ -78,6 +78,10 @@ class SessionState {
 	/** The functions each IR function of the modules calls (`FrontendCompilation.callsOf`), while it is the same object. */
 	public var irCalls(default, null) = new compiler.ir.reuse.IrFunctionMemo<Array<String>>();
 
+	/** What each IR function references for the static initialization order (`IrStaticReferences`), while it is the same object. */
+	public var staticReferences(default, null) =
+		new compiler.ir.reuse.IrFunctionMemo<compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences>();
+
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
 	 * reuses both.
@@ -220,6 +224,7 @@ class SessionState {
 		result.stageMemos = stageMemos;
 		result.irTypeMentions = irTypeMentions;
 		result.irCalls = irCalls;
+		result.staticReferences = staticReferences;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = copyReachabilityCache(reachabilityCache);

@@ -111,6 +111,10 @@ class IrStageMemos {
 	/** The typed interface dispatchers each function calls (`IrTypedInterfaceDispatch.generate`). */
 	public final interfaceRequests = new IrContributionMemo<Array<IrTypedInterfaceRequest>>();
 
+	/** The method references, erased operations and type tests each function asks for (`IrGenericOwnerErasure.requestsOf`). */
+	public final erasureRequests =
+		new IrContributionMemo<Array<compiler.ir.passes.objects.IrGenericOwnerErasure.IrErasureRequest>>();
+
 	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
 	public final enumMentions = new IrContributionMemo<Array<String>>();
 
@@ -147,6 +151,7 @@ class IrStageMemos {
 		keptHelpers = [];
 		walkSummaries.begin(build);
 		interfaceRequests.begin(build);
+		erasureRequests.begin(build);
 		enumMentions.begin(build);
 	}
 

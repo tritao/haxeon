@@ -2,6 +2,8 @@ package compiler.ir.pipeline;
 
 import compiler.core.Diagnostic;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrOpcode;
+import compiler.ir.reuse.IrFunctionMemo;
 import compiler.semantic.AbstractStatics;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleFields;
@@ -86,18 +88,23 @@ class StaticInitializationOrder {
 	 * initializer, and `program` the program's functions.
 	 */
 	public static function of(classes:Array<TypedClass>, initializers:Map<String, IrFunction>,
-			program:Array<IrFunction>):{
+			program:Array<IrFunction>, ?memo:IrFunctionMemo<IrStaticReferences>):{
 				order:Array<TypedClass>,
 				loops:Array<TypedClass>
 			} {
-		var walk = new StaticInitializationOrder(classes, initializers, program);
+		var walk = new StaticInitializationOrder(classes, initializers, program, memo);
 		for (classDecl in classes)
 			walk.place(classDecl.name);
 		return {order: walk.order, loops: walk.loops};
 	}
 
-	function new(classList:Array<TypedClass>, initializers:Map<String, IrFunction>, program:Array<IrFunction>) {
+	/** What each function references (`IrStaticReferences`), kept by the session while the function is the same object. */
+	final memo:Null<IrFunctionMemo<IrStaticReferences>>;
+
+	function new(classList:Array<TypedClass>, initializers:Map<String, IrFunction>, program:Array<IrFunction>,
+			memo:Null<IrFunctionMemo<IrStaticReferences>>) {
 		this.initializers = initializers;
+		this.memo = memo;
 		functions = [for (fn in program) fn.name => fn];
 		for (classDecl in classList) {
 			classes.set(classDecl.name, classDecl);
@@ -171,21 +178,27 @@ class StaticInitializationOrder {
 	}
 
 	function walk(fn:IrFunction):Void {
-		for (block in fn.blocks)
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case GlobalGet(_, name), GlobalSet(name, _):
-						var owner = staticOwners.get(name);
-						if (owner != null) {
-							place(owner);
-							walkMember(name);
-						}
-					case NewObject(_, typeName):
-						place(typeName);
-					case Call(_, callee, _), StaticClosure(_, callee):
-						reference(callee.name);
-					case _:
-				}
+		var references = memo == null ? null : memo.get(fn);
+		if (references == null) {
+			references = IrStaticReferences.of(fn);
+			if (memo != null)
+				memo.set(fn, references);
+		}
+		for (index in 0...references.kinds.length) {
+			var name = references.names[index];
+			switch references.kinds[index] {
+				case IrStaticReferences.GLOBAL:
+					var owner = staticOwners.get(name);
+					if (owner != null) {
+						place(owner);
+						walkMember(name);
+					}
+				case IrStaticReferences.CREATED:
+					place(name);
+				default:
+					reference(name);
+			}
+		}
 	}
 
 	function reference(callee:String):Void {
@@ -205,5 +218,60 @@ class StaticInitializationOrder {
 			place(owner);
 		// A lambda's body is part of the expression it is written in, and a generated helper stands for code Haxe has inline.
 		walkMember(callee);
+	}
+}
+
+/**
+ * What the walk of static initialization order reads of one function, in its order: the globals it reads or writes, the classes it
+ * creates and the functions it calls or closes over. It depends on the function alone, so a session keeps it while the function is
+ * the same object, and a function kept as its body alone is read from the body.
+ */
+class IrStaticReferences {
+	public static inline final GLOBAL = 0;
+	public static inline final CREATED = 1;
+	public static inline final CALLED = 2;
+
+	public final kinds:Array<Int> = [];
+	public final names:Array<String> = [];
+
+	function new() {}
+
+	public static function of(fn:IrFunction):IrStaticReferences {
+		var references = new IrStaticReferences(), body = fn.body;
+		if (body != null) {
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.GlobalGet, IrOpcode.GlobalSet:
+							references.add(GLOBAL, body.symbol(row).name);
+						case IrOpcode.NewObject:
+							references.add(CREATED, body.symbol(row).name);
+						case IrOpcode.Call, IrOpcode.StaticClosure:
+							references.add(CALLED, body.symbol(row).name);
+						default:
+					}
+					row = body.nextRow(row);
+				}
+			}
+			return references;
+		}
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case GlobalGet(_, name), GlobalSet(name, _):
+						references.add(GLOBAL, name);
+					case NewObject(_, typeName):
+						references.add(CREATED, typeName);
+					case Call(_, callee, _), StaticClosure(_, callee):
+						references.add(CALLED, callee.name);
+					case _:
+				}
+		return references;
+	}
+
+	inline function add(kind:Int, name:String):Void {
+		kinds.push(kind);
+		names.push(name);
 	}
 }

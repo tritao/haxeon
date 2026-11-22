@@ -111,7 +111,9 @@ class IrProgramAssembler {
 	 */
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram,
 			classOrder:Null<Array<String>>,
-			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>):Array<IrFunction> {
+			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>,
+			?references:compiler.ir.reuse
+		.IrFunctionMemo<StaticInitializationOrder.IrStaticReferences>):Array<IrFunction> {
 		var probes:Map<String, IrFunction> = [];
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields) {
@@ -123,7 +125,8 @@ class IrProgramAssembler {
 					], field.span));
 				}
 			}
-		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program),
+		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program,
+			references),
 			classes = initialization.order,
 			defined:Map<String, Bool> = [for (fn in program) fn.name => true],
 			inits = [

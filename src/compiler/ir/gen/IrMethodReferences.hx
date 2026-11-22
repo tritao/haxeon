@@ -23,6 +23,10 @@ import compiler.ir.verify.IrVerifier;
 class IrMethodReferences {
 	static inline final PREFIX = "$method-reference:";
 
+	/** Whether `name` is a method reference's closure target. */
+	public static inline function isReference(name:String):Bool
+		return StringTools.startsWith(name, PREFIX);
+
 	/** The closure target of a method value of `owner.member` on a receiver of `receiver`, as a closure of type `closure`. */
 	public static function name(owner:String, member:String, receiver:String, closure:String):String
 		return PREFIX + '$owner:$member:$receiver:$closure';
@@ -39,19 +43,19 @@ class IrMethodReferences {
 	}
 
 	/** Gives each method reference the program makes its function, before value-field lowering and generic owner erasure. */
-	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>):Void {
+	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		var requests:Map<String, {receiver:IrType, closure:IrType}> = [];
-		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
-			switch instruction.value {
-			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
-				var previous = requests.get(name.name);
-				if (previous != null
-					&& (!IrVerifier.sameType(previous.receiver, receiver.type)
-					|| !IrVerifier.sameType(previous.closure, output.type)))
-					throw new InternalError('Conflicting method reference "$name"');
-				requests.set(name.name, {receiver: receiver.type, closure: output.type});
-			default:
-		}
+		for (fn in functions)
+			for (request in IrGenericOwnerErasure.requestsOf(fn, lineage))
+				if (request.kind == IrGenericOwnerErasure.METHOD_REFERENCE) {
+					var name = request.name, receiver = request.arguments[0], previous = requests.get(name);
+					if (previous != null
+						&& (!IrVerifier.sameType(previous.receiver, receiver)
+						|| !IrVerifier.sameType(previous.closure, request.result)))
+						throw new InternalError('Conflicting method reference "$name"');
+					requests.set(name, {receiver: receiver, closure: request.result});
+				}
 		var byName = [for (object in objects) object.name => object],
 			byFunction = new IrFunctionIndex("method-references", functions),
 			names = [for (name in requests.keys()) name];
