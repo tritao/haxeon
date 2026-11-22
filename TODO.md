@@ -3,18 +3,13 @@
 Concrete gaps found while compiling Materia and while matching stock Haxe.
 Longer-term direction is in `ROADMAP.md`.
 
-- **Enum abstracts lose their type when lowered.**
-  `DeclarationIndex.resolveNamedType` resolves an enum abstract to its
-  underlying type, so a switch subject or expected type of an enum abstract
-  is just `Int`/`String`, and a bare case value such as `case Box:` cannot be
-  resolved against the switched type as Haxe does. `BodyTyper` works around
-  it by searching every enum abstract for the value, preferring the one in the
-  current package (`722504a6`, test
-  `tests/compiler/SamePackageEnumAbstractValueMain.hx`). A switch over an
-  enum abstract from another package still fails when two imported abstracts
-  share a value name. Keep enum abstracts as `TAbstract`, like other
-  abstracts, and resolve bare values from the expected type; then remove the
-  package heuristic.
+- **A bare enum abstract value is found by package.** Enum abstracts are
+  abstracts that declare values (`552099308`), and a case name resolves among
+  the values of the matched abstract (`43b27f9b8`). A bare value with no
+  expected type still searches every enum abstract and prefers the one in the
+  current package (`BodyTyper`, tests `SamePackageEnumAbstractValueMain`,
+  `AmbiguousEnumAbstractValueMain`); resolve it as Haxe does and remove the
+  package rule.
 - **Most of Haxe's `Type` API is missing.** Haxeon has the enum-value part, on a value of a known enum type:
   `Type.enumIndex`, `Type.enumEq`, `Type.enumConstructor`, `Type.enumParameters` and Haxe's global
   `haxe.EnumTools.EnumValueTools` (`getName`, `getParameters`, `getIndex`, `equals`), which the typer provides
@@ -123,18 +118,18 @@ regular recursive generic enums are in the next section.
   3. The Android reload crash (below).
 
   Items 4 and 5 (nested generic calls and structured lambda names, then the
-  pass replacing paths 6 to 8) wait until the naming function and the
-  boundary contract are agreed with haxeon-e4.
-- **CLI usage errors are `InternalError`.** An unknown option or a missing
-  argument (`HaxeonCli`, `LintCommand`) throws
-  `compiler.core.InternalError` since `24db87fe1`. Add a `UsageError` so a
-  user's mistake is not reported as a compiler failure.
+  pass replacing paths 6 to 8) have the naming function (`GeneratedNames`,
+  `63914ff7d`) and wait for the boundary contract with haxeon-e4.
+- **`haxeon lint` reports usage errors as `InternalError`.** `UsageError`
+  (exit 2) exists since `43ece64c9`, but `LintCommand` still throws
+  `InternalError` for a missing `--only` or `--manifest` value and an unknown
+  rule, as does `HaxeonCli` for a missing project file.
 - **`haxe.io.Error.Blocked` became `InternalError("Blocked")`.** `24db87fe1`
   changed `ProcessOutputCapture.read`. Blocked is a control-flow signal, not a
   failure: throw the enum value again.
-- **Lint rules cannot type many stdlib modules.** `LintMain` types each file
-  through the language service, which fails on many stdlib modules with
-  "Duplicate type name". Run the typed rules (`unbound-local`,
+- **Lint rules cannot type many stdlib modules.** `tools.TypedLint` types
+  each file through the language service, which fails on many stdlib modules
+  with "Duplicate type name". Run the typed rules (`unbound-local`,
   `throw-non-exception`) on the build's own compilation instead.
 - **`@:pure` is written by hand on `haxe.Exception`.** Its constructor and its
   caching `stack` getter carry it (`stdlib/haxe/Exception.hx`, `0db84ca90`).
@@ -178,14 +173,10 @@ SSA from.
 
 Design debt and levers left once the peak work lands:
 
-- **A performance guard in CI.** Main-thread instructions, allocated bytes
-  and peak resident memory of the self-compile on the frozen input, failing
-  on a clear regression, so the gains stay.
-- **One IR representation.** Objects are the IR; `IrBody` columns exist
-  beside it, unused by any pass (rewriting on immutable bodies was slower).
-  Decide: design in-place editing and migrate
-  ([IR_CORE_COLUMNS.md](docs/design/IR_CORE_COLUMNS.md)), or keep columns
-  for read-only consumers (the lowering reading bodies) and remove the rest.
+- **Finish moving the IR stages onto bodies.** The decision is a full
+  migration to bodies edited in place ([IR_CORE_COLUMNS.md](docs/design/IR_CORE_COLUMNS.md)),
+  and several passes run on bodies already; the stages before the encode
+  point still work on objects.
 - **The checked-arena runtime.** The fork's write tracking, evacuation and
   layout registration are unused by the compiler (the pilot did not pay,
   [ARENAS.md](docs/design/ARENAS.md)). Either make it a language feature with
@@ -199,8 +190,9 @@ Design debt and levers left once the peak work lands:
   symbol ids everywhere rather than one string key at a time.
 - **Parallel compilation** (ADR 0005): typing per class and lowering per
   function are natural units; the largest wall-time lever left.
-- **Warm-build latency.** Benchmark compile-server and language-service
-  rebuilds (latency, memory) beside the one-shot self-compile.
+- **Language-service latency.** The perf guard benchmarks compile-server
+  edits (`scripts/perf-guard.py`, incremental part); language-service
+  rebuilds (latency, memory) are not benchmarked.
 - **The collection policy.** The peak is the last collection's survivors plus
   the 1 GB trigger; a trigger tied to the live data is a policy to measure,
   not necessarily more collections.
@@ -251,8 +243,7 @@ The Haxe code Haxeon rejects or runs differently is listed in
   result, would report it.
 - **Lone surrogates.** Printing a String with a lone high surrogate swallows
   the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
-  conversion takes it as the pair's low half. `String.fromCharCode` of a code
-  point above 0xFFFF keeps only its low 16 bits where Haxe writes the pair.
+  conversion takes it as the pair's low half.
 
 ## Generated code, HashLink and Wasm (haxeon-e4's lane)
 
@@ -319,10 +310,6 @@ machine; re-measure on a quiet one before acting on a ratio.
   share a register.
 - **Code size, smaller items:** `OIncr`/`ODecr` for `+= 1` (stock uses them),
   shorter anonymous-structure names, and a size-aware inlining budget.
-- **Compressed debug sections** (decided, ADR 0003 §12): an LZ4 HC flag on
-  debug sections, function identities first (1.15 MB to about 234 KB on the
-  compile server), compressed by a runtime native over the fork's vendored
-  `lz4.c` so both compiler builds write the same bytes.
 - **Hand-built test programs declare runtime natives themselves.** A pass
   that starts calling a new runtime function breaks them
   (`IteratorTypeDescriptorMain`, fixed in `aefdb62c5`). Give
@@ -351,13 +338,13 @@ typer's drain order) and 5 (live pruning).
   up again: make the boxed original a small adapter over the split body instead of
   cloning large bodies, and find the downstream cost with a symbolized profile first.
 
-- **Session memory after the IR columns chain.** A compile server keeps the
-  generator's IR objects for the stages before the encode point and the bodies
-  after it, so the incremental baselines were moved up when the chain landed:
-  cold build, signature edit and the server's live data. Per-function reuse in
-  the pre-encode assembly stages (one memo per stage and function, checked by
-  `--check-reuse`) lets the session keep bodies alone and moves them back down;
-  see IR_CORE_COLUMNS.md, "Session caching model".
+- **Session memory after the IR columns chain.** The per-function stage
+  memos and keeping each function as its frozen body past the encode point
+  (`fa6bde3fd`) brought the signature edit below its level before the chain,
+  but the server's live data is still above it and cold allocation is higher
+  (`tests/perf/incremental-baseline.json`). The stages before the encode point
+  still keep the generator's objects; see IR_CORE_COLUMNS.md, "Session caching
+  model".
 
 The 2026-11-18 profile of a self-compile (Haxeon-built release compiler,
 29 s on one thread) is flat: compiler code 48%, string-keyed maps 18.5%,
@@ -380,11 +367,6 @@ lowering 17%, IR generation and SSA 11%, parsing 5.5%.
 - **SSA value names.** Every SSA temporary carries a `"v<id>"` String
   (`IrSsaVariables` makes each once). A temporary needs no name; drop
   the field for temporaries with ADR 0003 M3's structured identities.
-- **Lowering facts digest objects as text.** `HlLoweringView.objectDigest` is
-  `Std.string(object)`, paid by every compile-server build (a one-shot compile
-  records no facts since 4b9fcf1bf). Replace it with the query engine's
-  structural digest when lowering moves onto the engine (QUERY_ENGINE.md,
-  step 6).
 - **Per-function scratch.** Register allocation, SSA liveness and the lowering
   tables now keep their storage across functions; the rest of SSA building,
   lowering and the inliner still allocate per function. Do them together as

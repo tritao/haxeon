@@ -540,7 +540,7 @@ allocation counters (`HL_GC_PROFILE=1`) give exact totals.
 
 ```sh
 python3 benchmarks/incremental-project.py \
-  --project /path/to/haxeon.json --source /path/to/Main.hx \
+  --project /path/to/haxeon.toml --source /path/to/Main.hx \
   --token-a 'before' --token-b 'after' --output /tmp/edit.hl \
   --profile-output /tmp/compiler-edits.hlpc
 .tools/hashlink/hlprof-live export --format perfetto \
