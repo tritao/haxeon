@@ -15,6 +15,10 @@ Declarations under `hl/` are target ABI façades owned by this project. They
 carry explicit representation metadata and are not copies of upstream stdlib
 implementations.
 
+The portable part of the standard library, which the compiler's own stock Haxe build compiles as well, lives in
+`lib/haxeon-io` and is registered beside this directory: `haxeon.io`, and `toml` (TOML 1.0 documents, read into the values
+`haxe.Json.parse` gives and written back).
+
 Register this directory with `Compiler.addSourceRoot("stdlib")`. Modules are
 then discovered from their imports and type references, loaded only when they
 enter the reachable dependency graph, and retained in the compiler's module
