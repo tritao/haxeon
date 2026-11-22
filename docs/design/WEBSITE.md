@@ -89,7 +89,8 @@ shows something: the UI Showcase on the home page and, later, a playground.
 - The "Get started" path works from a release archive on Linux, macOS and Windows.
 - The first-party packages (`ui`, `platform`, `gpu`, `audio`, `animation`, `editor`) are releases of the `haxeon`
   registry that a release archive ships, so a new project depends on them as `ui = "^0.3"`.
-- `haxeon init --template app` makes a windowed app that `haxeon run` opens and `haxeon run --watch --live` edits.
+- `haxeon init --template app` makes a windowed app with its runner projects ([PROJECT_BUILDS.md](PROJECT_BUILDS.md)), which
+  `haxeon run` opens and `haxeon run --watch --live` edits.
 - Guides 1 to 5 written and their code compiled in CI.
 - The home page recording, and the UI Showcase on the web.
 - A VS Code extension over the existing language server.

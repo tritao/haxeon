@@ -63,6 +63,7 @@ Formats and runtime contracts:
 Project:
 
 - [WEBSITE.md](design/WEBSITE.md): the public site and the user documentation it publishes.
+- [PROJECT_BUILDS.md](design/PROJECT_BUILDS.md): runner projects per platform and one native graph per app.
 
 Language:
 
