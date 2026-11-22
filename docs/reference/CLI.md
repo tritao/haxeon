@@ -446,9 +446,14 @@ and toolchain selection is centralized: examples include
 `windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-arm64`, `android-arm64`,
 and `wasm32` (see [Targets and backends](#targets-and-backends)).
 
-Git dependencies can be added and installed reproducibly:
+Dependencies can be added and installed reproducibly. `haxeon add NAME` adds the latest release of `NAME` that is not
+yanked from the `haxeon` registry, written as its version range alone (`ui = "^0.3.1"`); `--version RANGE` picks the
+range and `--registry NAME` another registry, written as `{ registry = NAME, version = RANGE }`:
 
 ```sh
+./scripts/haxeon add ui
+./scripts/haxeon add ui --version "^0.3"
+./scripts/haxeon add widgets --registry local
 ./scripts/haxeon add --git https://github.com/example/foo.git --rev main foo
 ./scripts/haxeon install
 ./scripts/haxeon install --locked
@@ -468,7 +473,8 @@ release checksums, SemVer versions, yanked status, compatibility metadata, and
 native provider metadata. For local development, `publish` writes an immutable
 release and index below `~/.haxeon/cache/sources/registry`; projects then use
 `core = { registry = "local", version = "^1.0" }` and resolve through the normal
-package graph.
+package graph. A dependency on the `haxeon` registry is written as its range alone,
+`core = "^1.0"`.
 
 Repositories can declare workspace members. A workspace member with the same
 package name overrides an external dependency source while retaining the same

@@ -4,6 +4,9 @@ import compiler.core.InternalError;
 
 /** Shared JSON representation for manifest and lockfile package sources. */
 class PackageSourceCodec {
+	/** The registry a dependency written as a bare version range (`ui = "^0.3"`) comes from. */
+	public static inline final DEFAULT_REGISTRY = "haxeon";
+
 	public static function encode(source:PackageSource):Dynamic
 		return switch source {
 			case PackageSource.Path(path): {path: path};
@@ -14,8 +17,11 @@ class PackageSourceCodec {
 		};
 
 	public static function parse(raw:Dynamic, name:String, path:String):PackageSource {
+		// `name = "^1.2"` is `name = { registry = "haxeon", version = "^1.2" }`.
+		if (Std.isOfType(raw, String))
+			return PackageSource.Registry(DEFAULT_REGISTRY, name, requiredString(raw, "version", path));
 		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw new InternalError('$path must be an object with a package source');
+			throw new InternalError('$path must be a version range or an object with a package source');
 		var pathValue:Dynamic = Reflect.field(raw, "path"),
 			workspaceValue:Dynamic = Reflect.field(raw, "workspace"),
 			gitValue:Dynamic = Reflect.field(raw, "git"),

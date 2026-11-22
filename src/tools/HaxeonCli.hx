@@ -19,6 +19,7 @@ import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import compiler.core.UsageError;
 import compiler.formatter.Formatter;
 import compiler.formatter.ProjectFormat;
@@ -32,9 +33,11 @@ import haxeon.io.FileTree;
 import project.PackageLockfile;
 import project.PackageManifest;
 import project.PackageResolver;
+import project.PackageSourceCodec;
 import project.PackageSourceTools;
 import project.ProjectDiscovery;
 import project.ProjectSourceAcquirer;
+import project.RegistryIndex;
 import project.RegistryPublisher;
 import project.ResolvedPackage;
 import project.ResolvedProject;
@@ -101,8 +104,12 @@ private typedef PackageOptions = {
 private typedef AddOptions = {
 	final projectPath:String;
 	final name:Null<String>;
-	final git:String;
-	final rev:String;
+	/** A Git dependency's URL and ref, or null for a registry dependency. */
+	final git:Null<String>;
+	final rev:Null<String>;
+	/** A registry dependency's registry (default `haxeon`) and version range (default: from its latest release). */
+	final registry:Null<String>;
+	final version:Null<String>;
 }
 
 private typedef PublishOptions = {
@@ -399,8 +406,19 @@ class HaxeonCli {
 		var name = options.name == null ? inferPackageName(options.git) : options.name;
 		if (name == null || name.length == 0)
 			throw new UsageError('Git dependencies require a package name (pass it as the final argument or with --name)');
+		var source:Dynamic, added:String;
+		if (options.git != null) {
+			source = {git: options.git, rev: options.rev};
+			added = 'Added Git dependency ${name}@${options.rev}';
+		} else {
+			var registry = options.registry == null ? PackageSourceCodec.DEFAULT_REGISTRY : options.registry,
+				range = options.version == null ? "^" + registryIndex(registry).latest(name).version : options.version;
+			// A dependency on the default registry is written as its version range alone: `ui = "^0.3.0"`.
+			source = registry == PackageSourceCodec.DEFAULT_REGISTRY ? range : {registry: registry, version: range};
+			added = 'Added ${name} ${range} from the "$registry" registry';
+		}
 		if (PackageManifest.isToml(manifestPath))
-			addTomlDependency(manifestPath, name, {git: options.git, rev: options.rev});
+			addTomlDependency(manifestPath, name, source);
 		else {
 			var raw = PackageManifest.decode(manifestPath, File.getContent(manifestPath)),
 				dependencies:Dynamic = Reflect.field(raw, "dependencies");
@@ -412,11 +430,19 @@ class HaxeonCli {
 				throw new InternalError('$manifestPath "dependencies" must be an object');
 			if (Reflect.hasField(dependencies, name))
 				throw new InternalError('Dependency "$name" is already declared in $manifestPath');
-			Reflect.setField(dependencies, name, {git: options.git, rev: options.rev});
+			Reflect.setField(dependencies, name, source);
 			File.saveContent(manifestPath, Json.stringify(raw, null, "\t") + "\n");
 		}
-		Sys.println('Added Git dependency ${name}@${options.rev}');
+		Sys.println(added);
 		return 0;
+	}
+
+	/** The index of `registry` in the source cache, where `haxeon publish` and the resolver keep it. */
+	static function registryIndex(registry:String):RegistryIndex {
+		var path = Path.join([SourceCache.registryRoot(), TextDigest.sha256(registry), "index.json"]);
+		if (!FileSystem.exists(path))
+			throw new UsageError('The "$registry" registry is not available: no index at $path');
+		return RegistryIndex.parse(path, File.getContent(path));
 	}
 
 	/**
@@ -1859,10 +1885,13 @@ class HaxeonCli {
 			name:Null<String> = null,
 			git:Null<String> = null,
 			rev:Null<String> = null,
+			registry:Null<String> = null,
+			version:Null<String> = null,
 			index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
-			if (argument == "--git" || argument == "--rev" || argument == "--name" || argument == "--project") {
+			if (argument == "--git" || argument == "--rev" || argument == "--name" || argument == "--project"
+				|| argument == "--registry" || argument == "--version") {
 				if (index >= arguments.length)
 					throw new UsageError('Option "$argument" requires a value');
 				var value = arguments[index++];
@@ -1875,9 +1904,17 @@ class HaxeonCli {
 						name = value;
 					case "--project":
 						projectPath = value;
+					case "--registry":
+						registry = value;
+					case "--version":
+						version = value;
 					case _:
 				}
-			} else if (StringTools.startsWith(argument, "--git="))
+			} else if (StringTools.startsWith(argument, "--registry="))
+				registry = argument.substr("--registry=".length);
+			else if (StringTools.startsWith(argument, "--version="))
+				version = argument.substr("--version=".length);
+			else if (StringTools.startsWith(argument, "--git="))
 				git = argument.substr("--git=".length);
 			else if (StringTools.startsWith(argument, "--rev="))
 				rev = argument.substr("--rev=".length);
@@ -1892,15 +1929,28 @@ class HaxeonCli {
 			else
 				throw new UsageError('Unexpected add argument "$argument"');
 		}
-		if (git == null || git.length == 0)
-			throw new UsageError('Option "--git" requires a non-empty URL');
-		if (rev == null || rev.length == 0)
-			throw new UsageError('Option "--rev" requires a non-empty ref');
+		if (git == null) {
+			if (rev != null)
+				throw new UsageError('Option "--rev" needs "--git"');
+			if (name == null || name.length == 0)
+				throw new UsageError('A registry dependency needs a package name: haxeon add NAME');
+			if (registry != null && registry.length == 0 || version != null && version.length == 0)
+				throw new UsageError('Options "--registry" and "--version" need a non-empty value');
+		} else {
+			if (registry != null || version != null)
+				throw new UsageError('Options "--registry" and "--version" are for registry dependencies, not "--git"');
+			if (git.length == 0)
+				throw new UsageError('Option "--git" requires a non-empty URL');
+			if (rev == null || rev.length == 0)
+				throw new UsageError('Option "--rev" requires a non-empty ref');
+		}
 		return {
 			projectPath: projectPath,
 			name: name,
 			git: git,
-			rev: rev
+			rev: rev,
+			registry: registry,
+			version: version
 		};
 	}
 

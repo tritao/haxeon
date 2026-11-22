@@ -26,8 +26,9 @@ outputDir = "build"
 name = "my-app"
 
 [dependencies]
+ui = "^0.3"
 foo = { path = "../foo" }
-ui = { git = "https://example.org/ui.git", rev = "v1.2.0" }
+widgets = { git = "https://example.org/widgets.git", rev = "v1.2.0" }
 core = { registry = "local", version = "^1.0" }
 
 [format]
@@ -100,7 +101,7 @@ Paths are relative to the manifest's directory.
 | `inline` | boolean | inlining on | `false` builds with `--no-inline`. |
 | `nullSafety` | string | `"off"` | `"strict"`, `"loose"`, `"off"` or `"warn"`: the null-safety checker's mode for this package (below). |
 | `outputDir` | string | `"build"` | Where builds go. |
-| `dependencies.NAME` | table | | One dependency: `path`, `workspace`, `git` + `rev`, `registry` + `version`, or `haxelib` + `version`. |
+| `dependencies.NAME` | string or table | | One dependency. A version range alone (`ui = "^0.3"`) is a release of the `haxeon` registry, the same as `{ registry = "haxeon", version = "^0.3" }`. A table names its source: `path`, `workspace`, `git` + `rev`, `registry` + `version`, or `haxelib` + `version`. |
 | `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
 | `android` | table | | `applicationId` and `label` of the Android app ([ANDROID.md](ANDROID.md)). |

@@ -1,6 +1,7 @@
 package project;
 
 import compiler.core.InternalError;
+import compiler.core.UsageError;
 import haxe.Json;
 import haxe.io.Path;
 import project.PackageManifest.NativeManifest;
@@ -27,6 +28,20 @@ class RegistryIndex {
 
 	public function new(packages:Map<String, Array<RegistryVersion>>) {
 		this.packages = packages;
+	}
+
+	/** The highest release of `name` that is not yanked, which `haxeon add` writes a range from. */
+	public function latest(name:String):RegistryVersion {
+		var candidates = packages.get(name);
+		if (candidates == null)
+			throw new UsageError('The registry has no package "$name"');
+		var best:Null<RegistryVersion> = null;
+		for (candidate in candidates)
+			if (!candidate.yanked && (best == null || compareVersions(candidate.version, best.version) > 0))
+				best = candidate;
+		if (best == null)
+			throw new UsageError('Every release of "$name" in the registry is yanked');
+		return best;
 	}
 
 	public function resolve(name:String, range:String):RegistryVersion {

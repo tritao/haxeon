@@ -44,6 +44,7 @@ import project.PackageLockfile.PackageLockEntry;
 import project.PackageManifest;
 import project.PackageManifest.InstrumentManifest;
 import project.PackageResolver;
+import project.PackageSourceCodec;
 import project.PackageSourceTools;
 import project.PathSourceAcquirer;
 import project.ProjectDiscovery;
@@ -108,6 +109,7 @@ class BuildSystemMain {
 		testPackageCompatibility();
 		testHaxelibAdapter();
 		testRegistryAdapter();
+		testDefaultRegistryShorthand();
 		testRegistryPublisher();
 		testResolverDelegatesAcquisition();
 		testAlternateRootManifest();
@@ -1648,6 +1650,35 @@ class BuildSystemMain {
 		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "tampered\n");
 		expectThrows(() -> resolver.resolve(Path.join([app, "haxeon.json"])),
 			"registry source checksums should be verified on every use");
+		FileTree.remove(root);
+	}
+
+	/** A dependency written as a bare version range comes from the registry named `haxeon`, in a JSON and in a TOML manifest. */
+	static function testDefaultRegistryShorthand():Void {
+		var root = temporaryDirectory("registry-shorthand"),
+			cache = Path.join([root, "cache"]),
+			registryDirectory = Path.join([cache, Sha256.encode("haxeon")]),
+			foo = Path.join([registryDirectory, "foo", "1.1.0"]),
+			checksum = "release-checksum";
+		ensureDirectory(Path.join([foo, "src"]));
+		File.saveContent(Path.join([foo, "haxeon.json"]), '{"package":{"name":"foo"},"sourceRoots":["src"]}\n');
+		File.saveContent(Path.join([foo, "src", "Foo.hx"]), "class Foo {}\n");
+		File.saveContent(Path.join([foo, ".haxeon-checksum"]), checksum + "\n");
+		File.saveContent(Path.join([registryDirectory, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"1.1.0","checksum":"$checksum"}]}}}\n');
+		var json = Path.join([root, "json"]), toml = Path.join([root, "toml"]);
+		writePackage(json, '{"package":{"name":"app"},"dependencies":{"foo":"^1.0"}}', []);
+		ensureDirectory(Path.join([toml, "src"]));
+		File.saveContent(Path.join([toml, "haxeon.toml"]), '[package]\nname = "app"\n\n[dependencies]\nfoo = "^1.0"\n');
+		var resolver = new PackageResolver(new RegistrySourceAcquirer(cache));
+		for (manifest in [Path.join([json, "haxeon.json"]), Path.join([toml, "haxeon.toml"])]) {
+			var entry = resolver.resolve(manifest).lockfile.get("foo");
+			expect(entry != null && entry.resolvedRevision == "1.1.0" && entry.checksum == checksum,
+				'a bare version range in $manifest should resolve from the haxeon registry');
+			expect(entry != null
+				&& PackageSourceCodec.equal(entry.source, project.PackageSource.Registry("haxeon", "foo", "^1.0")),
+				'a bare version range in $manifest should lock as a haxeon registry source');
+		}
 		FileTree.remove(root);
 	}
 

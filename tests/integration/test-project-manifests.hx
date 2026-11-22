@@ -3,7 +3,7 @@
  * Project manifests in TOML and JSON: `haxeon init` writes a haxeon.toml that builds and runs; `haxeon migrate --dry-run`
  * prints the TOML and changes nothing, `haxeon migrate` replaces haxeon.json with it (dependency, format and android sections
  * included) and the project still builds; a directory with both files is a usage error naming both; `haxeon add` keeps a
- * haxeon.toml's comments. Each command has its own help.
+ * haxeon.toml's comments, and `haxeon add NAME` writes the latest release of the haxeon registry as `NAME = "^VERSION"`. Each command has its own help.
  */
 import haxe.io.Path;
 import haxeon.Script;
@@ -107,7 +107,22 @@ function main() {
 		|| manifest.indexOf("greet = { path = \"../lib\" }\nextra = { git = \"https://example.org/extra.git\", rev = \"v1\" }\n")
 		< 0)
 		Script.fail('FAIL: add did not insert the dependency into [dependencies]:\n$manifest');
-	Sys.println("PASS: init writes TOML, migrate converts JSON, both manifests are refused, add keeps comments");
+
+	// add NAME takes the latest release that is not yanked from the haxeon registry, written as its version range alone.
+	var cache = Path.join([work, "source-cache"]),
+		registry = Path.join([cache, "registry", haxe.crypto.Sha256.encode("haxeon")]);
+	FileSystem.createDirectory(registry);
+	write(registry, "index.json",
+		'{"version":1,"packages":{"ui":{"versions":[{"version":"0.3.1","checksum":"a"},{"version":"0.4.0","checksum":"b","yanked":true}]}}}\n');
+	Sys.putEnv("HAXEON_SOURCE_CACHE", cache);
+	log = Path.join([work, "add-registry.log"]);
+	expectStatus(haxeon(["add", "ui"], app, log), 0, log, "add ui");
+	if (File.getContent(Path.join([app, "haxeon.toml"])).indexOf('\nui = "^0.3.1"\n') < 0)
+		Script.fail('FAIL: add ui did not write ui = "^0.3.1":\n${File.getContent(Path.join([app, "haxeon.toml"]))}');
+	log = Path.join([work, "add-missing.log"]);
+	expectStatus(haxeon(["add", "missing"], app, log), 2, log, "add of a package the registry lacks");
+	expectText(log, 'The registry has no package "missing"', "the error for a package the registry lacks");
+	Sys.println("PASS: init writes TOML, migrate converts JSON, both manifests are refused, add keeps comments and adds registry packages");
 }
 
 function haxeon(arguments:Array<String>, directory:String, log:String):Int

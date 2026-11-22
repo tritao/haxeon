@@ -210,8 +210,12 @@ class CliHelp {
 			commands: [
 				{
 					name: "add",
-					summary: "Add a Git package dependency",
-					details: ["Usage: haxeon add --git URL --rev REF [NAME] [--project PATH]"]
+					summary: "Add a package dependency",
+					details: [
+						"Usage: haxeon add NAME [--version RANGE] [--registry NAME] [--project PATH]",
+						"       haxeon add --git URL --rev REF [NAME] [--project PATH]",
+						"  NAME alone adds the latest release from the haxeon registry, written as NAME = \"^VERSION\""
+					]
 				},
 				{
 					name: "install",
