@@ -77,10 +77,11 @@ class IrTypeAwareWalk {
 	 */
 	public static function run(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>,
 			requireProviders = false,
-			keepCreatedClassMethods = false, ?classDependencies:IrClassDependencies):IrWalkResult {
+			keepCreatedClassMethods = false, ?classDependencies:IrClassDependencies,
+			?lineage:compiler.ir.IrStageMemo.IrLineage):IrWalkResult {
 		var walk = new IrTypeAwareWalkState(program, roots, dynamicSites == null ? defaultDynamicSites() : dynamicSites,
 			requireProviders,
-			keepCreatedClassMethods, classDependencies);
+			keepCreatedClassMethods, classDependencies, lineage);
 		return walk.run();
 	}
 
@@ -180,6 +181,7 @@ private class IrTypeAwareWalkState {
 	final requireProviders:Bool;
 	final keepCreatedClassMethods:Bool;
 	final classDependencies:Null<IrClassDependencies>;
+	final lineage:Null<compiler.ir.IrStageMemo.IrLineage>;
 	final dependencySymbolsDone:Map<String, Bool> = [];
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
@@ -210,10 +212,14 @@ private class IrTypeAwareWalkState {
 	final declarationOnly:Map<String, Bool> = [];
 	final calledNatives:Map<String, Bool> = [];
 
+	/** The summary a walk without a memo reads each function into, one after the other. */
+	final scratch = IrWalkSummary.scratch();
+
 	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>,
 			requireProviders:Bool, keepCreatedClassMethods:Bool,
-			classDependencies:Null<IrClassDependencies>) {
+			classDependencies:Null<IrClassDependencies>, lineage:Null<compiler.ir.IrStageMemo.IrLineage>) {
 		this.classDependencies = classDependencies;
+		this.lineage = lineage;
 		this.program = program;
 		this.roots = roots;
 		this.dynamicSites = dynamicSites;
@@ -310,69 +316,55 @@ private class IrTypeAwareWalkState {
 				case None:
 			}
 			// Roots' signatures were made created in `reach`; elsewhere a type is created by what the code does with it.
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null)
-						switch output.type {
-							case Obj(objectName):
-								var object = index.object(objectName);
-								if (object != null && IrConstructed.withoutConstruction(objectName, object))
-									create(output.type);
-							default:
-						}
-					visit(fn, located.value);
-				}
+			follow(fn, IrWalkSummary.of(fn, lineage, scratch));
 		}
 	}
 
-	function visit(fn:IrFunction, instruction:IrInstruction):Void {
-		// What the instruction constructs is the shared definition (`IrConstructed`).
-		var made = IrConstructed.constructedBy(instruction, nativeResults);
-		if (made != null)
-			create(Obj(made));
-		switch instruction {
-			case Call(_, target, _):
-				callTarget(target.name);
-			case StaticClosure(_, target):
-				callTarget(target.name);
-			case InstanceClosure(_, target, _):
-				reach(target.name, false);
-			case MakeEnum(_, typeName, _, _):
-				create(Enum(typeName));
-			case ToDyn(_, value):
-				create(value.type);
-			case SafeCast(output, _):
-				create(output.type);
-			case GlobalGet(_, name), GlobalSet(name, _):
-				var type = staticTypes.get(name);
-				if (type != null)
-					create(type);
-			case MethodCall(_, object, method, _, _):
-				switch object.type {
-					case Obj(name):
-						site(name, method, false);
-					case Virtual(name):
-						site(name, method, true);
-					default:
+	/** The edges of `fn`, a reached function, from its summary. */
+	function follow(fn:IrFunction, summary:IrWalkSummary):Void {
+		for (name in summary.outputObjects) {
+			var object = index.object(name);
+			if (object != null && IrConstructed.withoutConstruction(name, object))
+				create(Obj(name));
+		}
+		for (name in summary.newObjects)
+			create(Obj(name));
+		for (name in summary.calls) {
+			// A native returns an instance of the class its declaration names (`IrConstructed`).
+			var made = nativeResults.get(name);
+			if (made != null)
+				create(Obj(made));
+			callTarget(name);
+		}
+		for (name in summary.staticClosures)
+			callTarget(name);
+		for (name in summary.instanceClosures)
+			reach(name, false);
+		for (type in summary.types)
+			create(type);
+		for (name in summary.globals) {
+			var type = staticTypes.get(name);
+			if (type != null)
+				create(type);
+		}
+		for (index in 0...summary.siteTypes.length)
+			site(summary.siteTypes[index], summary.siteMethods[index], summary.siteInterfaces[index]);
+		for (operation in summary.intrinsics) {
+			var typed = IrProviders.typedOperation(operation);
+			if (typed == null)
+				continue;
+			var subject = typed.subject.toString(), key = typed.operation + "\n" + subject;
+			demanded.set(key, true);
+			create(typeOfKey(operation));
+			var names = providersOf(typed.operation, subject);
+			if (names == null) {
+				if (requireProviders && !missingSeen.exists(key)) {
+					missingSeen.set(key, true);
+					missing.push('${fn.name}: ${typed.operation} of ${typed.subject.toString()} has no provider');
 				}
-			case Intrinsic(_, operation, _):
-				var typed = IrProviders.typedOperation(operation);
-				if (typed != null) {
-					var subject = typed.subject.toString(), key = typed.operation + "\n" + subject;
-					demanded.set(key, true);
-					create(typeOfKey(operation));
-					var names = providersOf(typed.operation, subject);
-					if (names == null) {
-						if (requireProviders && !missingSeen.exists(key)) {
-							missingSeen.set(key, true);
-							missing.push('${fn.name}: ${typed.operation} of ${typed.subject.toString()} has no provider');
-						}
-					} else
-						for (name in names)
-							reach(name, false);
-				}
-			default:
+			} else
+				for (name in names)
+					reach(name, false);
 		}
 	}
 
@@ -510,5 +502,172 @@ private class IrTypeAwareWalkState {
 				if (method != null)
 					reach(method, false);
 			}
+	}
+}
+
+/**
+ * What one function gives the type-aware walk, read once from its instructions: the names and types its edges and creations
+ * depend on, each kind in the order the instructions first name it. The walk resolves them against the program (`follow`), so
+ * the summary depends on the function alone, and a session keeps it by the function's version (`IrStageMemos.walkSummaries`).
+ */
+class IrWalkSummary {
+	/** The classes an instruction's output has (made created when they need no construction). */
+	public final outputObjects:Array<String> = [];
+
+	public final newObjects:Array<String> = [];
+
+	/** The targets of `Call`s. */
+	public final calls:Array<String> = [];
+
+	public final staticClosures:Array<String> = [];
+	public final instanceClosures:Array<String> = [];
+
+	/** The types made, converted to or from `Dyn`: `MakeEnum`, `ToDyn`, `SafeCast`. */
+	public final types:Array<IrType> = [];
+
+	/** The static fields read or written. */
+	public final globals:Array<String> = [];
+
+	/** The method calls: receiver class or interface, method, whether the receiver is an interface. */
+	public final siteTypes:Array<String> = [];
+
+	public final siteMethods:Array<String> = [];
+	public final siteInterfaces:Array<Bool> = [];
+
+	/** The typed operations. */
+	public final intrinsics:Array<IrIntrinsic> = [];
+
+	function new() {}
+
+	/** A summary to read functions into one after the other (`of`), for a walk that keeps none. */
+	public static function scratch():IrWalkSummary
+		return new IrWalkSummary();
+
+	/**
+	 * The summary of `fn`: kept by the session for its version with `lineage`; else read now into `scratch`, which the next call
+	 * reuses, so a walk without a memo allocates no summary per function.
+	 */
+	public static function of(fn:IrFunction, lineage:Null<compiler.ir.IrStageMemo.IrLineage>,
+			scratch:IrWalkSummary):IrWalkSummary {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0) {
+			scratch.clear();
+			scratch.fill(fn);
+			return scratch;
+		}
+		var memo = lineage.memos.walkSummaries, known = memo.get(version);
+		if (known == null) {
+			known = read(fn);
+			memo.keep(version, known);
+		} else if (lineage.checks && !same(known, read(fn)))
+			throw new compiler.core
+				.InternalError('--check-reuse: the walk summary reused for ${fn.name} differs from its instructions');
+		return known;
+	}
+
+	/** Reads the summary of `fn`. */
+	public static function read(fn:IrFunction):IrWalkSummary {
+		var summary = new IrWalkSummary();
+		summary.fill(fn);
+		return summary;
+	}
+
+	function clear():Void {
+		outputObjects.resize(0);
+		newObjects.resize(0);
+		calls.resize(0);
+		staticClosures.resize(0);
+		instanceClosures.resize(0);
+		types.resize(0);
+		globals.resize(0);
+		siteTypes.resize(0);
+		siteMethods.resize(0);
+		siteInterfaces.resize(0);
+		intrinsics.resize(0);
+	}
+
+	/** Adds what `fn`'s instructions give the walk. */
+	function fill(fn:IrFunction):Void {
+		var summary = this;
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var instruction = located.value, output = IrOperands.output(instruction);
+				if (output != null)
+					switch output.type {
+						case Obj(name):
+							once(summary.outputObjects, name);
+						default:
+					}
+				switch instruction {
+					case NewObject(_, typeName):
+						once(summary.newObjects, typeName);
+					case Call(_, target, _):
+						once(summary.calls, target.name);
+					case StaticClosure(_, target):
+						once(summary.staticClosures, target.name);
+					case InstanceClosure(_, target, _):
+						once(summary.instanceClosures, target.name);
+					case MakeEnum(_, typeName, _, _):
+						summary.types.push(Enum(typeName));
+					case ToDyn(_, value):
+						summary.types.push(value.type);
+					case SafeCast(output, _):
+						summary.types.push(output.type);
+					case GlobalGet(_, name), GlobalSet(name, _):
+						once(summary.globals, name);
+					case MethodCall(_, object, method, _, _):
+						switch object.type {
+							case Obj(name):
+								summary.site(name, method, false);
+							case Virtual(name):
+								summary.site(name, method, true);
+							default:
+						}
+					case Intrinsic(_, operation, _):
+						if (IrProviders.typedOperation(operation) != null)
+							summary.intrinsics.push(operation);
+					default:
+				}
+			}
+	}
+
+	/** `name` added to `list` unless a short list has it already: a repeat costs the walk nothing but a no-op. */
+	static inline function once(list:Array<String>, name:String):Void
+		if (list.length >= 32 || list.indexOf(name) < 0)
+			list.push(name);
+
+	function site(typeName:String, method:String, isInterface:Bool):Void {
+		var count = siteTypes.length;
+		if (count < 32)
+			for (index in 0...count)
+				if (siteTypes[index] == typeName && siteMethods[index] == method
+					&& siteInterfaces[index] == isInterface)
+					return;
+		siteTypes.push(typeName);
+		siteMethods.push(method);
+		siteInterfaces.push(isInterface);
+	}
+
+	/** Whether two summaries name the same edges, for `--check-reuse`. */
+	public static function same(left:IrWalkSummary, right:IrWalkSummary):Bool {
+		inline function names(a:Array<String>, b:Array<String>):Bool
+			return a.join("\u0001") == b.join("\u0001");
+		if (!names(left.outputObjects, right.outputObjects) || !names(left.newObjects, right.newObjects)
+			|| !names(left.calls, right.calls) || !names(left.staticClosures, right.staticClosures)
+			|| !names(left.instanceClosures, right.instanceClosures) || !names(left.globals, right.globals)
+			|| !names(left.siteTypes, right.siteTypes) || !names(left.siteMethods, right.siteMethods)
+			|| left.siteInterfaces.length != right.siteInterfaces.length || left.types.length != right.types.length
+			|| left.intrinsics.length != right.intrinsics.length)
+			return false;
+		for (index in 0...left.siteInterfaces.length)
+			if (left.siteInterfaces[index] != right.siteInterfaces[index])
+				return false;
+		for (index in 0...left.types.length)
+			if (!IrVerifier.sameType(left.types[index], right.types[index]))
+				return false;
+		for (index in 0...left.intrinsics.length)
+			if (Std.string(left.intrinsics[index]) != Std.string(right.intrinsics[index]))
+				return false;
+		return true;
 	}
 }

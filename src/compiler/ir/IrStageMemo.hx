@@ -101,6 +101,15 @@ class IrStageMemos {
 
 	final stages:Map<String, IrStageMemo> = [];
 
+	/** What each function gives the type-aware walks (`IrWalkSummary`), shared by the dispatch walk and the entry prune. */
+	public final walkSummaries = new IrContributionMemo<IrTypeAwareWalk.IrWalkSummary>();
+
+	/** The typed interface dispatchers each function calls (`IrTypedInterfaceDispatch.generate`). */
+	public final interfaceRequests = new IrContributionMemo<Array<IrTypedInterfaceDispatch.IrTypedInterfaceRequest>>();
+
+	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
+	public final enumMentions = new IrContributionMemo<Array<String>>();
+
 	/** The build the stages run for, counted by `startBuild`. */
 	public var build(default, null) = 0;
 
@@ -110,8 +119,12 @@ class IrStageMemos {
 	}
 
 	/** Starts an assembly run. */
-	public function startBuild():Void
+	public function startBuild():Void {
 		build++;
+		walkSummaries.begin(build);
+		interfaceRequests.begin(build);
+		enumMentions.begin(build);
+	}
 
 	/** The memo of `stage`, started for this build. */
 	public function stage(name:String):IrStageMemo {
@@ -153,6 +166,9 @@ class IrLineage {
 
 	public final memos:IrStageMemos;
 
+	/** `--check-reuse`: what a contribution memo reuses is computed again and compared. */
+	public var checks(default, null) = false;
+
 	final cells:Map<String, IrLineageCell> = [];
 	var cellCount = 0;
 
@@ -165,9 +181,11 @@ class IrLineage {
 	 * field counts, the structure printers), is settled as a stage's output (`settle`), so it keeps its identity while it is made the
 	 * same. The cells of names the build does not have are dropped.
 	 */
-	public static function start(memos:IrStageMemos, functions:Array<IrFunction>, generated:String->Int):IrLineage {
+	public static function start(memos:IrStageMemos, functions:Array<IrFunction>, generated:String->Int,
+			checks:Bool):IrLineage {
 		memos.startBuild();
 		var lineage = memos.lineage, memo = memos.stage(INPUT);
+		lineage.checks = checks;
 		if (lineage.cellCount > functions.length * 2)
 			lineage.sweep();
 		for (index in 0...functions.length) {
@@ -186,6 +204,12 @@ class IrLineage {
 		for (name in stale)
 			cells.remove(name);
 		cellCount -= stale.length;
+	}
+
+	/** The version of `fn` when it is the function its name stands for in this build; 0 otherwise. */
+	public function versionOf(fn:IrFunction):Int {
+		var cell = cells.get(fn.name);
+		return cell != null && cell.fn == fn && cell.build == memos.build ? cell.version : 0;
 	}
 
 	/** The version of the function named `name` as the stages stand; 0 when it has none. */
@@ -239,5 +263,65 @@ class IrLineage {
 		memo.keep(fn.name, entry);
 		set(entry.output, entry.outputVersion);
 		return entry.output;
+	}
+}
+
+/** A contribution a memo keeps, with the last build that used it. */
+class IrContribution<T> {
+	public final value:T;
+	public var used:Int;
+
+	public function new(value:T, used:Int) {
+		this.value = value;
+		this.used = used;
+	}
+}
+
+/**
+ * What a whole-program step reads of each function, by the function's version (`IrLineage.versionOf`): a function the lineage
+ * gives the same version has the same contribution, so it is not read again. A version names one function, so the versions a
+ * function has at different stages are different entries. What a build did not use is dropped when the next one starts.
+ */
+class IrContributionMemo<T> {
+	final entries:Map<Int, IrContribution<T>> = [];
+	var build = 0;
+	var count = 0;
+	var usedLastBuild = 0;
+	var used = 0;
+
+	public function new() {}
+
+	/** Starts `forBuild`: what the last build did not use is dropped. */
+	public function begin(forBuild:Int):Void {
+		var lastBuild = build;
+		build = forBuild;
+		usedLastBuild = used;
+		used = 0;
+		if (count > usedLastBuild) {
+			var stale = [for (version => entry in entries) if (entry.used < lastBuild) version];
+			for (version in stale)
+				entries.remove(version);
+			count -= stale.length;
+		}
+	}
+
+	/** The contribution of the function of `version`, or null; one returned counts as used. */
+	public function get(version:Int):Null<T> {
+		var entry = entries.get(version);
+		if (entry == null)
+			return null;
+		if (entry.used != build) {
+			entry.used = build;
+			used++;
+		}
+		return entry.value;
+	}
+
+	/** Keeps `value` as the contribution of the function of `version`. */
+	public function keep(version:Int, value:T):Void {
+		if (!entries.exists(version))
+			count++;
+		entries.set(version, new IrContribution(value, build));
+		used++;
 	}
 }

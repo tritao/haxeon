@@ -49,22 +49,23 @@ class IrPruneWatch {
 class IrEntryPrune {
 	/** The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. */
 	public static function walk(program:IrProgram, roots:Array<String>,
-			?classDependencies:IrClassDependencies):IrWalkResult {
+			?classDependencies:IrClassDependencies, ?lineage:compiler.ir.IrStageMemo.IrLineage):IrWalkResult {
 		var entries = roots.copy();
 		for (fn in program.functions)
 			if (fn.retention != Reachable)
 				entries.push(fn.name);
-		return IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true, classDependencies);
+		return IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true, classDependencies,
+			lineage);
 	}
 
 	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
 	public static function run(program:IrProgram, roots:Array<String>,
-			?classDependencies:IrClassDependencies):IrPruneResult {
+			?classDependencies:IrClassDependencies, ?lineage:compiler.ir.IrStageMemo.IrLineage):IrPruneResult {
 		var removedMethods:Map<String, Bool> = [];
 		// The type-aware walk alone: a class that is only mentioned, never created, keeps none of its methods. Its reach beyond what the old walk
 		// keeps are the provider rows a dynamic site reaches over the created types (the equality helper of a struct that only `__dynamic_equal`
 		// uses), which nothing calls by name until a later pass writes the call.
-		var walked = walk(program, roots, classDependencies);
+		var walked = walk(program, roots, classDependencies, lineage);
 		var reachable = walked.reached;
 		// A method named by a reachable call on a class that cannot have an instance keeps its class-table entry and loses its body: the
 		// verifier resolves the call against the table, but nothing can receive it, so the body is a stub that throws (the way an interface

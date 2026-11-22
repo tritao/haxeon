@@ -188,7 +188,7 @@ class IrPipeline {
 	static function dispatchWalk(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
 		var walk = IrEntryPrune.walk(pruneInputOf(assembly, context, functions), context.pruneRoots,
-			pruneDependencies(assembly, functions));
+			pruneDependencies(assembly, functions), context.lineage);
 		assembly.dispatchWalk = walk;
 		assembly.unreached = [for (fn in functions) if (!walk.reached.exists(fn.name)) fn.name => true];
 		return assembly;
@@ -266,7 +266,8 @@ class IrPipeline {
 	static function entryPrune(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
 		var pruneInput = pruneInputOf(assembly, context, functions);
-		var pruned = IrEntryPrune.run(pruneInput, context.pruneRoots, pruneDependencies(assembly, functions));
+		var pruned = IrEntryPrune.run(pruneInput, context.pruneRoots, pruneDependencies(assembly, functions),
+			context.lineage);
 		context.pruned = pruned.removed;
 		context.prunedMethods = pruned.removedMethods;
 		assembly.reachedNatives = pruned.calledNatives;
@@ -288,7 +289,7 @@ class IrPipeline {
 		assembly.generatedStart = assembly.functions.length;
 
 	static function typedInterfaceGenerate(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		IrTypedInterfaceDispatch.generate(assembly.functions, assembly.objects, assembly.interfaces);
+		IrTypedInterfaceDispatch.generate(assembly.functions, assembly.objects, assembly.interfaces, context.lineage);
 		return assembly;
 	}
 
@@ -342,7 +343,8 @@ class IrPipeline {
 		enumInput.natives = natives == null ? [] : natives;
 		enumInput.cNatives = cNatives == null ? [] : cNatives;
 		enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, assembly.functions,
-			enumInput.objects, enumInput.staticFields, enumInput.natives, enumInput.interfaces, enumInput.cNatives);
+			enumInput.objects, enumInput.staticFields, enumInput.natives, enumInput.interfaces, enumInput.cNatives,
+			context.lineage);
 		assembly.enumInput = enumInput;
 		return assembly;
 	}

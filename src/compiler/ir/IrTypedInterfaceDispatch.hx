@@ -6,6 +6,13 @@ import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
+/** A typed interface dispatcher a function calls: its name and the signature of the call. */
+typedef IrTypedInterfaceRequest = {
+	final name:String;
+	final arguments:Array<IrType>;
+	final result:IrType;
+}
+
 /** Closed-world typed entry points for value interface calls and specialized generic contracts. */
 class IrTypedInterfaceDispatch {
 	public static inline final PREFIX = "$typed-interface:";
@@ -92,8 +99,91 @@ class IrTypedInterfaceDispatch {
 		return PREFIX + interfaceName + ":" + method + ":" + haxe.crypto.Sha256.encode(signature).substr(0, 32);
 	}
 
+	/**
+	 * The dispatchers `fn` calls or takes as a method value, as requests of a name and signature, in the order it names them: kept
+	 * by the session for `fn`'s version with `lineage` (`IrStageMemos.interfaceRequests`), else read now.
+	 */
+	static function requestsOf(fn:IrFunction,
+			lineage:Null<compiler.ir.IrStageMemo.IrLineage>):Array<IrTypedInterfaceRequest> {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return readRequests(fn);
+		var memo = lineage.memos.interfaceRequests, known = memo.get(version);
+		if (known == null) {
+			known = readRequests(fn);
+			memo.keep(version, known);
+		} else if (lineage.checks) {
+			var now = readRequests(fn), same = now.length == known.length;
+			for (index in 0...now.length)
+				if (same && !sameRequest(now[index], known[index]))
+					same = false;
+			if (!same)
+				throw new InternalError('--check-reuse: the typed interface requests reused for ${fn.name} differ from its code');
+		}
+		return known;
+	}
+
+	@:processWide("a shared empty list of requests, only ever read")
+	static final NO_REQUESTS:Array<IrTypedInterfaceRequest> = [];
+
+	static function sameRequest(left:IrTypedInterfaceRequest, right:IrTypedInterfaceRequest):Bool {
+		if (left.name != right.name || left.arguments.length != right.arguments.length
+			|| !IrVerifier.sameType(left.result, right.result))
+			return false;
+		for (index in 0...left.arguments.length)
+			if (!IrVerifier.sameType(left.arguments[index], right.arguments[index]))
+				return false;
+		return true;
+	}
+
+	/** Reads the dispatcher requests of `fn` (`requestsOf`). A function read past the encode point is its body; one before it, its objects. */
+	static function readRequests(fn:IrFunction):Array<IrTypedInterfaceRequest> {
+		var found:Null<Array<IrTypedInterfaceRequest>> = null;
+		function request(name:String, arguments:Array<IrType>, result:IrType):Void {
+			if (found == null)
+				found = [];
+			found.push({name: name, arguments: arguments, result: result});
+		}
+		function closureRequest(name:String, output:IrType, receiver:IrType):Void
+			switch output {
+				case Function(arguments, result): request(name, [receiver].concat(arguments), result);
+				default: throw new InternalError('Invalid typed interface method reference "$name"');
+			}
+		var body = fn.body;
+		if (body != null)
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					var opcode = body.opcode(row);
+					if (opcode == IrOpcode.Call || opcode == IrOpcode.InstanceClosure) {
+						var name = body.symbol(row).name;
+						if (StringTools.startsWith(name, PREFIX)) {
+							if (opcode == IrOpcode.Call)
+								request(name, [for (index in 0...body.operandCount(row))
+									body.valueType(body.operand(row, index))], body.valueType(body.output(row)));
+							else
+								closureRequest(name, body.valueType(body.output(row)),
+									body.valueType(body.operand(row, 0)));
+						}
+					}
+					row = body.nextRow(row);
+				}
+			}
+				else
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
+								request(name.name, [for (argument in arguments) argument.type], output.type);
+							case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
+								closureRequest(name.name, output.type, receiver.type);
+							default:
+						}
+		return found == null ? NO_REQUESTS : found;
+	}
+
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
-			interfaces:Array<IrInterface>):Void {
+			interfaces:Array<IrInterface>, ?lineage:compiler.ir.IrStageMemo.IrLineage):Void {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		function request(name:String, signature:{arguments:Array<IrType>, result:IrType}):Void {
 			var previous = requests.get(name);
@@ -105,51 +195,9 @@ class IrTypedInterfaceDispatch {
 				throw new InternalError('Conflicting typed interface dispatch "$name"');
 			requests.set(name, signature);
 		}
-		function closureRequest(name:String, output:IrType, receiver:IrType):Void
-			switch output {
-				case Function(arguments, result): request(name, {
-					arguments: [receiver].concat(arguments),
-					result: result
-				});
-				default: throw new InternalError('Invalid typed interface method reference "$name"');
-			}
-		// A function read past the encode point is its body; one before it, its objects.
-		for (fn in functions) {
-			var body = fn.body;
-			if (body != null)
-				for (block in 0...body.blockCount()) {
-					var row = body.firstRow(block);
-					while (row >= 0) {
-						var opcode = body.opcode(row);
-						if (opcode == IrOpcode.Call || opcode == IrOpcode.InstanceClosure) {
-							var name = body.symbol(row).name;
-							if (StringTools.startsWith(name, PREFIX)) {
-								if (opcode == IrOpcode.Call)
-									request(name, {
-										arguments: [for (index in 0...body.operandCount(row))
-											body.valueType(body.operand(row, index))],
-										result: body.valueType(body.output(row))
-									});
-								else
-									closureRequest(name, body.valueType(body.output(row)),
-										body.valueType(body.operand(row, 0)));
-							}
-						}
-						row = body.nextRow(row);
-					}
-				}
-					else
-					for (block in fn.blocks) for (located in block.instructions) switch located.value {
-						case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
-							request(name.name, {
-								arguments: [for (argument in arguments) argument.type],
-								result: output.type
-							});
-						case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
-							closureRequest(name.name, output.type, receiver.type);
-						default:
-					}
-		}
+		for (fn in functions)
+			for (found in requestsOf(fn, lineage))
+				request(found.name, {arguments: found.arguments, result: found.result});
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
 			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions),
