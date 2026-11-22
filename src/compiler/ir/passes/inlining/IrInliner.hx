@@ -38,6 +38,7 @@ import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 /** An inlined function together with everything its result depended on. */
+@:nullSafety(Strict)
 class InlineMemo {
 	public final source:IrFunction;
 
@@ -80,6 +81,7 @@ class InlineMemo {
  * unchanged, so unchanged functions keep their identity between compiles; `published` is the inlined form each
  * function had after the last successful compile, which is what a patch has to be computed against.
  */
+@:nullSafety(Strict)
 class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
@@ -130,7 +132,7 @@ class IrInlineCache {
 
 	var lastFingerprint:Null<String> = null;
 	var lastFingerprintId = 0;
-	var objectTexts:Map<String, String> = [];
+	var objectTexts:Map<String, Null<String>> = [];
 	var objectIds:Map<String, Int> = [];
 	var lastObjectId = 0;
 
@@ -304,6 +306,7 @@ class IrInlineCache {
  * caller that changes is rebuilt as a new IrFunction and unchanged callers keep their identity. Decisions depend only
  * on IR content and on the (sorted) order of `program.functions`, so an incremental build matches a clean one.
  */
+@:nullSafety(Strict)
 class IrInliner {
 	/** Instruction budget for a callee without an `inline` hint. */
 	public static inline var SmallBudget = 24;
@@ -373,11 +376,14 @@ class IrInliner {
 	/** The rows a splice puts in place of the call. */
 	final madeRows:Array<Int> = [];
 
-	/** Copy elision's callbacks, made once. */
-	final bodyLookup:String->Null<IrBody>;
-
-	final methodLookup:IrType->String->Null<String>;
-	final consultLookup:String->Void;
+	/**
+	 * Copy elision's callbacks, made once. One field, set last: a method is taken as a value only once every other field is
+	 * set.
+	 */
+	final copyElisionCallbacks:{final bodyOf:String->Null<IrBody>;
+	final resolve:IrType->String->Null<String>;
+	final consult:String->Void;
+	};
 	final dependenciesOf:Array<Null<Array<IrFunction>>> = [];
 	final dependencyIdsOf:Array<Null<Array<Int>>> = [];
 	final impure:Array<Bool> = [];
@@ -459,20 +465,17 @@ class IrInliner {
 		types = cache.types;
 		voidType = types.id(Void);
 		receiverCheckSymbol = IrSymbol.of(IrReceiverCheck.NAME).id;
-		bodyLookup = pristineBody;
-		methodLookup = resolveMethod;
-		consultLookup = consultName;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
-		var names = [for (name in byName.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names) {
-			var symbol = IrSymbol.of(name);
+		var named = [for (fn in byName) fn];
+		named.sort((left, right) -> Reflect.compare(left.name, right.name));
+		for (fn in named) {
+			var name = fn.name, symbol = IrSymbol.of(name);
 			while (idsBySymbol.length <= symbol.id)
 				idsBySymbol.push(-1);
 			idsBySymbol[symbol.id] = functions.length;
 			ids.set(name, functions.length);
-			functions.push(byName.get(name));
+			functions.push(fn);
 			done.push(null);
 			finished.push(false);
 			reused.push(null);
@@ -501,10 +504,10 @@ class IrInliner {
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.base != null) {
-				var base = Std.string(object.base);
-				if (!subclasses.exists(base))
-					subclasses.set(base, []);
-				subclasses.get(base).push(object.name);
+				var base = Std.string(object.base), children = subclasses.get(base);
+				if (children == null)
+					subclasses.set(base, children = []);
+				children.push(object.name);
 			}
 		}
 		if (memoizes)
@@ -519,6 +522,7 @@ class IrInliner {
 			}
 		table = new IrObjectTable(objects, subclasses);
 		resolution = IrMethodResolution.of(program);
+		copyElisionCallbacks = {bodyOf: pristineBody, resolve: resolveMethod, consult: consultName};
 		computeComponents();
 	}
 
@@ -675,7 +679,7 @@ class IrInliner {
 		for (index in 0...program.functions.length) {
 			var fn = program.functions[index],
 				inlined = inlinedForms[index],
-				id:Int = inliner.ids.get(fn.name),
+				id = inliner.idOf(fn.name),
 				result:IrFunction;
 			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
@@ -730,8 +734,9 @@ class IrInliner {
 				changed.push(fn.name);
 			functions.push(result);
 			published.set(fn.name, result);
-			if (instrument != null)
-				instrumented.get(fn.name).result = result;
+			var instrumentedEntry = instrument == null ? null : instrumented.get(fn.name);
+			if (instrumentedEntry != null)
+				instrumentedEntry.result = result;
 		}
 		program.functions = functions;
 		// A compile that keeps no session reads the stage's output as bodies only (a session compares and caches the objects), so
@@ -754,6 +759,14 @@ class IrInliner {
 
 	inline function functionId(symbol:Int):Int
 		return symbol < idsBySymbol.length ? idsBySymbol[symbol] : -1;
+
+	/** The number of `name`, a function of the program. */
+	function idOf(name:String):Int {
+		var id = ids.get(name);
+		if (id == null)
+			throw new InternalError('"$name" is not a function of the inlined program');
+		return id;
+	}
 
 	function inlinedVersionOf(name:String):Null<IrBody> {
 		var id = ids.get(name);
@@ -943,6 +956,8 @@ class IrInliner {
 		objectFrames.pop();
 		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
 		var consulted = frames.pop();
+		if (consulted == null)
+			throw new InternalError('The consulted functions of $name were never framed');
 		frameSerials.pop();
 		// The functions consulted, once each and in name order (numbers are in name order).
 		consulted.sort((left, right) -> left - right);
@@ -1204,7 +1219,8 @@ class IrInliner {
 		}
 		body.sweepAliases();
 		IrScalarReplacement.runBody(body, table, passScratch, false, profile.packedValueFields);
-		IrCopyElision.runBody(body, bodyLookup, methodLookup, consultLookup, passScratch);
+		var callbacks = copyElisionCallbacks;
+		IrCopyElision.runBody(body, callbacks.bodyOf, callbacks.resolve, callbacks.consult, passScratch);
 	}
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
@@ -1273,8 +1289,11 @@ class IrInliner {
 
 	static function resolve(value:IrValue, substitutions:Map<Int, IrValue>):IrValue {
 		var current = value, steps = 0;
-		while (substitutions.exists(current.id) && steps < 4096) {
-			current = substitutions.get(current.id);
+		while (steps < 4096) {
+			var next = substitutions.get(current.id);
+			if (next == null)
+				break;
+			current = next;
 			steps++;
 		}
 		return current;
