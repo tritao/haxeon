@@ -129,9 +129,9 @@ Runtime performance, October 2026. The experiments that failed their gates are l
 | [fasta-output-profile](reports/2026-10-fasta-output-profile.md) | Accepted (short-ASCII decoder) |
 | [jit-register-allocation](reports/2026-10-jit-register-allocation.md), [results](reports/2026-10-jit-register-allocation-results.md) | Accepted, on by default on SysV x86-64 |
 | [bump-allocation-plan](reports/2026-10-bump-allocation-plan.md), [jit-inline-allocation](reports/2026-10-jit-inline-allocation.md) | Stage 1 accepted, opt-in |
-| [jit-boxed-allocation-layout](reports/2026-10-jit-boxed-allocation-layout.md), [allocation-census](reports/2026-10-allocation-census.md) | Stage 3: opt-in (`HL_JIT_ALLOC_BOX=1`), timings pending |
+| [jit-boxed-allocation-layout](reports/2026-10-jit-boxed-allocation-layout.md) | Stage 3: opt-in (`HL_JIT_ALLOC_BOX=1`), timings pending |
 | [compiler-gc-marking](reports/2026-10-compiler-gc-marking.md) | Opt-in candidate |
 | [gc-allocation-profile](reports/2026-10-gc-allocation-profile.md) | Accepted (allocation fast entry) |
-| [gc-profile](reports/2026-10-gc-profile.md) | Profile and the experimental incremental marking |
+| [gc-profile](reports/2026-10-gc-profile.md) | Experimental incremental marking (`HL_GC_INCREMENTAL=1`) |
 | [ir-opportunity-census](reports/2026-10-ir-opportunity-census.md) | Census of the IR after inlining |
 

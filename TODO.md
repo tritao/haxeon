@@ -259,6 +259,11 @@ The Haxe code Haxeon rejects or runs differently is listed in
 Planned in this order unless noted. Timings so far were taken on a loaded
 machine; re-measure on a quiet one before acting on a ratio.
 
+- **`haxe.ds.ObjectMap` is a linear search on Wasm.** Wasm references have no
+  stable identity hash, so the Wasm `ObjectMap` keeps parallel key and value
+  arrays and compares keys one by one: every lookup is O(n). Give both Wasm
+  targets an identity-hashed map, as HashLink has.
+
 - **Erased generic owners with a specialized receiver take the slow path.**
   The inlined fast path (`8c18d84d2`) tests only the owner's own class, so
   reading a `Box<Int>` (its own specialized class) through `Box<Dynamic>`

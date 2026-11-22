@@ -586,9 +586,7 @@ at **417 objects / 16,360 bytes**, versus the published `bb4072f8` checkpoint's
 418 / 16,384. The missing site is exactly the 24-byte `TextEditIntent` from the
 input callback. Its 32-byte closure retains its allocation and changes only its
 signature. All other 14 action totals are identical. This does not activate the
-general E3/E4/E8 families: their broader ABI follow-ups stay deferred. The frozen
-census tables and the final delta are distinguished in `../reports/2026-10-allocation-census.md`
-and `packages/ui/docs/VALUE_TYPES.md`.
+general E3/E4/E8 families: their broader ABI follow-ups stay deferred.
 
 #### UI sizing conversion: measured stop
 
@@ -949,8 +947,7 @@ records to structs with the needed conformances. These values carry configuratio
 their contents rather than reference identity. The UI continues to encode values at its existing scalar native boundary.
 `LayoutStyle` stays a mutable `Diffable` class with identity equality: its struct prototype boxes at layout-node call sites and
 regresses transition allocations. Its content comparisons use `Diff.mask`; render and style caches use
-the compiler-generated `Diff.fingerprint` snapshot, which hashes its stored fields without making it a map key. The census
-and per-action measurements are recorded in [UI value types](../../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
+the compiler-generated `Diff.fingerprint` snapshot, which hashes its stored fields without making it a map key. Future ADR 0002 per-field `@Channel(...)` declarations fold into
 the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](../reference/STRUCTURAL_EQUALITY.md).
 
 At a genuine Dynamic callback boundary, HashLink boxes a headerless struct as a typed Dynamic value and copies the
@@ -1065,7 +1062,7 @@ implementations. `Dynamic` values are materialized for inspection, debugging
 and reflection. This removes avoidable erasure and the temporary inline-axis and cached local-snapshot boxing paths,
 without a compiler transformation that would have to preserve dynamic access, reflection, identity, mutation, exception
 order and native escape. A same-machine 30-cycle HashLink census after initial setup found no allocations of the five
-value types in interaction, tab matrix or selection stress; see [UI value types](../../packages/ui/docs/VALUE_TYPES.md).
+value types in interaction, tab matrix or selection stress.
 
 Generic owners and functions specialize for struct type arguments, providing unboxed `Array<S>`, `Map<K, S>`,
 `State<S>` and typed closures. This also enables later replacement of per-kind declaration implementations with
@@ -1124,8 +1121,8 @@ test verifies deterministic generation and rejects header drift; it is not an in
 policy constant: HashLink retains geometric rounding for sparse requests; Wasm jumps directly to the request after
 one growth step. The same reserve algorithm handles both, preserving existing lane sizes and allocation counts.
 The uniform-growth experiments (factor two, factor 1.5, and factor 1.5 with a byte-sized minimum first capacity)
-were rejected because paired editor RSS growth increased; the measurements are in
-[VALUE_TYPES.md](../../packages/ui/docs/VALUE_TYPES.md#minimum-first-capacity-growth-trial-not-accepted).
+were rejected because paired editor RSS growth increased
+([VALUE_TYPES.md](../../packages/ui/docs/VALUE_TYPES.md#rejected-growth-policies)).
 The decided contract for a future uniform allocator remains: `resize(n)` allocates exactly `n` when it needs new
 storage, keeps existing capacity when `n` fits, and does not trim on shrink. Known-length constructors size exactly;
 implicit growth may reserve spare capacity. Explicit trimming, if needed, belongs in a separate method such as
@@ -1361,8 +1358,7 @@ implementation. The follow-up removes that interim compile-time setting.
 
 The measured factor-2 and permitted factor-1.5 candidates have not met the HashLink memory no-regression rule.
 The committed runtime therefore retains its existing policy; the proposed implementation is parked on disk.
-See [UI value types](../../packages/ui/docs/VALUE_TYPES.md#uniform-array-growth-factor-2-trial-not-accepted)
-for the paired allocation censuses, per-action KiB and RSS windows. Exact explicit sizing and capacity retention on
+See [UI value types](../../packages/ui/docs/VALUE_TYPES.md#rejected-growth-policies). Exact explicit sizing and capacity retention on
 shrink remain the decision, rather than an open syntax or semantics question. The next implementation must resolve
 the small-array allocation and memory cost without raising a ceiling or introducing target-specific growth settings.
 

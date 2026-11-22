@@ -114,4 +114,4 @@ Nine alternating pairs on the same four performance cores measure selection at 3
 0.01–0.02 ms faster. All action allocation medians and every named selection-census type are unchanged. All paired
 headless memory gates and all 18 hash-checked Wasm GC scene pairs pass with no allocation increase. The complete
 per-action timing/allocation table, census totals and RSS windows are in
-[VALUE_TYPES.md](../../packages/ui/docs/VALUE_TYPES.md#ir-bytecode-optimization-merge-2026-11-05).
+[VALUE_TYPES.md](../../packages/ui/docs/VALUE_TYPES.md).

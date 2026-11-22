@@ -189,8 +189,8 @@ materialize or unpack the nominal enum. Canonical IR, nullable erasure and closu
 association. Source `Null<E>` already lowers to the same null-capable enum IR type. The all-target helper tests
 allocate zero objects for typed copies and four objects for either 8 or 1,024 elements plus iteration. Public
 source closure/field/reflection adapters remain part of the pending source lowering; the storage association
-must also participate in live-patch ABI checks before activation. See STRUCTS.md and VALUE_TYPES.md for the
-representation contract and paired measurements.
+must also participate in live-patch ABI checks before activation. See STRUCTS.md for the
+representation contract.
 
 An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
 `Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
@@ -444,7 +444,7 @@ The chain has an implementer-count regression. Table selection performs a bounde
 of implementation count; bucket shape and indirect-call costs still affect the measured times. The single-entry Wasm
 case checks the complete class ID and calls its entry directly. For small Wasm contracts the old path can still be faster
 (the one-entry GC control is 0.50 ns/call); the replacement removes the unbounded chain rather than claiming a universal
-micro-benchmark speedup. Editor and Showcase timing observations are recorded in `packages/ui/docs/VALUE_TYPES.md`.
+micro-benchmark speedup.
 
 
 The typed table keeps an ordinary semantic method and a separate private entry per implementing class and used

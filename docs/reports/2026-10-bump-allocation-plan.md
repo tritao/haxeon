@@ -11,8 +11,7 @@ comparisons regressed 1–2%. A follow-up
 isolates cold helpers from hot runtime text and removes the LRU regression: merkletrees improves 19.97%, with full
 correctness validation and all six benchmark comparisons complete. It remains opt-in with `HL_JIT_ALLOC_BOX=1`;
 final compiler and startup/JIT timings are pending, so the acceptance gate is not yet complete. See
-[JIT_BOXED_ALLOCATION_LAYOUT.md](2026-10-jit-boxed-allocation-layout.md). The broader census is in
-[ALLOCATION_CENSUS.md](2026-10-allocation-census.md). An array-specific follow-up counted 16.1 million compiler arrays,
+[JIT_BOXED_ALLOCATION_LAYOUT.md](2026-10-jit-boxed-allocation-layout.md). An array-specific follow-up counted 16.1 million compiler arrays,
 85.28% at lengths 0–3. Profiles found limited directly removable cost, so a small-array JIT expansion was not
 implemented.
 The [compiler GC follow-up](2026-10-compiler-gc-marking.md) keeps an opt-in one-worker bitmap candidate after full
