@@ -239,6 +239,20 @@ A misspelled or ill-typed attribute is a compile error, attributes resolve and c
 libraries define their own without compiler changes. The compiler's own attributes (`@pure`, `@unobservable`) are
 declared the same way, in the standard library.
 
+Rules that keep attributes declarative:
+
+- Arguments are constant expressions of declared types, never code that runs; attributes are not decorators as in
+  Python or TypeScript.
+- An attribute applies only to the declaration, statement or parameter that follows it.
+- Several attributes are written in sequence (`@a @b`), on one line or several.
+- Use-site targets, as in Kotlin (`@field:x`, `@get:x`, `@return:x`), are added only when a case needs them; a module's
+  attributes go on its `module` or `package` declaration.
+
+Why `@`: Java, Kotlin, Swift, TypeScript, Python and Dart use it, Haxe already does, and migration is `@:x` to `@x`.
+C#'s `[Name]` and C++'s `[[name]]` clash with array literals and comprehensions, which can start a statement in an
+expression-oriented grammar (`[for (x in xs) f(x)]`). Rust's `#[name]` would blur `#`, which marks what the compiler
+decides (change 16).
+
 ### 2. Accessors inline with the property
 
 `var x(get, set):Int` plus separately named `get_x` and `set_x` methods, with `@:isVar` to request storage, becomes
