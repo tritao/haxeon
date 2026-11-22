@@ -27,7 +27,13 @@ class IrValuePhiScalarization {
 	 * the next stage (edited in place, or a copy when a cache holds the body); one nothing changes
 	 * stays the same object.
 	 */
-	public static function rewriteBodies(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch):Void {
+	public static function rewriteBodies(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch):Void
+		program.functions = compiler.ir.pipeline.IrFunctionStages.apply("value-phi-scalarization",
+			pass(program, types, scratch),
+			program.functions);
+
+	/** `rewriteBodies` per function (`IrValueObjectRows`): a function with a value phi is rewritten. */
+	public static function pass(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch):IrValueObjectRows {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects),
 			layouts = new IrInlineValueLayout(table),
@@ -35,10 +41,8 @@ class IrValuePhiScalarization {
 				for (declaration in program.enums)
 					if (declaration.inlineStorage != null) declaration.inlineStorage => true
 			];
-		program.functions = [
-			for (fn in program.functions)
-				rewriteBody(fn, objects, table, layouts, packets, types, scratch)
-		];
+		return new IrValueObjectRows(IrOpcode.Phi, table, types, scratch.bodyBuilder,
+			fn -> rewriteBody(fn, objects, table, layouts, packets, types, scratch));
 	}
 
 	/** `runBody` on `fn`'s body: `fn` itself when nothing changes. */

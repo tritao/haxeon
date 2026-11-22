@@ -33,6 +33,8 @@ import compiler.ir.model.IrTypeIds;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 import compiler.ir.passes.arrays.IrValueArrayProgramRewrite;
 import compiler.ir.passes.values.IrValueConstructors;
+import compiler.ir.passes.values.IrValueObjectRows;
+import compiler.ir.model.IrOpcode;
 import compiler.ir.passes.values.IrValueDynamicDispatch;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
 import compiler.ir.passes.values.IrValuePhiScalarization;
@@ -110,15 +112,15 @@ class IrPipeline {
 		new IrStage("value-array-rewrite", valueArrayRewrite),
 		new IrStage("value-constructors", valueConstructors).when(wasmValueLanes),
 		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
-		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
+		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
 		new IrStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
-		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
+		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
 		new IrStage("value-constructors", valueConstructors).when(hashLink),
 		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
 		new IrStage("scalar-closures", scalarClosures).when(hashLink),
-		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
+		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
-		new IrStage("scalar-replacement", scalarReplacement),
+		IrFunctionStages.programStage("scalar-replacement", scalarReplacement),
 		new IrStage("nullable-scalar-flow", nullableScalarFlow),
 		IrFunctionStages.programStage("late-enum-tag-escapes", enumTagEscapes),
 		new IrStage("inliner", inliner),
@@ -608,10 +610,8 @@ class IrPipeline {
 	}
 
 	/** The last value phi scalarization before scalar replacement. */
-	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return IrValuePhiScalarization.pass(program, bodyTypes(context), context.passScratch);
 
 	/** Wasm's scalar argument ABI, with value lanes. */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
@@ -635,15 +635,14 @@ class IrPipeline {
 		return program;
 	}
 
-	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrProgram {
+	/** A function that allocates a value object is rewritten (`IrValueObjectRows`). */
+	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrFunctionPass {
 		var scalarObjects = context.scalarObjects,
 			hashLink = !context.isWasm(),
-			types = bodyTypes(context);
-		program.functions = [
-			for (fn in program.functions)
-				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink)
-		];
-		return program;
+			types = bodyTypes(context),
+			scratch = context.passScratch;
+		return new IrValueObjectRows(IrOpcode.ValueInit, scalarObjects, types, scratch.bodyBuilder,
+			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, types, scratch, hashLink));
 	}
 
 	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrProgram {
