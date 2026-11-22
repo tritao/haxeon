@@ -286,6 +286,12 @@ class HlcFunctionLower {
 			if (receiver.exists())
 				nullCheck(row, receiver, switch body.opcode(row) {
 					case IrOpcode.FieldGet, IrOpcode.FieldSet: body.symbol(row).name;
+					// The JIT names the field from the instruction after the check: `length` before the array's size, which
+					// a raw array write reads first unless its bounds are known (`HlLower.lowerRawArrayWrite`).
+					case IrOpcode.ArraySize: "length";
+					case IrOpcode.ArraySet if (rawArray(receiver)
+						&& !arrayBounds.isProven(receiver, body.operand(row, 1))
+						&& !arrayBounds.isValidated(receiver, body.operand(row, 1))): "length";
 					default: null;
 				});
 			lowerRow(row, traps);

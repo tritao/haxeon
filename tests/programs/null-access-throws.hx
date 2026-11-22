@@ -36,6 +36,15 @@ function lengthOf(text:String):Int
 function twice(text:String):Int
 	return text.length + text.length;
 
+function arrayLength(values:Array<Int>):Int
+	return values.length;
+
+/** An Int array write reads the array's length first, for its bounds. */
+function writeFirst(values:Array<Int>):Int {
+	values[0] = 1;
+	return 0;
+}
+
 function fieldOf(value:Dynamic):Dynamic
 	return value.name;
 
@@ -44,6 +53,9 @@ function main():Int {
 	var missing:String = null;
 	count += throwsBoth(() -> lengthOf(missing), "Null access .length");
 	count += throwsBoth(() -> twice(missing), "Null access .length");
+	var noValues:Array<Int> = null;
+	count += throwsBoth(() -> arrayLength(noValues), "Null access .length");
+	count += throwsBoth(() -> writeFirst(noValues), "Null access .length");
 	var holder = new Holder(null);
 	count += throwsBoth(() -> holder.text.length, "Null access .length");
 	count += throwsBoth(() -> holder.other.text, "Null access .text");
@@ -62,5 +74,5 @@ function main():Int {
 	var named:Dynamic = {name: "named"};
 	if (fieldOf(named) == "named" && (fieldOf(named):String).length == 5)
 		count++;
-	return count * 3 + 12;
+	return count * 3 + 6;
 }
