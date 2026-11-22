@@ -24,7 +24,7 @@ HAXEON_DIR="$haxeon_dir" "$gpu_dir/tools/update-haxeon-hxi.sh" --check
 
 # No Wasm GPU binding is checked in, so the ABI32 run only audits that the GPU
 # import header agrees across the Wasm targets; its output is discarded.
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
+"$haxeon_dir/scripts/haxeon" ffi audit \
     --target=wasm32-unknown-wasi \
     --target=wasm32-unknown-emscripten \
     --profile=portable-abi32 \

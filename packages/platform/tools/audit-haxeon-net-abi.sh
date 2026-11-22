@@ -6,7 +6,7 @@ haxeon_dir=${HAXEON_DIR:-"$(cd "$package_dir/../.." && pwd)"}
 nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
 platform_dir="$haxeon_dir/packages/platform"
 
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
+"$haxeon_dir/scripts/haxeon" ffi audit \
 	--target=x86_64-linux-gnu \
 	--target=x86_64-w64-windows-gnu \
 	--target=x86_64-apple-darwin \

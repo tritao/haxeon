@@ -103,8 +103,8 @@ import sharing its line with other code ends it, so groups stay where they are. 
 later import of a name wins, so a run where two imports make the same short name
 visible (module imports count every type the module declares), or with a package
 wildcard, keeps its order and is not reported. `--only unused-imports` or
-`--only import-order` checks one rule. `scripts/format.sh` removes unused imports,
-sorts the rest and formats the whole tree, and `scripts/format.sh --check`, which
+`--only import-order` checks one rule. `haxeon dev format` removes unused imports,
+sorts the rest and formats the whole tree, and `haxeon dev format --check`, which
 CI and the pre-push hook (`scripts/hooks/pre-push`) run, fails on any of the three.
 
 Those two rules read syntax only and run by default. The rule `unbound-local` needs
@@ -610,9 +610,7 @@ and a Haxe target name given to `--target` is refused with Haxeon's (`--target h
   recipes run it during the build.
 - `haxeon ffi audit ...` imports one public header for several targets and compares their C ABIs.
 
-`scripts/haxeon-lsp`, `scripts/haxeon-ffi-import` and `scripts/haxeon-ffi-audit` remain as names for the same commands.
-The import one runs in the checkout's root, as it always has; `haxeon ffi import` resolves relative paths against the
-directory it is run from, like every other command.
+`haxeon ffi import` resolves relative paths against the directory it is run from, like every other command.
 
 ## Scripts
 

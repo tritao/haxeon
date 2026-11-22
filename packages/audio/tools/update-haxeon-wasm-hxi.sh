@@ -12,7 +12,7 @@ elif [[ $# != 0 ]]; then
   echo 'usage: update-haxeon-wasm-hxi.sh [--check]' >&2
   exit 2
 fi
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
+"$haxeon_dir/scripts/haxeon" ffi audit \
   --target=wasm32-unknown-wasi --target=wasm32-unknown-emscripten \
   --profile=portable-abi32 --library=nativekit --interface=NativeKitAudio \
   --depends=NativeKit --dependency-hxi="$haxeon_dir/packages/platform/bindings/nativekit-wasm.hxi" \

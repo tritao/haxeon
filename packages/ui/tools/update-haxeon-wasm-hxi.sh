@@ -17,7 +17,7 @@ elif [[ $# -ne 0 ]]; then
     exit 2
 fi
 
-HAXEON_DIR="$haxeon_dir" "$haxeon_dir/scripts/haxeon-ffi-audit" \
+HAXEON_DIR="$haxeon_dir" "$haxeon_dir/scripts/haxeon" ffi audit \
     --target=wasm32-unknown-wasi \
     --target=wasm32-unknown-emscripten \
     --profile=portable-abi32 \

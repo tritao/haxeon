@@ -19,7 +19,7 @@ nativekit_header="$nativekit_root/include/nativekit.h"
 graphics_header="$nativekit_root/include/nativekit_graphics.h"
 gpu_header="$nativekit_root/modules/gpu/include/nativekit_gpu.h"
 
-HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
+HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon" ffi import \
 	--target="$target" \
 	--library=nativekit \
 	--interface=NativeKit \
@@ -29,7 +29,7 @@ HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
 	--exclude-header="$nativekit_root/include/nativekit_net.h" \
 	"$nativekit_import_header"
 
-HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
+HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon" ffi import \
 	--target="$target" \
 	--library=nativekit_gpu \
 	--interface=NativeKitGpu \
@@ -43,7 +43,7 @@ HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
 	--source-label=modules/gpu/bindings/nativekit_gpu_import.h \
 	"$gpu_import_header"
 
-HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
+HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon" ffi import \
 	--target="$target" \
 	--library=nativekit_scene \
 	--interface=NativeKitScene \
@@ -54,7 +54,7 @@ HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
 	--source-label=modules/scene/include/nativekit_scene.h \
 	"$scene_header"
 
-HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
+HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon" ffi import \
 	--target="$target" \
 	--library=nativekit_scene_render \
 	--interface=NativeKitSceneRender \

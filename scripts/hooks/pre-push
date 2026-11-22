@@ -21,9 +21,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 		echo "pre-push: no native build in this tree, so the format of the pushed Haxe files is not checked" >&2
 		continue
 	fi
-	"$root/scripts/format.sh" --check --range "$base..$local_sha" || status=1
+	"$root/scripts/haxeon" dev format --check --range "$base..$local_sha" || status=1
 done
 if [ "$status" -ne 0 ]; then
-	echo "pre-push: fix with scripts/format.sh --changed (or haxeon fmt / haxeon lint --fix FILES)" >&2
+	echo "pre-push: fix with scripts/haxeon dev format --changed (or haxeon fmt / haxeon lint --fix FILES)" >&2
 fi
 exit "$status"

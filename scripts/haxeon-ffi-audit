@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-# The cross-target C ABI auditor, `haxeon ffi audit`; this name stays for the package scripts that use it. Paths are
-# relative to the caller's directory.
-set -euo pipefail
-exec "$(cd "$(dirname "$0")" && pwd)/haxeon" ffi audit "$@"

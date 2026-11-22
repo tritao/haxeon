@@ -28,7 +28,7 @@ case "$(uname -s):$(uname -m)" in
 		;;
 esac
 
-"$repo_dir/scripts/haxeon-ffi-import" \
+"$repo_dir/scripts/haxeon" ffi import \
 	--language=c++ \
 	--std=c++20 \
 	--cxx-profile=virtual \

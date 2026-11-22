@@ -9,7 +9,7 @@ editor_dir=${HAXEON_EDITOR_DIR:-"$haxeon_dir/packages/editor"}
 
 cd "$repo_dir"
 
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
+"$haxeon_dir/scripts/haxeon" ffi audit \
     --target=x86_64-linux-gnu \
     --target=x86_64-w64-windows-gnu \
     --target=x86_64-apple-darwin \

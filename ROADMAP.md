@@ -76,7 +76,7 @@ place and reloads on structural edits (`tests/hxml/plugin-test.hxml`).
 ### D. Language service
 
 Done: diagnostics, document symbols, completion, hover, definition, references and rename from one compiler snapshot,
-served over LSP (`scripts/haxeon-lsp`) and the JSON-lines protocol.
+served over LSP (`haxeon lsp`) and the JSON-lines protocol.
 
 - [~] Navigation follows compiler symbol identity for locals, members and imported functions; full type-aware navigation
   remains.

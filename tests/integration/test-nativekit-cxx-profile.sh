@@ -68,7 +68,7 @@ run_dir=$(mktemp -d "$repo_dir/out/nativekit-cxx-profile.XXXXXX")
 trap 'rm -rf -- "$run_dir"' EXIT
 
 set +e
-"$repo_dir/scripts/haxeon-ffi-import" \
+"$repo_dir/scripts/haxeon" ffi import \
 	--language=c++ \
 	--std=c++20 \
 	--target="$target" \
@@ -103,7 +103,7 @@ positive_hxi="$positive_dir/nativekit-display-list.hxi"
 positive_thunks="$positive_dir/nativekit-display-list-generated.cpp"
 positive_library="$positive_dir/libnativekit_display_list_fixture.so"
 
-"$repo_dir/scripts/haxeon-ffi-import" \
+"$repo_dir/scripts/haxeon" ffi import \
 	--language=c++ \
 	--std=c++20 \
 	--target="$target" \

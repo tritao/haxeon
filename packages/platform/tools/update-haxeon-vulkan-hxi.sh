@@ -18,7 +18,7 @@ elif [[ $# -ne 0 ]]; then
 fi
 
 cd "$platform_dir"
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
+"$haxeon_dir/scripts/haxeon" ffi audit \
     --target=x86_64-linux-gnu \
     --target=x86_64-w64-windows-gnu \
     --target=x86_64-apple-darwin \

@@ -1,6 +1,6 @@
 {
 	// F5 with this folder open: an Extension Development Host running the extension from source, on this checkout's
-	// tree. The extension's default server command, `haxeon-lsp`, is found on PATH in the checkout's scripts/.
+	// tree. The extension's default server command, `haxeon lsp`, finds `haxeon` on PATH in the checkout's scripts/.
 	"version": "0.2.0",
 	"configurations": [
 		{

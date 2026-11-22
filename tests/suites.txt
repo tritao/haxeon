@@ -26,7 +26,7 @@
 # Two suites must not share a lane or a pool when one writes files the other reads; say why next to a lane or pool that looks
 # combinable but is not.
 
-format-check                     ci          unless-env=SKIP_FORMAT_CHECK -- scripts/format.sh --check
+format-check                     ci          unless-env=SKIP_FORMAT_CHECK -- scripts/haxeon dev format --check
 # Every module of the compiler and the build tool type-checks, not only the ones the entry point reaches: a switch over an IR enum in a
 # module only tests compile (IrInterpreter) once broke the wave.
 type-check-all                   quick       -- .tools/haxe/haxe --cwd . common.hxml -cp tests/compiler --macro "include('compiler')" --macro "include('build')" -hl out/type-check-all.hl --no-output -main Main
@@ -117,7 +117,7 @@ git-package-lock                 ci          pool=projects cli-launcher -- bash 
 workspace                        ci          pool=projects cli-launcher -- bash tests/integration/test-workspace.sh
 workspace-shards                 ci          pool=projects cli-launcher -- bash tests/integration/test-workspace-shards.sh
 # Check the compiler fixed point and embedded incremental consumer together.
-self-hosting                     wave,ci     pool=projects cli-launcher -- bash scripts/check-self-hosting.sh
+self-hosting                     wave,ci     pool=projects cli-launcher -- scripts/haxeon scripts/check-self-hosting.hx
 loaded-source-invalidation       ci          pool=projects cli-launcher -- bash tests/integration/test-loaded-source-invalidation.sh
 
 # The C++ FFI fixtures write distinct out/ files; with the native runtime already built they share no build tree, so they share a pool.

@@ -32,7 +32,7 @@ cat > "$manifest" <<JSON
   "projection": true
 }
 JSON
-"$repo_dir/scripts/haxeon-ffi-import" \
+"$repo_dir/scripts/haxeon" ffi import \
 	--manifest="$manifest" \
 	--cxx-thunks="$repo_dir/out/cxx_owned_generated.cpp" \
 	--target="$target" \

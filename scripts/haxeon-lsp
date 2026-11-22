@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# The language server, `haxeon lsp`; this name stays for editors configured with it.
-set -euo pipefail
-exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/haxeon" lsp "$@"

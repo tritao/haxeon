@@ -22,7 +22,7 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       Run that build of MAIN on this checkout's VM with the arguments and the caller's streams and directory.
  *
  *   haxeon dev format [--check] [--changed]
- *       Format the Haxe sources of the checkout, or check them (FormatCommand). scripts/format.sh runs it.
+ *       Format the Haxe sources of the checkout, or check them (FormatCommand); the format-check suite and the pre-push hook run it.
  *
  *   haxeon dev test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]
  *       Run a mode of tests/suites.txt (SuiteRunner). scripts/test.sh runs `ci`; scripts/gate.sh runs the others with --gate.

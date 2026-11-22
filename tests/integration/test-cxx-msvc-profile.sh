@@ -5,7 +5,7 @@ repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
 mkdir -p "$repo_dir/out/cxx_msvc_projection"
 
 hxi_path="$repo_dir/out/cxx_msvc_profile.hxi"
-"$repo_dir/scripts/haxeon-ffi-import" \
+"$repo_dir/scripts/haxeon" ffi import \
 	--language=c++ \
 	--std=c++20 \
 	--cxx-lifetimes \

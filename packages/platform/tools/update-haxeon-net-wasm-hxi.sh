@@ -23,7 +23,7 @@ else
     destination="$output"
 fi
 
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
+"$haxeon_dir/scripts/haxeon" ffi audit \
     --target=wasm32-unknown-wasi \
     --target=wasm32-unknown-emscripten \
     --profile=portable-abi32 \

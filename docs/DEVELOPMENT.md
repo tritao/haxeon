@@ -121,7 +121,7 @@ check costs about a tenth of a second; `HAXEON_NATIVE_READY=1` skips it, as the 
 | Test suites | `haxeon dev test MODE` | `scripts/test.sh`, `scripts/gate.sh` | |
 | Test driver | `haxeon dev test-driver [jobs] [options]` | `scripts/test-driver.sh` | |
 | Refresh or check the checked-in compiler | `haxeon dev bootstrap [--self]` | `scripts/bootstrap-compiler.sh` | |
-| Format | `haxeon dev format [--check]` | `scripts/format.sh` | |
+| Format | `haxeon dev format [--check]` | | |
 | Run an entry point of this checkout (benchmarks, probes) | `haxeon dev run [--cp DIR]... MAIN [arguments]` | | |
 | Toolchain report | `haxeon doctor` | | |
 
@@ -147,11 +147,11 @@ Haxe sources are formatted by `haxeon fmt` ([CLI.md](reference/CLI.md)), with im
 test file whose lines are part of the test carries `@formatter:off` at the end of its first line.
 
 ```sh
-./scripts/format.sh                        # haxeon dev format
-./scripts/format.sh --check
-./scripts/format.sh --changed              # only files that differ from the merge base with origin/main
-./scripts/format.sh --check --range A..B   # only files the commits in A..B change
-scripts/haxeon fmt --check FILE...         # exactly these files
+scripts/haxeon dev format                        # the whole tree
+scripts/haxeon dev format --check
+scripts/haxeon dev format --changed              # only files that differ from the merge base with origin/main
+scripts/haxeon dev format --check --range A..B   # only files the commits in A..B change
+scripts/haxeon fmt --check FILE...               # exactly these files
 ```
 
 `git config core.hooksPath scripts/hooks` turns on a pre-push hook that runs that check over the commits a push sends, so a
