@@ -64,6 +64,12 @@ typedef CompilerRequest = {
 	final live:Bool;
 
 	/**
+	 * Type the program and report its diagnostics without generating or writing anything (`--no-output`, Haxe's name): what
+	 * `haxeon check` asks for. `output` is not written.
+	 */
+	final noOutput:Bool;
+
+	/**
 	 * Where `output` is published when the compile server stages it under a temporary name. A live session that starts
 	 * without history resumes the module published there, not the staged copy.
 	 */

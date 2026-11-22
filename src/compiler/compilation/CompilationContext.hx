@@ -44,6 +44,12 @@ class CompilationContext {
 	/** The reserved field slots of a live build's objects (`Compiler.liveFieldReserve`). */
 	public final liveFieldReserve:Int;
 
+	/**
+	 * Whether the program must have its executable entry point. A build always needs it; an analysis needs it only when it stands
+	 * for a build (`--no-output`), not when the editor types a library.
+	 */
+	public final requireEntry:Bool;
+
 	/** Why the frontend started over, one entry per module typing found it needed: each restart redoes the whole frontend. */
 	public final frontendRestarts:Array<String> = [];
 
@@ -64,8 +70,9 @@ class CompilationContext {
 	final owner:Compiler;
 	final defines:Map<String, String>;
 
-	public function new(compiler:Compiler, state:SessionState, ?buildSemanticModels = true) {
+	public function new(compiler:Compiler, state:SessionState, ?buildSemanticModels = true, ?requireEntry = false) {
 		this.owner = compiler;
+		this.requireEntry = requireEntry;
 		this.state = state;
 		defines = owner.defines;
 		rootModules = owner.rootModules.copy();

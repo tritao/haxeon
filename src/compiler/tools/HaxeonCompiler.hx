@@ -27,7 +27,10 @@ class HaxeonCompiler {
 				Sys.println(text);
 		}
 		try {
-			CompilerDriver.compile(request, Sys.println, null, null, null, printed);
+			if (request.noOutput)
+				CompilerDriver.check(request, Sys.println, null, null, printed);
+			else
+				CompilerDriver.compile(request, Sys.println, null, null, null, printed);
 		} catch (failure:CompileError) {
 			printed(new DiagnosticPrinter(request).errors(failure.diagnostics));
 			throw failure;

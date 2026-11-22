@@ -14,7 +14,11 @@ class AnalysisTransaction {
 	final entryModule:String;
 	final token:Null<CancellationToken>;
 
-	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>) {
+	/** Fail, as a build does, when the program has no executable entry point. */
+	final requireEntry:Bool;
+
+	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, requireEntry = false) {
+		this.requireEntry = requireEntry;
 		this.compiler = compiler;
 		this.entryModule = entryModule;
 		this.token = token;
@@ -38,7 +42,7 @@ class AnalysisTransaction {
 				diagnosticWork.push(dependency);
 		}
 		try {
-			var context = new CompilationContext(compiler, candidate);
+			var context = new CompilationContext(compiler, candidate, true, requireEntry);
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
 			var typed = frontend.typedProgram;
 			if (typed == null)

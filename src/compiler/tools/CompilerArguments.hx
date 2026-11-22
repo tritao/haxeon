@@ -34,6 +34,7 @@ class CompilerArguments {
 			entry = "compiler.tools.HaxeonCompiler",
 			dumpFunction = -1,
 			live = false,
+			noOutput = false,
 			buildModeExplicit = false,
 			importMemory = false,
 			sharedMemory = false,
@@ -141,6 +142,8 @@ class CompilerArguments {
 				diagnosticDirectory = value(argument, "--diagnostic-directory=");
 			else if (argument == "--live")
 				live = true;
+			else if (argument == "--no-output")
+				noOutput = true;
 			else if (argument == "--wasm-shared-memory")
 				sharedMemory = true;
 			else if (argument == "--wasm-import-memory")
@@ -180,6 +183,10 @@ class CompilerArguments {
 			throw new UsageError("Wasm memory options require --target=wasm32 or --target=wasm-gc");
 		if (live && backend != HashLink)
 			throw new UsageError("--live requires --target=hl");
+		if (noOutput
+			&& (live || baselineOutput != null || entryIdOutput != null || xmlOutput != null || irOutput != null
+			|| inputsOutput != null || ffiHeader != null))
+			throw new UsageError("--no-output writes nothing, so it takes no option that writes a file or a live publication");
 		if (baseline != null && !live)
 			throw new UsageError("--baseline requires --live");
 		if ((baselineOutput != null || entryIdOutput != null) && backend != HashLink)
@@ -235,6 +242,7 @@ class CompilerArguments {
 			color: color,
 			diagnosticDirectory: diagnosticDirectory,
 			live: live,
+			noOutput: noOutput,
 			exports: exports,
 			ffiHeader: ffiHeader,
 			ffiLibrary: ffiLibrary,

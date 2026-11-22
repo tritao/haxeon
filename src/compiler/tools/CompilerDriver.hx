@@ -222,6 +222,28 @@ class CompilerDriver {
 		}
 	}
 
+	/**
+	 * Executes a `--no-output` request: types the program from its entry and reports its warnings, as a compile does, but
+	 * generates nothing and writes no file. A type error is thrown as from `compile`.
+	 */
+	public static function check(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession,
+			?cancellation:CancellationToken, ?diagnostics:String->Void):compiler.Compiler.AnalysisResult {
+		if (!request.noOutput)
+			throw new InternalError("CompilerDriver.check takes a --no-output request");
+		var report = progress == null ? function(message:String) {} : progress,
+			progressReport = request.verbosity.atLeast(Verbosity.Normal) ? report : function(message:String) {};
+		progressReport("loading " + Std.string(request.paths.length) + " sources");
+		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
+		progressReport("checking entry " + request.entry);
+		var result = compiler.analyze(request.entry, cancellation, true),
+			printer = new DiagnosticPrinter(request),
+			warned = diagnostics == null ? report : diagnostics;
+		for (warning in compiler.warnings(result.moduleNames))
+			warned(printer.warning(warning));
+		progressReport("checked " + Std.string(result.moduleNames.length) + " modules");
+		return result;
+	}
+
 	/** The `diagnostic` reports: where the request's time and allocations went, phase by phase and pass by pass. */
 	static function reportCosts(report:String->Void, result:CompileResult, requestStartedAt:Float, preparedAt:Float,
 			compiledAt:Float, backendStartedAt:Float, backendDoneAt:Float, artifactsWrittenAt:Float, stampedAt:Float,

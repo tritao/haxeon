@@ -491,7 +491,7 @@ class FrontendCompilation {
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.natives.signatures(),
 				semanticAssembly.entryPoint, context.state.genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.state.lastTypedProgram : null,
-				semanticAssembly.facts, build.lowerToIr,
+				semanticAssembly.facts, build.lowerToIr || context.requireEntry,
 				retainedFromPrevious(context, names, selected, semanticAssembly.invalidated, build.lowerToIr,
 				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
 				previousSemantic), context.options.reverseTypingOrder, {

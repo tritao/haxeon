@@ -94,9 +94,9 @@ class CompilerServer {
 							client.close();
 							answered = true;
 							var started = Sys.time();
-							var result = compileConnected(null, CompilerArguments.parse(arguments), session);
+							var retyped = compileConnected(null, CompilerArguments.parse(arguments), session);
 							recordLiveState(session);
-							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped');
+							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, $retyped functions retyped');
 						case Compile(arguments):
 							var started = Sys.time();
 							#if (hl && !haxeon)
@@ -104,7 +104,7 @@ class CompilerServer {
 							#end
 							var parsed = CompilerArguments.parse(arguments);
 							request = parsed;
-							var result = compileConnected(client, parsed, session);
+							var retyped = compileConnected(client, parsed, session);
 							// The worker's costs, at `detailed`.
 							if (parsed.verbosity.atLeast(Verbosity.Detailed)) {
 								#if (hl && !haxeon)
@@ -113,7 +113,7 @@ class CompilerServer {
 									Message('worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'));
 								#end
 								send(client,
-									Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'));
+									Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, $retyped functions retyped'));
 							}
 					}
 					if (!answered)
@@ -149,11 +149,13 @@ class CompilerServer {
 		} catch (_:Dynamic) {}
 	}
 
-	/** A disconnected requester cancels only its own transaction, before the next request is accepted. */
-	static function compileConnected(client:Null<Socket>, request:CompilerRequest,
-			session:CompilerSession):compiler.Compiler.CompileResult {
+	/**
+	 * Compiles, or checks (`--no-output`), and returns how many functions were typed again. A disconnected requester cancels only
+	 * its own transaction, before the next request is accepted.
+	 */
+	static function compileConnected(client:Null<Socket>, request:CompilerRequest, session:CompilerSession):Int {
 		var cancellation = new CancellationToken(), done = new Lock();
-		var result:compiler.Compiler.CompileResult = null;
+		var retyped = 0;
 		var failure:Null<haxe.Exception> = null;
 		// Stage every artifact so cancellation preserves the previous successful publication.
 		var staged:Dynamic = Reflect.copy(request);
@@ -213,18 +215,22 @@ class CompilerServer {
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.compile");
 			var counting = AllocationCensus.begin();
-			try
-				result = CompilerDriver.compile(cast staged, message -> {
-					cancellation.check();
-					var requester = client;
-					if (requester != null)
-						send(requester, Message(message));
-				}, session, cancellation, publishEarly, message -> {
+			function progress(message:String):Void {
+				cancellation.check();
+				var requester = client;
+				if (requester != null)
+					send(requester, Message(message));
+			}
+			function diagnostics(message:String):Void {
 				var requester = client;
 				if (requester != null)
 					send(requester, Diagnostics(message));
-			})
-				catch (error:haxe.Exception)
+			}
+			try
+				retyped = request.noOutput ? CompilerDriver.check(cast staged, progress, session, cancellation,
+					diagnostics).retyped.length : CompilerDriver.compile(cast staged, progress, session, cancellation,
+					publishEarly, diagnostics).metrics.retypedFunctions
+			catch (error:haxe.Exception)
 				failure = error;
 			if (counting)
 				AllocationCensus.end();
@@ -273,6 +279,9 @@ class CompilerServer {
 		CompilerMemoryLog.record(request.output, session);
 		if (Sys.getEnv("HAXEON_COMPILER_CENSUS") != null)
 			sys.thread.Thread.create(function() CompilerMemoryCensus.run(session));
+		// A check wrote nothing to publish.
+		if (request.noOutput)
+			return retyped;
 		var markerDestination = request.output + ".live.full";
 		if (request.output != null && FileSystem.exists(markerDestination))
 			FileSystem.deleteFile(markerDestination);
@@ -286,7 +295,7 @@ class CompilerServer {
 			else if (StringTools.endsWith(output.destination, ".hlp") && FileSystem.exists(output.destination))
 				FileSystem.deleteFile(output.destination);
 		}
-		return result;
+		return retyped;
 	}
 
 	/** How long a live publication waits for a following request before its history is recorded. */

@@ -563,9 +563,12 @@ class Compiler {
 		sourceGeneration++;
 	}
 
-	/** Update semantic state without assembling or publishing a runtime artifact. */
-	public function analyze(entryModule:String, ?token:CancellationToken):AnalysisResult
-		return new AnalysisTransaction(this, entryModule, token).run();
+	/**
+	 * Update semantic state without assembling or publishing a runtime artifact. `requireEntry` fails it, as a build fails, when the
+	 * program has no executable entry point.
+	 */
+	public function analyze(entryModule:String, ?token:CancellationToken, requireEntry = false):AnalysisResult
+		return new AnalysisTransaction(this, entryModule, token, requireEntry).run();
 
 	public function dependentModules(module:String):Array<String>
 		return graph.dependents(module);
