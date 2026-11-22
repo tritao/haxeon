@@ -14,7 +14,7 @@ elif [[ $# != 0 ]]; then
 fi
 "$haxeon_dir/scripts/haxeon" ffi audit \
   --target=wasm32-unknown-wasi --target=wasm32-unknown-emscripten \
-  --profile=portable-abi32 --library=nativekit --interface=NativeKitAudio \
+  --profile=portable-abi32 --library=nativekit_audio --interface=NativeKitAudio \
   --depends=NativeKit --dependency-hxi="$haxeon_dir/packages/platform/bindings/nativekit-wasm.hxi" \
   --include="$nativekit_dir/modules/audio/include" --include="$nativekit_dir/modules/audio/bindings" \
   --include="$nativekit_dir/include" --exclude-header="$nativekit_dir/include/nativekit.h" \

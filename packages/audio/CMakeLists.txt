@@ -6,8 +6,9 @@ set(NK_BUILD_AUDIO ON CACHE BOOL "Enable audio" FORCE)
 set(NK_BUILD_TESTS OFF CACHE BOOL "Build native tests")
 set(NK_BUILD_EXAMPLES OFF CACHE BOOL "Build native examples")
 add_subdirectory("${NATIVEKIT_DIR}" nativekit)
+# NativeKit's core and its audio module are two libraries; both go where the package's programs load them.
 if(HAXEON_NATIVE_OUTPUT_DIR)
-    set_target_properties(nativekit PROPERTIES
+    set_target_properties(nativekit nativekit_audio PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
         RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
         ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")

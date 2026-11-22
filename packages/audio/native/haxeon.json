@@ -7,8 +7,8 @@
   "native": {
     "cmake": {
       "source": "..",
-      "target": "nativekit",
-      "library": "nativekit",
+      "target": "nativekit_audio",
+      "libraries": ["nativekit", "nativekit_audio"],
       "inputs": [
         "../CMakeLists.txt",
         "../../../vendor/nativekit/CMakeLists.txt",

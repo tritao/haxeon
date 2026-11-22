@@ -11,11 +11,11 @@ add_subdirectory("${NATIVEKIT_DIR}" nativekit)
 set(NKUI_NATIVEKIT_DIR "${NATIVEKIT_DIR}" CACHE PATH "NativeKit source for UI" FORCE)
 add_subdirectory("${HAXEON_ROOT}/packages/ui" ui)
 if(HAXEON_NATIVE_OUTPUT_DIR)
-    foreach(runtime IN ITEMS nativekit nativekit_gpu nativekit_ui)
+    foreach(runtime IN ITEMS nativekit nativekit_audio nativekit_gpu nativekit_ui)
         set_target_properties(${runtime} PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
             RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
             ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")
     endforeach()
 endif()
-add_custom_target(audio_lab_native DEPENDS nativekit nativekit_gpu nativekit_ui)
+add_custom_target(audio_lab_native DEPENDS nativekit nativekit_audio nativekit_gpu nativekit_ui)

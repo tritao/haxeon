@@ -22,7 +22,7 @@ fi
     --target=x86_64-apple-darwin \
     --target=arm64-apple-darwin \
     --profile=portable-abi64 \
-    --library=nativekit \
+    --library=nativekit_audio \
     --interface=NativeKitAudio \
     --depends=NativeKit \
     --dependency-hxi="$platform_dir/bindings/nativekit.hxi" \
