@@ -444,6 +444,14 @@ class IrTagEscapeRecord {
 			&& arguments.join(",") == other.arguments.join(",") && closures.join(",") == other.closures.join(",")
 			&& mapStores.join(",") == other.mapStores.join(",");
 
+	/** Whether the record has the argument at `index`, of type id `type`, of a call of `name`. */
+	function hasArgument(name:String, index:Int, type:Int):Bool {
+		for (entry in 0...callees.length)
+			if (arguments[entry * 2 + 1] == type && arguments[entry * 2] == index && callees[entry] == name)
+				return true;
+		return false;
+	}
+
 	/** Whether a type can lead the escape reach to an enum (`IrEnumEscapeReach.collect`): the others add nothing to it. */
 	static function leads(type:IrType):Bool
 		return switch type {
@@ -462,7 +470,7 @@ class IrTagEscapeRecord {
 			escaped.push(id);
 
 	static function read(body:IrBody):IrTagEscapeRecord {
-		var record = new IrTagEscapeRecord(), types = body.types, kept:Map<String, Bool> = [];
+		var record = new IrTagEscapeRecord(), types = body.types;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -482,9 +490,7 @@ class IrTagEscapeRecord {
 							var type = body.valueTypeId(body.operand(row, index));
 							if (!leads(types.type(type)))
 								continue;
-							var key = name + "\u0001" + index + "\u0001" + type;
-							if (!kept.exists(key)) {
-								kept.set(key, true);
+							if (!record.hasArgument(name, index, type)) {
 								record.callees.push(name);
 								record.arguments.push(index);
 								record.arguments.push(type);
