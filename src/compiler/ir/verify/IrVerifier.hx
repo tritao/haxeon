@@ -24,6 +24,7 @@ import compiler.ir.passes.scalars.IrScalarArguments;
 import compiler.ir.passes.scalars.IrScalarWordBits;
 import compiler.ir.passes.values.IrInlineValueLayout;
 import compiler.ir.passes.values.IrValueLaneReference;
+import compiler.ir.verify.IrVerifyMemo.IrVerifyTable;
 
 import compiler.core.InternalError;
 import compiler.ir.model.Ir;
