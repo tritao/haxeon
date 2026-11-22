@@ -122,7 +122,7 @@ class IrPipeline {
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
 		IrFunctionStages.programStage("scalar-replacement", scalarReplacement),
 		IrFunctionStages.programStage("nullable-scalar-flow", nullableScalarFlow),
-		new IrStage("late-enum-tag-escapes", lateEnumTagEscapes),
+		IrFunctionStages.programStage("late-enum-tag-escapes", lateEnumTagEscapes),
 		new IrStage("inliner", inliner),
 		new IrStage("verifier", verifier).when(verifiesHere),
 		new IrStage("verifier-check", verifierCheck).when(checksVerification)
@@ -658,16 +658,8 @@ class IrPipeline {
 			context.options.checkReuse);
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
-	/**
-	 * Without a memo for now: what it hands on is the inliner's input, which the inliner keeps as last build's equal function
-	 * (`IrInlineCache.stableSources`), so a memo would hold a second copy of each function the stages before it make anew each
-	 * build. It takes the memo once the inliner keys its sources by version.
-	 */
-	static function lateEnumTagEscapes(program:IrProgram, context:IrPipelineContext):IrProgram {
-		program.functions = IrFunctionStages.apply("late-enum-tag-escapes",
-			new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder), program.functions);
-		return program;
-	}
+	static function lateEnumTagEscapes(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
 
 	/**
 	 * The type ids of the bodies from here to the inliner: its cache's, so it takes the functions' bodies as they are. The
