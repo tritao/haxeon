@@ -155,6 +155,16 @@ class TestMain {
 		expectCompileError('function main():Int return true >= false ? 42 : 0;',
 			"Comparison requires matching numeric operands");
 		Sys.println("PASS: String ordering accepts matching strings without weakening mixed or boolean ordering");
+		// A type's path is its package and name: a root `Math` beside a module's main type is the standard library's, which
+		// Haxe rejects whether or not anything uses it; one in a package is a different path.
+		expectCompileError('class Math { public static function add(a:Int, b:Int):Int return a + b; } function main():Int return Math.add(20, 22);',
+			"Type name Math is redefined from module Main", true);
+		var packagedMath = new Compiler(null, CompilerIntrinsics.configuration());
+		packagedMath.addStandardLibrarySourceRoot("stdlib");
+		packagedMath.update("app/Main.hx",
+			"package app; class Math { public static function add(a:Int, b:Int):Int return a + b; } function main():Int return Math.add(20, 22);");
+		packagedMath.compile("app.Main");
+		Sys.println("PASS: a type at a standard library type's path is a redefinition on every target");
 		Frontend.compile('function main():Int { return 0x2A; }');
 		var separatedInteger =
 			new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
@@ -2437,9 +2447,16 @@ class TestMain {
 		}
 	}
 
-	static function expectCompileError(source:String, expected:String):Void {
+	/** With `modules`, `source` is module Main of a build with the standard library, whose own modules are in reach. */
+	static function expectCompileError(source:String, expected:String, modules = false):Void {
 		try {
-			Frontend.compile(source);
+			if (modules) {
+				var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+				compiler.addStandardLibrarySourceRoot("stdlib");
+				compiler.update("Main.hx", source);
+				compiler.compile("Main");
+			} else
+				Frontend.compile(source);
 			throw 'compiler accepted invalid source; expected "$expected"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.message != expected)

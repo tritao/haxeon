@@ -66,6 +66,8 @@ class ModuleAnalyzer {
 			state.tokens = keepsTokens ? parsed.tokens : TokenTable.empty;
 			state.ast = parsed.ast;
 			declarationOwners.release(state.name);
+			if (!state.source.isStandardLibrarySource)
+				checkStandardTypeNames(state.name, state.parsedAst());
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
@@ -525,6 +527,32 @@ class ModuleAnalyzer {
 		if (declared != null) return declared;
 		// A package-local lookup can fall back to a root declaration such as Equatable.
 		return qualified != typeName ? sourceModuleForDependency(typeName) : null;
+	}
+
+	/**
+	 * A type's path is its package and name, not its module: a type a module declares beside its main type, at the path of a
+	 * standard library type, redefines that type, which Haxe rejects. It is rejected here whether or not the build loads the
+	 * standard type, so every target reports it alike. A module at the standard module's own path replaces that module
+	 * instead, as an earlier class path does in Haxe.
+	 */
+	function checkStandardTypeNames(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {
+		var prefix = ast.packageName == null ? "" : Std.string(ast.packageName) + ".";
+		function check(name:String, isPrivate:Bool, span:compiler.core.Source.SourceSpan):Void {
+			var path = prefix + name;
+			if (!isPrivate && path != moduleName && sourceLoader.isStandardModule(path))
+				throw new CompileError(new compiler.core.Diagnostic("E1020",
+					'Type name $path is redefined from module $moduleName', span));
+		}
+		for (declaration in ast.aliases)
+			check(declaration.name, declaration.isPrivate, declaration.span);
+		for (declaration in ast.enums)
+			check(declaration.name, false, declaration.span);
+		for (declaration in ast.abstracts)
+			check(declaration.name, false, declaration.span);
+		for (declaration in ast.interfaces)
+			check(declaration.name, false, declaration.span);
+		for (declaration in ast.classes)
+			check(declaration.name, declaration.isPrivate, declaration.span);
 	}
 
 	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {

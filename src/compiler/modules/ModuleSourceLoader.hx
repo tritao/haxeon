@@ -118,6 +118,18 @@ class ModuleSourceLoader {
 		return state;
 	}
 
+	/** Whether a standard library root holds module `name`, whether or not this build loads it. */
+	public function isStandardModule(name:String):Bool {
+		var relative = name.split(".").join("/") + ".hx";
+		for (root in roots)
+			if (root.isStandardLibrary && root.packagePrefix == null) {
+				var path = exactPath(root.path, relative);
+				if (path != null && !declaresOther(FileVersion.readSource(path), packageOf(name)))
+					return true;
+			}
+		return false;
+	}
+
 	/** Materialize all source modules directly contained by a package. */
 	public function loadPackage(packageName:String, modules:Map<String, ModuleState>):Array<String> {
 		var result:Array<String> = [];
