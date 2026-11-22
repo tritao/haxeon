@@ -17,6 +17,7 @@ import compiler.ir.passes.enums.IrInlineEnumLowering;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.gen.IrMethodReferences;
 import compiler.ir.passes.nullability.IrNullableScalarFields;
+import compiler.ir.passes.nullability.IrNullableScalarFields.IrNullableScalarFieldsPass;
 import compiler.ir.passes.nullability.IrNullableScalarFlow;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.passes.nullability.IrOptionalFieldStorage;
@@ -93,7 +94,7 @@ class IrPipeline {
 		new IrAssemblyStage("object-reflection", objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
-		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
+		IrFunctionStages.stage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
 		new IrAssemblyStage("enum-tag-escapes", assemblyEnumTagEscapes)
 	]);
@@ -562,12 +563,9 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = new IrNullableScalarFields(assembly.objects).rewrite(assembly.functions,
-			bodyTypes(context),
-			context.passScratch.bodyBuilder);
-		return assembly;
-	}
+	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrNullableScalarFieldsPass(new IrNullableScalarFields(assembly.objects),
+			bodyTypes(context), context.passScratch.bodyBuilder);
 
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		assembly.program = IrProgramAssembler.finish(assembly, context);

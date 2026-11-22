@@ -31,17 +31,12 @@ class IrNullableScalarFields {
 	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
-		var rewritten:Array<IrFunction> = [];
-		for (fn in functions) {
-			var body = fn.bodyIn(types, builder);
-			if (!needsRewrite(body)) {
-				rewritten.push(fn);
-				continue;
-			}
-			var edited = body.forEditing(builder);
-			rewriteBody(edited);
-			rewritten.push(IrFunction.ofOwnedBody(edited));
-		}
+		return compiler.ir.pipeline.IrFunctionStages.apply("nullable-scalar-fields",
+			new IrNullableScalarFieldsPass(this, types, builder), functions);
+	}
+
+	/** The rewritten functions with the normalizers made, which come last. */
+	public function withHelpers(rewritten:Array<IrFunction>):Array<IrFunction> {
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -53,21 +48,46 @@ class IrNullableScalarFields {
 		return rewritten;
 	}
 
-	/** The field a store row of `body` writes, when it has a nullable scalar storage. */
-	function narrowedField(body:IrBody, row:Int):Null<IrObjectField> {
+	/**
+	 * The field a store row of `body` writes, when it has a nullable scalar storage: read through `reader`'s fact of the field
+	 * (`IrNullableScalarFieldsPass`) when given.
+	 */
+	public function narrowedField(body:IrBody, row:Int, ?reader:compiler.ir.reuse.IrFactReader):Null<IrObjectField> {
 		if (body.opcode(row) != IrOpcode.FieldSet)
 			return null;
-		var field = findField(body.valueType(body.operand(row, 0)), body.symbol(row).name);
+		var type = body.valueType(body.operand(row, 0)), name = body.symbol(row).name;
+		if (reader != null)
+			switch type {
+				case Obj(object):
+					reader.read(IrNullableScalarFieldsPass.FIELD, object + "\u0001" + name);
+				default:
+			}
+		var field = findField(type, name);
 		return field != null && field.nullableScalarStorage != null ? field : null;
 	}
 
-	function rewriteBody(body:IrBody):Void {
+	/** The fact of a store into `name` of an object of class `object`: 0 when it keeps no nullable scalar, else its storage. */
+	public function storageCode(object:String, name:String):Int {
+		var field = findField(Obj(object), name), storage = field == null ? null : field.nullableScalarStorage;
+		if (field == null || storage == null)
+			return 0;
+		var wide = switch field.type {
+			case Nullable(I64): 2;
+			default: 0;
+		};
+		return 1 + wide + (storage.signed ? 4 : 0) + storage.size * 8;
+	}
+
+	public function rewriteBody(body:IrBody, ?reader:compiler.ir.reuse.IrFactReader):Void {
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
-				var field = narrowedField(body, row);
-				if (field != null) {
-					var helper = helperFor(field.type, field.nullableScalarStorage),
+				var field = narrowedField(body, row, reader);
+				var storage = field == null ? null : field.nullableScalarStorage;
+				if (field != null && storage != null) {
+					if (reader != null)
+						reader.request(storage.size * 2 + (storage.signed ? 1 : 0), field.type);
+					var helper = helperFor(field.type, storage),
 						normalized = body.newValue("$nullable-scalar", body.typeId(field.type));
 					body.beginRow();
 					body.pushOperand(body.operand(row, 1));
@@ -80,11 +100,11 @@ class IrNullableScalarFields {
 		}
 	}
 
-	function needsRewrite(body:IrBody):Bool {
+	public function needsRewrite(body:IrBody, ?reader:compiler.ir.reuse.IrFactReader):Bool {
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
-				if (narrowedField(body, row) != null)
+				if (narrowedField(body, row, reader) != null)
 					return true;
 				row = body.nextRow(row);
 			}
@@ -92,7 +112,7 @@ class IrNullableScalarFields {
 		return false;
 	}
 
-	function helperFor(type:IrType, storage:IrScalarStorage):String {
+	public function helperFor(type:IrType, storage:IrScalarStorage):String {
 		var element = switch type {
 			case Nullable(I32): I32;
 			case Nullable(I64): I64;
@@ -149,4 +169,67 @@ class IrNullableScalarFields {
 		return null;
 	}
 
+}
+
+/**
+ * `IrNullableScalarFields.rewrite` per function (`IrFunctionPass`) on bodies: a function's summary says whether it stores a
+ * nullable Int at all; the rewrite reads, for each field it stores to, the field's nullable scalar storage (`FIELD`), and asks for
+ * the normalizer of each width it stores.
+ */
+class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass {
+	public static inline final FIELD = 0;
+
+	static inline final STORES = 1;
+
+	final fields:IrNullableScalarFields;
+	final types:IrTypeIds;
+	final builder:Null<IrBodyBuilder>;
+
+	public function new(fields:IrNullableScalarFields, types:IrTypeIds, ?builder:IrBodyBuilder) {
+		this.fields = fields;
+		this.types = types;
+		this.builder = builder;
+	}
+
+	public function summarize(fn:IrFunction):Int {
+		var body = fn.bodyIn(types, builder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.FieldSet)
+					switch body.valueType(body.operand(row, 1)) {
+						case Nullable(I32 | I64):
+							return STORES;
+						default:
+					}
+				row = body.nextRow(row);
+			}
+		}
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
+
+	public function fact(kind:Int, key:String):Int {
+		var split = key.indexOf("\u0001");
+		return fields.storageCode(key.substr(0, split), key.substr(split + 1));
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+		if (summary != STORES)
+			return fn;
+		var body = fn.bodyIn(types, builder), recording = reader.records() ? reader : null;
+		if (!fields.needsRewrite(body, recording))
+			return fn;
+		var edited = body.forEditing(builder);
+		fields.rewriteBody(edited, recording);
+		return IrFunction.ofOwnedBody(edited);
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		fields.helperFor(type, {size: kind >> 1, signed: kind & 1 == 1});
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return fields.withHelpers(functions);
 }
