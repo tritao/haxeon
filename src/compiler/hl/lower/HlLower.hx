@@ -1900,6 +1900,14 @@ class HlLower {
 				// A previous successful dereference or check may already have proved this SSA receiver non-null.
 				if (!nonNull.has(row))
 					instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
+			case StringLength:
+				// The string's `length` read in place, as HashLink reads the field: a null string fails the check, which names
+				// the field, unless a dereference before it already proved the string.
+				var header = temporaryRegisterType(internRuntimeHeader(BytesHeader), registerTypes);
+				instructions.push(HlInstruction.UnsafeCast(header, requireRegister(body.operand(row, 0), registers)));
+				if (!nonNull.has(row))
+					instructions.push(HlInstruction.NullCheck(header));
+				instructions.push(HlInstruction.FieldGet(defineRegister(output, registers, registerTypes), header, 1));
 			case ReferenceIdentity:
 				var pointers = identityPointers(row, instructions, registers, registerTypes);
 				lowerEqualityBool(pointers[0], pointers[1], output, instructions, registers, registerTypes);

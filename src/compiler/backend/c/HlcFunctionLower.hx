@@ -842,6 +842,10 @@ class HlcFunctionLower {
 		switch HlLoweringDecisions.classifyCall(base) {
 			case ReceiverCheck:
 				nullCheck(row, body.operand(row, 0));
+			case StringLength:
+				// The field read in place, as the bytecode reads it.
+				nullCheck(row, body.operand(row, 0), "length");
+				assign(row, '((vstring*)${v(body.operand(row, 0))})->length', module.i32);
 			case ReferenceIdentity:
 				line('${v(output)} = (void*)${v(body.operand(row, 0))} == (void*)${v(body.operand(row, 1))};');
 			case ExactTypeTest:

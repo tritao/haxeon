@@ -56,7 +56,7 @@ enum HlSymbolRequest {
  * where an object type with these fields keeps them, on 32- and 64-bit alike.
  */
 enum abstract HlRuntimeHeader(Int) {
-	/** `realtime_bytes`: the finalizer word, then `data` (field 0) and `length` (field 1). */
+	/** `realtime_bytes`: the finalizer word, then `data` (field 0) and `length` (field 1); `vstring` is laid out the same. */
 	var BytesHeader = 0;
 
 	/** `varray`: the type word, the element type (field 0), then `size` (field 1) and `capacity` (field 2). */

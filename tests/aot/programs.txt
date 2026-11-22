@@ -384,6 +384,7 @@ nested-mutable-capture
 nested-value-scalar-replace
 non-null-facts
 null-check-facts
+null-access-throws
 nullable-abstract-cast
 nullable-abstract-places
 nullable-abstract-value

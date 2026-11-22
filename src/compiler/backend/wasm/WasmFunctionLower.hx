@@ -896,6 +896,7 @@ class WasmFunctionLower {
 					case EnumTag(_): null;
 					default: value;
 				};
+			case Call(_, name, [value]) if (name.name == compiler.ir.names.IrReceiverCheck.STRING_LENGTH): value;
 			default: null;
 		};
 		return value == null ? null : switch value.type {

@@ -11,6 +11,9 @@ enum HlCallKind {
 	/** `IrReceiverCheck`: a null check of the receiver, unless proved non-null. */
 	ReceiverCheck;
 
+	/** `IrReceiverCheck.STRING_LENGTH`: the string's length field, read after a null check unless proved non-null. */
+	StringLength;
+
 	/** `IrReferenceIdentity`: whether two references are the same object. */
 	ReferenceIdentity;
 
@@ -139,6 +142,7 @@ class HlLoweringDecisions {
 	public static function classifyCall(name:String):HlCallKind
 		return switch name {
 			case compiler.ir.names.IrReceiverCheck.NAME: ReceiverCheck;
+			case compiler.ir.names.IrReceiverCheck.STRING_LENGTH: StringLength;
 			case compiler.ir.names.IrReferenceIdentity.NAME: ReferenceIdentity;
 			case compiler.ir.analysis.IrExactTypeFacts.TEST: ExactTypeTest;
 			case compiler.ir.passes.scalars.IrScalarWordBits.PACK,

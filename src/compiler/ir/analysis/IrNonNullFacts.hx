@@ -137,8 +137,9 @@ class IrNonNullFacts {
 	public static function checkedRow(body:IrBody, row:Int):IrValueId
 		return switch body.opcode(row) {
 			case IrOpcode.Call:
-				body.symbol(row).name == IrReceiverCheck.NAME && body.operandCount(row) == 1 ? body.operand(row,
-					0) : IrValueId.of(-1);
+				var name = body.symbol(row).name;
+				(name == IrReceiverCheck.NAME || name == IrReceiverCheck.STRING_LENGTH)
+					&& body.operandCount(row) == 1 ? body.operand(row, 0) : IrValueId.of(-1);
 			case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure, IrOpcode.ArrayGet,
 				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew, IrOpcode.IteratorHasNext,
 				IrOpcode.IteratorNext,
@@ -157,7 +158,6 @@ private class NonNullBodyFlow {
 	final testValue:Array<Int>;
 	final testOnTrue:Array<Bool>;
 	final outgoing:Array<Int>;
-	final receiverCheck:Int;
 	final receiver:Bool;
 	final fields:Null<String->Map<String, Bool>>;
 
@@ -181,7 +181,6 @@ private class NonNullBodyFlow {
 		testValue = scratch.testValue;
 		testOnTrue = scratch.testOnTrue;
 		outgoing = scratch.outgoing;
-		receiverCheck = IrSymbol.of(IrReceiverCheck.NAME).id;
 	}
 
 	public function run():Void {
@@ -212,7 +211,8 @@ private class NonNullBodyFlow {
 				switch body.opcode(row) {
 					case IrOpcode.ConstNull:
 						nulls[out] = true;
-					case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+					case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure,
+						IrOpcode.ConstString:
 						fresh.push(out);
 					case IrOpcode.FieldGet if (lookup != null):
 						switch body.valueType(body.operand(row, 0)) {
@@ -371,11 +371,12 @@ private class NonNullBodyFlow {
 
 	function transfer(row:Int, facts:Array<Int>, block:Int, allowPhi:Bool):Void {
 		var receiver = IrNonNullFacts.checkedRow(body, row), opcode = body.opcode(row);
-		if (receiver.exists() && (checkedDereferences || opcode == IrOpcode.MethodCall
-			|| opcode == IrOpcode.Call && body.aux(row) == receiverCheck))
+		// A call `checkedRow` names checks its operand on every target, as a method call does.
+		if (receiver.exists() && (checkedDereferences || opcode == IrOpcode.MethodCall || opcode == IrOpcode.Call))
 			set(facts, receiver, true);
 		switch opcode {
-			case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+			case IrOpcode.NewObject, IrOpcode.ValueInit, IrOpcode.StaticClosure, IrOpcode.InstanceClosure,
+				IrOpcode.ConstString:
 				set(facts, body.output(row), true);
 			case IrOpcode.FieldGet if (fields != null && fromFields[body.output(row)]):
 				set(facts, body.output(row), true);
