@@ -34,6 +34,9 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 ./scripts/haxeon build --build-mode release
 ./scripts/haxeon run
 ./scripts/haxeon run --quiet -- arguments
+./scripts/haxeon check
+./scripts/haxeon test
+./scripts/haxeon clean
 ./scripts/haxeon tool.hx arguments
 ./scripts/haxeon build --target wasm32
 ./scripts/haxeon init --target android
@@ -501,6 +504,31 @@ The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists the targets with the backend each builds, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the
 current machine.
+
+## Checking, testing and cleaning
+
+`haxeon check` types the project's program as `haxeon build` would and reports the same diagnostics, but generates and
+writes nothing: the compiler takes the request as `--no-output`, Haxe's name for it. It runs only the compile (and the FFI
+imports the compile reads, never the native libraries), for the project's target or `--target`, and takes `--define`,
+`--build-mode`, `-v`, `--color`, `--diagnostic-format` and `--timings` as `build` does. It shares the build's compiler
+session, so a check after a build, or a build after a check, reuses what the other typed. It exits with 1 when the program
+has an error.
+
+```text
+Checking my-app (host)…
+✔ No errors (0.3 s)
+```
+
+`haxeon test` builds the project's tests and runs them: a package keeps them in a project of their own,
+`tests/haxeon.json` beside its `haxeon.json` (as each package under `packages/` does), whose entry runs the tests and exits
+with a status other than 0 when one fails. Run in that `tests` directory, it runs the tests project itself. It takes the
+options of `run`, `--watch` included (the tests run again after each edit), passes the arguments after `--` to the tests,
+and exits with 0 when they pass and 1 when they fail. `haxeon workspace test` runs the tests of many projects at once,
+caching passing runs.
+
+`haxeon clean` removes what builds wrote for the project: its `outputDir` (and `outputDir-instrument`, the instrumented
+build's) and its tests project's. What projects share stays: the compiler workers, the native CMake cache, the artifact
+cache and the package source cache. An `outputDir` that would hold the project itself is refused, never removed.
 
 ## Targets and backends
 

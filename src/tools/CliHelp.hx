@@ -45,6 +45,16 @@ class CliHelp {
 					]
 				},
 				{
+					name: "clean",
+					summary: "Remove the project's build outputs",
+					details: [
+						"Usage: haxeon clean [--project PATH]",
+						"",
+						"Removes the project's outputDir (and the instrumented build's beside it) and its tests project's.",
+						"Caches shared between projects stay."
+					]
+				},
+				{
 					name: "doctor",
 					summary: "Check the local compiler, HashLink runtime and Android tools",
 					details: ["Usage: haxeon doctor"]
@@ -77,6 +87,18 @@ class CliHelp {
 						"  --compiler-only              Run only the Haxe compile",
 						"  --gradle-inputs FILE         Android: build what Gradle packages and describe it in FILE"
 					])
+				},
+				{
+					name: "check",
+					summary: "Type-check the project, writing nothing",
+					details: [
+						"Usage: haxeon check [options]",
+						"",
+						"Reports the diagnostics a build would, without generating or writing a module.",
+						""
+					].concat(BUILD_OPTIONS.filter(line -> line.indexOf("--output") < 0
+						&& line.indexOf("--self-hosted") < 0))
+						.concat(["  --timings                    Print where the check's time went, and the compiler's reports"])
 				},
 				{
 					name: "run",
@@ -120,6 +142,20 @@ class CliHelp {
 		{
 			title: "Test & quality",
 			commands: [
+				{
+					name: "test",
+					summary: "Build the project's tests (tests/haxeon.json) and run them",
+					details: [
+						"Usage: haxeon test [options] [-- TEST ARGUMENTS]",
+						"",
+						"Builds and runs tests/haxeon.json beside the project (or the project itself in a directory named tests),",
+						"and exits with 0 when the tests pass and 1 when they fail.",
+						""
+					].concat(BUILD_OPTIONS.filter(line -> line.indexOf("--target") < 0)).concat([
+						"  --quiet                      Print the build only if it fails",
+						"  --watch                      Build and run the tests again on source edits"
+					])
+				},
 				{
 					name: "fmt",
 					summary: "Format Haxe source files",

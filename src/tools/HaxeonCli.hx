@@ -1,6 +1,7 @@
 package tools;
 
 import build.BuildOutput;
+import build.BuildScope;
 import build.BuildSession;
 import build.HashLinkPath;
 import build.HaxeonProjectBuild;
@@ -22,7 +23,9 @@ import compiler.tools.ReportStyle;
 import compiler.tools.Verbosity;
 import haxe.Json;
 import haxe.io.Path;
+import haxeon.io.FileTree;
 import project.PackageLockfile;
+import project.PackageManifest;
 import project.PackageResolver;
 import project.PackageSourceTools;
 import project.ProjectDiscovery;
@@ -101,6 +104,18 @@ private typedef PublishOptions = {
 	final version:String;
 }
 
+/** What `build` does with the project once it is resolved. */
+private enum BuildCommand {
+	Build;
+	Run;
+
+	/** Build the project's tests (`tests/haxeon.json`) and run them. */
+	Test;
+
+	/** Type the program without writing a module. */
+	Check;
+}
+
 private typedef CommandCapture = {
 	final status:Int;
 	final output:String;
@@ -153,7 +168,7 @@ class HaxeonCli {
 				case "update": update(arguments);
 				case "tree": tree(arguments);
 				case "why": why(arguments);
-				case "identity-path": IdentityPath.run(arguments, args -> build(args, false));
+				case "identity-path": IdentityPath.run(arguments, args -> build(args, Build));
 				case "publish": publish(arguments);
 				case "package": packageCommand(arguments);
 				case "doctor": doctor(arguments);
@@ -162,10 +177,13 @@ class HaxeonCli {
 				case "fmt": fmt(arguments);
 				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]),
 					(rule, files) -> runTool("LintMain", [rule].concat(files)));
-				case "build": build(arguments, false);
+				case "build": build(arguments, Build);
+				case "check": build(arguments, Check);
+				case "test": build(arguments, Test);
+				case "clean": clean(arguments);
 				case "run" if (arguments.length > 0 && ScriptRun.isScript(arguments[0])):
 					runScript(arguments[0], arguments.slice(1));
-				case "run": build(arguments, true);
+				case "run": build(arguments, Run);
 				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
 				case "lsp": runTool("LspMain", arguments);
@@ -671,7 +689,7 @@ class HaxeonCli {
 		// Each line out as it is printed, as a shell script's, also into a pipe or a CI log (unless the caller chose).
 		if (Sys.getEnv("HL_STDOUT_FLUSH") == null)
 			Sys.putEnv("HL_STDOUT_FLUSH", "1");
-		return build(["--quiet"].concat(runArguments), true);
+		return build(["--quiet"].concat(runArguments), Run);
 	}
 
 	/** Ends a `--quiet` build's capture, printing what it kept to standard error when the build failed. */
@@ -685,23 +703,31 @@ class HaxeonCli {
 	}
 
 	/**
-	 * The line a `minimal` build starts with, `Building NAME (TARGET, MODE)…`; none for a plan or a `--quiet` build. Returns when
-	 * the build started.
+	 * The line a `minimal` build starts with, `Building NAME (TARGET, MODE)…` (`Checking NAME (TARGET)…` for a check); none for a
+	 * plan or a `--quiet` build. Returns when the build started.
 	 */
-	static function announceBuild(options:BuildOptions, project:ResolvedProject, target:String, mode:String):Float {
+	static function announceBuild(options:BuildOptions, project:ResolvedProject, target:String, mode:String,
+			check = false):Float {
 		if (!options.plan && !options.quiet && options.verbosity.atLeast(Verbosity.Minimal))
-			BuildOutput.line('Building ${project.rootPackage.name} ($target, $mode)\u2026');
+			BuildOutput.line(check ? 'Checking ${project.rootPackage.name} ($target)\u2026'
+				: 'Building ${project.rootPackage.name} ($target, $mode)\u2026');
 		return Sys.time();
 	}
 
-	/** The line a `minimal` build ends with: what it wrote and how long it took, or that it failed. */
-	static function reportBuilt(options:BuildOptions, output:Null<String>, status:Int, started:Float):Void {
+	/**
+	 * The line a `minimal` build ends with: what it wrote (or `done`, for a check, which writes nothing) and how long it took, or
+	 * that it failed.
+	 */
+	static function reportBuilt(options:BuildOptions, output:Null<String>, status:Int, started:Float,
+			?done:String):Void {
 		if (options.plan || options.quiet || !options.verbosity.atLeast(Verbosity.Minimal))
 			return;
 		var tenths = Math.round((Sys.time() - started) * 10),
 			seconds = ' (${Std.int(tenths / 10)}.${tenths % 10} s)';
 		if (status != 0)
-			BuildOutput.error('\u2718 Build failed$seconds');
+			BuildOutput.error('\u2718 ${done == null ? "Build" : "Check"} failed$seconds');
+		else if (done != null)
+			BuildOutput.line('\u2714 $done$seconds');
 		else if (output != null)
 			BuildOutput.line('\u2714 ${displayPath(output)}$seconds');
 	}
@@ -712,9 +738,13 @@ class HaxeonCli {
 		return StringTools.startsWith(normalized, base + "/") ? normalized.substr(base.length + 1) : normalized;
 	}
 
-	static function build(arguments:Array<String>, launch:Bool):Int {
-		var options = parseBuildOptions(arguments),
+	/** `haxeon build`, `run`, `test` and `check`. */
+	static function build(arguments:Array<String>, command:BuildCommand):Int {
+		var launch = command == Run || command == Test,
+			options = parseBuildOptions(arguments),
 			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
+		if (command == Test)
+			projectConfigPath = testProject(projectConfigPath);
 		if (!FileSystem.exists(projectConfigPath))
 			throw new InternalError('Project file not found: $projectConfigPath (run "haxeon init" to create one)');
 		var requestedTarget:Null<Target> = options.target == null ? null : parseTarget(options.target),
@@ -723,6 +753,8 @@ class HaxeonCli {
 			resolutionMs = Sys.time() * 1000.0 - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target,
 			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
+		if (command == Check)
+			return check(options, project, targetInfo, resolutionMs);
 		if (launch && targetInfo.isWasm())
 			throw new InternalError('The "$target" target can be built, but this CLI has no runner for it yet.');
 		if (launch && targetInfo.equals(Target.detectHost()))
@@ -747,6 +779,8 @@ class HaxeonCli {
 			structuredBuild = hostBuild || targetInfo.isWasm() || targetInfo.isAndroid();
 		if (options.watch && !targetInfo.isAndroid() && !hostBuild)
 			throw new UsageError('Option "--watch" currently requires a host or Android project');
+		if (command == Test && !hostBuild)
+			throw new UsageError('"haxeon test" runs a host project\'s tests; "$target" is not the host');
 		if (!launch && options.device != null)
 			throw new UsageError('Option "--device" is only valid with "haxeon run --target android"');
 		if (!targetInfo.isAndroid() && options.device != null)
@@ -788,7 +822,7 @@ class HaxeonCli {
 			var started = announceBuild(options, project, "host", options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
+				resolutionMs, options.selfHosted, scope(options), options.live, instrument, session,
 				options.buildMode == "development", null, null, options.style) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
@@ -872,7 +906,8 @@ class HaxeonCli {
 							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines,
 								options.jobs, false, false, false, 0.0,
-								options.selfHosted, change.compilerOnly, options.live, instrument, session,
+								options.selfHosted, change.compilerOnly ? CompilerOnly : Full, options.live,
+								instrument, session,
 								options.buildMode == "development", null, null, options.style);
 							if (windows)
 								Sys.putEnv("PATH", runPath);
@@ -899,8 +934,9 @@ class HaxeonCli {
 			if (!options.quiet && options.verbosity.atLeast(Verbosity.Normal))
 				Sys.println('Launching $output');
 			// A script runs where it was invoked; a project in its root.
-			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments),
+			var status = ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments),
 				scriptRun ? invokedFrom : project.root, launchEnvironment());
+			return command == Test ? testStatus(options, status) : status;
 		}
 		for (resolvedPackage in project.packages.packages)
 			if (resolvedPackage.nativeSources.length > 0 && !targetInfo.isAndroid())
@@ -916,7 +952,7 @@ class HaxeonCli {
 				BuildOutput.capture();
 			var started = announceBuild(options, project, "wasm32", options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
-				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
+				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, scope(options),
 				false,
 				false, null, options.buildMode == "development",
 				targetInfo, null, options.style) catch (error:haxe.Exception) {
@@ -942,7 +978,7 @@ class HaxeonCli {
 			BuildOutput.capture();
 		var started = announceBuild(options, project, "android", "development");
 		var buildStatus = try HaxeonProjectBuild.build(project, home, module, options.defines, options.jobs,
-			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
+			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, scope(options),
 			false, false, session, true, targetInfo, null, options.style) catch (error:haxe.Exception) {
 				releaseQuietOutput(options, true);
 				throw error;
@@ -975,6 +1011,99 @@ class HaxeonCli {
 		var device = selectAndroidDevice(adb, options.device);
 		return AndroidWatch.run(home, project, targetInfo, module, options.defines, options.jobs, options.selfHosted,
 			session, adb, device);
+	}
+
+	static function scope(options:BuildOptions):BuildScope
+		return options.compilerOnly ? CompilerOnly : Full;
+
+	/**
+	 * `haxeon check`: types the project's program as a build would, for any target, and reports its diagnostics without writing a
+	 * module. Only the compile runs, with the FFI imports it reads; it shares the build's compiler session, so a check after a
+	 * build, or a build after a check, reuses what the other typed.
+	 */
+	static function check(options:BuildOptions, project:ResolvedProject, target:Target, resolutionMs:Float):Int {
+		if (options.plan || options.explain || options.compilerOnly || options.watch || options.live
+			|| options.strictLive
+			|| options.profile || options.quiet || options.output != null || options.device != null
+			|| options.gradleInputs != null || options.runtimeArguments.length > 0)
+			throw new UsageError("haxeon check takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color and --diagnostic-format. See 'haxeon check --help'.");
+		NativeTargetSupport.validate(project, target);
+		var started = announceBuild(options, project,
+			target.isWasm() ? "wasm32" : (target.isAndroid() ? "android" : "host"),
+			options.buildMode, true),
+			// Nothing is written there: it names the check's source list, beside the build's, in the build's directory.
+			output = Path.join([HaxeonProjectBuild.outputDirectory(project, false), "check", "main"]),
+			status = HaxeonProjectBuild.build(project, haxeonHome(), output, options.defines, options.jobs, false,
+				false,
+				options.timings, resolutionMs, false, Check, false, false, null, options.buildMode == "development",
+				target,
+				null, options.style);
+		reportBuilt(options, null, status, started, "No errors");
+		return status;
+	}
+
+	/**
+	 * The project `haxeon test` runs: `tests/haxeon.json` beside the project's file, where a package keeps its tests, or the project
+	 * itself when it is that tests project (its directory is `tests`).
+	 */
+	static function testProject(manifestPath:String):String {
+		var tests = Path.join([Path.directory(manifestPath), "tests", CONFIG_FILE]);
+		if (FileSystem.exists(tests))
+			return tests;
+		if (Path.withoutDirectory(Path.directory(manifestPath)) == "tests")
+			return manifestPath;
+		if (!FileSystem.exists(manifestPath))
+			throw new InternalError('Project file not found: $manifestPath (run "haxeon init" to create one)');
+		throw new InternalError('No tests for $manifestPath: a project keeps them in a project of their own, $tests');
+	}
+
+	/** A test run's status: 0 when the tests passed, else 1, with a line that says which. */
+	static function testStatus(options:BuildOptions, status:Int):Int {
+		if (!options.quiet && options.verbosity.atLeast(Verbosity.Minimal)) {
+			if (status == 0)
+				BuildOutput.line("✔ Tests passed");
+			else
+				BuildOutput.error('✘ Tests failed (exit status $status)');
+		}
+		return status == 0 ? 0 : 1;
+	}
+
+	/**
+	 * `haxeon clean`: removes the project's build directories (`outputDir`, and the instrumented flavor's beside it) and its tests
+	 * project's. What projects share (compiler workers, the native and artifact caches) stays.
+	 */
+	static function clean(arguments:Array<String>):Int {
+		var options = parsePackageOptions(arguments, false, "clean"),
+			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			directories:Array<String> = [];
+		if (!FileSystem.exists(manifestPath))
+			throw new InternalError('Project file not found: $manifestPath');
+		var tests = Path.join([Path.directory(manifestPath), "tests", CONFIG_FILE]);
+		directories = buildDirectories(manifestPath);
+		if (FileSystem.exists(tests))
+			directories = directories.concat(buildDirectories(tests));
+		var removed = 0;
+		for (directory in directories)
+			if (FileSystem.exists(directory)) {
+				FileTree.remove(directory);
+				Sys.println('Removed ${displayPath(directory)}');
+				removed++;
+			}
+		if (removed == 0)
+			Sys.println("Nothing to remove");
+		return 0;
+	}
+
+	/** A project's build directories. One that would hold the project itself is refused, never removed. */
+	static function buildDirectories(manifestPath:String):Array<String> {
+		var manifest = PackageManifest.parse(manifestPath, File.getContent(manifestPath)),
+			root = Path.normalize(Path.directory(manifestPath));
+		return [for (suffix in ["", "-instrument"]) {
+			var directory = resolvePath(manifest.outputDir + suffix, root);
+			if (directory == root || StringTools.startsWith(root + "/", directory + "/"))
+				throw new InternalError('The "outputDir" of $manifestPath is $directory, which holds the project; remove its build by hand');
+			directory;
+		}];
 	}
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
@@ -1015,7 +1144,7 @@ class HaxeonCli {
 			File.saveContent(manifestPath, manifest);
 		var project = discoverProject(manifestPath),
 			output = Path.join([HaxeonProjectBuild.outputDirectory(project, instrument), "host", "live-host.hl"]);
-		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, false, false,
+		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, Full, false,
 			instrument, session, true, null, null, style) != 0)
 			throw new InternalError("Could not build the live development host");
 		return output;

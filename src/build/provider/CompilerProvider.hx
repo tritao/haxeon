@@ -30,15 +30,16 @@ class CompilerProvider {
 			// An Android module runs in the debug host, which patches it: it is always built live, with the baseline the patches
 			// are compiled against (`.hcs`) and the stable ID the host calls `main` by (`.entry`).
 			android = context.environment.target.isAndroid(),
-			live = context.live || android,
+			live = !context.checkOnly && (context.live || android),
 			arguments = [
 				"--target=" + compilerInputs.target,
 				"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
 				"--output=" + output,
-				"--entry=" + project.manifest.entry,
-				"--inputs-output=" + output + ".inputs.json"
+				"--entry=" + project.manifest.entry
 			],
 			inputs:Array<String> = [];
+		// A check writes nothing, so it has no outputs and always runs; its compiler session makes a repeat cheap.
+		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
 		for (sourceRoot in compilerInputs.roots)
 			arguments.push("--root=" + sourceRoot);
 		for (root in compilerInputs.packageRoots)
@@ -70,7 +71,7 @@ class CompilerProvider {
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
 		if (live)
 			arguments.push("--live");
-		if (android) {
+		if (android && !context.checkOnly) {
 			arguments.push("--baseline-output=" + output + ".hcs");
 			arguments.push("--entry-id-output=" + output + ".entry");
 		}
@@ -126,7 +127,7 @@ class CompilerProvider {
 				environment) : CompilerClient.compile(command, compilerSourcePath, reported, context.compilerHome,
 				context.environment.buildRoot, project.root, context.session);
 		};
-		var outputs = [
+		var outputs = context.checkOnly ? [] : [
 			output,
 			output + ".inputs.json",
 			output + ".functions",
@@ -135,11 +136,11 @@ class CompilerProvider {
 			output + ".descriptors.json"
 		];
 		// A HashLink module also has its runtime identity and live description; a Wasm module has neither.
-		if (compilerInputs.target == "hl") {
+		if (compilerInputs.target == "hl" && !context.checkOnly) {
 			outputs.push(output + ".hli");
 			outputs.push(output + ".live.json");
 		}
-		if (android) {
+		if (android && !context.checkOnly) {
 			outputs.push(output + ".hcs");
 			outputs.push(output + ".entry");
 		}

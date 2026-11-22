@@ -1,6 +1,7 @@
 package build;
 
 import build.BuildEnvironment.BuildProfile;
+import build.BuildScope;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.ExecutionPlan;
@@ -50,7 +51,7 @@ class HaxeonProjectBuild {
 
 	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int,
 			planOnly:Bool, explain:Bool,
-			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false,
+			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, scope:BuildScope = Full,
 			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
 			?style:ReportStyle):Int {
@@ -84,10 +85,16 @@ class HaxeonProjectBuild {
 					developmentMetadata,
 					baseline,
 					// `--timings` asks for the compiler's reports too: the scripts that measure builds read them.
-					timingsEnabled ? shown.withVerbosity(Verbosity.Diagnostic) : shown
+					timingsEnabled ? shown.withVerbosity(Verbosity.Diagnostic) : shown,
+					scope == Check
 				));
-		if (compilerOnly)
-			execution = compilerExecution(execution);
+		switch scope {
+			case Full:
+			case CompilerOnly:
+				execution = compilerExecution(execution);
+			case Check:
+				execution = checkExecution(execution);
+		}
 		timings.addElapsed("plan and lower", lowerStarted);
 		if (planOnly) {
 			Sys.println('Build ${project.rootPackage.name} [${new TargetLayout(environment).targetDirectory()}]');
@@ -108,6 +115,27 @@ class HaxeonProjectBuild {
 		if (timingsEnabled)
 			Sys.print(timings.toString());
 		return result.exitCode;
+	}
+
+	/** The compile and every action it depends on (the FFI imports it reads), without the native libraries. */
+	static function checkExecution(plan:ExecutionPlan):ExecutionPlan {
+		var needed:Map<String, Bool> = [], pending = [];
+		for (action in plan.actions)
+			if (action.action.match(Compiler(_, _, _, _, _)))
+				pending.push(action.id);
+		if (pending.length == 0)
+			throw new InternalError("Build plan has no compiler action");
+		while (pending.length > 0) {
+			var id = pending.pop();
+			if (needed.exists(id.key()))
+				continue;
+			needed.set(id.key(), true);
+			var action = plan.action(id);
+			if (action != null)
+				for (dependency in action.dependencies)
+					pending.push(dependency);
+		}
+		return new ExecutionPlan([for (action in plan.actions) if (needed.exists(action.id.key())) action]);
 	}
 
 	static function compilerExecution(plan:ExecutionPlan):ExecutionPlan {

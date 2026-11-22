@@ -1,5 +1,6 @@
 package tools;
 
+import build.BuildScope;
 import build.BuildSession;
 import build.HaxeonProjectBuild;
 import build.Target;
@@ -92,7 +93,7 @@ class AndroidWatch {
 			if (FileSystem.exists(output + suffix))
 				FileSystem.deleteFile(output + suffix);
 		var status = try HaxeonProjectBuild.build(project, home, output, defines, jobs, false, false, false, 0.0,
-			selfHosted, true, false, false, session, true, target, baseline) catch (error:Dynamic) {
+			selfHosted, CompilerOnly, false, false, session, true, target, baseline) catch (error:Dynamic) {
 				Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
 				1;
 			};

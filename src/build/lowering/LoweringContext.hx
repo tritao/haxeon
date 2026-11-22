@@ -40,11 +40,16 @@ class LoweringContext {
 	/** How the compiler reports (`--verbosity=`, diagnostics): given when the compile runs, so it never enters the action's fingerprint. */
 	public final reportStyle:compiler.tools.ReportStyle;
 
+	/** Type the program without writing a module (`BuildScope.Check`): the compile is a `--no-output` request with no outputs. */
+	public final checkOnly:Bool;
+
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
-			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle) {
+			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle,
+			?checkOnly:Bool) {
+		this.checkOnly = checkOnly == true;
 		this.reportStyle = reportStyle == null ? compiler.tools.ReportStyle.DEFAULT : reportStyle;
 		this.developmentMetadata = developmentMetadata;
 		this.baseline = baseline;
