@@ -36,6 +36,10 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *   haxeon dev bootstrap [--self]
  *       Refresh the checked-in compiler, or check it against the sources (build.HaxeonBuild). scripts/bootstrap-compiler.sh runs it.
  *
+ *   haxeon dev aot-compiler [--c-compiler=CC]
+ *       Build the compiler ahead of time to C and publish it beside the VM, where the CLI runs it while it is current
+ *       (build.AotCompiler, AotCompilerBuild): what a release ships prebuilt.
+ *
  *   haxeon dev check-tests
  *       Fail on a test file under tests/ that no suite, test driver case or workflow runs (TestRegistration).
  */
@@ -55,6 +59,7 @@ class DevCommand {
 			case "test-driver": TestDriverCommand.run(arguments, home);
 			case "native": native(arguments, home);
 			case "bootstrap": bootstrap(arguments, home);
+			case "aot-compiler": AotCompilerBuild.run(arguments, home);
 			case "help", "--help", "-h", "": usage(command == "" ? 2 : 0);
 			case _:
 				Sys.stderr().writeString('Unknown dev command: $command\n');
@@ -188,6 +193,8 @@ class DevCommand {
 		out.writeString("      Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)\n");
 		out.writeString("  bootstrap [--self]\n");
 		out.writeString("      Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically\n");
+		out.writeString("  aot-compiler [--c-compiler=CC]\n");
+		out.writeString("      Build the compiler to C (default C compiler: cc; gcc on Windows) and publish it beside the VM\n");
 		out.writeString("  check-tests\n");
 		out.writeString("      Fail on a test file under tests/ that no suite, test driver case or workflow runs\n");
 		return status;

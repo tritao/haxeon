@@ -38,8 +38,16 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
             if binary.exists():
                 assert binary.with_name(binary.name + '.build-id').read_text() == hashlib.sha256(binary.read_bytes()).hexdigest()
         return p.stdout
+    hashlink = pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip())
+    def worker(state):
+        # The worker program: the compiler built ahead of time when it is current (build.AotCompiler), which needs no bytecode
+        # in the session directory, else the VM with the worker bytecode built there.
+        programs = list(states.glob('*.hl'))
+        command = [str(programs[0])] if programs else [str(hashlink / 'haxeon-compiler'), 'serve']
+        return subprocess.Popen(([str(hashlink / 'hl')] if programs else []) + command + [str(state)], env=env,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     def run(expected, output='host/main.hl'):
-        p = subprocess.run([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(root / 'build' / output)], env=env, timeout=20)
+        p = subprocess.run([str(hashlink / 'hl'), str(root / 'build' / output)], env=env, timeout=20)
         assert p.returncode == expected, (output, p.returncode, expected)
     try:
         source('7')
@@ -50,10 +58,9 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         current = next(states.glob('*.json')).stem
         obsolete_state = states / ('0' * 64 + current[64:] + '.json')
         unrelated_state = states / ('1' * 64 + '-' + 'f' * 16 + '.json')
-        obsolete = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(obsolete_state)], env=env,
-                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        unrelated = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(unrelated_state)], env=env,
-                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        aot = not list(states.glob('*.hl'))
+        obsolete = worker(obsolete_state)
+        unrelated = worker(unrelated_state)
         # A worker publishes its state once the VM has loaded the compiler, which takes seconds, not milliseconds.
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
@@ -95,8 +102,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
             dead_state.unlink()
         # Beyond the memory budget, other workers are retired even under the count limit.
         heavy_state = states / ('3' * 64 + '-' + 'd' * 16 + '.json')
-        heavy = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(heavy_state)], env=env,
-                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        heavy = worker(heavy_state)
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if heavy_state.exists():
@@ -160,7 +166,8 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         output = build(extra=('--output=build/fallback.hl',), environment=fallback)
         assert 'reusing compiler session' not in output and 'interpreting the compiler' not in output, output
         run(13, 'fallback.hl')
-        assert len(set(states.glob('*.hl')) - workers) == 1, 'one-shot build did not use a compiled compiler'
+        # A compiled compiler: the one built ahead of time, or bytecode built for the one-shot run.
+        assert len(set(states.glob('*.hl')) - workers) == (0 if aot else 1), 'one-shot build did not use a compiled compiler'
         source('unknown_value')
         build(success=False, extra=('--output=build/fallback.hl',), environment=fallback)
         print('PASS: compiler worker reuse, retirement limits, error recovery, sidecars, disconnect cancellation, restart, and compiled one-shot fallback')

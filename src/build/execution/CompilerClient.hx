@@ -22,14 +22,16 @@ private typedef Connection = {
 class CompilerClient {
 	/**
 	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
-	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one.
+	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one. A worker the
+	 * compiler built ahead of time runs (`aot`, `build.AotCompiler`) has a version of its own, so a bytecode worker of the same
+	 * sources is not reused once the executable is installed.
 	 */
 	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String,
 			profilePort:Null<String>,
-			?session:build.BuildSession):String {
+			?session:build.BuildSession, aot:Bool = false):String {
 		// A request states its passes and checks (`CompileOptions`), so one worker serves every combination of them.
 		var identity = new ExecutionAction(new ActionId("compiler-session-v9"
-			+ (profilePort == null ? "" : ":profile:" + profilePort)), [],
+			+ (profilePort == null ? "" : ":profile:" + profilePort) + (aot ? ":aot" : "")), [],
 			build.CompilerSources.roots(compilerSource).concat([Path.join([
 				home,
 				"stdlib"
@@ -63,20 +65,35 @@ class CompilerClient {
 				|| Std.parseInt(profilePort) > 65535))
 				throw new InternalError("HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535");
 			var directory = preparedSessionDirectory();
+			// The compiler built ahead of time serves when it is current. The profiler's diagnostics port is the VM's, so a
+			// profiled worker runs on the VM.
+			var aot = profilePort == null ? build.AotCompiler.current(home, compilerSource,
+				session == null ? null : session.digests) : null;
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
 			// The worker program depends only on the compiler, so every project shares one artifact; each
 			// project (and build root) gets its own worker process so it keeps its incremental compiler state.
-			var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session),
+			var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session, aot != null),
 				key = version + "-" + Sha256.encode(projectRoot + "\n" + buildRoot).substr(0, 16),
 				statePath = Path.join([directory, key + ".json"]);
 			connection = connect(statePath);
 			if (connection == null) {
-				var workerArtifact = Path.join([directory, version + ".hl"]),
-					hashlink = Path.join([build.HashLinkPath.directory(home), "hl"]),
-					logPath = Path.join([directory, key + ".log"]);
-				ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
+				var logPath = Path.join([directory, key + ".log"]),
+					// The worker program, to which the state path is the last argument.
+					program:Array<String>;
+				if (aot != null)
+					program = [aot, "serve"];
+				else {
+					var workerArtifact = Path.join([directory, version + ".hl"]);
+					ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
+					program = [build.HashLinkPath.executable(home)];
+					if (profilePort != null) {
+						program.push("--diagnostics");
+						program.push(profilePort);
+					}
+					program.push(workerArtifact);
+				}
 				if (Sys.systemName() == "Windows") {
-					if (startWindowsWorker(home, hashlink, workerArtifact, statePath, logPath, profilePort) != 0)
+					if (startWindowsWorker(home, program.concat([statePath]), logPath) != 0)
 						throw new InternalError("Could not start compiler worker");
 				} else {
 					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
@@ -85,14 +102,7 @@ class CompilerClient {
 							build.HashLinkPath.directory(home),
 							ProcessRunner.environmentValue(libraryVariable)
 						].filter(value -> value != null && value.length > 0).join(":"),
-						launchArguments = [hashlink];
-					if (profilePort != null) {
-						launchArguments.push("--diagnostics");
-						launchArguments.push(profilePort);
-					}
-					launchArguments.push(workerArtifact);
-					launchArguments.push(statePath);
-					var launch = launchArguments.map(SysTools.quoteUnixArg).join(" ");
+						launch = program.concat([statePath]).map(SysTools.quoteUnixArg).join(" ");
 					// The shell redirects its own three streams first, so neither the worker nor the subshell that
 					// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
 					// worker) can keep the caller's pipes open after the build exits.
@@ -309,6 +319,10 @@ class CompilerClient {
 	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String,
 			buildRoot:String,
 			environment:Map<String, String>, fallback:Void->Int):Int {
+		// The compiler built ahead of time, when it is current, on every platform it was built for.
+		var aot = build.AotCompiler.current(home, compilerSource);
+		if (aot != null)
+			return ProcessRunner.run(aot, arguments, home, environment);
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
 			return fallback();
 		var hashlink = Path.join([build.HashLinkPath.directory(home), "hl"]),
@@ -341,21 +355,14 @@ class CompilerClient {
 		Windows has no setsid or nohup. `start /b` returns at once, and redirecting all three streams
 		keeps the worker from holding the build's pipes open.
 	**/
-	static function startWindowsWorker(home:String, hashlink:String, workerArtifact:String, statePath:String,
-			logPath:String, profilePort:Null<String>):Int {
+	static function startWindowsWorker(home:String, launchArguments:Array<String>, logPath:String):Int {
 		var quote = (value:String) -> '"' + value + '"';
 		var path = [
 			Path.join([home, "out"]),
 			build.HashLinkPath.directory(home),
 			ProcessRunner.environmentValue("PATH")
 		].filter(value -> value != null && value.length > 0).join(";");
-		var launch = [quote(hashlink + ".exe")];
-		if (profilePort != null) {
-			launch.push("--diagnostics");
-			launch.push(profilePort);
-		}
-		launch.push(quote(workerArtifact));
-		launch.push(quote(statePath));
+		var launch = launchArguments.map(quote);
 		var threshold = ProcessRunner.environmentValue("HL_GC_MARK_THRESHOLD");
 		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='
 			+ (threshold == null || threshold.length == 0 ? "0.4" : threshold)

@@ -252,6 +252,42 @@ traces read and leaves out the variables and types, most of the debug informatio
 their `hlp_` symbols in the executable itself), and reports the C compiler's diagnostics as a compile error. Neither is read from the environment or from defines. They change
 no IR or C text, so `CompileOptions.key` leaves them out.
 
+## Shipping the compiler
+
+The CLI (`haxeon`, the VM running `haxeon-cli.hl`) runs the compiler in three roles: one compile (`compiler.tools.HaxeonCompiler`,
+the one-shot fallback), a compile server per project (`compiler.tools.CompilerServer`, which `build.execution.CompilerClient`
+starts and reuses) and the language server (`LspMain`, `haxeon lsp`). Under the JIT each is a bytecode build of its own, made from
+the checkout's sources with the pinned Haxe and cached (the session directory, `out/tools`), and every start of one JITs all of its
+functions first (about a second for the compiler).
+
+Built ahead of time, the three are one executable, `haxeon-compiler` beside the VM (`HashLinkPath.directory`), whose entry point
+`tools.CompilerExecutable` takes the role from its first argument (`serve STATE`, `lsp`, else the compiler's own arguments): ahead
+of time, code a role does not use costs nothing at start-up, and one file is what a release ships. `build.AotCompiler` says where
+it is and whether it is current, and the CLI asks it at each place it would start the compiler on the VM:
+
+- `CompilerClient.run` starts `haxeon-compiler serve STATE` instead of `hl worker.hl STATE`, under a worker version of its own
+  (`compiler-session-v9:aot`), so a bytecode worker of the same sources is not reused once the executable is installed. A worker
+  profiled with `HAXEON_COMPILER_PROFILE_PORT` stays on the VM, whose diagnostics port it is.
+- `CompilerClient.runOneShot` runs `haxeon-compiler ARGUMENTS` instead of `hl compiler.hl ARGUMENTS`, on every platform.
+- `haxeon lsp` runs `haxeon-compiler lsp`.
+
+Nothing else chooses between the two: no option, no environment variable. The executable is used while it is current, that is
+built from the compiler sources the CLI would otherwise build to bytecode. Its stamp, `haxeon-compiler.sources`, holds the
+digest of those sources (`CompilerSources.roots` and the standard library, by relative path and content, so it does not depend on
+where the files are unpacked); when the executable or the stamp is missing, or the digest differs, the CLI runs the compiler on
+the VM as before. So an edit to the compiler in a checkout never runs an older compiler, and a release, whose sources are the
+ones it was built from, always runs the executable. `haxeon doctor` says which: ok, stale or not built.
+
+A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler. They are
+made by `haxeon dev aot-compiler [--c-compiler=CC]` (`tools.dev.AotCompilerBuild`): the native build (for the hlc SDK), the
+checkout's compiler built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`)
+with `cc` (`gcc`, MinGW, on Windows), then the executable published by rename (`cmake/haxeon-replace.cmake`, so a running worker
+keeps its file) and the stamp written last. The C sources and objects stay in `out/aot-compiler`, so a rebuild compiles only the
+C files that changed. The hlc build links libhl statically, so the executable needs nothing beside it; the stack traces read its
+own DWARF (`-g1`), which is most of its 39 MB. On Linux the CLI with the executable builds a one-file project cold (CLI start,
+compile server start, compile) in 1.2 s against 2.3 s with the bytecode worker, and a language server session starts in 0.6 s
+against 2.1 s. The `aot-compiler` suite builds it, checks each role and runs the suites that compile through the CLI with it.
+
 ## Testing
 
 - `tests/aot/test-aot-programs.sh` compiles each listed `tests/programs` file for `hl` and for `hlc`, runs both, and

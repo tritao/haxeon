@@ -44,7 +44,8 @@ class CompilerServer {
 		serve(args[0]);
 	}
 
-	static function serve(statePath:String):Void {
+	/** Serves requests until idle, publishing how to reach it at `statePath` (the rendezvous `CompilerClient` reads). */
+	public static function serve(statePath:String):Void {
 		var token = secureToken();
 		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);

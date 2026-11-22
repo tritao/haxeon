@@ -6,12 +6,16 @@ import compiler.tools.DiagnosticPrinter.DiagnosticFormat;
 
 /** Normal command-line entry point for Haxeon compilation. */
 class HaxeonCompiler {
-	public static function main():Void {
+	public static function main():Void
+		run(Sys.args());
+
+	/** Compiles once with the compiler's command-line `arguments` (`CompilerArguments`), in a process that then exits. */
+	public static function run(arguments:Array<String>):Void {
 		ProcessMemory.oneShotCompile();
 		// One compile per process: nothing is kept for a next build.
 		var request:CompilerRequest;
 		try
-			request = CompilerArguments.parse(Sys.args().concat([compiler.CompileOptions.NO_KEEP_SESSION]))
+			request = CompilerArguments.parse(arguments.concat([compiler.CompileOptions.NO_KEEP_SESSION]))
 		catch (error:UsageError) {
 			Sys.stderr().writeString("haxeon compiler: " + error.message + "\n");
 			Sys.exit(2);

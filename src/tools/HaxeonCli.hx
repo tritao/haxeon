@@ -1,5 +1,6 @@
 package tools;
 
+import build.AotCompiler;
 import build.BuildOutput;
 import build.BuildScope;
 import build.BuildSession;
@@ -184,7 +185,7 @@ class HaxeonCli {
 				case "run": build(arguments, Run);
 				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
-				case "lsp": runTool("LspMain", arguments);
+				case "lsp": languageServer(arguments);
 				case "ffi": ffi(arguments);
 				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
 				case "version", "--version": version();
@@ -483,6 +484,11 @@ class HaxeonCli {
 			}
 		}
 		reportPath("self-hosted compiler", compilerPath, false);
+		var aot = AotCompiler.executable(home);
+		if (FileSystem.exists(aot) && AotCompiler.current(home, Path.join([home, "src"])) == null)
+			Sys.println('stale: compiler built ahead of time ($aot), not built from these sources; the VM runs the compiler');
+		else
+			reportPath("compiler built ahead of time", aot, false);
 		reportPath("Android SDK", androidSdk, false);
 		reportPath("Android NDK 30.0.16248370", Path.join([androidSdk, "ndk", "30.0.16248370"]), false);
 		reportPath("Android platform tools (adb)", androidExecutable(home, "adb"), false);
@@ -678,6 +684,15 @@ class HaxeonCli {
 	 */
 	static function runTool(main:String, arguments:Array<String>):Int
 		return new tools.dev.ToolArtifacts(haxeonHome()).run({main: main, classPaths: [], defines: []}, arguments);
+
+	/**
+	 * `haxeon lsp`: the language server, in the compiler built ahead of time when it is current (`build.AotCompiler`), else in its
+	 * own bytecode build on the VM.
+	 */
+	static function languageServer(arguments:Array<String>):Int {
+		var home = haxeonHome(), aot = AotCompiler.current(home, Path.join([home, "src"]));
+		return aot == null ? runTool("LspMain", arguments) : Sys.command(aot, ["lsp"].concat(arguments));
+	}
 
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
 	static function runScript(script:String, arguments:Array<String>):Int {
