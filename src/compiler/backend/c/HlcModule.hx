@@ -51,6 +51,9 @@ class HlcModule {
 	/** The program's objects and typed interface entries as `HlLower`'s analyses read them. */
 	public final view:compiler.hl.lower.HlLoweringView;
 
+	/** The program's natives whose calls resize no array (`IrLoopBounds.pureNativeCalls`). */
+	public final pureCalls:Map<String, Bool>;
+
 	/** The program's ordinary C functions by name (`CNativeCall`). */
 	public final cNatives:Map<String, compiler.ir.model.Ir.IrCNative> = [];
 
@@ -131,6 +134,7 @@ class HlcModule {
 			objects);
 		for (native in program.cNatives)
 			cNatives.set(native.name, native);
+		pureCalls = compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives);
 		for (fn in code.functions)
 			place(fn.functionIndex, fn.type, false);
 		for (entry in code.natives) {

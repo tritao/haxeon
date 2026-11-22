@@ -236,6 +236,7 @@ class HlLower {
 			?frozen:String->Bool, checkReuse:Bool = false) {
 		this.frozen = frozen;
 		this.symbols = symbols;
+		arrayBounds = new HlArrayBounds(compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives));
 		// A compile that checks its reuse lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = !trustCache && checkReuse;
 		this.loweredCache = loweredCache;
@@ -2737,7 +2738,7 @@ class HlLower {
 	}
 
 	/** The array bounds proved and validated in the block being lowered, and the loops' proofs of the function. */
-	final arrayBounds = new HlArrayBounds();
+	final arrayBounds:HlArrayBounds;
 
 	/**
 	 * The byte-offset register of every array and index pair accessed so far in the block being lowered, by its number

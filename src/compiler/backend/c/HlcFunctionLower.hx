@@ -56,7 +56,7 @@ class HlcFunctionLower {
 	final uses:Array<Int> = [];
 
 	/** The array bounds proved and validated in the block being lowered, and the loops' proofs of the function. */
-	final arrayBounds = new compiler.hl.lower.HlArrayBounds();
+	final arrayBounds:compiler.hl.lower.HlArrayBounds;
 
 	/** The block being lowered, by id. */
 	var currentBlock = -1;
@@ -67,6 +67,7 @@ class HlcFunctionLower {
 	public function new(module:HlcModule) {
 		this.module = module;
 		this.types = module.types;
+		arrayBounds = new compiler.hl.lower.HlArrayBounds(module.pureCalls);
 	}
 
 	/**

@@ -13,11 +13,8 @@ import compiler.ir.model.IrValueId;
  * lowered: `startFunction` and `startBlock` empty it.
  */
 class HlArrayBounds {
-	@:processWide("an empty set of calls known not to resize arrays, never added to")
-	static final noPureCalls:Map<String, Bool> = [];
-
 	/** The loops' proofs of the function being lowered. */
-	final loops = new IrLoopBounds(noPureCalls);
+	final loops:IrLoopBounds;
 
 	/** The block's pairs, numbered in the order first met; chained by array value from `heads`. */
 	final pairIndices:Array<Int> = [];
@@ -36,7 +33,10 @@ class HlArrayBounds {
 	var block = 0;
 	var proofs = 0;
 
-	public function new() {}
+	/** Bounds for a program whose calls of `pureCalls` resize no array (`IrLoopBounds.pureNativeCalls`). */
+	public function new(pureCalls:Map<String, Bool>) {
+		loops = new IrLoopBounds(pureCalls);
+	}
 
 	/** Starts the function `body`, whose graph `graph` is: the loops' proofs of the previous one are dropped. */
 	public function startFunction(body:IrBody, graph:IrBodyGraph):Void
