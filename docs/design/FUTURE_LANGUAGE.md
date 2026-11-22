@@ -204,7 +204,7 @@ and each can be translated mechanically from Haxe mode.
   show the cost of. Sized types follow the rule: `Int8`, `UInt64`, `Float32`.
 - Annotations as `x:Int`, generics as `<T>`, constraints as `T:Hashable`.
 - Expression orientation: `if`, `switch` and blocks are values.
-- Pattern matching in `switch`, enums with payloads, `?.` and `??`.
+- `switch` as the pattern-matching form (change 8 below), enums with payloads, `?.` and `??`.
 - Semicolons. Without them newlines become significant in an expression-oriented grammar, which adds ambiguity.
 - `function`: renaming it is cosmetic and costs familiarity.
 
@@ -302,6 +302,33 @@ method that cannot be subclassed or overridden. Bindings use `let` (immutable) a
 
 Whether classes and methods are final by default, with `open` to allow overriding as in Kotlin and Swift, is a separate
 open question; it matters more for static dispatch than the keyword choice does.
+
+### 8. `switch` stays; captures, exhaustiveness and single-pattern tests change
+
+Haxe's `switch` already has the semantics of Rust's `match`: it is an expression, cases never fall through, and it
+matches enums with payloads, nested patterns, alternatives (`case A | B:`) and guards (`case x if x > 0:`). Renaming it
+`match` with `P =>` arms would rewrite every switch for no semantic gain. Arm bodies stay statements up to the next
+`case`; Rust needs commas and braces because its arms are expressions.
+
+- **Explicit captures.** In Haxe a bare lowercase name in a pattern binds a new variable, so a misspelled constant or a
+  name that matches an existing variable silently becomes a catch-all. Haxeon's compatibility gaps include pattern
+  captures that share a name with a function or variable for this reason. Bindings use `let`, as in Swift:
+  `case Some(let x):` binds, and `case Some(limit):` compares with `limit`.
+- **Always exhaustive.** Every `switch` is exhaustive, with `case _:` as the only explicit opt-out; `default` is removed
+  so there is one spelling. Adding an enum case then fails every match that does not handle it, which is what lets
+  enums and `Result` evolve safely.
+- **`if let` and `guard let`.** Testing one pattern no longer needs a full `switch`, which matters with `T?` and
+  `Result`:
+
+  ```haxe
+  if (let Some(user) = lookup(id)) { ... }
+  guard let Ok(config) = load(path) else return Err(...);
+  ```
+
+  `guard` is the early-exit form (Rust's `let ... else`) and covers the cases a `Result` operator cannot express.
+- **Patterns over named types.** Haxe's structure patterns (`case {name: n}`) and extractor patterns
+  (`case _.length => 3`) depend on anonymous structures, which change 5 removes. Patterns destructure structs and tuples
+  by field (`case Rect(x: 0, width: let w):`), and extractors become guards.
 
 ### Clashes to resolve
 
