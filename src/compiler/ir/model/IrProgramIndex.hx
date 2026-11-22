@@ -30,7 +30,12 @@ class IrProgramIndex {
 	var subclassNames:Null<Map<String, Array<String>>> = null;
 
 	var positionsByName:Map<String, Array<Int>> = [];
-	final implementors:Map<String, Array<IrObject>> = [];
+
+	/**
+	 * For each interface, the classes implementing it, in declaration order; filled for every interface in one pass on the
+	 * first `implementorsOf`. A class is listed under what its name's first class implements, as `implementsInterface` has it.
+	 */
+	var implementors:Null<Map<String, Array<IrObject>>> = null;
 
 	/** The index for `program`, kept on it and rebuilt when its declaration arrays change. */
 	public static function of(program:IrProgram):IrProgramIndex {
@@ -179,13 +184,66 @@ class IrProgramIndex {
 
 	/** Classes implementing `interfaceName` directly or through a base, in declaration order. */
 	public function implementorsOf(interfaceName:String):Array<IrObject> {
-		var result = implementors.get(interfaceName);
+		var byInterface = implementors;
+		if (byInterface == null) {
+			byInterface = [];
+			// Each class is added under every interface its name implements: through its bases, and the interfaces those extend.
+			var closures:Map<String, Array<String>> = [], implementedByName:Map<String, Array<String>> = [];
+			for (object in program.objects) {
+				var implemented = implementedByName.get(object.name);
+				if (implemented == null) {
+					implemented = [];
+					implementedByName.set(object.name, implemented);
+					var seen:Map<String, Bool> = [], current:Null<String> = object.name;
+					while (current != null) {
+						var declared = objects.get(current);
+						if (declared == null)
+							break;
+						for (direct in declared.interfaces)
+							for (name in interfaceClosure(direct, closures))
+								if (!seen.exists(name)) {
+									seen.set(name, true);
+									implemented.push(name);
+								}
+						current = declared.base;
+					}
+				}
+				for (name in implemented) {
+					var classes = byInterface.get(name);
+					if (classes == null) {
+						classes = [];
+						byInterface.set(name, classes);
+					}
+					classes.push(object);
+				}
+			}
+			implementors = byInterface;
+		}
+		var result = byInterface.get(interfaceName);
 		if (result == null) {
-			result = [
-				for (object in program.objects)
-					if (implementsInterface(object.name, interfaceName)) object
-			];
-			implementors.set(interfaceName, result);
+			result = [];
+			byInterface.set(interfaceName, result);
+		}
+		return result;
+	}
+
+	/** `name` and every interface it extends, directly or not, as `interfaceExtends` follows them. */
+	function interfaceClosure(name:String, closures:Map<String, Array<String>>):Array<String> {
+		var result = closures.get(name);
+		if (result == null) {
+			result = [];
+			var seen:Map<String, Bool> = [name => true], pending = [name];
+			while (pending.length > 0) {
+				var next = pending.pop(), interfaceDecl = interfaces.get(next);
+				result.push(next);
+				if (interfaceDecl != null)
+					for (base in interfaceDecl.bases)
+						if (!seen.exists(base)) {
+							seen.set(base, true);
+							pending.push(base);
+						}
+			}
+			closures.set(name, result);
 		}
 		return result;
 	}
