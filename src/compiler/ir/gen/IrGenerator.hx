@@ -2557,6 +2557,12 @@ class IrGenerator {
 					localTypes);
 				else builder.equal(observableFieldChanged(left.type, operands[0], operands[1], builder, localTypes),
 					builder.constBool(false));
+			case TCall("$receiver.checked", [value]):
+				// The value, checked as a receiver is before a field read (`BodyTyper.typedMember` on a Dynamic value).
+				var checked = lowerExpression(value, builder, localTypes);
+				if (!builder.isTerminated())
+					builder.call(compiler.ir.names.IrReceiverCheck.NAME, [checked], Void);
+				checked;
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));

@@ -2421,11 +2421,12 @@ class BodyTyper implements BodyTyping {
 
 	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		typedObject = TypeParameterMembers.receiver(session, this, typedObject, name, span);
-		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
+		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic. Unlike `Reflect.field`, which
+		// gives null, reading a field of null throws, as reading any other field does.
 		if (sameType(typedObject.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
 			return new TypedExpression(TCall("Reflect.field", [
-				typedObject,
+				new TypedExpression(TCall("$receiver.checked", [typedObject]), TDynamic, typedObject.span),
 				new TypedExpression(TStringLiteral(name), TString, span)
 			]), TDynamic, span);
 		}

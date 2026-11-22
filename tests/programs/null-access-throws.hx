@@ -1,4 +1,4 @@
-// A String's length throws a catchable null access on null, as in Haxe.
+// A String's length and a Dynamic value's field throw a catchable null access on null, as in Haxe; Reflect.field does not.
 class Holder {
 	public var text:String;
 	public var other:Holder;
@@ -36,6 +36,9 @@ function lengthOf(text:String):Int
 function twice(text:String):Int
 	return text.length + text.length;
 
+function fieldOf(value:Dynamic):Dynamic
+	return value.name;
+
 function main():Int {
 	var count = 0;
 	var missing:String = null;
@@ -46,5 +49,18 @@ function main():Int {
 	count += throwsBoth(() -> holder.other.text, "Null access .text");
 	if (lengthOf("abc") + twice("ab") + new Holder("held").text.length == 11)
 		count++;
-	return count * 6 + 12;
+	var nothing:Dynamic = null;
+	count += throwsBoth(() -> fieldOf(nothing), "Null access");
+	count += throwsBoth(() -> nothing.name.length, "Null access");
+	count += throwsBoth(() -> {
+		nothing.name = "set";
+		return 0;
+	}, "Null access");
+	// Reflect.field reads null of null, where a field read throws.
+	if (Reflect.field(nothing, "name") == null)
+		count++;
+	var named:Dynamic = {name: "named"};
+	if (fieldOf(named) == "named" && (fieldOf(named):String).length == 5)
+		count++;
+	return count * 3 + 12;
 }
