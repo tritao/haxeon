@@ -167,6 +167,9 @@ binary-size-report               ci          -- python3 tests/integration/test-b
 # The compiler compiling itself, once and incrementally in a compile server, costs no more than tests/perf/self-compile-baseline.json
 # and tests/perf/incremental-baseline.json allow (Linux x86-64; docs/DEVELOPMENT.md, "Performance guard").
 perf-guard                       ci          -- python3 scripts/perf-guard.py
+# The last commits that change src/compiler replayed as edits in one compile server session with the reuse checks, each warm
+# build the bytes of a fresh one: the byte-identical self-compile never builds warm.
+edit-replay                      ci          -- python3 tests/integration/test-edit-replay.py
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py
 jit-stack-probe                  ci          -- python3 tests/integration/test-jit-stack-probe.py
 jit-catch-registers              ci          -- python3 tests/integration/test-jit-catch-registers.py
