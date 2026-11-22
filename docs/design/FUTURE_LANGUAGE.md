@@ -317,15 +317,17 @@ matches enums with payloads, nested patterns, alternatives (`case A | B:`) and g
 - **Always exhaustive.** Every `switch` is exhaustive, with `case _:` as the only explicit opt-out; `default` is removed
   so there is one spelling. Adding an enum case then fails every match that does not handle it, which is what lets
   enums and `Result` evolve safely.
-- **`if let` and `guard let`.** Testing one pattern no longer needs a full `switch`, which matters with `T?` and
-  `Result`:
+- **`if let` and `let ... else`.** Testing one pattern no longer needs a full `switch`, which matters with `T?` and
+  `Result`, and needs no new keyword:
 
   ```haxe
   if (let Some(user) = lookup(id)) { ... }
-  guard let Ok(config) = load(path) else return Err(...);
+  let Ok(config) = load(path) else return Err(...);
   ```
 
-  `guard` is the early-exit form (Rust's `let ... else`) and covers the cases a `Result` operator cannot express.
+  A `let` whose pattern can fail must have an `else`, and that branch must leave the scope (`return`, `throw`, `break`,
+  `continue`), which the compiler checks through `Never`. This is Rust's `let ... else`; it covers the cases a `Result`
+  operator cannot express. Optionals often need neither form, since `T?` narrows after a null test.
 - **Patterns over named types.** Haxe's structure patterns (`case {name: n}`) and extractor patterns
   (`case _.length => 3`) depend on anonymous structures, which change 5 removes. Patterns destructure structs and tuples
   by field (`case Rect(x: 0, width: let w):`), and extractors become guards.
