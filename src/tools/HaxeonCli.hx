@@ -9,6 +9,7 @@ import build.NativeTargetSupport;
 import build.Target;
 import build.WorkspaceBuild;
 import build.WorkspaceManifest;
+import build.execution.ContentDigest;
 import build.execution.Executor;
 import build.execution.JobServer;
 import build.execution.OutputCapture;
@@ -22,6 +23,7 @@ import compiler.tools.DiagnosticPrinter.DiagnosticFormat;
 import compiler.tools.ReportStyle;
 import compiler.tools.Verbosity;
 import haxe.Json;
+import haxe.io.Bytes;
 import haxe.io.Path;
 import haxeon.io.FileTree;
 import project.PackageLockfile;
@@ -36,6 +38,7 @@ import project.ResolvedProject;
 import project.SourceCache;
 import sys.FileSystem;
 import sys.io.File;
+import tools.HaxeArguments.HaxeCompilation;
 import tools.WatchRun.WatchChange;
 import tools.WatchRun.WatchProfiling;
 
@@ -151,11 +154,6 @@ class HaxeonCli {
 		}
 
 		var command = arguments.shift();
-		if (CliHelp.isHaxeArgument(command)) {
-			Sys.stderr()
-				.writeString("haxeon: Haxe-style arguments are not supported yet: create a project with 'haxeon init' (see docs/reference/CLI.md)\n");
-			Sys.exit(2);
-		}
 		if (helpRequested(command, arguments)) {
 			Sys.println(CliHelp.command(command));
 			Sys.exit(0);
@@ -193,6 +191,7 @@ class HaxeonCli {
 				case "help" if (arguments.length > 0): commandHelp(arguments[0]);
 				case "help", "--help", "-h": usage();
 				case _ if (ScriptRun.isScript(command)): runScript(command, arguments);
+				case _ if (HaxeArguments.isHaxeArgument(command)): haxeCommandLine([command].concat(arguments));
 				case _:
 					unknownCommand(command);
 					2;
@@ -683,13 +682,13 @@ class HaxeonCli {
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
 	static function runScript(script:String, arguments:Array<String>):Int {
 		scriptRun = true;
-		var runArguments = ScriptRun.runArguments(script, arguments);
+		var program = ScriptRun.program(script);
 		// The program finds its own file through haxeon.Script.path().
 		Sys.putEnv("HAXEON_SCRIPT", Path.normalize(FileSystem.fullPath(script)));
 		// Each line out as it is printed, as a shell script's, also into a pipe or a CI log (unless the caller chose).
 		if (Sys.getEnv("HL_STDOUT_FLUSH") == null)
 			Sys.putEnv("HL_STDOUT_FLUSH", "1");
-		return build(["--quiet"].concat(runArguments), Run);
+		return buildWith(programOptions("development", Verbosity.Minimal, false, true, arguments), Run, program);
 	}
 
 	/** Ends a `--quiet` build's capture, printing what it kept to standard error when the build failed. */
@@ -738,18 +737,28 @@ class HaxeonCli {
 		return StringTools.startsWith(normalized, base + "/") ? normalized.substr(base.length + 1) : normalized;
 	}
 
-	/** `haxeon build`, `run`, `test` and `check`. */
-	static function build(arguments:Array<String>, command:BuildCommand):Int {
+	/** `haxeon build`, `run`, `test` and `check`, of the project the options name. */
+	static function build(arguments:Array<String>, command:BuildCommand):Int
+		return buildWith(parseBuildOptions(arguments), command);
+
+	/**
+	 * Builds the project the options name, or `program`, a project made in memory (a script's, a Haxe command line's), which is
+	 * resolved in its cache directory and whose module is copied to its `publishTo` once built.
+	 */
+	static function buildWith(options:BuildOptions, command:BuildCommand, ?program:ProgramProject):Int {
 		var launch = command == Run || command == Test,
-			options = parseBuildOptions(arguments),
-			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
-		if (command == Test)
+			projectConfigPath = program != null ? program.manifestPath() : resolvePath(options.projectPath,
+				Sys.getCwd());
+		if (command == Test && program == null)
 			projectConfigPath = testProject(projectConfigPath);
-		if (!FileSystem.exists(projectConfigPath))
+		if (program == null && !FileSystem.exists(projectConfigPath))
 			throw new InternalError('Project file not found: $projectConfigPath (run "haxeon init" to create one)');
-		var requestedTarget:Null<Target> = options.target == null ? null : parseTarget(options.target),
-			resolveStarted = Sys.time() * 1000.0,
-			project = discoverProject(projectConfigPath, requestedTarget),
+		var requestedTarget:Null<Target> = options.target == null ? null : parseTarget(options.target);
+		function resolveProject():ResolvedProject
+			return program != null ? ProjectDiscovery.resolve(projectConfigPath, requestedTarget, false,
+				program.manifest) : discoverProject(projectConfigPath, requestedTarget);
+		var resolveStarted = Sys.time() * 1000.0,
+			project = resolveProject(),
 			resolutionMs = Sys.time() * 1000.0 - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target,
 			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
@@ -827,7 +836,12 @@ class HaxeonCli {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
-			reportBuilt(options, output, buildStatus, started);
+			var publishTo = program == null ? null : program.publishTo;
+			if (buildStatus == 0 && publishTo != null && !options.plan) {
+				ensureDirectory(Path.directory(publishTo));
+				File.copy(output, publishTo);
+			}
+			reportBuilt(options, publishTo == null ? output : publishTo, buildStatus, started);
 			releaseQuietOutput(options, buildStatus != 0);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
@@ -900,7 +914,7 @@ class HaxeonCli {
 							var lock = lockfileStamp(projectConfigPath);
 							if (change.structural || lock != cachedLock) {
 								cachedLock = null; // resolve again next time if this throws
-								cachedProject = discoverProject(projectConfigPath, requestedTarget);
+								cachedProject = resolveProject();
 								cachedLock = lock;
 							}
 							var candidate = cachedProject;
@@ -1104,6 +1118,77 @@ class HaxeonCli {
 				throw new InternalError('The "outputDir" of $manifestPath is $directory, which holds the project; remove its build by hand');
 			directory;
 		}];
+	}
+
+	/**
+	 * `haxeon build.hxml`, `haxeon -cp src -main Main --hl out.hl`: a Haxe command line (HaxeArguments), one compilation after
+	 * another, stopping at the first that fails, as Haxe does. A compilation with nothing to compile prints the help, as Haxe's
+	 * does, and the next one runs.
+	 */
+	static function haxeCommandLine(arguments:Array<String>):Int {
+		for (compilation in HaxeArguments.parse(arguments, invokedFrom)) {
+			var status = haxeCompilation(compilation);
+			if (status != 0)
+				return status;
+		}
+		return 0;
+	}
+
+	/**
+	 * One compilation of a Haxe command line, as a program project (ProgramProject) built in the CLI's `hxml` cache
+	 * (`HAXEON_HXML_CACHE`, else `~/.haxeon/cache/hxml`), in a directory named by the compilation's working directory, entry and
+	 * output: the entry and the dot paths given are its sources, the class paths its source roots, and each `-lib NAME:VERSION`
+	 * a Haxelib dependency. It builds in release mode (development with `--debug`), and its module is copied to `--hl FILE`;
+	 * with no target, or `--no-output`, the program is only checked, as Haxe then only types it. Its `--cmd`s run after it
+	 * succeeds.
+	 */
+	static function haxeCompilation(compilation:HaxeCompilation):Int {
+		var main = compilation.main;
+		if (main == null && compilation.modules.length == 0) {
+			Sys.println(CliHelp.command("FILE.hxml"));
+			return 0;
+		}
+		if (main == null)
+			throw new UsageError("Haxeon builds a program from its entry: name it with -main CLASS");
+		var sources = [];
+		for (module in [main].concat(compilation.modules)) {
+			var file = HaxeArguments.moduleFile(compilation, module);
+			if (file == null) {
+				// Haxe's own words, and its status for a compilation that fails.
+				Sys.stderr().writeString('Type not found : $module\n');
+				return 1;
+			}
+			sources.push(file);
+		}
+		var dependencies:Map<String, project.PackageSource> = [];
+		for (library in compilation.libraries)
+			dependencies.set(library.name, project.PackageSource.Haxelib(library.name, library.version));
+		var output = compilation.noOutput ? null : compilation.hl,
+			key = compilation.directory + "\n" + main + "\n" + (output == null ? "" : output),
+			program = new ProgramProject(
+				ProgramProject.directory("hxml", "HAXEON_HXML_CACHE",
+					ContentDigest.makeHex(Bytes.ofString(key)).substr(0, 16)),
+				// A class path holds any package, as Haxe's do.
+				PackageManifest.program(main, main, sources, compilation.classPaths, false, compilation.defines,
+					compilation.noInline ? false : null, dependencies),
+				output
+			),
+			options = programOptions(compilation.debug ? "development" : "release",
+				compilation.verbose ? Verbosity.Normal : Verbosity.Minimal, compilation.times, false, []);
+		var status = buildWith(options, output == null ? Check : Build, program);
+		if (status != 0)
+			return status;
+		for (command in compilation.commands) {
+			var windows = Sys.systemName() == "Windows",
+				result = ProcessRunner.run(windows ? "cmd" : "sh", [windows ? "/c" : "-c", command],
+					compilation.directory,
+					new Map());
+			if (result != 0) {
+				Sys.stderr().writeString('haxeon: command failed with status $result: $command\n');
+				return 1;
+			}
+		}
+		return 0;
 	}
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
@@ -1541,6 +1626,46 @@ class HaxeonCli {
 			profileOutput: profileOutput
 		};
 	}
+
+	/**
+	 * The options a program the CLI made a project for builds with (a script, a Haxe command line's compilation): the defaults of
+	 * `haxeon build`, with these set.
+	 */
+	static function programOptions(buildMode:String, verbosity:Verbosity, timings:Bool, quiet:Bool,
+			runtimeArguments:Array<String>):BuildOptions
+		return {
+			projectPath: CONFIG_FILE,
+			target: null,
+			buildMode: buildMode,
+			buildModeExplicit: true,
+			output: null,
+			device: null,
+			defines: [],
+			runtimeArguments: runtimeArguments,
+			plan: false,
+			explain: false,
+			timings: timings,
+			verbosity: verbosity,
+			style: new ReportStyle(verbosity, DiagnosticFormat.Full, colorDiagnostics("auto"), invokedFrom),
+			quiet: quiet,
+			compilerOnly: false,
+			gradleInputs: null,
+			watch: false,
+			live: false,
+			strictLive: false,
+			jobs: 4,
+			selfHosted: Sys.getEnv("HAXEON_SELF_HOSTED") == "1",
+			profile: false,
+			profileSources: ProfileCapture.defaultSources(),
+			profileControls: {
+				start: "launch",
+				durationSeconds: 0,
+				maxSizeMiB: ProfileCapture.DEFAULT_MAX_SIZE_MIB,
+				window: null,
+				minCallMicros: null
+			},
+			profileOutput: null
+		};
 
 	static function parseVerbosity(value:String):Verbosity {
 		var level = Verbosity.parse(value);

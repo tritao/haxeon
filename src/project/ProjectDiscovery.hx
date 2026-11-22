@@ -17,14 +17,15 @@ class ProjectDiscovery {
 	 * Resolves as every `haxeon` command does: through the source cache, and with `haxeon.lock` beside the manifest when there
 	 * is one, which the graph must then match. `offline` is for the editor: a Git dependency comes only from a checkout the
 	 * cache already holds, at the commit the lockfile names, and one that is missing is an error to fix with `haxeon install`
-	 * rather than a fetch.
+	 * rather than a fetch. `program` is a root manifest made in memory, placed at `manifestPath` (`PackageResolver.resolve`).
 	 */
-	public static function resolve(manifestPath:String, ?target:Target, offline:Bool = false):ResolvedProject {
+	public static function resolve(manifestPath:String, ?target:Target, offline:Bool = false,
+			?program:PackageManifest):ResolvedProject {
 		var lockPath = lockfilePath(manifestPath),
 			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
 		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root(), null, null,
 			offline)).resolve(manifestPath,
-			lockfile, lockfile != null, target);
+			lockfile, lockfile != null, target, program);
 	}
 
 	public static function lockfilePath(manifestPath:String):String

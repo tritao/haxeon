@@ -44,6 +44,8 @@ test-registration                quick,ci    -- scripts/haxeon dev check-tests
 hashlink-replace                 ci          -- bash tests/integration/test-hashlink-replace.sh
 # haxeon script.hx: a script runs with its arguments, status and neighbours; a compile error fails it quietly.
 haxeon-script                    ci          -- scripts/haxeon tests/integration/test-haxeon-script.hx
+# haxeon build.hxml and Haxe arguments: built as stock Haxe builds them, --each/--next, a check without target, unsupported options.
+haxe-command-line                ci          -- scripts/haxeon tests/integration/test-haxe-command-line.hx
 # haxeon check, test and clean on a project.
 project-verbs                    ci          -- scripts/haxeon tests/integration/test-project-verbs.hx
 hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh

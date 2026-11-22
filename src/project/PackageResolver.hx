@@ -18,13 +18,21 @@ class PackageResolver {
 	public function new(sourceAcquirer:SourceAcquirer)
 		this.sourceAcquirer = sourceAcquirer;
 
-	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false,
-			?target:Target):ResolvedProject {
+	/**
+	 * The project of the manifest at `manifestPath`, or of `program`, a root manifest made in memory (`PackageManifest.program`):
+	 * then `manifestPath` only places it, in the directory that must exist, and no file is read for it.
+	 */
+	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false, ?target:Target,
+			?program:PackageManifest):ResolvedProject {
 		if (locked && lockfile == null)
 			throw new InternalError("haxeon.lock is required for --locked resolution");
-		var absoluteManifest = canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
+		var absoluteManifest = program != null ? Path.join([
+			FileSystem.fullPath(Path.directory(manifestPath)),
+			Path.withoutDirectory(manifestPath)
+		]) : canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
 			projectRoot = Path.directory(absoluteManifest),
-			rootManifest = PackageManifest.parse(absoluteManifest, File.getContent(absoluteManifest)),
+			rootManifest = program != null ? program : PackageManifest.parse(absoluteManifest,
+				File.getContent(absoluteManifest)),
 			requestedTarget = target == null ? Target.parse(rootManifest.target) : target,
 			visited = new Map<String, ResolvedPackage>(),
 			active = new Map<String, Bool>(),
@@ -53,17 +61,19 @@ class PackageResolver {
 			});
 		}
 
-		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource,
-				?manifestOverride:String):ResolvedPackage {
+		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource, ?manifestOverride:String,
+				?manifestValue:PackageManifest):ResolvedPackage {
 			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
 				manifestFile = manifestOverride == null ? Path.join([resolvedRoot, MANIFEST_NAME]) : manifestOverride,
-				resolvedManifest = canonicalExistingFile(manifestFile, 'Project file not found: $manifestFile');
+				resolvedManifest = manifestValue != null ? manifestFile : canonicalExistingFile(manifestFile,
+					'Project file not found: $manifestFile');
 			if (active.exists(resolvedRoot))
 				throw new InternalError('Package dependency cycle reaches "$resolvedRoot"');
 			var existing = visited.get(resolvedRoot);
 			if (existing != null)
 				return existing;
-			var manifest = PackageManifest.parse(resolvedManifest, File.getContent(resolvedManifest)),
+			var manifest = manifestValue != null ? manifestValue : PackageManifest.parse(resolvedManifest,
+				File.getContent(resolvedManifest)),
 				priorRoot = nameToRoot.get(manifest.packageName);
 			manifest.compatibility.validate(manifest.packageName, requestedTarget);
 			if (acquired.compatibility != null)
@@ -165,7 +175,7 @@ class PackageResolver {
 		}
 
 		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")),
-			PackageSource.Path("."), absoluteManifest);
+			PackageSource.Path("."), absoluteManifest, program);
 		var workspaceNames = [for (name in workspaceMembers.keys()) name];
 		workspaceNames.sort(Reflect.compare);
 		for (workspaceName in workspaceNames) {

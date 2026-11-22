@@ -125,6 +125,18 @@ class CliHelp {
 					details: ["Usage: haxeon SCRIPT.hx [ARGUMENTS]   (or haxeon run SCRIPT.hx [ARGUMENTS])"]
 				},
 				{
+					name: "FILE.hxml",
+					summary: "Build a Haxe command line or .hxml file",
+					details: [
+						"Usage: haxeon BUILD.hxml   or   haxeon -cp src -main Main --hl out.hl",
+						"",
+						"Reads Haxe's arguments as Haxe does (.hxml files, --next, --each, --cwd) and builds each compilation:",
+						"  -cp, -main, -D, --hl FILE.hl, --debug, --dce std|full, --no-inline, --no-output, --cmd, -lib NAME:VERSION,",
+						"  -v, --times, dot paths. No target (or --no-output) checks the program, as Haxe only types it then.",
+						"Anything else (--js, --interp, --macro, ...) is one error listing each. See 'Haxe command lines' in CLI.md."
+					]
+				},
+				{
 					name: "workspace",
 					summary: "Build or test many projects as one build graph",
 					details: [
@@ -271,7 +283,7 @@ class CliHelp {
 		return [
 			for (group in GROUPS)
 				for (command in group.commands)
-				if (!StringTools.endsWith(command.name, ".hx")) command.name
+				if (command.name.indexOf(".") < 0) command.name
 		];
 
 	/** The overview: each group's commands with a line each. */
@@ -322,36 +334,4 @@ class CliHelp {
 		}
 		return previous[right.length];
 	}
-
-	/** Whether `argument` is how a Haxe command line starts: an .hxml file or one of Haxe's own flags. */
-	public static function isHaxeArgument(argument:String):Bool
-		return StringTools.endsWith(argument, ".hxml")
-			|| [
-				"-cp",
-				"--class-path",
-				"-p",
-				"-main",
-				"--main",
-				"-m",
-				"--hl",
-				"-hl",
-				"-lib",
-				"--library",
-				"-L",
-				"-D",
-				"--define",
-				"--interp",
-				"-js",
-				"--js",
-				"-cpp",
-				"--cpp",
-				"--neko",
-				"--jvm",
-				"--cs",
-				"--python",
-				"--lua",
-				"--php",
-				"--swf"
-			]
-			.indexOf(argument) >= 0;
 }

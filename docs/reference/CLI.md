@@ -38,6 +38,8 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 ./scripts/haxeon test
 ./scripts/haxeon clean
 ./scripts/haxeon tool.hx arguments
+./scripts/haxeon build.hxml
+./scripts/haxeon -cp src -main Main --hl bin/main.hl
 ./scripts/haxeon build --target wasm32
 ./scripts/haxeon init --target android
 ./scripts/haxeon build --target android
@@ -54,10 +56,9 @@ cat src/Main.hx | ./scripts/haxeon fmt --stdin
 and `haxeon build -h` print one command's options. `haxeon --version` (or `haxeon
 version`) prints the CLI's version, the checkout commit its compiler is built from and
 the HashLink version, as `haxeon 0.3.0 (compiler 7970f0eaaa86, HashLink 2.0.0)`. A
-mistyped command gets one line naming the closest command, and a Haxe command line
-(an `.hxml` file, `-cp`, `-main`, `--hl`, `-lib`, `-D`, `--interp`, ...) gets one line
-saying it is not supported yet and to create a project with `haxeon init`; both exit
-with status 2.
+mistyped command gets one line naming the closest command, and exits with status 2. A
+command line that starts with an `.hxml` file or one of Haxe's options (`-cp`, `-main`,
+`--hl`, `-D`, ...) is built as Haxe would build it: see [Haxe command lines](#haxe-command-lines).
 
 A value the CLI does not take is reported with the values it does, as in `Unknown
 target "hlc". Valid: host, android, wasm32, ...`. Every command exits with 0 when it
@@ -530,6 +531,59 @@ caching passing runs.
 build's) and its tests project's. What projects share stays: the compiler workers, the native CMake cache, the artifact
 cache and the package source cache. An `outputDir` that would hold the project itself is refused, never removed.
 
+## Haxe command lines
+
+`haxeon` builds Haxe's own command lines, so a Haxe project builds without a `haxeon.json`:
+
+```sh
+./scripts/haxeon build.hxml
+./scripts/haxeon -cp src -main Main -D level=3 --hl bin/main.hl
+```
+
+The arguments are read as Haxe reads them. In an `.hxml` file each line is one argument, or, when it starts with `-`, its
+first word and the rest of the line (`-D name=a b` defines `name` as `a b`); quotes around a value are removed, a line
+starting with `#` is a comment, and a `#` later in a line is part of the value. An argument ending in `.hxml` is replaced by
+that file's arguments. Every path, an included `.hxml` file's too, is relative to the working directory, not to the file
+that names it. `--cwd DIR` changes the working directory for the rest of the run, as Haxe's does for its process: an
+`.hxml` file named after it is read from there, and every path of a compilation, a class path given before the `--cwd`
+too, is relative to the directory it is in when the compilation ends. `--next` separates compilations, `--each` gives the
+arguments before it to every compilation, and the first compilation that fails stops the rest. A compilation with nothing
+to compile (no `-main` and no dot path) prints the help and succeeds, as Haxe's does. The single-dash spellings (`-main`,
+`-lib`, `-cmd`, `-debug`, `-dce`, `-hl`) are read as their `--` forms, as in Haxe 4.
+
+| Haxe | Haxeon |
+|---|---|
+| `-cp DIR`, `-p`, `--class-path` | a source root; the one given last is looked in first, and the working directory, always one, last, as in Haxe |
+| `-main CLASS`, `-m`, `--main` | the entry; one that no class path holds is Haxe's `Type not found : CLASS`, status 1 |
+| dot paths (`pack.Module`) | modules compiled besides the entry |
+| `-D NAME[=VALUE]`, `--define` | a define |
+| `--hl FILE.hl` | build for the host and copy the module to `FILE.hl` |
+| no target, or `--no-output` | check the program, writing nothing, as Haxe only types it then |
+| `--debug` | a development build (otherwise release), and the define `debug` |
+| `--dce std`, `--dce full` | accepted: Haxeon always removes what the entry cannot reach |
+| `--no-inline` | the project setting `"inline": false` |
+| `-lib NAME:VERSION`, `-L`, `--library` | a Haxelib dependency of that exact version, from the Haxelib cache (see Haxelib above) |
+| `--cmd COMMAND` | run by the shell in the working directory after the compilation succeeds |
+| `-v`, `--verbose`; `--times` | `-v normal`; `--timings` |
+
+Anything else is one usage error (status 2) that lists each unsupported argument with what to do instead, before anything
+is built: another target (`--js`, `--cpp`, ...; HashLink/C `--hl FILE.c` too, for now), `--interp`, `--run` and `-x` (Haxeon
+has no interpreter: build with `--hl` and run the module with `hl`, or make a project and `haxeon run`), `--macro`, `-lib`
+without a version (Haxeon does not read haxelib's global repository), `--dce no`, `--resource` and the server and display
+options.
+
+```text
+haxeon: this Haxe command line uses what Haxeon does not support:
+  --js bin/main.js: Haxeon generates HashLink (--hl FILE) only
+  --macro include("app"): macros are not supported
+See 'Haxe command lines' in docs/reference/CLI.md.
+```
+
+Each compilation is a project the CLI makes in memory, as it does for a script, and builds like any host project. Its
+build state lives in the CLI's cache, `~/.haxeon/cache/hxml/<digest>` (`HAXEON_HXML_CACHE` names another directory), one
+per working directory, entry and output, so a second build is incremental; nothing is written to the working directory but
+the module, copied to the `--hl` path. A compilation's cache is removed after 30 days without a build, as a script's is.
+
 ## Targets and backends
 
 Two names describe a build, and Haxeon keeps them apart:
@@ -569,9 +623,9 @@ up, as `dotnet run app.cs` does:
 - A `haxeon.json` beside the script makes that project a path dependency, with its source roots and dependencies.
 - The build is quiet: its output appears, on standard error, only if it fails. The program runs in the directory the
   command was invoked from, with the given arguments, and its exit status is the command's.
-- The project is written to `~/.haxeon/cache/scripts/<digest of the script's path>` (`HAXEON_SCRIPT_CACHE` names
-  another directory), and the incremental build makes an unchanged script's next run cost a launch. A script's cache
-  is removed after 30 days without a run.
+- The project is made in memory and built in `~/.haxeon/cache/scripts/<digest of the script's path>`
+  (`HAXEON_SCRIPT_CACHE` names another directory), and the incremental build makes an unchanged script's next run cost a
+  launch. A script's cache is removed after 30 days without a run.
 - A first line `#!/usr/bin/env haxeon` makes the file executable where the shell reads such lines; Haxe accepts that
   line at the start of a file, and so do Haxeon's compiler and formatter.
 - The file's name is its module's, dashes included (`check-self-hosting.hx`); a script is never imported by name, so it
