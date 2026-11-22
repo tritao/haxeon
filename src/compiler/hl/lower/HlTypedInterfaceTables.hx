@@ -7,6 +7,7 @@ import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 import compiler.ir.verify.IrVerifier;
 
 /** Class-owned private entries; source methods and interface views retain their semantic ABI. */
+@:nullSafety(Strict)
 class HlTypedInterfaceTables {
 	public static inline final SLOT_NATIVE = "__hl_typed_method_slot";
 	public static inline final ENTRY_NATIVE = "__hl_typed_method_entry";

@@ -9,6 +9,7 @@ import haxe.ds.ObjectMap;
  * generation: a lowering keeps only the fragments it used, so functions replaced by an edit are released
  * instead of accumulating in a long-lived compiler session.
  */
+@:nullSafety(Strict)
 class HlDebugMetadataCache {
 	var identities:ObjectMap<IrFunction, HlFunctionIdentity> = new ObjectMap();
 	var nextIdentities:ObjectMap<IrFunction, HlFunctionIdentity> = new ObjectMap();

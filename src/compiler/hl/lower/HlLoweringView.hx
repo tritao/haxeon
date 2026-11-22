@@ -12,6 +12,7 @@ import compiler.ir.model.Ir.IrObject;
  * one the print was last made for: an `IrObject` is never changed once made, and the stages make new ones every build. Under
  * `--check-reuse` the two objects' texts are compared too, so a part `sameObject` does not know of is caught.
  */
+@:nullSafety(Strict)
 class HlFactPrints {
 	/** The kinds of fact: an object type, the typed-interface key of a dispatch function, the non-null fields of a class. */
 	static inline final OBJECT = 0;
@@ -24,7 +25,9 @@ class HlFactPrints {
 
 	final names:Array<String> = [];
 	final kinds:Array<Int> = [];
-	final answers:Array<String> = [];
+
+	/** A fact's answer, null until it is first worked out. */
+	final answers:Array<Null<String>> = [];
 	final objects:Array<Null<IrObject>> = [];
 	final prints:Array<Int> = [];
 	final worked:Array<Int> = [];
@@ -140,6 +143,7 @@ class HlFactPrints {
  * lowered function carries the exact list of outside facts it depends on, and a later build can ask whether they still hold before it
  * keeps the function. Lowering holds neither the program nor the object table, so a fact cannot be read without being recorded.
  */
+@:nullSafety(Strict)
 class HlLoweringView {
 	final objects:Map<String, IrObject>;
 	final typedKeys:Map<String, String>;
@@ -177,12 +181,14 @@ class HlLoweringView {
 		return facts;
 	}
 
-	function read(id:Int):Void
-		if (reads != null && !readMarks.exists(id)) {
+	function read(id:Int):Void {
+		var list = reads;
+		if (list != null && !readMarks.exists(id)) {
 			readMarks.set(id, true);
-			reads.push(id);
-			reads.push(prints.print(id, this));
+			list.push(id);
+			list.push(prints.print(id, this));
 		}
+	}
 
 	public function object(name:String):Null<IrObject> {
 		if (reads != null)

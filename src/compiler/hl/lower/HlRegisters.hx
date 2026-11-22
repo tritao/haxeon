@@ -3,6 +3,7 @@ package compiler.hl.lower;
 import compiler.hl.HlFunction.HlInstruction;
 
 /** The registers an instruction names, with whether it writes them, and the instruction with its registers renamed. */
+@:nullSafety(Strict)
 class HlRegisters {
 	/** Calls `use` with each register `instruction` names, `written` for the one it defines. Reads come before the write. */
 	public static function each(instruction:HlInstruction, use:(register:Int, written:Bool) -> Void):Void

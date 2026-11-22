@@ -12,11 +12,13 @@ import compiler.ir.model.IrValueId;
  * block validated, and the loops' proofs (`IrLoopBounds`), made when an access first asks. One serves every function
  * lowered: `startFunction` and `startBlock` empty it.
  */
+@:nullSafety(Strict)
 class HlArrayBounds {
 	@:processWide("an empty set of calls known not to resize arrays, never added to")
 	static final noPureCalls:Map<String, Bool> = [];
 
-	var body:IrBody;
+	/** The function being lowered (`startFunction`), null before the first. */
+	var body:Null<IrBody> = null;
 	var loops:Null<IrLoopBounds> = null;
 
 	/** The block's pairs, numbered in the order first met; chained by array value from `heads`. */
@@ -110,7 +112,7 @@ class HlArrayBounds {
 		var bounds = loops;
 		if (bounds == null) {
 			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new IrLoopBounds(body.toFunction(), noPureCalls);
+			bounds = new IrLoopBounds(requireBody().toFunction(), noPureCalls);
 			loops = bounds;
 		}
 		return bounds.proven(valueOf(array), valueOf(index), blockId);
@@ -129,6 +131,15 @@ class HlArrayBounds {
 		return -1;
 	}
 
-	function valueOf(value:IrValueId):IrValue
+	function valueOf(value:IrValueId):IrValue {
+		var body = requireBody();
 		return new IrValue(value, body.valueName(value), body.valueType(value));
+	}
+
+	function requireBody():IrBody {
+		var current = body;
+		if (current == null)
+			throw new compiler.core.InternalError("Array bounds were asked about before a function was started");
+		return current;
+	}
 }

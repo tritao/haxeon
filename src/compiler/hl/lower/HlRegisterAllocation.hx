@@ -15,6 +15,7 @@ import compiler.hl.HlFunction.HlInstruction;
  * active, so every register live into a handler is live throughout each block it protects. Arguments keep their registers, and a
  * register whose address is taken (`Ref`) keeps a slot of its own.
  */
+@:nullSafety(Strict)
 class HlRegisterAllocation {
 	// Scratch kept from one function to the next: lowering a program allocates each array once, at the size of its largest function.
 	final pinned:Array<Bool> = [];
@@ -235,8 +236,11 @@ class HlRegisterAllocation {
 				types.push(registerTypes[register]);
 			}
 		freeAt.resize(0);
-		for (type in typesWithSlots)
-			slotsByType.get(type).resize(0);
+		for (type in typesWithSlots) {
+			var slots = slotsByType.get(type);
+			if (slots != null)
+				slots.resize(0);
+		}
 		typesWithSlots.resize(0);
 		for (register in order) {
 			var type = registerTypes[register], slots = slotsByType.get(type), chosen = -1;
@@ -314,8 +318,16 @@ class HlRegisterAllocation {
 					if (known[index] != stack[index])
 						consistent = false;
 		}
-		while (work.length > 0 && consistent) {
-			var block = work.pop(), stack = entry[block].copy(), active = handlers[block], handlerEdge = -1;
+		while (consistent) {
+			var next = work.pop();
+			if (next == null)
+				break;
+			// A block is queued once its entry stack is known (`reach`).
+			var block:Int = next,
+				known = entry[block],
+				stack = known == null ? [] : known.copy(),
+				active = handlers[block],
+				handlerEdge = -1;
 			for (index in blockStarts[block]...blockEnd(block)) {
 				for (handler in stack)
 					if (active.indexOf(handler) < 0)

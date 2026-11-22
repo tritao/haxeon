@@ -55,6 +55,7 @@ enum HlCallKind {
  * (`HlcFunctionLower`). Each backend writes the decision in its own form; what is decided lives here once, so the two cannot
  * drift apart.
  */
+@:nullSafety(Strict)
 class HlLoweringDecisions {
 	/** The error a call of a Dynamic value that is not a function throws. */
 	public static inline final CALL_ERROR = "Cannot call a non-function value";

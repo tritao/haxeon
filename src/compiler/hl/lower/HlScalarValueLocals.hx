@@ -16,6 +16,7 @@ typedef HlScalarValueLocal = {
  * Frame-owned scalar slots for nonescaping value places (`IrScalarValuePlaces`, here on a body), including across exception
  * handlers. One serves every function lowered: `reset` makes it the places of the next body.
  */
+@:nullSafety(Strict)
 class HlScalarValueLocals {
 	/** Per value id, its local, or null; filled only for a body that has places. */
 	final locals:Array<Null<HlScalarValueLocal>> = [];
@@ -54,7 +55,7 @@ class HlScalarValueLocals {
 				if (body.opcode(row) == IrOpcode.ValueInit) {
 					var name = IrTypeTools.valueObjectName(body.valueType(body.output(row))),
 						object = objects.object(name);
-					if (object != null && IrScalarValuePlaces.scalarFields(objects.object(name), lookup)) {
+					if (object != null && IrScalarValuePlaces.scalarFields(object, lookup)) {
 						rootRows.push(row);
 						rootNames.push(name);
 						rootValid.push(true);

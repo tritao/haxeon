@@ -56,6 +56,7 @@ typedef MeasuredHlCode = {
 }
 
 /** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
+@:nullSafety(Strict)
 class HlLower {
 	final code:HlCode;
 	final symbols:HlSymbolTable;
@@ -63,7 +64,7 @@ class HlLower {
 	final objectTypeIndices:Map<String, Int> = [];
 
 	/** Everything lowering a function may learn about an object type; see `HlLoweringView`. */
-	var view:HlLoweringView;
+	final view:HlLoweringView;
 
 	/** The requests the function being lowered makes, when lowering records them. */
 	var recordedKeys:Null<Array<Int>>;
@@ -83,8 +84,8 @@ class HlLower {
 	/** The tables of the function being lowered, their storage kept from one function to the next. */
 	final scratch = new HlLowerScratch();
 
-	/** The body of the function being lowered (`lowerFunction`). */
-	var body:IrBody;
+	/** The body of the function being lowered (`lowerFunction`), null before the first; its methods read it through `requireBody`. */
+	var body:Null<IrBody> = null;
 
 	/**
 	 * The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`): the program's, so every
@@ -135,7 +136,7 @@ class HlLower {
 
 	public static function lower(program:IrProgram, ?indices:Map<String, Int>):HlCode {
 		IrVerifier.verify(program);
-		var lowerer = new HlLower(new HlSymbolTable(), null),
+		var lowerer = new HlLower(program, new HlSymbolTable(), null),
 			code = lowerer.lowerProgram(program);
 		if (indices != null)
 			for (name => index in lowerer.functionIndices)
@@ -153,7 +154,8 @@ class HlLower {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
-		if (!trustCache || regenerated == null || loweredCache == null || !loweredCache.entries.iterator().hasNext()) {
+		var cacheEmpty = loweredCache == null || !loweredCache.entries.iterator().hasNext();
+		if (!trustCache || regenerated == null || cacheEmpty) {
 			// The final IR of a plain build is verified where it is made (`FrontendCompilation`), once, whatever the backend.
 			// A frozen function (a retired signature, or a lambda the program dropped) is code the running module holds for
 			// its closures: the objects it names may be gone from the program, so it is lowered against the published types
@@ -177,7 +179,8 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve,
+			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
+				fieldReserve,
 				developmentMetadata, recordLowering,
 				loweredCache, trustCache, frozen, checkReuse),
 			code = lowerer.lowerProgram(program);
@@ -218,14 +221,14 @@ class HlLower {
 	final debugCache:Null<HlDebugMetadataCache>;
 	final developmentMetadata:Bool;
 
-	var typedInterfaces:HlTypedInterfaceTables;
+	final typedInterfaces:HlTypedInterfaceTables;
 	var metadataMs = 0.0;
 	var functionsMs = 0.0;
 	var debugMs = 0.0;
 	var finalizationMs = 0.0;
 	var allocationPhases:Array<PhaseAllocation> = [];
 
-	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>,
+	function new(program:IrProgram, symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>,
 			?regenerated:Array<String>,
 			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
@@ -233,7 +236,6 @@ class HlLower {
 			?frozen:String->Bool, checkReuse:Bool = false) {
 		this.frozen = frozen;
 		this.symbols = symbols;
-		allocateRegister = allocateTemporary;
 		// A compile that checks its reuse lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = !trustCache && checkReuse;
 		this.loweredCache = loweredCache;
@@ -258,9 +260,6 @@ class HlLower {
 		if (indices != null)
 			for (name => index in indices)
 				functionIndices.set(name, index);
-	}
-
-	function lowerProgram(program:IrProgram):HlCode {
 		typedInterfaces = new HlTypedInterfaceTables(program);
 		var facts = loweredCache == null ? null : loweredCache.facts;
 		if (facts != null)
@@ -271,6 +270,12 @@ class HlLower {
 		if (!trustCache)
 			view.useNonNullFields(compiler.ir.analysis.IrNonNullFields.of(program,
 				loweredCache == null ? null : loweredCache.nonNullStores, checkingLinks));
+		// A method of this lowering, so taken once every field has its value.
+		allocateRegister = allocateTemporary;
+	}
+
+	/** Lowers `program`, the program this lowering was made for. */
+	function lowerProgram(program:IrProgram):HlCode {
 		var runtimeNatives = preparedRuntimeNatives == null
 			? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
@@ -584,12 +589,16 @@ class HlLower {
 					if (trustCache) {
 						entries.set(fn.name,
 							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []));
-					} else if (recordLowering) {
-						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, recordedKeys,
-							recordedAnswers, view.endFunction());
-						this.lowered.set(fn.name, entry);
-						entries.set(fn.name, entry);
-						recordedKeys = null;
+					} else {
+						// Recording lowering, the function's requests were kept from its start.
+						var keys = recordedKeys;
+						if (keys != null) {
+							var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, keys,
+								recordedAnswers, view.endFunction());
+							this.lowered.set(fn.name, entry);
+							entries.set(fn.name, entry);
+							recordedKeys = null;
+						}
 					}
 				} catch (error:InternalError) {
 					throw new InternalError('HashLink lowering failed for ${fn.name}: ${error.message}', error.span);
@@ -913,6 +922,7 @@ class HlLower {
 	 */
 	function lowerValueArrayRead(row:Int, output:IrValueId, slot:InlineValueSlot, block:Int,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
 		var arrayValue = body.operand(row, 0),
 			indexValue = body.operand(row, 1),
 			array = requireRegister(arrayValue, registers),
@@ -1115,8 +1125,7 @@ class HlLower {
 
 	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType,
 			?library:String, ?symbol:String):Void {
-		var nativeLibrary = library == null ? "haxeon_runtime" : library,
-			nativeSymbol = symbol == null ? name : symbol;
+		var nativeLibrary = library ?? "haxeon_runtime", nativeSymbol = symbol ?? name;
 		for (native in natives)
 			if (native.name == name) {
 				if (native.arguments.length != arguments.length
@@ -1156,8 +1165,17 @@ class HlLower {
 	function loweringBody(fn:IrFunction):IrBody
 		return scratch.phiEdges.splitBody(fn.bodyIn(bodyTypes, scratch.bodyBuilder), scratch.bodyBuilder);
 
+	/** The body of the function being lowered, which every method that lowers part of it reads. */
+	inline function requireBody():IrBody {
+		var current = body;
+		if (current == null)
+			throw new InternalError("No function is being lowered");
+		return current;
+	}
+
 	function lowerFunction(source:IrBody):HlFunction {
-		body = source;
+		this.body = source;
+		var body = source;
 		nextLabel = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= nextLabel)
@@ -1518,6 +1536,7 @@ class HlLower {
 	 * Assignments are recorded in position order, so those at `position` are the last ones.
 	 */
 	function assignBindings(binding:Int, nextBinding:Array<Int>, position:Int):Void {
+		var body = requireBody();
 		var debugAssignments = scratch.debugAssignments, assignmentBindings = scratch.assignmentBindings;
 		while (binding >= 0) {
 			var identity = body.bindingIdentity(binding), seen = false, index = debugAssignments.length;
@@ -1546,6 +1565,7 @@ class HlLower {
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
 			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, exactTypes:compiler.ir.analysis.IrExactTypeFacts,
 			firstBinding:Array<Int>, arrayRecasts:Array<Int>, catchValues:Array<Int>):Void {
+		var body = requireBody();
 		var scalarOptionals = scratch.scalarLocals;
 		switch opcode {
 			case IrOpcode.Phi:
@@ -1870,12 +1890,15 @@ class HlLower {
 	}
 
 	/** The registers of operands `from` on of `row`, in order. */
-	function operandRegisters(row:Int, from:Int, registers:Array<Int>):Array<Int>
+	function operandRegisters(row:Int, from:Int, registers:Array<Int>):Array<Int> {
+		var body = requireBody();
 		return [for (index in from...body.operandCount(row)) requireRegister(body.operand(row, index), registers)];
+	}
 
 	function lowerCall(row:Int, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
 			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, firstBinding:Array<Int>):Void {
+		var body = requireBody();
 		var functionName = body.symbol(row).name, kind = HlLoweringDecisions.classifyCall(functionName);
 		if ((output:Int) == fusedCondition) {
 			switch kind {
@@ -1982,6 +2005,7 @@ class HlLower {
 	/** A call of function `functionName` with `row`'s operands. */
 	function lowerPlainCall(row:Int, output:IrValueId, functionName:String, instructions:Array<HlInstruction>,
 			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
 		var destination = defineRegister(output, registers, registerTypes);
 		var functionIndex = requireFunction(functionName);
 		var args = operandRegisters(row, 0, registers);
@@ -2004,6 +2028,7 @@ class HlLower {
 
 	function lowerCNativeCall(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Void {
+		var body = requireBody();
 		var functionName = body.symbol(row).name, argumentCount = body.operandCount(row);
 		var native = cNatives.get(functionName);
 		if (native == null)
@@ -2012,13 +2037,14 @@ class HlLower {
 		var callArguments = [for (_ in 0...3) temporaryRegister(IrType.RawPtr, registerTypes)];
 		for (index in 0...3)
 			instructions.push(HlInstruction.LoadString(callArguments[index], internString(invocation.strings[index])));
-		if (invocation.nullable != null) {
+		var resultNullable = invocation.nullable;
+		if (resultNullable != null) {
 			var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
 				release = temporaryRegister(IrType.RawPtr, registerTypes),
 				nullable = temporaryRegister(IrType.Bool, registerTypes);
 			instructions.push(HlInstruction.LoadString(ownership, internString(invocation.strings[3])));
 			instructions.push(HlInstruction.LoadString(release, internString(invocation.strings[4])));
-			instructions.push(HlInstruction.LoadBool(nullable, invocation.nullable));
+			instructions.push(HlInstruction.LoadBool(nullable, resultNullable));
 			callArguments.push(ownership);
 			callArguments.push(release);
 			if (invocation.strings.length > 5) {
@@ -2079,8 +2105,10 @@ class HlLower {
 		if (pointerResult || bytesResult || utf8Result) {
 			strings.push(native.pointerOwnership);
 			strings.push(native.pointerRelease == null ? "" : native.pointerRelease);
-			if (bytesResult)
-				strings.push(native.pointerLength);
+			// A bytes result is one with a length (`isManagedPointerBytes`).
+			var length = native.pointerLength;
+			if (bytesResult && length != null)
+				strings.push(length);
 			nullable = native.pointerNullable;
 		}
 		return {
@@ -2099,6 +2127,7 @@ class HlLower {
 
 	function lowerFieldGet(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Void {
+		var body = requireBody();
 		var object = body.operand(row, 0), fieldName = body.symbol(row).name, local = scratch.scalarLocals.get(object);
 		if (local != null) {
 			var source:Int = cast local.fields.get(fieldName);
@@ -2240,6 +2269,7 @@ class HlLower {
 	**/
 	function scopeEndPosition(binding:Int, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
 			lastByScope:Array<Int>):Int {
+		var body = requireBody();
 		// Per binding, as a function's assignments of a variable share it: -2 until it is found.
 		var lastInScope = lastByScope[binding];
 		if (lastInScope == -2) {
@@ -2275,6 +2305,7 @@ class HlLower {
 		its continuation regardless of block creation order.
 	**/
 	function layOut():Array<Int> {
+		var body = requireBody();
 		var size = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= size)
@@ -2347,6 +2378,7 @@ class HlLower {
 
 	/** Puts block `id` on the walk's stack, with its children (`visitPostorder`). */
 	function pushPostorder(id:Int):Void {
+		var body = requireBody();
 		var children = scratch.children;
 		scratch.stackBlocks.push(id);
 		scratch.stackNext.push(children.length);
@@ -2397,6 +2429,7 @@ class HlLower {
 	 * that is a jump can carry moves; a block whose moves go to more than one block has the target -2.
 	 */
 	function groupPhiMoves():Void {
+		var body = requireBody();
 		var size = 0, total = 0;
 		for (block in 0...body.blockCount()) {
 			if (body.blockId(block) >= size)
@@ -2608,6 +2641,7 @@ class HlLower {
 	 * `uses` counts every read of a value; a debug binding keeps the offset, so a debugger can show it.
 	 */
 	function foldPointerOffsets(uses:Array<Int>):Void {
+		var body = requireBody();
 		var limit = body.valueLimit(),
 			pointers = compiler.ir.model.IrPassScratch.filledInts(scratch.foldedPointers, limit, -1),
 			offsets = compiler.ir.model.IrPassScratch.filledInts(scratch.foldedOffsets, limit, -1),
@@ -2665,6 +2699,7 @@ class HlLower {
 	var memoryBase = 0;
 
 	function defineRegister(value:IrValueId, registers:Array<Int>, types:Array<Int>):Int {
+		var body = requireBody();
 		if (registers[value] >= 0)
 			return registers[value];
 		var index = types.length;
@@ -2738,6 +2773,7 @@ class HlLower {
 	 */
 	function lowerRawArrayWrite(array:IrValueId, index:IrValueId, source:Int, instructions:Array<HlInstruction>,
 			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
 		var arrayType = body.valueType(array), elementShift = rawArrayShift(arrayType);
 		if (elementShift == null)
 			throw new InternalError("Inline array access requires an Int or Float array");
@@ -2773,6 +2809,7 @@ class HlLower {
 	/** The two references a reference-identity test compares, as raw pointers: a virtual is compared by the object it wraps. */
 	function identityPointers(row:Int, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Array<Int> {
+		var body = requireBody();
 		var pointers:Array<Int> = [];
 		for (index in 0...body.operandCount(row)) {
 			var argument = body.operand(row, index), source = requireRegister(argument, registers);
@@ -2793,6 +2830,7 @@ class HlLower {
 	/** An array push or byte read or write: the common case inline, the native on the slow path. */
 	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, kind:HlCallKind,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
 		var push = kind == ArrayPush, get = kind == BytesGet;
 		var destination = defineRegister(output, registers, registerTypes);
 		var args = operandRegisters(row, 0, registers);
@@ -3277,8 +3315,9 @@ class HlLower {
 				return;
 			seen.set(name, true);
 			result.push(name);
-			if (interfaceBases.exists(name))
-				for (base in interfaceBases.get(name))
+			var bases = interfaceBases.get(name);
+			if (bases != null)
+				for (base in bases)
 					visit(base);
 		}
 		for (name in names)
@@ -3286,8 +3325,12 @@ class HlLower {
 		return result;
 	}
 
-	function record(request:HlSymbolRequest):Void
-		requestKeys.record(request, recordedKeys, recordedAnswers);
+	/** Records `request` of the function being lowered, when lowering records them. */
+	function record(request:HlSymbolRequest):Void {
+		var keys = recordedKeys;
+		if (keys != null)
+			requestKeys.record(request, keys, recordedAnswers);
+	}
 
 	function addFunctionName(name:String, index:Int):Void {
 		if (functionIndices.exists(name))
@@ -3296,9 +3339,9 @@ class HlLower {
 	}
 
 	function requireFunction(name:String):Int {
-		if (!functionIndices.exists(name))
-			throw new InternalError('Unknown IR function "$name"');
 		var index = functionIndices.get(name);
+		if (index == null)
+			throw new InternalError('Unknown IR function "$name"');
 		if (recordedKeys != null)
 			record(FunctionRef(name, index));
 		return index;
