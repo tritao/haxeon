@@ -446,8 +446,13 @@ class ConversionResolver {
 					throw new InternalError("Unsupported structural copy target");
 			}
 			statements.push(TReturn(result, span));
+			// One helper per converting function and target: the origin details the operation, so two functions that convert to
+			// the same structure serve two provider rows, not one row twice (`IrProviders.check`).
+			var operation = compiler.core.Provides.ProviderOperations
+				.detailed(compiler.core.Provides.ProviderOperation.DynamicStructure,
+				origin);
 			session.closureConversion.addFunction({
-				name: helper, role: ProviderFunction(target, compiler.core.Provides.ProviderOperation.DynamicStructure),
+				name: helper, role: ProviderFunction(target, operation),
 				origin: origin,
 				originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 				owner: null,
