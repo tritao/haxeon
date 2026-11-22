@@ -176,6 +176,11 @@ yields the value; it is allowed only in functions whose result is a compatible `
 expected to handle (parsing, IO, RPC, file formats) use `Result`; exceptions remain for programming errors and
 unrecoverable failures. Decide together with the must-use rule below.
 
+Open: a postfix `?` reads ambiguously next to the ternary `a ? b : c`. The parser can separate them by lookahead, but
+readers cannot easily. Decide before implementing between postfix `?` (accepting the ambiguity), a prefix keyword such
+as `try expr` distinct from `try`/`catch`, and a postfix `?` in a dialect without the ternary
+([FUTURE_LANGUAGE.md](FUTURE_LANGUAGE.md#clashes-to-resolve)).
+
 ### Must-use results
 
 A call whose result type is declared must-use (`Result`, `Disposable` values, builders) and whose result is discarded is

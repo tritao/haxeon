@@ -142,6 +142,178 @@ meaning of existing code and so need the new dialect; the others can land in Hax
 Items 1–5 and 8 are what would justify a new language. Items 6, 7 and 9 can land in Haxeon first and try out most of the
 new language's ideas before a break is decided.
 
+## Built-in types
+
+The changes above come down to three questions for every built-in type: does it have a known layout, can it be null,
+and is it generic without boxing? Haxe's types each fail one of them for a different reason. The names users touch most
+(`Int`, `String`, `Array`, `Map`) keep their spelling, so the language still reads like Haxe; what they guarantee
+changes.
+
+### Kept
+
+- **`Bool`**: unchanged.
+- **`Float`**: stays 64-bit. `Float32` becomes a first-class type for layouts, GPU data and FFI, replacing HashLink's
+  `Single`.
+- **Function types** `(A, B) -> R`: unchanged syntax. A closure that captures nothing is created once
+  ([UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md), item 7).
+- **`Bytes`**: kept, and the backing type for strings and spans.
+
+### Changed
+
+- **`Int`**: 64-bit, with `Int8` through `Int64` and `UInt8` through `UInt64`; the `Int64` abstract goes away (change 3).
+  Overflow wraps, as in Haxe, because it is predictable and identical on every backend; checked and saturating
+  operations are methods.
+- **`String`**: immutable UTF-8 with byte-offset indices and explicit code point or grapheme iteration (change 2).
+  `StringBuf` becomes an ordinary library builder.
+- **`Array<T>`**: still a growable reference type, but always specialized to its element type: `Array<Rect>` stores
+  contiguous structs and `Array<Int>` raw integers. Haxeon already does much of this as an optimization; the new
+  language guarantees it.
+- **`Map<K, V>`**: Haxe's `Map` is an abstract that selects `IntMap`, `StringMap` or `ObjectMap` by key type, with
+  identity for object keys. It becomes one generic hash map, `Map<K:Hashable, V>`, driven by the key's declared
+  `Hashable`, as `haxeon.collections.HashMap` already is. `Set<T:Hashable>` sits beside it.
+- **`Null<T>`** becomes **`T?`**, with the inline presence layout for every type (change 1).
+- **`Iterator<T>` and `Iterable<T>`**: Haxe declares them as anonymous structure typedefs (`{hasNext, next}`), so
+  iteration depends on structure values. They become interfaces, and loops specialize over concrete iterators without
+  boxing (change 5).
+- **`Void`**: a real unit type usable as a type argument, so `Result<Void, E>`, `Signal<Void>` and `Future<Void>` work.
+
+### Removed or restricted
+
+- **`Dynamic`**: removed. Untyped data (JSON, scripting, RPC payloads) uses an explicit variant enum from the library
+  (change 4).
+- **`Any`**: only an explicit boxed value, with checked casts out and no field access.
+- **`Class<T>`, `Enum<T>`, `Type` and `Reflect`**: available only for types that declare a reflection capability, as
+  `Diffable` works today.
+
+### Added
+
+- **Value tuples** with named fields, in place of anonymous structures (change 5).
+- **Fixed-size arrays** `T[N]`, which [STRUCTS.md](STRUCTS.md) already has inside flat structs.
+- **Slices, `Span<T>`**: views without copying over arrays, bytes, strings and native memory, generalizing `NativeSpan`.
+- **`Result<T, E>`** in the core library (change 7).
+
+## Syntax
+
+Haxe's syntax stays the base. The changes are a handful of forms that are clumsy or that clash with the semantics above,
+and each can be translated mechanically from Haxe mode.
+
+### Kept
+
+- **Capitalized types, built-ins included.** One rule: types are capitalized, values are not. `Int` and `Rect` look
+  alike because both are value types. Lowercase primitives bring back the split that Java's `int` and `Integer`
+  show the cost of. Sized types follow the rule: `Int8`, `UInt64`, `Float32`.
+- Annotations as `x:Int`, generics as `<T>`, constraints as `T:Hashable`.
+- Expression orientation: `if`, `switch` and blocks are values.
+- Pattern matching in `switch`, enums with payloads, `?.` and `??`.
+- Semicolons. Without them newlines become significant in an expression-oriented grammar, which adds ambiguity.
+- `function`: renaming it is cosmetic and costs familiarity.
+
+### 1. Typed attributes in place of `@:` metadata
+
+Haxe metadata is untyped: `@:name(args)` takes any name and any expressions, unknown names are accepted silently, and
+each compiler feature parses its own arguments. The `@:` prefix exists to separate compiler metadata from user metadata,
+which is for macros; with no macros, that distinction has no purpose.
+
+Most of the metadata Haxeon uses today is a feature that the semantics above give real syntax:
+
+| Today | Becomes |
+|---|---|
+| `@:allow`, `@:access`, `@:privateAccess` | the module system (change 8) |
+| `@:optional` | `T?` (change 1) |
+| `@:from`, `@:to` | explicit conversions (change 4 below) |
+| `@:isVar` | accessor syntax (change 2 below) |
+| `@:noReturn` | a `Never` result type |
+| `@:hlNative`, `@:cNative` | typed native declarations |
+
+What remains is attributes: `@name` or `@name(values)`, where `name` resolves to a declared annotation type, as the typed
+annotations planned in [STRUCTS.md](STRUCTS.md) already do (`@:annotation struct Range { var min:Float; var max:Float; }`).
+A misspelled or ill-typed attribute is a compile error, attributes resolve and complete like any other name, and
+libraries define their own without compiler changes. The compiler's own attributes (`@pure`, `@unobservable`) are
+declared the same way, in the standard library.
+
+### 2. Accessors inline with the property
+
+`var x(get, set):Int` plus separately named `get_x` and `set_x` methods, with `@:isVar` to request storage, becomes
+`var x:Int { get => ...; set(v) => ... }`. The accessors sit with the declaration, and storage follows from use.
+
+### 3. Raw-value enums
+
+`enum abstract Color(Int) { var red = 1; }` becomes `enum Color : Int { red = 1; }`. Haxeon already gives these
+`RawRepresentable` semantics, with checked conversion from declared constants and no implicit conversions; the syntax
+says what they are.
+
+### 4. Newtypes without implicit conversions
+
+A Haxe abstract wraps a representation type and can declare implicit conversions both ways:
+`abstract StableTypeId(Int) from Int to Int {}`. The compiler uses this shape for its identifiers (`CfgValueId`,
+`StableTypeId`, `StableFieldId`, `WasmLocalRef`, `WasmGlobalRef`, `WasmFunctionRef`). `from Int` lets any `Int` (a loop
+index, a count, a different identifier unwrapped by `to Int`) become an identifier without a mark at the call site, and
+`to Int` lets arithmetic and comparisons silently operate on the raw value. The type documents intent but checks little.
+
+In the new language a newtype has no implicit conversions:
+
+```haxe
+newtype StableTypeId(Int) {
+	public static function of(raw:Int):StableTypeId;  // explicit way in
+	public var raw(get):Int;                         // explicit way out
+	// operations the type allows, declared like any method or operator
+}
+```
+
+- **Construction and unwrapping are visible.** A call site that turns an `Int` into an identifier says so, which is
+  where mistakes happen.
+- **Operations are opt-in.** Equality and hashing come from conformances (`implements Hashable`); arithmetic exists only
+  if declared, so adding two identifiers is an error rather than a meaningless number.
+- **No runtime cost.** As today, the representation is the wrapped type: no box, no header, the same layout in structs
+  and arrays.
+- **Conversions that are wanted** (units such as `Meters` to `Float`) are still declared, but as named conversions,
+  not silent ones.
+
+This also simplifies the type system. Implicit conversions interact with overload-free call checking, generic
+inference and `Null<T>`; [../reference/SEMANTIC_TYPE_CONTRACT.md](../reference/SEMANTIC_TYPE_CONTRACT.md) already limits
+them deliberately, and newtypes remove the abstract case altogether. Abstracts with operator overloading over another
+type's representation (Haxe's "abstract as a view") become a newtype plus declared operators.
+
+### 5. One checked cast
+
+Haxe has an unchecked `cast x` and a checked `cast(x, T)`. Only a checked `x as T` remains, and `untyped` is removed.
+
+### 6. No `dynamic` methods
+
+Reassignable methods conflict with static dispatch and with hot patching's own model of what may change. A field of
+function type covers the remaining uses.
+
+### 7. `let` and `var` for bindings
+
+Haxe's `final` means two unrelated things: a binding assigned once (`final x = 1`, `final name:String`) and a class or
+method that cannot be subclassed or overridden. Bindings use `let` (immutable) and `var` (mutable), as in Swift, and
+`final` keeps only its inheritance meaning.
+
+- **Not `let mut`.** Rust's `mut` belongs to its ownership model, beside `&mut` borrows. Without ownership it is a
+  longer `var`. `mut` stays free for mutating value types in place, if mutating methods or in-out parameters arrive
+  ([SCOPED_PLACES.md](SCOPED_PLACES.md)), so it keeps one meaning.
+- **Immutability by warning, not by length.** The compiler warns when a `var` is never reassigned, as Swift does, which
+  gives the habit Rust's longer form aims for without the noise.
+- **Fields.** A `let` field is assigned once, in its initializer or the constructor, as Haxe's `final` fields are, and
+  matches the immutable value types (`Color`, `Rect`).
+- **Migration.** Haxe `var` keeps its meaning and Haxe `final` bindings become `let`; nothing else is rewritten.
+- **Caveat.** In JavaScript and TypeScript `let` is mutable. Swift and Kotlin users read it as intended; TypeScript users
+  adjust once.
+
+Whether classes and methods are final by default, with `open` to allow overriding as in Kotlin and Swift, is a separate
+open question; it matters more for static dispatch than the keyword choice does.
+
+### Clashes to resolve
+
+- **`T?` against optional parameters.** Haxe marks an optional parameter as `?x:Int`. Optional parameters become
+  defaults (`x:Int = 0`) or `x:Int?`, and the prefix form goes away.
+- **Postfix `?` against the ternary.** [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md) plans `expr?` for `Result`, but
+  `a ? b : c` exists. A parser can tell them apart by lookahead; a reader cannot easily. Either use a prefix keyword
+  (`try expr`, as Swift and Zig do, distinct from `try`/`catch`) or drop the ternary, since `if` is already an
+  expression. Dropping the ternary is preferred. This affects the current Haxeon plan and is decided there first.
+- **String quotes.** Haxe interpolates single-quoted strings (`'$x'`) and not double-quoted ones. Either both
+  interpolate or one quote style remains.
+
 ## What we would lose
 
 - **The oracle.** Replaced by a written semantics and a conformance suite, which take sustained effort.
