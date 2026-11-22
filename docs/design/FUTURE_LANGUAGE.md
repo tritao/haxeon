@@ -340,6 +340,64 @@ matches enums with payloads, nested patterns, alternatives (`case A | B:`) and g
   (`case _.length => 3`) depend on anonymous structures, which change 5 removes. Patterns destructure structs and tuples
   by field (`case Rect(x: 0, width: let w):`), and extractors become guards.
 
+### 9. Integer division yields an integer
+
+In Haxe `5 / 2` is the `Float` `2.5`, a JavaScript inheritance, and integer division is written `Std.int(a / b)`. On
+integers `/` truncates toward zero, and `%` takes the sign of the dividend; both are specified for every backend. Code
+that wants a float converts an operand first. This changes meaning silently, so the Haxe-mode translator rewrites each
+integer `/` as an explicit float division.
+
+### 10. Named arguments and default values
+
+Haxe has neither named arguments nor defaults beyond constants, but it lets a call skip optional arguments by matching
+their types. Calls may name arguments (`f(width: 10, height: 20)`), parameters take defaults (`x:Int = 0`), and
+skipping by type goes away. This also settles optional parameters against `T?` (see the clashes below) and gives
+structs a memberwise initializer: `Rect(x: 0, y: 0, width: 10, height: 10)`.
+
+### 11. Declared extensions in place of `using`
+
+`using` turns every static function of a module into methods wherever the module is imported. Extensions are declared
+once and imported by name: `extension String { function words():Array<String> ... }`. They share the form of
+conformance extensions (change 6), so the language has one extension mechanism.
+
+### 12. Ranges
+
+Haxe's `0...n` excludes `n`, which reads as inclusive to anyone coming from Swift, Ruby or mathematics, and it has no
+inclusive form, step or reverse. Ranges are `0..<n` (exclusive) and `0...n` (inclusive), as in Swift; `stride` and
+`reversed` are library functions.
+
+### 13. Parentheses when mixing bitwise operators
+
+Haxe places `&`, `|` and `^` at one precedence level, above comparisons. Binding tighter than comparisons is kept; mixing
+the three without parentheses (`a | b & c`, which Haxe evaluates left to right) is an error.
+
+### 14. Tuples and destructuring
+
+With value tuples (change 5): `let (min, max) = bounds(xs);`, `for ((key, value) in map)`, and functions that return
+`(Int, String)`.
+
+### 15. Trailing closures
+
+When a call's last argument is a function, it may follow the parentheses:
+`new TrackedScope("panel") { ... }`, and likewise `forEach`, `withLock` and test blocks. This gives most of what result
+builders would have given the UI ([UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md)) without a builder transform.
+
+### Smaller changes
+
+- **`package` inferred from the file path.** Haxe requires it to match the directory, so declaring it is redundant.
+- **Enum cases resolved by expected type.** Haxe brings every constructor of an imported enum into scope, where names
+  collide. A case resolves from the expected type (`red` where a `Color` is expected) or is qualified (`Color.red`);
+  constructors are not imported globally.
+- **Arrow lambdas only.** `x -> expr` and `(a, b) -> { ... }` replace the anonymous `function (x) ...` expression;
+  `function` remains for declarations.
+- **Constraints with `&`.** `T:Hashable & Diffable` in place of `T:(Hashable, Diffable)`.
+- **No call-site `inline f()`.** Inlining is the optimizer's decision, or a declaration attribute.
+- **`#if` around whole declarations and statements only.** Haxe's `#if` works on tokens like a preprocessor. Target
+  differences go through target profiles and typed compile options.
+
+Kept as they are: array and map comprehensions (`[for (x in xs) f(x)]`), a required `override`, no C-style `for (;;)`,
+and `??=`, `?.` and `??`.
+
 ### Clashes to resolve
 
 - **`T?` against optional parameters.** Haxe marks an optional parameter as `?x:Int`. Optional parameters become
