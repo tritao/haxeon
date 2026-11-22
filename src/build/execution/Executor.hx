@@ -43,10 +43,13 @@ class Executor implements ExecutionBackend {
 			for (dependency in action.dependencies)
 				dependedOn.set(dependency.key(), true);
 		#if (target.threaded && !eval)
-		return executeQueued(plan);
+		var result = executeQueued(plan);
 		#else
-		return executeWaves(plan);
+		var result = executeWaves(plan);
 		#end
+		// Kept now, not when the process ends: a watch session or the program `haxeon run` starts may run for hours.
+		digests.save();
+		return result;
 	}
 
 	/** Single-threaded targets run ready actions in barrier-separated waves. */

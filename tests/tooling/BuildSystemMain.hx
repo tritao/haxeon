@@ -20,6 +20,7 @@ import build.execution.ActionResult;
 import build.execution.ArtifactCache;
 import build.execution.CompilerClient;
 import build.execution.ContentDigestCache;
+import build.execution.DigestStore;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
 import build.execution.ExecutionBackend.ExecutionBackendFactory;
@@ -83,6 +84,7 @@ class BuildSystemMain {
 		#end
 		testFingerprintsAndSkipping();
 		testPersistentDigestCache();
+		testDigestStore();
 		testSharedDigestsAcrossExecutions();
 		testWorkerVersionMemo();
 		testWatchChangeClassification();
@@ -734,7 +736,10 @@ class BuildSystemMain {
 			source = Path.join([root, "input.txt"]);
 		File.saveContent(source, "first contents
 ");
-		var cache = new ContentDigestCache(true), now = Sys.time();
+		// A store of its own: the clock this test moves would otherwise put its digests in the user's.
+		var store = new DigestStore(Path.join([root, "content-digests"])),
+			cache = new ContentDigestCache(true, store),
+			now = Sys.time();
 		cache.clock = () -> now;
 		var first = cache.file(source);
 		expect(first == Sha256.make(File.getBytes(source)).toHex() && cache.hashes == 1,
@@ -757,10 +762,57 @@ class BuildSystemMain {
 		expect(cache.file(source) == Sha256.make(File.getBytes(source)).toHex()
 			&& cache.hashes == 4, "a changed size invalidates a settled entry");
 		// One cache per execution keeps its old behaviour: it trusts the signature without a margin.
-		var local = new ContentDigestCache();
+		var local = new ContentDigestCache(false, new DigestStore(Path.join([root, "local-digests"])));
 		local.file(source);
 		local.file(source);
 		expect(local.hashes == 1, "a per-execution cache serves a freshly written file from memory");
+		FileTree.remove(root);
+	}
+
+	static function testDigestStore():Void {
+		var root = temporaryDirectory("digest-store"),
+			source = Path.join([root, "input.txt"]),
+			unused = Path.join([root, "unused.txt"]),
+			other = Path.join([root, "other.txt"]),
+			storePath = Path.join([root, "store", "content-digests"]);
+		File.saveContent(source, "first contents\n");
+		File.saveContent(unused, "unused\n");
+		File.saveContent(other, "other\n");
+		// Just written: a hash now is within the margin of the file's times, so the store keeps nothing.
+		var racy = new ContentDigestCache(false, new DigestStore(storePath));
+		racy.file(source);
+		racy.save();
+		expect(!FileSystem.exists(storePath), "a digest of a file changed within the margin is not stored");
+		// A clock far enough ahead makes the files old relative to the hash, as files last changed long ago are.
+		var first = new ContentDigestCache(false, new DigestStore(storePath)), now = Sys.time() + 60.0;
+		first.clock = () -> now;
+		var digest = first.file(source);
+		first.file(unused);
+		first.save();
+		var second = new ContentDigestCache(false, new DigestStore(storePath));
+		expect(second.file(source) == digest && second.hashes == 0,
+			"another process reads a settled digest from the store without reading the file");
+		File.saveContent(source, "a longer replacement\n");
+		var third = new ContentDigestCache(false, new DigestStore(storePath));
+		expect(third.file(source) == Sha256.make(File.getBytes(source)).toHex() && third.hashes == 1,
+			"a changed file is hashed again, not served from the store");
+		// A year on, a process that hashes another file drops the entry it neither used nor made.
+		var later = now + 365 * 24 * 3600.0,
+			aged = new DigestStore(storePath),
+			agedCache = new ContentDigestCache(false, aged);
+		aged.clock = () -> later;
+		agedCache.clock = () -> later;
+		agedCache.file(other);
+		agedCache.save();
+		var after = new ContentDigestCache(false, new DigestStore(storePath));
+		after.file(other);
+		expect(after.hashes == 0, "a save keeps the digests it made");
+		after.file(unused);
+		expect(after.hashes == 1, "a save drops the entries that are old and unused");
+		File.saveContent(storePath, "not a digest store\n");
+		var corrupt = new ContentDigestCache(false, new DigestStore(storePath));
+		expect(corrupt.file(source) == Sha256.make(File.getBytes(source)).toHex() && corrupt.hashes == 1,
+			"an unreadable store is an empty one");
 		FileTree.remove(root);
 	}
 

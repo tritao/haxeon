@@ -12,6 +12,7 @@ import build.Target;
 import build.WorkspaceBuild;
 import build.WorkspaceManifest;
 import build.execution.ContentDigest;
+import build.execution.DigestStore;
 import build.execution.Executor;
 import build.execution.JobServer;
 import build.execution.OutputCapture;
@@ -201,6 +202,8 @@ class HaxeonCli {
 					unknownCommand(command);
 					2;
 			};
+			// Digests a command made outside a build (`doctor`, `lsp`, `dev aot-compiler`) are kept for the next.
+			DigestStore.saveShared();
 			Sys.exit(status);
 		} catch (error:Dynamic) {
 			Sys.stderr().writeString("haxeon: " + (expectedFailure(error) ? "" : "internal error: ") + Std.string(error)

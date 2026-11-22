@@ -7,13 +7,14 @@ import sys.io.File;
 import sys.thread.Mutex;
 #end
 
-private typedef DigestEntry = {
+/** A file's digest, here and in a `DigestStore`. */
+typedef DigestEntry = {
 	/** size, mtime, ctime, device and inode as of the hash. */
 	final signature:String;
 
 	final digest:String;
 
-	/** When the hash started, read before the bytes were. */
+	/** When the hash started, in seconds since the epoch, read before the bytes were. */
 	final hashedAt:Float;
 }
 
@@ -25,10 +26,14 @@ private typedef DigestEntry = {
  * a file rewritten with the same size within a second of being hashed looks untouched. Like git's index, a persistent cache
  * therefore only trusts an entry whose timestamps are older than `racyMarginSeconds` before the hash began; younger ("racily
  * clean") entries are re-hashed on the next lookup, which in practice is the file just saved, once.
+ *
+ * Behind every cache is a `DigestStore`, which keeps the digests of settled files (by the same rule) across processes: a file
+ * this cache has not hashed yet is looked up there before it is read.
  */
 class ContentDigestCache {
 	final entries:Map<String, DigestEntry> = [];
 	final persistent:Bool;
+	final store:DigestStore;
 	#if (target.threaded && !eval)
 	final mutex = new Mutex();
 	#end
@@ -42,9 +47,15 @@ class ContentDigestCache {
 	/** Files read and hashed so far. */
 	public var hashes(default, null) = 0;
 
-	public function new(persistent:Bool = false) {
+	/** `store` defaults to the user's (`DigestStore.shared`). */
+	public function new(persistent:Bool = false, ?store:DigestStore) {
 		this.persistent = persistent;
+		this.store = store == null ? DigestStore.shared() : store;
 	}
+
+	/** Writes the store behind this cache back, when it gained digests worth keeping. */
+	public function save():Void
+		store.save();
 
 	public function file(path:String):String {
 		#if (target.threaded && !eval)
@@ -60,10 +71,18 @@ class ContentDigestCache {
 				entry = entries.get(key);
 			if (entry != null && entry.signature == signature && (!persistent || settled(stat, entry.hashedAt)))
 				return release(entry.digest);
+			var modified = stat.mtime.getTime(),
+				changed = stat.ctime.getTime(),
+				stored = store.find(key, signature, modified, changed, racyMarginSeconds);
+			if (stored != null) {
+				entries.set(key, stored);
+				return release(stored.digest);
+			}
 			var hashedAt = clock(),
 				digest = ContentDigest.makeHex(File.getBytes(path));
 			hashes++;
 			entries.set(key, {signature: signature, digest: digest, hashedAt: hashedAt});
+			store.record(key, signature, modified, changed, digest, hashedAt, racyMarginSeconds);
 			return release(digest);
 		} catch (error:haxe.Exception) {
 			#if (target.threaded && !eval)
