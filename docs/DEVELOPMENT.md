@@ -70,9 +70,12 @@ and taken back six times, and an optional argument added to `InternalError`'s co
 gates allocated bytes and the functions retyped, artifacts invalidated and functions regenerated (the `HAXEON_EXPLAIN_INVALIDATION`
 counts); wall is printed. A heap census at the end of every build gives the session's live data after the last body edit and its
 growth over the last two, which stays near zero unless the session keeps something from every build. A second session of the
-server, without those reports, gates edit latency: main-thread `instructions:u` of the body edit and of the signature edit, from
-`perf stat --per-thread` attached to the server around each build (skipped where perf is not available). This part adds about
-three minutes.
+server, without those reports, gates edit latency: main-thread `instructions:u` of a no-op rebuild (the floor every build pays),
+of the body edit and of the signature edit, from `perf stat --per-thread` attached to the server around each build, each build
+starting once the server has settled from the one before (skipped where perf is not available); per build it prints wall, the
+collections inside it and the server's peak resident set. When `haxeon-aot` is current (`haxeon dev aot`), a third session prints
+edit wall on the server built ahead of time, with the collector marking on its threads as a user's does, never compared; otherwise
+it is skipped and passes. This part adds about three minutes.
 
 The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
 no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
@@ -80,7 +83,7 @@ instructions of every process the command starts and the bytes the server alloca
 `--only=self-compile`, `--only=incremental` or `--only=small-project` runs one part.
 
 Every metric fails the run beyond its tolerance, but the primary ones are what the compiler is optimized for, in this order:
-edit latency in the compile server, startup (the small project's cold build and check), and the server's live data, weighted
+edit latency in the compile server (the no-op floor, the body edit, the signature edit), startup (the small project's cold build and check), and the server's live data, weighted
 above the one-shot peak. They are marked `*` and summed up in the first line of the summary the run ends with. The cold
 self-compile (instructions, wall, peak, allocation, live data) and the incremental allocation and function counts are regression
 guards.

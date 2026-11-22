@@ -77,7 +77,7 @@ def main(arguments):
     extract(base, tree, None)
     guard.list_sources(tree, os.path.join(tree, "sources.txt"))
 
-    session = guard.CompileServer(hl, server, tree, os.path.join(out, "server.log"), reports=False)
+    session = guard.CompileServer([hl, server], tree, os.path.join(out, "server.log"), reports=False)
     failures, previous = [], base
     try:
         for step, revision in enumerate([base] + edits):

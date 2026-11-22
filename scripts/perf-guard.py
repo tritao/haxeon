@@ -8,7 +8,8 @@ compile server, and building a small project from a cold start.
                                                    without --update
 
 Every metric fails the run beyond its tolerance, but they do not weigh the same. In order, the compiler is optimized for:
-  1. edit latency in the compile server: main-thread instructions of a body edit and of a signature edit
+  1. edit latency in the compile server: main-thread instructions of a no-op rebuild (the floor every build pays), of a body edit
+     and of a signature edit
   2. startup, which dominates a small project's build: instructions of a cold small-project build and check
   3. the compile server's live data, weighted above the one-shot compile's peak
 These are the primary metrics: marked `*` where compared, and summed up in the first line of the summary the run ends with.
@@ -37,9 +38,16 @@ session's live bytes after the last body edit before the signature edit and thei
 near zero unless the session keeps something from every build.
 
 A second session of that server, without the census and the invalidation reports, measures edit latency: main-thread
-instructions:u (cycles:u reported) of the body edit (the median of three) and of the signature edit, from perf --per-thread
-attached to the server around each build. The server compiles on a thread of its own, which inherits the main thread's
-counters, so the main thread's row holds the build's work. Skipped where perf is not available.
+instructions:u (cycles:u reported) of the no-op rebuild and of the body edit (each the median of three) and of the signature
+edit, from perf --per-thread attached to the server around each build. The server compiles on a thread of its own, which
+inherits the main thread's counters, so the main thread's row holds the build's work. Each build starts once the server has
+settled from the one before (its collection between requests), and reports, never compares, its wall, the collections inside it
+and the server's peak resident set over it. Skipped where perf is not available.
+
+A third session reports edit wall, never compared: the no-op rebuild, the body edit and the signature edit on the compile
+server built ahead of time (haxeon-aot `serve`), the server a user's edits run on, with the collector marking on its threads
+as a user's does (the other sessions mark on one thread so that the main thread's counters hold the work). Like the small
+project's aot mode, it runs only when haxeon-aot is current, and is skipped, passing, otherwise.
 
 The small-project part (tests/perf/small-project-baseline.json) runs the CLI built from the checkout (`haxeon build` and
 `haxeon check` of tests/perf/small-project) as a user does, from no compile server running: the CLI starts the project's
@@ -252,19 +260,25 @@ def server_request(state, body):
 
 
 class CompileServer:
-    """A compile server on a copy of the sources, driven over its protocol (compiler.tools.CompilerServerProtocol)."""
+    """A compile server on a copy of the sources, driven over its protocol (compiler.tools.CompilerServerProtocol).
 
-    def __init__(self, hl, server, tree, log_path, reports=True, pin=()):
+    `command` runs the server given its state file's path: the VM and the server's bytecode, or haxeon-aot's `serve`. The
+    collector marks on one thread (HL_GC_MARK_SERIAL) so that the main thread's counters hold its work, unless `serial_mark` is
+    off, as a session measured by wall time leaves it."""
+
+    def __init__(self, command, tree, log_path, reports=True, serial_mark=True):
         self.tree, self.log_path, self.reports = tree, log_path, reports
         state = os.path.join(tree, "server.json")
-        env = dict(os.environ, HL_GC_MARK_SERIAL="1", HAXEON_COMPILER_IDLE_SECONDS="900")
+        env = dict(os.environ, HAXEON_COMPILER_IDLE_SECONDS="900")
+        if serial_mark:
+            env["HL_GC_MARK_SERIAL"] = "1"
         if reports:
             # The census at the end of each build (`write-done`) collects first and reports the live data per size class only;
             # the explanation of each build's invalidation names what it retyped and regenerated.
             env.update(HAXEON_PEAK_CENSUS="write-done", HL_GC_CENSUS_PAGES_ONLY="1", HAXEON_EXPLAIN_INVALIDATION="1")
         self.log = open(log_path, "w")
         self.offset = 0
-        self.process = subprocess.Popen(list(pin) + [hl, server, state], cwd=tree, env=env, stdin=subprocess.DEVNULL,
+        self.process = subprocess.Popen(list(command) + [state], cwd=tree, env=env, stdin=subprocess.DEVNULL,
                                         stdout=self.log, stderr=subprocess.STDOUT)
         deadline = time.monotonic() + 60
         while not os.path.exists(state):
@@ -277,10 +291,24 @@ class CompileServer:
     def request(self, body):
         return server_request(self.state, body)
 
-    def compile(self, label):
+    def settle(self):
+        """Waits until the server has finished what it does after the last request (its collection between requests): it serves a
+        ping, which it does not answer but closes, only then."""
+        self.request({"ping": True})
+
+    def compile(self, label, settle=True):
+        """One build, from a settled server (settled by the caller when not `settle`): its metrics, with its wall, the collections
+        inside it and the server's peak resident set over it."""
+        if settle:
+            self.settle()
+        # Resets the peak resident set (VmHWM) to the current one.
+        with open(f"/proc/{self.process.pid}/clear_refs", "w") as refs:
+            refs.write("5")
         started = time.monotonic()
         responses = self.request({"arguments": compile_arguments("sources.txt", "out.hl")})
         wall = time.monotonic() - started
+        with open(f"/proc/{self.process.pid}/status") as status:
+            peak = next(int(row.split()[1]) * 1024 for row in status if row.startswith("VmHWM:"))
         messages = [response["message"] for response in responses if "message" in response]
         # The build's own report (phases, IR passes), kept for reading a change in the metrics.
         with open(os.path.join(os.path.dirname(self.log_path), "server-messages.log"), "a") as report:
@@ -294,8 +322,10 @@ class CompileServer:
             raise SystemExit(f"perf-guard: the {label} build failed; server log: {self.log_path}")
         line = next(message for message in messages if message.startswith("driver allocation phases:"))
         fields = dict(field.split("=", 1) for field in line.split(":", 1)[1].split())
-        build = {"label": label, "wall": wall,
-                 "allocated_bytes": sum(int(value) for key, value in fields.items() if key.endswith("-bytes"))}
+        build = {"label": label, "wall": wall, "peak_rss_bytes": peak,
+                 "allocated_bytes": sum(int(value) for key, value in fields.items() if key.endswith("-bytes")),
+                 "collections": sum(int(value) for key, value in fields.items() if key.endswith("-gcs")),
+                 "collection_ms": sum(float(value) for key, value in fields.items() if key.endswith("-gc-ms"))}
         reuse = next((message for message in messages if message.startswith("compiler phases (reused: ")), "")
         build["reuse"] = reuse[len("compiler phases (reused: "):].split(", linked")[0].split(") (ms)")[0]
         for row in log.splitlines():
@@ -338,7 +368,8 @@ def edit(tree, change, forward=True):
 
 
 def measure_incremental(hl, compiler, out, frozen):
-    """Builds the compile server with `compiler` and drives it through the scripted builds; returns their metrics."""
+    """Builds the compile server with `compiler` and drives it through the scripted builds; returns their metrics, compared and
+    reported."""
     server = os.path.join(out, "compiler-server.hl")
     with open(os.path.join(out, "server-build.log"), "w") as log:
         status = subprocess.run(compile_command(hl, compiler, os.path.join(out, "sources.txt"), server, SERVER_ENTRY),
@@ -347,7 +378,7 @@ def measure_incremental(hl, compiler, out, frozen):
         raise SystemExit(f"perf-guard: building the compile server failed (exit {status}); log: {os.path.join(out, 'server-build.log')}")
     tree = copy_frozen(frozen, os.path.join(out, "incremental"))
     open(os.path.join(out, "server-messages.log"), "w").close()
-    session = CompileServer(hl, server, tree, os.path.join(out, "server.log"))
+    session = CompileServer([hl, server], tree, os.path.join(out, "server.log"))
     try:
         builds = [session.compile("cold"), session.compile("first no-op"), session.compile("no-op")]
         for index in range(BODY_EDITS):
@@ -378,7 +409,12 @@ def measure_incremental(hl, compiler, out, frozen):
         metrics.update(measure_edit_latency(hl, server, frozen, out))
     else:
         print(f"perf-guard: edit latency skipped: {skip}")
-    return metrics
+    reported = {}
+    if aot_current():
+        reported.update(measure_edit_wall(os.path.join(os.path.dirname(hl), "haxeon-aot"), frozen, out))
+    else:
+        print("perf-guard: edit wall ahead of time: skipped (haxeon-aot not built, or stale: build it with haxeon dev aot)")
+    return metrics, reported
 
 
 def copy_frozen(frozen, tree):
@@ -436,43 +472,90 @@ class ThreadCounter:
         return counts
 
 
-# The edit-latency session measures each body edit this many times (made and taken back) and keeps the median.
-LATENCY_BODY_EDITS = 3
+# The edit-latency session measures the no-op and each body edit this many times (the body edit made and taken back) and keeps
+# the median.
+LATENCY_REPEATS = 3
+
+
+def report_build(build):
+    """The build's line of the edit-latency and edit-wall sessions: what is compared and what is only reported."""
+    print(f"perf-guard: {build['label']:24} wall {build['wall']:6.2f} s, "
+          + (f"cycles {build['cycles'] / 1e9:6.2f}G, " if "cycles" in build else "")
+          + f"collections {build['collections']} ({build['collection_ms']:7.1f} ms), "
+          + f"peak {build['peak_rss_bytes'] / 1048576.0:6.0f} MB (not compared)"
+          + (f", instructions {build['instructions'] / 1e9:6.2f}G" if "instructions" in build else ""))
+
+
+def median(values):
+    return sorted(values)[len(values) // 2]
 
 
 def measure_edit_latency(hl, server, frozen, out):
-    """Main-thread instructions of a body edit and of the signature edit, as a user's edit pays them: in a session of their own,
-    without the incremental part's census and invalidation reports, whose work would count in them."""
+    """Main-thread instructions of a no-op rebuild (the floor every build pays), of a body edit and of the signature edit, as a
+    user's edit pays them: in a session of their own, without the incremental part's census and invalidation reports, whose work
+    would count in them."""
     tree = copy_frozen(frozen, os.path.join(out, "edit-latency"))
     pin, prefix = performance_cores()
-    session = CompileServer(hl, server, tree, os.path.join(out, "edit-latency-server.log"), reports=False, pin=pin)
+    session = CompileServer(pin + [hl, server], tree, os.path.join(out, "edit-latency-server.log"), reports=False)
 
     def counted(label):
+        # Settled first, so that what the server does after the last request is not counted.
+        session.settle()
         counter = ThreadCounter(session.process.pid, prefix, out)
         counter.command("enable")
-        build = session.compile(label)
+        build = session.compile(label, settle=False)
         build.update(counter.counts())
         return build
 
     try:
         session.compile("latency cold")
-        session.compile("latency no-op")
+        session.compile("latency first no-op")
+        noop = [counted(f"latency no-op {index + 1}") for index in range(LATENCY_REPEATS)]
         body = []
-        for index in range(LATENCY_BODY_EDITS):
+        for index in range(LATENCY_REPEATS):
             edit(tree, BODY_EDIT, forward=index % 2 == 0)
             body.append(counted(f"latency body edit {index + 1}"))
-        if LATENCY_BODY_EDITS % 2:
+        if LATENCY_REPEATS % 2:
             edit(tree, BODY_EDIT, forward=False)
             session.compile("latency body edit undone")
         edit(tree, SIGNATURE_EDIT)
         signature = counted("latency signature edit")
     finally:
         session.stop()
-    for build in body + [signature]:
-        print(f"perf-guard: {build['label']:24} wall {build['wall']:6.2f} s, cycles {build.get('cycles', 0) / 1e9:6.2f}G "
-              f"(not compared), instructions {build['instructions'] / 1e9:6.2f}G")
-    return {"body_edit_instructions": sorted(build["instructions"] for build in body)[len(body) // 2],
+    for build in noop + body + [signature]:
+        report_build(build)
+    return {"noop_instructions": median([build["instructions"] for build in noop]),
+            "body_edit_instructions": median([build["instructions"] for build in body]),
             "signature_edit_instructions": signature["instructions"]}
+
+
+def measure_edit_wall(executable, frozen, out):
+    """Wall of a no-op rebuild, a body edit (each the median of LATENCY_REPEATS) and the signature edit on the compile server
+    built ahead of time (`executable`, haxeon-aot's `serve`), the server a user's edits run on, with the collector marking as a
+    user's does. Reported, never compared: wall varies with the machine's load."""
+    tree = copy_frozen(frozen, os.path.join(out, "edit-wall"))
+    session = CompileServer([executable, "serve"], tree, os.path.join(out, "edit-wall-server.log"), reports=False,
+                            serial_mark=False)
+    try:
+        session.compile("aot cold")
+        session.compile("aot first no-op")
+        noop = [session.compile(f"aot no-op {index + 1}") for index in range(LATENCY_REPEATS)]
+        body = []
+        for index in range(LATENCY_REPEATS):
+            edit(tree, BODY_EDIT, forward=index % 2 == 0)
+            body.append(session.compile(f"aot body edit {index + 1}"))
+        if LATENCY_REPEATS % 2:
+            edit(tree, BODY_EDIT, forward=False)
+            session.compile("aot body edit undone")
+        edit(tree, SIGNATURE_EDIT)
+        signature = session.compile("aot signature edit")
+    finally:
+        session.stop()
+    for build in noop + body + [signature]:
+        report_build(build)
+    return {"aot_noop_wall_seconds": median([build["wall"] for build in noop]),
+            "aot_body_edit_wall_seconds": median([build["wall"] for build in body]),
+            "aot_signature_edit_wall_seconds": signature["wall"]}
 
 
 # The small project's builds run the CLI as a user does, with the compile servers it starts kept in a session directory of the
@@ -647,7 +730,8 @@ def measure_small_project_mode(out, mode, expected_server):
 
 # The metrics the compiler is optimized for, in the order of the priorities, and those that only guard against regressions:
 # each is (baseline, metric, label) and appears in the summary the run ends with. A primary metric's row is marked with `*`.
-PRIMARY = [(INCREMENTAL_BASELINE, "body_edit_instructions", "body edit"),
+PRIMARY = [(INCREMENTAL_BASELINE, "noop_instructions", "no-op"),
+           (INCREMENTAL_BASELINE, "body_edit_instructions", "body edit"),
            (INCREMENTAL_BASELINE, "signature_edit_instructions", "signature edit"),
            (SMALL_PROJECT_BASELINE, "vm_build_instructions", "small-project cold build on the VM"),
            (SMALL_PROJECT_BASELINE, "vm_check_instructions", "check on the VM"),
@@ -747,8 +831,11 @@ def main(arguments):
         improvements += found[1]
     if "incremental" in parts:
         started = time.monotonic()
-        metrics = measure_incremental(hl, compiler, out, frozen)
+        metrics, reported = measure_incremental(hl, compiler, out, frozen)
         print(f"perf-guard: incremental builds wall {time.monotonic() - started:.1f} s (not compared)")
+        if reported:
+            print("perf-guard: edit wall ahead of time (not compared): "
+                  + ", ".join(f"{name} {value:.2f} s" for name, value in reported.items()))
         found = compare(INCREMENTAL_BASELINE, metrics, update, compared)
         failures += found[0]
         improvements += found[1]
