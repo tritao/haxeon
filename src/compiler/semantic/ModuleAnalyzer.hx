@@ -310,8 +310,9 @@ class ModuleAnalyzer {
 		}
 		for (fn in ast.functions)
 			addFunctionTypeDependencies(fn, state, dependencies);
-		for (implementation in PlatformAbi.implementationModules(state.name)) {
-			var module = sourceModuleForDependency(implementation);
+		// What typing a use of this module's declarations calls comes with it (`RuntimeType.companionModules`).
+		for (companion in compiler.runtime.RuntimeType.companionModules(state.name)) {
+			var module = sourceModuleForDependency(companion);
 			if (module != null)
 				dependencies.set(module, true);
 		}

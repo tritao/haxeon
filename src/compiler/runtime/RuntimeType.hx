@@ -15,6 +15,20 @@ import compiler.types.Type.NominalKind;
 class RuntimeType {
 	public static inline final SPECIALIZED_MAP = "haxeon.collections.HashMap";
 
+	/** The interface an observable class implements, and the reactive runtime its generated field access calls. */
+	public static inline final OBSERVABLE = "Observable";
+
+	public static inline final OBSERVABLE_SOURCE = "haxeon.reactive.ObservableSource";
+	public static inline final REACTIVE_RUNTIME = "haxeon.reactive.ReactiveRuntime";
+
+	/**
+	 * The modules that come with `module` in the graph, because typing a use of what it declares makes a call into them that no
+	 * source names: the reactive runtime with `Observable`, and the stdlib modules implementing the platform methods of
+	 * `haxe.io.Bytes` (`PlatformAbi.implementationModules`). Typing then finds them loaded instead of restarting the frontend.
+	 */
+	public static function companionModules(module:String):Array<String>
+		return module == OBSERVABLE ? [OBSERVABLE_SOURCE, REACTIVE_RUNTIME] : PlatformAbi.implementationModules(module);
+
 	/** The class whose statics turn a thrown value into what a catch clause tests (`TypedCatchSubject`). */
 	public static inline final EXCEPTION = "haxe.Exception";
 

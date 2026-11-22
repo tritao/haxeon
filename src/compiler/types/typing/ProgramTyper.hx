@@ -6,6 +6,7 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
+import compiler.runtime.RuntimeType;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.semantic.InitializerUnit;
 import compiler.semantic.InterfaceFieldAccessors;
@@ -956,8 +957,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		// Observable field access is generated after typing. Its per-object source is
 		// therefore an implicit module dependency even when user code imports none of
 		// the reactive runtime classes.
-		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.reactive.ObservableSource");
-		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.reactive.ReactiveRuntime");
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", RuntimeType.OBSERVABLE_SOURCE);
+		session.runtimeDependencyTracker.record(classDecl.name + ".new", RuntimeType.REACTIVE_RUNTIME);
 		if (isValue || isNativeValue)
 			BodyTyper.fail("E1025",
 				'Observable conformance is only supported on classes with identity: "${classDecl.name}"',

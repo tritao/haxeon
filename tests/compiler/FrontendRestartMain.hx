@@ -8,7 +8,8 @@ import compiler.runtime.CompilerIntrinsics;
  * - a module that changes a representation is never found late, because the specialized map owner's module is part of every
  *   program: a class field of a specialized map type, or a specialized map met only inside a body, restarts nothing and types
  *   the program once; without it (no stdlib root) the compiler stops and names the module.
- * A Dynamic object literal does not cause a restart on HashLink, whose dynamic objects are native.
+ * A Dynamic object literal does not cause a restart on HashLink, whose dynamic objects are native, and a platform method of
+ * `haxe.io.Bytes` written in the stdlib (`toHex`) none at all: its module comes with `haxe.io.Bytes` (`RuntimeType.companionModules`).
  */
 class FrontendRestartMain {
 	static final value =
@@ -40,6 +41,12 @@ class FrontendRestartMain {
 			|| passes[1] != moduleAlone[0] - plain[0])
 			throw 'Dynamic arithmetic must continue with only the new module, not type everything again: typed $passes, the module alone ${moduleAlone} over ${plain}';
 		expectSameProgram(arithmetic, compile("import haxeon.DynamicOps; " + arithmeticSource), "Dynamic arithmetic");
+
+		// The modules implementing the platform methods of `haxe.io.Bytes` come with it: `toHex` restarts nothing.
+		var hexSource = "function main():Int return haxe.io.Bytes.ofString(\"*\").toHex() == \"2a\" ? 42 : 1;";
+		var hex = compile(hexSource);
+		expectReasons(hex, [], "Bytes.toHex");
+		expectSameProgram(hex, compile("import haxe.io.BytesHex; " + hexSource), "Bytes.toHex");
 
 		var fieldSource = value
 			+ "class Holder { public var entries:Map<Int, Value>; public function new() {} } "

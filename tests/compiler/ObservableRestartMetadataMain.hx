@@ -2,7 +2,7 @@ import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.tools.IrInterpreter;
 
-/** A frontend restart must retain metadata changes discovered before the restart. */
+/** A class implementing `Observable` brings the reactive runtime its field access calls, and an edit of its metadata is kept. */
 class ObservableRestartMetadataMain {
 	static function main():Void {
 		for (inlineEnabled in [false, true]) {
@@ -32,6 +32,6 @@ class ObservableRestartMetadataMain {
 			var result = new IrInterpreter(edited.ir).run("main");
 			if (result != 0) throw 'metadata edit kept stale field tracking: $result';
 		}
-		Sys.println("PASS: frontend restarts preserve incremental metadata changes");
+		Sys.println("PASS: the reactive runtime comes with Observable and metadata edits are kept");
 	}
 }
