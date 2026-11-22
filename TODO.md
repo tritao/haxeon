@@ -329,6 +329,14 @@ typer's drain order) and 5 (live pruning).
 
 ### Compiler speed
 
+- **Session memory after the IR columns chain.** A compile server keeps the
+  generator's IR objects for the stages before the encode point and the bodies
+  after it, so the incremental baselines were moved up when the chain landed:
+  cold build, signature edit and the server's live data. Per-function reuse in
+  the pre-encode assembly stages (one memo per stage and function, checked by
+  `--check-reuse`) lets the session keep bodies alone and moves them back down;
+  see IR_CORE_COLUMNS.md, "Session caching model".
+
 The 2026-11-18 profile of a self-compile (Haxeon-built release compiler,
 29 s on one thread) is flat: compiler code 48%, string-keyed maps 18.5%,
 allocation and GC 17.6%, string operations 7%, int-keyed maps 5%, dynamic

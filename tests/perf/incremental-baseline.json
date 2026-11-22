@@ -2,7 +2,7 @@
 	"about": "scripts/perf-guard.py, incremental part: the compile server built in release mode from the checkout, compiling a copy of the frozen input (self-compile-baseline.json's input_revision) through cold, no-op, body-edit, signature-edit and late body-edit builds. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"cold_allocated_bytes": {
-			"value": 2488067712,
+			"value": 2642895616,
 			"tolerance": 0.02,
 			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth."
 		},
@@ -47,7 +47,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 2000028056,
+			"value": 2179442648,
 			"tolerance": 0.03,
 			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
@@ -72,7 +72,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"server_live_bytes": {
-			"value": 738092646,
+			"value": 894330470,
 			"tolerance": 0.03,
 			"why": "The session's live data at the end of the last build, from a heap census there: deterministic to a fraction of a megabyte."
 		},

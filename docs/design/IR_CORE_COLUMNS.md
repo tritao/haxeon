@@ -173,6 +173,12 @@ function names; reuse is by object identity of the `IrFunction` an entry was mad
 The objects stay alive in a session for as long as stages before the encode point read them, through their own caches and
 `bodySources`; once the encode point is at the start of the IR stages, a session can keep the bodies alone.
 
+Until then a session pays for both forms: the generator's objects for every function the stages before the encode point
+read, and the bodies after it. The incremental perf-guard baselines (cold build, signature edit and the server's live data)
+were moved up for it when the IR chain landed. Per-function reuse in the stages before the encode point (a memo per stage
+and function, so an unchanged function is never read again) is what lets the session drop the objects and brings those
+baselines back down.
+
 ## Checks
 
 Allocated bytes, main-thread instructions and peak memory on the frozen input at each step, as for the other steps; the
