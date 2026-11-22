@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
-# The suites CI runs: the `ci` mode of tests/suites.txt, which lists them in order with how they are scheduled.
+# The test suites: a mode of tests/suites.txt, which lists them in order with how they are scheduled.
 #
-#   scripts/test.sh [--only NAME,...] [--list]
+#   scripts/test.sh [quick|wave|ci|full] [--gate] [--jobs N] [--only NAME,...] [--list]
 #
-# TEST_JOBS sets the job count (default 16); SKIP_FORMAT_CHECK=1 skips the format check. Every suite runs even when an earlier one
-# fails; the exit code is 0 only if every suite that ran passed. Logs and summary.txt go to out/test/<time>-ci/.
+#   quick  the NUL guard, whole-tree type check, default driver, and UI Showcase builds on HL/Wasm32/Wasm GC
+#   wave   quick, then the driver again with --check-reuse (adds the warm-edit rebuilds and the reuse comparisons), the Wasm
+#          backend script, the strict self-hosting fixed-point, equality and embedding checks and the external-tool build
+#   ci     what CI runs, and the default
+#   full   all three, each suite once
+#
+# --gate is the run a report quotes: it refuses a tree with tracked changes (GATE_ALLOW_DIRTY=1 records "dirty" instead), stops if
+# the native runtime or the prebuilt tools fail to build, runs 4 jobs unless told otherwise, and writes its logs and summary.txt, whose
+# lines are what a report quotes, to out/gate/<commit>-<mode>-<time>/ (without it, out/test/<time>-<mode>/). TEST_JOBS or --jobs sets
+# the job count (default 16 without --gate); SKIP_FORMAT_CHECK=1 skips the format check. Every suite runs even when an earlier one
+# fails; the exit code is 0 only if every suite that ran passed. Temporary files go to a directory of the run's own, removed after it.
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
+mode=ci
+case ${1:-} in quick | wave | ci | full) mode=$1 && shift ;; esac
+work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-test.XXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+export TMPDIR="$work"
 # scripts/haxeon runs on the checkout-built HashLink, so it is built first (a no-op when it is up to date).
 "$root_dir/scripts/build-native.sh" >/dev/null
-exec "$root_dir/scripts/haxeon" dev test ci "$@"
+"$root_dir/scripts/haxeon" dev test "$mode" "$@"

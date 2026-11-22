@@ -121,7 +121,7 @@ number taken with a different app tree or at a different load.
 
 ## 8. The gate
 
-`scripts/gate.sh quick|wave|full [jobs]` is the one way to run the suites for a report. It runs `scripts/haxeon dev test MODE --gate`: the
+`scripts/test.sh quick|wave|full --gate` (`scripts/gate.sh` when this was written) is the one way to run the suites for a report. It runs `scripts/haxeon dev test MODE --gate`: the
 modes are groups of `tests/suites.txt`, which lists the suites in order. It builds the native runtime and the prebuilt tools once (a failed
 build stops it), refuses a tree with tracked changes (`GATE_ALLOW_DIRTY=1` runs and records "dirty"), and runs every suite of the mode,
 continuing past a failing one:

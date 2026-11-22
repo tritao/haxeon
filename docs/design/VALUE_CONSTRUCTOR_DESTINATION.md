@@ -48,6 +48,6 @@ Port the bounded-constructor repro and assert zero temporaries for 1,024 six-con
 
 ## Reviewed implementation order
 
-1. Fix eligibility and lowering using the existing scalar-result role; run `gate.sh wave`.
-2. Add the allocation, aliasing, exception, nested-value, managed-reference and nullable tests above; run `gate.sh wave`.
-3. Add the warm-edit five-to-six-branch transition and role/layout-change coverage; run `gate.sh wave`.
+1. Fix eligibility and lowering using the existing scalar-result role; run `scripts/test.sh wave --gate`.
+2. Add the allocation, aliasing, exception, nested-value, managed-reference and nullable tests above; run `scripts/test.sh wave --gate`.
+3. Add the warm-edit five-to-six-branch transition and role/layout-change coverage; run `scripts/test.sh wave --gate`.

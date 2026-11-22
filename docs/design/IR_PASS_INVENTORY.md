@@ -82,7 +82,7 @@ committed; status is `done`, `active` or `queued`. The declaration model it rest
 | §13 reachability walk over declared providers, pruning before the passes, one frontend pass | dev-c5 | `warm-rebuild-reuse` | queued; waits on the §13 design decisions |
 | Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/design/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
 | Engine core (ADR 0003 M4a, [QUERY_ENGINE.md](QUERY_ENGINE.md)), then the M2 framework on it and the (a) ports of step 2 | haxeon-e4 | `main` | active (claimed 2026-11-18, reordered 2026-11-19) |
-| Cold-build performance and the measure and gate scripts (`scripts/perf-guard.py`, `scripts/gate.sh`) | dev-c5 | `warm-rebuild-reuse` | active |
+| Cold-build performance and the measure and gate scripts (`scripts/perf-guard.py`, `scripts/test.sh --gate`) | dev-c5 | `warm-rebuild-reuse` | active |
 | The provider model itself (`IrFunctionKind`, `ProviderOperation`, the provider table and its checks); a1 adds families to it, changes to the model go through dev-c5 | dev-c5 | `warm-rebuild-reuse` | active |
 | HashLink allocator refill path: word-at-a-time scan of the mark bitmap in `flush_free_list` (fixed-class pages), then the TLAB run size; both measured with cold builds of the app (`scripts/measure-cold.sh`, since removed) | dev-c5 | `haxeon/flush-word-scan` in `vendor/hashlink` (off 875bc1d25) | active (claimed 2026-11-11) |
 | ADR 0003 section 13 step 3: design note for the type-aware reachability walk over typed operations and provider kinds (reviewed by dev-71 before code) | dev-c5 | `warm-rebuild-reuse` | written: `docs/design/REACHABILITY_WALK.md`, awaiting dev-71 review |
@@ -92,7 +92,7 @@ Rules both drivers follow:
 
 - Claim an item before starting it: a committed line in this table changing its status to `active` with the driver's name.
 - Merge `main` into the working branch daily.
-- Push only at green gates (`scripts/gate.sh`; the summary file it writes is what a report quotes).
+- Push only at green gates (`scripts/test.sh MODE --gate`; the summary file it writes is what a report quotes).
 - Message the other driver before touching an area they own.
 
 ## Outer gate control evidence

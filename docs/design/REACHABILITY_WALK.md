@@ -114,7 +114,7 @@ test failure. Cost: one set lookup per call edge, check mode only.
 4. **Warm equals cold with the prune on.** In step 3 the warm-edit sweep and `--check-reuse` run with the prune on, not just in step
    1. An edit that changes the reachable set must give the same bytes as a cold build. The walk's result must be a function of the
    program graph, so cached results stay valid; this is confirmed by those runs.
-5. Gates: `gate.sh wave` per commit (warm-edit sweep included), `full` and the outer app gates before publishing. The cold-build effect is
+5. Gates: `test.sh wave --gate` per commit (warm-edit sweep included), `full` and the outer app gates before publishing. The cold-build effect is
    measured with `scripts/perf-guard.py` (the cold self-compile).
 
 ## Results of step 1
@@ -185,7 +185,7 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
 ### Removal and 3b items of step 3a
 
 - **Removal.** ``--no-early-prune``, `Main --no-early-prune` and the driver's unpruned reference run are a migration reference, not a product option, and
-  there is no user-facing fallback. Delete the switch, the flag and the unpruned run (and the gate.sh coverage field for it) when 3b lands, or after
+  there is no user-facing fallback. Delete the switch, the flag and the unpruned run (and the gate's coverage field for it) when 3b lands, or after
   the pruned path has been the default through two pushes, whichever comes first.
 - **3b: a closure field's ABI from its type.** The scalar-argument pass chooses the ABI of a closure field (the `$get` / `$set` fields of key-path classes)
   from which closures exist, so an unreachable key path's field ABI changes with the prune (`key-path-semantics`). It is benign (deterministic,
@@ -250,6 +250,6 @@ exception on both backends).
 - **One representation of "unreachable".** The Wasm call-site traps (an interface method with no implementation, and the unreceivable class call of
   9d57e32e8) are emitted as the `unreachable` instruction by `WasmFunctionLower` at the call site. They should become IR `Unreachable`, lowered once,
   so the IR says it and HashLink gets the same behavior for those cases (today HL has no equivalent for them). Not urgent.
-- **Whole-tree type check in the gate.** `gate.sh` runs `type-check-all` (every module of `compiler` and `build`) from `quick` up, so a switch over
+- **Whole-tree type check in the gate.** The gate runs `type-check-all` (every module of `compiler` and `build`) from `quick` up, so a switch over
   an IR enum in a module that only tests compile cannot break a wave again. (`EnumAbstractHints.hx`, an orphan that did not compile, was deleted on
   main in f33ec9256, so the stage keeps no name list.)

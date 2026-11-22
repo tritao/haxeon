@@ -25,7 +25,7 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       Format the Haxe sources of the checkout, or check them (FormatCommand); the format-check suite and the pre-push hook run it.
  *
  *   haxeon dev test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]
- *       Run a mode of tests/suites.txt (SuiteRunner). scripts/test.sh runs `ci`; scripts/gate.sh runs the others with --gate.
+ *       Run a mode of tests/suites.txt (SuiteRunner), 16 jobs by default and 4 with --gate. scripts/test.sh runs it.
  *
  *   haxeon dev native [preset]
  *       Build the VM: HashLink with the Haxeon runtime compiled in (build.HaxeonBuild.buildNative).
@@ -147,7 +147,7 @@ class DevCommand {
 			return SuiteRunner.list(home, mode);
 		return SuiteRunner.run(home, {
 			mode: mode,
-			jobs: jobs == null || jobs < 1 ? 16 : jobs,
+			jobs: jobs == null || jobs < 1 ? (gate ? 4 : 16) : jobs,
 			gate: gate,
 			only: only
 		});

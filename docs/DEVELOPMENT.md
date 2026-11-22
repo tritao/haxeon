@@ -22,8 +22,8 @@ next to `summary.txt`.
 ```sh
 ./scripts/test.sh                                  # dev test ci; TEST_JOBS sets the jobs (default 16), SKIP_FORMAT_CHECK=1 skips the format check
 ./scripts/test.sh --only driver-default,wasm-backend
-scripts/haxeon dev test full --list                # the suites a mode runs, with their lanes and pools
-./scripts/gate.sh quick|wave|full [jobs]           # dev test MODE --gate, 4 jobs by default: a report in out/gate (docs/reports/2026-11-test-suite-cost.md section 8)
+./scripts/test.sh full --list                      # the suites a mode runs, with their lanes and pools
+./scripts/test.sh quick|wave|full --gate           # 4 jobs unless --jobs says otherwise: a report in out/gate (docs/reports/2026-11-test-suite-cost.md section 8)
 ```
 
 A new suite is a line in `tests/suites.txt`, not a stage in a script. Give it the groups it belongs to; put it in a `lane` or `pool`
@@ -118,14 +118,14 @@ check costs about a tenth of a second; `HAXEON_NATIVE_READY=1` skips it, as the 
 | Pinned tools and submodules | `cmake -P cmake/Bootstrap.cmake` | `scripts/bootstrap-tools.sh` | `scripts/setup.ps1` |
 | The VM, first build | `cmake --preset P`, `cmake --build --preset P` | `scripts/build-native.sh` | `scripts/build-native.ps1` |
 | The VM, rebuilt | `haxeon dev native [preset]` | | |
-| Test suites | `haxeon dev test MODE` | `scripts/test.sh`, `scripts/gate.sh` | |
+| Test suites | `haxeon dev test MODE` | `scripts/test.sh [MODE]` | |
 | Test driver | `haxeon dev test-driver [jobs] [options]` | `scripts/test-driver.sh` | |
 | Refresh or check the checked-in compiler | `haxeon dev bootstrap [--self]` | `scripts/bootstrap-compiler.sh` | |
 | Format | `haxeon dev format [--check]` | | |
 | Run an entry point of this checkout (benchmarks, probes) | `haxeon dev run [--cp DIR]... MAIN [arguments]` | | |
 | Toolchain report | `haxeon doctor` | | |
 
-The Unix wrappers pass their arguments on; `test.sh`, `gate.sh` and `test-driver.sh` build the native runtime first.
+The Unix wrappers pass their arguments on; `test.sh` and `test-driver.sh` build the native runtime first.
 `bootstrap-compiler.sh` runs the bootstrap without the CLI, so it works before HashLink is built. `haxeon dev test` runs its
 suites through Bash, so it needs a Unix shell.
 
