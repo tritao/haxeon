@@ -17,6 +17,7 @@ import compiler.ir.model.TypeKey;
  * Preserve the payload width of a nullable native scalar on every field store. On IR bodies (docs/design/IR_CORE_COLUMNS.md,
  * migration): a store is preceded in place by a call of the width's normalizer, whose functions are built and encoded later.
  */
+@:nullSafety(Strict)
 class IrNullableScalarFields {
 	final objects:Map<String, IrObject>;
 	final helpers:Map<String, IrFunction> = [];
@@ -153,7 +154,7 @@ class IrNullableScalarFields {
 	}
 
 	function findField(type:IrType, name:String):Null<IrObjectField> {
-		var objectName = switch type {
+		var objectName:Null<String> = switch type {
 			case Obj(value): value;
 			default: return null;
 		};
@@ -176,6 +177,7 @@ class IrNullableScalarFields {
  * nullable Int at all; the rewrite reads, for each field it stores to, the field's nullable scalar storage (`FIELD`), and asks for
  * the normalizer of each width it stores.
  */
+@:nullSafety(Strict)
 class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass {
 	public static inline final FIELD = 0;
 

@@ -40,6 +40,7 @@ private typedef OptionalMethodRequest = {
  * Plans inline optional fields and builds their storage accessors. Logical value copies are made only at the accessor
  * boundary; the holder itself contains a flag and recursively flattened payload slots, including managed references.
  */
+@:nullSafety(Strict)
 class IrOptionalFieldStorage {
 	final objects:Map<String, IrObject>;
 	final layouts:IrInlineValueLayout;
@@ -190,6 +191,13 @@ class IrOptionalFieldStorage {
 			next = fn.nextValueId(),
 			owner = new IrValue(next++, "$optional-owner", Obj(request.owner)),
 			aliases:Map<Int, Array<String>> = [receiver.id => request.path];
+		// The path of a value a guard found among the aliases.
+		function aliasPath(id:Int):Array<String> {
+			var path = aliases.get(id);
+			if (path == null)
+				throw new InternalError('Missing optional field place alias $id');
+			return path;
+		}
 		// A receiver projection remains a place across SSA blocks. A cast only unwraps a nullable projection; the original
 		// null check remains in the cloned body.
 		var changed = true;
@@ -200,11 +208,11 @@ class IrOptionalFieldStorage {
 					switch located.value {
 						case FieldGet(out, object,
 							field) if (aliases.exists(object.id) && isComposite(out.type) && !aliases.exists(out.id)):
-							aliases.set(out.id, aliases.get(object.id).concat([field]));
+							aliases.set(out.id, aliasPath(object.id).concat([field]));
 							changed = true;
 						case SafeCast(out,
 							value) if (aliases.exists(value.id) && isComposite(out.type) && !aliases.exists(out.id)):
-							aliases.set(out.id, aliases.get(value.id));
+							aliases.set(out.id, aliasPath(value.id));
 							changed = true;
 						default:
 					}
@@ -222,14 +230,14 @@ class IrOptionalFieldStorage {
 				switch instruction {
 					case FieldGet(out, object, field) if (aliases.exists(object.id)):
 						var nested = nestedPhysicalField(object.type, field),
-							path = aliases.get(object.id).concat(nested == null ? [field] : nested.path);
+							path = aliasPath(object.id).concat(nested == null ? [field] : nested.path);
 						instruction = nested == null
 							&& isComposite(out.type) ? Call(out, IrSymbol.of(getterFor(plan, path, out.type)),
 							[owner]) : FieldGet(out, owner, physical(plan, path, nested != null && nested.presence));
 						handled = true;
 					case FieldSet(object, field, value) if (aliases.exists(object.id)):
 						var nested = nestedPhysicalField(object.type, field),
-							path = aliases.get(object.id).concat(nested == null ? [field] : nested.path),
+							path = aliasPath(object.id).concat(nested == null ? [field] : nested.path),
 							actual = materializeAlias(value, aliases, plan, owner, target, located, next);
 						next = actual.next;
 						if (nested == null && isComposite(value.type)) {
@@ -251,7 +259,7 @@ class IrOptionalFieldStorage {
 							args.push(actual.value);
 						}
 						instruction = Call(out,
-							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliases.get(object.id), resolved)),
+							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliasPath(object.id), resolved)),
 							args);
 						handled = true;
 					case Call(out, called, arguments)
@@ -264,7 +272,7 @@ class IrOptionalFieldStorage {
 							args.push(actual.value);
 						}
 						instruction = Call(out,
-							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliases.get(arguments[0].id),
+							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliasPath(arguments[0].id),
 							called.name)), args);
 						handled = true;
 					default:
@@ -279,7 +287,7 @@ class IrOptionalFieldStorage {
 						}
 					if (substitutions.keys().hasNext())
 						instruction = IrInliner.remap(instruction,
-							value -> substitutions.exists(value.id) ? substitutions.get(value.id) : value, id -> id);
+							value -> substitutions.get(value.id) ?? value, id -> id);
 				}
 				target.instructions.push(new Located(instruction, located.provenance));
 			}
@@ -360,7 +368,7 @@ class IrOptionalFieldStorage {
 	}
 
 	function methodName(type:IrType, method:String):String {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: throw new InternalError('Invalid value method receiver');
 		};
@@ -484,9 +492,9 @@ class IrOptionalFieldStorage {
 							throw new InternalError('Invalid optional field copy "$name"');
 						var target = planFor(fields[0], fields[1]),
 							source = planFor(fields[2], fields[3]);
-						if (target == null
-							|| source == null
-							|| !Type.enumEq(target.type, source.type)
+						if (target == null || source == null)
+							throw new InternalError('Incompatible optional field copy "$name"');
+						if (!Type.enumEq(target.type, source.type)
 							|| target.slots.length != source.slots.length)
 							throw new InternalError('Incompatible optional field copy "$name"');
 						var destination = body.operand(row, 0),
@@ -662,7 +670,7 @@ class IrOptionalFieldStorage {
 		};
 
 	function find(type:IrType, field:String):Null<OptionalFieldPlan> {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: return null;
 		};

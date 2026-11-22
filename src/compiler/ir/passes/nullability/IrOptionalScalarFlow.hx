@@ -44,6 +44,7 @@ private typedef OptionalClosure = {
  * never stated), as what it becomes depends on the whole program's candidates. It asks for the copy, box and unbox helpers the
  * function it hands on calls. `finish` adds the candidates' scalar forms, the receiver checks and the helpers.
  */
+@:nullSafety(Strict)
 class IrOptionalScalarFlow implements IrFunctionPass {
 	public static inline final PREFIX = "$optional-scalar:";
 	public static inline final WRAPPER = "$optional-components:";
@@ -202,22 +203,42 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		for (fn in originals)
 			if (candidates.exists(fn.name))
 				made.push(scalarForm(fn, true));
-		var checkNames = [for (name in receiverChecks.keys()) name];
-		checkNames.sort(Reflect.compare);
-		for (name in checkNames)
-			made.push(receiverChecks.get(name));
-		var names = [for (name in wrappers.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names)
-			declarations.push(wrappers.get(name));
+		var checks = [for (name => check in receiverChecks) {
+			name:name, check:check
+		}];
+		checks.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in checks)
+			made.push(entry.check);
+		var wrapped = [for (name => declared in wrappers) {
+			name:name, declared:declared
+		}];
+		wrapped.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in wrapped)
+			declarations.push(entry.declared);
 		for (fn in made)
 			helpers.scan(fn.bodyIn(bodyTypes(), builder), null);
 		return helpers.append(rewritten.concat(made), declarations);
 	}
 
+	/** Whether `name` is a value class. */
+	function isValueName(name:String):Bool {
+		var object = objects.get(name);
+		return object != null && object.isValue;
+	}
+
+	/** Whether `type` is the value class `optionalType` holds when present. */
+	function holds(optionalType:IrType, type:IrType):Bool {
+		var name = optional(optionalType);
+		return name != null && Type.enumEq(type, Obj(name));
+	}
+
+	/** Whether a call of the closure `binding` passes a candidate's values or an alias. */
+	function closureInvolved(binding:Null<OptionalClosure>, args:Array<IrValue>, alias:Map<Int, OptionalAlias>):Bool
+		return binding != null && (candidates.exists(binding.name) || hasAlias(args, alias));
+
 	function optional(type:IrType):Null<String>
 		return switch type {
-			case Nullable(Obj(name)) if (objects.exists(name) && objects.get(name).isValue): name;
+			case Nullable(Obj(name)) if (isValueName(name)): name;
 			default: null;
 		};
 
@@ -246,21 +267,23 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		return WRAPPER + name;
 
 	function wrapper(name:String):IrObject {
-		if (!wrappers.exists(name)) {
-			var fields:Array<IrObjectField> = [];
-			var shape = slots(name);
-			for (i in 0...shape.length)
-				fields.push({name: "$slot" + i, type: shape[i].type});
-			wrappers.set(name, {
-				name: wrapperName(name),
-				isValue: true,
-				base: null,
-				interfaces: [],
-				fields: fields,
-				methods: []
-			});
-		}
-		return wrappers.get(name);
+		var known = wrappers.get(name);
+		if (known != null)
+			return known;
+		var fields:Array<IrObjectField> = [];
+		var shape = slots(name);
+		for (i in 0...shape.length)
+			fields.push({name: "$slot" + i, type: shape[i].type});
+		var made:IrObject = {
+			name: wrapperName(name),
+			isValue: true,
+			base: null,
+			interfaces: [],
+			fields: fields,
+			methods: []
+		};
+		wrappers.set(name, made);
+		return made;
 	}
 
 	function closureBindings(fn:IrFunction):Map<Int, OptionalClosure> {
@@ -290,9 +313,12 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						case ValueInit(out) if (!result.exists(out.id)):
 							result.set(out.id, compiler.ir.model.IrTypeTools.valueObjectName(out.type));
 							changed = true;
-						case Upcast(out, value) if (!result.exists(out.id) && result.exists(value.id)):
-							result.set(out.id, result.get(value.id));
-							changed = true;
+						case Upcast(out, value) if (!result.exists(out.id)):
+							var name = result.get(value.id);
+							if (name != null) {
+								result.set(out.id, name);
+								changed = true;
+							}
 						case Phi(out, inputs) if (!result.exists(out.id) && inputs.length > 0):
 							var name:Null<String> = null, same = true;
 							for (input in inputs) {
@@ -384,7 +410,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						case SafeCast(out, value) | ToDyn(out,
 							value) if (places.exists(value.id) && !places.exists(out.id)):
 							switch out.type {
-								case Obj(name) if (objects.exists(name) && objects.get(name).isValue):
+								case Obj(name) if (isValueName(name)):
 									places.set(out.id, true);
 									changed = true;
 								case Nullable(Obj(_)) if (optional(out.type) != null):
@@ -394,7 +420,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							}
 						case FieldGet(out, owner, _) if (places.exists(owner.id) && !places.exists(out.id)):
 							switch out.type {
-								case Obj(name) if (objects.exists(name) && objects.get(name).isValue):
+								case Obj(name) if (isValueName(name)):
 									places.set(out.id, true);
 									changed = true;
 								case Nullable(Obj(_)) if (optional(out.type) != null):
@@ -424,17 +450,16 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case SafeCast(out, source)
-							if (!places.exists(source.id)
-							&& optional(source.type) != null
-							&& Type.enumEq(out.type, Obj(optional(source.type)))):
-							if (!result.exists(out.id)) {
-								result.set(out.id, {root: source.id, path: [], typeName: optional(source.type)});
+						case SafeCast(out, source) if (!places.exists(source.id)):
+							var name = optional(source.type);
+							if (name != null && Type.enumEq(out.type, Obj(name)) && !result.exists(out.id)) {
+								// Haxe's checker types a literal's field by its value's declared type, not by the test above.
+								result.set(out.id, {root: source.id, path: [], typeName: (name: String)});
 								changed = true;
 							}
 						case FieldGet(out, owner, field) if (result.exists(owner.id)):
 							switch out.type {
-								case Obj(name) if (objects.exists(name) && objects.get(name).isValue
+								case Obj(name) if (isValueName(name)
 									&& !result.exists(out.id)):
 									var parent:OptionalAlias = cast result.get(owner.id);
 									result.set(out.id, {
@@ -452,7 +477,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	}
 
 	function physicalField(type:IrType, physicalName:String):Null<{path:Array<String>, presence:Bool}> {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: return null;
 		};
@@ -473,7 +498,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	}
 
 	function declaredField(type:IrType, field:String):Null<IrObjectField> {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: return null;
 		};
@@ -513,7 +538,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 					switch located.value {
 						case FieldGet(out, owner, _) if (roots.exists(owner.id) && !roots.exists(out.id)):
 							switch out.type {
-								case Obj(name) if (objects.exists(name) && objects.get(name).isValue):
+								case Obj(name) if (isValueName(name)):
 									roots.set(out.id, true);
 									changed = true;
 								default:
@@ -641,13 +666,13 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							return false;
 						if (physical == null && declared != null)
 							switch declared.type {
-								case Obj(name) if (objects.exists(name) && objects.get(name).isValue): return false;
+								case Obj(name) if (isValueName(name)): return false;
 								case Nullable(Obj(_)) if (optional(declared.type) == null): return false;
 								default:
 							}
 					case FieldSet(owner, _, value) if (!alias.exists(owner.id) && values.exists(value.id)):
 					case ToDyn(out,
-						source) if (values.exists(out.id) && Type.enumEq(source.type, Obj(optional(out.type)))):
+						source) if (values.exists(out.id) && holds(out.type, source.type)):
 					case SafeCast(out, source) if (alias.exists(out.id) && values.exists(source.id)):
 					case Equal(_, left, right) if ((values.exists(left.id) && nulls.exists(right.id))
 						|| (values.exists(right.id) && nulls.exists(left.id))):
@@ -659,13 +684,13 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 					case Call(_, name, args) if (candidates.exists(name.name) || hasAlias(args, alias)):
 						if (!canPassAliases(name.name, args, alias))
 							return false;
-					case CallClosure(_, closure, args)
-						if (bindings.exists(closure.id)
-						&& (candidates.exists(bindings.get(closure.id).name) || hasAlias(args, alias))):
-						var binding:OptionalClosure = cast bindings.get(closure.id),
-							actual = binding.receiver == null ? args : [binding.receiver].concat(args);
-						if (!canPassAliases(binding.name, actual, alias))
-							return false;
+					case CallClosure(_, closure, args) if (closureInvolved(bindings.get(closure.id), args, alias)):
+						var binding = bindings.get(closure.id);
+						if (binding != null) {
+							var actual = binding.receiver == null ? args : [binding.receiver].concat(args);
+							if (!canPassAliases(binding.name, actual, alias))
+								return false;
+						}
 					case MethodCall(_, receiver, name, args, terminalReceiver) if (alias.exists(receiver.id)):
 						var target = aliasMethod(receiver, name);
 						if (target == null
@@ -712,6 +737,12 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				throw new InternalError('Missing optional scalar components for $id');
 			return result;
 		}
+		function typeName(id:Int):String {
+			var name = types.get(id);
+			if (name == null)
+				throw new InternalError('Missing optional scalar type for $id');
+			return name;
+		}
 		function allocate(value:IrValue):Void {
 			var name = optional(value.type);
 			if (name == null || places.exists(value.id) || components.exists(value.id))
@@ -737,6 +768,13 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			exact = exactTypes(fn),
 			substitutions:Map<Int, IrValue> = [],
 			holders:Map<Int, IrValue> = [];
+		// The closure bound to `id`, a value a guard found among the bindings.
+		function bindingOf(id:Int):OptionalClosure {
+			var binding = bindings.get(id);
+			if (binding == null)
+				throw new InternalError('Missing optional closure binding for $id');
+			return binding;
+		}
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
@@ -745,7 +783,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							root = receiver.root;
 						if (!holders.exists(root))
 							holders.set(root,
-								new IrValue(next++, "$optional-place", Obj(wrapper(types.get(root)).name)));
+								new IrValue(next++, "$optional-place", Obj(wrapper(typeName(root)).name)));
 					default:
 				}
 		var origin = SourceProvenance.generated("optional-scalar-flow"),
@@ -761,8 +799,8 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				var parts = component(arg.id);
 				for (i in 0...parts.length)
 					prefix.push(new Located(FieldGet(parts[i], aggregate, "$slot" + i), origin));
-				if (holders.exists(arg.id)) {
-					var holder = holders.get(arg.id);
+				var holder = holders.get(arg.id);
+				if (holder != null) {
 					prefix.push(new Located(ValueInit(holder), origin));
 					for (i in 0...parts.length)
 						prefix.push(new Located(FieldSet(holder, "$slot" + i, parts[i]), origin));
@@ -772,18 +810,19 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		function add(block:IrBlock, instruction:IrInstruction, from:Located<IrInstruction>):Void
 			block.instructions.push(new Located(instruction, from.provenance));
 		function install(block:IrBlock, id:Int, from:Located<IrInstruction>):Void {
-			if (!holders.exists(id))
+			var holder = holders.get(id);
+			if (holder == null)
 				return;
-			var holder = holders.get(id), parts = component(id);
+			var parts = component(id);
 			add(block, ValueInit(holder), from);
 			for (i in 0...parts.length)
 				add(block, FieldSet(holder, "$slot" + i, parts[i]), from);
 		}
 		function partsAt(block:IrBlock, id:Int, from:Located<IrInstruction>):Array<IrValue> {
-			if (!holders.exists(id))
+			var holder = holders.get(id);
+			if (holder == null)
 				return component(id);
-			var holder = holders.get(id),
-				shape = slots(types.get(id)),
+			var shape = slots(typeName(id)),
 				parts:Array<IrValue> = [];
 			for (i in 0...shape.length) {
 				var value = new IrValue(next++, "$optional-current", shape[i].type);
@@ -837,7 +876,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			add(block, FieldSet(holder, "$slot" + index, value), from);
 		}
 		function field(type:IrType, name:String):IrObjectField {
-			var owner = switch type {
+			var owner:Null<String> = switch type {
 				case Obj(value): value;
 				default: throw new InternalError("Invalid value field owner");
 			};
@@ -872,7 +911,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						}
 					} else
 						switch entry.type {
-							case Obj(childName) if (objects.exists(childName) && objects.get(childName).isValue):
+							case Obj(childName) if (isValueName(childName)):
 								add(block, FieldSet(result, entry.name, build(childName, pathField)), from);
 							default:
 								add(block, FieldSet(result, entry.name, root[slotIndex(a.typeName, pathField, false)]),
@@ -924,14 +963,14 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			return target;
 		}
 		function box(block:IrBlock, value:IrValue, from:Located<IrInstruction>):IrValue {
-			var name = types.get(value.id),
+			var name = typeName(value.id),
 				packed = aggregate(block, name, partsAt(block, value.id, from), from),
 				result = new IrValue(next++, "$optional-boxed", value.type);
 			add(block, Call(result, IrSymbol.of(IrOptionalValueFlow.boxName(name)), [packed]), from);
 			return result;
 		}
 		function unbox(block:IrBlock, value:IrValue, output:IrValue, from:Located<IrInstruction>):Void {
-			var name = types.get(output.id),
+			var name = typeName(output.id),
 				packed = new IrValue(next++, "$optional-unboxed", Obj(wrapper(name).name));
 			add(block, Call(packed, IrSymbol.of(IrOptionalValueFlow.unboxName(name)), [value]), from);
 			var parts = component(output.id);
@@ -942,10 +981,10 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				from:Located<IrInstruction>):Void {
 			var expanded:Array<IrValue> = [];
 			for (arg in arguments)
-				expanded.push(components.exists(arg.id) ? aggregate(block, types.get(arg.id),
+				expanded.push(components.exists(arg.id) ? aggregate(block, typeName(arg.id),
 					partsAt(block, arg.id, from), from) : arg);
 			if (components.exists(out.id)) {
-				var valueName = types.get(out.id),
+				var valueName = typeName(out.id),
 					result = new IrValue(next++, "$optional-result", Obj(wrapper(valueName).name));
 				add(block, Call(result, IrSymbol.of(PREFIX + name), expanded), from);
 				var parts = component(out.id);
@@ -1019,7 +1058,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							substitutions.set(out.id,
 								root[slotIndex(a.typeName, a.path.concat(physical.path), physical.presence)]);
 						else if (components.exists(out.id)) {
-							var shape = slots(types.get(out.id)),
+							var shape = slots(typeName(out.id)),
 								parts = component(out.id);
 							for (i in 0...parts.length)
 								substitutions.set(parts[i].id,
@@ -1028,7 +1067,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							substitutions.set(out.id, root[slotIndex(a.typeName, path, false)]);
 					case FieldGet(out, owner,
 						name) if (components.exists(out.id) && inlineOptionalField(owner, name, out.type)):
-						var shape = slots(types.get(out.id)),
+						var shape = slots(typeName(out.id)),
 							parts = component(out.id);
 						for (i in 0...parts.length)
 							add(target, FieldGet(parts[i], owner, IrInlineValueLayout.slotName(name, shape[i])),
@@ -1038,8 +1077,11 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							physical = physicalField(owner.type, name),
 							path = a.path.concat([name]),
 							holder = holders.get(a.root);
+						// Every alias that is written to has a holder for its root (made above).
+						if (holder == null)
+							throw new InternalError('Missing optional place holder for ${a.root}');
 						if (components.exists(value.id)) {
-							var shape = slots(types.get(value.id)),
+							var shape = slots(typeName(value.id)),
 								parts = partsAt(target, value.id, located);
 							for (i in 0...parts.length)
 								storeSlot(target, holder, a.typeName,
@@ -1052,14 +1094,14 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							storeSlot(target, holder, a.typeName, slotIndex(a.typeName, path, false), value, located);
 					case FieldSet(owner, name,
 						value) if (components.exists(value.id) && inlineOptionalField(owner, name, value.type)):
-						var shape = slots(types.get(value.id)),
+						var shape = slots(typeName(value.id)),
 							parts = partsAt(target, value.id, located);
 						for (i in 0...parts.length)
 							add(target, FieldSet(owner, IrInlineValueLayout.slotName(name, shape[i]), parts[i]),
 								located);
 					case ToDyn(out, source) if (components.exists(out.id)):
 						var parts = component(out.id),
-							name = types.get(out.id);
+							name = typeName(out.id);
 						if (alias.exists(source.id)) {
 							add(target, ConstBool(parts[0], true), located);
 							var shape = slots(name),
@@ -1088,8 +1130,8 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						for (i in 0...to.length)
 							substitutions.set(to[i].id, from[i]);
 					case CallClosure(out, closure, arguments) if (bindings.exists(closure.id)
-						&& candidates.exists(bindings.get(closure.id).name)):
-						var binding:OptionalClosure = cast bindings.get(closure.id),
+						&& candidates.exists(bindingOf(closure.id).name)):
+						var binding = bindingOf(closure.id),
 							args = binding.receiver == null ? arguments : [binding.receiver].concat(arguments);
 						var actual = [
 							for (argument in args)
@@ -1104,6 +1146,9 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						emitCall(target, out, name.name, actual, located);
 					case MethodCall(out, receiver, name, arguments, _) if (!alias.exists(receiver.id)
 						&& hasCandidateMethod(exact, receiver, name)):
+						var resolved = resolvedMethod(exact, receiver, name);
+						if (resolved == null)
+							throw new InternalError('The candidate method $name has no implementation');
 						// Method arguments have already been evaluated; preserve the null error at the original call.
 						if (!exact.exists(receiver.id))
 							switch receiver.type {
@@ -1117,7 +1162,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							for (argument in [receiver].concat(arguments))
 								alias.exists(argument.id) ? aliasValue(target, argument, located) : argument
 						];
-						emitCall(target, out, resolvedMethod(exact, receiver, name), actual, located);
+						emitCall(target, out, resolved, actual, located);
 					case Call(out, name, arguments) if (hasAlias(arguments, alias)):
 						var actual = [
 							for (argument in arguments)
@@ -1140,10 +1185,10 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							terminalReceiver), located);
 					case CallClosure(out, closure, arguments)
 						if (bindings.exists(closure.id)
-						&& bindings.get(closure.id).receiver == null
-						&& functions.exists(bindings.get(closure.id).name)
+						&& bindingOf(closure.id).receiver == null
+						&& functions.exists(bindingOf(closure.id).name)
 						&& !hasAlias(arguments, alias)):
-						var binding:OptionalClosure = cast bindings.get(closure.id);
+						var binding = bindingOf(closure.id);
 						var boxed = [
 							for (argument in arguments)
 								components.exists(argument.id) ? box(target, argument, located) : argument
@@ -1156,7 +1201,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							add(target, Call(out, IrSymbol.of(binding.name), boxed), located);
 					case CallClosure(out, closure,
 						arguments) if (bindings.exists(closure.id) && hasAlias(arguments, alias)):
-						var binding:OptionalClosure = cast bindings.get(closure.id),
+						var binding = bindingOf(closure.id),
 							args = binding.receiver == null ? arguments : [binding.receiver].concat(arguments);
 						var actual = [
 							for (argument in args)
@@ -1201,9 +1246,9 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 							target.instructions.push(located);
 						else {
 							var instruction = IrInliner.remap(op,
-								value -> remapped.exists(value.id) ? remapped.get(value.id) : value, id -> id);
+								value -> remapped.get(value.id) ?? value, id -> id);
 							target.instructions.push(new Located(instruction, located.provenance));
-							if (boxedOutput != null)
+							if (boxedOutput != null && out != null)
 								unbox(target, boxedOutput, out, located);
 						}
 				}
@@ -1225,7 +1270,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 					case Return(value) if (components.exists(value.id)):
 						var here:Located<IrInstruction> = new Located(ConstVoid(new IrValue(next++, "$optional-origin",
 							Void)), terminator.provenance);
-						var result = aggregate(target, types.get(value.id), partsAt(target, value.id, here), here);
+						var result = aggregate(target, typeName(value.id), partsAt(target, value.id, here), here);
 						target.terminator = new Located(Return(result), terminator.provenance);
 					case Throw(value) if (components.exists(value.id)):
 						var here:Located<IrInstruction> = new Located(ConstVoid(new IrValue(next++, "$optional-origin",
@@ -1283,7 +1328,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				block.instructions.push(located);
 		}
 		debug = [for (binding in debug) if (!removed.exists(binding.value.id)) binding];
-		var result = optional(fn.result) == null ? fn.result : Obj(wrapper(optional(fn.result)).name);
+		var resultName = optional(fn.result), result = resultName == null ? fn.result : Obj(wrapper(resultName).name);
 		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks,
 			clone ? OptionalScalar(fn.name) : fn.kind, debug, fn.inlineHint,
 			clone ? compiler.ir.model.IrFunction.IrRetention.Reachable : fn.retention);

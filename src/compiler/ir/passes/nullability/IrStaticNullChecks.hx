@@ -1,5 +1,6 @@
 package compiler.ir.passes.nullability;
 
+import compiler.core.InternalError;
 import compiler.ir.analysis.IrInitializationCalls;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -20,6 +21,7 @@ import compiler.ir.model.Ir;
  * Diagnose dereferencing a null static instead of letting native code read null + a field offset. On IR bodies
  * (docs/design/IR_CORE_COLUMNS.md, migration): a dereference of a static is preceded in place by a call of the static's check.
  */
+@:nullSafety(Strict)
 class IrStaticNullChecks {
 	/**
 	 * `functions` read as their bodies made with `types` (those of the functions' bodies when not given): a function that gets
@@ -31,11 +33,11 @@ class IrStaticNullChecks {
 	 */
 	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache,
 			?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(functions);
+		// The closure below reads both, so each is one value from the start.
+		var typeIds = types ?? IrTypeIds.ofFunctions(functions);
 		var helpers:Map<String, IrFunction> = [];
 		var nextCopies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
-		var store = cache != null ? cache : new IrStaticCheckCache();
+		var store = cache ?? new IrStaticCheckCache();
 		var valueTypes:Map<String, Bool> = [], valueNames:Array<String> = [];
 		if (objects != null)
 			for (object in objects)
@@ -54,9 +56,11 @@ class IrStaticNullChecks {
 		var byName = new IrFunctionIndex("static-null-checks", functions),
 			reachable:Map<String, Bool> = [],
 			pending = ["__init"];
-		var execution = new IrInitializationCalls(functions, types, objects, builder);
+		var execution = new IrInitializationCalls(functions, typeIds, objects, builder);
 		while (pending.length > 0) {
 			var name = pending.pop();
+			if (name == null)
+				break;
 			if (reachable.exists(name) || !byName.exists(name))
 				continue;
 			reachable.set(name, true);
@@ -73,7 +77,7 @@ class IrStaticNullChecks {
 					helpers.set(helperName, knownHelper);
 				else {
 					var created = check(helperName, name, valueType);
-					created.bodyIn(types, builder);
+					created.bodyIn(typeIds, builder);
 					// A session's cache keeps it.
 					if (cache != null)
 						created.freezeBody(builder);
@@ -91,12 +95,16 @@ class IrStaticNullChecks {
 			var known = store.copies.get(fn.name);
 			if (known != null && known.source == fn) {
 				nextCopies.set(fn.name, known);
-				for (name in known.statics)
-					helpers.set(name, store.helpers.get(name));
+				for (name in known.statics) {
+					var helper = store.helpers.get(name);
+					if (helper == null)
+						throw new InternalError('A kept copy of ${fn.name} calls the missing static check $name');
+					helpers.set(name, helper);
+				}
 				result.push(known.result);
 				continue;
 			}
-			var body = fn.bodyIn(types, builder);
+			var body = fn.bodyIn(typeIds, builder);
 			// A session's cache keeps `fn` as its copy's source, so the copy is made on a copy.
 			if (cache != null)
 				body = fn.freezeBody(builder);
@@ -145,10 +153,12 @@ class IrStaticNullChecks {
 			result.push(copied);
 		}
 		store.copies = nextCopies;
-		var names = [for (name in helpers.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names)
-			result.push(helpers.get(name));
+		var made = [for (name => helper in helpers) {
+			name:name, helper:helper
+		}];
+		made.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in made)
+			result.push(entry.helper);
 		return result;
 	}
 
@@ -236,6 +246,7 @@ class IrStaticNullChecks {
 }
 
 /** What `IrStaticNullChecks` produced last time: each reachable function's instrumented copy, and the shared helpers. */
+@:nullSafety(Strict)
 class IrStaticCheckCache {
 	public var copies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
 	public var helpers:Map<String, IrFunction> = [];

@@ -15,6 +15,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 
 /** Logical optional copies stay explicit until nonescaping value flow has been planned. */
+@:nullSafety(Strict)
 class IrOptionalValueFlow {
 	static inline final COPY_PREFIX = "$optional-value:copy:";
 	static inline final BOX_PREFIX = "$optional-value:box:";
@@ -135,7 +136,7 @@ class IrOptionalValueFlow {
 					}
 				} else
 					switch field.type {
-						case Obj(child) if (objects.exists(child) && objects.get(child).isValue):
+						case Obj(child) if (isValueIn(child, objects)):
 							builder.fieldSet(value, field.name, buildValue(child, fieldPath));
 						default:
 							var found = false;
@@ -211,14 +212,22 @@ class IrOptionalValueFlow {
 			Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalUnbox));
 	}
 
+	/** Whether `name` is a value class of `objects`. */
+	static function isValueIn(name:String, objects:Map<String, IrObject>):Bool {
+		var object = objects.get(name);
+		return object != null && object.isValue;
+	}
+
 	static function isOptionalValue(type:IrType, objects:Map<String, IrObject>):Bool
 		return switch type {
-			case Nullable(Obj(name)): objects.exists(name) && objects.get(name).isValue;
+			case Nullable(Obj(name)):
+				var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 
 	static function findField(objects:Map<String, IrObject>, type:IrType, field:String):IrObjectField {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: throw new InternalError("Invalid optional value field");
 		};
@@ -262,9 +271,9 @@ class IrOptionalValueFlow {
 		for (field in object.fields) {
 			var value = builder.fieldGet(source, field.name, field.type);
 			switch field.type {
-				case Obj(child) if (objects.exists(child) && objects.get(child).isValue):
+				case Obj(child) if (isValueIn(child, objects)):
 					value = copyValue(builder, value, child, objects);
-				case Nullable(Obj(child)) if (objects.exists(child) && objects.get(child).isValue):
+				case Nullable(Obj(child)) if (isValueIn(child, objects)):
 					value = copyOptional(builder, value, child, objects);
 				default:
 			}
@@ -275,6 +284,7 @@ class IrOptionalValueFlow {
 }
 
 /** The optional value helpers a pass found called (`IrOptionalValueFlow.appendHelpers`), by kind and value class. */
+@:nullSafety(Strict)
 class IrOptionalHelpers {
 	public static inline final COPY = 0;
 	public static inline final BOX = 1;
