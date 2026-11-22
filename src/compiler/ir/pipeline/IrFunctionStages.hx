@@ -1,6 +1,7 @@
 package compiler.ir.pipeline;
 
 import compiler.core.InternalError;
+import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.IrFunction;
 import compiler.ir.reuse.IrFactReader;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
@@ -21,17 +22,18 @@ class IrFunctionStages {
 		}).memoized();
 	}
 
-	/** A stage of the program the target lowers (`IrPipeline.target`) that runs the pass `make` gives, on its functions. */
+	/**
+	 * A stage of the program the target lowers (`IrPipeline.target`) that runs the pass `make` gives, on its functions; `done` reads
+	 * the pass after the run and gives the stage's program.
+	 */
 	public static function programStage(name:String,
-			make:(compiler.ir.model.Ir.IrProgram, IrPipelineContext) -> IrFunctionPass,
-			?done:(compiler.ir.model.Ir.IrProgram, IrFunctionPass) -> Void):compiler.ir.pipeline.IrStage {
+			make:(IrProgram, IrPipelineContext) -> IrFunctionPass,
+			?done:(IrProgram, IrFunctionPass) -> IrProgram):compiler.ir.pipeline.IrStage {
 		return new compiler.ir.pipeline.IrStage(name, function(program, context) {
 			var pass = make(program, context);
 			program.functions = run(name, pass, program.functions, context.lineage, context.options.checkReuse,
 				context.passScratch.bodyBuilder);
-			if (done != null)
-				done(program, pass);
-			return program;
+			return done != null ? done(program, pass) : program;
 		}).memoized();
 	}
 

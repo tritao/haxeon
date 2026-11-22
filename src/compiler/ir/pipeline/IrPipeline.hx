@@ -106,7 +106,8 @@ class IrPipeline {
 	 * module builders.
 	 */
 	public static final target:IrStageList = new IrStageList("target", [
-		new IrStage("closed-enum-tag-abi", closedEnumTagAbi).when(closesEnumTags),
+		IrFunctionStages.programStage("closed-enum-tag-abi", closedEnumTagAbi,
+			closedEnumTagProgram).when(closesEnumTags),
 		new IrStage("value-array-rewrite", valueArrayRewrite),
 		new IrStage("value-constructors", valueConstructors).when(wasmValueLanes),
 		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
@@ -568,7 +569,10 @@ class IrPipeline {
 			bodyTypes(context), context.passScratch.bodyBuilder);
 
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.program = IrProgramAssembler.finish(assembly, context);
+		var program = IrProgramAssembler.finish(assembly, context);
+		assembly.program = program;
+		// From here the stages work on the finished program's functions, which the lineage settles.
+		assembly.functions = program.functions;
 		return assembly;
 	}
 
@@ -577,14 +581,19 @@ class IrPipeline {
 		if (program == null)
 			throw new InternalError("The enum tag escapes run on the finished program");
 		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
+		assembly.functions = program.functions;
 		return assembly;
 	}
 
 	// Target stages.
 
-	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram {
-		return IrClosedEnumTagAbi.run(program, context.reflectable, bodyTypes(context), context.passScratch);
-	}
+	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrClosedEnumTagAbi(program, context.reflectable, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.lineage);
+
+	/** The program with the closed tags projected in its tables too. */
+	static function closedEnumTagProgram(program:IrProgram, pass:IrFunctionPass):IrProgram
+		return cast(pass, IrClosedEnumTagAbi).result();
 
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;

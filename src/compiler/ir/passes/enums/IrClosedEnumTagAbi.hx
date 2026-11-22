@@ -1,5 +1,6 @@
 package compiler.ir.passes.enums;
 
+import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
@@ -11,43 +12,73 @@ import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.passes.objects.IrObjectReflection;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
+import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 /**
  * Project an unobserved nominal tag to its integer ABI, including ordinary integer arrays. On IR bodies
- * (docs/design/IR_CORE_COLUMNS.md, migration), in release builds. A function's types change in place (`setValueType`,
- * `setResult`).
+ * (docs/design/IR_CORE_COLUMNS.md, migration), in release builds, per function (`IrFunctionPass`).
+ *
+ * The whole-program step chooses the closed tags: the payload-free enums no escape reaches (`IrEnumEscapeReach`), from what each
+ * function lets escape (`IrTagEscapeRecord`, kept by the function's version in a session). The rewrite of a function reads, for
+ * each tag its types name, whether it is closed (`CLOSED`); a function that changes becomes its edited body, owned by the next
+ * stage. The program's tables are projected after the functions (`projected`).
  */
-class IrClosedEnumTagAbi {
-	final closed:Map<String, Bool>;
+class IrClosedEnumTagAbi implements IrFunctionPass {
+	/** The fact of an enum tag: 1 when it is closed. */
+	static inline final CLOSED = 0;
+
+	final program:IrProgram;
+	final reflectableObjects:Null<Array<String>>;
 	final types:IrTypeIds;
 	final builder:IrBodyBuilder;
+	final lineage:Null<IrLineage>;
+	var closed:Map<String, Bool> = [];
 
 	/** By type id: 1 when the type changes, 0 when not, -1 when not yet known. */
 	final changing:Array<Int> = [];
 
-	function new(closed:Map<String, Bool>, types:IrTypeIds, builder:IrBodyBuilder) {
-		this.closed = closed;
+	/** By type id: the tags the type names where the projection looks (`changes`), or null when not yet known. */
+	final tagNames:Array<Null<Array<String>>> = [];
+
+	/** The reader of the function being rewritten when it records, else null. */
+	var reader:Null<IrFactReader> = null;
+
+	/** The program with the closed tags projected, once the run is finished: the program itself when no tag is closed. */
+	public var projected(default, null):Null<IrProgram> = null;
+
+	public function new(program:IrProgram, reflectableObjects:Null<Array<String>>, types:IrTypeIds,
+			builder:IrBodyBuilder, lineage:Null<IrLineage>) {
+		this.program = program;
+		this.reflectableObjects = reflectableObjects;
 		this.types = types;
 		this.builder = builder;
+		this.lineage = lineage;
 	}
 
 	/**
 	 * `program` with the closed tags projected, read from the functions' bodies, made with `types` (those of the program's bodies
-	 * when not given). A function that changes becomes its edited body: owned by the next stage: edited in
-	 * place, or a copy when a cache holds the body.
+	 * when not given), without a memo.
 	 */
 	public static function run(program:IrProgram, ?reflectableObjects:Array<String>, ?types:IrTypeIds,
 			?scratch:IrPassScratch):IrProgram {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
-		var builder = scratch == null ? new IrBodyBuilder(types) : scratch.bodyBuilder;
-		for (fn in program.functions)
-			fn.bodyIn(types, builder);
-		var closed = select(program, types, builder, reflectableObjects);
-		if (!closed.keys().hasNext())
-			return program;
-		var pass = new IrClosedEnumTagAbi(closed, types, builder);
-		return pass.project(program);
+		var pass = new IrClosedEnumTagAbi(program, reflectableObjects, types,
+			scratch == null ? new IrBodyBuilder(types) : scratch.bodyBuilder, null);
+		IrFunctionStages.apply("closed-enum-tag-abi", pass, program.functions);
+		return pass.result();
+	}
+
+	/** The projected program (`projected`) of a finished run. */
+	public function result():IrProgram {
+		var made = projected;
+		if (made == null)
+			throw new InternalError("The closed enum tag ABI has not finished");
+		return made;
 	}
 
 	function changes(type:IrType):Bool
@@ -58,7 +89,35 @@ class IrClosedEnumTagAbi {
 			default: false;
 		};
 
+	static function addTags(type:IrType, names:Array<String>):Void
+		switch type {
+			case EnumTag(name):
+				if (names.indexOf(name) < 0)
+					names.push(name);
+			case Array(inner), Iterator(inner), Nullable(inner):
+				addTags(inner, names);
+			case Function(args, result):
+				for (arg in args)
+					addTags(arg, names);
+				addTags(result, names);
+			default:
+		}
+
+	/** Whether the type of id `id` changes; the reader, when recording, reads the facts of the tags it names. */
 	function changesId(id:Int):Bool {
+		var current = reader;
+		if (current != null) {
+			var names = id < tagNames.length ? tagNames[id] : null;
+			if (names == null) {
+				names = [];
+				addTags(types.type(id), names);
+				while (tagNames.length <= id)
+					tagNames.push(null);
+				tagNames[id] = names;
+			}
+			for (name in names)
+				current.read(CLOSED, name);
+		}
 		var known = id < changing.length ? changing[id] : -1;
 		if (known < 0) {
 			known = changes(types.type(id)) ? 1 : 0;
@@ -67,6 +126,11 @@ class IrClosedEnumTagAbi {
 			changing[id] = known;
 		}
 		return known == 1;
+	}
+
+	function isClosed(name:String):Bool {
+		var current = reader;
+		return current != null ? current.read(CLOSED, name) == 1 : closed.exists(name);
 	}
 
 	function physical(type:IrType):IrType
@@ -103,16 +167,27 @@ class IrClosedEnumTagAbi {
 		return false;
 	}
 
-	static function select(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder,
-			?reflectableObjects:Array<String>):Map<String, Bool> {
-		var closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true],
-			functions = [for (fn in program.functions) fn.name => fn],
-			natives = [for (n in program.natives) n.name => n];
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	/** Chooses the closed tags: the payload-free enums that nothing lets escape. */
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+		closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true];
 		if (!closed.keys().hasNext())
-			return closed;
-		var roots:Array<IrType> = [];
+			return;
+		var natives = [for (n in program.natives) n.name => n];
+		var roots:Array<IrType> = [], rooted:Array<Bool> = [];
 		function escape(type:IrType):Void
 			roots.push(type);
+		// The records' types are named by id, each a root once.
+		function escapeId(id:Int):Void {
+			while (rooted.length <= id)
+				rooted.push(false);
+			if (!rooted[id]) {
+				rooted[id] = true;
+				roots.push(types.type(id));
+			}
+		}
 
 		for (n in program.cNatives) {
 			for (a in n.arguments)
@@ -125,7 +200,9 @@ class IrClosedEnumTagAbi {
 					IrEnumEscapeReach.addNativeRoot(roots, a);
 				IrEnumEscapeReach.addNativeRoot(roots, n.result);
 			}
-		for (fn in program.functions) {
+		// The closures and map stores the reach follows are the records', so it reads no function itself.
+		var reach = new IrEnumEscapeReach(program, _ -> false);
+		for (fn in functions) {
 			switch fn.kind {
 				case ClosureAdapter(source, target):
 					escape(source);
@@ -141,55 +218,42 @@ class IrClosedEnumTagAbi {
 					escape(a.type);
 				escape(fn.result);
 			}
-
-			var body = fn.bodyIn(types, builder);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					switch body.opcode(row) {
-						case IrOpcode.EnumDynamicBox | IrOpcode.EnumDynamicView | IrOpcode.EnumTagBox
-							| IrOpcode.EnumTagUnbox
-							| IrOpcode.InlineEnumBox | IrOpcode.InlineEnumUnbox | IrOpcode.TypeValue:
-							escape(body.typeOperand(row));
-						case IrOpcode.ToDyn | IrOpcode.ToVirtual | IrOpcode.EnumIndex | IrOpcode.Throw
-							| IrOpcode.Rethrow:
-							escape(body.valueType(body.operand(row, 0)));
-						case IrOpcode.SafeCast:
-							escape(body.valueType(body.output(row)));
-							escape(body.valueType(body.operand(row, 0)));
-						case IrOpcode.Call:
-							var name = body.symbol(row).name;
-							if (natives.exists(name)) {
-								for (index in 0...body.operandCount(row))
-									escape(body.valueType(body.operand(row, index)));
-							} else {
-								var target = functions.get(name);
-								if (target != null)
-									for (index in 0...body.operandCount(row))
-										if (index < target.arguments.length && switch target.arguments[index].type {
-											case Dyn: true;
-											default: false;
-										})
-											escape(body.valueType(body.operand(row, index)));
-							}
-						case IrOpcode.CNativeCall:
-							for (index in 0...body.operandCount(row))
-								escape(body.valueType(body.operand(row, index)));
-						case IrOpcode.CallClosure:
-							switch body.valueType(body.operand(row, 0)) {
-								case Dyn: for (index in 1...body.operandCount(row))
-									escape(body.valueType(body.operand(row, index)));
-								default:
-							}
-						default:
-					}
-					row = body.nextRow(row);
+			var record = IrTagEscapeRecord.of(fn, types, builder, lineage);
+			for (id in record.escaped)
+				escapeId(id);
+			var callees = record.callees, arguments = record.arguments;
+			for (index in 0...callees.length) {
+				var name = callees[index], position = arguments[index * 2], type = arguments[index * 2 + 1];
+				if (rooted.length > type && rooted[type])
+					continue;
+				if (natives.exists(name))
+					escapeId(type);
+				else {
+					var target = names.get(name);
+					if (target != null && position < target.arguments.length && switch target.arguments[position].type {
+						case Dyn: true;
+						default: false;
+					})
+						escapeId(type);
 				}
+			}
+			var closures = record.closures, index = 0;
+			while (index < closures.length) {
+				reach.closureEnvironment(types.type(closures[index]), types.type(closures[index + 1]));
+				index += 2;
+			}
+			var stores = record.mapStores;
+			index = 0;
+			while (index < stores.length) {
+				reach.mapContent(types.type(stores[index]), types.type(stores[index + 1]),
+					types.type(stores[index + 2]));
+				index += 3;
 			}
 		}
 		if (IrObjectReflection.usedByProgram(program)) {
-			if (reflectableObjects != null)
-				for (name in reflectableObjects)
+			var reflectable = reflectableObjects;
+			if (reflectable != null)
+				for (name in reflectable)
 					escape(Obj(name));
 			for (object in program.objects)
 				if (object.isValue
@@ -197,17 +261,35 @@ class IrClosedEnumTagAbi {
 					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
 					escape(Obj(object.name));
 		}
-		for (name in new IrEnumEscapeReach(program).collect(roots, _ -> false).keys())
+		for (name in reach.collect(roots, _ -> false).keys())
 			closed.remove(name);
-
-		return closed;
 	}
 
-	function project(program:IrProgram):IrProgram {
+	public function fact(kind:Int, key:String):Int
+		return closed.exists(key) ? 1 : 0;
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		// A reader that records must read the facts of the tags even when none is closed: one may be in a later build.
+		if (!reader.records() && !closed.keys().hasNext())
+			return fn;
+		this.reader = reader.records() ? reader : null;
+		var result = projectFunction(fn, fn.bodyIn(types, builder));
+		this.reader = null;
+		return result;
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		throw new InternalError("The closed enum tag ABI asks for no helper");
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		if (!closed.keys().hasNext()) {
+			projected = program;
+			return functions;
+		}
 		var result = new IrProgram(program.entryPoint);
 		result.natives = [for (native in program.natives) projectNative(native)];
 		result.cNatives = [for (native in program.cNatives) projectCNative(native)];
-		result.functions = [for (fn in program.functions) projectFunction(fn, fn.bodyIn(types, builder))];
+		result.functions = functions;
 		// Only the selected tag carriers change; native placement and optional payload widths stay intact.
 		result.objects = [for (object in program.objects)
 			{
@@ -255,7 +337,8 @@ class IrClosedEnumTagAbi {
 		result.parameterDefaults = program.parameterDefaults;
 		result.positionalPlaces = program.positionalPlaces;
 		result.positionalSources = program.positionalSources;
-		return result;
+		projected = result;
+		return functions;
 	}
 
 	function projectFunction(fn:IrFunction, source:IrBody):IrFunction {
@@ -272,7 +355,7 @@ class IrClosedEnumTagAbi {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				switch body.opcode(row) {
-					case IrOpcode.MakeEnum if (body.operandCount(row) == 0 && closed.exists(body.symbol(row).name)):
+					case IrOpcode.MakeEnum if (body.operandCount(row) == 0 && isClosed(body.symbol(row).name)):
 						body.setOperation(row, IrOpcode.ConstInt, body.auxInt(row, 1) + 1);
 					case IrOpcode.ConstNull if (body.valueTypeId(body.output(row)) == i32):
 						body.setOperation(row, IrOpcode.ConstInt, 0);
@@ -313,4 +396,118 @@ class IrClosedEnumTagAbi {
 			argumentModes: native.argumentModes,
 			result: physical(native.result)
 		};
+}
+
+/**
+ * What one function lets escape, for the closed tag ABI's choice (`IrClosedEnumTagAbi.prepare`), by type ids of the body's
+ * table: the types its instructions hand to `Dyn`, a type value, a throw or a cast; each call's callee with the position and
+ * type of each argument (an argument escapes when the callee is a native, or takes `Dyn` there); the closures it makes with
+ * their receivers, and the map stores, which the escape reach follows. Only types that can lead to an enum are kept. It depends
+ * on the body alone, so a session keeps it by the function's version (`IrStageMemos.tagEscapes`).
+ */
+class IrTagEscapeRecord {
+	public final escaped:Array<Int> = [];
+
+	/** One per distinct call argument kept: the callee, with the argument's position and type id at twice its index in `arguments`. */
+	public final callees:Array<String> = [];
+
+	public final arguments:Array<Int> = [];
+
+	/** Pairs of a closure's type and its receiver's. */
+	public final closures:Array<Int> = [];
+
+	/** Triples of a map's type, the key's and the value's. */
+	public final mapStores:Array<Int> = [];
+
+	function new() {}
+
+	public static function of(fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
+			lineage:Null<IrLineage>):IrTagEscapeRecord {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return read(fn.bodyIn(types, builder));
+		var memo = lineage.memos.tagEscapes, known = memo.get(version);
+		if (known == null) {
+			known = read(fn.bodyIn(types, builder));
+			memo.keep(version, known);
+		} else if (lineage.checks && !known.same(read(fn.bodyIn(types, builder))))
+			throw new InternalError('--check-reuse: the tag escapes reused for ${fn.name} differ from its body');
+		return known;
+	}
+
+	function same(other:IrTagEscapeRecord):Bool
+		return escaped.join(",") == other.escaped.join(",") && callees.join(",") == other.callees.join(",")
+			&& arguments.join(",") == other.arguments.join(",") && closures.join(",") == other.closures.join(",")
+			&& mapStores.join(",") == other.mapStores.join(",");
+
+	/** Whether a type can lead the escape reach to an enum (`IrEnumEscapeReach.collect`): the others add nothing to it. */
+	static function leads(type:IrType):Bool
+		return switch type {
+			case Enum(_), EnumTag(_), Nullable(_), Array(_), Iterator(_), Function(_, _), Obj(_), Virtual(_),
+				Abstract(_):
+				true;
+			default:
+				false;
+		};
+
+	function escape(body:IrBody, value:IrValueId):Void
+		escapeType(body.types, body.valueTypeId(value));
+
+	function escapeType(types:IrTypeIds, id:Int):Void
+		if (leads(types.type(id)) && escaped.indexOf(id) < 0)
+			escaped.push(id);
+
+	static function read(body:IrBody):IrTagEscapeRecord {
+		var record = new IrTagEscapeRecord(), types = body.types, kept:Map<String, Bool> = [];
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.EnumDynamicBox | IrOpcode.EnumDynamicView | IrOpcode.EnumTagBox
+						| IrOpcode.EnumTagUnbox
+						| IrOpcode.InlineEnumBox | IrOpcode.InlineEnumUnbox | IrOpcode.TypeValue:
+						record.escapeType(types, body.aux(row));
+					case IrOpcode.ToDyn | IrOpcode.ToVirtual | IrOpcode.EnumIndex | IrOpcode.Throw | IrOpcode.Rethrow:
+						record.escape(body, body.operand(row, 0));
+					case IrOpcode.SafeCast:
+						record.escape(body, body.output(row));
+						record.escape(body, body.operand(row, 0));
+					case IrOpcode.Call:
+						var name = body.symbol(row).name, count = body.operandCount(row);
+						for (index in 0...count) {
+							var type = body.valueTypeId(body.operand(row, index));
+							if (!leads(types.type(type)))
+								continue;
+							var key = name + "\u0001" + index + "\u0001" + type;
+							if (!kept.exists(key)) {
+								kept.set(key, true);
+								record.callees.push(name);
+								record.arguments.push(index);
+								record.arguments.push(type);
+							}
+						}
+						if (count >= 3 && IrEnumEscapeReach.mapSetter(name)) {
+							record.mapStores.push(body.valueTypeId(body.operand(row, 0)));
+							record.mapStores.push(body.valueTypeId(body.operand(row, 1)));
+							record.mapStores.push(body.valueTypeId(body.operand(row, count - 1)));
+						}
+					case IrOpcode.CNativeCall:
+						for (index in 0...body.operandCount(row))
+							record.escape(body, body.operand(row, index));
+					case IrOpcode.CallClosure:
+						switch body.valueType(body.operand(row, 0)) {
+							case Dyn: for (index in 1...body.operandCount(row))
+								record.escape(body, body.operand(row, index));
+							default:
+						}
+					case IrOpcode.InstanceClosure:
+						record.closures.push(body.valueTypeId(body.output(row)));
+						record.closures.push(body.valueTypeId(body.operand(row, 0)));
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return record;
+	}
 }

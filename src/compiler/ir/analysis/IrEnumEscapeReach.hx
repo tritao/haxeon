@@ -93,7 +93,7 @@ class IrEnumEscapeReach {
 		return StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")
 			&& StringTools.endsWith(name, "_set");
 
-	function closureEnvironment(closure:IrType, receiver:IrType):Void {
+	public function closureEnvironment(closure:IrType, receiver:IrType):Void {
 		var environments = closureEnvironments.get(closure);
 		if (environments == null) {
 			environments = [];
@@ -102,7 +102,7 @@ class IrEnumEscapeReach {
 		environments.push(receiver);
 	}
 
-	function mapContent(map:IrType, key:IrType, value:IrType):Void {
+	public function mapContent(map:IrType, key:IrType, value:IrType):Void {
 		var contents = mapContents.get(map);
 		if (contents == null) {
 			contents = [];
