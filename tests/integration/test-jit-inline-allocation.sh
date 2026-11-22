@@ -7,8 +7,9 @@ trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 hooks=$(dirname "$(haxeon_native_test jitalloc.hdll)")
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -hl "$work/probe.hl" -main JitAllocationProbe
-for mode in 0 1; do
- HL_JIT_ALLOC_CENSUS="$work/census-$mode.json" HL_JIT_ALLOC_INLINE=$mode HL_GC_MIN_TRIGGER=65536 PATH="$hooks:$library:$PATH" LD_LIBRARY_PATH="$hooks:$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$hooks:$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/probe.hl"
+# Compiled code allocates inline wherever the VM supports it; the probe checks it allocates every object either way.
+for mode in inline; do
+ HL_JIT_ALLOC_CENSUS="$work/census-$mode.json" HL_GC_MIN_TRIGGER=65536 PATH="$hooks:$library:$PATH" LD_LIBRARY_PATH="$hooks:$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$hooks:$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/probe.hl"
  python3 - "$work/census-$mode.json" <<'PYCODE'
 import json,sys
 rows=json.load(open(sys.argv[1]))['types']

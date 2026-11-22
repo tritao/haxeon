@@ -132,7 +132,7 @@ class CompileOptions {
 	public final cSdk:Null<String>;
 
 	/**
-	 * Allocate objects in a `--target=hlc` build's C from the thread's allocation buffer inline, as the JIT does on Linux x86-64.
+	 * Allocate objects in a `--target=hlc` build's C from the thread's allocation buffer inline, as the JIT does on Linux.
 	 * Off by default: the C build allocates through `hl_alloc_obj` unless asked.
 	 */
 	public final inlineAllocation:Bool;

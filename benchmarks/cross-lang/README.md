@@ -196,7 +196,7 @@ The cross-language table above was not regenerated.
 
 ### Guarded JIT object allocation
 
-The JIT allocates eligible objects up to 40 bytes inline on Linux x86-64 SysV (on AArch64, with `HL_JIT_ALLOC_INLINE=1`).
+The JIT allocates eligible objects up to 40 bytes inline on Linux x86-64 SysV and AArch64.
 Nine alternating pairs on core 0, identical bytecode and load <=4 measured binarytrees at 0.810601 → 0.574274 s
 (29.15% faster) and merkletrees at 0.293442 → 0.248573 s (15.29%). Peak RSS was essentially unchanged and none of
 the other four benchmarks regressed. Its per-site cold stubs increase code size. It is on by default; measured again when it was
