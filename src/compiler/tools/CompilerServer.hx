@@ -28,7 +28,7 @@ class CompilerServer {
 		return token;
 	}
 
-	#if (hl && !haxeon)
+	#if hl
 	@:hlNative("haxeon_runtime", "__host_secure_random_token")
 	static function windowsSecureToken():String
 		return null;
