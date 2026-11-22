@@ -1240,16 +1240,9 @@ class CallResolver {
 		if (callableFieldType == null)
 			return null;
 		return switch callableFieldType {
-			case TFunction(argumentTypes, result, _):
-				if (arguments.length != argumentTypes.length)
-					fail("E1008",
-						'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}',
-						span);
-				var typed = [
-					for (index in 0...arguments.length)
-						bodyTyper.typeExpression(arguments[index], scope, argumentTypes[index])
-				];
-				typed = coerceArguments(typed, argumentTypes, name);
+			case TFunction(argumentTypes, result, optional):
+				var typed = functionValueArguments(arguments, argumentTypes, optional, null, scope, span,
+					'Function field "$name"', name);
 				new TypedExpression(TClosureCall(bodyTyper.typedMember(receiver, name, span), typed), result, span);
 			default:
 				fail("E1007", 'Cannot call non-function field "$name"', span);
@@ -1273,16 +1266,9 @@ class CallResolver {
 		}
 		var fieldCallable = typeExpressionValue(Variable(name, span), scope);
 		return switch fieldCallable.type {
-			case TFunction(argumentTypes, result, _):
-				if (arguments.length != argumentTypes.length)
-					fail("E1008",
-						'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}',
-						span);
-				var typed = [
-					for (index in 0...arguments.length)
-						bodyTyper.typeExpression(arguments[index], scope, argumentTypes[index])
-				];
-				typed = coerceArguments(typed, argumentTypes, name);
+			case TFunction(argumentTypes, result, optional):
+				var typed = functionValueArguments(arguments, argumentTypes, optional, null, scope, span,
+					'Function field "$name"', name);
 				new TypedExpression(TClosureCall(fieldCallable, typed), result, span);
 			default:
 				fail("E1007", 'Cannot call non-function field "$name"', span);
@@ -1455,41 +1441,12 @@ class CallResolver {
 		if (functionType == null)
 			fail("E1007", callableName == null
 				? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
-		var restIndex = functionType.arguments.length - 1;
-		arguments = restIndex >= 0
-			&& RestArguments.isRestValue(functionType.arguments[restIndex]) ? RestArguments.packAt(restIndex,
-			arguments, span) : RestArguments.packAt(-1, arguments, span);
 		var calleeLocal = callableName == null ? null : bodyTyper.localAt(callee, scope),
 			calleeFunction = calleeLocal == null ? null : calleeLocal.localFunction,
-			localParameters = calleeFunction == null ? null : calleeFunction.arguments;
-		if (localParameters != null && localParameters.length != functionType.arguments.length)
-			localParameters = null;
-		// A call may omit the arguments the function type flags optional, as in Haxe; the function fills their defaults.
-		var required = FunctionTypes.requiredCount(functionType.optional, functionType.arguments.length);
-		if (localParameters != null)
-			while (required > 0 && AstPredicates.isOptionalArgument(localParameters[required - 1]))
-				required--;
-		if (arguments.length < required || arguments.length > functionType.arguments.length)
-			fail("E1008",
-				callableName == null
-				? 'Function expression expects ${functionType.arguments.length} arguments, got ${arguments.length}'
-				: 'Function value "$callableName" expects ${functionType.arguments.length} arguments, got ${arguments.length}',
-				span);
-		var typedArguments = [
-			for (index in 0...arguments.length)
-				bodyTyper.typeExpression(arguments[index], scope, functionType.arguments[index])
-		];
-		// An omitted argument is passed as null: the function that runs replaces it with its own default. A local function
-		// whose declared type takes the value itself (`function add(extra:Int = 2):Int`) is called with its default.
-		for (index in arguments.length...functionType.arguments.length) {
-			var parameter = localParameters == null ? null : localParameters[index];
-			typedArguments.push(parameter != null
-				&& DefaultArguments.valueDefault(parameter, functionType.arguments[index], session.relations)
-				? bodyTyper.typeDefaultExpression(parameter, functionType.arguments[index],
-				callableName) : new TypedExpression(TNullLiteral, TNull, span));
-		}
-		typedArguments = coerceArguments(typedArguments, functionType.arguments,
-			callableName == null ? "function expression" : callableName);
+			typedArguments = functionValueArguments(arguments, functionType.arguments, functionType.optional,
+				calleeFunction == null ? null : calleeFunction.arguments, scope, span,
+				callableName == null ? "Function expression" : 'Function value "$callableName"',
+				callableName == null ? "function expression" : callableName);
 		invalidateClosureWrites(callee, callableName, scope);
 		if (invalidateAllExpressions)
 			scope.invalidateAllExpressions();
@@ -1508,6 +1465,43 @@ class CallResolver {
 				span);
 		return bodyTyper.typeExpression(compiler.types.analysis.LocalInlineFunctions.call(local.arguments, local.body,
 			local.result, arguments, span), scope, expectedType);
+	}
+
+	/**
+	 * A call's arguments typed against a function value's parameters, its rest arguments packed. A call may omit the
+	 * arguments the function type flags optional, as in Haxe: an omitted one is passed as null, and the function that runs
+	 * replaces it with its own default. A local function whose declared type takes the value itself (`function add(extra:Int
+	 * = 2):Int`) is called with its default.
+	 */
+	function functionValueArguments(arguments:Array<AstExpression>, parameters:Array<CompilerType>,
+			optional:Array<Bool>,
+			localParameters:Null<Array<AstArgument>>, scope:Scope, span:SourceSpan, callee:String,
+			coercionName:String):Array<TypedExpression> {
+		var restIndex = parameters.length - 1;
+		arguments = restIndex >= 0
+			&& RestArguments.isRestValue(parameters[restIndex]) ? RestArguments.packAt(restIndex, arguments,
+			span) : RestArguments.packAt(-1, arguments, span);
+		if (localParameters != null && localParameters.length != parameters.length)
+			localParameters = null;
+		var required = FunctionTypes.requiredCount(optional, parameters.length);
+		if (localParameters != null)
+			while (required > 0 && AstPredicates.isOptionalArgument(localParameters[required - 1]))
+				required--;
+		if (arguments.length < required || arguments.length > parameters.length)
+			fail("E1008", '$callee expects ${parameters.length} arguments, got ${arguments.length}', span);
+		var typed = [
+			for (index in 0...arguments.length)
+				bodyTyper.typeExpression(arguments[index], scope, parameters[index])
+		];
+		for (index in arguments.length...parameters.length) {
+			var parameter = localParameters == null ? null : localParameters[index];
+			typed.push(parameter != null
+				&& DefaultArguments.valueDefault(parameter, parameters[index], session.relations)
+				? bodyTyper.typeDefaultExpression(parameter, parameters[index],
+				coercionName) : new TypedExpression(TNullLiteral,
+				TNull, span));
+		}
+		return coerceArguments(typed, parameters, coercionName);
 	}
 
 	function invalidateClosureWrites(callee:AstExpression, callableName:Null<String>, scope:Scope):Void {

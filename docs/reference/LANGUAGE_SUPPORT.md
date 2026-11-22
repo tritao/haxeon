@@ -269,6 +269,9 @@ HashLink):
   structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
   after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
   as in Haxe (`structure-open-literal`).
+- A class or interface instance where a structure is expected (`var shape:{function area():Int;} = new Rectangle();`)
+  is a type mismatch. It waits for the same views (`docs/design/STRUCTURE_VALUES.md`, step 4); the differential case
+  `structure-from-class` records it.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API beyond an enum value's (`typeof`, `getClass`,
   `getClassName`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon

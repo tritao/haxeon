@@ -3033,6 +3033,24 @@ class Parser {
 		return atomic;
 	}
 
+	/** A structure's `function name(a:A, ?b:B):R` field after its name, as the type `(A, ?B) -> R`. */
+	function parseMethodFieldType():AstType {
+		consume(TokenKind.LeftParen);
+		var arguments = [], optionals:Array<Bool> = [];
+		if (!check(TokenKind.RightParen))
+			do {
+				var optional = match(TokenKind.Question);
+				consume(TokenKind.Identifier);
+				consume(TokenKind.Colon);
+				var argument = parseType();
+				arguments.push(optional ? NullableType(argument) : argument);
+				optionals.push(optional);
+			} while (match(TokenKind.Comma));
+		consume(TokenKind.RightParen);
+		consume(TokenKind.Colon);
+		return FunctionType(arguments, parseType(), optionals);
+	}
+
 	static function chainedFunctionType(arguments:Array<AstType>, result:AstType, optional:Array<Bool>):AstType
 		return switch result {
 			case FunctionType(nextArguments, finalResult, nextOptional):
@@ -3066,9 +3084,18 @@ class Parser {
 						isFinal = true;
 					else
 						advance();
+				// A `function` field is a method: read-only, like a final field of its function type.
+				var method = match(TokenKind.Function);
+				if (method)
+					isFinal = true;
 				var name = consume(TokenKind.Identifier);
-				consume(TokenKind.Colon);
-				var type = parseType();
+				var type:AstType;
+				if (method)
+					type = parseMethodFieldType();
+				else {
+					consume(TokenKind.Colon);
+					type = parseType();
+				}
 				fields.push({
 					name: textOf(name),
 					type: type,
