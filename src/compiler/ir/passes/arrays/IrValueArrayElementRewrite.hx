@@ -12,6 +12,7 @@ import compiler.ir.passes.values.IrValueInterfaceBoxes;
 import compiler.ir.verify.IrVerifier;
 
 /** Lower plain array element reads and writes after element-place operations have been separated, on a body edited in place. */
+@:nullSafety(Strict)
 class IrValueArrayElementRewrite {
 	/** `fn` rewritten on a copy, or `fn` when nothing changes: for a pass run on its own (a test). */
 	public static function rewrite(fn:IrFunction, element:IrType, helpers:IrValueArrayElements,
@@ -139,11 +140,10 @@ class IrValueArrayElementRewrite {
 							&& switch body.opcode(conversion) {
 								case IrOpcode.SafeCast: true;
 								case IrOpcode.Call:
-									var converter = body.symbol(conversion).name;
+									var converter = body.symbol(conversion).name, unboxed = tagUnboxes.get(converter);
 									StringTools.startsWith(converter, IrCheckedDynamicCasts.PREFIX)
 										|| StringTools.startsWith(converter, IrValueInterfaceBoxes.UNBOX_PREFIX)
-										|| (tagUnboxes.exists(converter)
-										&& IrVerifier.sameType(element, tagUnboxes.get(converter)));
+										|| (unboxed != null && IrVerifier.sameType(element, unboxed));
 								default: false;
 							};
 						if (!matches)

@@ -23,6 +23,7 @@ typedef IrValueArraySubslot = {
 }
 
 /** Field accessors for an array place: each call keeps the array and index live, never a pointer into a lane. */
+@:nullSafety(Strict)
 class IrValueArraySlotHelpers {
 	final namespace:Int;
 	final element:IrType;
@@ -49,13 +50,15 @@ class IrValueArraySlotHelpers {
 
 	public function getter(slot:Int):String {
 		checkSlot(slot);
-		if (reads[slot] == null) reads[slot] = nextName();
-		return reads[slot];
+		var name = reads[slot];
+		if (name == null) reads[slot] = name = nextName();
+		return name;
 	}
 	public function setter(slot:Int):String {
 		checkSlot(slot);
-		if (writes[slot] == null) writes[slot] = nextName();
-		return writes[slot];
+		var name = writes[slot];
+		if (name == null) writes[slot] = name = nextName();
+		return name;
 	}
 
 	/** Request a check before evaluating the rest of a place operation. */

@@ -14,6 +14,7 @@ import compiler.ir.pipeline.IrProgramAssembler;
  * Lane factories consume their own requests; this factory emits ordinary physical arrays afterwards.
  * There is no erased temporary or reflective descriptor in a logical allocation.
  */
+@:nullSafety(Strict)
 class IrArrayFactory {
 	public static inline final NAME = "$array:allocate";
 

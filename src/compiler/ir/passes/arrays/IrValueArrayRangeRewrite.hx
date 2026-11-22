@@ -7,6 +7,7 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrSymbol;
 
 /** Lower typed value-array range operations directly to the lane runtime, on a body edited in place. */
+@:nullSafety(Strict)
 class IrValueArrayRangeRewrite {
 	/** Whether `body` changed; `uses` is a table this reuses. */
 	public static function rewriteBody(body:IrBody, element:IrType, factory:IrValueArrayFactory, uses:Array<Int>):Bool {

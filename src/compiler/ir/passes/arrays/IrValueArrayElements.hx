@@ -11,6 +11,7 @@ import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.codec.IrTypeCodec;
 
 /** Typed element boundaries, lowered to scalar call components when the backend supports them. */
+@:nullSafety(Strict)
 class IrValueArrayElements {
 	public static inline final PREFIX = "$value-array:element:";
 	final element:IrType;

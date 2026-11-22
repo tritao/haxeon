@@ -15,6 +15,7 @@ import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.codec.IrTypeCodec;
 
 /** Scalar component boundary for nonescaping nullable struct elements. */
+@:nullSafety(Strict)
 class IrValueArrayOptionalComponents {
 	final element:IrType;
 	final wrapper:IrType;

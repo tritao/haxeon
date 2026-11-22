@@ -12,6 +12,7 @@ import compiler.ir.model.IrTypeIds;
  * Expand compiler-generated array element boundaries before scalar replacement on every target, on bodies: each call of a helper
  * is expanded as the inliner expands a call (`IrBodyCallExpansion`).
  */
+@:nullSafety(Strict)
 class IrValueArrayScalarLowering {
 	/**
 	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s: only in those `scope`
