@@ -95,7 +95,7 @@ Wasm GC's four allocation opcode counts are unchanged. The 20-cycle corrected-ed
 
 ## Previously rejected approaches
 
-Counted-loop bounds-check elimination and GC locality experiments failed their earlier microbenchmark gates; fused writes had no material candidate in those benchmarks. See [the prior results](2026-10-optimization-next-results.md). They will not be revived without different evidence from the real-code census.
+Counted-loop bounds-check elimination and GC locality experiments failed their earlier microbenchmark gates; fused writes had no material candidate in those benchmarks. They will not be revived without different evidence from the real-code census.
 
 Broadly threading empty jump blocks was also tested after the receiver-check pass. It reduced the GC Showcase's IR jump-to-empty-jump count from 790 to 76, but both Wasm targets gained 1,521 modeled instructions: Wasm GC grew from 5,517,903 to 5,521,984 bytes and Wasm32 from 30,078,392 to 30,082,466 bytes. A single-predecessor variant reduced the GC instruction count by 70 but increased its code section by 283 bytes. These results illustrate that an IR jump count alone does not predict the size of the restructured Wasm. A strictly linear-chain variant leaves both Wasm targets' modeled instruction counts and module sizes unchanged, and reduces the Wasm32 IR jump-to-empty-jump count from 790 to 568. On HashLink Showcase it reduces emitted instructions from 356,604 to 356,270, the sum of encoded function bytes from 1,545,603 to 1,545,101, and module size from 13,567,662 to 13,559,886 bytes. IR allocation sites remain 5,411 on HashLink and 7,703 on Wasm32. Showcase HashLink is a useful proxy but does not replace the requested unchanged-editor measurement.
 

@@ -34,8 +34,7 @@ Its compilation completed successfully; instrumented compiler phase times are no
 | lru | 97,359 | 97,098 | 99.73% | 2 |
 | compiler | 157,033,514 | 15,372,371 | 9.79% | 32,256,676 |
 
-Array counts above are GC blocks (header, separate storage and growth), not array objects. The
-[array-specific follow-up](2026-10-array-allocation-profile.md) separates these and measures CPU headroom.
+Array counts above are GC blocks (header, separate storage and growth), not array objects.
 
 Every counted `i32` allocation requested 16 bytes. Merkletrees additionally allocated 14,985,902 40-byte Nodes;
 boxes account for about 28.57% of its allocated bytes, versus half its allocation count. This is allocation volume,
@@ -72,8 +71,7 @@ The compiler workload is one fresh compilation, not a long-lived worker memory-r
 ## Prototype outcome
 
 The integer-box prototype cleared the merkletrees gain gate (19.63%) but was dropped because repeated LRU
-comparisons regressed against the accepted runtime. See
-[JIT_BOXED_ALLOCATION.md](2026-10-jit-boxed-allocation.md) for that rejection.
+comparisons regressed against the accepted runtime.
 
 The follow-up isolates cold JIT helpers from ordinary runtime text, removes the LRU regression, and measures
 merkletrees at 0.259076 -> 0.207330 s (19.97% faster), with all six benchmarks and full correctness validation

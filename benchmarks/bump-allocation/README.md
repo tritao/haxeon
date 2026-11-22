@@ -23,7 +23,7 @@ Use a Release net9.0 executable project containing `Allocation.cs` for C#. All t
 core 0, load <=4 before and after, a discarded warmup, and frozen binaries. Measure a zero-iteration process
 separately to show startup overhead. Collect `perf stat` instructions/cycles separately from wall-time runs.
 
-The Stage 0 report is [BUMP_ALLOCATION_PROFILE.md](../../docs/reports/2026-10-bump-allocation-profile.md).
+The plan and its stages are in [the bump allocation plan](../../docs/reports/2026-10-bump-allocation-plan.md).
 
 `measure.py` reproduces the nine-round census after preparing the frozen binaries under
 `out/bump-allocation/` as described in the report. It records load, RSS, timing, counters and runtime hashes.

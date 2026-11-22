@@ -104,13 +104,12 @@ running a benchmark, use `NKUI_HAXEON_TARGET=wasm-gc NKUI_HAXEON_WASM_GC_ALLOCAT
 | Selection stress, classes → current | 4,307 → 0 | 512 → 0 | 866 → 0 | 5,364 → 0 | 456 → 0 |
 
 Earlier struct, conformance, erased-boundary and literal-cache comparisons are recorded in the
-[UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#initial-value-conversion-measurements).
+
 Typed Float-hash and generic-closure fixtures allocate zero objects for 8 and 1,024 calls across all targets and
 inlining modes.
 
 The earlier closure, pointer, type-identity and reactive-runtime comparisons retained the documented action-allocation
 behavior within their paired controls. Fixed-step Showcase runs avoid animation-phase variation in allocation counts.
-The individual revisions, captures and paired samples are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#earlier-paired-runtime-and-ui-measurements).
 
 ### Interface-view unbox result ABI (2026-11-05)
 
@@ -232,7 +231,7 @@ These totals describe this host/build configuration; compare the paired guests
 within it rather than substituting totals from a different host configuration.
 The Wasm32 Showcase also builds and passes browser smoke with WebGL2.
 
-The paired editor and Wasm measurements retained the documented behavior. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The paired editor and Wasm measurements retained the documented behavior.
 
 ### Generated callback dependencies and the UI snapshot gate (2026-11-05)
 
@@ -256,15 +255,15 @@ passed 753 tests and self-hosting reached a fixed point. All ten UI scripts,
 the app suite, all nine retention scenarios, browser smoke, performance budgets
 and six headless memory runs passed.
 
-The callback dependency and UI snapshot gates passed on all three targets and both inlining modes. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The callback dependency and UI snapshot gates passed on all three targets and both inlining modes.
 
 ### Key-path merge and field-mask port (2026-11-05)
 
-`RenderNode` and `StyleResolver` use typed key paths and field masks; the full gate and paired comparison passed. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+`RenderNode` and `StyleResolver` use typed key paths and field masks; the full gate and paired comparison passed.
 
 ### Nested scalar callbacks at HashLink Dynamic boundaries (2026-11-05)
 
-Nested function arguments and results bridge independently of the outer scalar ABI. The callback fixture passes across all targets with inlining off/on. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Nested function arguments and results bridge independently of the outer scalar ABI. The callback fixture passes across all targets with inlining off/on.
 
 ### Negative array insertion indices on Wasm (2026-11-05)
 
@@ -279,7 +278,7 @@ extreme indices and both inline settings. Control returned 42 on HashLink and 1
 on both Wasm targets; candidate returned 42 on all six target/inline combinations.
 The broader mixed lane test also passes on both Wasm targets with this fix alone.
 
-Negative insertion indices are tested on both Wasm targets; the complete parity and product gates passed. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Negative insertion indices are tested on both Wasm targets; the complete parity and product gates passed.
 
 ### One structural runtime for lane arrays (2026-11-05)
 
@@ -315,18 +314,18 @@ every pair:
 Guest SHA-256: control
 `6221ae673935fd1d280f7b371c1dcffb0c172a070e8e6162b82c131ffe00bf06`, candidate
 `edd093e31f00ed8bd9123b79441a24a4c7281139c51b19d363ac88c60f335b3d`.
-The structural runtime and production clear/validation policy passed the target fixtures and product gates. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The structural runtime and production clear/validation policy passed the target fixtures and product gates.
 
 ### Uniform array growth: factor-2 trial (not accepted)
 
-The factor-2 and factor-1.5 growth trials were withheld after their HashLink memory regressions; the committed target-specific capacity policy remains in force. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The factor-2 and factor-1.5 growth trials were withheld after their HashLink memory regressions; the committed target-specific capacity policy remains in force.
 
 ### Checkout VM launcher integration
 
 After merging `hl-exit-crash`, the VM and profiler come from the checkout CMake
 build through `scripts/hl` and `scripts/hlprof-live`; the compiler suite uses
 `scripts/test-driver.sh 16` with private copies of its loaded VM and runtime.
-Project fingerprints stamp the actual checkout VM, and project generation and UI tools use the checkout launcher. The rejected growth policy stays parked. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Project fingerprints stamp the actual checkout VM, and project generation and UI tools use the checkout launcher. The rejected growth policy stays parked.
 
 ### Wasm GC scalar words and range operations
 
@@ -336,7 +335,7 @@ The backend caches each lane cast. Unknown native layouts use bounded word fragm
 
 The new `struct-array-word-access.hx` fixture passes on HashLink, Wasm32 and Wasm GC with both inlining settings. Reads, writes and reversal allocate zero guest objects for 8 and 1,024 prepared elements. Existing low-level tests retain 32/64-bit words, unaligned spans, forwarding, lazy references, bitmap boundaries and exception checks. Synthetic native arrays with deliberately arbitrary layouts are untyped; the typed layout checks still enforce the exact element representation.
 
-Typed scalar accessors keep stride, offset, width and bitmap presence as compile-time facts; packed and unaligned ranges use the shared word-span kernel. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Typed scalar accessors keep stride, offset, width and bitmap presence as compile-time facts; packed and unaligned ranges use the shared word-span kernel.
 
 ### Minimum-first-capacity growth trial (not accepted)
 
@@ -347,7 +346,7 @@ Empty HashLink storage was shared only where no metadata owner needed pinning. W
 shared lazily by storage type, so unused storage types allocated nothing. `ComputedStyle` indexed stores used
 implicit growth instead of repeated explicit resize. No other growth variant was measured.
 
-Minimum-first-capacity growth remains rejected because the measured HashLink RSS regression was not acceptable. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Minimum-first-capacity growth remains rejected because the measured HashLink RSS regression was not acceptable.
 
 ### Values have equality; objects have identity (2026-11-05)
 
@@ -362,7 +361,7 @@ snapshots compare through `Diff.mask(a, b) == 0`, with a regression check that d
 entry. Synthesis still requires field conformance: a struct containing class references can explicitly choose identity
 in its `equals` implementation. No new class conformance, identity hash, or cache ownership mechanism was added.
 
-The comparison and unchanged allocation windows are archived with their controls. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The comparison and unchanged allocation windows are archived with their controls.
 
 ### IR bytecode optimization merge (2026-11-05)
 
@@ -436,10 +435,9 @@ skips), all six UI value snapshots, the app suite, all nine retention scenarios,
 headless memory, and Wasm32/Wasm GC WebGL2 browser smoke tests. The comparison uses frozen bytecode/libraries; raw
 captures were deleted once their numbers were extracted. No measurement was retried to obtain a pass.
 
-
 ### Inline enum layout and word-access checkpoint (2026-11-06)
 
-The enum layout planner and packed-word access helpers were brought up before source-enum activation; subsequent sections document the implemented representation. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The enum layout planner and packed-word access helpers were brought up before source-enum activation; subsequent sections document the implemented representation.
 
 ### Nullable argument/result ABI checkpoint (2026-11-06)
 
@@ -451,7 +449,7 @@ inlining on and off. Managed cases explicitly export and require their setup fun
 Every 8/1,024-call census is zero; HashLink uses the exact object census. This composes existing lowering passes and
 does not implement the deferred scalar generic specialization stage.
 
-The corrected nullable ABI comparison selected compiler source explicitly for each project build. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The corrected nullable ABI comparison selected compiler source explicitly for each project build.
 
 ### Binary-size merge and native build policy (2026-11-06)
 
@@ -573,7 +571,7 @@ numbers are extracted; the idle outer gate checkout and historical audit source 
 
 ## Float32 enum payload words
 
-Float32 enum payload words use the portable word helpers; their implementation and target fixtures are retained. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Float32 enum payload words use the portable word helpers; their implementation and target fixtures are retained.
 
 ## Tracking writes after viewport frame preparation
 
@@ -829,7 +827,6 @@ threshold, verification rule or budget ceiling changed. Raw captures were delete
 finished caches were pruned before the next Web build, and the idle gate checkout is removed
 after recording this commit.
 
-
 ### Complete dependencies requested by generated enum methods (2026-11-06)
 
 A handwritten enum equality method can construct a specialized owner whose methods request hashing,
@@ -957,7 +954,6 @@ verification rule or immutable value changed. Raw captures were deleted after ex
 comparison artifacts and measurement records are retained until the commit is recorded, then the idle
 gate checkout is removed.
 
-
 ### Self-hosting body-typing follow-up (2026-11-06)
 
 The `36bc1497` review asked whether the combined completion loop repeatedly generates enough helper bodies
@@ -990,7 +986,6 @@ identical 33,973,526-byte modules, SHA-256
 No generator-cursor change is justified by this timing sample. It does not establish that whole-request
 regeneration is cheap for every codec-heavy input; a measurable case should switch the generators to
 consume newly queued requests rather than weaken completion or repeat benchmarks until a pass.
-
 
 For the concrete enum-metadata candidate, a separate comparison compiles a frozen post-inference-fix
 643-file compiler/stdlib snapshot with `36bc1497` and the candidate. The same affinity, VM and alternating
@@ -1375,7 +1370,7 @@ change requires a domain reload before source activation.
 
 ### Enum storage association in the live-patch ABI
 
-Changing an enum storage association requires `ReloadDomain`; an unchanged association with a body edit remains patchable. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Changing an enum storage association requires `ReloadDomain`; an unchanged association with a body edit remains patchable.
 
 ### Preserve typed iterator sources
 
@@ -1386,7 +1381,7 @@ array view and erased the element type; explicit `Array<E>.iterator()` failed wi
 compiler and passes on HashLink, Wasm32 and Wasm GC with inlining disabled and enabled. It covers managed payloads,
 saved values after element replacement, growth, exhaustion, nullable elements and map-value iteration.
 
-The typed iterator path and target fixtures passed; paired measurements are archived. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The typed iterator path and target fixtures passed; paired measurements are archived.
 
 ### Dynamic lane writes without staging arrays
 
@@ -1495,7 +1490,6 @@ all browser pairs above. The first compiler-suite attempt exposed three syntheti
 old callback protocol. They were ported, retaining exception, alias, GC and missing-barrier assertions, and the full
 suite was rerun after that correction. Source inline-enum lowering and the remaining semantic ABI work are unfinished.
 
-
 ### Enum equality uses the ordinary value ABI
 
 Control: `098fa40a`; candidate: the next equality-helper classification change. The generated-function filters in
@@ -1587,7 +1581,6 @@ Validation: 794 compiler tests, 0 failures; self-hosting fixed point; all ten UI
 existing skips; six UI snapshots; app suite; nine retention scenarios; budgets and six headless memory captures;
 all browser pairs above. Source inline-enum lowering and the UI enum conversions remain unfinished.
 
-
 ### Registered enum arrays use the assembled-program lane pass
 
 Control: `a9c0e31c`; candidate: the enum-array discovery change. The existing logical-enum-array fixture now supplies
@@ -1675,7 +1668,6 @@ Validation: 794 compiler tests, 0 failures; self-hosting fixed point; all ten UI
 all browser pairs above. Full paired records and hashes are retained on disk; raw captures are deleted after reading.
 Source inline-enum activation and the UI enum conversions remain unfinished.
 
-
 ### Function-valued globals retain null and closure semantics
 
 Control: `e8d70a4b`; candidate: the HashLink function-global storage fix. The native VM initializes raw `HFUN` globals
@@ -1755,7 +1747,6 @@ Validation: 796 compiler tests, 0 failures; self-hosting fixed point; all ten UI
 14 existing skips; six UI snapshots; app suite; nine retention scenarios; all budget runs, six memory captures and
 all browser pairs above. Source inline-enum lowering and UI conversions remain unfinished.
 
-
 ### Scalar closures forward reference leaves through verified private calls
 
 Control: `b4751a62`; candidate: the private closure ABI change. The verifier accepted traced reference carriers at
@@ -1773,7 +1764,7 @@ rejection tests remain. The old Wasm normalizer failed verification because its 
 signature; the shared policy now marks the helper as an actual private function rather than adding a verifier bypass.
 Source inline-enum activation remains unfinished.
 
-Verified scalar closure forwarding preserved zero-allocation typed calls in the target fixtures. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Verified scalar closure forwarding preserved zero-allocation typed calls in the target fixtures.
 
 ### Nongeneric interface calls preserve value carriers
 
@@ -1803,11 +1794,11 @@ map lookup used to replace a dispatcher. Generation now explicitly checks the lo
 the consistency check and source-level null safety; it does not use a cast or relax the verifier. Both failed attempts
 are retained separately from final-source validation.
 
-Nongeneric interface value carriers passed the target fixtures and product gates. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Nongeneric interface value carriers passed the target fixtures and product gates.
 
 ### Constant-time typed interface dispatch (November 2026)
 
-Only `ViewportContent.paint(Canvas, Rect)` selects this ABI in the UI package. Class tables live in module metadata, do not enlarge instances and add no per-call allocations; the source audit and benchmark are in `GENERIC_SPECIALIZATION.md`. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Only `ViewportContent.paint(Canvas, Rect)` selects this ABI in the UI package. Class tables live in module metadata, do not enlarge instances and add no per-call allocations; the source audit and benchmark are in `GENERIC_SPECIALIZATION.md`.
 
 ### Host export roots before enum layout selection (Tier 1 checkpoint)
 
@@ -1832,7 +1823,7 @@ array elements now share the existing lane layout. Classification is program-wid
 forms and remaining widening work are listed in STRUCTS.md (E1–E9). Unsupported escapes keep the whole enum boxed.
 No UI enum conversion is included in this checkpoint.
 
-The first source inline-enum subset was gated independently; the historical product measurements are retained below. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The first source inline-enum subset was gated independently; the historical product measurements are retained below.
 
 ### Fail-closed inline enum IR validation (Tier 1 checkpoint)
 
@@ -1867,7 +1858,7 @@ The scalar-closure safe-use list did not recognize method arguments, so the firs
 boxed adapter source set. The fix checks every possible receiver's declared callback argument against its exact type.
 It keeps the callback on the typed scalar ABI; no Dynamic fallback or verifier exemption is introduced.
 
-Typed callback transport passed the target and inlining matrix; the historical micro and product comparisons are retained below. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Typed callback transport passed the target and inlining matrix; the historical micro and product comparisons are retained below.
 
 ### Nominal interface checks found by the batch app gate
 
@@ -1953,14 +1944,9 @@ stages decreased. Product allocation/RSS/browser comparisons remain pending on t
 Records: `haxeon-flat-work/map-null-keys`; the original app failure is retained as
 `enum-first-batch-gates/app-scene-collision-failure.log`.
 
-
 ### Closed source enum batch: final product comparison
 
-The full product comparison, frozen inputs, allocations, timing and module hashes are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#closed-source-enum-batch-final-product-comparison).
-
 ### Final batch validation after the 614024b2 rebase
-
-The rebased validation and its control comparison are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#final-batch-validation-after-the-614024b2-rebase).
 
 ### Rejected payload sizing conversion (2026-11-09)
 
@@ -2059,8 +2045,6 @@ sources change in this port; the cache prerequisite's self-hosting fixed point s
 
 ### Nullary enum cache and closed-tag batch: final measurements (2026-11-09)
 
-The nullary cache and closed-tag allocation, timing and module comparisons are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#nullary-enum-cache-and-closed-tag-batch-final-measurements-2026-11-09).
-
 ### Cursor intent as a closed enum (2026-11-09)
 
 The UI's platform-independent `CursorShape` now uses a plain `Equatable` enum. `UiContext` maps every intent through
@@ -2145,7 +2129,6 @@ material body-typing growth; the extra representation work is in IR assembly. Th
 once these numbers are recorded. The VM reader additionally rejects forged case-cache global indices before
 hot-reload hashing can use them; the live-patch fixture exercises that malformed-bytecode path.
 
-
 ### Nominal-tag assembly traversal follow-up (2026-11-09)
 
 The 5,235.14 → 5,978.75 ms assembly observation above is a regression checkpoint, not an accepted final cost.
@@ -2161,7 +2144,6 @@ The regression fixture checks 1,000 and 4,000 unrelated functions, unchanged ins
 lowering, nested descriptors and an invalid phi operand. Source fixtures cover inherited class and interface
 signatures and inherited Dynamic fields on all three targets, with inlining disabled and enabled.
 
-
 An allocation-stack census isolated the remaining tag-triggered cost in the lane-array pass: before its fix,
 control/candidate assembly allocated **55,802,950 / 58,884,891 objects**, **2,404,120,848 / 2,539,939,384 bytes**.
 Stacks sampled every 1,024 bytes attributed about 49 MiB to speculative Dynamic-view rebuilding, 25 MiB to
@@ -2173,7 +2155,7 @@ unchanged: the final unrelated-body overhead is **65,384 / 79,368 bytes** for on
 reference-array parameters cost **69,456 bytes**. Removing fixed discovery overhead exposed the remaining per-shape
 function-map/list rebuilding; that cause was fixed rather than relaxing the test.
 
-The assembly traversal fix passed the target fixtures; individual timing observations are archived. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The assembly traversal fix passed the target fixtures; individual timing observations are archived.
 
 ### RawRepresentable synthesis (2026-11-09)
 
@@ -2258,7 +2240,6 @@ allocated about 255 MB more and was discarded. These overlapping runs are not a
 paired timing acceptance measurement; batch timing and editor measurements are
 recorded after the final ports.
 
-
 Flags validation: compiler suite **849 passed, 0 failed** (8 workers),
 self-hosting fixed point, and all six target/inlining combinations pass. The UI
 framework passes, including unknown native modifier bits and the native/UI
@@ -2275,7 +2256,6 @@ in this change. This is not a completed paired compile-time comparison or an
 acceptance result. A control with the required boundary casts is being checked;
 the flow-fact scaling issue remains a follow-up until that comparison completes.
 Batch editor/Web allocation and memory measurements remain pending Tier 3.
-
 
 ### Typed cursor keys and flag reads (655fd164 follow-up)
 
@@ -2311,19 +2291,15 @@ the newly typed flags and cursor intent.
 
 ### Closed raw/flags conversions: pre-rebase batch checkpoint (2026-11-10)
 
-The pre-rebase raw/flags batch evidence is in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#closed-rawflags-conversions-pre-rebase-batch-checkpoint-2026-11-10).
-
 ### Restoring self-hosting after origin/main 090589e5
 
-Compiler sources remain self-hostable by using explicit types and nullable checks, exhaustive typed instruction comparisons and storage-independent generic map reads. Final fields and verifier checks remain intact. The original failure-to-commit ledger and validation are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#restoring-self-hosting-after-originmain-090589e5).
+Compiler sources remain self-hostable by using explicit types and nullable checks, exhaustive typed instruction comparisons and storage-independent generic map reads. Final fields and verifier checks remain intact.
 
 ### Closed raw/flags conversions: rebased integration checkpoint (2026-11-10)
 
-The rebased raw/flags validation, full gate outcomes and individual timing samples are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#closed-rawflags-conversions-rebased-integration-checkpoint-2026-11-10).
-
 ### Quiet-machine selection and Wasm32 timing check (2026-11-10)
 
-The quiet-machine repeat tied selection medians at 2.43 ms and Wasm32 median/p95 at 1.50/2.10 ms. [Paired samples and conditions](../../../docs/history/ui-value-types-2026-11.md#quiet-machine-selection-and-wasm32-timing-check-2026-11-10).
+The quiet-machine repeat tied selection medians at 2.43 ms and Wasm32 median/p95 at 1.50/2.10 ms.
 
 ### Closed layout transaction codes (2026-11-10)
 
@@ -2387,8 +2363,6 @@ headless and both Web modules build, and the app/CAD and all retention scenarios
 and paired performance gates are recorded at the measured batch head.
 
 ### Gated layout and text enum batch (2026-11-10)
-
-The layout/text batch gates, artifact hashes and paired measurements are in the [UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#gated-layout-and-text-enum-batch-2026-11-10).
 
 ### Discrete style properties and generated closure size (2026-11-10)
 
@@ -2499,7 +2473,7 @@ This preserves the original direct metadata read. All ten UI scripts and all-tar
 revision, as do the freshly built app suite and all nine retention scenarios. The compiler is unchanged from
 the 856/0 suite and full compiler parity run.
 
-The constructor-initialized metadata design was validated against the previous module and retained as the field representation. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+The constructor-initialized metadata design was validated against the previous module and retained as the field representation.
 
 ### Plain widget choices (2026-11-10, next gated batch)
 
@@ -2626,7 +2600,7 @@ only after target-specific closure adapters and supplies the same shared-memory
 contract as UI parity; earlier harness setup errors are excluded from the
 allocation result.
 
-Checked native decoders compact consecutive declared integer codes into exact range guards; sparse gaps and signed endpoints remain checked. The target fixtures and product gates passed. [Measurement history](../../../docs/history/ui-value-types-2026-11.md).
+Checked native decoders compact consecutive declared integer codes into exact range guards; sparse gaps and signed endpoints remain checked. The target fixtures and product gates passed.
 
 ## Release code size after enum conversions
 
@@ -2662,7 +2636,6 @@ naming every visual kind from an off-by-one case index. Value names follow the g
 
 The development modules measured 11,581,890 bytes on Wasm32, 6,038,119 on Wasm GC and 101,643,349 for the HashLink
 editor. The emitted-function attribution, controls, per-run logs and full gate results are preserved in the
-[UI checkpoint history](../../../docs/history/ui-value-types-2026-11.md#release-code-size-after-enum-conversions-2026-11-11).
 
 ### Stage 5 component batches
 

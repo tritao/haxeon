@@ -100,8 +100,7 @@ Rules both drivers follow:
 The outer app comparison had three matching control failures: the cosmetic-thread material rebuild, CAD collision
 bounds and panel-flows inspection-camera label. The rebased editor and Web comparisons retained identical normalized
 functions; the exact allocation windows matched. One-shot typing and memory measurements were noisy under concurrent
-builds. The complete control, per-run measurements, module hashes and accepted baseline messages are preserved in the
-[November 2026 gate history](../history/ir-pass-inventory-2026-11.md).
+builds.
 
 On outer `8ced7e09a`, the app suite also stopped at `Worker document tests failed: schema v17 is unsupported;
 expected v18`. The same message occurs with the unchanged `124b72aa0` control compiler in the same outer worktree;

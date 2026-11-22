@@ -9,7 +9,9 @@ Where a document lives says what kind it is:
 | [design/](design/) | Design notes, proposals and plans | Starts with a `Status:` line. |
 | [adr/](adr/) | Architecture decision records | Decisions and their status only. |
 | [reports/](reports/) | Dated measurements, experiments and reviews, named `YYYY-MM-topic.md` | Not edited after acceptance. Describes the tree at that date. |
-| [history/](history/) | Superseded plans and logs of finished work, named `topic-YYYY-MM.md` | Kept for the reasoning only. |
+
+A plan that is superseded or finished, a log of finished work, and a report on an experiment that was dropped are
+deleted: git keeps them. What still matters moves first into the code's comments, a reference page or a design note.
 
 The project roadmap is [../ROADMAP.md](../ROADMAP.md). The UI package keeps its own documents in
 [../packages/ui/docs/](../packages/ui/docs/).
@@ -111,34 +113,25 @@ Runtime and tools:
 
 Reviews and investigations:
 
-- [2026-11-architecture-review.md](reports/2026-11-architecture-review.md), with its
-  [evidence](reports/2026-11-architecture-review-evidence.md): the review and the agreed plan. It names documents by
-  the paths they had before this folder was split.
+- [2026-11-architecture-review.md](reports/2026-11-architecture-review.md): the review and the agreed plan. It names
+  documents by the paths they had before this folder was split.
 - [2026-11-test-suite-cost.md](reports/2026-11-test-suite-cost.md): where test time goes.
 - [2026-11-compiler-memory.md](reports/2026-11-compiler-memory.md): compiler worker memory census.
 - [2026-11-binary-size.md](reports/2026-11-binary-size.md),
   [2026-11-bytecode-opportunities.md](reports/2026-11-bytecode-opportunities.md): UI and editor module size (unfinished).
-- [2026-11-hashlink-driver-exit.md](reports/2026-11-hashlink-driver-exit.md): the test-driver crash at exit.
 
-Runtime performance, October 2026. "Accepted" changes are in the tree; the others record why an idea was dropped:
+Runtime performance, October 2026. The experiments that failed their gates are listed in
+[BENCHMARKS.md](reference/BENCHMARKS.md#tried-and-rejected):
 
 | Report | Outcome |
 |---|---|
 | [gc-empty-page-retention](reports/2026-10-gc-empty-page-retention.md) | Accepted |
 | [fasta-output-profile](reports/2026-10-fasta-output-profile.md) | Accepted (short-ASCII decoder) |
-| [jit-register-allocation](reports/2026-10-jit-register-allocation.md), [phase0](reports/2026-10-jit-register-allocation-phase0.md), [results](reports/2026-10-jit-register-allocation-results.md) | Accepted, on by default on SysV x86-64 |
-| [bump-allocation-plan](reports/2026-10-bump-allocation-plan.md), [profile](reports/2026-10-bump-allocation-profile.md), [jit-inline-allocation](reports/2026-10-jit-inline-allocation.md) | Stage 1 accepted, opt-in |
-| [jit-allocation-initialization](reports/2026-10-jit-allocation-initialization.md) | Dropped (stage 2) |
-| [jit-boxed-allocation](reports/2026-10-jit-boxed-allocation.md), [layout](reports/2026-10-jit-boxed-allocation-layout.md), [allocation-census](reports/2026-10-allocation-census.md) | Stage 3: see the reports |
+| [jit-register-allocation](reports/2026-10-jit-register-allocation.md), [results](reports/2026-10-jit-register-allocation-results.md) | Accepted, on by default on SysV x86-64 |
+| [bump-allocation-plan](reports/2026-10-bump-allocation-plan.md), [jit-inline-allocation](reports/2026-10-jit-inline-allocation.md) | Stage 1 accepted, opt-in |
+| [jit-boxed-allocation-layout](reports/2026-10-jit-boxed-allocation-layout.md), [allocation-census](reports/2026-10-allocation-census.md) | Stage 3: opt-in (`HL_JIT_ALLOC_BOX=1`), timings pending |
 | [compiler-gc-marking](reports/2026-10-compiler-gc-marking.md) | Opt-in candidate |
-| [gc-profile](reports/2026-10-gc-profile.md), [gc-allocation-profile](reports/2026-10-gc-allocation-profile.md), [object-allocation-profile](reports/2026-10-object-allocation-profile.md), [array-allocation-profile](reports/2026-10-array-allocation-profile.md) | Profiles; no change accepted |
-| [fasta-profile](reports/2026-10-fasta-profile.md), [bytes-access-profile](reports/2026-10-bytes-access-profile.md), [bounds-check-elimination](reports/2026-10-bounds-check-elimination.md) | Rejected |
-| [optimization-next-results](reports/2026-10-optimization-next-results.md), [ir-opportunity-census](reports/2026-10-ir-opportunity-census.md) | Summary of that optimization round |
+| [gc-allocation-profile](reports/2026-10-gc-allocation-profile.md) | Accepted (allocation fast entry) |
+| [gc-profile](reports/2026-10-gc-profile.md) | Profile and the experimental incremental marking |
+| [ir-opportunity-census](reports/2026-10-ir-opportunity-census.md) | Census of the IR after inlining |
 
-## History
-
-- [provider-requests-2026-11.md](history/provider-requests-2026-11.md): helper requests as records, superseded by typed operations.
-- [typer-metadata-merge-2026-11.md](history/typer-metadata-merge-2026-11.md): the typed metadata merge, landed 2026-11-08.
-- [ir-pass-inventory-2026-11.md](history/ir-pass-inventory-2026-11.md): gate history of the IR pass work.
-- [structs-measurements-2026-11.md](history/structs-measurements-2026-11.md): struct measurement history.
-- [ui-value-types-2026-11.md](history/ui-value-types-2026-11.md): UI value-type checkpoint history.

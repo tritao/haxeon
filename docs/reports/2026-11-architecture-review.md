@@ -15,8 +15,7 @@ self-hosting.
 
 What was checked afterwards: twelve of the high-severity claims were re-checked by hand against `c6cfd889` (listed in
 [Verification](#verification)). Eleven held and one was already fixed. Every other finding is a reviewer's claim with
-its own evidence, not independently confirmed. The full evidence, cost statements and the "leave alone" lists are in
-[ARCHITECTURE_REVIEW_EVIDENCE.md](2026-11-architecture-review-evidence.md).
+its own evidence, not independently confirmed.
 
 Each finding carries a kind (architecture, organization, overengineering), a severity, an effort (S, M, L) and the risk
 of making the change.

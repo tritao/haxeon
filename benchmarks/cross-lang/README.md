@@ -208,7 +208,8 @@ The cross-language table above was not regenerated.
 
 A guarded inline integer-box prototype measured merkletrees at 0.247260 → 0.198725 s (19.63% faster), but repeated
 LRU comparisons showed a 1–2% regression against the accepted runtime. It was dropped under the no-regression gate;
-that variant was reverted. See [the experiment report](../../docs/reports/2026-10-jit-boxed-allocation.md).
+that variant was reverted. A follow-up that keeps the cold helpers out of the hot runtime text removes the regression and is
+opt-in with `HL_JIT_ALLOC_BOX=1` ([report](../../docs/reports/2026-10-jit-boxed-allocation-layout.md)).
 The cross-language table above was not regenerated.
 
 ### Corrected integer-box allocation (opt-in; final timing gate pending)

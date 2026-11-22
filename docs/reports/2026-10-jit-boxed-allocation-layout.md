@@ -115,7 +115,7 @@ checks were not repeated here. Other DAP tests, AArch64, Windows, 32-bit, Clang 
 
 ## Evidence
 
-The earlier rejection remains documented in [JIT_BOXED_ALLOCATION.md](2026-10-jit-boxed-allocation.md). Evidence for this
+Evidence for this
 follow-up is under `out/boxed-allocation/`: `isolate-final.json`, `cold-lru.json`, diagnostic profiles/counters,
 `cold-final-six.json`, `startup-jit.json`, `cold-validation.log`, suite logs, and `cold-final-hashes.json`. The final VM SHA-256 is
 `de6d0ff23543079c99d5a3074d7911d755d0377fcfe8530ab49b2a01e2954b91`, its library is

@@ -2,7 +2,7 @@
 
 Status: approved as the plan by dev-71 (2026-11-11), with the changes folded in below. Step 1, the diagnostic, comes first and decides whether
 the prune is done at all (see "Decision gate"). The note is the walk and the prune of [ADR 0003 §13](../adr/0003-compiler-architecture.md),
-built on the unified function kinds ([PROVIDER_REQUESTS.md](../history/provider-requests-2026-11.md), superseded by `IrFunctionKind`) and placed in the phase
+built on the unified function kinds (`IrFunctionKind`) and placed in the phase
 order of [ENUM_PASS_PHASE_ORDER.md](ENUM_PASS_PHASE_ORDER.md). It is not a second provider design.
 
 ## What exists
