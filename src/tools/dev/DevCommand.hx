@@ -40,6 +40,9 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       Build the compiler ahead of time to C and publish it beside the VM, where the CLI runs it while it is current
  *       (build.AotCompiler, AotCompilerBuild): what a release ships prebuilt.
  *
+ *   haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]
+ *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/reference/RELEASES.md).
+ *
  *   haxeon dev check-tests
  *       Fail on a test file under tests/ that no suite, test driver case or workflow runs (TestRegistration).
  */
@@ -60,6 +63,7 @@ class DevCommand {
 			case "native": native(arguments, home);
 			case "bootstrap": bootstrap(arguments, home);
 			case "aot-compiler": AotCompilerBuild.run(arguments, home);
+			case "package": ReleasePackage.run(arguments, home);
 			case "help", "--help", "-h", "": usage(command == "" ? 2 : 0);
 			case _:
 				Sys.stderr().writeString('Unknown dev command: $command\n');
@@ -195,6 +199,8 @@ class DevCommand {
 		out.writeString("      Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically\n");
 		out.writeString("  aot-compiler [--toolchain=NAME]\n");
 		out.writeString("      Build the compiler to C (default toolchain: the hlc SDK's target's) and publish it beside the VM\n");
+		out.writeString("  package [--output=DIR] [--version=VERSION] [--no-archive]\n");
+		out.writeString("      Stage this platform's release in DIR (default out/release) and archive it\n");
 		out.writeString("  check-tests\n");
 		out.writeString("      Fail on a test file under tests/ that no suite, test driver case or workflow runs\n");
 		return status;

@@ -1,0 +1,168 @@
+name: release
+
+# Release archives (docs/reference/RELEASES.md): each platform's job builds the VM and the CLI in release mode, the compiler ahead
+# of time where the AOT backend supports the platform's toolchain, packages them with `haxeon dev package` and smoke-tests the
+# unpacked archive (scripts/smoke-test-release.sh). No test suites run here: the commit is tested by ci.yml, and a tag is
+# published only once ci.yml passed on that commit on main. The final job writes SHA256SUMS and, for a tag, creates the GitHub
+# release or adds the archives to it; run by hand (workflow_dispatch) it is a dry run whose archives are the run's artifacts.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runs_on: ubuntu-24.04
+            aot: true
+            experimental: false
+          # MSVC, as ci.yml's windows job builds it. The compiler built ahead of time with MSVC waits for its first CI run, so
+          # the archive ships the compiler's bytecode, which the VM runs; `aot: true` turns it on (with its .pdb).
+          - platform: windows-x86_64
+            runs_on: windows-2022
+            aot: false
+            experimental: false
+          # Experimental: the compiler built ahead of time has not had its stack traces verified on macOS.
+          - platform: macos-arm64
+            runs_on: macos-15
+            aot: true
+            experimental: true
+    runs-on: ${{ matrix.runs_on }}
+    continue-on-error: ${{ matrix.experimental }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        # Git Bash on Windows, so each step runs the same way everywhere.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Release version
+        id: version
+        run: |
+          current=$(sed -n 's/.*CURRENT_HAXEON = "\(.*\)";/\1/p' src/project/PackageCompatibility.hx)
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then
+            version=${GITHUB_REF_NAME#v}
+            if [[ $version != "$current" && $version != "$current"-* ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match the CLI's version $current (src/project/PackageCompatibility.hx)"
+              exit 1
+            fi
+          else
+            version=$current-dev.${GITHUB_SHA::12}
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # The CLI as the platform's launcher runs it: scripts/haxeon, or scripts/haxeon.ps1 on Windows.
+          if [[ $RUNNER_OS == Windows ]]; then
+            echo "haxeon=pwsh -NoProfile -File scripts/haxeon.ps1" >> "$GITHUB_OUTPUT"
+          else
+            echo "haxeon=scripts/haxeon" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The pinned tools, and on Windows the MSVC environment and the native runtime (scripts/setup.ps1).
+      - uses: ./.github/actions/setup-host
+
+      - name: Build the VM and the CLI
+        if: runner.os != 'Windows'
+        run: scripts/build-native.sh
+
+      - name: Build the compiler ahead of time
+        if: matrix.aot
+        run: ${{ steps.version.outputs.haxeon }} dev aot-compiler
+
+      - name: Package
+        run: ${{ steps.version.outputs.haxeon }} dev package --version=${{ steps.version.outputs.version }} --output=out/release
+
+      - name: Smoke test
+        run: |
+          archive=$(ls out/release/haxeon-${{ steps.version.outputs.version }}-${{ matrix.platform }}.*)
+          scripts/smoke-test-release.sh "$archive" ${{ matrix.aot && '--aot' || '--no-aot' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: haxeon-${{ matrix.platform }}
+          path: |
+            out/release/*.tar.gz
+            out/release/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: haxeon-*
+          merge-multiple: true
+          path: dist
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          ls -l
+          sha256sum haxeon-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: dist
+
+      # A release is made of a commit that ci.yml tested: one on main whose ci.yml run succeeded.
+      - name: Require a passing ci.yml run on main for the tagged commit
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          status=$(gh api "repos/$GH_REPO/compare/main...$GITHUB_SHA" --jq .status)
+          if [[ $status != behind && $status != identical ]]; then
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main (compare: $status); tag a commit of main"
+            exit 1
+          fi
+          passed=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq .total_count)
+          if [[ $passed == 0 ]]; then
+            echo "::error::ci.yml has no successful run for $GITHUB_SHA; wait for it (or run it with workflow_dispatch on main) and re-run this job"
+            exit 1
+          fi
+
+      - name: Create or update the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          macos=$(ls dist | grep -c macos || true)
+          {
+            echo "Haxeon $version: unpack the archive for your platform anywhere and run \`bin/haxeon\` (docs/reference/RELEASES.md)."
+            echo
+            echo "- **Linux (x86_64)**: with the compiler built ahead of time (\`bin/haxeon-compiler\`)."
+            echo "- **Windows (x86_64)**: built with MSVC, without the compiler built ahead of time for now: the compiler runs on"
+            echo "  the VM from its bytecode (\`bin/haxeon-compiler.hl\`), a slower start with the same compiler."
+            if [[ $macos != 0 ]]; then
+              echo "- **macOS (arm64)**: experimental. It has the compiler built ahead of time, whose stack traces are not verified"
+              echo "  on macOS yet."
+            fi
+            echo
+            echo "Check a download against \`SHA256SUMS\`."
+          } > notes.md
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --title "Haxeon $version" --notes-file notes.md
+          fi

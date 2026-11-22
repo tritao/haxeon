@@ -1,0 +1,133 @@
+package tools.dev;
+
+import build.AotCompiler;
+import build.HashLinkPath;
+import build.HaxeonRelease;
+import build.execution.ProcessRunner;
+import compiler.core.InternalError;
+import haxe.io.Path;
+import sys.FileSystem;
+import sys.io.File;
+
+/**
+ * `haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]`: stages this checkout's release for the platform it runs
+ * on, `DIR/haxeon-VERSION-PLATFORM/` (`DIR` is `out/release` by default), and archives it beside, as `.tar.gz` or, on Windows,
+ * `.zip` (docs/reference/RELEASES.md). The layout is defined here and nowhere else:
+ *
+ *   haxeon-release.txt              the marker that makes the directory a release (`build.HaxeonRelease`)
+ *   bin/                            the VM's directory: hl, haxeon, the CLI's bytecode (haxeon-cli.hl), the compiler built
+ *                                   ahead of time with its stamp (and its .pdb with MSVC) when it is built and current, the
+ *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
+ *   stdlib/                         the standard library
+ *   LICENSE, NOTICE, README.md
+ *
+ * It builds what a checkout's native build does not, the compiler's bytecode: `tools.CompilerExecutable` with the pinned Haxe, as the
+ * CLI builds the compiler in a checkout, stamped with the sources' digest (`AotCompiler.bytecode`). It packages the compiler built
+ * ahead of time when `haxeon dev aot-compiler` built it from these sources, and goes without it when there is none; a stale one is
+ * an error, as the release would never run it. The compiler's sources stay behind: the marker records their digest, which the
+ * stamps must hold.
+ */
+class ReleasePackage {
+	public static function run(arguments:Array<String>, home:String):Int {
+		home = Path.normalize(home);
+		var output = Path.join([home, "out", "release"]),
+			version = project.PackageCompatibility.CURRENT_HAXEON,
+			archive = true;
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, "--output="))
+				output = absolute(argument.substr("--output=".length));
+			else if (StringTools.startsWith(argument, "--version="))
+				version = argument.substr("--version=".length);
+			else if (argument == "--no-archive")
+				archive = false;
+			else
+				throw new InternalError('Usage: haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive] (unexpected "$argument")');
+		if (version == "" || ~/[\/\\\s]/.match(version))
+			throw new InternalError('Not a release version: "$version"');
+
+		var compilerSource = Path.join([home, "src"]),
+			native = AotCompiler.executable(home),
+			digest = AotCompiler.sourcesDigest(home, compilerSource),
+			bytecode = new ToolArtifacts(home).resolve({main: "tools.CompilerExecutable", classPaths: [], defines: []});
+
+		if (FileSystem.exists(native) && AotCompiler.current(home, compilerSource) == null)
+			throw new InternalError('$native is stale: rebuild it with "haxeon dev aot-compiler", or remove it to package without it');
+
+		var name = 'haxeon-$version-${platform()}', root = Path.join([output, name]);
+		var bin = Path.join([root, HaxeonRelease.BIN]);
+		cmake(home, ["-E", "rm", "-rf", root]);
+		cmake(home, ["-E", "make_directory", bin]);
+		var vm = HashLinkPath.directory(home), suffix = Sys.systemName() == "Windows" ? ".exe" : "";
+		var programs = ['hl$suffix', 'haxeon$suffix', "haxeon-cli.hl"];
+		if (FileSystem.exists(native))
+			programs = programs.concat([Path.withoutDirectory(native), Path.withoutDirectory(AotCompiler.stamp(home))]);
+		// An MSVC build's debug information, which its stack traces read, is beside it.
+		var symbols = Path.withoutExtension(native) + ".pdb";
+		if (FileSystem.exists(native) && FileSystem.exists(symbols))
+			programs.push(Path.withoutDirectory(symbols));
+		for (entry in FileSystem.readDirectory(vm))
+			if (~/\.(dll|hdll|dylib|so)(\.[0-9.]+)?$/.match(entry))
+				programs.push(entry);
+		for (program in programs) {
+			var path = Path.join([vm, program]);
+			if (!FileSystem.exists(path))
+				throw new InternalError('Missing $path: build the native runtime first (haxeon dev native)');
+			cmake(home, ["-E", "copy", path, bin]);
+		}
+		// Under the names `AotCompiler` looks for beside the release's VM.
+		var bytecodeName = Path.withoutDirectory(AotCompiler.bytecode(home));
+		cmake(home, ["-E", "copy", bytecode, Path.join([bin, bytecodeName])]);
+		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(home))]), digest + "\n");
+		cmake(home, ["-E", "copy_directory", Path.join([home, "stdlib"]), Path.join([root, "stdlib"])]);
+		// The stamps hold the digest of what the release holds: no source changed while it was made.
+		if (AotCompiler.sourcesDigest(home, compilerSource) != digest)
+			throw new InternalError("The compiler sources changed while the release was made; run it again");
+		for (file in ["LICENSE", "NOTICE", "README.md"])
+			if (FileSystem.exists(Path.join([home, file])))
+				cmake(home, ["-E", "copy", Path.join([home, file]), root]);
+		var commit = ProcessRunner.capture("git", ["-C", home, "rev-parse", "--short=12", "HEAD"]);
+		File.saveContent(Path.join([root, HaxeonRelease.MARKER]),
+			HaxeonRelease.marker(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
+			platform(), digest));
+		Sys.println('Staged $root' + (FileSystem.exists(native)
+			? "" : ' (without $native: run "haxeon dev aot-compiler" first to include it)'));
+		if (!archive)
+			return 0;
+		var file = name + (Sys.systemName() == "Windows" ? ".zip" : ".tar.gz");
+		if (FileSystem.exists(Path.join([output, file])))
+			FileSystem.deleteFile(Path.join([output, file]));
+		var format = Sys.systemName() == "Windows" ? ["cf", file, "--format=zip"] : ["czf", file],
+			status = ProcessRunner.run("cmake", ["-E", "tar"].concat(format).concat([name]), output, new Map());
+		if (status != 0)
+			return status;
+		Sys.println('Archived ${Path.join([output, file])}');
+		return 0;
+	}
+
+	/** The release's platform name: the operating system and the processor, as `linux-x86_64` or `windows-arm64`. */
+	public static function platform():String {
+		var system = switch Sys.systemName() {
+			case "Windows": "windows";
+			case "Mac": "macos";
+			case _: "linux";
+		};
+		var machine = Sys.systemName() == "Windows"
+			? Sys.getEnv("PROCESSOR_ARCHITECTURE") : StringTools.trim(ProcessRunner.capture("uname",
+			["-m"]).output);
+		var processor = switch machine == null ? "" : machine.toLowerCase() {
+			case "amd64", "x86_64", "x64": "x86_64";
+			case "arm64", "aarch64": "arm64";
+			case other: throw new InternalError('Unknown processor "$other"');
+		};
+		return '$system-$processor';
+	}
+
+	static function absolute(path:String):String
+		return Path.normalize(Path.isAbsolute(path) ? path : Path.join([Sys.getCwd(), path]));
+
+	static function cmake(home:String, arguments:Array<String>):Void {
+		var status = ProcessRunner.run("cmake", arguments, home, new Map());
+		if (status != 0)
+			throw new InternalError('cmake ${arguments.join(" ")} failed (exit $status)');
+	}
+}

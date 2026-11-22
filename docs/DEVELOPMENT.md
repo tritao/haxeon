@@ -265,6 +265,12 @@ Pinned tool versions, archive checksums, extraction, and submodule setup are
 defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are thin
 launchers for that shared bootstrap rather than separate installers.
 
+`scripts/haxeon dev aot-compiler` builds the compiler ahead of time beside the VM,
+which the CLI runs while it is built from the current sources; after a compiler
+edit, builds say once that it is stale and `haxeon doctor` reports it. A release
+archive for this platform is `scripts/haxeon dev package`, checked with
+`scripts/smoke-test-release.sh`: see [RELEASES.md](reference/RELEASES.md).
+
 ## API documentation
 
 Haxeon recognizes Haxe documentation comments beginning with `/**`. Their

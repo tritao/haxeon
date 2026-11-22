@@ -1,0 +1,87 @@
+# Releases
+
+A release is one archive per platform that holds everything the `haxeon` command needs: unpack it anywhere and run
+`bin/haxeon`. No C compiler, CMake, pinned Haxe or checkout is needed.
+
+## What an archive holds
+
+`haxeon-VERSION-PLATFORM.tar.gz` (`.zip` on Windows) holds one directory, `haxeon-VERSION-PLATFORM/`:
+
+| Path | What it is |
+| --- | --- |
+| `haxeon-release.txt` | The marker that makes the directory a release: `version`, `commit`, `platform` and `compiler-sources` (the digest of the compiler's sources and standard library the release was made from), one `NAME=VALUE` per line. |
+| `bin/hl`, `bin/haxeon` | The VM, and the VM with the CLI as its entry point (`native/haxeon_main.c`). |
+| `bin/haxeon-cli.hl` | The CLI's bytecode, which `bin/haxeon` runs. |
+| `bin/haxeon-compiler`, `bin/haxeon-compiler.sources` | The compiler built ahead of time, one executable for a compile, the compile server and the language server, with its stamp (docs/design/AOT_BACKEND.md), and with MSVC its `haxeon-compiler.pdb`, which its stack traces read. Present where the release job builds it. |
+| `bin/haxeon-compiler.hl`, `bin/haxeon-compiler.hl.sources` | The same compiler as bytecode, with its stamp: what the VM runs when there is no executable. |
+| `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
+| `stdlib/` | The standard library. |
+| `LICENSE`, `NOTICE`, `README.md` | |
+
+Platforms:
+
+- **Linux x86-64**: with the compiler built ahead of time.
+- **Windows x86-64**: built with MSVC, as `ci.yml` builds it. The release job does not build the compiler ahead of time there
+  until the MSVC AOT build has passed on CI, so the archive has no `bin/haxeon-compiler` and the compiler runs on the VM from
+  `bin/haxeon-compiler.hl`: the same compiler with a slower start. `haxeon doctor` says `not built: compiler built ahead of
+  time`. Turning it on is `aot: true` for the job in `release.yml`: `haxeon dev package` takes the executable, and its
+  `haxeon-compiler.pdb`, whenever they are built.
+- **macOS arm64**: experimental. It has the compiler built ahead of time, whose stack traces are not verified on macOS.
+
+## How an unpacked release finds itself
+
+`bin/haxeon` finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or `GetModuleFileNameW`, symbolic links resolved). When
+the directory above `bin` holds `haxeon-release.txt`, that directory is `HAXEON_HOME`, `bin` is the VM's directory
+(`HAXEON_HASHLINK_DIR`, `build.HashLinkPath`) and `bin/haxeon-cli.hl` is the CLI. Otherwise the executable belongs to the
+checkout that built it, whose paths were compiled in. A symbolic link to `bin/haxeon` from a directory on `PATH` works.
+
+The CLI runs the compiler as `build.AotCompiler.program` says: the executable when its stamp matches, else the bytecode on the
+VM when its stamp matches, else (in a checkout) bytecode it builds from the sources with the pinned Haxe. A checkout matches the
+stamps against the digest of its `src/`, `lib/haxeon-io/` and `stdlib/`. A release ships no compiler sources, as its compiler
+cannot change: it matches them against the digest its marker records, so the pinned Haxe is never needed, and `haxeon doctor` does
+not ask for it.
+
+What a release does not do yet, as it needs a checkout's tools or sources: `haxeon dev`, `haxeon lint`, `haxeon ffi`,
+`--self-hosted` builds, native C packages (they compile against the VM's headers in `vendor/hashlink`) and Android builds.
+
+## Making one
+
+From a checkout with the native build done (`scripts/build-native.sh`, or `scripts/setup.ps1` on Windows):
+
+```sh
+scripts/haxeon dev aot-compiler                # optional: the compiler built ahead of time, included when current
+scripts/haxeon dev package [--version=V] [--output=DIR] [--no-archive]
+scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot for an archive without it
+```
+
+`haxeon dev package` (`tools.dev.ReleasePackage`, the one place the layout is defined) builds the compiler's bytecode with the
+pinned Haxe (`tools.CompilerExecutable`, through the tool cache), stages the directory in `out/release` with the bytecode's
+stamp and the sources' digest in the marker, checks that the sources still have that digest once the standard library is
+copied, and archives it with `cmake -E tar`. The compiler's sources are not shipped. It changes
+nothing in the checkout's VM directory. A stale `haxeon-compiler` is an error, since the release would never run it: rebuild it or remove it.
+The version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
+
+`scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
+starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script. It checks that no
+compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler. With
+`--aot` it times the same cold build without `bin/haxeon-compiler`, which also exercises the bytecode fallback.
+
+## The release workflow
+
+`.github/workflows/release.yml` runs on `v*` tags and by hand (workflow_dispatch). One job per platform builds the VM and the
+CLI in release mode and the compiler ahead of time where supported, packages and smoke-tests, and uploads the archive. It runs no
+test suites; the macOS job may fail without failing the run. A final job downloads the archives and writes `SHA256SUMS`. For a
+tag it then checks that the tagged commit is on `main` and has a successful `ci.yml` run, and creates the GitHub release with
+the archives and checksums, or uploads them to the release if it exists. Run by hand, it stops before that: the archives are the
+run's artifacts. A tag's version must be the CLI's version, optionally with a suffix (`v0.3.0`, `v0.3.0-rc.1`).
+
+## A checkout's stale compiler
+
+In a checkout the executable is current only until the compiler's sources change. A build with a stale one prints one line,
+
+```
+note: haxeon-compiler is older than the compiler sources, so the compiler runs on the VM (a slower start); rebuild it with "haxeon dev aot-compiler"
+```
+
+unless it prints no progress (`--quiet`, `--verbosity quiet`, a script), and `haxeon doctor` reports it as stale with the same
+remedy. Nothing rebuilds it automatically.
