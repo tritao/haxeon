@@ -601,6 +601,11 @@ class TestMain {
 		Frontend.compile('function choose(value:Null<String>):Int return switch 1 { case 1 if (value != null): value.length; default: 0; }; function main():Int return choose(null);');
 		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }',
 			'Conditional branches must have matching types');
+		// A lambda's typed argument must take what its context passes: Haxe rejects both.
+		expectCompileError('function choose(flag:Bool):Void { var f = flag ? (x:String) -> {} : (y:Int) -> {}; } function main():Int return 0;',
+			'Lambda argument type does not match its context');
+		expectCompileError('function main():Int { var f:Int->Void = (x:String) -> {}; return 0; }',
+			'Lambda argument type does not match its context');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }',
 			'Switch expression requires a default branch');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; var Triangle = 3; } function main():Int { var shape = Shape.Square; return switch shape { case Circle: 0; case Square: 42; }; }',

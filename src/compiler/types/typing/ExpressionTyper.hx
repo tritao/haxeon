@@ -2349,10 +2349,12 @@ class ExpressionTyper {
 				return TNullable(inner);
 			default:
 		}
-		if (session.relations.isAssignable(left, right))
-			return right;
+		// The first branch's type wins when the second fits it, as Haxe's `unify_min` keeps it: of two function types that
+		// each stand for the other (`String->Void` and `Dynamic->Void`), the true branch's.
 		if (session.relations.isAssignable(right, left))
 			return left;
+		if (session.relations.isAssignable(left, right))
+			return right;
 		return null;
 	}
 

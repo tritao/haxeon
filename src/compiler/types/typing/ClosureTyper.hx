@@ -98,8 +98,11 @@ class ClosureTyper {
 			var declaredType = argumentType;
 			if (DefaultArguments.valueDefault(argument, argumentType, session.relations))
 				argumentType = TNullable(argumentType);
+			// A typed argument need only take what the context passes, as Haxe unifies a function's arguments the
+			// other way round: `(text:String) -> ...` stands for a `Dynamic->Void`.
 			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i])
-				&& !TypeRelations.equals(declaredType, expectedFunction.arguments[i]))
+				&& !TypeRelations.equals(declaredType, expectedFunction.arguments[i])
+				&& !session.relations.isAssignable(expectedFunction.arguments[i], argumentType))
 				fail("E1003", "Lambda argument type does not match its context", argument.span);
 			lambdaArguments.push({
 				name: lambdaScope.define(localName, argumentType, argument.span).id,
