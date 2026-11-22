@@ -309,6 +309,16 @@ The Haxe code Haxeon rejects or runs differently is listed in
 Planned in this order unless noted. Timings so far were taken on a loaded
 machine; re-measure on a quiet one before acting on a ratio.
 
+- **Drop the shared host heap once the web uses wasm-gc.** On the web,
+  NativeKit's Emscripten host and Haxeon's `wasm32` guest share one linear
+  memory, so the host's `malloc` is replaced by dlmalloc confined to a fixed
+  arena below the guest heap (`vendor/nativekit/docs/wasm-host-memory.md`,
+  `NativeKit::wasm_host_allocator`, `NK_WASM_HOST_HEAP_LIMIT`). With
+  `wasm-gc` the guest's objects live in the engine's heap, so the host can
+  have linear memory to itself with Emscripten's own allocator, and the arena,
+  its limit and the adapter can go. Before that, check what still needs a
+  byte region both sides address (buffers passed by pointer, audio worklet
+  memory) and give those explicit shared buffers.
 - **Wasm32 output is not deterministic for a few programs.** Four Wasm32
   modules of the driver suite differed between two runs of the same commit
   (lengths 22396/22398 and 23806), seen on 2026-11-10; the source was not found.
