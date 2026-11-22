@@ -1006,25 +1006,42 @@ class SemanticAssembly {
 			for (functionName => fn in state.irFunctions) {
 				var caller = enclosingFunction(functionName),
 					seen:Map<String, Bool> = [];
-				for (block in fn.blocks)
-					for (located in block.instructions) {
-						var target = switch located.value {
-							case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): name;
-							default: null;
-						};
-						var origin = target == null ? null : genericOrigin((target == null ? null : target.name));
-						if (origin == null)
-							continue;
-						if (seen.exists(origin))
-							continue;
-						seen.set(origin, true);
-						var callers = result.get(origin);
-						if (callers == null) {
-							callers = [];
-							result.set(origin, callers);
-						}
-						callers.push(caller);
+				function refer(target:String):Void {
+					var origin = genericOrigin(target);
+					if (origin == null || seen.exists(origin))
+						return;
+					seen.set(origin, true);
+					var callers = result.get(origin);
+					if (callers == null) {
+						callers = [];
+						result.set(origin, callers);
 					}
+					callers.push(caller);
+				}
+				// A function kept as its body alone is read from the body, not decoded.
+				var body = fn.body;
+				if (body != null) {
+					for (block in 0...body.blockCount()) {
+						var row = body.firstRow(block);
+						while (row >= 0) {
+							switch body.opcode(row) {
+								case compiler.ir.model.IrOpcode.Call, compiler.ir.model.IrOpcode.StaticClosure,
+									compiler.ir.model.IrOpcode.InstanceClosure:
+									refer(body.symbol(row).name);
+								default:
+							}
+							row = body.nextRow(row);
+						}
+					}
+					continue;
+				}
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _):
+								refer(name.name);
+							default:
+						}
 			}
 		}
 		return result;

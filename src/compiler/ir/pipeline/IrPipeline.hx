@@ -513,12 +513,14 @@ class IrPipeline {
 		var types = bodyTypes(context),
 			builder = context.passScratch.bodyBuilder,
 			retained = context.options.keepSession;
+		// A session keeps the frozen body alone: the stages after this point read bodies, the memos before it hand on a function
+		// they reuse without reading it, and the whole-program scans read bodies (`IrSourceRehash`, `IrStaticReferences`, the
+		// contributions); what a later build reads as objects is decoded again from its body.
 		for (fn in functions) {
 			fn.bodyIn(types, builder);
 			if (retained)
 				fn.freezeBody(builder);
-			else
-				fn.releaseDecoded();
+			fn.releaseDecoded();
 		}
 	}
 
