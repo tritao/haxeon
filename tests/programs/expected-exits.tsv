@@ -626,6 +626,7 @@ flow-join-expressions	42
 do-while-join	42
 local-inference-type-variables	42
 module-level-variables	42
+module-variable-member	42
 array-concat-nullable	42
 abstract-equality-conformance	42
 wire-final-record	42

@@ -384,12 +384,23 @@ class ModuleCanonicalizer {
 	 * a local, a field of `this`, a static of the enclosing class, or a module-level variable of this module (qualified as
 	 * reads are), and is never an import.
 	 */
-	static function canonicalAssignmentTarget(name:String, module:String, locals:LocalScope, aliases:Null<AliasTable>,
-			span:SourceSpan):String {
+	static function canonicalAssignmentTarget(name:String, module:String, entry:String, locals:LocalScope,
+			aliases:Null<AliasTable>, span:SourceSpan):String {
 		if (name.indexOf(".") < 0)
 			return locals.get(name) == true ? stored(module + "." + name, aliases) : name;
 		var imported = importedReference(name, locals, aliases);
-		return imported == null ? stored(name, aliases) : storedImport(name, imported, aliases, span);
+		return imported == null ? stored(moduleMemberPath(name, module, entry, locals),
+			aliases) : storedImport(name, imported, aliases, span);
+	}
+
+	/**
+	 * `name` qualified by `module` when it starts with a module-level name of it (`seen`, `seen.length`, `seen.push`), else
+	 * `name`. The entry module's `main` stays bare, as the entry point is named.
+	 */
+	static function moduleMemberPath(name:String, module:String, entry:String, locals:LocalScope):String {
+		if (locals.get(compiler.core.QualifiedName.first(name)) != true)
+			return name;
+		return module == entry && name == "main" ? "main" : module + "." + name;
 	}
 
 	/** `path` with a module-level variable it names given where that variable is stored (AliasTable.moduleFieldPath). */
@@ -460,7 +471,7 @@ class ModuleCanonicalizer {
 			case DeclaredAssignment(name, declaration, e, span):
 				DeclaredAssignment(name, declaration, canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e,
-				span): Assignment(canonicalAssignmentTarget(n, module, locals, aliases, span),
+				span): Assignment(canonicalAssignmentTarget(n, module, entry, locals, aliases, span),
 				canonicalExpression(e, module, entry, locals, aliases), targetSpan(n, module, locals, span));
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
@@ -484,7 +495,8 @@ class ModuleCanonicalizer {
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
-			case Increment(name, delta, span): Increment(canonicalAssignmentTarget(name, module, locals, aliases, span),
+			case Increment(name, delta,
+				span): Increment(canonicalAssignmentTarget(name, module, entry, locals, aliases, span),
 				delta,
 				targetSpan(name, module, locals, span));
 			case If(c, y, n,
@@ -527,10 +539,7 @@ class ModuleCanonicalizer {
 			case Variable(name, span):
 				var imported = importedReference(name, locals, aliases),
 					resolved = imported != null ? storedImport(name, imported, aliases,
-						span) : stored(name.indexOf(".") < 0
-						&& locals.get(name) == true
-						? (module == entry && name == "main" ? "main" : module + "." + name) : name,
-						aliases);
+						span) : stored(moduleMemberPath(name, module, entry, locals), aliases);
 				resolved == name ? e : Variable(resolved,
 					compiler.core.Source.SourceSpan.reference(span.file, span.start, span.end, span.isBareReference,
 					span.referenceName == null ? name : span.referenceName));
@@ -650,20 +659,10 @@ class ModuleCanonicalizer {
 				s): Range(canonicalExpression(start, module, entry, locals, aliases),
 				canonicalExpression(rangeEnd, module, entry, locals, aliases), s);
 			case Call(name, args, s):
-				var resolved = name;
-				var dot = name.indexOf("."),
-					prefix = compiler.core.QualifiedName.first(name),
-					imported = locals.get(prefix) == false ? null : resolveOptionalExpressionAlias(name, aliases);
-				if (imported != null)
-					resolved = storedImport(name, imported, aliases, s);
-				else {
-					if (name.indexOf(".") < 0 && locals.get(name) == true)
-						resolved = module == entry && name == "main" ? "main" : module + "." + name;
-					else if (dot > 0 && locals.get(prefix) == true)
-						// A method of a module-level variable (`names.push(x)`): the variable is qualified as a read of it is.
-						resolved = module + "." + name;
-					resolved = stored(resolved, aliases);
-				}
+				var local = locals.get(compiler.core.QualifiedName.first(name)) == false,
+					imported = local ? null : resolveOptionalExpressionAlias(name, aliases),
+					resolved = imported != null ? storedImport(name, imported, aliases,
+						s) : stored(moduleMemberPath(name, module, entry, locals), aliases);
 				Call(resolved, [
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
