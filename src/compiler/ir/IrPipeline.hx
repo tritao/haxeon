@@ -33,7 +33,7 @@ class IrPipeline {
 		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects),
 		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(pruning),
 		new IrAssemblyStage("enum-dynamic-dispatch-input", enumDynamicDispatchInput).when(hasObjects),
-		new IrAssemblyStage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects),
+		IrFunctionStages.stage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects),
 		new IrAssemblyStage("reachability-report", reachabilityReport).when(reportsReachability),
 		IrFunctionStages.stage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects),
 		IrFunctionStages.stage("override-bridges", overrideBridges, bridgedObjects).when(hasObjects),
@@ -223,11 +223,9 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function enumDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = IrEnumDynamicDispatch.rewrite(assembly.functions, assembly.reflectionInput,
-			assembly.reflectableObjects, assembly.unreached);
-		return assembly;
-	}
+	static function enumDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrEnumDynamicDispatch(assembly.reflectionInput, assembly.reflectableObjects, assembly.unreached,
+			context.lineage);
 
 	static function reachabilityReport(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var reflectionInput = assembly.reflectionInput;

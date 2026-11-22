@@ -113,6 +113,24 @@ class IrStageMemos {
 	/** The build the stages run for, counted by `startBuild`. */
 	public var build(default, null) = 0;
 
+	/**
+	 * Generated helpers whose name says all they are made of (the enum dispatch's boxes, views and unboxes), by name: a build that
+	 * asks for one again takes last build's, without making it. What a build did not keep is dropped when the next one starts.
+	 */
+	var helpers:Map<String, IrContribution<IrFunction>> = [];
+
+	var keptHelpers:Map<String, IrContribution<IrFunction>> = [];
+
+	/** Last build's helper `name`, or null. */
+	public function helper(name:String):Null<IrFunction> {
+		var known = helpers.get(name);
+		return known == null ? null : known.value;
+	}
+
+	/** Keeps `fn` for the next build (`helper`). */
+	public function keepHelper(fn:IrFunction):Void
+		keptHelpers.set(fn.name, new IrContribution(fn, build));
+
 	public function new(versions:IrFunctionVersions) {
 		this.versions = versions;
 		lineage = new IrLineage(this);
@@ -121,6 +139,8 @@ class IrStageMemos {
 	/** Starts an assembly run. */
 	public function startBuild():Void {
 		build++;
+		helpers = keptHelpers;
+		keptHelpers = [];
 		walkSummaries.begin(build);
 		interfaceRequests.begin(build);
 		enumMentions.begin(build);

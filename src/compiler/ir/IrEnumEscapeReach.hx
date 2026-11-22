@@ -20,7 +20,8 @@ class IrEnumEscapeReach {
 	final objectClosures:Map<String, Map<String, Bool>> = [];
 	var implementersBuilt = false;
 
-	public function new(program:IrProgram) {
+	/** `scans`, when given, tells the functions whose closures and map stores to read: the others have none. */
+	public function new(program:IrProgram, ?scans:IrFunction->Bool) {
 		objects = [for (entry in program.objects) entry.name => entry];
 		contracts = [for (entry in program.interfaces) entry.name => entry];
 		declarations = [for (entry in program.enums) entry.name => entry];
@@ -51,6 +52,8 @@ class IrEnumEscapeReach {
 			}
 		// A function read past the encode point is its body; one before it, its objects.
 		for (fn in functions) {
+			if (scans != null && !scans(fn))
+				continue;
 			var body = fn.body;
 			if (body != null)
 				for (block in 0...body.blockCount()) {
@@ -82,7 +85,7 @@ class IrEnumEscapeReach {
 		}
 	}
 
-	static function mapSetter(name:String):Bool
+	public static function mapSetter(name:String):Bool
 		return StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")
 			&& StringTools.endsWith(name, "_set");
 
