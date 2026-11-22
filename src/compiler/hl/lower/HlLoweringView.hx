@@ -8,8 +8,9 @@ import compiler.ir.Ir.IrObject;
  * fact has it. A fact is worked out at most once per lowering (`begin`). The session keeps one with the lowered functions
  * (`HlLoweredCache`), which the copies of that cache share: a rolled-back build can only make a print newer, never reuse one.
  *
- * An object's answer is its text (`Std.string`), made again only when the program holds another object of that name than the one
- * the print was last made for: an `IrObject` is never changed once made.
+ * An object fact keeps its print while the program's object of that name compares the same, part by part (`sameObject`), as the
+ * one the print was last made for: an `IrObject` is never changed once made, and the stages make new ones every build. Under
+ * `--check-reuse` the two objects' texts are compared too, so a part `sameObject` does not know of is caught.
  */
 class HlFactPrints {
 	final ids:Map<String, Int> = [];
@@ -23,7 +24,7 @@ class HlFactPrints {
 	var lowering = 0;
 	var lastPrint = 0;
 
-	/** Recompute an object's text even when it is the object the print was made for, and fail if it changed. */
+	/** Compare the texts of two objects `sameObject` finds the same, and fail if they differ. */
 	public var checkObjects = false;
 
 	public function new() {}
@@ -58,27 +59,62 @@ class HlFactPrints {
 		if (worked[id] == lowering)
 			return prints[id];
 		worked[id] = lowering;
-		var answer:String;
 		if (isObject[id]) {
-			var found = view.currentObject(names[id]);
-			if (found != null && found == objects[id] && prints[id] != 0) {
-				if (checkObjects && Std.string(found) != answers[id])
-					throw new compiler.core
-						.InternalError('--check-reuse: object ${names[id]} changed after lowering read it');
-				return prints[id];
-			}
+			var found = view.currentObject(names[id]), last = objects[id];
+			var same = prints[id] != 0 && (found == last || found != null && last != null && sameObject(found, last));
+			if (same && checkObjects && found != last && Std.string(found) != Std.string(last))
+				throw new compiler.core
+					.InternalError('--check-reuse: object ${names[id]} compares the same as the one lowering read, but is not');
 			objects[id] = found;
-			answer = found == null ? "-" : Std.string(found);
-		} else {
-			var key = view.currentTypedKey(names[id]);
-			answer = key == null ? "-" : key;
+			if (!same)
+				prints[id] = ++lastPrint;
+			return prints[id];
 		}
+		var key = view.currentTypedKey(names[id]), answer = key == null ? "-" : key;
 		if (prints[id] == 0 || answer != answers[id]) {
 			answers[id] = answer;
 			prints[id] = ++lastPrint;
 		}
 		return prints[id];
 	}
+
+	/** Whether two objects of the same name read the same to lowering: every part of an `IrObject`. */
+	static function sameObject(a:IrObject, b:IrObject):Bool {
+		if (a.isValue != b.isValue || a.base != b.base || !sameNativeLayout(a.nativeLayout, b.nativeLayout)
+			|| a.interfaces.length != b.interfaces.length || a.fields.length != b.fields.length
+			|| a.methods.length != b.methods.length)
+			return false;
+		for (index in 0...a.interfaces.length)
+			if (a.interfaces[index] != b.interfaces[index])
+				return false;
+		for (index in 0...a.fields.length) {
+			var left = a.fields[index], right = b.fields[index];
+			if (left.name != right.name || !compiler.ir.IrTypeIdentity.same(left.type, right.type)
+				|| !sameFieldLayout(left.nativeLayout, right.nativeLayout)
+				|| !sameStorage(left.scalarStorage, right.scalarStorage)
+				|| !sameStorage(left.nullableScalarStorage, right.nullableScalarStorage))
+				return false;
+		}
+		for (index in 0...a.methods.length) {
+			var left = a.methods[index], right = b.methods[index];
+			if (left.name != right.name || left.functionName != right.functionName)
+				return false;
+		}
+		return true;
+	}
+
+	static function sameNativeLayout(a:Null<compiler.ir.Ir.IrObjectNativeLayout>,
+			b:Null<compiler.ir.Ir.IrObjectNativeLayout>):Bool
+		return a == null ? b == null : b != null && a.target == b.target && a.size == b.size
+			&& a.alignment == b.alignment;
+
+	static function sameFieldLayout(a:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>,
+			b:Null<compiler.ir.Ir.IrObjectFieldNativeLayout>):Bool
+		return a == null ? b == null : b != null && a.offset == b.offset && a.size == b.size
+			&& a.alignment == b.alignment && a.signed == b.signed && a.inlineRecord == b.inlineRecord;
+
+	static function sameStorage(a:Null<compiler.ir.Ir.IrScalarStorage>, b:Null<compiler.ir.Ir.IrScalarStorage>):Bool
+		return a == null ? b == null : b != null && a.size == b.size && a.signed == b.signed;
 
 	public function describe(id:Int):String
 		return (isObject[id] ? "object:" : "typed:") + names[id];
