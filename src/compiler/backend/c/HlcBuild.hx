@@ -81,7 +81,8 @@ class HlcBuild {
 		var driver = driverOf(toolchain), os = sdkTarget(sdk).os;
 		var objects = directory + (exactFrames ? "/obj-development" : "/obj-release");
 		FileSystem.createDirectory(objects);
-		var header = directory + "/hlc.h", headerTime = modified(header);
+		// Every file includes `hlc.h`, and through it the SDK's `hlc_prelude.h`.
+		var headerTime = Math.max(modified(directory + "/hlc.h"), modified(sdk + "/include/hlc_prelude.h"));
 		var sources = [for (file in files) if (StringTools.endsWith(file.path, ".c")) directory + "/" + file.path];
 		sources.push(sdk + "/src/hlc_main.c");
 		sources.push(sdk + "/src/hlc_stack.c");

@@ -4,6 +4,7 @@
  * (`hl_module_init_aot`: nothing is compiled), so the C code shares every layout decision with the JIT. */
 #include <hl.h>
 #include <hlmodule.h>
+#include <hlc_prelude.h>
 
 extern const unsigned long long hlc_image[]; // the image's bytes as little-endian words
 extern const int hlc_image_size;
@@ -27,7 +28,6 @@ extern const int hlc_global_ref_indices[];
 extern const int hlc_native_ref_count;
 extern void **const hlc_native_refs[];
 extern const int hlc_native_ref_indices[];
-typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;
 extern const hlc_signature hlc_signatures[];
 extern const int hlc_signature_count;
 

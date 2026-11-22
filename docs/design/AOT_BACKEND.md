@@ -91,8 +91,14 @@ failure, never silent corruption.
 
 The sources go to `OUTPUT.c/`:
 
-- `hlc.h`: what every file shares, and only that: `#include <hl.h>`, the section and inlining macros, the runtime
-  helpers (`hlc_new`, the value array view).
+- `hlc.h`: what every file shares, and only that. What is the same for every program is a real header of the SDK,
+  `hlc_prelude.h` (`native/aot/hlc_prelude.h`, copied into `include/` by the `haxeon-hlc-sdk` target): `#include <hl.h>`,
+  the warning pragmas, the section and inlining macros (`HLC_FUNCTION`), `hlc_signature`, `hlc_f64`, the native symbol
+  macros (`HLC_SYMBOL`) and the inline allocation helper `hlc_new`. The generated `hlc.h` defines the program's options
+  before it includes the prelude (`HLC_INLINE_ALLOCATION` with `CompileOptions.inlineAllocation`) and adds only what
+  depends on the program after it: the value array view, which calls the program's own functions. The entry point
+  (`hlc_main.c`) includes the prelude for `hlc_signature`. The C build recompiles every file when the prelude is newer
+  than its object, as when `hlc.h` is.
 - One `.c` file per Haxe source file (each function goes with the source most of its rows come from, so inlined code
   does not move it), so C builds run in parallel and an edit recompiles only the files whose text changed: the writer
   leaves an unchanged file untouched, so its timestamp stays. Measured on the compiler with `hl2c`, per-module files
