@@ -1,6 +1,7 @@
 # Project CLI and builds
 
-The project CLI creates a small `haxeon.toml` manifest ([MANIFEST.md](MANIFEST.md); `haxeon.json` works too), builds HashLink programs
+The project CLI creates projects from templates (`haxeon create`, below), each with a `haxeon.toml` manifest
+([MANIFEST.md](MANIFEST.md); `haxeon.json` works too), builds HashLink programs
 for the current desktop host, experimental Wasm32 modules, and Android APKs, and
 can launch host programs or install and launch an Android app. The same command
 is available on Unix-like systems and Windows:
@@ -25,6 +26,9 @@ run it as `haxeon`. `scripts/haxeon` (and `scripts\haxeon` on Windows) runs it
 after rebuilding it and the CLI's bytecode if their sources changed.
 
 ```sh
+./scripts/haxeon create my_app
+./scripts/haxeon create my_tool --template program
+./scripts/haxeon create .
 ./scripts/haxeon init
 ./scripts/haxeon migrate --dry-run
 ./scripts/haxeon migrate
@@ -68,6 +72,22 @@ succeeds, 1 when a build, a test or another step fails, 2 for a usage error (an 
 command or option, a missing or invalid value) and 70 for an internal error, which is a
 bug in Haxeon. The compiler run directly takes each valued option as `--name=value` or
 `--name value`, and exits with 2 for a usage error too.
+
+`haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`
+([templates/README.md](../../templates/README.md)): `--template app` (the default) is a window with a counter and an
+`[app]` section ([MANIFEST.md](MANIFEST.md)), `--template program` a console program. `--platforms` lists an app's
+platforms (by default this machine's) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
+template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
+before; `create . --template program` replaces it.
+
+An app's window takes the host's standard flags after `--`, so a test or a script can run any app without code of its
+own: `--frames=N` stops after N frames, `--capture=DIR` writes the last frame and diagnostics to DIR,
+`--capture-seconds=S` captures after S seconds instead, and `--input-script=PATH` plays timed input
+(`haxeon.ui.host.DesktopUiHostOptions.withArguments`):
+
+```sh
+haxeon run -- --frames=10 --capture=out/capture
+```
 
 `haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
 default, while `--check` reports files that would change; a directory stands for

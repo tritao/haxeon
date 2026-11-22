@@ -50,6 +50,7 @@ haxe-command-line                ci          -- scripts/haxeon tests/integration
 project-verbs                    ci          -- scripts/haxeon tests/integration/test-project-verbs.hx
 # haxeon.toml and haxeon.json: init writes TOML, migrate converts JSON, both in one directory are refused, add keeps comments.
 project-manifests                ci          -- scripts/haxeon tests/integration/test-project-manifests.hx
+project-templates                ci          -- scripts/haxeon tests/integration/test-project-templates.hx
 # nullSafety in haxeon.toml (init writes strict; strict fails, warn warns, off and absent stay quiet) and --macro nullSafety(...).
 null-safety-setting              ci          -- scripts/haxeon tests/integration/test-null-safety-setting.hx
 hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh

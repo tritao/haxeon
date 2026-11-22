@@ -1,0 +1,16 @@
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+nullSafety = "strict"
+
+[package]
+name = "{{package}}"
+
+[app]
+name = "{{name}}"
+id = "{{id}}"
+version = "1.0.0"
+platforms = {{platforms}}
+
+[dependencies]
+haxeon-ui = { path = "{{haxeon}}/packages/ui" }

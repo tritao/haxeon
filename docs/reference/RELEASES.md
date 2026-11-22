@@ -18,6 +18,7 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 | `bin/haxeon-compiler.hl`, `bin/haxeon-compiler.hl.sources` | The compiler's roles as bytecode, with its stamp: what the VM runs when there is no executable. |
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
 | `stdlib/` | The standard library. |
+| `templates/` | The project templates of `haxeon create` ([templates/README.md](../../templates/README.md)). |
 | `LICENSE`, `NOTICE`, `README.md` | |
 
 Platforms:

@@ -104,6 +104,7 @@ Paths are relative to the manifest's directory.
 | `dependencies.NAME` | string or table | | One dependency. A version range alone (`ui = "^0.3"`) is a release of the `haxeon` registry, the same as `{ registry = "haxeon", version = "^0.3" }`. A table names its source: `path`, `workspace`, `git` + `rev`, `registry` + `version`, or `haxelib` + `version`. |
 | `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
+| `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program ([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)). |
 | `android` | table | | `applicationId` and `label` of the Android app ([ANDROID.md](ANDROID.md)). |
 | `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([CLI.md](CLI.md)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |

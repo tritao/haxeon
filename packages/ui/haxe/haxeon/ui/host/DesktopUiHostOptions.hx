@@ -37,6 +37,39 @@ class DesktopUiHostOptions extends UiHostOptions {
 
 	public function new() super();
 
+	/**
+	 * Applies the host's standard command-line flags, so any app can be run for a number of frames, captured or driven by a
+	 * script without code of its own, and returns the options: `--frames=N` (stop after N frames), `--capture=DIR` (write
+	 * the last frame and diagnostics to DIR), `--capture-seconds=S` (capture after S seconds instead) and
+	 * `--input-script=PATH` (timed input, `ScriptedInput`). Other arguments are the app's and are left alone.
+	 */
+	public function withArguments(arguments:Array<String>):DesktopUiHostOptions {
+		for (argument in arguments) {
+			var separator = argument.indexOf("=");
+			if (!StringTools.startsWith(argument, "--") || separator < 0)
+				continue;
+			var value = argument.substr(separator + 1);
+			switch argument.substr(0, separator) {
+				case "--frames":
+					var frames = Std.parseInt(value);
+					if (frames == null || frames < 0)
+						throw 'Invalid --frames value "$value"';
+					frameLimit = frames;
+				case "--capture":
+					captureDirectory = value;
+				case "--capture-seconds":
+					var seconds = Std.parseFloat(value);
+					if (!Math.isFinite(seconds) || seconds < 0)
+						throw 'Invalid --capture-seconds value "$value"';
+					captureSeconds = seconds;
+				case "--input-script":
+					inputScriptPath = value;
+				case _:
+			}
+		}
+		return this;
+	}
+
 	public function validate():Void {
 		if (title == null || title.length == 0 || width <= 0 || height <= 0 || minimumWidth < 0 || minimumHeight < 0
 			|| eventQueueCapacity <= 0 || targetFps <= 0.0 || frameLimit < 0 || captureSeconds < 0.0

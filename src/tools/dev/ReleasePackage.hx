@@ -19,6 +19,7 @@ import sys.io.File;
  *                                   ahead of time with its stamp (and its .pdb with MSVC) when it is built and current, the
  *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
  *   stdlib/                         the standard library
+ *   templates/                      the project templates of `haxeon create` (templates/README.md)
  *   LICENSE, NOTICE, README.md
  *
  * It builds what a checkout's native build does not, the compiler's bytecode: `tools.CompilerExecutable` with the pinned Haxe, as the
@@ -79,6 +80,7 @@ class ReleasePackage {
 		cmake(home, ["-E", "copy", bytecode, Path.join([bin, bytecodeName])]);
 		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(home))]), digest + "\n");
 		cmake(home, ["-E", "copy_directory", Path.join([home, "stdlib"]), Path.join([root, "stdlib"])]);
+		cmake(home, ["-E", "copy_directory", Path.join([home, "templates"]), Path.join([root, "templates"])]);
 		// The stamps hold the digest of what the release holds: no source changed while it was made.
 		if (AotCompiler.sourcesDigest(home, compilerSource) != digest)
 			throw new InternalError("The compiler sources changed while the release was made; run it again");

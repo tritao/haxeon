@@ -65,6 +65,37 @@ class FfiManifest {
 }
 
 /**
+ * What makes a project an app: its `[app]` section. An app builds through its runner projects, one per platform it names;
+ * a project without the section is a program (docs/design/PROJECT_BUILDS.md).
+ */
+class AppManifest {
+	/** The platforms an app can name, each with a runner project of its own (docs/design/PROJECT_BUILDS.md). */
+	public static final PLATFORMS = ["linux", "windows", "macos", "android", "web", "ios"];
+
+	/** The name people see: the window title, the launcher label, the page title. */
+	public final name:String;
+
+	/** The reverse-domain identifier: Android's applicationId, the macOS bundle identifier. */
+	public final id:String;
+
+	public final version:String;
+
+	/** The icon's image, relative to the manifest, or null for the template's. */
+	public final icon:Null<String>;
+
+	/** The platforms the app builds for, each with its runner directory beside the manifest. */
+	public final platforms:Array<String>;
+
+	public function new(name:String, id:String, version:String, icon:Null<String>, platforms:Array<String>) {
+		this.name = name;
+		this.id = id;
+		this.version = version;
+		this.icon = icon;
+		this.platforms = platforms.copy();
+	}
+}
+
+/**
  * What an instrumented build (`haxeon run --profile=instrument`) probes, from the project's `"instrument"` object.
  * Haxe patterns name functions (`Math`, `haxe.ds.*`); native patterns are globs over source paths relative to the
  * project (`**` crosses directories). Boundary hooks time calls into code the build does not compile.
@@ -151,6 +182,9 @@ class PackageManifest {
 	/** The instrumented build's scope; the defaults instrument everything. */
 	public final instrument:InstrumentManifest;
 
+	/** The `[app]` section, which makes the project an app; null for a program. */
+	public final app:Null<AppManifest>;
+
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>,
 			sourceRoots:Array<String>,
 			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String,
@@ -158,7 +192,8 @@ class PackageManifest {
 			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>,
 			androidApplicationId:String,
 			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
-			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest) {
+			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
+			?app:AppManifest) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -181,6 +216,7 @@ class PackageManifest {
 		this.androidAppLabel = androidAppLabel;
 		this.compatibility = compatibility;
 		this.instrument = instrument == null ? new InstrumentManifest() : instrument;
+		this.app = app;
 	}
 
 	/** The manifest `haxeon init` writes and every lookup prefers. */
@@ -233,7 +269,8 @@ class PackageManifest {
 	static final FIELD_ORDER = [
 		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
 		"target",
-		"defines", "inline", "nullSafety", "outputDir", "package", "dependencies", "native", "ffi", "android", "format",
+		"defines", "inline", "nullSafety", "outputDir", "package", "app", "dependencies", "native", "ffi", "android",
+		"format",
 		"compatibility",
 		"instrument"
 	];
@@ -400,7 +437,31 @@ class PackageManifest {
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
 			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
-			parseNullSafety(raw, path), [], parseInstrument(raw, path));
+			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path));
+	}
+
+	/** The `[app]` section: a name (the package's by default), a reverse-domain `id`, a `version`, an `icon` and the `platforms`. */
+	static function parseApp(raw:Dynamic, packageName:String, path:String):Null<AppManifest> {
+		var app:Dynamic = Reflect.field(raw, "app");
+		if (app == null)
+			return null;
+		if (!isObject(app))
+			throw new UsageError('$path "app" must be a table');
+		var id = optionalString(app, "id", "", path);
+		if (!isAndroidApplicationId(id))
+			throw new UsageError('$path "app.id" must be a reverse-domain identifier, such as "com.example.hello"');
+		var platforms = stringArray(app, "platforms", path, []);
+		if (platforms.length == 0)
+			throw new UsageError('$path "app.platforms" must name at least one of ${AppManifest.PLATFORMS.join(", ")}');
+		for (platform in platforms)
+			if (AppManifest.PLATFORMS.indexOf(platform) < 0)
+				throw new UsageError('$path "app.platforms" names "$platform"; the platforms are ${AppManifest.PLATFORMS.join(", ")}');
+		var icon:Dynamic = Reflect.field(app, "icon");
+		if (icon != null && !Std.isOfType(icon, String))
+			throw new UsageError('$path "app.icon" must be a path');
+		return new AppManifest(optionalString(app, "name", packageName, path), id,
+			optionalString(app, "version", "1.0.0", path),
+			icon, platforms);
 	}
 
 	/**

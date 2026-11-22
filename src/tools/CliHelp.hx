@@ -35,8 +35,22 @@ class CliHelp {
 			title: "Project",
 			commands: [
 				{
+					name: "create",
+					summary: "Create a project from a template, or add what one lacks",
+					details: [
+						"Usage: haxeon create DIRECTORY [--template app|program] [--platforms LIST] [--org PREFIX]",
+						"",
+						"  DIRECTORY                    A new directory, or . to add the template's missing files here",
+						"  --template NAME              app (default: a window, with an [app] section) or program (a console program)",
+						"  --platforms LIST             An app's platforms, comma-separated (default: this machine's)",
+						"  --org PREFIX                 The app identifier's prefix (default com.example)",
+						"",
+						"  Existing files are never overwritten."
+					]
+				},
+				{
 					name: "init",
-					summary: "Create haxeon.toml and src/Main.hx in this directory",
+					summary: "Create haxeon.toml and src/Main.hx in this directory (to be replaced by create)",
 					details: [
 						"Usage: haxeon init [--entry Main] [--target host|wasm32|android]",
 						"",
