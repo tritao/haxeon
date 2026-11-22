@@ -8,6 +8,7 @@ import compiler.ir.model.Ir.IrType;
  * `[a, b]`, so a compiler built by each would name and hash the same types differently. The form is the one stock Haxe prints
  * (`Function([I32,Obj(pkg.Name)],Void)`), the form the compiler's outputs already carry.
  */
+@:nullSafety(Strict)
 class IrTypeIdentity {
 	public static function text(type:IrType):String {
 		var out = new StringBuf();

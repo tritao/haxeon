@@ -6,6 +6,7 @@ import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 
 /** Imperative helper for constructing a single well-formed SSA function. */
+@:nullSafety(Strict)
 class IrBuilder {
 	public final blocks:Array<IrBlock> = [];
 	public final arguments:Array<IrValue> = [];

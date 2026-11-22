@@ -12,6 +12,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * its columns at their exact size and `reset` empties them without giving their storage back.
  */
 @:allow(compiler.ir.model.IrBody)
+@:nullSafety(Strict)
 class IrBodyBuilder {
 	var types:IrTypeIds;
 	final opcodes:Array<Int> = [];

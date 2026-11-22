@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 
 /** Stable source coordinates retained independently of a compiler source snapshot. */
+@:nullSafety(Strict)
 class SourceLocation {
 	public final path:String;
 	public final start:Int;
@@ -47,6 +48,7 @@ enum SourceOrigin {
 }
 
 /** Source ownership carried by CFG and SSA operations through transformations. */
+@:nullSafety(Strict)
 class SourceProvenance {
 	public final location:Null<SourceLocation>;
 	public final origin:SourceOrigin;
@@ -62,15 +64,18 @@ class SourceProvenance {
 		this.origin = origin;
 	}
 
-	public static function user(span:SourceSpan):SourceProvenance
+	public static function user(span:SourceSpan):SourceProvenance {
+		var reason = span.generatedReason;
 		return new SourceProvenance(SourceLocation.fromSpan(span),
-			span.generatedReason == null ? UserSource : CompilerGenerated(span.generatedReason));
+			reason == null ? UserSource : CompilerGenerated(reason));
+	}
 
 	public static function generated(reason:String, ?anchor:SourceSpan):SourceProvenance
 		return new SourceProvenance(anchor == null ? null : SourceLocation.fromSpan(anchor), CompilerGenerated(reason));
 }
 
 /** Keeps transformation provenance structurally attached to an operation. */
+@:nullSafety(Strict)
 class Located<T> {
 	public final value:T;
 	public final provenance:SourceProvenance;

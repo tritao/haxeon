@@ -95,6 +95,7 @@ enum IrFunctionKind {
  * body replaces this one, which is not read again. A stage given a frozen body edits a copy.
  */
 @:allow(compiler.ir.model.IrBody)
+@:nullSafety(Strict)
 class IrFunction {
 	public final name:String;
 	public final arguments:Array<IrValue>;

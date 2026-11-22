@@ -16,6 +16,7 @@ import compiler.ir.passes.scalars.IrScalarArguments;
  * recognizes a helper by the prefix of its name any more. Do not add a prefix list: give the generator's operation a place here.
  * A function that serves no type declares what it is by another kind (a lambda, a clone, an adapter, a helper).
  */
+@:nullSafety(Strict)
 class IrProviders {
 	/** The operation without the detail words after its first colon. */
 	public static function base(operation:String):String {

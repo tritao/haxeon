@@ -13,6 +13,7 @@ import compiler.ir.model.Ir.IrProgram;
  * made those passes quadratic in the number of classes; this index answers
  * each lookup by name and remembers the subtype sets it has computed.
  */
+@:nullSafety(Strict)
 class IrProgramIndex {
 	final program:IrProgram;
 	final functionCount:Int;
@@ -164,7 +165,10 @@ class IrProgramIndex {
 			// The names below `typeName` in the class tree, then their classes in declaration order.
 			var found:Array<Int> = [], seen:Map<String, Bool> = [typeName => true], pending = [typeName];
 			while (pending.length > 0) {
-				var name = pending.pop(), positions = positionsByName.get(name), below = children.get(name);
+				var name = pending.pop();
+				if (name == null)
+					break;
+				var positions = positionsByName.get(name), below = children.get(name);
 				if (positions != null)
 					for (position in positions)
 						found.push(position);
@@ -234,7 +238,10 @@ class IrProgramIndex {
 			result = [];
 			var seen:Map<String, Bool> = [name => true], pending = [name];
 			while (pending.length > 0) {
-				var next = pending.pop(), interfaceDecl = interfaces.get(next);
+				var next = pending.pop();
+				if (next == null)
+					break;
+				var interfaceDecl = interfaces.get(next);
 				result.push(next);
 				if (interfaceDecl != null)
 					for (base in interfaceDecl.bases)

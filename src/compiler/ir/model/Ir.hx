@@ -43,6 +43,7 @@ enum IrType {
 }
 
 /** Immutable SSA definition with a function-local numeric identity. */
+@:nullSafety(Strict)
 class IrValue {
 	public final id:Int;
 	public final name:String;
@@ -184,6 +185,7 @@ enum IrTerminator {
 }
 
 /** SSA basic block identified independently of its position in the block array. */
+@:nullSafety(Strict)
 class IrBlock {
 	public final id:Int;
 	public final instructions:Array<Located<IrInstruction>>;
@@ -296,6 +298,7 @@ typedef IrObject = {
 }
 
 /** Copies of an IR object that change one part and carry every other field over, including ones added later. */
+@:nullSafety(Strict)
 class IrObjectTools {
 	public static function withMethods(object:IrObject, methods:Array<IrObjectMethod>):IrObject {
 		var copy:Dynamic = Reflect.copy(object);
@@ -352,6 +355,7 @@ enum IrDefault {
 }
 
 /** Complete register-independent program assembled into a HashLink module. */
+@:nullSafety(Strict)
 class IrProgram {
 	public var natives:Array<IrNative> = [];
 	public var cNatives:Array<IrCNative> = [];

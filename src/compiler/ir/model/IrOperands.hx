@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.ir.model.Ir;
 
 /** Canonical value definitions and uses shared by verification and lowering. */
+@:nullSafety(Strict)
 class IrOperands {
 	public static function output(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
@@ -42,7 +43,9 @@ class IrOperands {
 	/** Tests all SSA values, including phi edge uses, without temporary input arrays. */
 	public static inline function anyValue(instruction:IrInstruction, test:IrValue->Bool):Bool {
 		var result = output(instruction);
-		return (result != null && test(result)) || operandView(instruction, test) == matchedInputs;
+		if (result != null && test(result))
+			return true;
+		return operandView(instruction, test) == matchedInputs;
 	}
 
 	/** A null predicate returns the input view. Otherwise only the two shared predicate results are returned. */
