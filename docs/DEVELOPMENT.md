@@ -148,7 +148,9 @@ none of those can be, and no alias for any of them:
   `test-cli-launcher.sh` (the suite runner's `cli-launcher` option), `hooks/pre-push`, and `lib/`, which test scripts source;
 - tools that read what a run wrote: `alloc-sites.py` (the allocation census), `peak-timeline.py`, `check-pftrace.py`,
   `hlprof-report.py`, `hlprof-spans.py`, `report-binary-size.py`; and `compiler-class-paths.sh` for tools outside the tree,
-  `generate-ryu-table-data.py` for the checked-in table it generates.
+  `generate-ryu-table-data.py` for the checked-in table it generates; `apply-ir-layout.py`, which moves the modules of
+  `src/compiler/ir` into the packages `ir-layout.txt` names and fixes every reference, for a branch made before the move
+  (`python3 scripts/apply-ir-layout.py .` after rebasing; it is idempotent).
 
 New scripts for this tree are Haxe, run by `haxeon` ([CLI.md](reference/CLI.md#scripts)): `scripts/check-self-hosting.hx`
 and `tests/integration/test-haxeon-script.hx` are examples. They run the same on every platform, which the Bash scripts

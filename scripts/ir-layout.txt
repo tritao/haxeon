@@ -1,0 +1,179 @@
+# Layout of src/compiler/ir: one "Module destination.package" per line. Read by apply-ir-layout.py.
+# Modules of compiler.ir that are not listed stay where they are (the script names them).
+# It is the layout the move was generated from: after it, ObjectReflection and GenericOwnerErasure became IrObjectReflection and
+# IrGenericOwnerErasure, and IrVerifyTable, IrConstructed, IrReachabilityReport and IrInlineEnumReferenceAccess sub-types of
+# IrVerifyMemo, IrReachability and IrInlineEnumCaseAccess; a branch that still names those fixes them by hand.
+
+# The IR's data: the tree form, the body columns, types, symbols, provenance and the program tables.
+Ir                              compiler.ir.model
+IrBody                          compiler.ir.model
+IrBodyBuilder                   compiler.ir.model
+IrBuilder                       compiler.ir.model
+IrFieldStorage                  compiler.ir.model
+IrFunction                      compiler.ir.model
+IrObjectTable                   compiler.ir.model
+IrOpcode                        compiler.ir.model
+IrOperands                      compiler.ir.model
+IrPassScratch                   compiler.ir.model
+IrProgramIndex                  compiler.ir.model
+IrProviders                     compiler.ir.model
+IrSymbol                        compiler.ir.model
+IrTypeIdentity                  compiler.ir.model
+IrTypeIds                       compiler.ir.model
+IrTypeMap                       compiler.ir.model
+IrTypeTools                     compiler.ir.model
+IrValueId                       compiler.ir.model
+SourceProvenance                compiler.ir.model
+TypeKey                         compiler.ir.model
+
+# Generated-entity names (`$prefix:` constants).
+IrReceiverCheck                 compiler.ir.names
+IrReferenceIdentity             compiler.ir.names
+
+# Control-flow graphs over functions and bodies.
+IrBodyGraph                     compiler.ir.cfg
+IrGraph                         compiler.ir.cfg
+IrReducibility                  compiler.ir.cfg
+IrSwitch                        compiler.ir.cfg
+PhiEdges                        compiler.ir.cfg
+
+# IR generation from the typed program, with SSA construction.
+DebugNames                      compiler.ir.gen
+IrGenerator                     compiler.ir.gen
+IrIteratorReplacement           compiler.ir.gen
+IrLocalsBuilder                 compiler.ir.gen
+IrLoopContext                   compiler.ir.gen
+IrMethodReferences              compiler.ir.gen
+IrSsaVariables                  compiler.ir.gen
+
+# Program assembly, the stage lists and their drivers, and the build's inputs.
+IrAssembly                      compiler.ir.pipeline
+IrFunctionIndex                 compiler.ir.pipeline
+IrFunctionPass                  compiler.ir.pipeline
+IrFunctionStages                compiler.ir.pipeline
+IrPipeline                      compiler.ir.pipeline
+IrPipelineContext               compiler.ir.pipeline
+IrProgramAssembler              compiler.ir.pipeline
+IrSourceRehash                  compiler.ir.pipeline
+IrStage                         compiler.ir.pipeline
+ProgramFacts                    compiler.ir.pipeline
+StaticInitializationOrder       compiler.ir.pipeline
+TargetProfile                   compiler.ir.pipeline
+
+# What a session keeps from one build for the next: stage memos, facts, lineage, versions.
+IrFactReader                    compiler.ir.reuse
+IrFacts                         compiler.ir.reuse
+IrFunctionMemo                  compiler.ir.reuse
+IrFunctionVersions              compiler.ir.reuse
+IrStageMemo                     compiler.ir.reuse
+
+# Read-only whole-program and per-function analyses, reachability and the prune.
+IrConstructed                   compiler.ir.analysis
+IrEntryPrune                    compiler.ir.analysis
+IrEnumEscapeReach               compiler.ir.analysis
+IrExactTypeFacts                compiler.ir.analysis
+IrInitializationCalls           compiler.ir.analysis
+IrLoopBounds                    compiler.ir.analysis
+IrMethodResolution              compiler.ir.analysis
+IrNonNullFacts                  compiler.ir.analysis
+IrReachability                  compiler.ir.analysis
+IrReachabilityReport            compiler.ir.analysis
+IrTypeAwareWalk                 compiler.ir.analysis
+
+# Passes, by family.
+IrFunctionRewrite               compiler.ir.passes
+
+IrBodyCallExpansion             compiler.ir.passes.inlining
+IrInliner                       compiler.ir.passes.inlining
+
+GenericOwnerErasure             compiler.ir.passes.objects
+IrCheckedDynamicCasts           compiler.ir.passes.objects
+IrClassIds                      compiler.ir.passes.objects
+IrOverrideBridges               compiler.ir.passes.objects
+IrTypeHashDispatch              compiler.ir.passes.objects
+IrTypedInterfaceDispatch        compiler.ir.passes.objects
+ObjectReflection                compiler.ir.passes.objects
+
+IrArrayRuntimeNatives           compiler.ir.passes.enums
+IrClosedEnumTagAbi              compiler.ir.passes.enums
+IrEnumDynamicDispatch           compiler.ir.passes.enums
+IrEnumRuntimeSpecializations    compiler.ir.passes.enums
+IrEnumRuntimeTypes              compiler.ir.passes.enums
+IrEnumTagLowering               compiler.ir.passes.enums
+IrEnumTagStorage                compiler.ir.passes.enums
+IrInlineEnumCaseAccess          compiler.ir.passes.enums
+IrInlineEnumEligibility         compiler.ir.passes.enums
+IrInlineEnumEscapes             compiler.ir.passes.enums
+IrInlineEnumLayout              compiler.ir.passes.enums
+IrInlineEnumLowering            compiler.ir.passes.enums
+IrInlineEnumReferenceAccess     compiler.ir.passes.enums
+IrInlineEnumRequests            compiler.ir.passes.enums
+IrInlineEnumStorage             compiler.ir.passes.enums
+IrInlineEnumWordAccess          compiler.ir.passes.enums
+
+IrInlineValueLayout             compiler.ir.passes.values
+IrValueConstructors             compiler.ir.passes.values
+IrValueDynamicDispatch          compiler.ir.passes.values
+IrValueInterfaceBoxes           compiler.ir.passes.values
+IrValueLaneLayout               compiler.ir.passes.values
+IrValueLaneReference            compiler.ir.passes.values
+IrValueLaneRuntime              compiler.ir.passes.values
+IrValuePhiScalarization         compiler.ir.passes.values
+
+IrArrayFactory                  compiler.ir.passes.arrays
+IrValueArrayAccess              compiler.ir.passes.arrays
+IrValueArrayBridge              compiler.ir.passes.arrays
+IrValueArrayElementRewrite      compiler.ir.passes.arrays
+IrValueArrayElements            compiler.ir.passes.arrays
+IrValueArrayFactory             compiler.ir.passes.arrays
+IrValueArrayLayout              compiler.ir.passes.arrays
+IrValueArrayOptionalComponents  compiler.ir.passes.arrays
+IrValueArrayOptionalRewrite     compiler.ir.passes.arrays
+IrValueArrayPlaceMethods        compiler.ir.passes.arrays
+IrValueArrayPlaceRewrite        compiler.ir.passes.arrays
+IrValueArrayProgramRewrite      compiler.ir.passes.arrays
+IrValueArrayRangeRewrite        compiler.ir.passes.arrays
+IrValueArrayRows                compiler.ir.passes.arrays
+IrValueArrayScalarLowering      compiler.ir.passes.arrays
+IrValueArraySlotHelpers         compiler.ir.passes.arrays
+
+IrHlScalarRef                   compiler.ir.passes.scalars
+IrNestedScalarReplacement       compiler.ir.passes.scalars
+IrScalarAbiEligibility          compiler.ir.passes.scalars
+IrScalarArguments               compiler.ir.passes.scalars
+IrScalarClosures                compiler.ir.passes.scalars
+IrScalarRefPromotion            compiler.ir.passes.scalars
+IrScalarReplacement             compiler.ir.passes.scalars
+IrScalarValuePlaces             compiler.ir.passes.scalars
+IrScalarWordBits                compiler.ir.passes.scalars
+
+IrNullableScalarFields          compiler.ir.passes.nullability
+IrNullableScalarFlow            compiler.ir.passes.nullability
+IrOptionalFieldStorage          compiler.ir.passes.nullability
+IrOptionalScalarFlow            compiler.ir.passes.nullability
+IrOptionalValueFlow             compiler.ir.passes.nullability
+IrStaticNullChecks              compiler.ir.passes.nullability
+
+IrConstantBranches              compiler.ir.passes.cleanup
+IrCopyElision                   compiler.ir.passes.cleanup
+IrDeadPureValues                compiler.ir.passes.cleanup
+IrJumpThreading                 compiler.ir.passes.cleanup
+IrLoadStoreForwarding           compiler.ir.passes.cleanup
+IrReceiverCheckElision          compiler.ir.passes.cleanup
+IrStrengthReduction             compiler.ir.passes.cleanup
+IrUnreachableBlocks             compiler.ir.passes.cleanup
+
+# The verifier and its per-function memo.
+IrVerifier                      compiler.ir.verify
+IrVerifyMemo                    compiler.ir.verify
+IrVerifyTable                   compiler.ir.verify
+
+# Diagnostics and reference tools over IR: interpreter, instrumentation, reports.
+IrAllocationReport              compiler.ir.tools
+IrInstrumentation               compiler.ir.tools
+IrInterpreter                   compiler.ir.tools
+IrOpportunityCensus             compiler.ir.tools
+
+# Out of the shared IR: a HashLink lowering decision, and the Wasm backends' erasure.
+IrSharedRuntimeCalls            compiler.hl
+IrNullableErasure               compiler.backend.wasm
