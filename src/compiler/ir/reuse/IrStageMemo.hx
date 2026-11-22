@@ -201,6 +201,9 @@ class IrLineage {
 	@:processWide("a shared empty list of facts, only ever read")
 	public static final NO_FACTS:Array<Int> = [];
 
+	/** What the memo of the frozen functions a stage without a memo hands on is named after the stage (`handedOn`). */
+	public static inline final SETTLED = ":settled";
+
 	/** The name the input's settling is metered and memoized under. */
 	public static inline final INPUT = "assembly-input";
 
@@ -211,8 +214,9 @@ class IrLineage {
 
 	/**
 	 * Past the encode point: the stages read and edit bodies, and what a memo keeps is frozen. A function a stage without a memo
-	 * hands on is then not compared with last build's (no cache compares after it computes): one that is not the function its
-	 * name stood for, or whose body is not frozen (made this build), takes a new version.
+	 * hands on is then not compared with last build's (no cache compares after it computes): one whose body is not frozen (made
+	 * this build) takes a new version, and a frozen one that is not the function its name stood for keeps the version it had when
+	 * the stage handed on the same object last build (`handedOn`), else takes a new one.
 	 */
 	public var bodies(default, null) = false;
 
@@ -324,7 +328,7 @@ class IrLineage {
 			if (bodies) {
 				var body = fn.body;
 				if (cell == null || cell.fn != fn || cell.build != memos.build || body == null || !body.frozen) {
-					set(fn, memos.versions.next());
+					set(fn, body != null && body.frozen ? handedOn(stage, fn) : memos.versions.next());
 					cell = cells.get(fn.name);
 				}
 			} else if (cell == null || cell.fn != fn || cell.build != memos.build) {
@@ -343,6 +347,19 @@ class IrLineage {
 					cell.build = 0;
 			live = functions.length;
 		}
+	}
+
+	/**
+	 * The version of `fn`, frozen, which `stage` hands on in place of the function its name stood for: the version it had when the
+	 * stage handed on the same object last build (a stage that keeps what it made, as the value array rewrite's factory lowerings
+	 * do), else a new one. An object is never changed once frozen, so the same object is the same function; nothing is compared.
+	 */
+	function handedOn(stage:String, fn:IrFunction):Int {
+		var memo = memos.stage(stage + SETTLED), entry = memo.last(fn.name);
+		if (entry == null || entry.output != fn)
+			entry = new IrStageEntry(0, NO_FACTS, fn, memos.versions.next(), 0, null);
+		memo.keep(fn.name, entry);
+		return entry.outputVersion;
 	}
 
 	/** `fn`, made from the function of version `input` (0 for none), settled with `memo` and recorded. */
