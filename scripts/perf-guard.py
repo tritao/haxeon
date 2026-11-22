@@ -43,10 +43,14 @@ counters, so the main thread's row holds the build's work. Skipped where perf is
 
 The small-project part (tests/perf/small-project-baseline.json) runs the CLI built from the checkout (`haxeon build` and
 `haxeon check` of tests/perf/small-project) as a user does, from no compile server running: the CLI starts the project's
-server (the compiler built ahead of time when it is current, else the VM running the compiler's bytecode, compiled once into
-the guard's session directory) and asks it to compile. It reads instructions:u of every process the command starts, counted
-until the server leaves (perf cannot follow a detached server per thread), and the bytes the server allocated for the
-request (its worker allocations); wall of the CLI is reported, never compared.
+server and asks it to compile. It reads instructions:u of every process the command starts, counted until the server leaves
+(perf cannot follow a detached server per thread), and the bytes the server allocated for the request (its worker
+allocations); wall of the CLI is reported, never compared. It runs in two modes, each with metrics of its own, so the result
+never depends on what happens to be built:
+  vm    always: haxeon-aot set aside for the run, so the CLI and the server are the VM running their bytecode (the server's
+        compiled once into the guard's session directory)
+  aot   when the CLI and compiler built ahead of time (haxeon-aot, `haxeon dev aot`) is current: it runs the CLI and serves the
+        compile. Skipped, and passing, when it is not built or stale.
 
 Measures on Linux x86-64 only, where the baseline was taken; elsewhere it says so and passes. A metric beyond its tolerance
 below the baseline passes and asks for the baseline to be updated, so gains are locked in.
@@ -513,11 +517,43 @@ def stop_workers(session):
             os.remove(path)
 
 
+# Where haxeon-aot waits while the vm mode runs; a guard stopped mid-run leaves it there, and the next run puts it back.
+AOT_ASIDE_SUFFIX = ".perf-guard-aside"
+
+
+def aot_current():
+    """Whether the checkout's haxeon-aot is current, as `haxeon doctor` reports it."""
+    report = subprocess.run([os.path.join(ROOT, "scripts", "haxeon"), "doctor"], cwd=ROOT, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True).stdout
+    return any(line.startswith("ok: CLI and compiler built ahead of time") for line in report.splitlines())
+
+
 def measure_small_project(hl, out):
+    """Both modes of the small-project part (the docstring at the top): vm always, aot when haxeon-aot is current."""
+    executable = os.path.join(os.path.dirname(hl), "haxeon-aot")
+    if os.path.exists(executable + AOT_ASIDE_SUFFIX) and not os.path.exists(executable):
+        os.rename(executable + AOT_ASIDE_SUFFIX, executable)
+    metrics = {}
+    aside = os.path.exists(executable)
+    if aside:
+        os.rename(executable, executable + AOT_ASIDE_SUFFIX)
+    try:
+        metrics.update(measure_small_project_mode(out, "vm", "hl"))
+    finally:
+        if aside:
+            os.rename(executable + AOT_ASIDE_SUFFIX, executable)
+    if aot_current():
+        metrics.update(measure_small_project_mode(out, "aot", "haxeon-aot"))
+    else:
+        print("perf-guard: small project aot: skipped (haxeon-aot not built, or stale: build it with haxeon dev aot)")
+    return metrics
+
+
+def measure_small_project_mode(out, mode, expected_server):
     """A cold `haxeon build` and `haxeon check` of tests/perf/small-project, as a user starts one: the CLI, which starts the
-    project's compile server (the compiler built ahead of time when it is current, else the VM running the compiler's bytecode),
-    and the compile; returns their metrics."""
-    work = os.path.join(out, "small-project")
+    project's compile server, and the compile; returns their metrics, named after `mode`. The server must be `expected_server`:
+    the mode measures that program or nothing."""
+    work = os.path.join(out, "small-project", mode)
     # Kept between runs, as a user's is: it holds the server program the CLI builds once for the checkout's compiler.
     session = os.path.join(work, "session")
     project = os.path.join(work, "project")
@@ -555,23 +591,28 @@ def measure_small_project(hl, out):
             sys.stderr.write(log[-4000:] + process.stderr[-2000:])
             raise SystemExit(f"perf-guard: the small project's {command} failed (exit {process.returncode}); "
                              f"log: {env['PERF_GUARD_LOG']}")
-        # `worker allocations: bytes=B count=C heap=H`, what the server allocated for the request; a check reports no driver
-        # allocation phases, and the compiler built ahead of time no worker allocations.
+        # `worker allocations: bytes=B count=C heap=H`, what the server allocated for the request, on the VM and built ahead of
+        # time alike.
         line = next((line for line in log.splitlines() if line.startswith("worker allocations: ")), None)
-        if line is not None:
-            fields = dict(field.split("=", 1) for field in line.split(":", 1)[1].split())
-            metrics[f"{command}_allocated_bytes"] = int(fields["bytes"])
+        if line is None:
+            raise SystemExit(f"perf-guard: the small project's {mode} {command} reported no worker allocations; "
+                             f"log: {env['PERF_GUARD_LOG']}")
+        fields = dict(field.split("=", 1) for field in line.split(":", 1)[1].split())
+        metrics[f"{mode}_{command}_allocated_bytes"] = int(fields["bytes"])
         counts = {}
         for row in (row.split(",") for row in process.stderr.splitlines()):
             if len(row) > 2 and row[0].isdigit() and row[2] in events:
                 counts[events[row[2]]] = int(row[0])
         if "instructions" in counts:
-            metrics[f"{command}_instructions"] = counts["instructions"]
+            metrics[f"{mode}_{command}_instructions"] = counts["instructions"]
         with open(env["PERF_GUARD_WALL"]) as source:
             wall = int(source.read()) / 1e9
         with open(env["PERF_GUARD_SERVER"]) as source:
             server = os.path.basename(source.read().strip())
-        print(f"perf-guard: small project cold {command:5} wall {wall:5.2f} s"
+        if server != expected_server:
+            raise SystemExit(f"perf-guard: the small project's {mode} {command} was served by {server or 'nothing'}, "
+                             f"not {expected_server}")
+        print(f"perf-guard: small project {mode:3} cold {command:5} wall {wall:5.2f} s"
               + (f", cycles {counts['cycles'] / 1e9:.2f}G" if "cycles" in counts else "") + " (not compared), "
               + (f"instructions {counts['instructions'] / 1e9:.2f}G, " if "instructions" in counts else "")
               + f"served by {server}")
@@ -584,8 +625,10 @@ def measure_small_project(hl, out):
 # each is (baseline, metric, label) and appears in the summary the run ends with. A primary metric's row is marked with `*`.
 PRIMARY = [(INCREMENTAL_BASELINE, "body_edit_instructions", "body edit"),
            (INCREMENTAL_BASELINE, "signature_edit_instructions", "signature edit"),
-           (SMALL_PROJECT_BASELINE, "build_instructions", "small-project cold build"),
-           (SMALL_PROJECT_BASELINE, "check_instructions", "check"),
+           (SMALL_PROJECT_BASELINE, "vm_build_instructions", "small-project cold build on the VM"),
+           (SMALL_PROJECT_BASELINE, "vm_check_instructions", "check on the VM"),
+           (SMALL_PROJECT_BASELINE, "aot_build_instructions", "cold build ahead of time"),
+           (SMALL_PROJECT_BASELINE, "aot_check_instructions", "check ahead of time"),
            (INCREMENTAL_BASELINE, "server_live_bytes", "server live")]
 REGRESSION_GUARDS = [(BASELINE, "main_thread_instructions", "self-compile"), (BASELINE, "peak_rss_bytes", "self-compile peak")]
 

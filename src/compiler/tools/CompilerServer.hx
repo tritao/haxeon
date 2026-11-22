@@ -100,7 +100,7 @@ class CompilerServer {
 							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, $retyped functions retyped');
 						case Compile(arguments):
 							var started = Sys.time();
-							#if (hl && !haxeon)
+							#if hl
 							var memoryBefore = hl.Gc.stats();
 							#end
 							var parsed = CompilerArguments.parse(arguments);
@@ -108,7 +108,7 @@ class CompilerServer {
 							var retyped = compileConnected(client, parsed, session);
 							// The worker's costs, at `detailed`.
 							if (parsed.verbosity.atLeast(Verbosity.Detailed)) {
-								#if (hl && !haxeon)
+								#if hl
 								var memoryAfter = hl.Gc.stats();
 								send(client,
 									Message('worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'));
