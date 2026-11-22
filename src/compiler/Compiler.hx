@@ -95,13 +95,12 @@ typedef CompileMetrics = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
-	final frontendRestarts:Array<String>;
 
-	/** The functions each typing pass of the frontend typed, in order: a pass that continues another types only what is new. */
-	final frontendPassFunctions:Array<Int>;
+	/** The functions the frontend typed: those an edit invalidated, or every one in a first build. */
+	final frontendTypedFunctions:Int;
 
-	/** Where each frontend pass spent its time and allocation, one line per pass. */
-	final frontendPassReports:Array<String>;
+	/** Where the frontend's stages spent their time and allocation, as one line; empty when the frontend did not run. */
+	final frontendStages:String;
 
 	/** What each IR pass allocated, for the timings line; empty when the build reused its pipeline and ran none. */
 	final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost>;
@@ -682,9 +681,8 @@ class Compiler {
 						graphParseMs: 0.0,
 						graphDependencyMs: 0.0,
 						graphInitializationMs: 0.0,
-						frontendRestarts: [],
-						frontendPassFunctions: [],
-						frontendPassReports: [],
+						frontendTypedFunctions: 0,
+						frontendStages: "",
 						irPassCosts: [],
 						semanticAssemblyMs: 0.0,
 						semanticAliasMs: 0.0,

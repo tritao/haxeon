@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.InternalError;
+import compiler.runtime.RuntimeType;
 import compiler.semantic.AbstractStatics;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
 
@@ -2431,7 +2432,7 @@ class BodyTyper implements BodyTyping {
 		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic. Unlike `Reflect.field`, which
 		// gives null, reading a field of null throws, as reading any other field does.
 		if (sameType(typedObject.type, TDynamic)) {
-			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
 			return new TypedExpression(TCall("Reflect.field", [
 				new TypedExpression(TCall("$receiver.checked", [typedObject]), TDynamic, typedObject.span),
 				new TypedExpression(TStringLiteral(name), TString, span)

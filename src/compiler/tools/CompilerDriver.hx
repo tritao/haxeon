@@ -263,8 +263,8 @@ class CompilerDriver {
 			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt)
 			+ (deferFullModule ? " (patch first)" : "")));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
-		for (line in result.metrics.frontendPassReports)
-			report("frontend " + line);
+		if (result.metrics.frontendStages != "")
+			report("frontend " + result.metrics.frontendStages);
 		report("ir passes (ms/MB/k objects): "
 			+ [for (entry in result.metrics.irPassCosts) entry.name + "=" + Math.round(entry.milliseconds) + "/"
 			+ Math.round(entry.bytes / 1048576.0) + "/"
@@ -371,17 +371,12 @@ class CompilerDriver {
 		if (FileSystem.exists(path))
 			FileSystem.deleteFile(path);
 
-	/** Empty unless typing found modules the graph lacked; the restart then redid the whole frontend. */
-	static function frontendRestarts(reasons:Array<String>):String
-		return reasons.length == 0 ? "" : " (restarted: " + reasons.join("; ") + ")";
-
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
 		return "compiler phases (reused: " + metrics.reuse + ", linked functions: " + metrics.linkedFunctions
 			+ ", of which re-indexed: " + metrics.movedFunctions + ") (ms): snapshot="
 			+ milliseconds(metrics.transactionSnapshotMs) + " candidate="
 			+ milliseconds(metrics.candidateSetupMs) + " frontend=" + milliseconds(metrics.frontendMs)
-			+ frontendRestarts(metrics.frontendRestarts)
 			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs)
 			+ " dependencies="
 			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs)

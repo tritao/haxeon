@@ -153,9 +153,12 @@ class TestRunner {
 		];
 		for (root in roots)
 			arguments.push("--root=" + root);
-		if (!run.plain)
+		if (!run.plain) {
 			arguments.push("--live");
-		else if (release) {
+			// A live build keeps every function, `Reflect`'s among them, so it reflects over every layout and boxes what a plain
+			// build keeps inline: a program's allocation census holds only in a plain build, which `live_build` tells it.
+			arguments.push("--define=live_build");
+		} else if (release) {
 			arguments.push("--build-mode=release");
 			arguments.push("--verify-ir");
 		}

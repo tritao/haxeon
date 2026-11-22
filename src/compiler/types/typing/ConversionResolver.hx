@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.InternalError;
+import compiler.runtime.RuntimeType;
 import compiler.types.Monomorphs;
 
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -390,7 +391,7 @@ class ConversionResolver {
 				"Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly",
 				value.span);
 		var origin = session.currentContext.name;
-		session.runtimeDependencyTracker.record(origin, "Reflect");
+		session.runtimeDependencyTracker.record(origin, RuntimeType.REFLECT);
 		new AnonymousTypeRegistry(session).register(target);
 		var converted =
 			new TypedExpression(TCall(DynamicStructureGenerator.request(session, target, origin, value.span),

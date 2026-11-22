@@ -91,7 +91,7 @@ Compiler (ADR 0003 and its follow-ups):
 - [PROVIDER_INVENTORY.md](design/PROVIDER_INVENTORY.md): which generated functions serve which operation.
 - [HELPER_OWNERSHIP.md](design/HELPER_OWNERSHIP.md): ownership of shared generated helpers.
 - [INTERNED_NAMES.md](design/INTERNED_NAMES.md): interned names.
-- [FRONTEND_RESTART.md](design/FRONTEND_RESTART.md): removing the frontend restart.
+- [FRONTEND_RESTART.md](design/FRONTEND_RESTART.md): how the frontend came to run once, with every runtime module typing calls in the graph.
 - [LAZY_DECLARATION_TYPING.md](design/LAZY_DECLARATION_TYPING.md): unannotated declaration types typed on demand
   (plan step 2.5).
 - [GENERIC_TYPING_ONCE.md](design/GENERIC_TYPING_ONCE.md): typing a generic body once; elaboration per representation

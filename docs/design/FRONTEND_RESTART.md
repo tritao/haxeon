@@ -1,6 +1,22 @@
-# Removing the frontend restart (design note, no code yet)
+# Removing the frontend restart
 
-Status: for review. Measured on 2026-11-12 with haxeon 7b97c092e on the Materia app of outer e9173b977 (the baseline recorded in
+Status: done (option B, below). `RuntimeType` declares every module typing can call although no source names it:
+`programModules` (the specialized map owner, `haxeon.DynamicOps`, `Reflect`, `Std`, `runtime.FloatBits`, `haxe.Int64`, and
+`runtime.DynamicObject` on Wasm) are roots of every program that has them, since whether a body operates on a Dynamic or converts
+a Float is only known once it is typed; `companionModules` come with the module that declares what needs them (the `haxe.io.Bytes`
+method implementations, derived from `PlatformAbi`'s method table, and the reactive runtime with `Observable`). The frontend runs
+once; after typing it checks every recorded dependency is declared and in the program, and fails naming it otherwise.
+
+Blocker 1 is a predicate: `Std` calls compiler intrinsics, and `DynamicOps` and `Reflect` call `Std`, so the three are seeded only
+where the intrinsics are registered (a harness that adds a stdlib root without `CompilerIntrinsics.register` has none of them).
+Blocker 2 is the leak named below, closed in every build but a live HashLink one: whether the program reflects over object layouts
+is read from the natives reached code calls (`IrObjectReflection.usedByProgram`, which `IrEnumDynamicDispatch` now reads too). Wasm
+runs the walk from the entry without pruning for that answer, as `--no-early-prune` does on HashLink. A live HashLink build walks
+nothing, since its host can call any function, so with `Reflect` always loaded it always reflects: enums reflection could reach are
+boxed there, and closures over values lose their scalar form, where a plain build keeps both. Programs that count allocations
+check it in plain builds only (the test driver defines `live_build` for live ones).
+
+What follows is the note as written before the change. Measured on 2026-11-12 with haxeon 7b97c092e on the Materia app of outer e9173b977 (the baseline recorded in
 `scripts/measure-cold.sh`, since removed). Counts below are deterministic (compile-count, bytes); the wall figures were taken at load 10 to 20 and are indicative.
 
 ## What happens today

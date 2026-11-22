@@ -13,8 +13,9 @@ class GenericStructOwnerMain {
 		if (new compiler.ir.tools.IrInterpreter(referenceRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased reference writes did not preserve checked value semantics in the interpreter";
 		var arraySource = File.getContent("tests/programs/generic-erased-array-function-checks.hx");
-		arraySource = StringTools.replace(StringTools.replace(StringTools.replace(arraySource, "#if !wasm", ""), "#end",
-			""), "hl.Gc.totalAllocated()", "0");
+		arraySource =
+			StringTools.replace(StringTools.replace(StringTools.replace(arraySource, "#if !(wasm || live_build)",
+			""), "#end", ""), "hl.Gc.totalAllocated()", "0");
 		var checkedArrays = Frontend.compile(arraySource);
 		if (new compiler.ir.tools.IrInterpreter(checkedArrays).run("main") != 42)
 			throw "erased array and function writes did not preserve checked value semantics in the interpreter";
@@ -41,8 +42,8 @@ class GenericStructOwnerMain {
 		checkTypeHandleDynamic();
 		checkCallbackAllocations();
 		var interfaceSource = File.getContent("tests/programs/generic-interface-value-carriers.hx");
-		interfaceSource = StringTools.replace(StringTools.replace(StringTools.replace(interfaceSource, "#if !wasm", ""),
-			"#end", ""), "hl.Gc.totalAllocated()", "0");
+		interfaceSource = StringTools.replace(StringTools.replace(StringTools.replace(interfaceSource,
+			"#if !(wasm || live_build)", ""), "#end", ""), "hl.Gc.totalAllocated()", "0");
 		var interfaceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		interfaceRuntime.addStandardLibrarySourceRoot("stdlib");
 		interfaceRuntime.update("Main.hx", interfaceSource);

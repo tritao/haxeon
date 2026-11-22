@@ -81,10 +81,15 @@ class NonExceptionThrowsMain {
 		return c.analyze("Main").nonExceptionThrows;
 	}
 
-	/** `line: type` of each throw, once each, in line order: a body typed twice (a specialization) records its throws twice. */
+	/**
+	 * `line: type` of each throw of the test's source, once each, in line order: a body typed twice (a specialization) records its throws
+	 * twice. The standard library modules every program has (`RuntimeType.programModules`) have throws of their own, which are left out.
+	 */
 	static function lines(throws:Array<NonExceptionThrow>):Array<String> {
 		var result:Array<String> = [];
 		for (thrown in throws) {
+			if (thrown.span.file.isStandardLibrarySource)
+				continue;
 			var line = '${thrown.span.file.lineColumnAt(thrown.span.start).line}: ${thrown.thrown}';
 			if (result.indexOf(line) < 0)
 				result.push(line);

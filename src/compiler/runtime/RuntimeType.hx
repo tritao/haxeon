@@ -15,25 +15,75 @@ import compiler.types.Type.NominalKind;
 class RuntimeType {
 	public static inline final SPECIALIZED_MAP = "haxeon.collections.HashMap";
 
+	/** The operators whose operand is Dynamic, which the typer calls where an operand is Dynamic. */
+	public static inline final DYNAMIC_OPS = "haxeon.DynamicOps";
+
+	/** Field access and method calls on a Dynamic value, and its copy into an anonymous structure, call `Reflect`. */
+	public static inline final REFLECT = "Reflect";
+
+	/** `Std.string`, which converts a Float or a Dynamic value to a String. */
+	public static inline final STD = "Std";
+
+	/** The bits of a Float, which a generated hash of a Float reads as an Int64. */
+	public static inline final FLOAT_BITS = "runtime.FloatBits";
+
+	public static inline final INT64 = "haxe.Int64";
+
 	/** The interface an observable class implements, and the reactive runtime its generated field access calls. */
 	public static inline final OBSERVABLE = "Observable";
 
 	public static inline final OBSERVABLE_SOURCE = "haxeon.reactive.ObservableSource";
 	public static inline final REACTIVE_RUNTIME = "haxeon.reactive.ReactiveRuntime";
 
-	/**
-	 * The modules that come with `module` in the graph, because typing a use of what it declares makes a call into them that no
-	 * source names: the reactive runtime with `Observable`, and the stdlib modules implementing the platform methods of
-	 * `haxe.io.Bytes` (`PlatformAbi.implementationModules`). Typing then finds them loaded instead of restarting the frontend.
-	 */
-	public static function companionModules(module:String):Array<String>
-		return module == OBSERVABLE ? [OBSERVABLE_SOURCE, REACTIVE_RUNTIME] : PlatformAbi.implementationModules(module);
-
 	/** The stdlib module that implements `String.fromCharCode` in Haxe on a target whose runtime does not (Wasm). */
 	public static inline final STRING_CODES = "haxe.StringCodes";
 
 	/** `String.fromCharCode` in `STRING_CODES`, which the typer calls where that module defines it. */
 	public static inline final STRING_FROM_CHAR_CODE = "haxe.StringCodes.fromCharCode";
+
+	/** An intrinsic `Std`'s body calls (`Std.int` of a Float), registered with the compiler's other intrinsics or not at all. */
+	static inline final STD_INTRINSIC = "__std_int_f64";
+
+	/**
+	 * The modules every program that has them includes from the start, because typing can make a body call them although no
+	 * source names them, and whether it does is only known once bodies are typed: Dynamic values reach every program (the
+	 * stdlib's own signatures take them), and so do Floats. With these and `companionModules`, the graph has every module typing
+	 * calls before anything is typed (`RuntimeDependencyTracker` records the calls; the frontend checks them). A module is only
+	 * one where what it calls exists: `Std`, and `haxeon.DynamicOps` and `Reflect`, which call it, need the compiler's intrinsics,
+	 * which `hasNative` tells.
+	 */
+	public static function programModules(wasm:Bool, hasNative:String->Bool):Array<String> {
+		var intrinsics = hasNative(STD_INTRINSIC);
+		var modules = [
+			for (module in [SPECIALIZED_MAP, DYNAMIC_OPS, REFLECT, STD, FLOAT_BITS, INT64])
+				if (intrinsics || (module != DYNAMIC_OPS && module != REFLECT && module != STD)) module
+		];
+		// Only targets without native dynamic objects allocate the stdlib's class for a Dynamic object literal.
+		if (wasm)
+			modules.push(PlatformAbi.DYNAMIC_OBJECT_CLASS);
+		return modules;
+	}
+
+	/**
+	 * The modules that come with `module` in the graph, because typing a use of what it declares makes a call into them that no
+	 * source names: the reactive runtime with `Observable`, and the stdlib modules implementing the platform methods of
+	 * `haxe.io.Bytes` (`PlatformAbi.implementationModules`).
+	 */
+	public static function companionModules(module:String):Array<String>
+		return module == OBSERVABLE ? [OBSERVABLE_SOURCE, REACTIVE_RUNTIME] : PlatformAbi.implementationModules(module);
+
+	/**
+	 * Whether the graph adds `module` before typing when typing can call it: a program module, a companion, or `STRING_CODES`, which
+	 * the dependency scan adds where a source names `String.fromCharCode`. Typing may call no other module the source does not name.
+	 */
+	public static function isTypedDependency(module:String):Bool {
+		if (module == STRING_CODES || programModules(true, _ -> true).indexOf(module) >= 0)
+			return true;
+		for (owner in [OBSERVABLE, PlatformAbi.BYTES])
+			if (companionModules(owner).indexOf(module) >= 0)
+				return true;
+		return false;
+	}
 
 	/** The class whose statics turn a thrown value into what a catch clause tests (`TypedCatchSubject`). */
 	public static inline final EXCEPTION = "haxe.Exception";

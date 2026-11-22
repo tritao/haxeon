@@ -63,7 +63,7 @@ class TestCatalog {
 		"TestMain",
 		"AuditVerifierMain",
 		"IrReducibilityMain",
-		"FrontendRestartMain",
+		"TypedRuntimeModulesMain",
 		"ReachabilityPruneMain",
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",

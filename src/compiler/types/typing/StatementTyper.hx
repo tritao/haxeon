@@ -613,7 +613,7 @@ class StatementTyper {
 					value = bodyTyper.coerce(stored(assigned, assignedValue, assignedValue), TDynamic, "array element",
 						"E1002");
 				scope.invalidateExpressionNamespace("array-entry:");
-				session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 				TExpression(new TypedExpression(TCall("haxeon.DynamicOps.setIndex", [typedArray, index, value]), TVoid,
 					span), span);
 			case TMap(key, mapValue):
@@ -663,7 +663,7 @@ class StatementTyper {
 
 	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression,
 			span:SourceSpan):TypedStatement {
-		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
 		var boxed = bodyTyper.coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
 			call = new TypedExpression(TCall("Reflect.setField", [
 				object,

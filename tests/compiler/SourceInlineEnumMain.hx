@@ -68,16 +68,19 @@ class SourceInlineEnumMain {
 				c.configure("first-" + target + inlining, "first",
 					CompilerDriver.targetDefines(target));
 				c.options = new CompileOptions({inlining: inlining});
+				// A plain build: a live one reflects whenever `Reflect` is loaded, as it is in every program with a stdlib, and boxes.
+				// A plain build decides from what the entry reaches, so each edit below is reached, through a variable's initializer.
+				c.livePatching = false;
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				var result = c.compile("Main");
 				assertInline(result.ir, true);
 				rejectPointerNull(result.ir);
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx")
-					+ "\nfunction reveal(value:Packet):Dynamic return value;\n");
+					+ "\nfunction reveal(value:Packet):Dynamic return value;\nvar revealed:Dynamic = reveal(Packet.Empty);\n");
 				assertInline(c.compile("Main").ir, false);
 				c.update("Main.hx",
 					sys.io.File.getContent("tests/programs/source-inline-enum.hx")
-					+ '\nfunction reflectUnrelated():Dynamic return Reflect.field({marker:1}, "marker");\n');
+					+ '\nfunction reflectUnrelated():Dynamic return Reflect.field({marker:1}, "marker");\nvar reflected:Dynamic = reflectUnrelated();\n');
 				assertInline(c.compile("Main").ir, false);
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				assertInline(c.compile("Main").ir, true);

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
@@ -102,7 +103,7 @@ class StringConversion {
 		}
 		var dynamicValue = bodyTyper.coerce(value, TDynamic, "string conversion", "E1010");
 		if (TypeRelations.equals(value.type, TFloat) || TypeRelations.equals(value.type, TDynamic)) {
-			session.runtimeDependencyTracker.record(session.currentContext.name, "Std");
+			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STD);
 			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
 		}
 		return new TypedExpression(TCall("__std_string", [dynamicValue]), TString, value.span);

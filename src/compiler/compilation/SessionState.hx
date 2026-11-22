@@ -166,9 +166,8 @@ class SessionState {
 
 	/**
 	 * Releases the records only a next build reads to decide what to redo (dependency edges, fingerprints, the answers typed bodies
-	 * relied on, the inferred signatures and declaration types), for a compile that keeps no session once its last frontend pass has
-	 * assembled the IR tables. A pass that restarts reads them, so they are made as before and dropped only here. Changes the modules
-	 * in place, as `releaseRetained` does.
+	 * relied on, the inferred signatures and declaration types), for a compile that keeps no session once its frontend has assembled
+	 * the IR tables. Changes the modules in place, as `releaseRetained` does.
 	 */
 	public function releaseIncrementalRecords():Void
 		for (state in modules) {

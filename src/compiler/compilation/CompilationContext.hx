@@ -50,13 +50,11 @@ class CompilationContext {
 	 */
 	public final requireEntry:Bool;
 
-	/** Why the frontend started over, one entry per module typing found it needed: each restart redoes the whole frontend. */
-	public final frontendRestarts:Array<String> = [];
+	/** The functions the frontend typed: those an edit invalidated, or every one in a first build. */
+	public var frontendTypedFunctions = 0;
 
-	public final frontendPassFunctions:Array<Int> = [];
-
-	/** One line per frontend pass: where its time and allocation went (see `FrontendCompilation.passReport`). */
-	public final frontendPassReports:Array<String> = [];
+	/** Where the frontend's stages spent their time and allocation (see `FrontendCompilation.stagesReport`). */
+	public var frontendStages = "";
 
 	/** What each IR pass allocated in this compile, in the order the passes first ran (`IrPassMeter`). */
 	public final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost> = [];

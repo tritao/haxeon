@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
+import compiler.runtime.RuntimeType;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
@@ -1664,7 +1665,7 @@ class ExpressionTyper {
 		return switch typedArray.type {
 			case TDynamic:
 				// `dynamicValue[i]`: read when the program runs, as Haxe/HL reads the array the value holds.
-				session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 				new TypedExpression(TCall("haxeon.DynamicOps.index", [typedArray, bodyTyper.dynamicIndex(typedIndex)]),
 					TDynamic, span);
 			case TMap(key, value):
@@ -2095,7 +2096,7 @@ class ExpressionTyper {
 				return null;
 		if (!dynamicOperand)
 			return null;
-		session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 		var boxed = [for (operand in operands) bodyTyper.coerce(operand, TDynamic, "dynamic operand", "E1010")];
 		return new TypedExpression(TCall("haxeon.DynamicOps." + name, boxed), result, span);
 	}

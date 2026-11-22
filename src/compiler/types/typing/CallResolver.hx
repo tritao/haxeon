@@ -1005,7 +1005,7 @@ class CallResolver {
 	 */
 	function resolveDynamicMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope):TypedExpression {
-		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
 		var callee = new TypedExpression(TCall("Reflect.field", [
 			receiver,
 			new TypedExpression(TStringLiteral(name), TString, span)

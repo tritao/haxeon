@@ -66,8 +66,6 @@ A failed or rejected build leaves every cache as the last successful build left 
   a file lowers every function after it again. Positions relative to the declaration, made absolute when the debug section
   is encoded, would confine an edit to its function; it changes the IR codec, `HlLower`, the debug section and the patch
   format.
-- **The frontend can run twice** when typing asks for a runtime module the graph lacks
-  ([FRONTEND_RESTART.md](FRONTEND_RESTART.md)).
 - **The inliner does not memoize functions in call cycles** whose inlining depends on the walk order; they are inlined
   again on every build.
 - **A value-array shape's pass visits every function** to learn it is not selected, about 95 bytes per function per shape

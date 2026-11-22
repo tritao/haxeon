@@ -6,7 +6,7 @@ import compiler.runtime.CompilerIntrinsics;
  * the generic enum `Outcome<T>` through `Future<T>`, so each instantiation has an owner class of its own. `Maker` makes the
  * specialization `Promise<Array<String>>`; `Binder` takes a bound method of it, which erasure resolves through the owner
  * object and its `cancel` method; `Keep` and `Edit` read key paths of `Node`, which share one generated cache class; `Other` keeps `Promise<Int>` in the program when the other module goes away; `Main` uses all, reads a code identity (so the generated identity table is part of the
- * program) and needs a runtime module found only while typing, so the first compile restarts the frontend.
+ * program) and needs a runtime module no source names (`haxeon.DynamicOps`, which the graph adds before typing).
  *
  * Every scenario edits the sources after a first compile, reads every loaded module from disk again as a reused session
  * does, compiles again, and then compiles the final sources in a fresh compiler. The program must run alike, and the

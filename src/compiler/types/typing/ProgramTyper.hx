@@ -7,6 +7,7 @@ import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.RuntimeType;
+import compiler.runtime.RuntimeType;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.semantic.InitializerUnit;
 import compiler.semantic.InterfaceFieldAccessors;

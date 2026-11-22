@@ -41,7 +41,10 @@ class EnumTagReleaseSizeMain {
 			+ '\nfunction main():Int { var x:Dynamic=17, y:Dynamic=18; var h=new Holder(On), a:Array<Mode>=[Off,On,Hot], f:Mode->Mode=function(v:Mode):Mode return v; '
 			+ 'a[0]=h.mode; return x!=y && same(a[0],f(On)) && a[2]==Hot ? 42 : 1; }');
 		var program = session.compile("Main").ir;
-		if (nominal && compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program).length != 0)
+		// Only `Mode` is the program's: the standard library modules every program has may keep descriptors of their own (Wasm keeps
+		// what nothing reaches until its builders walk the program).
+		if (nominal && Lambda.exists(compiler.ir.passes.enums.IrEnumRuntimeTypes.declarations(program),
+			entry -> entry.name == "Mode"))
 			throw "Unobserved tag retained a boxed descriptor";
 		return encode(program, target);
 	}

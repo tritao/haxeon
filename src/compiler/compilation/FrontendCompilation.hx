@@ -33,7 +33,6 @@ import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.EnumRuntimeType;
 import compiler.types.typing.RetainedFromPrevious;
-import compiler.types.typing.RuntimeDependencyTracker;
 import compiler.types.typing.TypingFailure;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
@@ -72,9 +71,8 @@ typedef FrontendResult = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
-	final frontendRestarts:Array<String>;
-	final frontendPassFunctions:Array<Int>;
-	final frontendPassReports:Array<String>;
+	final frontendTypedFunctions:Int;
+	final frontendStages:String;
 	final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost>;
 	final frontendDoneAt:Float;
 
@@ -96,8 +94,8 @@ typedef FrontendResult = {
 }
 
 /**
- * One frontend pass: its inputs, what its phases hand to each other, and the time and allocation readings taken at the phase
- * boundaries. `FrontendCompilation.run` makes one per pass; a restart is another pass with its own.
+ * One frontend build: its inputs, what its phases hand to each other, and the time and allocation readings taken at the phase
+ * boundaries. `FrontendCompilation.run` makes one per compile.
  */
 private class FrontendBuild {
 	public final context:CompilationContext;
@@ -106,12 +104,6 @@ private class FrontendBuild {
 	public final rollbackModules:Map<String, ModuleState>;
 	public final lowerToIr:Bool;
 	public final indexSemantics:Bool;
-
-	/** What earlier passes of this build regenerated and retyped, when this pass is a restart. */
-	public final carried:Null<{
-		regenerated:Array<String>,
-		retyped:Array<String>
-	}>;
 
 	// The start of the pass.
 	public var allocationAtStart:AllocationSnapshot;
@@ -215,17 +207,13 @@ private class FrontendBuild {
 	public var relocated:Array<String>;
 
 	public function new(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
-			rollbackModules:Map<String, ModuleState>, lowerToIr:Bool, indexSemantics:Bool, carried:Null<{
-				regenerated:Array<String>,
-				retyped:Array<String>
-			}>) {
+			rollbackModules:Map<String, ModuleState>, lowerToIr:Bool, indexSemantics:Bool) {
 		this.context = context;
 		this.entryModule = entryModule;
 		this.token = token;
 		this.rollbackModules = rollbackModules;
 		this.lowerToIr = lowerToIr;
 		this.indexSemantics = indexSemantics;
-		this.carried = carried;
 	}
 }
 
@@ -238,63 +226,46 @@ typedef TypeMentions = {
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	/**
-	 * One frontend pass, as a sequence of phases over one `FrontendBuild`. A pass that finds a runtime helper while typing publishes
-	 * what it typed and restarts; the pass that finishes reports the build.
+	 * The frontend, as a sequence of phases over one `FrontendBuild`. The graph has every module typing can call before anything is
+	 * typed (`RuntimeType.programModules`, `RuntimeType.companionModules`), so the phases run once.
 	 */
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
 			rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>,
 			?pendingSignatures:Map<String, Bool>,
-			?pendingStructural:Map<String, Bool>, ?carried:{
-				regenerated:Array<String>,
-				retyped:Array<String>
-			}):FrontendResult {
-		while (true) {
-			var pass = throughTables(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics,
-				pendingBody,
-				pendingSignatures, pendingStructural, carried);
-			if (pass.result != null)
-				return pass.result;
-			var build = pass.build;
-			if (build == null) {
-				// A runtime helper found while typing joins the program: the next pass is an incremental one over what this one
-				// published, with the newly reachable modules to type, and the work of this pass carries over.
-				pendingBody = [];
-				pendingSignatures = [];
-				pendingStructural = [];
-				carried = pass.carried;
-				continue;
-			}
-			runIrPipeline(build);
-			PeakProbe.mark("ir-done");
-			PhaseCollections.end("ir", context.options.phaseCollections);
-			selectChangedFunctions(build);
-			var irAssemblyDoneAt = now();
-			build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
-				AllocationMeter.sample()));
-			return result(build, build.ir, build.relocated, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
-		}
+			?pendingStructural:Map<String, Bool>):FrontendResult {
+		var tables = throughTables(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics, pendingBody,
+			pendingSignatures, pendingStructural);
+		if (tables.result != null)
+			return tables.result;
+		var build = tables.build;
+		if (build == null)
+			throw new InternalError("The frontend ended with neither a result nor a build to lower");
+		runIrPipeline(build);
+		PeakProbe.mark("ir-done");
+		PhaseCollections.end("ir", context.options.phaseCollections);
+		selectChangedFunctions(build);
+		var irAssemblyDoneAt = now();
+		build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
+			AllocationMeter.sample()));
+		return result(build, build.ir, build.relocated, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
 	}
 
 	/**
-	 * One frontend pass up to the IR tables: a result when the pass ends there, the build to run the IR pipeline on, or neither and
-	 * what to carry into the pass that restarts it. It runs in a frame of its own, which is gone by the time the IR passes run: a
+	 * The frontend up to the IR tables: a result when the compile ends there, else the build to run the IR pipeline on. It runs in
+	 * a frame of its own, which is gone by the time the IR passes run: a
 	 * compile that keeps no session releases the typed program here, and a dead slot of a longer-lived frame would keep it alive.
 	 */
 	static function throughTables(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
 			rollbackModules:Map<String, ModuleState>, lowerToIr:Bool, indexSemantics:Bool,
 			pendingBody:Null<Map<String, Bool>>, pendingSignatures:Null<Map<String, Bool>>,
-			pendingStructural:Null<Map<String, Bool>>, carried:Null<{
-				regenerated:Array<String>,
-				retyped:Array<String>
-			}>):{
+			pendingStructural:Null<Map<String, Bool>>):{
 				result:Null<FrontendResult>,
-				build:Null<FrontendBuild>,
-				carried:Null<{regenerated:Array<String>, retyped:Array<String>}>
+				build:Null<FrontendBuild>
 			} {
 		PeakProbe.mark("frontend-start");
-		seedRepresentationModules(context);
-		var build = new FrontendBuild(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics, carried);
+		seedTypedRuntimeModules(context);
+		var build = new FrontendBuild(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics);
 		startPass(build);
 		checkCancelled(token);
 		resolveGraph(build, pendingBody, pendingSignatures, pendingStructural);
@@ -307,20 +278,14 @@ class FrontendCompilation {
 		publishIndex(build);
 		pruneCachedFunctions(build);
 		generatePendingIr(build);
-		reportPass(build);
-		if (includeTypedRuntimeDependencies(context, build.runtimeDependencies, build.typed().functions,
-			build.semanticAssembly.owners, build.names, rollbackModules)) {
-			context.state.lastTypedProgram = build.typed();
-			return {result: null, build: null, carried: {regenerated: build.regenerated, retyped: build.retyped}};
-		}
+		reportStages(build);
 		if (context.options.checkReuse)
 			checkHelperCalls(build.context.state.modules, build.names);
 		finishTyping(build);
 		if (!lowerToIr)
 			return {
 				result: result(build, null, [], build.typingLoweringDoneAt, null, null),
-				build: null,
-				carried: null
+				build: null
 			};
 		collectCachedIr(build);
 		checkCancelled(token);
@@ -345,7 +310,7 @@ class FrontendCompilation {
 				context.state.semanticProgram = null;
 		}
 		PhaseCollections.end("tables", context.options.phaseCollections);
-		return {result: null, build: build, carried: null};
+		return {result: null, build: build};
 	}
 
 	/** The clock of every timestamp and duration in `FrontendResult`: milliseconds. */
@@ -458,8 +423,7 @@ class FrontendCompilation {
 	static function assembleSemantics(build:FrontendBuild):Void {
 		build.semanticAssembly = SemanticAssembly.run(build.context, build.entryModule, build.token,
 			build.rollbackModules,
-			build.names, build.bodyChanged, build.signatureChanged, build.structuralChanged, build.indexSemantics,
-			build.carried != null);
+			build.names, build.bodyChanged, build.signatureChanged, build.structuralChanged, build.indexSemantics);
 		build.frontendDoneAt = now();
 		build.allocationAfterSemantic = AllocationMeter.sample();
 	}
@@ -509,7 +473,7 @@ class FrontendCompilation {
 			var typedNew = typedResult.program;
 			build.typedNew = typedNew;
 			build.nativeTypeDescriptors = typedNew.nativeTypeDescriptors;
-			context.frontendPassFunctions.push(typedNew.functions.length);
+			context.frontendTypedFunctions = typedNew.functions.length;
 			build.generator = new IrGenerator(compiler.ir.pipeline.ProgramFacts.of(typedNew), context.targetProfile());
 			build.typerMetrics = typedResult.metrics;
 			var runtimeDependencies = typedResult.runtimeDependencies;
@@ -522,15 +486,7 @@ class FrontendCompilation {
 			build.typedUnits = typedResult.typedUnits;
 			build.inferredSignatures = typedResult.inferredSignatures;
 			build.defaultArgumentSources = typedResult.defaultArgumentSources;
-			// A module that changes a representation is in the program before anything is typed (see `seedRepresentationModules`),
-			// so typing cannot have used a representation without it. If one is reported missing, a module was left out of the
-			// seeds: fail here, naming it, and do not compile what was typed against the wrong representation.
-			for (dependency in runtimeDependencies)
-				if (RuntimeDependencyTracker.changesRepresentation(dependency.target)) {
-					var representationModule = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
-					if (representationModule == null || names.indexOf(representationModule) < 0)
-						throw new InternalError('Representation module "${dependency.target}" must be seeded but is not in the program (needed by "${dependency.functionName}")');
-				}
+			checkTypedRuntimeDependencies(context, runtimeDependencies, names);
 			context.state.semanticProgram = semantic;
 		} catch (error:CompileError) {
 			// Typing recovers from a failed body and goes on, so the error can carry one diagnostic per failed body: each goes to
@@ -696,11 +652,10 @@ class FrontendCompilation {
 		var context = build.context,
 			typedNew = build.typed(),
 			generator = build.generator,
-			carried = build.carried,
 			objectCache = context.state.objectCache,
 			canonicalObjectCache = context.state.canonicalObjectCache;
-		build.retyped = carried == null ? [] : carried.retyped.copy();
-		build.regenerated = carried == null ? [] : carried.regenerated.copy();
+		build.retyped = [];
+		build.regenerated = [];
 		var previousTyped = context.state.lastTypedProgram;
 		build.currentSpecializedOwners = [
 			for (classDecl in typedNew.classes)
@@ -1283,27 +1238,26 @@ class FrontendCompilation {
 		};
 	}
 
-	/** This pass's line in `CompilationContext.frontendPassReports`. */
-	static function reportPass(build:FrontendBuild):Void {
+	/** Where the frontend's stages spent their time and allocation: `CompilationContext.frontendStages`. */
+	static function reportStages(build:FrontendBuild):Void {
 		var context = build.context;
-		context.frontendPassReports.push(passReport(context.frontendPassReports.length
-			+ 1, [
-				stage("graph", build.frontendGraphDoneAt - build.passStartedAt,
-					AllocationMeter.delta("graph", build.allocationAtStart, build.allocationAfterGraph)),
-				stage("semantic-assembly", build.frontendDoneAt - build.frontendGraphDoneAt,
-					AllocationMeter.delta("semantic", build.allocationAfterGraph, build.allocationAfterSemantic)),
-				stage("signature-inference", build.analysisDoneAt - build.frontendDoneAt,
-					AllocationMeter.delta("analysis", build.allocationAfterSemantic, build.allocationAfterAnalysis)),
-				stage("typing", build.typingDoneAt - build.analysisDoneAt,
-					AllocationMeter.delta("typing", build.allocationAfterAnalysis, build.allocationAfterProgramTyping)),
-				stage("ir-generation", build.irGenerationDoneAt - build.typingDoneAt,
-					AllocationMeter.delta("ir-generation", build.allocationAfterProgramTyping,
-					AllocationMeter.sample()))
-			], context.parseMs
+		context.frontendStages = stagesReport([
+			stage("graph", build.frontendGraphDoneAt - build.passStartedAt,
+				AllocationMeter.delta("graph", build.allocationAtStart, build.allocationAfterGraph)),
+			stage("semantic-assembly", build.frontendDoneAt - build.frontendGraphDoneAt,
+				AllocationMeter.delta("semantic", build.allocationAfterGraph, build.allocationAfterSemantic)),
+			stage("signature-inference", build.analysisDoneAt - build.frontendDoneAt,
+				AllocationMeter.delta("analysis", build.allocationAfterSemantic, build.allocationAfterAnalysis)),
+			stage("typing", build.typingDoneAt - build.analysisDoneAt,
+				AllocationMeter.delta("typing", build.allocationAfterAnalysis, build.allocationAfterProgramTyping)),
+			stage("ir-generation", build.irGenerationDoneAt - build.typingDoneAt,
+				AllocationMeter.delta("ir-generation", build.allocationAfterProgramTyping,
+				AllocationMeter.sample()))
+		], context.parseMs
 			- build.parseMsAtStart,
 			context.parseBytes
 			- build.parseBytesAtStart, context.parseCount
-			- build.parseCountAtStart));
+			- build.parseCountAtStart);
 	}
 
 	/** The end of typing and lowering, and the allocation phases of the whole pass. */
@@ -1532,7 +1486,8 @@ class FrontendCompilation {
 				build.initializers, entryPoint, irCNatives, build.reflectable,
 				context.state.inlineCache, context.valueArrayTarget(),
 				context.exportedFunctions(), context.isWasmTarget() || !context.livePatching,
-				!context.livePatching && !context.isWasmTarget() && context.options.earlyPrune, [for (object in objects) {
+				!context.livePatching && !context.isWasmTarget() && context.options.earlyPrune,
+				[for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
 						var canonical = canonicalObjectCache.get(object.name);
 						if (canonical == null)
@@ -1657,9 +1612,8 @@ class FrontendCompilation {
 			graphParseMs: build.graphParseMs,
 			graphDependencyMs: build.graphDependencyMs,
 			graphInitializationMs: build.graphInitializationMs,
-			frontendRestarts: context.frontendRestarts,
-			frontendPassFunctions: context.frontendPassFunctions,
-			frontendPassReports: context.frontendPassReports,
+			frontendTypedFunctions: context.frontendTypedFunctions,
+			frontendStages: context.frontendStages,
 			irPassCosts: context.irPassCosts,
 			frontendDoneAt: build.frontendDoneAt,
 			analysisMs: build.analysisDoneAt - build.frontendDoneAt,
@@ -1716,16 +1670,17 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * The modules whose presence changes how types are represented are part of every program that can have them, so no body is
-	 * ever typed without one (see `RuntimeDependencyTracker.changesRepresentation`). Today that is the specialized map owner's
-	 * `RuntimeType.SPECIALIZED_MAP`: two functions in a program that has no use for it. A program without a stdlib root has no such
-	 * module and cannot make a specialized map either.
+	 * The modules typing can call although no source names them, and cannot tell it will before bodies are typed, are part of
+	 * every program that can have them (`RuntimeType.programModules`), so the graph is complete before anything is typed. One of
+	 * them, the specialized map owner, also changes how types are represented: no body is ever typed without it. A program without
+	 * a stdlib root has none of them, and can make no call into one.
 	 */
-	static function seedRepresentationModules(context:CompilationContext):Void {
-		var module = context.moduleAnalyzer.loadSourceModuleDependency(compiler.runtime.RuntimeType.SPECIALIZED_MAP);
-		if (module != null && context.rootModules.indexOf(module) < 0)
-			context.rootModules.push(module);
-	}
+	static function seedTypedRuntimeModules(context:CompilationContext):Void
+		for (path in compiler.runtime.RuntimeType.programModules(context.isWasmTarget(), context.natives.has)) {
+			var module = context.moduleAnalyzer.loadSourceModuleDependency(path);
+			if (module != null && context.rootModules.indexOf(module) < 0)
+				context.rootModules.push(module);
+		}
 
 	static function removeCachedFunctions(state:ModuleState, names:Array<String>):Void
 		for (cached in names) {
@@ -2415,10 +2370,9 @@ class FrontendCompilation {
 	 * One frontend pass as a line: for each stage its time, bytes, objects and collections (with their time), and the parsing done inside
 	 * the pass (it happens in the graph and in semantic assembly, so it is shown apart rather than as a stage).
 	 */
-	static function passReport(number:Int, stages:Array<{name:String, ms:Float, allocation:PhaseAllocation}>,
-			parseMs:Float, parseBytes:Float,
-			parseCount:Float):String {
-		var parts = ['pass$number'];
+	static function stagesReport(stages:Array<{name:String, ms:Float, allocation:PhaseAllocation}>, parseMs:Float,
+			parseBytes:Float, parseCount:Float):String {
+		var parts = [];
 		for (stage in stages) {
 			var a = stage.allocation;
 			parts.push('${stage.name}=${Math.round(stage.ms)}ms/${Math.round(a.bytes / 1048576.0)}MB/${Math.round(a.count / 1000.0)}k/${Std.int(a.collections)}gc(${Math.round(a.markMicros / 1000.0)}ms)');
@@ -2427,51 +2381,26 @@ class FrontendCompilation {
 		return parts.join(" ");
 	}
 
-	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{
+	/**
+	 * Every module typing called into without the source naming it was in the graph before anything was typed (`RuntimeType`
+	 * declares them; `seedTypedRuntimeModules` and `ModuleAnalyzer.addTypeDependencies` add them). A module missing here is a typer
+	 * rule whose module `RuntimeType` does not declare: fail, naming it, and compile nothing typed without it.
+	 */
+	static function checkTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{
 		var functionName:String;
 		var target:String;
-	}>,
-		typedFunctions:Array<compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, names:Array<String>,
-		rollbackModules:Map<String, ModuleState>):Bool {
-		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
-		for (fn in typedFunctions)
-			typedByName.set(fn.name, fn);
-		var changed = false;
+	}>, names:Array<String>):Void {
+		var program = [for (name in names) name => true];
 		for (dependency in dependencies) {
-			if (names.indexOf(dependency.target) >= 0)
-				continue;
+			if (!compiler.runtime.RuntimeType.isTypedDependency(dependency.target))
+				throw new InternalError('Typing made "${dependency.functionName}" call "${dependency.target}", which RuntimeType does not declare, so the graph does not add it');
 			// Only targets without native dynamic objects (Wasm) call the stdlib's class; elsewhere the dependency is unused.
 			if (dependency.target == PlatformAbi.DYNAMIC_OBJECT_CLASS && !context.isWasmTarget())
 				continue;
-			var target = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
-			if (target == null)
-				throw new InternalError('Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module');
-			if (names.indexOf(target) >= 0)
-				continue;
-			var fn = typedByName.get(dependency.functionName),
-				owner:Null<String> = null;
-			if (StringTools.startsWith(dependency.functionName,
-				compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX))
-				owner = context.state.declarationOwners.get(dependency.functionName
-					.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
-			else if (fn != null)
-				owner = resolveFunctionModule(fn, owners, typedByName, []);
-			else if (owners.exists(dependency.functionName))
-				// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
-				owner = owners.get(dependency.functionName);
-			else
-				owner = initializerModule(dependency.functionName, owners);
-			if (owner == null)
-				throw new InternalError('Typed runtime dependency from unknown function "${dependency.functionName}"');
-			var state = context.state.writableState(owner, rollbackModules);
-			if (state.dependencies.indexOf(target) < 0) {
-				context.frontendRestarts.push('${dependency.functionName} needs $target');
-				state.dependencies.push(target);
-				state.dependencies.sort(Reflect.compare);
-				changed = true;
-			}
+			var module = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
+			if (module == null || !program.exists(module))
+				throw new InternalError('Module "${dependency.target}", which typing made "${dependency.functionName}" call, is not in the program');
 		}
-		return changed;
 	}
 
 	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram,

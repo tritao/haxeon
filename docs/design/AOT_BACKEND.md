@@ -549,8 +549,8 @@ builds a release's: the C build's compile from 17.1 s to 14.8 s, main-thread ins
 the same sources: 10.4 s, 44 G). What is left of the difference: the C emission (3.9 s built ahead of time), and the bytecode
 lowering of function bodies the C backend does not read (1.4 s), which needs `HlLower` to intern without lowering (the types,
 constants and natives a body names are interned as it is lowered). The `haxeon dev aot` build of `tools.CompilerExecutable` also
-pays a frontend restart (graph 8.6 s against 1.5 s) for standard library modules only typing finds (`haxe.io.BytesHex`,
-`haxeon.DynamicOps`); that is the frontend's, not the C backend's.
+paid a frontend restart (graph 8.6 s against 1.5 s) for standard library modules only typing found (`haxe.io.BytesHex`,
+`haxeon.DynamicOps`); the graph now has them before typing (docs/design/FRONTEND_RESTART.md).
 
 Per-function C emission in parallel (designed, a later track). Each function lowers into its own text and files are joined in
 slot order, so the output stays deterministic; declarations are per file and independent once lowering is done. What is shared
