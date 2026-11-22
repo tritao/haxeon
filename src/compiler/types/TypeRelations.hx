@@ -250,11 +250,11 @@ class TypeRelations {
 
 	/**
 	 * Whether a function's argument or result of type `actual` stands for `expected` in a function type: assignable, or an Int
-	 * read as a Float (`Int->Void` takes a `Float->Void`), which Haxe unifies there. The function value is converted by an
-	 * adapter (ConversionResolver.functionAdapter).
+	 * read as a Float or a nullable number read as the number (`Int->Void` takes a `Float->Void`, `Null<Int>->Void` an
+	 * `Int->Void`), which Haxe unifies there. The function value is converted by an adapter (ConversionResolver.functionAdapter).
 	 */
 	public function convertsInFunction(actual:CompilerType, expected:CompilerType):Bool
-		return isAssignable(actual, expected) || conversion(actual, expected).match(IntToFloat);
+		return isAssignable(actual, expected) || conversion(actual, expected).match(IntToFloat | UnwrapNullableDefault);
 
 	/**
 	 * Whether `left` and `right` are a reference type that holds null and its `Null<>`, either way round: one storage, so an array of

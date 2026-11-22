@@ -57,6 +57,13 @@ class ConversionResolver {
 	/** `value ?? default`: a nullable scalar read as its element type, null giving the type's Haxe default. Evaluates `value` once. */
 	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String, position:Int,
 			code:String):TypedExpression {
+		warnNullDefault(value, expected);
+		return readWithDefault(value, expected, context, position, code);
+	}
+
+	/** `value`, a nullable number, read as `expected`, with null read as the type's default (0, 0.0, false). */
+	function readWithDefault(value:TypedExpression, expected:CompilerType, context:String, position:Int,
+			code:String):TypedExpression {
 		var element = switch value.type {
 			case TNullable(inner): inner;
 			default: value.type;
@@ -75,7 +82,6 @@ class ConversionResolver {
 					span);
 				default: new TypedExpression(TIntLiteral(0), TInt, span);
 			};
-		warnNullDefault(value, expected);
 		return new TypedExpression(TBlockExpression([TVar(id, value, span)],
 			new TypedExpression(TConditional(isNull, fallback, present), expected, span)),
 			expected, span);
@@ -695,6 +701,10 @@ class ConversionResolver {
 			return value;
 		if (functionSignaturesDiffer(value.type, target))
 			return functionAdapter(value, target, span);
+		// A null passed to or returned by the adapted function reads as the number's default, as on Haxe's HashLink target,
+		// without W1001: no expression here takes the `??` it suggests.
+		if (session.relations.conversion(value.type, target).match(UnwrapNullableDefault))
+			return readWithDefault(value, target, "function value", 0, "E1002");
 		if ((switch (value.type) {
 			case TInt: true;
 			default: false;
