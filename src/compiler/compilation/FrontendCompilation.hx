@@ -1577,6 +1577,9 @@ class FrontendCompilation {
 			passes.meter = meter;
 			passes.instrumentScope = build.instrumentScope;
 			passes.verifyMemo = context.state.verifyMemo;
+			// The lineage of the assembly continues through the stages over bodies (`IrLineage.bodies`).
+			var stageMemos = context.state.stageMemos;
+			passes.lineage = context.options.keepSession ? stageMemos.lineage : null;
 			// The generator's functions are the pipeline's input and only a next build reads them again: a build that keeps no
 			// session lets them go while the passes run, which then hold the only copy of the program.
 			if (!context.options.keepSession) {

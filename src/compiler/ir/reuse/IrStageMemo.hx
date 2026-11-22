@@ -201,6 +201,17 @@ class IrLineage {
 	/** `--check-reuse`: what a contribution memo reuses is computed again and compared. */
 	public var checks(default, null) = false;
 
+	/**
+	 * Past the encode point: the stages read and edit bodies, and what a memo keeps is frozen. A function a stage without a memo
+	 * hands on is then not compared with last build's (no cache compares after it computes): one that is not the function its
+	 * name stood for, or whose body is not frozen (made this build), takes a new version.
+	 */
+	public var bodies(default, null) = false;
+
+	/** From here the stages read bodies (`bodies`). */
+	public function enterBodies():Void
+		bodies = true;
+
 	final cells:Map<String, IrLineageCell> = [];
 	var cellCount = 0;
 
@@ -223,6 +234,7 @@ class IrLineage {
 		memos.startBuild();
 		var lineage = memos.lineage, memo = memos.stage(INPUT);
 		lineage.checks = checks;
+		lineage.bodies = false;
 		lineage.live = 0;
 		if (lineage.cellCount > functions.length * 2)
 			lineage.sweep();
@@ -301,7 +313,13 @@ class IrLineage {
 		var memo:Null<IrStageMemo> = null, mark = ++settling;
 		for (index in 0...functions.length) {
 			var fn = functions[index], cell = cells.get(fn.name);
-			if (cell == null || cell.fn != fn || cell.build != memos.build) {
+			if (bodies) {
+				var body = fn.body;
+				if (cell == null || cell.fn != fn || cell.build != memos.build || body == null || !body.frozen) {
+					set(fn, memos.versions.next());
+					cell = cells.get(fn.name);
+				}
+			} else if (cell == null || cell.fn != fn || cell.build != memos.build) {
 				if (memo == null)
 					memo = memos.stage(stage);
 				functions[index] = settleOne(memo, fn, version(fn.name));

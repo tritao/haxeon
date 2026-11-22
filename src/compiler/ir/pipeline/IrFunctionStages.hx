@@ -13,10 +13,25 @@ class IrFunctionStages {
 			?done:(IrAssembly, IrFunctionPass) -> Void):compiler.ir.pipeline.IrStage.IrAssemblyStage {
 		return new compiler.ir.pipeline.IrStage.IrAssemblyStage(name, function(assembly, context) {
 			var pass = make(assembly, context);
-			assembly.functions = run(name, pass, assembly.functions, context.lineage, context.options.checkReuse);
+			assembly.functions = run(name, pass, assembly.functions, context.lineage, context.options.checkReuse,
+				context.passScratch.bodyBuilder);
 			if (done != null)
 				done(assembly, pass);
 			return assembly;
+		}).memoized();
+	}
+
+	/** A stage of the program the target lowers (`IrPipeline.target`) that runs the pass `make` gives, on its functions. */
+	public static function programStage(name:String,
+			make:(compiler.ir.model.Ir.IrProgram, IrPipelineContext) -> IrFunctionPass,
+			?done:(compiler.ir.model.Ir.IrProgram, IrFunctionPass) -> Void):compiler.ir.pipeline.IrStage {
+		return new compiler.ir.pipeline.IrStage(name, function(program, context) {
+			var pass = make(program, context);
+			program.functions = run(name, pass, program.functions, context.lineage, context.options.checkReuse,
+				context.passScratch.bodyBuilder);
+			if (done != null)
+				done(program, pass);
+			return program;
 		}).memoized();
 	}
 
@@ -30,7 +45,7 @@ class IrFunctionStages {
 	 * entry is computed again and compared.
 	 */
 	public static function run(name:String, pass:IrFunctionPass, functions:Array<IrFunction>,
-			lineage:Null<IrLineage>, checks:Bool):Array<IrFunction> {
+			lineage:Null<IrLineage>, checks:Bool, ?builder:compiler.ir.model.IrBodyBuilder):Array<IrFunction> {
 		if (lineage == null) {
 			var summaries = [for (fn in functions) pass.summarize(fn)];
 			pass.prepare(functions, summaries, new IrFunctionIndex(name, functions));
@@ -69,7 +84,14 @@ class IrFunctionStages {
 					made = pass.transform(fn, summaries[index], reader),
 					last = memo.last(fn.name),
 					version = input;
-				if (made != fn) {
+				if (made != fn && lineage.bodies) {
+					// Past the encode point what a memo keeps is frozen, so the stages after it edit copies; nothing is compared
+					// with what the stage made last build.
+					var body = made.body;
+					if (body != null)
+						made.freezeBody(builder);
+					version = memos.versions.next();
+				} else if (made != fn) {
 					if (last != null && input != 0 && last.input == input
 						&& compiler.ir.codec.IrFunctionStateEquality.same(last.output, made)) {
 						made = last.output;
