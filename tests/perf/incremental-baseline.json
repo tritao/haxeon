@@ -2,17 +2,17 @@
 	"about": "scripts/perf-guard.py, incremental part: the compile server built in release mode from the checkout, compiling a copy of the frozen input (self-compile-baseline.json's input_revision) through cold, no-op, body-edit, signature-edit and late body-edit builds. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"cold_allocated_bytes": {
-			"value": 2685919056,
+			"value": 2736194472,
 			"tolerance": 0.02,
 			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"first_noop_allocated_bytes": {
-			"value": 242157016,
+			"value": 241639304,
 			"tolerance": 0.02,
 			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 230934448,
+			"value": 230504824,
 			"tolerance": 0.02,
 			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
@@ -27,7 +27,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 528704384,
+			"value": 513990048,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -47,7 +47,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 1412044344,
+			"value": 1445933776,
 			"tolerance": 0.03,
 			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
@@ -62,7 +62,7 @@
 			"why": "Deterministic; the slack absorbs new callers."
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 526360528,
+			"value": 497175576,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
@@ -72,22 +72,22 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"server_live_bytes": {
-			"value": 810444390,
+			"value": 828060467,
 			"tolerance": 0.03,
 			"why": "The session's live data at the end of the last build, from a heap census there: deterministic to a fraction of a megabyte."
 		},
 		"server_live_growth_bytes": {
-			"value": 0,
+			"value": 314573,
 			"tolerance_abs": 4194304,
 			"why": "Growth of the live data over the last two body edits, after the session has settled: steady to a fraction of a megabyte between runs. Keeping each build's compile result, whose IR mostly shares the session's, adds about eight megabytes a build, so the slack is a few megabytes."
 		},
 		"body_edit_instructions": {
-			"value": 8875570296,
+			"value": 7820714613,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
 		},
 		"signature_edit_instructions": {
-			"value": 28105902485,
+			"value": 27733546601,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the signature edit, measured as body_edit_instructions is."
 		}
