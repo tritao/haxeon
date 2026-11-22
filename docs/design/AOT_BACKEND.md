@@ -110,7 +110,7 @@ The sources go to `OUTPUT.c/`:
   index), the type descriptors, globals and allocation descriptors it reads, the natives it calls and the prototypes of
   the functions it names, each kind sorted by name. So no file parses the whole program's declarations (one header of all
   of them was 3 MB, parsed by each of 517 files), and a declaration's change rebuilds only the files that use it.
-- `image.c`: the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
+- `image.c` (`HlcImage`): the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
   table (function pointers by slot), the generated functions by C name, the layouts to check, and the pointers the files
   name with their table positions (below). It is the one file that depends on table positions.
 - `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them.
