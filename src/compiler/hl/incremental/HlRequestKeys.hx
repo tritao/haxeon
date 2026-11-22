@@ -33,6 +33,9 @@ class HlRequestKeys {
 	/** The rest, which lowering asks far less often, by a text key. */
 	final others:Map<String, Int> = [];
 
+	/** By number, the symbol table's key of the type a type request names (`HlSymbolTable.typeKey`), made when first asked. */
+	final typeKeys:Array<Null<String>> = [];
+
 	/** `seen[key]` is `recording` when the function being recorded asked `key` already. */
 	final seen:Array<Int> = [];
 
@@ -61,6 +64,16 @@ class HlRequestKeys {
 
 	public inline function interns(key:Int):Bool
 		return interning[key];
+
+	/** The symbol table's key of the type request `key` names (a `TypeOf` or `RefTo`). */
+	public function typeKey(key:Int, type:compiler.ir.Ir.IrType):String {
+		var known = typeKeys[key];
+		if (known == null) {
+			known = HlSymbolTable.typeKey(type);
+			typeKeys[key] = known;
+		}
+		return known;
+	}
 
 	/** Starts recording a function's requests (`record`). */
 	public function startFunction():Void
@@ -107,6 +120,7 @@ class HlRequestKeys {
 		var key = requests.length;
 		requests.push(request);
 		seen.push(0);
+		typeKeys.push(null);
 		switch request {
 			case ConstInt(value, _): ints.set(value, key);
 			case ConstFloat(value, _): floats.set(floatKey(value), key);

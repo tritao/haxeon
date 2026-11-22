@@ -28,7 +28,7 @@ class HlRequestAnswers {
 	public function answer(key:Int):Int {
 		if (key < answered.length && answered[key])
 			return values[key];
-		var value = ask(keys.request(key));
+		var value = ask(key, keys.request(key));
 		if (key >= answered.length) {
 			answered.resize(keys.count);
 			values.resize(keys.count);
@@ -38,13 +38,13 @@ class HlRequestAnswers {
 		return value;
 	}
 
-	function ask(request:HlSymbolRequest):Int
+	function ask(key:Int, request:HlSymbolRequest):Int
 		return switch request {
 			case ConstInt(value, _): symbols.internInt(value);
 			case ConstFloat(value, _): symbols.internFloat(value);
 			case ConstString(value, _): symbols.internString(value);
-			case TypeOf(type, _): HlSymbolRequest.HlRemap.typeIndex(symbols, type);
-			case RefTo(type, _): symbols.internReference(type);
+			case TypeOf(type, _): symbols.internTypeWithKey(type, keys.typeKey(key, type));
+			case RefTo(type, _): symbols.internReferenceByKey(type, keys.typeKey(key, type));
 			case RuntimeHeader(kind, _): symbols.internRuntimeHeader(kind);
 			case NativeStorage(type, layout, _):
 				var index = symbols.internNativeFieldStorageType(type, layout);

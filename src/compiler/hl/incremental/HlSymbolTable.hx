@@ -289,8 +289,12 @@ class HlSymbolTable {
 	public static inline final STRING_LENGTH_FIELD = 1;
 
 	/** Compiler-only references used to access runtime headers with pointer-size-aware HashLink instructions. */
-	public function internReference(type:IrType):Int {
-		var key = "ref:" + typeKey(type);
+	public function internReference(type:IrType):Int
+		return internReferenceByKey(type, typeKey(type));
+
+	/** `internReference` for a type whose key (`typeKey`) the caller already has. */
+	public function internReferenceByKey(type:IrType, typeKey:String):Int {
+		var key = "ref:" + typeKey;
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
 		ensureWritable();
@@ -316,6 +320,13 @@ class HlSymbolTable {
 		typeIndex.set(type, index);
 		return index;
 	}
+
+	/**
+	 * `internType` for a type whose key (`typeKey`) the caller already has, as the link step does (`HlRequestAnswers`): it does not
+	 * hash the type's structure, and leaves the structural index to `internType`.
+	 */
+	public function internTypeWithKey(type:IrType, key:String):Int
+		return internTypeByKey(type, key);
 
 	function internTypeByKey(type:IrType, key:String):Int {
 		if (typeIndices.exists(key))
@@ -897,7 +908,7 @@ class HlSymbolTable {
 		return index;
 	}
 
-	static function typeKey(type:IrType):String
+	public static function typeKey(type:IrType):String
 		return switch type {
 			case Void: "void";
 			case I32: "i32";

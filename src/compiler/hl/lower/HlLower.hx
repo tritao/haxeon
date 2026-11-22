@@ -610,7 +610,9 @@ class HlLower {
 		// The VM uses function identities for stack-trace and profiler names in every mode.
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
 		code.debugSections.push(HlDebugSection.of(HlWriter.FUNCTION_IDENTITIES, 1, 0,
-			HlWriter.encodeFunctionIdentities(identities), HlLz4.HIGH));
+			debugCache == null
+			? HlWriter.encodeFunctionIdentities(identities) : debugCache.identitiesPayload(identities),
+			HlLz4.HIGH));
 		var allocationAfterIdentities = AllocationMeter.sample(),
 			allocationAfterSpanGroups = allocationAfterIdentities;
 		if (developmentMetadata) {
