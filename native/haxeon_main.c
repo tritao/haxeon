@@ -4,11 +4,12 @@
  * this executable (HAXEON_CLI_BYTECODE). An executable built in a checkout belongs to it, as the shell launchers did:
  * HAXEON_HOME and HAXEON_HASHLINK_DIR name that checkout. The same executable in a release (`haxeon dev package`) is
  * bin/haxeon below a root that holds haxeon-release.txt, wherever it was unpacked: found from the executable's own path, that
- * root is HAXEON_HOME and bin the VM's directory, with the CLI's bytecode in it. HAXEON_CLI_HL runs other CLI bytecode instead.
+ * root is HAXEON_HOME and bin the VM's directory, with the CLI's bytecode in it.
  *
  * When Haxeon is built ahead of time (AOT_EXECUTABLE in the VM's directory, build.AotCompiler), the launcher runs the CLI in it
  * instead, `haxeon-aot cli ARGUMENTS`, which starts without the JIT. Whether that executable is current, built from these
- * sources, is its own question to answer (tools.CompilerExecutable): when it is not, it runs the CLI's bytecode on the VM. */
+ * sources, is its own question to answer (tools.CompilerExecutable): when it is not, it runs the CLI's bytecode on the VM. To
+ * run the CLI's bytecode while the executable is current, remove or rename the executable. */
 /* No hl.h: its macros (_GUID) break <windows.h>, and the VM's entry point is all this needs of HashLink. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -107,7 +108,6 @@ static int run_ahead_of_time( void ) {
 }
 
 int wmain( int argc, wchar_t *argv[] ) {
-	const wchar_t *override = _wgetenv(L"HAXEON_CLI_HL");
 	wchar_t *bin = NULL, *root = release_root(&bin), *cli;
 	wchar_t **arguments = (wchar_t**)malloc(sizeof(wchar_t*) * (size_t)(argc + 2));
 	if( root != NULL ) {
@@ -119,7 +119,6 @@ int wmain( int argc, wchar_t *argv[] ) {
 		_putenv_s("HAXEON_HASHLINK_DIR",HAXEON_HASHLINK_DIR);
 		cli = widen(HAXEON_CLI_BYTECODE);
 	}
-	if( override != NULL && *override ) cli = (wchar_t*)override;
 	if( cli == NULL || arguments == NULL ) return 1;
 	{
 		/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about; a console also needs ANSI turned on. */
@@ -129,7 +128,7 @@ int wmain( int argc, wchar_t *argv[] ) {
 			&& SetConsoleMode(error,mode | 0x0004 /* ENABLE_VIRTUAL_TERMINAL_PROCESSING */);
 		_putenv_s("HAXEON_STDERR_TERMINAL",terminal ? "1" : "0");
 	}
-	if( override == NULL || !*override ) {
+	{
 		int status = run_ahead_of_time();
 		if( status >= 0 ) return status;
 	}
@@ -206,7 +205,6 @@ static void run_ahead_of_time( int argc, char *argv[] ) {
 }
 
 int main( int argc, char *argv[] ) {
-	const char *override = getenv("HAXEON_CLI_HL");
 	char *bin = NULL, *root = release_root(&bin);
 	const char *cli;
 	char **arguments = (char**)malloc(sizeof(char*) * (size_t)(argc + 2));
@@ -219,11 +217,10 @@ int main( int argc, char *argv[] ) {
 		setenv("HAXEON_HASHLINK_DIR",HAXEON_HASHLINK_DIR,1);
 		cli = HAXEON_CLI_BYTECODE;
 	}
-	if( override != NULL && *override ) cli = override;
 	if( cli == NULL || arguments == NULL ) return 1;
 	/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about. */
 	setenv("HAXEON_STDERR_TERMINAL",isatty(STDERR_FILENO) ? "1" : "0",1);
-	if( override == NULL || !*override ) run_ahead_of_time(argc,argv);
+	run_ahead_of_time(argc,argv);
 	if( access(cli,R_OK) != 0 ) {
 		fprintf(stderr,"Missing the Haxeon CLI bytecode %s; build the native runtime (scripts/build-native.sh)\n",cli);
 		return 1;

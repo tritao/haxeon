@@ -347,8 +347,8 @@ says where it is and whether it is current, and each place that would start the 
   Windows as a child it waits for, with the command line as typed), and the CLI's bytecode on the VM otherwise. The launcher does
   not read the sources: the executable checks its own stamp first and, when it is stale, runs the CLI's bytecode on the VM
   instead (`hl haxeon-cli.hl ARGUMENTS`), so an edit to the CLI never runs an older CLI. Only the stamp check of a stale
-  executable runs, which compares the digest of the sources as they are now with the one it was built from. `HAXEON_CLI_HL`
-  (other CLI bytecode) skips the executable.
+  executable runs, which compares the digest of the sources as they are now with the one it was built from. To run the CLI's
+  bytecode while the executable is current (to debug the CLI on the VM), remove or rename the executable.
 - `CompilerClient.run` starts `haxeon-aot serve STATE` instead of `hl worker.hl STATE`, under a worker version of its own
   (`compiler-session-v9:aot`), so a bytecode worker of the same sources is not reused once the executable is installed. A worker
   profiled with `HAXEON_COMPILER_PROFILE_PORT` stays on the VM, whose diagnostics port it is.
