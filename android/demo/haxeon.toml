@@ -1,0 +1,14 @@
+version = 1
+entry = "Main"
+sources = ["Main.hx"]
+sourceRoots = ["."]
+target = "android"
+defines = []
+outputDir = "build"
+
+[package]
+name = "demo"
+
+[android]
+applicationId = "org.haxeon.android"
+label = "Haxeon"

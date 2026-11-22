@@ -586,7 +586,7 @@ def measure_small_project_mode(out, mode, expected_server):
     # Unmeasured: builds the server program when the session has none for this compiler yet, warms the file cache and fills the
     # digest store.
     with open(os.path.join(work, "warm-up.log"), "w") as log:
-        status = subprocess.run([haxeon, "build", "--project", "haxeon.json"], cwd=project, env=env, stdout=log,
+        status = subprocess.run([haxeon, "build", "--project", "haxeon.toml"], cwd=project, env=env, stdout=log,
                                 stderr=subprocess.STDOUT).returncode
     stop_workers(session)
     if status != 0:
@@ -601,7 +601,7 @@ def measure_small_project_mode(out, mode, expected_server):
         fresh_project(project)
         if empty_store:
             remove_file(store)
-        shell = pin + ["sh", "-c", SMALL_PROJECT_SHELL, "sh", haxeon, command, "--project", "haxeon.json", "-v", "detailed"]
+        shell = pin + ["sh", "-c", SMALL_PROJECT_SHELL, "sh", haxeon, command, "--project", "haxeon.toml", "-v", "detailed"]
         if skip is None:
             shell = ["perf", "stat", "-x,", "-e", ",".join(events), "--"] + shell
         process = subprocess.run(shell, cwd=project, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)

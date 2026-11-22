@@ -19,6 +19,7 @@ The project roadmap is [../ROADMAP.md](../ROADMAP.md). The UI package keeps its 
 Using Haxeon:
 
 - [CLI.md](reference/CLI.md): project CLI, manifests, dependencies, builds.
+- [MANIFEST.md](reference/MANIFEST.md): the project manifest, `haxeon.toml` or `haxeon.json`.
 - [RELEASES.md](reference/RELEASES.md): the release archives, how one is made and the release workflow.
 - [LANGUAGE_SUPPORT.md](reference/LANGUAGE_SUPPORT.md): the supported Haxe subset and what is not yet supported.
 - [LIVE_PATCHING.md](reference/LIVE_PATCHING.md): how patching works and the reload rules.

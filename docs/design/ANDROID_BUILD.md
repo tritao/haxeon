@@ -52,7 +52,7 @@ Gradle's `android/` project lives inside the Haxeon checkout, so `haxeonRoot` is
 `<haxeonRoot>/scripts/haxeon` (`haxeon.cmd` on Windows), which brings the CLI up to date and runs it; the `haxeonCommand`
 Gradle property replaces it, for instance with an installed `haxeon`. The project is the `haxeonProject` property (in
 `gradle.properties`, `~/.gradle/gradle.properties` or `-P`), by default the bundled demo, which is now a project of its own
-(`android/demo/haxeon.json`; its outputs go to `android/demo/build/`, which is ignored).
+(`android/demo/haxeon.toml`; its outputs go to `android/demo/build/`, which is ignored).
 
 Android Studio's sync only configures the project, which needs neither haxeon nor its outputs; haxeon runs when a build runs.
 `haxeonApplicationId` and `haxeonAppLabel` are configuration-time properties as before: standalone Gradle uses the defaults

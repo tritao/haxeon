@@ -20,7 +20,7 @@ split.
 ./scripts/haxeon run --target android [--device SERIAL]
 ```
 
-Set `android.applicationId` and `android.label` in `haxeon.json` to customize
+Set `applicationId` and `label` in the manifest's `[android]` section to customize
 the installed package name and launcher label. `run` installs the APK and
 launches it on the selected device or the only online device. `haxeon devices`
 lists connected devices.
@@ -28,7 +28,7 @@ lists connected devices.
 Gradle can also run on its own, as Android Studio does. It then runs
 `scripts/haxeon build --target android --gradle-inputs FILE` (`haxeon.cmd` on
 Windows) for the project the `haxeonProject` Gradle property names, by default
-the bundled demo (`android/demo/haxeon.json`), and packages what that build
+the bundled demo (`android/demo/haxeon.toml`), and packages what that build
 describes in `FILE`:
 
 ```sh

@@ -10,8 +10,8 @@ try {
     Push-Location $ProjectDir
     & $Cli init
     if ($LASTEXITCODE -ne 0) { throw "haxeon init failed with $LASTEXITCODE" }
-    $Manifest = Get-Content -Raw -Path "haxeon.json" | ConvertFrom-Json
-    if ($null -eq $Manifest.package -or [string]::IsNullOrEmpty($Manifest.package.name)) {
+    $Manifest = Get-Content -Raw -Path "haxeon.toml"
+    if ($Manifest -notmatch '(?m)^\[package\]\s*\r?\nname\s*=\s*"[^"]+"') {
         throw "haxeon init did not write a non-empty package name"
     }
 
@@ -34,7 +34,7 @@ try {
     Pop-Location
     # What Gradle packages, as Gradle on its own asks for it: no Android SDK is needed for a project without native code.
     $AndroidInputs = Join-Path $AndroidProjectDir "gradle inputs.properties"
-    & $Cli build --target android --project (Join-Path $AndroidProjectDir "haxeon.json") --gradle-inputs $AndroidInputs
+    & $Cli build --target android --project $AndroidProjectDir --gradle-inputs $AndroidInputs
     if ($LASTEXITCODE -ne 0) { throw "Android build for Gradle failed with $LASTEXITCODE" }
     $AndroidModule = Join-Path $AndroidProjectDir "build/android-arm64/app.hl"
     foreach ($Suffix in @("", ".hli", ".entry", ".hcs")) {
@@ -43,8 +43,8 @@ try {
     if (-not (Test-Path $AndroidInputs)) { throw "Android Gradle inputs were not described" }
     $AndroidDemoDir = Join-Path $ProjectDir "android demo"
     New-Item -ItemType Directory -Path $AndroidDemoDir | Out-Null
-    Copy-Item (Join-Path $RepoDir "android/demo/haxeon.json"), (Join-Path $RepoDir "android/demo/Main.hx") $AndroidDemoDir
-    & $Cli build --target android --project (Join-Path $AndroidDemoDir "haxeon.json") `
+    Copy-Item (Join-Path $RepoDir "android/demo/haxeon.toml"), (Join-Path $RepoDir "android/demo/Main.hx") $AndroidDemoDir
+    & $Cli build --target android --project (Join-Path $AndroidDemoDir "haxeon.toml") `
         --gradle-inputs (Join-Path $AndroidDemoDir "inputs.properties")
     if ($LASTEXITCODE -ne 0) { throw "Android demo build for Gradle failed with $LASTEXITCODE" }
     foreach ($Suffix in @("", ".hli", ".entry", ".hcs")) {
@@ -54,7 +54,7 @@ try {
     }
 
     Pop-Location
-    & $Cli run --project (Join-Path $ProjectDir "haxeon.json") -- hello
+    & $Cli run --project $ProjectDir -- hello
     if ($LASTEXITCODE -ne 42) { throw "haxeon run returned $LASTEXITCODE; expected 42" }
     Write-Output "PASS: project CLI init, doctor, target listing, host run, wasm32 build, and Android asset generation"
     exit 0

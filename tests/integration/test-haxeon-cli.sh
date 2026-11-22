@@ -35,20 +35,20 @@ mkdir -p "$android_project"
 )
 # What Gradle packages, as Gradle on its own asks for it: no Android SDK is needed for a project without native code.
 android_inputs="$android_project/gradle inputs.properties"
-"$cli" build --target android --project "$android_project/haxeon.json" --gradle-inputs "$android_inputs"
+"$cli" build --target android --project "$android_project" --gradle-inputs "$android_inputs"
 android_module="$android_project/build/android-arm64/app.hl"
 for artifact in "" .hli .entry .hcs; do
 	test -s "$android_module$artifact"
 done
 grep -qxF "module=$android_module" "$android_inputs"
 grep -qxF "entry=$android_module.entry" "$android_inputs"
-"$cli" build --target android --project "$android_project/haxeon.json" --plan | grep -F "$android_module.hcs" >/dev/null
+"$cli" build --target android --project "$android_project" --plan | grep -F "$android_module.hcs" >/dev/null
 
 # The bundled demo, from a copy so its build stays out of the checkout.
 android_demo="$project_dir/android demo"
 mkdir -p "$android_demo"
-cp "$repo_dir/android/demo/haxeon.json" "$repo_dir/android/demo/Main.hx" "$android_demo/"
-"$cli" build --target android --project "$android_demo/haxeon.json" --gradle-inputs "$android_demo/inputs.properties"
+cp "$repo_dir/android/demo/haxeon.toml" "$repo_dir/android/demo/Main.hx" "$android_demo/"
+"$cli" build --target android --project "$android_demo/haxeon.toml" --gradle-inputs "$android_demo/inputs.properties"
 for artifact in "" .hli .entry .hcs; do
 	test -s "$android_demo/build/android-arm64/app.hl$artifact"
 done
@@ -61,7 +61,7 @@ if ! grep -qF "/gradle-$gradle_version-bin.zip" "$repo_dir/android/gradle/wrappe
 fi
 
 set +e
-"$cli" run --project "$project_dir/haxeon.json" -- hello
+"$cli" run --project "$project_dir" -- hello
 run_status=$?
 set -e
 if [[ $run_status -ne 42 ]]; then

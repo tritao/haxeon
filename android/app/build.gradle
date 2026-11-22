@@ -16,7 +16,7 @@ def haxeonInputsFile = haxeonInputsProperty != null ? file(haxeonInputsProperty)
 def haxeonCommand = providers.gradleProperty('haxeonCommand')
     .getOrElse(new File(haxeonRoot, 'scripts/haxeon' + (isWindows ? '.cmd' : '')).absolutePath)
 def haxeonProject = providers.gradleProperty('haxeonProject')
-    .getOrElse(new File(haxeonRoot, 'android/demo/haxeon.json').absolutePath)
+    .getOrElse(new File(haxeonRoot, 'android/demo/haxeon.toml').absolutePath)
 // The NDK and CMake versions, which scripts/android-env.sh and the CLI read from the same file.
 def toolVersions = new Properties()
 toolVersions.load(new StringReader(providers.fileContents(rootProject.layout.projectDirectory.file('versions.txt')).asText.get()))

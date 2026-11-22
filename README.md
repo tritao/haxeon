@@ -44,7 +44,7 @@ Ninja tools are installed locally by the setup scripts.
 cmake --preset release
 cmake --build --preset release   # HashLink VM and Haxeon runtime
 
-./scripts/haxeon init            # creates haxeon.json and src/Main.hx
+./scripts/haxeon init            # creates haxeon.toml and src/Main.hx
 ./scripts/haxeon run             # build and launch
 ./scripts/haxeon run --watch     # rebuild and relaunch on edits
 ./scripts/haxeon --help          # every command; haxeon help build for one

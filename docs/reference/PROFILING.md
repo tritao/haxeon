@@ -224,13 +224,12 @@ so ordinary builds and their compiler worker are untouched. It probes:
   macOS does not instrument native code yet; `../design/PROFILER_DESIGN_POSIX.md` is the
   design.
 
-`haxeon.json` narrows what is probed:
+The manifest's `instrument` section (`haxeon.toml`, or `"instrument"` in a `haxeon.json`) narrows what is probed:
 
-```json
-"instrument": {
-  "haxe": { "include": ["*"], "exclude": ["Math", "haxe.ds.*"] },
-  "native": { "include": ["**"], "exclude": ["vendor/harfbuzz/**"] }
-}
+```toml
+[instrument]
+haxe = { include = ["*"], exclude = ["Math", "haxe.ds.*"] }
+native = { include = ["**"], exclude = ["vendor/harfbuzz/**"] }
 ```
 
 Haxe patterns match qualified function names; `*` matches any run of
@@ -262,11 +261,12 @@ dropped 10012 short calls to 2 functions; most often:
          10000  Main.tiny
 ```
 
-`--profile-min-call=US` sets the threshold for one run, and `haxeon.json` sets
+`--profile-min-call=US` sets the threshold for one run, and the manifest sets
 the project's:
 
-```json
-"instrument": { "minCallMicros": 1 }
+```toml
+[instrument]
+minCallMicros = 1
 ```
 
 `0` keeps every call. Fractions work (`0.5`).
@@ -291,12 +291,11 @@ exists: the blocking and system calls.
 - **Vulkan**: queue submits and presents, image acquisition and the fence,
   semaphore, queue and device waits.
 
-`haxeon.json` chooses them:
+The manifest chooses them:
 
-```json
-"instrument": {
-  "boundary": { "imports": "blocking", "extra": ["kernel32.dll!SetEvent"], "dxgi": true, "d3d11": true, "vulkan": true }
-}
+```toml
+[instrument]
+boundary = { imports = "blocking", extra = ["kernel32.dll!SetEvent"], dxgi = true, d3d11 = true, vulkan = true }
 ```
 
 `imports` is `blocking` (the curated set) or `none`; `extra` adds functions as
@@ -343,11 +342,10 @@ the runtime is counted and skipped rather than ending the session.
 
 Example exclude lists, for a smaller capture of an editor-sized program:
 
-```json
-"instrument": {
-  "haxe": { "exclude": ["Math", "Std", "StringTools", "haxe.ds", "haxe.io.Bytes", "haxe.Int64"] },
-  "native": { "exclude": ["**/harfbuzz/**", "**/sheenbidi/**", "**/libunibreak/**", "**/onig*/**", "**/libwebsockets/**"] }
-}
+```toml
+[instrument]
+haxe = { exclude = ["Math", "Std", "StringTools", "haxe.ds", "haxe.io.Bytes", "haxe.Int64"] }
+native = { exclude = ["**/harfbuzz/**", "**/sheenbidi/**", "**/libunibreak/**", "**/onig*/**", "**/libwebsockets/**"] }
 ```
 
 The first keeps the Haxe standard library's small, hot functions out; the
