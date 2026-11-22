@@ -16,6 +16,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * Gives each branch-to-phi edge a block for its parallel copies without mutating cached SSA: `split` on a function, `splitBody`
  * on a body, with tables kept from one body to the next.
  */
+@:nullSafety(Strict)
 class PhiEdges {
 	/** The blocks with phis, by id. */
 	final phiBlocks = new IrValueMarks();
@@ -245,8 +246,9 @@ class PhiEdges {
 	}
 
 	static function edgeId(edges:Map<String, Int>, key:String):Int {
-		if (!edges.exists(key))
+		var id = edges.get(key);
+		if (id == null)
 			throw new InternalError('Missing phi edge $key');
-		return edges.get(key);
+		return id;
 	}
 }

@@ -11,6 +11,7 @@ import compiler.ir.model.IrPassScratch;
  * (`IrPassScratch.bodyGraph`) serves every function of a pass. The walk, and so the order of `order` and of each block's
  * predecessors, is `IrGraph`'s.
  */
+@:nullSafety(Strict)
 class IrBodyGraph {
 	/** The reachable blocks in reverse postorder, the entry first. */
 	public final order:Array<Int> = [];
@@ -209,6 +210,8 @@ class IrBodyGraph {
 	/** As `IrGraph.prepareVisit`: the terminator's distinct targets, then the handler of each try region begun in the block. */
 	function prepareVisit(id:Int):Void {
 		var body = this.body, block = indexOf(id);
+		if (body == null)
+			throw new InternalError("The graph visited a block before it was given a body");
 		reachable[id] = true;
 		var terminator = body.terminatorRow(block);
 		if (terminator < 0)

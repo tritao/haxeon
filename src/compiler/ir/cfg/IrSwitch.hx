@@ -1,6 +1,7 @@
 package compiler.ir.cfg;
 
 /** The blocks a dense switch (`IrTerminator.Switch`, `CfgTerminator.Switch`) can transfer to. */
+@:nullSafety(Strict)
 class IrSwitch {
 	/** Each block `targets` or `otherwise` names, once, in first-mention order: a block several values select is one edge. */
 	public static function successors(targets:Array<Int>, otherwise:Int):Array<Int> {
