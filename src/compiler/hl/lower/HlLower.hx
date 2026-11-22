@@ -2121,7 +2121,7 @@ class HlLower {
 				requireObjectField(objectType, object, fieldName)));
 		// Inline records produce an HSTRUCT pointer into their owner. Only scalar
 		// narrow fields need sign or zero extension after the field load.
-		if (HlLoweringDecisions.extendsNarrowStorage(nativeLayout)) {
+		if (nativeLayout != null && HlLoweringDecisions.extendsNarrowStorage(nativeLayout)) {
 			var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 				bits = nativeLayout.size * 8;
 			instructions.push(HlInstruction.LoadInt(maskOrShift,
