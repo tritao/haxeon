@@ -786,7 +786,8 @@ class IrTagEscapeSignatures {
 class IrBodyTagEscapes {
 	final reads:IrTagEscapesPass;
 
-	var tags = false;
+	/** Whether the program has tag adapters: -1 until a row with a tag asks, so a body without tags does not read it. */
+	var tags = -1;
 	var body:IrBody;
 	var edit = false;
 	var changed = false;
@@ -800,7 +801,7 @@ class IrBodyTagEscapes {
 	public function rewrite(body:IrBody, edit:Bool):Bool {
 		this.body = body;
 		this.edit = edit;
-		tags = reads.hasTags();
+		tags = -1;
 		changed = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -876,13 +877,29 @@ class IrBodyTagEscapes {
 		body.setOperand(row, index, boxed);
 	}
 
+	function hasTags():Bool {
+		if (tags < 0)
+			tags = reads.hasTags() ? 1 : 0;
+		return tags == 1;
+	}
+
+	/** Whether a tag is among `row`'s operands, its output or the type it names: the rows the tag escapes rewrite. */
+	function involvesTag(row:Int):Bool {
+		var output = body.output(row);
+		if (hasTag(row, 0) || output.exists() && isTag(output))
+			return true;
+		var opcode = body.opcode(row);
+		return (opcode == IrOpcode.EnumTagBox || opcode == IrOpcode.EnumTagUnbox)
+			&& tagName(body.typeOperand(row)) != null;
+	}
+
 	function visit(block:Int, row:Int):Void {
 		switch body.opcode(row) {
 			case IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
 				var count = body.operandCount(row);
 				call(row, reads.provider(body.opcode(row) == IrOpcode.InlineEnumBox, body.typeOperand(row), count,
 					count == 1 ? body.valueType(body.operand(row, 0)) : null, body.valueType(body.output(row))));
-			case _ if (!tags):
+			case _ if (!involvesTag(row) || !hasTags()):
 			case IrOpcode.ToDyn:
 				var name = tagName(body.valueType(body.operand(row, 0)));
 				if (name != null) {

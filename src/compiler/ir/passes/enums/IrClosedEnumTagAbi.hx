@@ -406,6 +406,10 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
  * on the body alone, so a session keeps it by the function's version (`IrStageMemos.tagEscapes`).
  */
 class IrTagEscapeRecord {
+	/** The record of a function that lets nothing escape, shared. */
+	@:processWide("an empty record, only ever read")
+	static final NONE = new IrTagEscapeRecord();
+
 	public final escaped:Array<Int> = [];
 
 	/** One per distinct call argument kept: the callee, with the argument's position and type id at twice its index in `arguments`. */
@@ -508,6 +512,7 @@ class IrTagEscapeRecord {
 				row = body.nextRow(row);
 			}
 		}
-		return record;
+		return record.escaped.length + record.callees.length + record.closures.length + record.mapStores.length == 0
+			? NONE : record;
 	}
 }
