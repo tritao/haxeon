@@ -3,7 +3,7 @@
 	"input_revision": "b3a22d6bf8ec9487a7061b12f93259aaff161552",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2182673208,
+			"value": 2112024808,
 			"tolerance": 0.02,
 			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
 		},
@@ -13,27 +13,27 @@
 			"why": "Phase-end collections (CompileOptions.phaseCollections) plus the byte trigger as a safety net; one extra collection can come from crossing a trigger boundary."
 		},
 		"live_bytes_tables": {
-			"value": 245681357,
+			"value": 245786214,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_ir": {
-			"value": 308386202,
+			"value": 242011341,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"live_bytes_backend": {
-			"value": 269274317,
+			"value": 263507149,
 			"tolerance": 0.03,
 			"why": "Live data at the end of the phase, from a heap census there: deterministic to a fraction of a megabyte for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"peak_rss_bytes": {
-			"value": 1344897024,
+			"value": 1347186688,
 			"tolerance": 0.08,
 			"why": "An outcome of the collection schedule, not a measure of the work: reported and gated loosely, while allocation and the live data at the phase boundaries gate tightly."
 		},
 		"main_thread_instructions": {
-			"value": 52490328965,
+			"value": 53803534398,
 			"tolerance": 0.03,
 			"why": "Stable to well under a percent with perf; compared only where perf is installed and allowed."
 		}
