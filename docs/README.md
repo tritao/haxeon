@@ -60,6 +60,10 @@ Formats and runtime contracts:
 
 ## Design
 
+Project:
+
+- [WEBSITE.md](design/WEBSITE.md): the public site and the user documentation it publishes.
+
 Language:
 
 - [LANGUAGE_ROADMAP.md](design/LANGUAGE_ROADMAP.md): planned language and compiler features.
