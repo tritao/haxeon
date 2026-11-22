@@ -12,6 +12,7 @@ import compiler.ir.verify.IrVerifier;
 
 /** Materialize the nominal boxed enum only at a genuine Dynamic/reflection/native boundary. */
 @:access(compiler.ir.model.IrBuilder)
+@:nullSafety(Strict)
 class IrInlineEnumEscapes {
 	public static function boxName(name:String):String return IrInlineEnumCaseAccess.HELPER_PREFIX + "box:" + name;
 	public static function unboxName(name:String):String return IrInlineEnumCaseAccess.HELPER_PREFIX + "unbox:" + name;
@@ -26,9 +27,10 @@ class IrInlineEnumEscapes {
 				case Enum(name), Nullable(Enum(name)): declarations.get(name);
 				default: null;
 			};
-			if (nested != null && nested.inlineStorage != null) {
+			var nestedStorage = nested == null ? null : nested.inlineStorage;
+			if (nested != null && nestedStorage != null) {
 				if (toStorage) return builder.call(unboxName(nested.name), [builder.toDyn(value)],
-					Obj(nested.inlineStorage));
+					Obj(nestedStorage));
 				return builder.safeCast(builder.call(boxName(nested.name), [value], Dyn), logical);
 			}
 			if (!IrVerifier.sameType(value.type, logical))
@@ -37,11 +39,13 @@ class IrInlineEnumEscapes {
 		}
 		for (name in names) {
 			var declaration = declarations.get(name), shape = planner.shape(name);
-			if (declaration == null || shape == null
-				|| shape.valueObject.name != declaration.inlineStorage)
+			if (declaration == null)
+				throw new InternalError('Invalid enum escape storage for "$name"');
+			var storageName = declaration.inlineStorage;
+			if (shape == null || storageName == null || shape.valueObject.name != storageName)
 				throw new InternalError('Invalid enum escape storage for "$name"');
 			IrInlineEnumStorage.validate(declaration, objects);
-			var storage:IrType = Obj(declaration.inlineStorage), access = new IrInlineEnumCaseAccess(shape, objects);
+			var storage:IrType = Obj(storageName), access = new IrInlineEnumCaseAccess(shape, objects);
 			var box = new IrBuilder(), value = box.argument("value", storage), tag = box.fieldGet(value, "tag", I32);
 			var nil = box.createBlock(), present = box.createBlock();
 			box.branch(box.equal(tag, box.constInt(0)), nil, present);

@@ -7,12 +7,14 @@ import compiler.ir.passes.values.IrValueLaneReference;
 import compiler.ir.verify.IrVerifier;
 
 /** The logical enum remains public; only typed storage uses its private value record. */
+@:nullSafety(Strict)
 class IrInlineEnumStorage {
 	public static function resolve(enums:Array<IrEnum>, objects:IrObjectTable, name:String):Null<IrType> {
 		for (declaration in enums) if (declaration.name == name) {
-			if (declaration.inlineStorage == null) return null;
+			var storage = declaration.inlineStorage;
+			if (storage == null) return null;
 			validate(declaration, objects);
-			return Obj(declaration.inlineStorage);
+			return Obj(storage);
 		}
 		throw new InternalError('Unknown enum "$name"');
 	}
@@ -21,8 +23,9 @@ class IrInlineEnumStorage {
 		var name = declaration.inlineStorage;
 		if (name == null) return;
 		var object = objects.get(name);
-		if (declaration.isRecursive == true || name != IrInlineEnumLayout.VALUE_PREFIX + declaration.name
-			|| object == null || !object.isValue || object.base != null || object.interfaces.length != 0
+		if (object == null || declaration.isRecursive == true
+			|| name != IrInlineEnumLayout.VALUE_PREFIX + declaration.name
+			|| !object.isValue || object.base != null || object.interfaces.length != 0
 			|| object.methods.length != 0)
 			throw new InternalError('Invalid inline storage for enum "${declaration.name}"');
 		if (object.fields.length == 0 || object.fields[0].name != "tag"

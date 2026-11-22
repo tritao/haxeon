@@ -31,6 +31,7 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  * (docs/design/IR_CORE_COLUMNS.md, migration): a function that mentions a selected enum is edited in place, on a copy when a cache
  * holds its body; the helpers, dispatchers and escape adapters it adds are built as functions and encoded.
  */
+@:nullSafety(Strict)
 class IrInlineEnumLowering {
 	final planner:IrInlineEnumLayout;
 	final eligibility:IrInlineEnumEligibility;
@@ -206,9 +207,11 @@ class IrInlineEnumLowering {
 		var pass = new IrInlineEnumLoweringPass(lowering, types, builder);
 		result.functions = IrFunctionStages.run(IrInlineEnumLoweringPass.STAGE, pass, program.functions, lineage,
 			lineage != null && lineage.checks, builder);
-		var names = [for (name in helpers.keys()) name];
-		names.sort(Reflect.compare);
-		var made = [for (name in names) helpers.get(name)];
+		var sorted = [for (name => helper in helpers) {
+			name:name, helper:helper
+		}];
+		sorted.sort((a, b) -> Reflect.compare(a.name, b.name));
+		var made = [for (entry in sorted) entry.helper];
 		// The functions lowered here call their typed dispatchers already (`lower`); the others did before.
 		var dispatched = result.functions.length;
 		result.functions = result.functions.concat(made);
@@ -216,7 +219,7 @@ class IrInlineEnumLowering {
 		if (lineage != null)
 			lineage.settle(IrInlineEnumLoweringPass.STAGE, result.functions);
 		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces, lineage);
-		made = made.concat(result.functions.slice(dispatched + names.length));
+		made = made.concat(result.functions.slice(dispatched + sorted.length));
 		// Lane-array reflection bridges use the logical enum adapter even when this source has no escape.
 		var escapes = IrInlineEnumEscapes.functions(result.enums, table, planner);
 		result.functions = result.functions.concat(escapes);
@@ -572,6 +575,7 @@ class IrInlineEnumLowering {
  * helpers it makes. It asks for the word access natives the function it hands on calls (`WORD_NATIVE`, by their place in
  * `IrInlineEnumWordAccess.natives`).
  */
+@:nullSafety(Strict)
 class IrInlineEnumLoweringPass implements IrFunctionPass {
 	public static inline final STAGE = "inline-enum-lowering";
 

@@ -19,6 +19,7 @@ private typedef EnumUseNode = {
 }
 
 /** Conservative first source subset. A rejected enum keeps its nominal storage everywhere in the program. */
+@:nullSafety(Strict)
 class IrInlineEnumEligibility {
 	public final allowed:Map<String, Bool> = [];
 	public final reasons:Map<String, String> = [];
@@ -171,12 +172,16 @@ class IrInlineEnumEligibility {
 			replay(program.functions[index], uses[index], bodyTypes, program.entryPoint);
 		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
 		var walk = reflectionReach.walker(supportsCallableEscape), reached:Map<String, Bool> = [];
-		for (reason in escapeOrder)
-			for (name in walk(escapeRoots.get(reason)).keys())
-				if (!reached.exists(name)) {
-					reached.set(name, true);
-					block(name, reason);
-				}
+		// Each reason in the order has its roots.
+		for (reason in escapeOrder) {
+			var roots = escapeRoots.get(reason);
+			if (roots != null)
+				for (name in walk(roots).keys())
+					if (!reached.exists(name)) {
+						reached.set(name, true);
+						block(name, reason);
+					}
+		}
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
@@ -515,6 +520,7 @@ class IrInlineEnumEligibility {
  * them; its type descriptors with their uses by kind; and the closures it makes and its map stores, which the escape reach follows.
  * It depends on the body alone, so a session keeps it by the function's version (`IrStageMemos.inlineEnumUses`).
  */
+@:nullSafety(Strict)
 class IrInlineEnumUses {
 	public static inline final ESCAPE = 0;
 	public static inline final ESCAPE_MAP = 1;

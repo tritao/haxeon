@@ -19,12 +19,19 @@ import compiler.ir.reuse.IrFacts;
 import compiler.ir.verify.IrVerifier;
 import compiler.types.typing.EnumRuntimeType;
 
+/** An enum type a Dynamic operation needs helpers for, by its key. */
+private typedef EnumDynamicRequest = {
+	final id:String;
+	final type:IrType;
+}
+
 /**
  * Dispatch Dynamic enum operations by the concrete runtime enum descriptor. Per function (`IrFunctionPass`): a function's summary
  * says which Dynamic enum operations it has (`BOXES`, `CALLS_EQUAL`, `CALLS_REFLECT`, `CLOSES`), and its rewrite reads whether
  * it is reached (`UNREACHED`), whether any enum registers (`REGISTERED`) and whether a helper it calls kept its content name
  * (`RENAMED`), and asks for the unboxes and type tests it calls. The helpers are named by the enum type.
  */
+@:nullSafety(Strict)
 class IrEnumDynamicDispatch implements IrFunctionPass {
 	/** Read-only: no type values in a function. */
 	@:processWide("a shared empty map, only ever read")
@@ -65,7 +72,8 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	final equalities:Map<String, String> = [];
 	final reflectiveEqualities:Map<String, String> = [];
 	var occupied:Map<String, Bool> = [];
-	var names:Array<String> = [];
+	/** The requests in the order of their keys. */
+	var requested:Array<EnumDynamicRequest> = [];
 	final boxNames:Map<String, String> = [];
 	final viewNames:Map<String, String> = [];
 	final unboxNames:Map<String, String> = [];
@@ -77,7 +85,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	/** The reflective equality helpers no root reaches, which the stage drops. */
 	var dropped:Map<String, Bool> = [];
 
-	/** The box and view helpers, in the order of `names`. */
+	/** The box and view helpers, in the order of `requested`. */
 	final made:Array<IrFunction> = [];
 
 	/** The box helper of `type`: what an `EnumDynamicBox` of it calls, unless a function of the program has the name. */
@@ -213,28 +221,37 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 				&& isEnum(fn.arguments[0].type)): register(fn.arguments[0].type);
 			default:
 		}
-		names = [for (name in requests.keys()) name];
-		names.sort(Reflect.compare);
+		requested = [for (id => type in requests) {
+			id:id, type:type
+		}];
+		requested.sort((a, b) -> Reflect.compare(a.id, b.id));
 		// Named by the enum type, not by its place among the requests: an enum that starts or stops being requested renames no
 		// other helper, so the callers of the others keep their code.
-		for (id in names) {
-			var type = requests.get(id);
-			boxNames.set(id, symbol(occupied, helperName(BOX_PREFIX, type)));
-			viewNames.set(id, symbol(occupied, helperName(VIEW_PREFIX, type)));
+		var named = [for (request in requested) {
+			var id = request.id,
+				type = request.type,
+				box = symbol(occupied, helperName(BOX_PREFIX, type)),
+				view = symbol(occupied, helperName(VIEW_PREFIX, type));
+			boxNames.set(id, box);
+			viewNames.set(id, view);
 			unboxNames.set(id, symbol(occupied, helperName(UNBOX_PREFIX, type)));
-		}
-		for (id in names) {
+			{
+				request:request, box:box, view:view
+			};
+		}];
+		for (helpers in named) {
+			var id = helpers.request.id;
 			if (boxes.exists(id)) {
-				var name = boxNames.get(id), known = remembered(name);
+				var name = helpers.box, known = remembered(name);
 				if (known == null) {
-					var builder = new IrBuilder(), value = builder.argument("value", requests.get(id));
+					var builder = new IrBuilder(), value = builder.argument("value", helpers.request.type);
 					builder.returnValue(builder.toDyn(value));
 					known = new IrFunction(name, builder.arguments, Dyn, builder.blocks, GeneratedHelper);
 				}
 				made.push(known);
 			}
 			if (views.exists(id)) {
-				var name = viewNames.get(id), known = remembered(name);
+				var name = helpers.view, known = remembered(name);
 				if (known == null) {
 					var builder = new IrBuilder(), array = builder.argument("array", Array(Dyn));
 					builder.returnValue(array);
@@ -257,10 +274,10 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	public function fact(kind:Int, key:String):Int
 		return switch kind {
 			case UNREACHED:
-				var skipped = unreached;
-				(skipped != null && skipped.exists(key)) || dropped.exists(key) ? 1 : 0;
+				var skipped = unreached, notReached = skipped != null && skipped.exists(key);
+				notReached || dropped.exists(key) ? 1 : 0;
 			case REGISTERED:
-				names.length > 0 ? 1 : 0;
+				requested.length > 0 ? 1 : 0;
 			default:
 				occupiedBy(key) ? IrFacts.UNKNOWN : 0;
 		};
@@ -316,13 +333,16 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 					[new Located(Call(output, IrSymbol.of(helper), [input]), located.provenance)];
 				case Call(output, name,
 					arguments) if ((name.name == "__std_is_of_type" || name.name == "__std_is_exact_type")
-					&& arguments.length == 2 && types.exists(arguments[1].id)
-					&& isEnum(types.get(arguments[1].id)) && registered()):
-					var type = types.get(arguments[1].id),
-						exact = name.name == "__std_is_exact_type";
-					reader.request(exact ? TEST_EXACT : TEST_INSTANCE, type);
-					[new Located(Call(output, IrSymbol.of(typeTestName(type, exact)), [arguments[0]]),
-						located.provenance)];
+					&& arguments.length == 2):
+					var type = types.get(arguments[1].id);
+					if (type == null || !isEnum(type) || !registered())
+						null;
+					else {
+						var exact = name.name == "__std_is_exact_type";
+						reader.request(exact ? TEST_EXACT : TEST_INSTANCE, type);
+						[new Located(Call(output, IrSymbol.of(typeTestName(type, exact)), [arguments[0]]),
+							located.provenance)];
+					}
 				default: null;
 			};
 		});
@@ -349,24 +369,26 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		var rewritten = [for (fn in functions) if (!dropped.exists(fn.name)) fn];
 		for (helper in made)
 			rewritten.push(helper);
-		var usedUnboxNames = [for (name in unboxes.keys()) name];
-		usedUnboxNames.sort(Reflect.compare);
+		var usedUnboxes = [for (name => type in unboxes) {
+			name:name, type:type
+		}];
+		usedUnboxes.sort((a, b) -> Reflect.compare(a.name, b.name));
 		var session = lineage, kept = made.copy();
-		for (name in usedUnboxNames) {
-			var known = remembered(name);
+		for (used in usedUnboxes) {
+			var known = remembered(used.name);
 			if (known == null)
-				known = unbox(name, unboxes.get(name));
+				known = unbox(used.name, used.type);
 			rewritten.push(known);
 			kept.push(known);
 		}
-		var testNames = [for (name in typeTests.keys()) name];
-		testNames.sort(Reflect.compare);
-		for (name in testNames) {
-			var test = typeTests.get(name);
-			rewritten.push(typeTest(name, test.type, test.exact, names, requests));
-		}
-		if (needsEqual && names.length > 0) rewritten.push(dispatcher(EQUAL, names, requests, equalities));
-		if (needsReflect) rewritten.push(dispatcher(REFLECT, names, requests, reflectiveEqualities));
+		var tests = [for (name => test in typeTests) {
+			name:name, test:test
+		}];
+		tests.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in tests)
+			rewritten.push(typeTest(entry.name, entry.test.type, entry.test.exact, requested));
+		if (needsEqual && requested.length > 0) rewritten.push(dispatcher(EQUAL, requested, equalities));
+		if (needsReflect) rewritten.push(dispatcher(REFLECT, requested, reflectiveEqualities));
 		if (session != null)
 			for (helper in kept)
 				session.memos.keepHelper(helper);
@@ -407,7 +429,11 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 			if (!helpers.exists(fn.name)) scan(fn);
 		else if (fn.retention != compiler.ir.model.IrFunction.IrRetention.Reachable) mark(fn.name);
 		var index = 0;
-		while (index < pending.length) scan(helpers.get(pending[index++]));
+		// Only helpers are marked, so each pending name has one.
+		while (index < pending.length) {
+			var helper = helpers.get(pending[index++]);
+			if (helper != null) scan(helper);
+		}
 		for (name in helpers.keys())
 			if (!live.exists(name))
 				dropped.set(name, true);
@@ -447,15 +473,14 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		return new IrFunction(name, builder.arguments, type, builder.blocks, EnumDynamicUnbox(type));
 	}
 
-	static function typeTest(name:String, type:IrType, exact:Bool, names:Array<String>,
-			requests:Map<String, IrType>):IrFunction {
+	static function typeTest(name:String, type:IrType, exact:Bool, requested:Array<EnumDynamicRequest>):IrFunction {
 		var builder = new IrBuilder(), input = builder.argument("value", Dyn), targetName = switch type {
 			case Enum(value): value;
 			default: "";
 		},
 			declaration = EnumRuntimeType.declaration(targetName), family = declaration == targetName;
-		for (boxName in names) {
-			var candidate = requests.get(boxName), candidateName = switch candidate {
+		for (request in requested) {
+			var candidate = request.type, candidateName = switch candidate {
 				case Enum(value): value;
 				default: "";
 			};
@@ -478,16 +503,16 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	}
 
 	/** Enums have equality but no declared ordering. Never order their boxed addresses. */
-	static function dispatcher(name:String, names:Array<String>, requests:Map<String, IrType>,
+	static function dispatcher(name:String, requested:Array<EnumDynamicRequest>,
 			equalities:Map<String, String>):IrFunction {
 		var builder = new IrBuilder(), left = builder.argument("left", Dyn), right = builder.argument("right", Dyn);
-		for (boxName in names) {
-			var type = requests.get(boxName),
+		for (request in requested) {
+			var type = request.type,
 				matched = builder.createBlock(),
 				next = builder.createBlock(),
 				same = builder.createBlock(),
 				different = builder.createBlock(),
-				equality = equalities.get(boxName);
+				equality = equalities.get(request.id);
 			builder.branch(builder.call("__std_is_exact_type", [left, builder.typeValue(type)], Bool), matched, next);
 			builder.select(matched);
 			builder.branch(builder.call("__std_is_exact_type", [right, builder.typeValue(type)], Bool), same,

@@ -27,6 +27,7 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  * each tag its types name, whether it is closed (`CLOSED`); a function that changes becomes its edited body, owned by the next
  * stage. The program's tables are projected after the functions (`projected`).
  */
+@:nullSafety(Strict)
 class IrClosedEnumTagAbi implements IrFunctionPass {
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;
@@ -405,6 +406,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
  * their receivers, and the map stores, which the escape reach follows. Only types that can lead to an enum are kept. It depends
  * on the body alone, so a session keeps it by the function's version (`IrStageMemos.tagEscapes`).
  */
+@:nullSafety(Strict)
 class IrTagEscapeRecord {
 	/** The record of a function that lets nothing escape, shared. */
 	@:processWide("an empty record, only ever read")

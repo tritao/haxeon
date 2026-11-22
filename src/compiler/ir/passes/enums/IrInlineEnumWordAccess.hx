@@ -7,6 +7,7 @@ import compiler.ir.passes.scalars.IrScalarWordBits;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneSlot;
 
 /** Packs and unpacks scalar leaves in an inline enum's overlapping payload words. */
+@:nullSafety(Strict)
 class IrInlineEnumWordAccess {
 	final bits:Int;
 	final wordType:IrType;

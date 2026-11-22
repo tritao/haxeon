@@ -9,6 +9,7 @@ import compiler.ir.passes.scalars.IrScalarWordBits;
 
 /** Nominal I32 storage is available only when the entire enum has no payload. */
 @:access(compiler.ir.model.IrBuilder)
+@:nullSafety(Strict)
 class IrEnumTagStorage {
 	public static function eligible(declaration:IrEnum):Bool {
 		for (constructor in declaration.cases)
@@ -77,6 +78,8 @@ class IrEnumTagStorage {
 			}
 		if (!foundBox || !foundUnbox) {
 			var declaration = Lambda.find(program.enums, entry -> entry.name == name);
+			if (declaration == null)
+				throw new InternalError('Unknown tag-stored enum "$name"');
 			for (fn in adapters(declaration, box, unbox))
 				switch fn.kind {
 					case EnumTagAdapter(_, true) if (!foundBox):

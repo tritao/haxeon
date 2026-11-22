@@ -8,6 +8,7 @@ import compiler.ir.reuse.IrFunctionMemo;
 import compiler.ir.model.Ir;
 
 /** Boxed enum descriptors are needed by boxed carriers and reflection, never by a nominal I32 tag alone. */
+@:nullSafety(Strict)
 class IrEnumRuntimeTypes {
 	/**
 	 * The enums whose boxed descriptors the program needs. `memo` keeps each function's part (`functionNames`) while the function is

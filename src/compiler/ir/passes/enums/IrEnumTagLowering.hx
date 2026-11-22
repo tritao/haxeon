@@ -25,6 +25,7 @@ import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.passes.enums.IrInlineEnumRequests.IrInlineEnumProviders;
 
 /** Select nominal scalar storage independently of payload-enum escape eligibility. */
+@:nullSafety(Strict)
 class IrEnumTagLowering {
 	/** Lowers the tag-stored enums of `program` (`IrEnumTagLoweringPass`), without a memo. */
 	public static function run(program:IrProgram):IrProgram {
@@ -64,14 +65,17 @@ class IrEnumTagLowering {
 				result: Bool
 			});
 		var declarations = [for (entry in program.enums) entry.name => entry];
-		for (name in names)
-			if (!existing.exists(boxNames.get(name)) || !existing.exists(unboxNames.get(name)))
-				for (helper in IrEnumTagStorage.adapters(declarations.get(name), boxNames.get(name),
-					unboxNames.get(name)))
+		for (name in names) {
+			var declaration = declarations.get(name), box = boxNames.get(name), unbox = unboxNames.get(name);
+			if (declaration == null || box == null || unbox == null)
+				throw new InternalError('Enum tag "$name" needs adapters but has no declaration or adapter names');
+			if (!existing.exists(box) || !existing.exists(unbox))
+				for (helper in IrEnumTagStorage.adapters(declaration, box, unbox))
 					if (!existing.exists(helper.name)) {
 						existing.set(helper.name, helper);
 						program.functions.push(helper);
 					}
+		}
 	}
 
 	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
@@ -104,6 +108,22 @@ class IrEnumTagLowering {
 	 * and casts into adapter calls, in place: the functions are this lowering's own. What it expects where a value leaves, and the
 	 * adapters, are `lookups`'s, which records the adapters it needs.
 	 */
+	/** The box adapter of the tag-stored enum `name`, which every tag that is boxed has. */
+	public static function boxAdapter(reads:IrTagEscapeReads, name:String):String {
+		var box = reads.boxName(name);
+		if (box == null)
+			throw new InternalError('Enum tag "$name" has no box adapter');
+		return box;
+	}
+
+	/** The unbox adapter of the tag-stored enum `name`. */
+	public static function unboxAdapter(reads:IrTagEscapeReads, name:String):String {
+		var unbox = reads.unboxName(name);
+		if (unbox == null)
+			throw new InternalError('Enum tag "$name" has no unbox adapter');
+		return unbox;
+	}
+
 	public static function rewriteEscapes(lookups:IrTagEscapeReads, selectedFunctions:Array<IrFunction>):Void {
 		function isTag(value:IrValue):Bool
 			return switch value.type {
@@ -156,7 +176,7 @@ class IrEnumTagLowering {
 					next = currentFunction.nextValueId();
 				var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
 				lookups.require(name);
-				rewritten.push(new Located(Call(boxed, IrSymbol.of(lookups.boxName(name)), [value]),
+				rewritten.push(new Located(Call(boxed, IrSymbol.of(boxAdapter(lookups, name)), [value]),
 					currentBlock.instructions[position].provenance));
 				boxed;
 				default: value;
@@ -182,7 +202,7 @@ class IrEnumTagLowering {
 									throw new InternalError("Expected tag");
 							};
 							lookups.require(name);
-							Call(output, IrSymbol.of(lookups.boxName(name)), [value]);
+							Call(output, IrSymbol.of(boxAdapter(lookups, name)), [value]);
 						case SafeCast(output, value) if (isTag(output)):
 							markChanged();
 							changed = true;
@@ -193,7 +213,7 @@ class IrEnumTagLowering {
 									throw new InternalError("Expected tag");
 							};
 							lookups.require(name);
-							Call(output, IrSymbol.of(lookups.unboxName(name)), [value]);
+							Call(output, IrSymbol.of(unboxAdapter(lookups, name)), [value]);
 						case Intrinsic(output, EnumTagBox(EnumTag(name)), arguments):
 							if (lookups.boxName(name) == null
 								|| arguments.length != 1
@@ -203,7 +223,7 @@ class IrEnumTagLowering {
 							markChanged();
 							changed = true;
 							lookups.require(name);
-							Call(output, IrSymbol.of(lookups.boxName(name)), arguments);
+							Call(output, IrSymbol.of(boxAdapter(lookups, name)), arguments);
 						case Intrinsic(output, EnumTagUnbox(EnumTag(name)), arguments):
 							if (lookups.unboxName(name) == null
 								|| arguments.length != 1
@@ -213,7 +233,7 @@ class IrEnumTagLowering {
 							markChanged();
 							changed = true;
 							lookups.require(name);
-							Call(output, IrSymbol.of(lookups.unboxName(name)), arguments);
+							Call(output, IrSymbol.of(unboxAdapter(lookups, name)), arguments);
 						case Call(output, name, arguments):
 							var tagArgument = hasTag(arguments);
 							if (!tagArgument && !isTag(output)) located.value else {
@@ -360,6 +380,7 @@ interface IrTagEscapeReads {
  * signatures, fields and globals where a tag leaves the function, which callees are tag adapters, the adapters' names and the
  * provider of each inline-enum request; it asks for the adapters it needs, which `finish` adds.
  */
+@:nullSafety(Strict)
 class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 	// Facts.
 	static inline final TAGS = 0;
@@ -578,6 +599,7 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 }
 
 /** `IrTagEscapeReads` from the program's tables, as a lowering without a memo reads them. */
+@:nullSafety(Strict)
 class IrTagEscapeTables implements IrTagEscapeReads {
 	final lookups:IrTagEscapeSignatures;
 	final adapterEnums:Map<String, String>;
@@ -620,6 +642,7 @@ class IrTagEscapeTables implements IrTagEscapeReads {
 }
 
 /** The types an escape check expects where a value leaves its function: arguments of calls, fields, globals. Memoized by name. */
+@:nullSafety(Strict)
 class IrTagEscapeSignatures {
 	final functions:IrFunctionIndex;
 
@@ -783,18 +806,26 @@ class IrTagEscapeSignatures {
  * reads of the program is read through `reads` (`IrTagEscapesPass`), which records it, and so are the adapters it needs. A walk
  * that does not `edit` only says whether one that does would change the body.
  */
+@:nullSafety(Strict)
 class IrBodyTagEscapes {
 	final reads:IrTagEscapesPass;
 
 	/** Whether the program has tag adapters: -1 until a row with a tag asks, so a body without tags does not read it. */
 	var tags = -1;
-	var body:IrBody;
+	/** The body being rewritten (`rewrite`), null before the first. */
+	var body:Null<IrBody> = null;
 	var edit = false;
 	var changed = false;
 
 	public function new(reads:IrTagEscapesPass) {
 		this.reads = reads;
-		body = null;
+	}
+
+	inline function requireBody():IrBody {
+		var current = body;
+		if (current == null)
+			throw new InternalError("Tag escapes were asked about before a body was given");
+		return current;
 	}
 
 	/** Whether `body` changes; it is changed when `edit` is set. */
@@ -829,9 +860,10 @@ class IrBodyTagEscapes {
 		};
 
 	inline function isTag(value:IrValueId):Bool
-		return tagName(body.valueType(value)) != null;
+		return tagName(requireBody().valueType(value)) != null;
 
 	function hasTag(row:Int, from:Int):Bool {
+		var body = requireBody();
 		for (index in from...body.operandCount(row))
 			if (isTag(body.operand(row, index)))
 				return true;
@@ -839,6 +871,7 @@ class IrBodyTagEscapes {
 	}
 
 	function needsArguments(row:Int, from:Int, expected:Null<Array<IrType>>):Bool {
+		var body = requireBody();
 		if (expected == null)
 			return false;
 		for (index in from...body.operandCount(row))
@@ -849,6 +882,7 @@ class IrBodyTagEscapes {
 
 	/** Makes `row` a call of `name` with its operands and output. */
 	function call(row:Int, name:String):Void {
+		var body = requireBody();
 		changed = true;
 		if (edit)
 			body.setOperation(row, IrOpcode.Call, IrSymbol.of(name).id);
@@ -856,6 +890,7 @@ class IrBodyTagEscapes {
 
 	/** Boxes each tag operand of `row` from `from` on whose expected type is `Dyn`, in a call before the row. */
 	function adapt(block:Int, row:Int, from:Int, expected:Null<Array<IrType>>):Void {
+		var body = requireBody();
 		changed = true;
 		if (!edit || expected == null)
 			return;
@@ -868,11 +903,13 @@ class IrBodyTagEscapes {
 	}
 
 	function adaptOne(block:Int, row:Int, index:Int, value:IrValueId, name:String):Void {
+		var body = requireBody();
 		var boxed = body.newValue("$enum-tag:implicit-box", body.typeId(Dyn));
 		reads.require(name);
 		body.beginRow();
 		body.pushOperand(value);
-		var made = body.endRow(IrOpcode.Call, boxed, IrSymbol.of(reads.boxName(name)).id, body.provenance(row));
+		var made = body.endRow(IrOpcode.Call, boxed, IrSymbol.of(IrEnumTagLowering.boxAdapter(reads, name)).id,
+			body.provenance(row));
 		body.linkBefore(block, row, made);
 		body.setOperand(row, index, boxed);
 	}
@@ -885,6 +922,7 @@ class IrBodyTagEscapes {
 
 	/** Whether a tag is among `row`'s operands, its output or the type it names: the rows the tag escapes rewrite. */
 	function involvesTag(row:Int):Bool {
+		var body = requireBody();
 		var output = body.output(row);
 		if (hasTag(row, 0) || output.exists() && isTag(output))
 			return true;
@@ -894,6 +932,7 @@ class IrBodyTagEscapes {
 	}
 
 	function visit(block:Int, row:Int):Void {
+		var body = requireBody();
 		switch body.opcode(row) {
 			case IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
 				var count = body.operandCount(row);
@@ -904,13 +943,13 @@ class IrBodyTagEscapes {
 				var name = tagName(body.valueType(body.operand(row, 0)));
 				if (name != null) {
 					reads.require(name);
-					call(row, reads.boxName(name));
+					call(row, IrEnumTagLowering.boxAdapter(reads, name));
 				}
 			case IrOpcode.SafeCast:
 				var name = tagName(body.valueType(body.output(row)));
 				if (name != null) {
 					reads.require(name);
-					call(row, reads.unboxName(name));
+					call(row, IrEnumTagLowering.unboxAdapter(reads, name));
 				}
 			case IrOpcode.EnumTagBox:
 				var name = tagName(body.typeOperand(row));
@@ -921,7 +960,7 @@ class IrBodyTagEscapes {
 						|| !IrVerifier.sameType(body.valueType(body.output(row)), Dyn))
 						throw new InternalError("Invalid enum tag box signature");
 					reads.require(name);
-					call(row, reads.boxName(name));
+					call(row, IrEnumTagLowering.boxAdapter(reads, name));
 				}
 			case IrOpcode.EnumTagUnbox:
 				var name = tagName(body.typeOperand(row));
@@ -932,7 +971,7 @@ class IrBodyTagEscapes {
 						|| !IrVerifier.sameType(body.valueType(body.output(row)), EnumTag(name)))
 						throw new InternalError("Invalid enum tag unbox signature");
 					reads.require(name);
-					call(row, reads.unboxName(name));
+					call(row, IrEnumTagLowering.unboxAdapter(reads, name));
 				}
 			case IrOpcode.Call:
 				var tagArgument = hasTag(row, 0), output = body.output(row);
@@ -1010,6 +1049,7 @@ class IrBodyTagEscapes {
  * adapters and the adapters' names; it asks for the adapters it needs. The program's tables, the native wrappers, the adapters
  * and the dropping of tag equalities nothing calls are the whole-program steps around it.
  */
+@:nullSafety(Strict)
 class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeReads {
 	// Facts.
 	static inline final ELIGIBLE = 0;
@@ -1497,12 +1537,20 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 		function use(value:IrValue):IrValue {
 			if (!valueChanges(value))
 				return value;
-			if (!values.exists(value.id))
-				values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
-			return values.get(value.id);
+			var known = values.get(value.id);
+			if (known == null)
+				values.set(value.id, known = new IrValue(value.id, value.name, mapped(value.type)));
+			return known;
 		}
 		var indexTags:Map<Int, IrValue> = [],
 			replacedIndices:Map<Int, Bool> = [];
+		// The tag an index a guard found among `indexTags` was read from.
+		function indexTag(id:Int):IrValue {
+			var tag = indexTags.get(id);
+			if (tag == null)
+				throw new InternalError('Missing enum tag of index $id');
+			return tag;
+		}
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
@@ -1531,8 +1579,8 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 					case Equal(output, left, right)
 						if (indexTags.exists(left.id)
 						&& indexTags.exists(right.id)
-						&& IrVerifier.sameType(indexTags.get(left.id).type, indexTags.get(right.id).type)):
-						instruction = Equal(use(output), indexTags.get(left.id), indexTags.get(right.id));
+						&& IrVerifier.sameType(indexTag(left.id).type, indexTag(right.id).type)):
+						instruction = Equal(use(output), indexTag(left.id), indexTag(right.id));
 						replacedIndices.set(left.id, true);
 						replacedIndices.set(right.id, true);
 					case Call(output, target, arguments) if (wrapperOf(target.name) != null):
@@ -1542,7 +1590,8 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 						instruction = Call(use(output), IrSymbol.of(wrapperName(name)),
 							[for (argument in arguments) use(argument)]);
 					case Call(output, name, arguments) if (unboxOf(name.name) != null):
-						if (!IrVerifier.sameType(unboxOf(name.name), output.type))
+						var unboxed = unboxOf(name.name);
+						if (unboxed == null || !IrVerifier.sameType(unboxed, output.type))
 							throw new InternalError("Malformed enum unbox signature");
 						switch use(output).type {
 							case EnumTag(enumName): instruction = Intrinsic(use(output),

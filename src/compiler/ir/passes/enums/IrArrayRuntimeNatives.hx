@@ -3,6 +3,7 @@ package compiler.ir.passes.enums;
 /** Exact runtime storage names shared by enum escape classification. Unknown names fail closed.
  * Replace this registry with declared native roles when array natives acquire them (a1 debt).
  */
+@:nullSafety(Strict)
 class IrArrayRuntimeNatives {
 	static final names:Map<String, Bool> = build();
 

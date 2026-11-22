@@ -10,6 +10,7 @@ import compiler.ir.model.Ir;
 import compiler.types.typing.EnumRuntimeType;
 
 /** Select concrete runtime descriptors from current and cached IR, never from an erased template. */
+@:nullSafety(Strict)
 class IrEnumRuntimeSpecializations {
 	@:processWide("a shared empty list of enum names, only ever read")
 	static final NONE:Array<String> = [];
@@ -157,6 +158,7 @@ class IrEnumRuntimeSpecializations {
 }
 
 /** The types a run of `IrEnumRuntimeSpecializations.materialize` without a memo has visited, by id of one table. */
+@:nullSafety(Strict)
 private class IrMentionScratch {
 	public var types:Null<IrTypeIds> = null;
 	public final visited:Array<Bool> = [];
