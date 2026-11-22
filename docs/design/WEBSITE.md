@@ -41,8 +41,8 @@ The table follows README.md; when a platform's status changes there, it changes 
 
 - **Home:** the headline, a 30-second recording of an app edited while it runs, the three differences, the platform
   table, and the UI Showcase running in the browser.
-- **Get started:** install from a release archive (`docs/reference/RELEASES.md`; no C toolchain or checkout), then
-  "Your first app".
+- **Get started:** install a C and C++ toolchain and CMake (the one command for each system, as `haxeon doctor` prints
+  it), then Haxeon from a release archive (`docs/reference/RELEASES.md`; no checkout), then "Your first app".
 - **Guides** (tutorials and how-tos), in the order they are written:
   1. Your first app: one project built for desktop, Android and the web.
   2. Live editing: what a patch can change, what needs a reload, and how state carries across.
@@ -69,6 +69,14 @@ The table follows README.md; when a platform's status changes there, it changes 
   example, the package and standard library API from doc comments, the compatibility table from the differential tests.
 - **Every code block is compiled in CI**, and run where the page shows its output.
 
+## Native code
+
+An app that uses a package wrapping C or C++ (the UI package does) builds that code with the user's own C and C++
+toolchain and CMake, once per machine and set of options, in a cache every project shares. `haxeon doctor` checks the
+toolchain and names the command that installs it. Packages ship sources, not prebuilt libraries: prebuilt libraries would
+cover only the packages whose authors build every target, and not an executable built ahead of time through C. Bundling a
+compiler is the next step if the install proves the obstacle (TODO.md).
+
 ## Site
 
 The documentation pages are static HTML from an existing docs generator (Astro Starlight unless a reason against it
@@ -79,6 +87,9 @@ shows something: the UI Showcase on the home page and, later, a playground.
 ## Before launch
 
 - The "Get started" path works from a release archive on Linux, macOS and Windows.
+- The first-party packages (`ui`, `platform`, `gpu`, `audio`, `animation`, `editor`) are releases of the `haxeon`
+  registry that a release archive ships, so a new project depends on them as `ui = "^0.3"`.
+- `haxeon init --template app` makes a windowed app that `haxeon run` opens and `haxeon run --watch --live` edits.
 - Guides 1 to 5 written and their code compiled in CI.
 - The home page recording, and the UI Showcase on the web.
 - A VS Code extension over the existing language server.

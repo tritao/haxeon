@@ -3,6 +3,14 @@
 Concrete gaps found while compiling Materia and while matching stock Haxe.
 Longer-term direction is in `ROADMAP.md`.
 
+- **Spike: bundle a C compiler with Haxeon** (after the app template). Apps
+  that use native packages build C and C++ with the user's toolchain
+  (`docs/design/WEBSITE.md`, native code), which on Windows means Visual
+  Studio Build Tools. Build NativeKit and an ahead-of-time app with a pinned
+  `zig cc` on Linux and Windows: correctness, the size it adds, and whether
+  its GNU ABI mixes with the MSVC-built VM and runtime. macOS keeps the Xcode
+  tools (Apple's SDK is not redistributable) and Android the NDK either way.
+
 - **A bare enum abstract value is found by package.** Enum abstracts are
   abstracts that declare values (`552099308`), and a case name resolves among
   the values of the matched abstract (`43b27f9b8`). A bare value with no

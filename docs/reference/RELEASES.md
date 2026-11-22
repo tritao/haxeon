@@ -1,7 +1,9 @@
 # Releases
 
 A release is one archive per platform that holds everything the `haxeon` command needs: unpack it anywhere and run
-`bin/haxeon`. No C compiler, CMake, pinned Haxe or checkout is needed.
+`bin/haxeon`. No pinned Haxe or checkout is needed, and building and running a program needs no C compiler or CMake. A
+project that uses a package with C or C++ code (the UI package, for one), an executable built ahead of time
+(`--target hlc`) and an Android build do need them: `haxeon doctor` checks for them.
 
 ## What an archive holds
 
