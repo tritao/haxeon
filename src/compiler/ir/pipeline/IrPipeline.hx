@@ -22,7 +22,6 @@ import compiler.ir.passes.nullability.IrNullableScalarFlow;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.passes.nullability.IrOptionalFieldStorage;
 import compiler.ir.passes.nullability.IrOptionalScalarFlow;
-import compiler.ir.passes.nullability.IrOptionalValueFlow;
 import compiler.ir.passes.objects.IrOverrideBridges;
 import compiler.ir.model.IrProviders;
 import compiler.ir.analysis.IrReachability.IrReachabilityReport;
@@ -88,7 +87,7 @@ class IrPipeline {
 		IrFunctionStages.stage("enum-tag-lowering", enumTagLowering, loweredEnumInput).when(lowersEnums),
 		new IrAssemblyStage("encode-bodies", encodeBodies).encodes(),
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
-		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
+		IrFunctionStages.stage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage("object-reflection", objectReflection),
@@ -422,16 +421,8 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var objects = assembly.objects,
-			types = bodyTypes(context),
-			builder = context.passScratch.bodyBuilder;
-		var functions = new IrOptionalScalarFlow(objects).rewrite(objects, assembly.functions, types, builder);
-		// The copy, box and unbox helpers the rewritten calls name.
-		functions = IrOptionalValueFlow.addHelpers(functions, objects, types, builder);
-		assembly.functions = encodeMade("optional-scalar-flow", functions, context);
-		return assembly;
-	}
+	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrOptionalScalarFlow(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder);
 
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		// The checked copies are kept, frozen, only in a session.

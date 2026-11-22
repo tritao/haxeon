@@ -19,6 +19,12 @@ import compiler.core.Provides.ProviderOperation;
 import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.passes.nullability.IrOptionalValueFlow.IrOptionalHelpers;
+import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts;
 
 private typedef OptionalAlias = {
 	final root:Int;
@@ -30,79 +36,183 @@ private typedef OptionalClosure = {
 	final receiver:Null<IrValue>;
 }
 
-/** Scalar components for optional values that do not need a boxed representation. */
-class IrOptionalScalarFlow {
+/**
+ * Scalar components for optional values that do not need a boxed representation, per function (`IrFunctionPass`). A function's
+ * summary says whether its types name a nullable object at all (`NULLABLE_OBJECTS`) and whether it calls an optional value
+ * helper (`CALLS_HELPERS`). Its rewrite reads, for each nullable object its signature and values have, whether the object is a
+ * value class (`VALUE`): a function with none keeps its form, and one with an optional value is rewritten each run (`REWRITE`,
+ * never stated), as what it becomes depends on the whole program's candidates. It asks for the copy, box and unbox helpers the
+ * function it hands on calls. `finish` adds the candidates' scalar forms, the receiver checks and the helpers.
+ */
+class IrOptionalScalarFlow implements IrFunctionPass {
 	public static inline final PREFIX = "$optional-scalar:";
 	public static inline final WRAPPER = "$optional-components:";
 
+	// Facts.
+	static inline final VALUE = 0;
+	static inline final REWRITE = 1;
+
+	// Summaries.
+	static inline final NULLABLE_OBJECTS = 1;
+	static inline final CALLS_HELPERS = 2;
+
+	final declarations:Array<IrObject>;
 	final objects:Map<String, IrObject>;
 	final layouts:IrInlineValueLayout;
 	final wrappers:Map<String, IrObject> = [];
 	var candidates:Map<String, IrFunction> = [];
-	final functions:Map<String, IrFunction> = [];
+	var functions = new IrFunctionIndex("optional-scalar-flow", []);
 	final receiverChecks:Map<String, IrFunction> = [];
 	final resolution:IrMethodResolution;
+	final helpers = new IrOptionalHelpers();
 
-	// What `rewrite` reads the functions' bodies with.
-	var types:Null<IrTypeIds> = null;
-	var builder:Null<IrBodyBuilder> = null;
+	// What the pass reads the functions' bodies with.
+	var types:Null<IrTypeIds>;
+	final builder:Null<IrBodyBuilder>;
 
-	public function new(declarations:Array<IrObject>) {
+	/** The functions in program order, for the candidates' scalar forms (`finish`). */
+	var originals:Array<IrFunction> = [];
+
+	public function new(declarations:Array<IrObject>, ?types:IrTypeIds, ?builder:IrBodyBuilder) {
+		this.declarations = declarations;
+		this.types = types;
+		this.builder = builder;
 		objects = [for (object in declarations) object.name => object];
 		resolution = IrMethodResolution.over(declarations);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
 	}
 
 	/**
-	 * `originals` with their optional values in scalar slots, read as their bodies made with `types` (those of the functions'
-	 * bodies when not given), encoding a function that has none. A function that has an optional value
-	 * is read as its objects, decoded from its body, and one it changes or adds is a function without a body.
+	 * `originals` with their optional values in scalar slots, followed by the scalar forms, receiver checks and helpers they call,
+	 * without a memo; the wrappers join the declarations. Read as their bodies made with the pass's types (those of the functions'
+	 * bodies when not given).
 	 */
-	public function rewrite(declarations:Array<IrObject>, originals:Array<IrFunction>, ?types:IrTypeIds,
-			?builder:IrBodyBuilder):Array<IrFunction> {
+	public function rewrite(originals:Array<IrFunction>):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(originals);
-		this.types = types;
-		this.builder = builder;
-		for (fn in originals)
-			functions.set(fn.name, fn);
-		for (fn in originals) {
+		return IrFunctionStages.apply("optional-scalar-flow", this, originals);
+	}
+
+	static function nullableObject(type:IrType):Null<String>
+		return switch type {
+			case Nullable(Obj(name)): name;
+			default: null;
+		};
+
+	public function summarize(fn:IrFunction):Int {
+		var summary = nullableObject(fn.result) != null ? NULLABLE_OBJECTS : 0;
+		for (arg in fn.arguments)
+			if (nullableObject(arg.type) != null)
+				summary |= NULLABLE_OBJECTS;
+		var body = fn.bodyIn(bodyTypes(), builder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var out = body.output(row);
+				if (out.exists() && nullableObject(body.valueType(out)) != null)
+					summary |= NULLABLE_OBJECTS;
+				if (body.opcode(row) == compiler.ir.model.IrOpcode.Call
+					&& IrOptionalHelpers.isHelper(body.symbol(row).name))
+					summary |= CALLS_HELPERS;
+				row = body.nextRow(row);
+			}
+		}
+		return summary;
+	}
+
+	function bodyTypes():IrTypeIds {
+		var table = types;
+		if (table == null)
+			throw new InternalError("The optional scalar flow reads bodies with the program's types");
+		return table;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+		this.functions = names;
+		originals = functions;
+		for (index in 0...functions.length) {
+			var fn = functions[index];
+			if (summaries[index] & NULLABLE_OBJECTS == 0 || StringTools.startsWith(fn.name, PREFIX))
+				continue;
 			var signature = optional(fn.result) != null;
 			for (arg in fn.arguments)
 				if (optional(arg.type) != null)
 					signature = true;
-			if (signature && !StringTools.startsWith(fn.name, PREFIX))
+			if (signature)
 				candidates.set(fn.name, fn);
 		}
 		var changed = true;
 		while (changed) {
 			changed = false;
-			for (fn in originals)
+			for (fn in functions)
 				if (candidates.exists(fn.name) && !eligible(fn)) {
 					candidates.remove(fn.name);
 					changed = true;
 				}
 		}
-		var rewritten:Array<IrFunction> = [];
-		for (fn in originals) {
-			var signature = optional(fn.result) != null;
+	}
+
+	public function fact(kind:Int, key:String):Int
+		return switch kind {
+			case VALUE:
+				var object = objects.get(key);
+				object != null && object.isValue ? 1 : 0;
+			default: IrFacts.UNKNOWN;
+		};
+
+	/** `optional`, reading the fact of the object a nullable object type names when `reader` records. */
+	function optionalRead(type:IrType, reader:Null<IrFactReader>):Null<String> {
+		var name = nullableObject(type);
+		if (name == null)
+			return null;
+		if (reader != null)
+			reader.read(VALUE, name);
+		return optional(type);
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		if (summary == 0)
+			return fn;
+		var recording = reader.records() ? reader : null, result = fn;
+		if (summary & NULLABLE_OBJECTS != 0) {
+			var signature = optionalRead(fn.result, recording) != null;
 			for (arg in fn.arguments)
-				if (optional(arg.type) != null)
+				if (optionalRead(arg.type, recording) != null)
 					signature = true;
-			rewritten.push(!signature && hasOptional(fn) && eligible(fn) ? transform(fn, false) : fn);
+			if (!signature && hasOptional(fn, recording)) {
+				reader.read(REWRITE, "");
+				if (eligible(fn))
+					result = scalarForm(fn, false);
+			}
 		}
+		// The helpers the function calls: the rewritten one's are read from its body, which the stages after this one read.
+		if (result != fn || summary & CALLS_HELPERS != 0)
+			helpers.scan(result.bodyIn(bodyTypes(), builder), reader);
+		return result;
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		switch type {
+			case Obj(name): helpers.add(kind, name);
+			default: throw new InternalError("An optional value helper request names no value class");
+		}
+
+	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
+		var made:Array<IrFunction> = [];
 		for (fn in originals)
 			if (candidates.exists(fn.name))
-				rewritten.push(transform(fn, true));
+				made.push(scalarForm(fn, true));
 		var checkNames = [for (name in receiverChecks.keys()) name];
 		checkNames.sort(Reflect.compare);
 		for (name in checkNames)
-			rewritten.push(receiverChecks.get(name));
+			made.push(receiverChecks.get(name));
 		var names = [for (name in wrappers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names)
 			declarations.push(wrappers.get(name));
-		return rewritten;
+		for (fn in made)
+			helpers.scan(fn.bodyIn(bodyTypes(), builder), null);
+		return helpers.append(rewritten.concat(made), declarations);
 	}
 
 	function optional(type:IrType):Null<String>
@@ -111,21 +221,22 @@ class IrOptionalScalarFlow {
 			default: null;
 		};
 
-	function hasOptional(fn:IrFunction):Bool {
+	/** Whether `fn` has an optional value, reading the facts of the nullable objects it looks at through `reader`. */
+	function hasOptional(fn:IrFunction, reader:Null<IrFactReader>):Bool {
 		for (arg in fn.arguments)
-			if (optional(arg.type) != null)
+			if (optionalRead(arg.type, reader) != null)
 				return true;
-		var body = fn.bodyIn(types, builder);
+		var body = fn.bodyIn(bodyTypes(), builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				var out = body.output(row);
-				if (out.exists() && optional(body.valueType(out)) != null)
+				if (out.exists() && optionalRead(body.valueType(out), reader) != null)
 					return true;
 				row = body.nextRow(row);
 			}
 		}
-		return optional(fn.result) != null;
+		return optionalRead(fn.result, reader) != null;
 	}
 
 	function slots(name:String):Array<IrInlineValueSlot>
@@ -588,7 +699,8 @@ class IrOptionalScalarFlow {
 		return true;
 	}
 
-	function transform(fn:IrFunction, clone:Bool):IrFunction {
+	/** `fn` with its optional values in scalar slots: as the candidate's scalar form when `clone`. */
+	function scalarForm(fn:IrFunction, clone:Bool):IrFunction {
 		var next = fn.nextValueId();
 		var places = arrayPlaceValues(fn),
 			types:Map<Int, String> = [],

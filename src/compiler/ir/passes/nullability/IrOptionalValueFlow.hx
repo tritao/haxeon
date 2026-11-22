@@ -1,5 +1,6 @@
 package compiler.ir.passes.nullability;
 
+import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -45,35 +46,34 @@ class IrOptionalValueFlow {
 
 	/**
 	 * `functions` followed by the copy, box and unbox helpers their calls name, built as functions. The calls are read from the
-	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none
-	 *.
+	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none.
 	 */
 	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, ?types:IrTypeIds,
 			?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
+		var helpers = new IrOptionalHelpers();
+		for (fn in functions)
+			helpers.scan(fn.bodyIn(types, builder), null);
+		return helpers.append(functions, objects);
+	}
+
+	/** The kind of the optional value helper `name` (`IrOptionalHelpers`), or -1 when it is not one. */
+	public static function helperKind(name:String):Int
+		return StringTools.startsWith(name, COPY_PREFIX) ? IrOptionalHelpers.COPY : StringTools.startsWith(name,
+			BOX_PREFIX) ? IrOptionalHelpers.BOX : StringTools.startsWith(name, UNBOX_PREFIX)
+			? IrOptionalHelpers.UNBOX : -1;
+
+	/** The value class an optional value helper of kind `kind` named `name` is for. */
+	public static function helperValue(kind:Int, name:String):String
+		return name.substr((kind == IrOptionalHelpers.COPY ? COPY_PREFIX : kind == IrOptionalHelpers.BOX
+			? BOX_PREFIX : UNBOX_PREFIX)
+			.length);
+
+	/** `functions` followed by the helpers of `needed`, `boxes` and `unboxes` (value class names), in name order of each. */
+	public static function appendHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, needed:Map<String, Bool>,
+			boxes:Map<String, Bool>, unboxes:Map<String, Bool>):Array<IrFunction> {
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object];
-		var needed:Map<String, Bool> = [],
-			boxes:Map<String, Bool> = [],
-			unboxes:Map<String, Bool> = [];
-		for (fn in functions) {
-			var body = fn.bodyIn(types, builder);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.Call) {
-						var name = body.symbol(row).name;
-						if (StringTools.startsWith(name, COPY_PREFIX))
-							needed.set(name.substr(COPY_PREFIX.length), true);
-						else if (StringTools.startsWith(name, BOX_PREFIX))
-							boxes.set(name.substr(BOX_PREFIX.length), true);
-						else if (StringTools.startsWith(name, UNBOX_PREFIX))
-							unboxes.set(name.substr(UNBOX_PREFIX.length), true);
-					}
-					row = body.nextRow(row);
-				}
-			}
-		}
 		var names = [for (name in needed.keys()) name];
 		names.sort(Reflect.compare);
 		var result = functions.copy();
@@ -272,4 +272,54 @@ class IrOptionalValueFlow {
 		}
 		return copy;
 	}
+}
+
+/** The optional value helpers a pass found called (`IrOptionalValueFlow.appendHelpers`), by kind and value class. */
+class IrOptionalHelpers {
+	public static inline final COPY = 0;
+	public static inline final BOX = 1;
+	public static inline final UNBOX = 2;
+
+	final copies:Map<String, Bool> = [];
+	final boxes:Map<String, Bool> = [];
+	final unboxes:Map<String, Bool> = [];
+
+	public function new() {}
+
+	public static function isHelper(name:String):Bool
+		return IrOptionalValueFlow.helperKind(name) >= 0;
+
+	/** The helper of `kind` for the value class `name` is called. */
+	public function add(kind:Int, name:String):Void (kind == COPY ? copies : kind == BOX ? boxes : unboxes).set(name,
+		true);
+
+	/**
+	 * The helpers `body` calls: asked for through `reader` when given (`IrFactReader.request`, which comes back to the pass that
+	 * adds them), else added.
+	 */
+	public function scan(body:IrBody, reader:Null<compiler.ir.reuse.IrFactReader>):Void {
+		var asked:Map<String, Bool> = [];
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call) {
+					var name = body.symbol(row).name, kind = IrOptionalValueFlow.helperKind(name);
+					if (kind >= 0) {
+						var value = IrOptionalValueFlow.helperValue(kind, name);
+						if (reader == null)
+							add(kind, value);
+						else if (!asked.exists(name)) {
+							asked.set(name, true);
+							reader.request(kind, Obj(value));
+						}
+					}
+				}
+				row = body.nextRow(row);
+			}
+		}
+	}
+
+	/** `functions` followed by the helpers found. */
+	public function append(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction>
+		return IrOptionalValueFlow.appendHelpers(functions, objects, copies, boxes, unboxes);
 }
