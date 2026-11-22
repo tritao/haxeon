@@ -9,7 +9,9 @@ class InvalidationMain {
 		var compiler = new Compiler();
 		compiler.update("Leaf.hx", "function value():Int return 42;");
 		compiler.update("Middle.hx", "function value():Int return Leaf.value();");
-		compiler.update("Main.hx", "function main():Int return Middle.value();");
+		compiler.update("Main.hx", "function main():Int return Middle.value() + Inferring.value();");
+		compiler.update("Inferred.hx", "function value():Int return 1;");
+		compiler.update("Inferring.hx", "function value() return Inferred.value();");
 		compiler.compile("Main");
 		var noOp = compiler.compile("Main");
 		expect(noOp.invalidations.length == 0, "no-op compilation reported invalidations");
@@ -22,7 +24,20 @@ class InvalidationMain {
 			"invalidation reason metric was incomplete");
 		expectReason(changed.invalidations, "Leaf.value", SignatureChanged, "Leaf.value");
 		expectReason(changed.invalidations, "Middle.value", DependencySignature, "Leaf.value");
-		expectReason(changed.invalidations, "main", DependencySignature, "Middle.value");
+		// A caller is retyped with its callee's new signature, as Haxe types it again; its own signature stays, so its callers
+		// are not.
+		expectInvalidated(changed.invalidations, ["Leaf.value", "Middle.value"]);
+
+		// A changed body leaves its callers alone.
+		compiler.update("Middle.hx", "function value():Int return Leaf.value() + 1;");
+		expectInvalidated(compiler.compile("Main").invalidations, ["Middle.value"]);
+
+		// A signature changes with its callee's when it is inferred, and then its callers are retyped in turn.
+		compiler.update("Inferred.hx", "function value(?offset:Int = 0):Int return 1 + offset;");
+		var inferred = compiler.compile("Main");
+		expectReason(inferred.invalidations, "Inferring.value", DependencySignature, "Inferred.value");
+		expectReason(inferred.invalidations, "main", DependencySignature, "Inferring.value");
+		expectInvalidated(inferred.invalidations, ["Inferred.value", "Inferring.value", "main"]);
 
 		var structural = new Compiler();
 		structural.update("model/Value.hx", "package model; class Value {}");
@@ -90,6 +105,14 @@ class InvalidationMain {
 					if (reason.kind == kind && reason.cause == cause)
 						return;
 		throw 'Missing invalidation $artifact <- $kind($cause): $invalidations';
+	}
+
+	/** That `invalidations` are of exactly the artifacts `expected`. */
+	static function expectInvalidated(invalidations:Array<InvalidatedArtifact>, expected:Array<String>):Void {
+		var names = [for (entry in invalidations) entry.artifact];
+		names.sort(Reflect.compare);
+		expected.sort(Reflect.compare);
+		expect(names.join(",") == expected.join(","), 'invalidated $names, expected $expected: $invalidations');
 	}
 
 	static function expect(condition:Bool, message:String):Void {

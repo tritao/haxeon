@@ -834,7 +834,12 @@ class SemanticAssembly {
 				invalidate(invalid, invalidationReasons, helperOrigin, DependencySignature, changed, changedId,
 					"generated-helper");
 			}
-			if (changedId != null && reverseBodyDependencies.exists(changedId))
+			// A caller is typed against its callee's signature, and lowered with the defaults of the arguments it omits, so it is
+			// retyped when that signature changes, as Haxe types it again. A callee only retyped (its body, or a callee of its own,
+			// changed) keeps its signature and leaves its callers alone; one whose signature is inferred counts as changed above.
+			// A generic origin's callers are retyped however it was invalidated: they request its dropped specializations again.
+			var callersRetyped = changedSignatures.exists(changed) || genericOrigins.exists(changed);
+			if (callersRetyped && changedId != null && reverseBodyDependencies.exists(changedId))
 				for (ownerName in reverseBodyDependencies.get(changedId)) {
 					var owner = enclosingFunction(ownerName);
 					if (!invalid.exists(owner)) {
@@ -887,7 +892,7 @@ class SemanticAssembly {
 								"specialization-request");
 						}
 			}
-			if (reverseCalls.exists(changed)) {
+			if (callersRetyped && reverseCalls.exists(changed)) {
 				var callers = reverseCalls.get(changed);
 				for (callerName in callers) {
 					var caller = enclosingFunction(callerName);
