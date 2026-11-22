@@ -9,7 +9,7 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
-import compiler.ir.passes.objects.ObjectReflection;
+import compiler.ir.passes.objects.IrObjectReflection;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
 
 /**
@@ -187,7 +187,7 @@ class IrClosedEnumTagAbi {
 				}
 			}
 		}
-		if (ObjectReflection.usedByProgram(program)) {
+		if (IrObjectReflection.usedByProgram(program)) {
 			if (reflectableObjects != null)
 				for (name in reflectableObjects)
 					escape(Obj(name));

@@ -165,7 +165,7 @@ Pass<S>
   (structural digest); an unchanged summary lets every `rewrite` of that pass be reused.
 - A pass lists the tables it changes (objects, interfaces, enums, statics, natives). Those changes are part of its summary
   (`inline enum storage`, `physical objects`), not a side effect on shared arrays. Today `IrValueInterfaceBoxes`,
-  `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `GenericOwnerErasure.generate` and `ObjectReflection` push
+  `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `IrGenericOwnerErasure.generate` and `IrObjectReflection` push
   into input arrays in place; that goes away with their port.
 
 #### B.2 One dependency mechanism, shared with A
@@ -195,7 +195,7 @@ audit notes at the end of the doc. CPU is the share of the warm no-op compile th
 |---|---|---|---|---|---|---|
 | IrEnumDynamicDispatch | LS | enum box descriptors and the `needsEqual/Reflect/Compare` flags, merged from per-function Call names | bodies (reachability pruning of `$enum-reflect-equals:*`) | adds box/view/unbox/dispatch functions; set = f(names in all bodies) | medium: the first body that needs an enum box flips a flag and rewrites every `__dynamic_equal` call | in 20% group |
 | IrValueDynamicDispatch | LS | `suffixes` from value objects and `$value$equality:` names | names only | one dispatcher | low | in group |
-| GenericOwnerErasure.generate | generator | helper set = f(Call/InstanceClosure names, objects) | callee signatures (`findMethod`) | adds erased/test/call helpers | low | in group |
+| IrGenericOwnerErasure.generate | generator | helper set = f(Call/InstanceClosure names, objects) | callee signatures (`findMethod`) | adds erased/test/call helpers | low | in group |
 | IrValueInterfaceBoxes | LS | value objects with interfaces + implementation signatures | signatures | adds `$value-interface-box:*` objects and wrappers (pushes into `objects`) | low | 12% of group (220) |
 | IrTypedInterfaceDispatch.rewriteValueCalls | L | none | none | none | none | 54 |
 | IrTypedInterfaceDispatch.generate | generator | helper set = f(`$typed-interface:` names) | signatures; replaces entries in place | dispatchers/adapters | low | 24 |
@@ -205,7 +205,7 @@ audit notes at the end of the doc. CPU is the share of the warm no-op compile th
 | IrOptionalScalarFlow | **G** (candidate-pruning fixpoint) | `candidates` = greatest set such that each `eligible(fn)` holds given the others | callee bodies (`snapshotOnlyReceiver`), signatures, method resolution over all objects | pushes wrapper objects; `$optional-scalar:` clone of every candidate; receiver-check helpers | high | 315 |
 | IrOptionalValueFlow.addHelpers | L + generator | helper set = f(Call names) | none | copy/box/unbox helpers | none | 10 |
 | IrStaticNullChecks | LS | functions reachable from `__init` (`IrInitializationCalls`, with a closure-origin fixpoint of its own) | bodies (call graph) | `__static$nonnull$*` helpers | medium: an `__init` call-graph change instruments unrelated functions | 68 |
-| ObjectReflection.generate | generator | helper set = f(declared natives, reflectable objects) | signatures | layout functions, renamed natives | low | 42 |
+| IrObjectReflection.generate | generator | helper set = f(declared natives, reflectable objects) | signatures | layout functions, renamed natives | low | 42 |
 | IrOptionalFieldStorage | LS | `plans` from objects only | value-method bodies (cloned per owner/field/path) | accessors, place getters/setters, method clones; `physicalObjects` | low (callers keep names) | 129 |
 | IrNullableScalarFields | L | none | none | normalize helpers | none | 18 |
 | IrValueArrayProgramRewrite | LS | concrete value-array element types (objects, enums, interfaces, statics, natives, all bodies) | place-method bodies (clones), helper bodies inlined by `ScalarLowering` | many shape helpers, natives | medium | 253 |
@@ -250,8 +250,8 @@ generated entity replaces it. Per family (pass that owns it in parentheses):
 |---|---|---|
 | `$enum-equals:`, `$enum-reflect-equals:`, enum box/view names, Base64 types (IrEnumDynamicDispatch) | same pass, `IrInlineEnumEscapes` | identity `EnumHelper(kind, enumType)`; the box descriptor set is the summary |
 | `$value$equality:` suffixes (IrValueDynamicDispatch, IrOptionalScalarFlow exclusions) | `substr` | identity `ValueEquality(valueType)` |
-| `$generic-erased:`, `$generic-type-test:`, `$generic-method-reference:` (GenericOwnerErasure, `methodReferenceOf`) | `split(":")` | identity `ErasedGeneric(owner, member, typeArgs)`; the owner/member fields replace splitting `Owner.member` |
-| `$value-interface-box:` (`BOX_PREFIX`) (ValueInterfaceBoxes) | IrTypedInterfaceDispatch, InlineEnumEligibility, ObjectReflection, `IrValueInterfaceBoxes` | identity `InterfaceBox(valueType, interface)`; box objects are part of the box summary |
+| `$generic-erased:`, `$generic-type-test:`, `$generic-method-reference:` (IrGenericOwnerErasure, `methodReferenceOf`) | `split(":")` | identity `ErasedGeneric(owner, member, typeArgs)`; the owner/member fields replace splitting `Owner.member` |
+| `$value-interface-box:` (`BOX_PREFIX`) (ValueInterfaceBoxes) | IrTypedInterfaceDispatch, InlineEnumEligibility, IrObjectReflection, `IrValueInterfaceBoxes` | identity `InterfaceBox(valueType, interface)`; box objects are part of the box summary |
 | `$typed-interface:` entries/adapters | `split(":")`, `originalEntryName` | identity `TypedInterface(entry|adapter, interface, method, object)` |
 | `$optional-scalar:`, `$optional-value:*`, `$optional-field:method:` (+Json), `$nullable-scalar:*` | startsWith chains, `Json.parse` | identities per family; the Json-in-name encodings (OptionalFieldStorage) become typed fields |
 | `$scalar-arguments:`, `$receiver:` | prefix allowlists in IrScalarArguments, IrScalarClosures, `originalEntryName`, `WasmScalarAbi` | identity `ScalarClone(original, kind)`: "the original of this clone" is a field, not `substr` |
@@ -278,7 +278,7 @@ reused), after the framework commit and the target-profile milestone (ADR M1):
 3. `IrScalarClosures` (254) and `IrValueArrayProgramRewrite` (253).
 4. `IrNullableScalarFlow`, `IrOptionalScalarFlow` (75, 315): second fixpoint pair, reusing the cone mechanism from step 1.
 5. The helper generators and dispatch passes (`IrValueInterfaceBoxes`, `IrEnumDynamicDispatch`, `IrValueDynamicDispatch`,
-   `GenericOwnerErasure`, `IrTypedInterfaceDispatch`, `ObjectReflection`, `IrOptionalValueFlow`, `IrEnumRuntimeSpecializations`):
+   `IrGenericOwnerErasure`, `IrTypedInterfaceDispatch`, `IrObjectReflection`, `IrOptionalValueFlow`, `IrEnumRuntimeSpecializations`):
    cheap per pass; most of their benefit is that helpers become derived from summaries (no ownership by name).
 6. `IrInliner` last: it already has the only correct dependency recorder; it moves onto the shared view, which deletes
    `IrInlineCache.memo/cleaned/instrumented` as separate stores.
@@ -361,10 +361,10 @@ for `IrOptionalScalarFlow.hx:30-39`, `IrScalarArguments.hx:76-120` and the `canP
   `IrValueArrayPlaceMethods` clones and `ScalarLowering` inlining, `IrValueConstructors.hx:11-30,121-137`,
   `IrScalarArguments.hx:180-216,296-323`, `IrNullableScalarFlow.hx:28-35,156-161`, `IrInliner.hx` memo
   (`InlineMemo.dependencies`).
-- Signature/name-only reads: `GenericOwnerErasure.hx:230-236` (`findMethod`), `IrValueInterfaceBoxes.hx:38-56`,
-  `IrTypedInterfaceDispatch.hx:107,130-137`, `ObjectReflection.hx:154-186`, `IrScalarClosures.hx:80-83`.
+- Signature/name-only reads: `IrGenericOwnerErasure.hx:230-236` (`findMethod`), `IrValueInterfaceBoxes.hx:38-56`,
+  `IrTypedInterfaceDispatch.hx:107,130-137`, `IrObjectReflection.hx:154-186`, `IrScalarClosures.hx:80-83`.
 - In-place mutation of inputs: `IrValueInterfaceBoxes.hx:64`, `IrOptionalScalarFlow.hx:52`,
-  `IrTypedInterfaceDispatch.hx:196,209`, `GenericOwnerErasure.hx:75,102,144`.
+  `IrTypedInterfaceDispatch.hx:196,209`, `IrGenericOwnerErasure.hx:75,102,144`.
 - Hidden state: `IrGenerator.hx:64` (`genericOwnerOrigins`), `usesNativeReflectionDispatch`, `observableClassFieldCount`,
   `IrInliner.packedValueFields`.
 - Name parsing sites: see B.4 for the families; the heaviest users are `IrOptionalFieldStorage` (Json in names),
@@ -408,7 +408,7 @@ What landed, one commit each (driver suite, outputs, app counts and the hot-relo
    `generateCfg` gives each function a fresh one.
 4. `ProgramFacts.of(typed)` holds the enum, class, generic, equatable and observable facts and renders them as `inputState(profile)`.
    `IrGenerator` is `new IrGenerator(facts, profile)`, an instance; `IrProgramAssembler` takes it where it lowers types or generates functions;
-   `GenericOwnerErasure` and `ObjectReflection` take the facts. `ProgramFacts` is derived on every build; keeping it on the identity of the typed
+   `IrGenericOwnerErasure` and `IrObjectReflection` take the facts. `ProgramFacts` is derived on every build; keeping it on the identity of the typed
    program is the M4 item.
 5. Generation creates no objects of its own (the `generatedObjects` list was assigned and never read), so nothing is returned from it. The flat and
    inline value-object tables are final inputs built from the program's object list with `IrGenerator.withObjects(objects)`.

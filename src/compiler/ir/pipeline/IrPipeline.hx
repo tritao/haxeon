@@ -3,7 +3,7 @@ package compiler.ir.pipeline;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch.IrTypedInterfaceCalls;
 import compiler.ir.model.IrFunction.IrRetention;
 import compiler.ir.passes.enums.IrEnumTagLowering.IrEnumTagLoweringPass;
-import compiler.ir.passes.objects.GenericOwnerErasure;
+import compiler.ir.passes.objects.IrGenericOwnerErasure;
 import compiler.ir.passes.objects.IrCheckedDynamicCasts;
 import compiler.ir.passes.enums.IrClosedEnumTagAbi;
 import compiler.ir.passes.cleanup.IrConstantBranches;
@@ -37,7 +37,7 @@ import compiler.ir.passes.values.IrValueDynamicDispatch;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
 import compiler.ir.passes.values.IrValuePhiScalarization;
 import compiler.ir.verify.IrVerifier;
-import compiler.ir.passes.objects.ObjectReflection;
+import compiler.ir.passes.objects.IrObjectReflection;
 import compiler.core.InternalError;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrProgram;
@@ -212,8 +212,9 @@ class IrPipeline {
 			present:Map<String, Bool> = [for (fn in functions) fn.name => true],
 			facts = assembly.generator.facts;
 		return {
-			symbols: ObjectReflection.helperSymbols(),
-			of: (className, symbol) -> ObjectReflection.dependencies(objectTable, facts.observableFieldBits, className,
+			symbols: IrObjectReflection.helperSymbols(),
+			of: (className, symbol) -> IrObjectReflection.dependencies(objectTable, facts.observableFieldBits,
+				className,
 				symbol,
 				name -> present.exists(name))
 		};
@@ -283,7 +284,7 @@ class IrPipeline {
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		// Method values first: a bound method of an erased generic owner calls an erased operation, which erasure then makes.
 		IrMethodReferences.generate(assembly.functions, assembly.objects);
-		GenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects);
+		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects);
 		return assembly;
 	}
 
@@ -458,7 +459,7 @@ class IrPipeline {
 	static function objectReflection(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		assembly.generatedStart = assembly.functions.length;
 		var generator = assembly.generator;
-		assembly.natives = ObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
+		assembly.natives = IrObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
 			assembly.reachedNatives, context.options.checkReuse);
 		assembly.functions = encodeMade("object-reflection", assembly.functions, context);

@@ -211,10 +211,10 @@ The "label" of a measured span can cover two passes where the code runs them bac
 | IrOptionalFieldStorage + IrNullableScalarFields | (b) / (a) | `plans` from the object table only | value-method bodies (cloned per owner/field/path) | 3.0M | 2.4% |
 | IrValuePhiScalarization (twice) | (a) | none | none | 2.4M + 0.9M | 2.6% |
 | runtime-surface detection and the rest of `assemble` | (b) | which runtime helpers any call needs (a union of per-function facts) | none | 2.2M | 1.8% |
-| ObjectReflection.generate | (b) generator | helper set = f(declared natives, reflectable objects) | signatures | 1.9M | 1.5% |
+| IrObjectReflection.generate | (b) generator | helper set = f(declared natives, reflectable objects) | signatures | 1.9M | 1.5% |
 | IrOptionalScalarFlow + IrOptionalValueFlow.addHelpers | (c) fixpoint + (a) generator | `candidates` = greatest set such that each `eligible(fn)` holds given the others | callee bodies (`snapshotOnlyReceiver`), method resolution | 1.0M | 0.8% |
 | IrStaticNullChecks | (b) | functions reachable from `__init` (call graph) | bodies of the reachable functions | 0.4M | 0.3% |
-| GenericOwnerErasure.generate | (b) generator | helper set = f(call names, objects) | callee signatures | 0.01M | 0.0% |
+| IrGenericOwnerErasure.generate | (b) generator | helper set = f(call names, objects) | callee signatures | 0.01M | 0.0% |
 
 Counting the table's rows, about 7 passes are (a), 12 are (b) and 4 are (c) (`IrInliner`, `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`; the
 last three are the candidate-pruning fixpoints). The inliner is already memoized and is left for last.
@@ -249,7 +249,7 @@ Pass<C, S>
      so the cone is complete.
 4. **Tables.** A pass names the tables it changes (objects, interfaces, enums, statics, natives). The change is part of its summary,
    not a side effect on a shared array. The ones that push into input arrays in place today (`IrValueInterfaceBoxes`,
-   `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `GenericOwnerErasure.generate`, `ObjectReflection`) change with their port.
+   `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `IrGenericOwnerErasure.generate`, `IrObjectReflection`) change with their port.
 5. **Check mode.** `--check-reuse` recomputes every reused rewrite, contribution and helper and compares with
    `HlFunctionEquality`-style structural equality; it names the pass, the function and the first differing instruction.
 6. **Unported passes** run as one opaque step with the whole program, so every commit is correct.
@@ -279,8 +279,8 @@ By edit cost, with what must come first:
 6. **IrValueArrayProgramRewrite** (b): 8.7M.
 7. **IrNullableScalarFlow, IrOptionalScalarFlow** (c): 5.7M + 1.0M; they reuse the mechanism of step 5.
 8. **The dispatch and helper-generating passes** (b): `ValueConstructors`, `EnumDynamicDispatch`, `ValueInterfaceBoxes`,
-   `TypedInterfaceDispatch`, `CheckedDynamicCasts`, `ValueDynamicDispatch`, `OptionalFieldStorage`, `ObjectReflection`,
-   `GenericOwnerErasure`, runtime-surface detection, `StaticNullChecks`: 2% to 3% each; their gain is that the helpers become derived from
+   `TypedInterfaceDispatch`, `CheckedDynamicCasts`, `ValueDynamicDispatch`, `OptionalFieldStorage`, `IrObjectReflection`,
+   `IrGenericOwnerErasure`, runtime-surface detection, `StaticNullChecks`: 2% to 3% each; their gain is that the helpers become derived from
    summaries. If the floor of step 0 is fixed, the remaining edit cost of these is small, and they can be ported by need (name
    families, M3) rather than by cost.
 9. **IrInliner** last: it moves onto the shared view and `IrInlineCache.memo/cleaned/instrumented` are deleted. Its 31.2M is the

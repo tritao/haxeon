@@ -15,7 +15,7 @@ import compiler.ir.pipeline.ProgramFacts;
 import compiler.semantic.GeneratedNames;
 
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
-class GenericOwnerErasure {
+class IrGenericOwnerErasure {
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
 	/** Whether `name` is an operation through an erased generic owner (`$generic-erased:Owner:get|set|call:member`). */
 	public static inline function isOperation(name:String):Bool

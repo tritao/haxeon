@@ -107,7 +107,7 @@ class IteratorTypeDescriptorMain {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			},
-			// The erased-owner accessors test exact classes first (GenericOwnerErasure); the assembler declares it in a build.
+			// The erased-owner accessors test exact classes first (IrGenericOwnerErasure); the assembler declares it in a build.
 			{
 				name: compiler.ir.analysis.IrExactTypeFacts.TEST,
 				library: "haxeon_runtime",
@@ -157,7 +157,7 @@ class IteratorTypeDescriptorMain {
 		write.select(after);
 		write.returnValue(write.constInt(1));
 		program.functions.push(new IrFunction("erasedWrite", [], I32, write.blocks, Ordinary));
-		compiler.ir.passes.objects.GenericOwnerErasure.generate(compiler.ir.pipeline.ProgramFacts.empty(),
+		compiler.ir.passes.objects.IrGenericOwnerErasure.generate(compiler.ir.pipeline.ProgramFacts.empty(),
 			program.functions, program.objects);
 		IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42) throw "interpreter lost an iterator element type";

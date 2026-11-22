@@ -193,7 +193,7 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
 
 ### Prerequisites for generating helpers only on demand, and what reads `result.ir`
 
-Reflection helpers (`ObjectReflection.generate`) are written for every class whenever a reflection native is declared, not on demand. Two places
+Reflection helpers (`IrObjectReflection.generate`) are written for every class whenever a reflection native is declared, not on demand. Two places
 where the walk sees less than the program uses stop that today:
 
 1. **Dynamic field access** (`raw.x` on a Dynamic) becomes the reflection natives only at lowering, so no call names them and the walk never sees

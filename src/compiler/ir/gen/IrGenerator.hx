@@ -1,6 +1,6 @@
 package compiler.ir.gen;
 
-import compiler.ir.passes.objects.GenericOwnerErasure;
+import compiler.ir.passes.objects.IrGenericOwnerErasure;
 import compiler.ir.passes.arrays.IrArrayFactory;
 import compiler.ir.model.IrFunction;
 import compiler.ir.passes.values.IrInlineValueLayout;
@@ -2651,7 +2651,7 @@ class IrGenerator {
 						default: lowerType(args[1].type);
 					};
 					builder.call(intrinsic, [input, builder.typeValue(target)], Bool);
-				} else builder.call(GenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"),
+				} else builder.call(IrGenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"),
 					[input], Bool);
 			case TCall(name, args) if (compiler.semantic.GeneratedNames.isSpecialization(name)
 				&& args.length > 0

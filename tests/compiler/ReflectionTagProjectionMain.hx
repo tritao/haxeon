@@ -74,7 +74,8 @@ class ReflectionTagProjectionMain {
 			}
 		];
 		var functions:Array<IrFunction> = [],
-			remaining = compiler.ir.passes.objects.ObjectReflection.generate(compiler.ir.pipeline.ProgramFacts.empty(),
+			remaining =
+				compiler.ir.passes.objects.IrObjectReflection.generate(compiler.ir.pipeline.ProgramFacts.empty(),
 				natives, objects,
 				["Holder"], functions);
 		var generated = [for (fn in functions) fn.name => true];

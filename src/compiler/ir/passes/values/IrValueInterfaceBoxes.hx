@@ -11,7 +11,7 @@ import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.IrFunctionRewrite;
-import compiler.ir.passes.objects.GenericOwnerErasure;
+import compiler.ir.passes.objects.IrGenericOwnerErasure;
 import compiler.ir.passes.objects.IrTypeHashDispatch;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
@@ -303,13 +303,13 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 			if (implementation.arguments.length != arguments.length + 1)
 				throw new InternalError('Invalid interface implementation "$valueName.$methodName"');
 			var adapted = [for (index in 0...arguments.length)
-				GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
+				IrGenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
 				objectMap)];
 			var result = builder.call(implementation.name, [payload].concat(adapted), implementation.result);
 			builder.returnValue((switch (contract.result) {
 				case Void: true;
 				default: false;
-			}) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
+			}) ? result : IrGenericOwnerErasure.convert(builder, result, contract.result, objectMap));
 			methods.push({name: methodName, functionName: compiler.ir.model.IrSymbol.of(wrapper)});
 			generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks,
 				Provider(TypeKey.of(Obj(valueName)),

@@ -6,7 +6,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.passes.inlining.IrInliner;
-import compiler.ir.passes.objects.GenericOwnerErasure;
+import compiler.ir.passes.objects.IrGenericOwnerErasure;
 
 private typedef CensusAllocation = {
 	final value:Int;
@@ -201,7 +201,7 @@ class IrOpportunityCensus {
 							case 2: count(22);
 							default:
 						}
-					case Call(_, name, _) if (GenericOwnerErasure.isOperation(name.name)):
+					case Call(_, name, _) if (IrGenericOwnerErasure.isOperation(name.name)):
 						count(23);
 					default:
 				}

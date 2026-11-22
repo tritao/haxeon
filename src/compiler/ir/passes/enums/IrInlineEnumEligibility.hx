@@ -7,7 +7,7 @@ import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrTypeIds;
-import compiler.ir.passes.objects.ObjectReflection;
+import compiler.ir.passes.objects.IrObjectReflection;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
 import compiler.semantic.SemanticSignature;
 import compiler.types.typing.EnumRuntimeType;
@@ -145,7 +145,7 @@ class IrInlineEnumEligibility {
 				escape(native.result, "native signature");
 			}
 		// Reflection helpers are generated after storage selection and can expose every registered layout.
-		if (ObjectReflection.usedByProgram(program)) {
+		if (IrObjectReflection.usedByProgram(program)) {
 			var reflectedNames = reflectableObjects == null ? [] : reflectableObjects,
 				reflected = [for (name in reflectedNames) name => true];
 			for (object in program.objects) {

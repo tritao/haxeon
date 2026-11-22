@@ -28,7 +28,7 @@ Columns: generator (file), name form, serves (type, operation), consumer (who ca
 | `ValueEqualityGenerator` | `$value$equality:<sha(T)>` | (value struct T, equality) | direct call from `==`; `IrValueDynamicDispatch` scans for `$value$equality:` to build `$value-dynamic-equal` | direct call; none for the dynamic boundary (dispatcher added later) |
 | `WireCodecGenerator` | `$wire:encode/decode/value-encode/value-decode:<T>`, `$wire:map-{int,string,enum}-compare[:..]`, `$json:encode/decode/value-*:<T>` | (T, wire/JSON encode; decode; map-key compare for the key type) | direct call from the codec call sites; nested codecs call each other | direct calls (including between codecs) |
 | `KeyPathTyping` | `$keypath.<..>`, `$keypath.literal:<..>` | (root type, key path accessor) | direct call from the key-path expression | direct call |
-| `GenericOwnerErasure` (also IR) | `$generic-erased:`, `$generic-type-test:`, `$generic-method-reference:` | (generic owner T, erased call; type test; method reference) | direct calls produced during erasure; `$generic:` bodies call them | direct call |
+| `IrGenericOwnerErasure` (also IR) | `$generic-erased:`, `$generic-type-test:`, `$generic-method-reference:` | (generic owner T, erased call; type test; method reference) | direct calls produced during erasure; `$generic:` bodies call them | direct call |
 | `ConversionResolver` | `$iteration-adapter:<ctx>:<id>:<field>` | (iterable type, iteration protocol adapter) | direct call at the conversion | direct call |
 | `LambdaName` | `$lambda:`, `$lambda-env:` | (closure) | closure value | closure edge, already walked |
 | `ReceiverMutationInference` | `$receiver-readonly:<..>` | analysis marker on a method, not a helper | purity analysis | none |

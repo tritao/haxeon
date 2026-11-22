@@ -49,7 +49,7 @@ enum are `TObject`.
   of the object's own type that nothing uses; an `HEnum` per enum with constructor names and payload types and no global.
   Statics are separate globals. Value objects are `HStruct`, structures `$anon:{...}` objects.
 - **Wasm** objects carry the runtime type id (a header word on wasm32, a field on wasm-gc); names exist only where a
-  table needs them: `EnumStringDescriptors` for enum printing, `ObjectReflection` for `Reflect` on object layouts.
+  table needs them: `EnumStringDescriptors` for enum printing, `IrObjectReflection` for `Reflect` on object layouts.
 - **Dense class ids**: `IrClassIds` assigns each class an id, stable across a live session, and IR has
   `ClassId(output, object)` (`INTERFACE_VALUES.md`); no backend lowers it yet.
 - **Exact-type tests**: `STRUCTURE_VALUES.md` adds `exactType(v) == C` (`OGetType` and an `OType` compare on HashLink,

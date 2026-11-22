@@ -24,7 +24,7 @@ private typedef ReflectedLayout = {
  * that tests the value against every reflectable object type, most derived first, and calls that
  * layout's generated function to compare field names. HashLink reflects through its own runtime and never declares these natives.
  */
-class ObjectReflection {
+class IrObjectReflection {
 	/**
 	 * With `tableDispatch`, only the per-layout functions are generated and each native stays declared, listing them as
 	 * the functions its backend implementation calls: the backend finds a value's layout from the type id in its header
@@ -146,7 +146,7 @@ class ObjectReflection {
 							_) if (!names.exists(target.name) && !StringTools.startsWith(target.name, "__")
 							&& !StringTools.startsWith(target.name, OPTIONAL_PREFIX)):
 							if (HELPER_CALLEES.indexOf(target.name) < 0)
-								throw new InternalError('reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)');
+								throw new InternalError('reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (IrObjectReflection.HELPER_CALLEES)');
 							emitted.set(target.name, true);
 						default:
 					}
@@ -163,7 +163,7 @@ class ObjectReflection {
 				declared.set(name, true);
 		for (name in expected.keys())
 			if (!declared.exists(name))
-				throw new InternalError('the "$symbol" helpers call $name, which ObjectReflection.dependencies did not tell the walk');
+				throw new InternalError('the "$symbol" helpers call $name, which IrObjectReflection.dependencies did not tell the walk');
 	}
 
 	/** The name prefix of the native a layout-specific HashLink helper falls back to for any other value. */

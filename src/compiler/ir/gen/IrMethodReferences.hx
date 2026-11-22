@@ -7,7 +7,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.TypeKey;
-import compiler.ir.passes.objects.GenericOwnerErasure;
+import compiler.ir.passes.objects.IrGenericOwnerErasure;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.verify.IrVerifier;
 
@@ -69,9 +69,9 @@ class IrMethodReferences {
 				signature.arguments[index])];
 			var result:IrValue;
 			switch request.receiver {
-				// A receiver of an erased generic owner: its operations dispatch to the physical owner (GenericOwnerErasure).
+				// A receiver of an erased generic owner: its operations dispatch to the physical owner (IrGenericOwnerErasure).
 				case Dyn:
-					result = builder.call(GenericOwnerErasure.erasedCallName(owner, member),
+					result = builder.call(IrGenericOwnerErasure.erasedCallName(owner, member),
 						[receiver].concat(arguments),
 						signature.result);
 				// An interface: the implementing class's method, called through the interface's contract.
@@ -79,18 +79,18 @@ class IrMethodReferences {
 					result = builder.methodCall(receiver, member, arguments, signature.result);
 				case Obj(className):
 					var object = byName.get(className),
-						method = object == null ? null : GenericOwnerErasure.findMethod(object, member, byName,
+						method = object == null ? null : IrGenericOwnerErasure.findMethod(object, member, byName,
 							byFunction);
 					if (method == null || method.arguments.length != arguments.length + 1)
 						throw new InternalError('Missing target for method reference "$name"');
-					var adapted = [for (index in 0...arguments.length) GenericOwnerErasure.convert(builder,
+					var adapted = [for (index in 0...arguments.length) IrGenericOwnerErasure.convert(builder,
 						arguments[index],
 						method.arguments[index + 1].type, byName)];
 					var called = builder.methodCall(receiver, member, adapted, method.result);
 					result = (switch (signature.result) {
 						case Void: true;
 						default: false;
-					}) ? called : GenericOwnerErasure.convert(builder, called, signature.result, byName);
+					}) ? called : IrGenericOwnerErasure.convert(builder, called, signature.result, byName);
 				default: throw new InternalError('Invalid receiver for method reference "$name"');
 			}
 			builder.returnValue(result);

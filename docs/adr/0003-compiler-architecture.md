@@ -90,11 +90,11 @@ Four further structural problems sit next to incrementality.
      closures rerun interface boxing and checked casts, and scalar arguments and value arrays run phi scalarization and
      scalar replacement inside their loops.
    - Several passes push objects or functions into the shared input arrays in place (`IrValueInterfaceBoxes`,
-     `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `GenericOwnerErasure.generate`, `ObjectReflection`).
+     `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `IrGenericOwnerErasure.generate`, `IrObjectReflection`).
 3. **Generated entities are identified by encoded names.** There are more than twenty-five prefixes (`$generic:`,
    `$generic-method-reference:`, `$value$equality:`, `$wire:`, `$json:`, `$inline-enum-global:<len>:<name>:<field>`,
    `$scalar-arguments:`, `$value-array:…`, `$typed-interface-entry:`…). They are parsed back into structure in more than
-   twenty places, from `GenericOwnerErasure` and `IrTypedInterfaceDispatch` to `HlLower`, `WasmScalarAbi` (a long
+   twenty places, from `IrGenericOwnerErasure` and `IrTypedInterfaceDispatch` to `HlLower`, `WasmScalarAbi` (a long
    `startsWith` exclusion chain) and `WasmTypedInterfaceTables` (a length-prefixed parser).
 4. **The compiler discovers its own runtime library while typing.** Typing records runtime targets as it meets them
    (`Reflect`, `haxeon.DynamicOps`, `Std`, `DynamicObject`, `haxeon.collections.HashMap`, `runtime.FloatBits`,

@@ -95,14 +95,14 @@ Seeding `haxeon.DynamicOps` flipped `CallbackValue` from inline to boxed storage
 `closure-method-value-arguments.hx` differ in exactly one line, `CallbackValue: registered reflection layout`. The rule is
 `IrInlineEnumEligibility`: when the program reflects over object layouts, every enum reachable by type from a registered layout (every class of the
 typed program, plus anonymous, value and box classes) is blocked from inline storage, because the per-layout reflection helpers read and write the raw
-packet and never box it. "The program reflects" was `ObjectReflection.usesObjectLayouts(program.natives)`, and `program.natives` is the declared native
+packet and never box it. "The program reflects" was `IrObjectReflection.usesObjectLayouts(program.natives)`, and `program.natives` is the declared native
 surface of every loaded module: seeding `DynamicOps` loads `Reflect` (it calls `Reflect.compare`), whose module declares the `__reflect_object_*`
 natives. Two inputs computed from what is loaded, not from what is reached: the declared reflection natives, and the list of all typed classes. Pruning
 unreachable functions earlier (even before the enum dispatch, even for Wasm) changed nothing, which is how it was told apart from a function-level
 leak.
 
 Fix (plain builds): reflection is used when a reflection native is among the natives the walk reached (`IrTypeAwareWalk` returns `calledNatives`; the
-early prune records them as `IrProgram.reachedNatives`; `ObjectReflection.usedByProgram` reads them where the program has been pruned and the declared
+early prune records them as `IrProgram.reachedNatives`; `IrObjectReflection.usedByProgram` reads them where the program has been pruned and the declared
 natives where it has not). Dynamic member access needs no special case: `raw.x`, `raw.x = v` and `raw.m()` compile to ordinary calls of
 `Reflect.field` / `Reflect.setField` and a closure call, so they are calls of reflection natives in the reached IR.
 `tests/compiler/UnusedModuleInvarianceMain` builds a program with and without an unused root module that itself calls `Reflect`, and asserts the same

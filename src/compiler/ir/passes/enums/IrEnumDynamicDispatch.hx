@@ -10,7 +10,7 @@ import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.passes.IrFunctionRewrite;
-import compiler.ir.passes.objects.ObjectReflection;
+import compiler.ir.passes.objects.IrObjectReflection;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
@@ -178,7 +178,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		var program = reflectionProgram;
 		if (program != null) {
 			var roots:Array<IrType> = [];
-			if (ObjectReflection.usesObjectLayouts(program.natives)) {
+			if (IrObjectReflection.usesObjectLayouts(program.natives)) {
 				var reflectable = reflectableObjects;
 				if (reflectable != null) for (name in reflectable) roots.push(Obj(name));
 				for (object in program.objects)

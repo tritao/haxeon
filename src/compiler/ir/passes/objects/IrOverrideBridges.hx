@@ -195,11 +195,11 @@ class IrOverrideBridges implements IrFunctionPass {
 			],
 			adapted = [
 				for (index in 0...arguments.length)
-					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
+					IrGenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
 					objects)
 			],
 			result = builder.call(implementation.name, [receiver].concat(adapted), implementation.result);
-		builder.returnValue(isVoid(root.result) ? builder.constVoid() : GenericOwnerErasure.convert(builder, result,
+		builder.returnValue(isVoid(root.result) ? builder.constVoid() : IrGenericOwnerErasure.convert(builder, result,
 			root.result, objects));
 		return new IrFunction(name, builder.arguments, root.result, builder.blocks,
 			Provider(TypeKey.of(implementation.arguments[0].type),
@@ -218,10 +218,10 @@ class IrOverrideBridges implements IrFunctionPass {
 			],
 			adapted = [
 				for (index in 0...arguments.length)
-					GenericOwnerErasure.convert(builder, arguments[index], slot.arguments[index + 1].type, objects)
+					IrGenericOwnerErasure.convert(builder, arguments[index], slot.arguments[index + 1].type, objects)
 			],
 			result = builder.methodCall(receiver, method, adapted, slot.result);
-		builder.returnValue(isVoid(resultType) ? builder.constVoid() : GenericOwnerErasure.convert(builder, result,
+		builder.returnValue(isVoid(resultType) ? builder.constVoid() : IrGenericOwnerErasure.convert(builder, result,
 			resultType, objects));
 		return new IrFunction(name, builder.arguments, resultType, builder.blocks,
 			Provider(TypeKey.of(receiverType),

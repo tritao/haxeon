@@ -123,7 +123,7 @@ So a caller that inlined a callee would keep the old body after the callee is ed
   virtual and interface calls until there is a proof that a method is not overridden.
 - Callee: non-recursive (build call-graph SCCs by scanning `Call` and closure names), within an instruction budget,
   no `BeginTry`/`Catch`, not `__`-prefixed, not `__init*` or the entry point, not referenced by native metadata or
-  `ObjectReflection`.
+  `IrObjectReflection`.
 - `inline function` becomes a stronger hint (larger budget). The parser currently drops it for methods and functions
   (`syntax/Parser.hx:212, 538-596, 778`); `AstFunction` and `TypedFunction` need an optional flag, and
   `ModuleChangeAnalyzer` must treat a change of it as a signature-level change.

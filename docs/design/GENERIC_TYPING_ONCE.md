@@ -80,7 +80,7 @@ representation, and today the body typer does both jobs at once.
 
 Point 2 is the substantial change. The boundary, copy and helper nodes are what `IrGenerator` and the HashLink and Wasm
 lowering consume today. Moving their insertion after typing changes the typer→IR boundary, and it meets the erased-owner
-work of step 2.6 (`GenericOwnerErasure`, `IrExactTypeFacts`, HashLink lowering). So the model is reached in two stages.
+work of step 2.6 (`IrGenericOwnerErasure`, `IrExactTypeFacts`, HashLink lowering). So the model is reached in two stages.
 
 ## Stage 1: typer only, byte-identical
 
@@ -132,7 +132,7 @@ next to its code typings (paths 6 to 8), and the specializations at type paramet
 
 ## Stage 2: elaboration as a pass
 
-Approved by the user on 2026-11-18. This stage crosses into erased-generic lowering (`GenericOwnerErasure`,
+Approved by the user on 2026-11-18. This stage crosses into erased-generic lowering (`IrGenericOwnerErasure`,
 `IrExactTypeFacts`, the HashLink lowering), so it is sequenced with step 2.6 and its owner, haxeon-e4. The steps are:
 
 1. The typer stops emitting `TToDynamic`, `TAbiCast` and `TCopy` for a type parameter. It records the semantic
@@ -152,16 +152,16 @@ Each item is gated on byte-identical programs and self-compile output, as stage 
 haxeon-e4 reviewed this stage. Its conditions are the contract:
 
 1. **Placement and output.** The pass runs on the typed AST, before `IrGenerator`. Its output for a representation is
-   exactly today's typed code (the output of paths 6, 7 and 8), so `IrGenerator`, `GenericOwnerErasure`,
+   exactly today's typed code (the output of paths 6, 7 and 8), so `IrGenerator`, `IrGenericOwnerErasure`,
    `IrExactTypeFacts` and the HashLink and Wasm lowering see the same input. The equivalence ("elaborated at the erased
    representation equals path 7's typing", and likewise for each specialization) is a permanent test, not a local
    probe.
 2. **Boundaries keep their source type.** Every boundary the pass inserts carries its semantic source type (`T`, its
    substitution, the bound), as a field on the node or in a side table, not only the physical `TToDynamic` or
-   `TAbiCast`. `GenericOwnerErasure`'s fast path (a `Box<Int>` read through `Box<Dynamic>`), exact-type facts at erased
+   `TAbiCast`. `IrGenericOwnerErasure`'s fast path (a `Box<Int>` read through `Box<Dynamic>`), exact-type facts at erased
    boundaries and 2.6 slice 8 use it.
 3. **One naming function.** Owner and specialization names (`$generic-erased:Owner:get|set|call:member`,
-   `GenericOwnerErasure.isOperation` and `DISPATCH_PREFIX`) come from one function both lanes share. A change to it is
+   `IrGenericOwnerErasure.isOperation` and `DISPATCH_PREFIX`) come from one function both lanes share. A change to it is
    agreed with haxeon-e4 first.
 4. **Structured lambda names.** A lambda is named by its owner, member, index and representation, not by a hash of
    types, to fit `IrSymbol` ([IR_SYMBOLS.md](IR_SYMBOLS.md)) and ADR 0003 M3. This is decided with haxeon-e4 before

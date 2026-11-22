@@ -132,7 +132,7 @@ reflection are those of the object, as in Haxe. A field access dispatches on the
   `S` (literal records, constructed classes and their constructed subclasses, interface implementors), read or write
   that class's physical field, and convert it where the field types differ (final covariance `Int` to `Float`,
   optional to required with the default, a boxed `Null<T>`). The last arm reads by name, the way `Dynamic` does
-  (`hl_dyn_get*` on HashLink, `ObjectReflection` on Wasm): it serves dynamic objects, objects of a shape added by a
+  (`hl_dyn_get*` on HashLink, `IrObjectReflection` on Wasm): it serves dynamic objects, objects of a shape added by a
   later patch, and objects kept across a full reload. A missing field reads as its type's default.
 
 `==` on structures compares the references. Reflection, `Std.string` and `Std.isOfType` see the object. Dispatcher
@@ -199,7 +199,7 @@ must unwrap. The object model chooses the table at the access, from the object's
 
 ### Generic erasure (haxeon-e4's question)
 
-The `$generic-erased:Owner:get:member` dispatchers (`GenericOwnerErasure`) already follow this model: the erased
+The `$generic-erased:Owner:get:member` dispatchers (`IrGenericOwnerErasure`) already follow this model: the erased
 owner is the original object carried as `Dynamic`, and the dispatcher tests the owner's layout and reads its physical
 field. They are slow because of how they test: for each candidate class, `__std_is_of_type` (a runtime call) and then
 `SafeCast` (another), where stock Haxe, which does not specialize generics, reads the field directly. On lru that is
@@ -495,12 +495,12 @@ that change HashLink positions or lowering also run the ci-tier debug-metadata a
 | 1 | Receiver kinds in the IR census; the miss-count diagnostic option; `benchmarks/structure-access` (exact, view, class as structure, by name) on HashLink and both Wasm targets. | None | haxeon-e4 | `ir/IrOpportunityCensus`, `CompileOptions`, `benchmarks/` |
 | 2a | `IrType.Structure(S)`; structure slots physically `dyn` / root reference / pointer; reads and writes unguarded through an unchecked cast; `HlInstruction.GetType`; `==` as a pointer compare. | Same semantics; bytes change | haxeon-e4 (IR, HL); Wasm owner | `ir/{Ir, IrGenerator (lowerType), IrBuilder, IrVerifier, IrTypeIdentity, codec/*}`, `hl/{HlFunction, HlWriter, lower/HlLower, incremental/HlSymbolTable}`, `backend/wasm/{WasmFunctionLower, gc/WasmGcRepresentation, linear/WasmLinearRepresentation}` |
 | 2b | `IrShapeDispatch`: dispatchers as provider rows, the guarded fast path, refinement after a guard, the by-name arm. | Same semantics | haxeon-e4 | new `ir/IrShapeDispatch`, `IrPipeline`, `core/Provides`, `REACHABILITY_WALK` hooks, the three backends' exact test |
-| 3 | Erased generic owners on `IrShapeDispatch`: exact-class arms, inlined own-specialization arm. | Faster; same semantics | haxeon-e4 | `ir/GenericOwnerErasure`, `IrGenerator.erasedOwnerOperation` |
+| 3 | Erased generic owners on `IrShapeDispatch`: exact-class arms, inlined own-specialization arm. | Faster; same semantics | haxeon-e4 | `ir/IrGenericOwnerErasure`, `IrGenerator.erasedOwnerOperation` |
 | 4a | Census of maps and sets keyed by a structure; move those users to declared value types; then structure keys compare by identity (decision 5). | `Map` keys match Haxe | any | `STRUCTS.md` `Hashable` on structures, the users the census finds |
 | 4 | Relations: width, depth, optional, access kinds, `Array` and function variance, common fields, class and interface to structure, `Dynamic` to structure as a retype; `StructureView`; accessor (`get`, `set`) fields in structures (`function` fields and `default`/`null`/`never` property fields in structures, and `var` in interfaces, have landed). Deletes `dynamicStructure`, E1016's structure case, `anonymousReadOnlyWidening`. | Accepts Haxe's programs; differential tests | typer (coordinate with haxeon-7b) | `types/TypeRelations`, `typing/{ConversionResolver, ExpressionTyper, CallResolver, DeclarationIndex}`, `syntax/Parser` |
 | 5 | Open literal structures: frame-owned, gaining optional fields in `coerce`, closed and named in `settleFrame`, registered at closing; `TObjectLiteral` name from its type; the verifier; the cross-unit diagnostic. | Accepts Haxe's open-literal programs | typer (haxeon-7b's files) | `typing/{BodyTyper (settleFrame), MonomorphFrames, ExpressionTyper (typeObjectLiteral), ConversionResolver, AnonymousTypeRegistry}`, `types/{Monomorphs, TypedTypeMap, TypedAst}` |
 | 6 | The census build without `localExpectedTypes`, the fixes it asks for, then the deletion. | `values.push(1)` as `Array<Float>` rejected | typer | `typing/{BodyTyper, StatementTyper, TypingContext}`, `types/{Type (MonomorphCell.hint), Monomorphs}` |
-| 7 | Reflection and printing of unwritten optional fields (decision 4); `LANGUAGE_SUPPORT.md`, `SEMANTIC_TYPE_CONTRACT.md`, `STRUCTS.md` updated. | Reflection matches Haxe | any | `IrProgramAssembler.anonymousStringsFrom`, `ObjectReflection`, docs |
+| 7 | Reflection and printing of unwritten optional fields (decision 4); `LANGUAGE_SUPPORT.md`, `SEMANTIC_TYPE_CONTRACT.md`, `STRUCTS.md` updated. | Reflection matches Haxe | any | `IrProgramAssembler.anonymousStringsFrom`, `IrObjectReflection`, docs |
 | 8 | Interface field access on `IrShapeDispatch`: a read or write of an interface variable (`9f2db038d`) becomes a shape-dispatched field access, an exact-class arm reading the field inline with the dispatcher as fallback, instead of a virtual call to a hidden `$get_x`/`$set_x` accessor. Then delete those hidden accessors (`semantic/InterfaceFieldAccessors`) and their per-class methods. The interface's own `get_x`/`set_x` accessors stay. | Faster; same semantics; less code; adding an interface variable no longer adds methods to every implementing class | haxeon-e4 (IR), typer for the access typing | `ir/IrShapeDispatch`, `semantic/InterfaceFieldAccessors` (deleted), `typing/InterfaceProperties`, `IrGenerator` |
 
 Order and parallelism:

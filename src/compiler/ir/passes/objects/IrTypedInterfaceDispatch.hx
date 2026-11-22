@@ -317,13 +317,13 @@ class IrTypedInterfaceDispatch {
 					var concrete = entry.safeCast(dynamicValue, Obj(candidate.name)),
 						target = valueName == null ? concrete : entry.fieldGet(concrete, "value", Obj(valueName)),
 						adapted = [for (index in 0...entryArgs.length)
-							GenericOwnerErasure.convert(entry, entryArgs[index],
+							IrGenericOwnerErasure.convert(entry, entryArgs[index],
 							implementation.arguments[index + 1].type, byName)],
 						result = entry.call(implementation.name, [target].concat(adapted), implementation.result);
 					entry.returnValue((switch signature.result {
 						case Void: true;
 						default: false;
-					}) ? result : GenericOwnerErasure.convert(entry, result, signature.result, byName));
+					}) ? result : IrGenericOwnerErasure.convert(entry, result, signature.result, byName));
 				}
 				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks,
 					Provider(TypeKey.of(Obj(candidate.name)),
