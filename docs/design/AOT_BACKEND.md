@@ -434,8 +434,8 @@ fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves 
 value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
 table prologue of dispatch functions; ordinary C function calls (`CNativeCall`) through the runtime's dispatch. Array bounds
 checks are inline compares, dropped where an earlier check in the block still holds (`HlLower.keepsArrayBounds`) or the loop
-proves the index in range (`IrLoopBounds`). Objects are allocated by `hl_alloc_obj`, as the JIT allocates them by default. The JIT's inline
-allocation is opt-in on both: the JIT's with `HL_JIT_ALLOC_INLINE=1` in the VM, the C backend's with the typed option
+proves the index in range (`IrLoopBounds`). Objects are allocated by `hl_alloc_obj`. The JIT allocates small objects inline
+on Linux x86-64 (opt-in with `HL_JIT_ALLOC_INLINE=1` on AArch64); the C backend does with the typed option
 `CompileOptions.inlineAllocation` (`--inline-allocation`), which allocates by `hlc_new` from the collector's own descriptor
 (`hl_jit_alloc_prepare`, filled at start-up). A cast from `Null<T>` to `T` reads the box inline, as the JIT's
 `emit_dyn_cast` does, instead of calling `hl_dyn_casti`.

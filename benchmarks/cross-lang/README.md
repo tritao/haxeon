@@ -194,12 +194,13 @@ The other benchmarks had no regression beyond noise. Reduced page release/refaul
 cache-miss explanation. See [the full measurement and validation report](../../docs/reports/2026-10-gc-empty-page-retention.md).
 The cross-language table above was not regenerated.
 
-### Guarded JIT object allocation (opt-in)
+### Guarded JIT object allocation
 
-`HL_JIT_ALLOC_INLINE=1` enables guarded inline allocation of eligible objects up to 40 bytes on Linux x86-64 SysV.
+The JIT allocates eligible objects up to 40 bytes inline on Linux x86-64 SysV (on AArch64, with `HL_JIT_ALLOC_INLINE=1`).
 Nine alternating pairs on core 0, identical bytecode and load <=4 measured binarytrees at 0.810601 → 0.574274 s
 (29.15% faster) and merkletrees at 0.293442 → 0.248573 s (15.29%). Peak RSS was essentially unchanged and none of
-the other four benchmarks regressed. The feature remains off by default; its per-site cold stubs increase code size.
+the other four benchmarks regressed. Its per-site cold stubs increase code size. It is on by default; measured again when it was
+enabled, against the call path: binarytrees -33% and merkletrees -23% main-thread cycles, the other four within noise.
 See [the full report](../../docs/reports/2026-10-jit-inline-allocation.md) for validation, startup limitations and all six results.
 The cross-language table above was not regenerated.
 
