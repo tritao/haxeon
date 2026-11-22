@@ -474,10 +474,10 @@ One existing value-ABI gap is distinct from method selection: a bound closure re
 logical result ABI on HashLink. Its correctness is covered outside the component-call zero-byte census. Carrying its
 presence/scalar/reference leaves through the escaping closure ABI remains required before the no-box port is complete.
 
-`python3 scripts/benchmark-typed-interface-dispatch.py --compiler boxed=/disk/old.hl --compiler table=/disk/new.hl
---output /disk/new-empty-run` regenerates the 1/8/32 sources and records every paired process sample, allocation count,
-and guest build log. For the previous source path use `6f816201`; for the reviewed chain use `ccf4a141`. The output
-directory must be new: a failed run is retained rather than overwritten.
+The boxed and table dispatch were compared by `scripts/benchmark-typed-interface-dispatch.py` (with
+`tests/bench/typed-interface-dispatch.template.hx`), which regenerated the 1/8/32 sources and recorded every paired process
+sample, allocation count and guest build log; the boxed path's source is `6f816201`, the reviewed chain `ccf4a141`. Both
+files were removed once the boxed path was gone; take them from git history to compare two dispatch builds again.
 
 ### Typed callbacks passed through methods
 

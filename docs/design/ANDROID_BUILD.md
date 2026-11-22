@@ -41,7 +41,7 @@ loads, and registers both directories as generated sources of every variant, so 
 
 - **Run by the CLI.** `haxeon build --target android` builds, writes `build/android-arm64/app.hl.gradle.properties`, and runs
   `assembleDebug` with `-PhaxeonInputs=<that file>` (and the application ID and label). Gradle's `buildHaxeon` task is skipped.
-- **Run on its own** (Android Studio, `scripts/build-android.sh`, `./gradlew` in `android/`). Without `haxeonInputs`, the
+- **Run on its own** (Android Studio, `./gradlew` in `android/`). Without `haxeonInputs`, the
   `buildHaxeon` task runs `haxeon build --target android --project <haxeonProject> --gradle-inputs
   app/build/haxeon/inputs.properties`, which builds and describes but never starts Gradle, so the two cannot recurse. The task
   always runs; haxeon's own fingerprints make a build with nothing changed cheap.

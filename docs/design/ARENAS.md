@@ -191,9 +191,10 @@ Output identical in every mode. The counts move by a few between runs: a stale w
 an arena's recycled pages and keep it. Releasing the typing temporaries does not pay today: the peak is set later, by
 the IR passes and the backend, and the collections fall where they did, so the option stays off. (Before the copy and
 evacuation kept to known layouts, 539 arenas released, but by rewriting words of untyped blocks that only their use made
-pointers, which a release must never do.) `scripts/check-typing-arenas.sh` is the escape check: it builds the compiler
-with Haxeon, compiles it again with `--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, fails when an arena is kept
-(printing each reference by holder field and allocation site) or the output changes.
+pointers, which a release must never do.) The escape check is to build the compiler with Haxeon, compile it again plainly
+and with `--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, and require that no arena is kept (`HL arena reference` lines
+name each reference by holder field and allocation site) and that the two outputs are identical. The script that did it,
+`scripts/check-typing-arenas.sh`, was removed when the pilot stopped; take it from git history to revive the pilot.
 
 What `strict` still names, largest first: normalized abstract constructors aliased in the declaration type table (a
 fresh normalized copy per call, `CallResolver.typeAbstractConstruction`, which another track is changing); typed

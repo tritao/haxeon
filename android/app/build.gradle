@@ -9,7 +9,7 @@ def haxeonApplicationId = providers.gradleProperty('haxeonApplicationId').getOrE
 def haxeonAppLabel = providers.gradleProperty('haxeonAppLabel').getOrElse('Haxeon')
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
 // What haxeon built for Gradle to package (docs/design/ANDROID_BUILD.md). `haxeon build --target android` builds it first and
-// names it with -PhaxeonInputs; on its own (Android Studio, scripts/build-android.sh) Gradle asks haxeon to build it.
+// names it with -PhaxeonInputs; on its own (Android Studio, ./gradlew) Gradle asks haxeon to build it.
 def haxeonInputsProperty = providers.gradleProperty('haxeonInputs').orNull
 def haxeonInputsFile = haxeonInputsProperty != null ? file(haxeonInputsProperty)
     : layout.buildDirectory.file('haxeon/inputs.properties').get().asFile

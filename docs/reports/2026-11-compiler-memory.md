@@ -3,7 +3,8 @@
 Status: census (2026-11-09), no fixes made. `materia/app`, plain `build --compiler-only`, the persistent compiler worker, default GC
 settings (`HL_GC_MARK_THRESHOLD=0.4`, set by the launcher). Tools: `HAXEON_COMPILER_MEMORY_LOG`, `HAXEON_COMPILER_HEAP_DUMP(_ON)` and
 `HAXEON_COMPILER_CENSUS` in the worker (`CompilerMemoryLog`, `CompilerMemoryCensus`), `scripts/hl-heap-tally.c` and
-`scripts/hl-heap-names.py` for the dumps.
+`scripts/hl-heap-names.py` for the dumps (both since removed; `haxeon heap inspect` reads a heap dump, and the runtime's census
+`HL_GC_CENSUS_AT`/`HAXEON_PEAK_CENSUS` gives the page census by kind).
 
 ## What the numbers are
 

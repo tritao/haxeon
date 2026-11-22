@@ -33,7 +33,7 @@ describes in `FILE`:
 
 ```sh
 source scripts/android-env.sh
-./scripts/build-android.sh assembleDebug [-PhaxeonProject=/path/to/haxeon.json]
+android/gradlew -p android assembleDebug [-PhaxeonProject=/path/to/haxeon.json]
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 

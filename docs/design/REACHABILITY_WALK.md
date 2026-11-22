@@ -115,7 +115,7 @@ test failure. Cost: one set lookup per call edge, check mode only.
    1. An edit that changes the reachable set must give the same bytes as a cold build. The walk's result must be a function of the
    program graph, so cached results stay valid; this is confirmed by those runs.
 5. Gates: `gate.sh wave` per commit (warm-edit sweep included), `full` and the outer app gates before publishing. The cold-build effect is
-   measured with `scripts/measure-cold.sh` (the app and `self-hosting` targets).
+   measured with `scripts/perf-guard.py` (the cold self-compile).
 
 ## Results of step 1
 
@@ -147,7 +147,7 @@ What the numbers say about the walk itself:
   It needs reflective field access to be a typed dynamic site first (see the prerequisite above), because it drops methods that are reachable only by name.
 - Objects with a reached method: the app 8850 -> 1593 (today) -> 1571; self-hosting 1399 -> 148; the corpus 933 -> 221 -> 217.
 - No `$` function without a kind in any of the three (kindless helpers: 0), so the prerequisite "no target-only helper without a kind" holds on these.
-- Not measured: the effect of the prune on pass time, which is step 3's evidence (`measure-cold.sh` before and after).
+- Not measured: the effect of the prune on pass time, which is step 3's evidence (`perf-guard.py` before and after).
 
 ## Step 3a, first cut (on by default for plain HashLink builds; `--no-early-prune` turns it off)
 

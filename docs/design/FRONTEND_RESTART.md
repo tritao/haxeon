@@ -1,7 +1,7 @@
 # Removing the frontend restart (design note, no code yet)
 
 Status: for review. Measured on 2026-11-12 with haxeon 7b97c092e on the Materia app of outer e9173b977 (the baseline recorded in
-`scripts/measure-cold.sh`). Counts below are deterministic (compile-count, bytes); the wall figures were taken at load 10 to 20 and are indicative.
+`scripts/measure-cold.sh`, since removed). Counts below are deterministic (compile-count, bytes); the wall figures were taken at load 10 to 20 and are indicative.
 
 ## What happens today
 

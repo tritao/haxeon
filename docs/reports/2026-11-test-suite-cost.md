@@ -107,6 +107,9 @@ and the `provides` row come from the generator and a change in either fails the 
 
 ## 7. Measuring a cold build
 
+`scripts/measure-cold.sh` has since been removed: `scripts/perf-guard.py` measures cold builds by main-thread instructions, which
+load does not move as it moves wall and CPU time. What it did:
+
 `scripts/measure-cold.sh <label> [runs]` builds an app cold `runs` times (default 3) and prints, per run, the wall time, the compiler's own
 time, the compile-count, the worker's CPU seconds and its peak RSS. `MEASURE_APP` names the app project; `HAXEON_ROOT` the checkout whose
 compiler is measured, so one app can be built by two checkouts and the lines compared. It waits while the load average is at or above
@@ -139,7 +142,7 @@ run did not use. The coverage line counts the passing program cases in the log, 
 
 ### The self-hosting target
 
-`MEASURE_APP=self-hosting scripts/measure-cold.sh <label> [runs]` measures the project of `tests/integration/test-compiler-embedding.sh`
+`MEASURE_APP=self-hosting scripts/measure-cold.sh <label> [runs]` (since removed) measured the project of `tests/integration/test-compiler-embedding.sh`
 (source: `tests/fixtures/self-hosting/Main.hx`), in which Haxeon compiles the compiler's own sources: 5236 functions retyped, about 147 million
 compile-count. It needs no app checkout, so it is the target for work on a loaded or app-less machine. It is **a different workload from the
 Materia app**: quote a percentage only against the same target (the app's -35% cold-build figure is not comparable with these).
