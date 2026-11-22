@@ -158,7 +158,7 @@ class IrOverrideBridges implements IrFunctionPass {
 	static function callAdapterName(receiver:IrType, method:String, arguments:Array<IrType>, result:IrType):String {
 		var signature = IrTypeIdentity.text(receiver) + ":" + IrTypeIdentity.listText(arguments) + ":"
 			+ IrTypeIdentity.text(result);
-		return CALL_PREFIX + method + ":" + haxe.crypto.Sha256.encode(signature).substr(0, 32);
+		return CALL_PREFIX + method + ":" + compiler.core.TextDigest.sha256(signature).substr(0, 32);
 	}
 
 	static function sameSignature(implementation:IrFunction, root:IrFunction):Bool {

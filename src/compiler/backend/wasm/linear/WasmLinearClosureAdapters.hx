@@ -210,7 +210,7 @@ class WasmLinearClosureAdapters {
 							&& types.exists(arguments[1].id)):
 							var type = types.get(arguments[1].id),
 								name = "$wasm:closure-type-check:"
-									+ haxe.crypto.Sha256.encode(IrTypeIdentity.text(type)).substr(0, 32);
+									+ compiler.core.TextDigest.sha256(IrTypeIdentity.text(type)).substr(0, 32);
 							helpers.set(name, type);
 							target.instructions
 								.push(new Located(IrInstruction.Call(out, IrSymbol.of(name), [arguments[0]]),

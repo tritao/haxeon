@@ -114,7 +114,7 @@ class IrTypedInterfaceDispatch {
 	public static function callName(interfaceName:String, method:String, arguments:Array<IrType>,
 			result:IrType):String {
 		var signature = IrTypeIdentity.listText(arguments) + ":" + IrTypeIdentity.text(result);
-		return PREFIX + interfaceName + ":" + method + ":" + haxe.crypto.Sha256.encode(signature).substr(0, 32);
+		return PREFIX + interfaceName + ":" + method + ":" + compiler.core.TextDigest.sha256(signature).substr(0, 32);
 	}
 
 	/**

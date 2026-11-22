@@ -310,6 +310,13 @@ value stays null), and a warning can point out a surprising case.
   Nor does this meet the rule: it is kept so that a bug surfaces at the read that goes wrong rather than later. To port
   code that relies on Haxe's read, write `i < a.length ? a[i] : null` or a small helper (`array-read-out-of-range`).
 
+Different from Haxe on purpose:
+
+- `haxe.crypto.Sha256.encode` gives the SHA-256 of the string's UTF-8 bytes. Haxe's hashes those bytes but pads them
+  with the string's UTF-16 length, so for a string beyond ASCII its digest is not the SHA-256 (Haxe 4.3.7 on HashLink:
+  `encode("é")` is `b2207512...`, not `4a99557e...`). `Sha256.make(Bytes.ofString(s))` is the SHA-256 in both, so code
+  that must agree with stock Haxe hashes the bytes (`sha256-string-digests`).
+
 An unannotated field's type is its initializer's, and an unannotated function's result and arguments are what its body
 gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must
 match it, `return null` first makes it nullable, and no value return makes it `Void`. Where Haxe would let a later use in

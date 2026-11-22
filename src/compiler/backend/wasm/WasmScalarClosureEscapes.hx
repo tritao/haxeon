@@ -234,7 +234,7 @@ class WasmScalarClosureEscapes {
 			existing = signatureChecks.get(key);
 		if (existing != null)
 			return existing;
-		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32),
+		var suffix = compiler.core.TextDigest.sha256(key).substr(0, 32),
 			name = "$wasm:closure-signature-check:" + suffix,
 			environment = "$wasm:closure-escape:" + suffix,
 			invoke = "$wasm:closure-escape-call:" + suffix,
@@ -279,7 +279,7 @@ class WasmScalarClosureEscapes {
 				}))
 					throw new InternalError("Nullable scalar closure escape requires a function");
 				var innerAdapter = adapter(inner),
-					maker = "$wasm:closure-escape-nullable:" + haxe.crypto.Sha256.encode(key).substr(0, 32),
+					maker = "$wasm:closure-escape-nullable:" + compiler.core.TextDigest.sha256(key).substr(0, 32),
 					b = new IrBuilder(),
 					closure = b.argument("closure", type),
 					missing = b.createBlock(),
@@ -297,7 +297,7 @@ class WasmScalarClosureEscapes {
 			default:
 				throw new InternalError("A scalar closure escape must have a function type");
 		}
-		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32),
+		var suffix = compiler.core.TextDigest.sha256(key).substr(0, 32),
 			environment = "$wasm:closure-escape:" + suffix,
 			invoke = "$wasm:closure-escape-call:" + suffix,
 			maker = "$wasm:closure-escape-make:" + suffix,
@@ -381,7 +381,7 @@ class WasmScalarClosureEscapes {
 				}))
 					throw new InternalError("Nullable scalar closure restoration requires a function");
 				var innerRestoration = restoration(inner),
-					maker = "$wasm:closure-restore-nullable:" + haxe.crypto.Sha256.encode(key).substr(0, 32),
+					maker = "$wasm:closure-restore-nullable:" + compiler.core.TextDigest.sha256(key).substr(0, 32),
 					b = new IrBuilder(),
 					closure = b.argument("closure", Dyn),
 					missing = b.createBlock(),
@@ -398,7 +398,7 @@ class WasmScalarClosureEscapes {
 			default:
 				throw new InternalError("A restored scalar closure must have a function type");
 		}
-		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32),
+		var suffix = compiler.core.TextDigest.sha256(key).substr(0, 32),
 			environment = "$wasm:closure-restored:" + suffix,
 			invoke = RESTORE_CALL_PREFIX + suffix,
 			maker = "$wasm:closure-restore-make:" + suffix,

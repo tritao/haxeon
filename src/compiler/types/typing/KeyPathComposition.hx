@@ -13,7 +13,7 @@ class KeyPathComposition {
 			root:CompilerType, middle:CompilerType, value:CompilerType, writable:Bool,
 			span:SourceSpan):TypedExpression {
 		var name = "$keypath.compose:" + session.currentContext.functionName + ":" + span.start + ":"
-			+ haxe.crypto.Sha256.encode(SemanticSignature.type(left.type)
+			+ compiler.core.TextDigest.sha256(SemanticSignature.type(left.type)
 			+ SemanticSignature.type(right.type)).substr(0, 16),
 			environment = name + ":environment",
 			type = TKeyPath(root, value, writable),

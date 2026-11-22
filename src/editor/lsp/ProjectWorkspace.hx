@@ -7,10 +7,10 @@ import build.Target;
 import build.TargetLayout;
 import compiler.core.FileVersion;
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import compiler.service.LanguageService;
 import compiler.tools.SourceManifestLoader;
 import haxe.Json;
-import haxe.crypto.Sha256;
 import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import project.CompilerInputs;
@@ -34,7 +34,7 @@ class HaxeProjectConfiguration {
 			libraries:Array<String>,
 			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration) {
 		this.ffi = ffi == null ? new compiler.ffi.FfiRegistry.FfiConfiguration() : ffi;
-		ffiIdentity = Sha256.encode(haxe.Json.stringify({
+		ffiIdentity = TextDigest.sha256(haxe.Json.stringify({
 			interfaces: this.ffi.interfaceSources(),
 			projections: this.ffi.projectionSources()
 		}));
@@ -43,14 +43,14 @@ class HaxeProjectConfiguration {
 		this.entries = sortedCopy(entries);
 		this.defines = sortedCopy(defines);
 		this.libraries = sortedCopy(libraries);
-		scopeId = Sha256.encode([
+		scopeId = TextDigest.sha256([
 			file,
 			this.classPaths.join("|"),
 			this.entries.join("|"),
 			this.libraries.join("|"),
 			ffiIdentity
 		].join("\n"));
-		id = Sha256.encode(scopeId + "\n" + this.defines.join("|"));
+		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|"));
 	}
 
 	public function owns(path:String):Bool {

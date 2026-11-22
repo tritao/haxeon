@@ -1,6 +1,7 @@
 package project;
 
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -19,7 +20,7 @@ class RegistryPublisher {
 			throw new InternalError('Project file not found: $absoluteManifest');
 		var packageRoot = Path.directory(absoluteManifest),
 			manifest = PackageManifest.parse(absoluteManifest, File.getContent(absoluteManifest)),
-			registryDirectory = Path.join([registryRoot, Sha256.encode(registry)]),
+			registryDirectory = Path.join([registryRoot, TextDigest.sha256(registry)]),
 			destination = Path.join([registryDirectory, manifest.packageName, version]);
 		if (FileSystem.exists(destination))
 			throw new InternalError('Registry release "${manifest.packageName}@$version" is already published and immutable');
@@ -54,7 +55,7 @@ class RegistryPublisher {
 		var fields:Array<String> = [];
 		collectChecksums(root, "", fields);
 		fields.sort(Reflect.compare);
-		return Sha256.encode(fields.join("\n"));
+		return TextDigest.sha256(fields.join("\n"));
 	}
 
 	static function collectChecksums(root:String, relative:String, result:Array<String>):Void {

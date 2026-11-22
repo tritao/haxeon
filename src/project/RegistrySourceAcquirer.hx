@@ -2,6 +2,7 @@ package project;
 
 import build.execution.ProcessRunner;
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -17,7 +18,7 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 	public function acquire(source:PackageSource, ownerRoot:String, packageId:PackageId):AcquiredSource
 		return switch source {
 			case PackageSource.Registry(registry, name, range):
-				var registryDirectory = Path.join([cacheRoot, Sha256.encode(registry)]),
+				var registryDirectory = Path.join([cacheRoot, TextDigest.sha256(registry)]),
 					indexPath = Path.join([registryDirectory, "index.json"]);
 				if (!FileSystem.exists(indexPath))
 					throw new InternalError('Registry index for "$registry" is not in the Haxeon cache: $indexPath');

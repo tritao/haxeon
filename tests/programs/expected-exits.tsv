@@ -6,6 +6,7 @@ json-typed-object-array	42
 bytes-view	42
 bytes-blit	42
 sha256	42
+sha256-string-digests	42
 loop-phi-parallel	42
 bytes-codec	42
 messagepack-codec	42

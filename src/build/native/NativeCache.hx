@@ -2,7 +2,7 @@ package build.native;
 
 import build.BuildEnvironment;
 import build.TargetLayout;
-import haxe.crypto.Sha256;
+import compiler.core.TextDigest;
 import haxe.io.Path;
 import project.ResolvedPackage;
 import sys.FileSystem;
@@ -90,7 +90,7 @@ class NativeCache {
 		// Case-insensitive file systems (Windows, macOS) reach one directory by several spellings.
 		if (Sys.systemName() == "Windows" || Sys.systemName() == "Mac")
 			identity = identity.toLowerCase();
-		var key = Sha256.encode(identity).substr(0, 10),
+		var key = TextDigest.sha256(identity).substr(0, 10),
 			name = new EReg("[^A-Za-z0-9_.]+", "g").replace(resolvedPackage.name, "-");
 		return Path.join([root, layout.targetDirectory(), name + "-" + key]);
 	}

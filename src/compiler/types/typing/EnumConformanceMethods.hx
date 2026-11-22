@@ -5,13 +5,13 @@ import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.core.Source.SourceSpan;
+import compiler.core.TextDigest;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.typing.HelperRequests.HelperRequest;
-import haxe.crypto.Sha256;
 
 /** Handwritten enum conformance methods lower to statically dispatched functions over the enum value. */
 class EnumConformanceMethods {
@@ -29,7 +29,7 @@ class EnumConformanceMethods {
 	public static inline final PREFIX = "$enum-custom:";
 
 	public static function name(type:CompilerType, method:String):String
-		return PREFIX + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0,
+		return PREFIX + method + ":" + TextDigest.sha256(compiler.semantic.SemanticSignature.type(type)).substr(0,
 			32);
 
 	/** Requests `method` of the enum `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */

@@ -532,7 +532,7 @@ class IrScalarClosures {
 		}, signatureKey = key(callable), existing = signatureChecks.get(signatureKey);
 		if (existing != null)
 			return existing;
-		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
+		var suffix = compiler.core.TextDigest.sha256(signatureKey).substr(0, 32),
 			name = "$scalar-closure:signature-check:" + suffix,
 			environment = "$scalar-closure:environment:" + suffix,
 			wrapper = "$scalar-closure:erased-call:" + suffix;
@@ -567,7 +567,7 @@ class IrScalarClosures {
 				}))
 					throw new InternalError("Nullable scalar closure erasure requires a function");
 				var innerErasure = ensureErasure(inner),
-					suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
+					suffix = compiler.core.TextDigest.sha256(signature).substr(0, 32),
 					maker = "$scalar-closure:erase-nullable:" + suffix,
 					result = {
 						maker: maker,
@@ -591,7 +591,7 @@ class IrScalarClosures {
 			default:
 				throw new InternalError("Scalar closure erasure requires a function");
 		}
-		var suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
+		var suffix = compiler.core.TextDigest.sha256(signature).substr(0, 32),
 			environment = "$scalar-closure:environment:" + suffix,
 			wrapper = "$scalar-closure:erased-call:" + suffix,
 			maker = "$scalar-closure:erase:" + suffix,
@@ -697,7 +697,8 @@ class IrScalarClosures {
 				}))
 					throw new InternalError("Nullable scalar closure restoration requires a function");
 				var innerMaker = ensureRestoration(inner),
-					maker = "$scalar-closure:restore-nullable:" + haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
+					maker = "$scalar-closure:restore-nullable:"
+						+ compiler.core.TextDigest.sha256(signatureKey).substr(0, 32),
 					b = new IrBuilder(),
 					original = b.argument("closure", Dyn),
 					missing = b.createBlock(),
@@ -714,7 +715,7 @@ class IrScalarClosures {
 			default:
 				throw new InternalError("Scalar closure restoration requires a function");
 		}
-		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
+		var suffix = compiler.core.TextDigest.sha256(signatureKey).substr(0, 32),
 			environment = "$scalar-closure:restored-environment:" + suffix,
 			wrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
 			maker = "$scalar-closure:restore:" + suffix,

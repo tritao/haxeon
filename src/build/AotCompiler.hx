@@ -1,7 +1,7 @@
 package build;
 
 import build.execution.ContentDigestCache;
-import haxe.crypto.Sha256;
+import compiler.core.TextDigest;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -113,7 +113,7 @@ class AotCompiler {
 			text.add('root $index\n');
 			digestTree(roots[index], "", text, digests);
 		}
-		return Sha256.encode(text.toString());
+		return TextDigest.sha256(text.toString());
 	}
 
 	static function digestTree(root:String, relative:String, into:StringBuf, digests:ContentDigestCache):Void {

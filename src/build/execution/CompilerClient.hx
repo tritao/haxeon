@@ -1,9 +1,9 @@
 package build.execution;
 
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import compiler.tools.CompilerServerProtocol;
 import haxe.SysTools;
-import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -74,7 +74,7 @@ class CompilerClient {
 			// project (and build root) gets its own worker process so it keeps its incremental compiler state.
 			var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session,
 				prebuilt != null && prebuilt.native),
-				key = version + "-" + Sha256.encode(projectRoot + "\n" + buildRoot).substr(0, 16),
+				key = version + "-" + TextDigest.sha256(projectRoot + "\n" + buildRoot).substr(0, 16),
 				statePath = Path.join([directory, key + ".json"]);
 			connection = connect(statePath);
 			if (connection == null) {

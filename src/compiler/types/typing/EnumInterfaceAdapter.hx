@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
+import compiler.core.TextDigest;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedClass;
@@ -11,12 +12,11 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.HelperRequests.HelperRequest;
-import haxe.crypto.Sha256;
 
 /** An enum obtains an object only at an explicit interface conversion boundary. */
 class EnumInterfaceAdapter {
 	public static function name(type:CompilerType, interfaceType:CompilerType):String
-		return "$enum-interface:" + Sha256.encode(compiler.semantic.SemanticSignature.type(type) + ":"
+		return "$enum-interface:" + TextDigest.sha256(compiler.semantic.SemanticSignature.type(type) + ":"
 			+ compiler.semantic.SemanticSignature.type(interfaceType)).substr(0, 32);
 
 	public static function request(session:TypingSession, type:CompilerType, interfaceType:CompilerType,

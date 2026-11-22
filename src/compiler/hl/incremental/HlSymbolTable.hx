@@ -547,7 +547,7 @@ class HlSymbolTable {
 		for (method in interfaceDecl.methods)
 			contract.push(method.name + ":" + IrTypeIdentity.listText(method.arguments) + "->"
 				+ IrTypeIdentity.text(method.result));
-		var identity = internString(name + "#" + haxe.crypto.Sha256.encode(contract.join("\n")));
+		var identity = internString(name + "#" + compiler.core.TextDigest.sha256(contract.join("\n")));
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {
 			types[index] = Virtual(identity, completeFields);

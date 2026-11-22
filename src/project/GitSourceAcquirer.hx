@@ -2,7 +2,7 @@ package project;
 
 import build.execution.ProcessRunner;
 import compiler.core.InternalError;
-import haxe.crypto.Sha256;
+import compiler.core.TextDigest;
 import haxe.io.Path;
 import sys.FileSystem;
 
@@ -23,7 +23,7 @@ class GitSourceAcquirer implements SourceAcquirer {
 		return switch source {
 			case PackageSource.Git(url, rev):
 				var resolvedRevision = resolveRevision(url, rev),
-					destination = Path.join([sourceRoot, "git", Sha256.encode(url + "\n" + resolvedRevision)]);
+					destination = Path.join([sourceRoot, "git", TextDigest.sha256(url + "\n" + resolvedRevision)]);
 				if (!FileSystem.exists(destination)) {
 					if (offline)
 						throw new InternalError('Git dependency "$packageId" at $resolvedRevision is not in the source cache; run "haxeon install"');

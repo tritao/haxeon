@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
+import compiler.core.TextDigest;
 import compiler.semantic.SemanticSignature;
 import compiler.types.KeyPathType;
 import compiler.types.Type.CompilerType;
@@ -12,7 +13,6 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.KeyPathTyping.KeyPathDefinition;
-import haxe.crypto.Sha256;
 
 /** Shared descriptors own typed access functions; calling them never builds a writer. */
 class KeyPathRuntime {
@@ -38,7 +38,7 @@ class KeyPathRuntime {
 			var span = definition.span,
 				pathType = TKeyPath(definition.root, definition.value, definition.writable),
 				cacheName = cacheOwner(definition),
-				fieldName = "$p$" + Sha256.encode(name).substr(0, 32),
+				fieldName = "$p$" + TextDigest.sha256(name).substr(0, 32),
 				cache = caches.get(cacheName);
 			new AnonymousTypeRegistry(session).register(pathType);
 			if (cache == null) {
@@ -163,7 +163,7 @@ class KeyPathRuntime {
 			case TInstance(_, name, _): name;
 			default: throw new InternalError("Invalid key path root");
 		};
-		return rootName + ".$keypaths$" + Sha256.encode(SemanticSignature.type(definition.root)).substr(0, 16);
+		return rootName + ".$keypaths$" + TextDigest.sha256(SemanticSignature.type(definition.root)).substr(0, 16);
 	}
 
 	static function string(value:String, span:SourceSpan):TypedExpression
