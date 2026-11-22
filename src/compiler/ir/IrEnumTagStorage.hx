@@ -30,20 +30,28 @@ class IrEnumTagStorage {
 				default:
 			}
 		}
-		var nextBox = 0, nextUnbox = 0, result:Map<String, {box:String, unbox:String}> = [];
+		var result:Map<String, {box:String, unbox:String}> = [];
 		for (name in names) {
 			var box = boxes.get(name), unbox = unboxes.get(name);
-			if (box == null) {
-				do box = "$haxeon_enum_tag_box_" + nextBox++ while (occupied.exists(box));
-				occupied.set(box, true);
-			}
-			if (unbox == null) {
-				do unbox = "$haxeon_enum_tag_unbox_" + nextUnbox++ while (occupied.exists(unbox));
-				occupied.set(unbox, true);
-			}
+			if (box == null)
+				box = free(occupied, "$enum-tag-box:" + name);
+			if (unbox == null)
+				unbox = free(occupied, "$enum-tag-unbox:" + name);
 			result.set(name, {box: box, unbox: unbox});
 		}
 		return result;
+	}
+
+	/**
+	 * `base`, the adapter's name by its enum, unless a function has it; then the first free `base_N`. Named by the enum, not by its
+	 * place among the eligible ones, so one enum more renames no other adapter, and the code of their callers stays the same.
+	 */
+	static function free(occupied:Map<String, Bool>, base:String):String {
+		var name = base, suffix = 0;
+		while (occupied.exists(name))
+			name = base + "_" + suffix++;
+		occupied.set(name, true);
+		return name;
 	}
 
 	/** Request the checked boundary when a later helper introduces a tag escape. */
