@@ -1,0 +1,88 @@
+/* The entry point of an app's runner (docs/design/PROJECT_BUILDS.md): the HashLink VM started on the app's module, which sits
+ * beside the executable under its name (`hello-app` runs `hello-app.hl`). `--haxeon-module=PATH` as the first argument runs
+ * PATH instead: `haxeon run --watch` runs the module it rebuilds so, and `--live` the live host, which takes the app's module
+ * as an argument, in the app's own executable. Every other argument is the program's (Sys.args()).
+ *
+ * The runner's main.c (the SDK's haxeon_app.c) only calls haxeon_app_main, so an app's executable compiles nothing of
+ * HashLink's: the VM, its entry point and this file are libhaxeon-app, built by Haxeon's native build with HashLink's flags. */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MODULE_OPTION "--haxeon-module="
+
+#ifdef _WIN32
+#	include <windows.h>
+#	include <wchar.h>
+
+int hl_vm_main( int argc, wchar_t *argv[] );
+
+int haxeon_app_main( int argc, wchar_t *argv[] ) {
+	DWORD capacity = 32768, length;
+	wchar_t *path = (wchar_t*)malloc(sizeof(wchar_t) * (capacity + 4)), *dot, *slash;
+	wchar_t **arguments = (wchar_t**)malloc(sizeof(wchar_t*) * ((size_t)argc + 2));
+	int count = 0, first = 1;
+	if( path == NULL || arguments == NULL ) return 70;
+	length = GetModuleFileNameW(NULL,path,capacity);
+	if( length == 0 || length >= capacity ) { fprintf(stderr,"haxeon app: cannot find its own executable\n"); return 70; }
+	/* app.exe runs app.hl */
+	dot = wcsrchr(path,L'.');
+	slash = wcsrchr(path,L'\\');
+	if( dot != NULL && (slash == NULL || dot > slash) ) *dot = 0;
+	wcscat(path,L".hl");
+	arguments[count++] = argv[0];
+	if( argc > 1 && wcsncmp(argv[1],L"" MODULE_OPTION,wcslen(L"" MODULE_OPTION)) == 0 ) {
+		arguments[count++] = argv[1] + wcslen(L"" MODULE_OPTION);
+		first = 2;
+	} else
+		arguments[count++] = path;
+	for( int i = first; i < argc; i++ ) arguments[count++] = argv[i];
+	arguments[count] = NULL;
+	return hl_vm_main(count,arguments);
+}
+#else
+#	include <limits.h>
+#	include <unistd.h>
+#	ifdef __APPLE__
+#		include <mach-o/dyld.h>
+#	endif
+
+int hl_vm_main( int argc, char *argv[] );
+
+/* The absolute path of this executable, or NULL. */
+static char *executable_path( void ) {
+	char *path = (char*)malloc(PATH_MAX + 4);
+	if( path == NULL ) return NULL;
+#	ifdef __APPLE__
+	uint32_t size = PATH_MAX;
+	if( _NSGetExecutablePath(path,&size) != 0 ) { free(path); return NULL; }
+	char *resolved = realpath(path,NULL);
+	free(path);
+	if( resolved == NULL ) return NULL;
+	path = (char*)realloc(resolved,strlen(resolved) + 4);
+	return path;
+#	else
+	ssize_t length = readlink("/proc/self/exe",path,PATH_MAX);
+	if( length <= 0 || length >= PATH_MAX ) { free(path); return NULL; }
+	path[length] = 0;
+	return path;
+#	endif
+}
+
+int haxeon_app_main( int argc, char *argv[] ) {
+	char *path = executable_path();
+	char **arguments = (char**)malloc(sizeof(char*) * ((size_t)argc + 2));
+	int count = 0, first = 1;
+	if( path == NULL || arguments == NULL ) { fprintf(stderr,"haxeon app: cannot find its own executable\n"); return 70; }
+	strcat(path,".hl");
+	arguments[count++] = argv[0];
+	if( argc > 1 && strncmp(argv[1],MODULE_OPTION,strlen(MODULE_OPTION)) == 0 ) {
+		arguments[count++] = argv[1] + strlen(MODULE_OPTION);
+		first = 2;
+	} else
+		arguments[count++] = path;
+	for( int i = first; i < argc; i++ ) arguments[count++] = argv[i];
+	arguments[count] = NULL;
+	return hl_vm_main(count,arguments);
+}
+#endif

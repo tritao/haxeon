@@ -18,9 +18,12 @@ import haxeon.ui.widgets.text.Text;
 /** The window's content. Change `view` while `haxeon run --watch --live` runs: the window updates and keeps the count. */
 class App implements DesktopUiApplication {
 	final ui:UiContext;
+	final host:DesktopUiHostContext;
 
-	public function new(host:DesktopUiHostContext)
+	public function new(host:DesktopUiHostContext) {
+		this.host = host;
 		ui = new UiContext(null, host.fonts);
+	}
 
 	function view():View {
 		var style = new LayoutStyle();
@@ -42,6 +45,14 @@ class App implements DesktopUiApplication {
 
 	public function diagnosticState():Dynamic
 		return {count: Main.count.value};
+
+	/** Before a patch that removes code: let go of the UI built from the old code, its handlers among them. */
+	public function release():Void
+		ui.releaseRetained();
+
+	/** After every patch: draw a frame, which builds the UI from the patched code. */
+	public function rebuild():Void
+		host.requestFrame();
 }
 
 class Main {
@@ -49,6 +60,7 @@ class Main {
 	public static final count = new Signal(0);
 
 	static var session:Null<DesktopUiHostSession> = null;
+	static var app:Null<App> = null;
 
 	static function options():DesktopUiHostOptions {
 		var options = new DesktopUiHostOptions();
@@ -58,14 +70,20 @@ class Main {
 		return options.withArguments(Sys.args());
 	}
 
+	static function create(host:DesktopUiHostContext):App {
+		var created = new App(host);
+		app = created;
+		return created;
+	}
+
 	/** `haxeon run`: open the window and run until it closes. */
 	static function main():Int
-		return DesktopUiHost.run(options(), host -> new App(host));
+		return DesktopUiHost.run(options(), create);
 
 	// `haxeon run --watch --live` keeps one process and calls these instead of `main`, so edits apply to the running app.
 
 	public static function start(arguments:String):Void
-		session = DesktopUiHost.open(options(), host -> new App(host));
+		session = DesktopUiHost.open(options(), create);
 
 	public static function tick():Int
 		return session != null && session.tick() ? 1 : 0;
@@ -78,4 +96,12 @@ class Main {
 
 	public static function restoreState(state:String):Void
 		count.value = Std.parseInt(state) ?? 0;
+
+	public static function liveRelease():Void
+		if (app != null)
+			app.release();
+
+	public static function liveRebuild():Void
+		if (app != null)
+			app.rebuild();
 }

@@ -44,7 +44,10 @@ class ProjectCreator {
 		var existing = FileSystem.exists(target) ? PackageManifest.find(target) : null;
 		if (existing != null && options.platforms != null)
 			throw new UsageError('Adding platforms to an existing project is not supported yet; edit [app].platforms in $existing');
-		var platforms = options.platforms == null ? [hostPlatform()] : options.platforms,
+		// An existing app keeps its platforms; a new one takes --platforms, or this machine's.
+		var existingApp = existing == null ? null : PackageManifest.parse(existing, File.getContent(existing)).app,
+			platforms = existingApp != null ? existingApp.platforms : options.platforms == null
+				? [hostPlatform()] : options.platforms,
 			values = [
 				"package" => packageName,
 				"name" => displayName(packageName),
@@ -53,7 +56,7 @@ class ProjectCreator {
 				"haxeon" => Path.normalize(FileSystem.absolutePath(home))
 			];
 		var created:Array<String> = [], kept:Array<String> = [];
-		copy(templateDirectory, target, "", values, created, kept);
+		copy(templateDirectory, target, "", values, created, kept, platforms);
 		var shown = options.directory == "." ? "this directory" : options.directory;
 		if (created.length == 0) {
 			Sys.println('Nothing to add: $shown already has every file of the ${options.template} template');
@@ -125,8 +128,7 @@ class ProjectCreator {
 
 	/** Copies the template's files that `target` lacks, replacing placeholders; a file `target` has is kept as it is. */
 	static function copy(source:String, target:String, relative:String, values:Map<String, String>,
-			created:Array<String>,
-			kept:Array<String>):Void {
+			created:Array<String>, kept:Array<String>, platforms:Array<String>):Void {
 		var names = FileSystem.readDirectory(source);
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -136,7 +138,10 @@ class ProjectCreator {
 				to = Path.join([target, targetName]),
 				shown = relative == "" ? targetName : relative + "/" + targetName;
 			if (FileSystem.isDirectory(from)) {
-				copy(from, to, shown, values, created, kept);
+				// A runner directory is copied for the app's platforms only.
+				if (relative == "" && AppManifest.PLATFORMS.indexOf(name) >= 0 && platforms.indexOf(name) < 0)
+					continue;
+				copy(from, to, shown, values, created, kept, platforms);
 				continue;
 			}
 			if (FileSystem.exists(to)) {

@@ -80,6 +80,13 @@ platforms (by default this machine's) and `--org` the prefix of its identifier (
 template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
 before; `create . --template program` replaces it.
 
+An app builds through its runner project ([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)): on Linux, `haxeon build`
+compiles the module, writes `build/generated/linux/haxeon.cmake` and builds `linux/` with CMake into `build/linux/app/`,
+where the executable (named after the package), its module and its native packages' libraries sit together; `haxeon run`
+runs that executable, and `--watch`/`--live` run the module they rebuild in it. `cmake -S linux -B DIR && cmake --build DIR`
+builds the same app once a build has written the fragment. Building for a platform the app does not list, or without its
+runner, is a usage error that names `haxeon create .`.
+
 An app's window takes the host's standard flags after `--`, so a test or a script can run any app without code of its
 own: `--frames=N` stops after N frames, `--capture=DIR` writes the last frame and diagnostics to DIR,
 `--capture-seconds=S` captures after S seconds instead, and `--input-script=PATH` plays timed input

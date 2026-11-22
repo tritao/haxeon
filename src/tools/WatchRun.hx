@@ -33,7 +33,7 @@ class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
 			liveHost:Null<String>, entry:String,
 			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, verbosity:Verbosity,
-			?session:build.BuildSession):Int {
+			?session:build.BuildSession, runner:Bool = false):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw new InternalError("haxeon run --watch currently requires Linux, macOS or Windows");
 		// Each edit's result goes to the events file too, and the app (and a live host) learns its path from the environment.
@@ -45,7 +45,7 @@ class WatchRun {
 			baseline = snapshot(project),
 			logPath = output + ".watch.log",
 			profile = startProfile(profiling),
-			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile),
+			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile, runner),
 			logOffset = 0,
 			result = 0;
 		var watcher = openWatcher(project, baseline);
@@ -152,7 +152,7 @@ class WatchRun {
 				finishProfile(profile);
 				profile = startProfile(profiling);
 				WatchEvents.emit(events, "reload", build, null, null, null, null, "restarting the app");
-				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
+				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile, runner);
 				logOffset = 0;
 			}
 		} catch (error:haxe.Exception) {
@@ -291,11 +291,18 @@ class WatchRun {
 
 	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String,
 			liveHost:Null<String>, entry:String,
-			profile:Null<ProfileCapture>):Process {
+			profile:Null<ProfileCapture>, runner:Bool):Process {
 		var runtimeOptions = profile == null ? [] : profile.runtimeArguments();
-		var commandArguments = [runtime].concat(runtimeOptions)
-			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry,
-			Json.stringify(arguments)]);
+		var program = liveHost == null ? [output].concat(arguments) : [
+			liveHost,
+			output,
+			entry,
+			Json.stringify(arguments)
+		];
+		// An app's runner (docs/design/PROJECT_BUILDS.md) runs the module it is given by its option, the rest as its arguments.
+		if (runner)
+			program = ["--haxeon-module=" + program[0]].concat(program.slice(1));
+		var commandArguments = [runtime].concat(runtimeOptions).concat(program);
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
 		// macOS strips DYLD_* from what the protected /bin/sh inherits, so the app would not find its native
 		// libraries. Set the search path again inside the shell.

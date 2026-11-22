@@ -1,6 +1,9 @@
 # Project builds: runner projects and one native graph per app
 
-Status: agreed direction (2026-11-22); nothing built yet. How an app is built for each platform: by platform projects the
+Status: step 1 is built for Linux: `haxeon create` writes `linux/`, `haxeon build` generates the fragment and builds the runner
+with every native package in one graph, and `haxeon run` (with `--watch` and `--live`) runs the app's executable. The SDK the
+runner links is the native build's `hlc-sdk` directory for now (`lib/libhaxeon-app.a`, `src/haxeon_app.c`,
+`cmake/HaxeonApp.cmake`); release archives do not ship it yet. Steps 2 to 6 are open. How an app is built for each platform: by platform projects the
 app owns, which `haxeon` generates once and then drives, as Flutter does, instead of builds Haxeon runs out of sight.
 
 ## Problem

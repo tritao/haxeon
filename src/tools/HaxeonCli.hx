@@ -967,6 +967,13 @@ class HaxeonCli {
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
 		if (hostBuild) {
+			// An app builds through its runner project (docs/design/PROJECT_BUILDS.md); a script or another program as before.
+			var app = program == null ? project.manifest.app : null;
+			if (app != null && options.profile)
+				throw new UsageError("Profiling an app through its runner is not supported yet");
+			if (app != null && !options.plan && !options.compilerOnly)
+				AppRunner.runnerDirectory(project, app, AppRunner.hostPlatform());
+			var appScope = app != null && !options.compilerOnly ? BuildScope.Module : scope(options);
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
 			var output = options.output == null
 				? Path.join([buildDirectory, "host", "main.hl"]) : resolvePath(options.output, project.root);
@@ -982,11 +989,13 @@ class HaxeonCli {
 			var started = announceBuild(options, project, "host", options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, scope(options), options.live, instrument, session,
+				resolutionMs, options.selfHosted, appScope, options.live, instrument, session,
 				options.buildMode == "development", null, null, options.style) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
+			if (app != null && buildStatus == 0 && !options.plan && !options.compilerOnly)
+				buildStatus = AppRunner.build(project, home, AppRunner.hostPlatform(), output, options.quiet);
 			var publishTo = program == null ? null : program.publishTo;
 			if (buildStatus == 0 && publishTo != null && !options.plan) {
 				ensureDirectory(Path.directory(publishTo));
@@ -999,7 +1008,10 @@ class HaxeonCli {
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
 			if (options.live && session != null)
 				session.warmLiveCompiler();
-			var hashlink = Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]);
+			// An app runs as its runner's executable, which finds its native libraries beside itself.
+			var runner = app == null ? null : AppRunner.executable(project, AppRunner.hostPlatform());
+			var hashlink = runner != null
+				? runner : Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]);
 			if (!FileSystem.exists(hashlink))
 				throw new InternalError('HashLink is missing: $hashlink (run scripts/build-native.sh)');
 			var nativeDirectories = [
@@ -1071,7 +1083,8 @@ class HaxeonCli {
 							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines,
 								options.jobs, false, false, false, 0.0,
-								options.selfHosted, change.compilerOnly ? CompilerOnly : Full, options.live,
+								options.selfHosted, change.compilerOnly ? CompilerOnly : app != null
+								? BuildScope.Module : Full, options.live,
 								instrument, session,
 								options.buildMode == "development", null, null, options.style);
 							if (windows)
@@ -1085,7 +1098,7 @@ class HaxeonCli {
 							OutputCapture.record("haxeon: " + Std.string(error) + "\n");
 							return null;
 						}
-					}, options.verbosity, session);
+					}, options.verbosity, session, runner != null);
 			}
 			if (options.profile) {
 				var capture = options.profileOutput == null ? ProfileCapture.nextCapture(Path.join([
@@ -1097,9 +1110,9 @@ class HaxeonCli {
 					project.manifest.entry, options.profileSources);
 			}
 			if (!options.quiet && options.verbosity.atLeast(Verbosity.Normal))
-				Sys.println('Launching $output');
+				Sys.println('Launching ${runner != null ? runner : output}');
 			// A script runs where it was invoked; a project in its root.
-			var status = ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments),
+			var status = ProcessRunner.run(hashlink, (runner != null ? [] : [output]).concat(options.runtimeArguments),
 				scriptRun ? invokedFrom : project.root, launchEnvironment());
 			return command == Test ? testStatus(options, status) : status;
 		}

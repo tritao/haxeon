@@ -196,6 +196,26 @@ else()
   set_target_properties(hlvm PROPERTIES OUTPUT_NAME hl)
 endif()
 
+# The VM of an app's runner (docs/design/PROJECT_BUILDS.md, the SDK's lib/libhaxeon-app): hlvm with HashLink's entry point
+# (hl_vm_main) and the app entry point that starts it on the module beside the executable (native/app/haxeon_app_main.c).
+# The runner compiles only a two-line main (native/app/haxeon_app.c), so these are compiled here with hl's own flags.
+add_library(haxeon_app_entry OBJECT native/haxeon_vm_main.c native/app/haxeon_app_main.c)
+target_include_directories(haxeon_app_entry PRIVATE vendor/hashlink/src)
+set_target_properties(haxeon_app_entry PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+foreach(_property IN ITEMS COMPILE_DEFINITIONS COMPILE_OPTIONS)
+  get_target_property(_value hl ${_property})
+  if(_value)
+    set_property(TARGET haxeon_app_entry APPEND PROPERTY ${_property} "${_value}")
+  endif()
+endforeach()
+add_library(haxeon_app STATIC
+  "$<FILTER:$<TARGET_OBJECTS:hl>,EXCLUDE,/src/main\\.c\\.(o|obj)$>"
+  $<TARGET_OBJECTS:libhl>
+  $<TARGET_OBJECTS:haxeon_runtime_objects>
+  $<TARGET_OBJECTS:haxeon_app_entry>
+)
+set_target_properties(haxeon_app PROPERTIES OUTPUT_NAME haxeon-app)
+
 # The VM library of executables compiled ahead of time (the hlc SDK's libhl.a): hlvm with no JIT. Its objects are hlvm's
 # but for the JIT's, whose entry points jit_none.c gives as a VM without the JIT (hl_module_init_aot only).
 include(vendor/hashlink/cmake/hl-sources.cmake)
@@ -249,14 +269,18 @@ set(_hlc_sdk_headers
 list(TRANSFORM _hlc_sdk_headers PREPEND "${CMAKE_SOURCE_DIR}/")
 add_custom_target(haxeon-hlc-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_HLC_SDK_DIR}/include" "${HAXEON_HLC_SDK_DIR}/lib"
-    "${HAXEON_HLC_SDK_DIR}/src"
+    "${HAXEON_HLC_SDK_DIR}/src" "${HAXEON_HLC_SDK_DIR}/cmake"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${_hlc_sdk_headers} "${HAXEON_HLC_SDK_DIR}/include"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
     "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${HAXEON_HLC_SDK_DIR}/src"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm_aot>" "${HAXEON_HLC_SDK_DIR}/lib/libhl${CMAKE_STATIC_LIBRARY_SUFFIX}"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_pinned_libffi>"
     "${HAXEON_HLC_SDK_DIR}/lib/libffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  DEPENDS hlvm_aot "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c"
+  # An app's runner: the VM with the app entry point, the runner's main and haxeon_add_app.
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_app>" "${HAXEON_HLC_SDK_DIR}/lib"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/app/haxeon_app.c" "${HAXEON_HLC_SDK_DIR}/src"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonApp.cmake" "${HAXEON_HLC_SDK_DIR}/cmake"
+  DEPENDS hlvm_aot haxeon_app "${CMAKE_SOURCE_DIR}/native/app/haxeon_app.c" "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonApp.cmake" "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c"
     "${CMAKE_SOURCE_DIR}/native/aot/hlc_prelude.h"
   COMMENT "Assembling the hlc SDK"
   VERBATIM

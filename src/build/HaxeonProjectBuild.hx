@@ -92,7 +92,7 @@ class HaxeonProjectBuild {
 			case Full:
 			case CompilerOnly:
 				execution = compilerExecution(execution);
-			case Check:
+			case Check | Module:
 				execution = checkExecution(execution);
 		}
 		timings.addElapsed("plan and lower", lowerStarted);

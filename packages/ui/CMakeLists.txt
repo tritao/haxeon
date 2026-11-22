@@ -12,7 +12,9 @@ if(NOT NKUI_NATIVEKIT_DIR)
         "Path to the NativeKit source checkout" FORCE)
 endif()
 
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+# NativeKit comes from whoever builds UIKit: a graph that already has its targets (an app's runner adds the nativekit package
+# first) keeps them; otherwise UIKit adds NativeKit itself, top level or not.
+if(NOT TARGET NativeKit::nativekit)
     set(NK_BUILD_GPU ON CACHE BOOL "Build NativeKit GPU for UIKit" FORCE)
     add_subdirectory("${NKUI_NATIVEKIT_DIR}" "${CMAKE_BINARY_DIR}/nativekit")
 endif()
