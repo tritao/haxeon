@@ -157,7 +157,7 @@ class HaxeArguments {
 			result:Array<Array<Located>> = [],
 			files = 0;
 		while (pending.length > 0) {
-			var argument = pending.shift(), flag = longName(argument.value);
+			var argument:Located = pending.shift(), flag = longName(argument.value);
 			if (flag == "--next") {
 				if (accumulated.length > 0)
 					result.push(located(each.concat(accumulated), current));
@@ -168,7 +168,7 @@ class HaxeArguments {
 			} else if (flag == "--cwd") {
 				if (pending.length == 0)
 					throw new UsageError('Haxe option "${argument.value}" requires a directory');
-				var target = resolve(current, pending.shift().value);
+				var directoryArgument:Located = pending.shift(), target = resolve(current, directoryArgument.value);
 				if (!FileSystem.exists(target) || !FileSystem.isDirectory(target))
 					throw new UsageError('Invalid directory: $target');
 				current = target;
@@ -233,8 +233,8 @@ class HaxeArguments {
 				case "--define":
 					defines.push(value);
 				case "--library":
-					var colon = value.indexOf(":");
-					if (colon > 0 && colon < value.length - 1)
+					var library:String = value, colon = library.indexOf(":");
+					if (colon > 0 && colon < library.length - 1)
 						libraries.push({name: value.substr(0, colon), version: value.substr(colon + 1)});
 					else
 						unsupported.push('${argument.value} $value: give the version (-lib $value:VERSION), or declare the dependency in haxeon.json; Haxeon does not read haxelib\'s global repository');
