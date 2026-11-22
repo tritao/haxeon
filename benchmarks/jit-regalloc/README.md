@@ -5,14 +5,15 @@ These programs are opt-in and are not registered in the normal test suite.
 call, a rare returning call, seven live integer accumulators across a call,
 nested loops using an outer value, and a two-way loop-carried update.
 
-Build the stock-Haxe seed compiler, then run paired measurements:
+Run paired measurements:
 
 ```sh
-export LD_LIBRARY_PATH=$PWD/out:$(scripts/hashlink-path.sh)
-mkdir -p out/regalloc
-.tools/haxe/haxe --cwd . common.hxml -hl out/regalloc/compiler.hl -main compiler.tools.HaxeonCompiler
 python3 benchmarks/jit-regalloc/run.py --modes 0,4
 ```
+
+The micros are compiled with the compiler `scripts/haxeon dev tool-path compiler.tools.HaxeonCompiler` gives (stock Haxe builds
+it from this checkout); `--compiler` or `HAXEON_COMPILER_HL` names another compiler bytecode. `bootstrap/compiler.hl` only
+compiles the stdlib of its own revision, so it fails on a checkout whose stdlib has moved on.
 
 The runner disables Haxeon's inliner when compiling the micros, checks all small
 results against stock Haxe Eval, pins CPU 0, waits for load <= 4, and runs nine

@@ -21,7 +21,8 @@ def run(command, env):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--compiler', default=os.environ.get('HAXEON_COMPILER_HL', 'out/regalloc/compiler.hl'))
+    parser.add_argument('--compiler', default=os.environ.get('HAXEON_COMPILER_HL'),
+                        help='compiler bytecode (default: the stock-Haxe-built tool compiler of this checkout)')
     parser.add_argument('--work', default='out/regalloc/micro-results')
     parser.add_argument('--iterations', type=int, default=300000000)
     parser.add_argument('--pairs', type=int, default=9)
@@ -33,6 +34,10 @@ def main():
     modes = [int(value, 0) for value in args.modes.split(',')]
     if len(modes) != 2 or args.pairs < 1:
         parser.error('provide two masks and at least one pair')
+    if args.compiler is None:
+        args.compiler = subprocess.check_output(
+            [str(ROOT / 'scripts/haxeon'), 'dev', 'tool-path', 'compiler.tools.HaxeonCompiler'],
+            cwd=ROOT, text=True).strip().splitlines()[-1]
     work = (ROOT / args.work).resolve()
     work.mkdir(parents=True, exist_ok=True)
     vm_dir = subprocess.check_output([str(ROOT / 'scripts/hashlink-path.sh')], text=True).strip()
