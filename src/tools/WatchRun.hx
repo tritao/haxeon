@@ -261,8 +261,10 @@ class WatchRun {
 	}
 
 	/**
-		taskkill /F returns before the old app has closed its handles. While it still holds the
-		log, the new cmd.exe redirection fails and the relaunch exits at once.
+		Empties the app's log before the next app starts. The shell's redirection truncates it too, but only once the new
+		process runs: a read of the log before then would take the previous app's output for the new one's and skip as
+		much of the new output. On Windows it also waits out the old app: taskkill /F returns before it has closed its
+		handles, and while it still holds the log the new cmd.exe redirection fails and the relaunch exits at once.
 	**/
 	static function releaseLog(path:String):Void {
 		var deadline = Sys.time() + 10.0;
@@ -293,8 +295,7 @@ class WatchRun {
 			command = "export DYLD_LIBRARY_PATH=" + quote(dyldPath) + "; " + command;
 		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
 		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
-		if (Sys.systemName() == "Windows")
-			releaseLog(logPath);
+		releaseLog(logPath);
 		var previous = Sys.getCwd();
 		try {
 			Sys.setCwd(cwd);
