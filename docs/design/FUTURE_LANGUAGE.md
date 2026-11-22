@@ -250,7 +250,7 @@ Rules that keep attributes declarative:
 
 Why `@`: Java, Kotlin, Swift, TypeScript, Python and Dart use it, Haxe already does, and migration is `@:x` to `@x`.
 C#'s `[Name]` and C++'s `[[name]]` clash with array literals and comprehensions, which can start a statement in an
-expression-oriented grammar (`[for (x in xs) f(x)]`). Rust's `#[name]` would blur `#`, which marks what the compiler
+expression-oriented grammar (`[for x in xs { f(x) }]`). Rust's `#[name]` would blur `#`, which marks what the compiler
 decides (change 16).
 
 ### 2. Accessors inline with the property
@@ -343,7 +343,7 @@ matches enums with payloads, nested patterns, alternatives (`case A | B:`) and g
   `Result`, and needs no new keyword:
 
   ```haxe
-  if (let Some(user) = lookup(id)) { ... }
+  if let Some(user) = lookup(id) { ... }
   let Ok(config) = load(path) else return Err(...);
   ```
 
@@ -387,7 +387,7 @@ the three without parentheses (`a | b & c`, which Haxe evaluates left to right) 
 
 ### 14. Tuples and destructuring
 
-With value tuples (change 5): `let (min, max) = bounds(xs);`, `for ((key, value) in map)`, and functions that return
+With value tuples (change 5): `let (min, max) = bounds(xs);`, `for (key, value) in map { ... }`, and functions that return
 `(Int, String)`.
 
 ### 15. Trailing closures
@@ -417,13 +417,41 @@ function fromHost(s:JsString):String { ... }
   options, and an unknown or misspelled condition is an error.
 - **Checking.** The active branch is type-checked and inactive branches only parsed; parity builds on each target check
   the rest. Checking inactive branches against every target's declarations is a possible later step.
-- **Constant expressions.** `#cfg(...)` is a compile-time `Bool`: in `if (#cfg(target.hasThreads)) ... else ...` both
+- **Constant expressions.** `#cfg(...)` is a compile-time `Bool`: in `if #cfg(target.hasThreads) { ... } else { ... }` both
   branches are type-checked and the inactive one is folded away. Prefer it when both paths compile everywhere.
 
 `#` marks what the compiler decides (later also `#file`, `#line`), and `@` stays for attributes that describe a
 declaration (change 1). A `@cfg` attribute, as in Rust, was considered: it gives the same guarantees, but it puts "does
 not exist on this target" in the same form as "is pure", and it must be repeated on each item where `#if` groups them.
 Most Haxe `#if` uses already wrap whole declarations or statements, so migration is mechanical.
+
+### 17. No parentheses around conditions; braces always
+
+`if`, `while`, `for`, `switch` and `catch` take their condition or header without parentheses, and their bodies always
+take braces, as in Swift, Rust and Go:
+
+```haxe
+if ready { start(); } else { wait(); }
+while queue.notEmpty { process(queue.pop()); }
+for item in items { render(item); }
+switch phase { case Idle: ...; case Running(let p): ... }
+if let Some(user) = lookup(id) { greet(user); }
+try { load(); } catch e:IoError { report(e); }
+```
+
+- **Why.** Mandatory braces remove dangling `else` and the indented-but-unguarded statement ("goto fail"). With braces
+  required, parentheses around the condition carry nothing, and headers such as `for item in items` and
+  `if let Some(x) = e` read better without them.
+- **Short conditional expressions get longer.** `if (a) 1 else 2` becomes `if a { 1 } else { 2 }`. This matters because
+  dropping the ternary is preferred (see the clashes below), leaving `if` as the only conditional expression; Rust
+  accepts the same cost.
+- **No trailing closures in condition position.** In `if items.any { it > 0 } { ... }` the parser cannot tell which
+  brace opens the body. As in Swift (trailing closures) and Rust (struct literals), a trailing closure there is an
+  error: pass the closure in parentheses or parenthesize the call.
+- **One-line early exits get longer.** `if (x == null) return;` becomes `if x == null { return; }`; `let ... else` and
+  `T?` narrowing cover most of them.
+- **Unchanged.** Calls, declarations, lambdas, casts and grouping parentheses in expressions.
+- **Migration.** Mechanical: remove the parentheses and add braces where missing.
 
 ### Smaller changes
 
@@ -436,7 +464,7 @@ Most Haxe `#if` uses already wrap whole declarations or statements, so migration
 - **Constraints with `&`.** `T:Hashable & Diffable` in place of `T:(Hashable, Diffable)`.
 - **No call-site `inline f()`.** Inlining is the optimizer's decision, or a declaration attribute.
 
-Kept as they are: array and map comprehensions (`[for (x in xs) f(x)]`), a required `override`, no C-style `for (;;)`,
+Kept as they are: array and map comprehensions (written `[for x in xs { f(x) }]` under change 17), a required `override`, no C-style `for (;;)`,
 and `??=`, `?.` and `??`.
 
 ### Clashes to resolve
