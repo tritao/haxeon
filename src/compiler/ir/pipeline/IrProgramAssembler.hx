@@ -614,7 +614,7 @@ class IrProgramAssembler {
 			?inlineCache:IrInlineCache,
 			?valueTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget,
 			?exportedFunctions:Array<String>,
-			pruneFromEntry = false,
+			walkFromEntry = false, pruneFromEntry = false,
 			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions,
 			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos,
 			?generatedVersion:String->Int):IrProgram {
@@ -646,6 +646,7 @@ class IrProgramAssembler {
 		context.inlineCache = inlineCache;
 		context.exportedFunctions = exportedFunctions;
 		context.canonicalObjects = canonicalObjects;
+		context.walkFromEntry = walkFromEntry || pruneFromEntry;
 		context.pruneFromEntry = pruneFromEntry;
 		// What a plain build's prune keeps (docs/design/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
 		// exported functions.

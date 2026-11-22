@@ -416,8 +416,8 @@ class IrProgram {
 	public var hostCNatives:Null<Map<String, IrCNative>> = null;
 
 	/**
-	 * Names of the natives that reached code calls, once the early prune ran (`IrEntryPrune`); null when it did not, and every declared native then
-	 * counts. A decision about what the program does at run time (does it reflect?) reads this, not the declared natives of every loaded module.
+	 * Names of the natives that reached code calls, from the walk from the entry (`IrEntryPrune`) of every build but a live HashLink one; null in
+	 * that one, where every declared native counts. A decision about what the program does at run time (does it reflect?) reads this, not the declared natives of every loaded module.
 	 */
 	public var reachedNatives:Null<Map<String, Bool>> = null;
 

@@ -235,8 +235,9 @@ class IrObjectReflection {
 	}
 
 	/**
-	 * Whether the program reflects over object layouts: a reflection native that reached code calls once the early prune ran (the declared natives
-	 * of every loaded module otherwise). A program that merely has `Reflect` loaded, because an unused module calls it, does not.
+	 * Whether the program reflects over object layouts: a reflection native that reached code calls, in every build but a live HashLink one (the
+	 * declared natives of every loaded module there, which walks nothing). A program that merely has `Reflect` loaded, as every
+	 * program with a stdlib does, does not.
 	 */
 	public static function usedByProgram(program:IrProgram):Bool {
 		var reached = program.reachedNatives;

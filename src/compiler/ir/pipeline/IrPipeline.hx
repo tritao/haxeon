@@ -71,7 +71,7 @@ class IrPipeline {
 		// Erased dispatch can reach a specialized body that the original callers do not name.
 		// Expose those targets before the walk filters typed enum/value conversions.
 		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects),
-		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(pruning),
+		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(walking),
 		new IrAssemblyStage("enum-dynamic-dispatch-input", enumDynamicDispatchInput).when(hasObjects),
 		IrFunctionStages.stage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects),
 		new IrAssemblyStage("reachability-report", reachabilityReport).when(reportsReachability),
@@ -132,6 +132,9 @@ class IrPipeline {
 	static inline final REFLECTION = "object-reflection and nullable-scalar-fields";
 
 	// Predicates.
+
+	static function walking(assembly:IrAssembly, context:IrPipelineContext):Bool
+		return context.walkFromEntry && assembly.objects != null;
 
 	static function pruning(assembly:IrAssembly, context:IrPipelineContext):Bool
 		return context.pruneFromEntry && assembly.objects != null;
@@ -224,16 +227,20 @@ class IrPipeline {
 	}
 
 	/**
-	 * A plain build decides the Dynamic dispatch of enums and structs from what is reached: an enum or struct that no reached code can
-	 * have, and a helper that only unreached code asked for, change nothing (the dispatches rewrite every `__dynamic_equal` site once
-	 * any type registers).
+	 * A build that is not live decides whether it reflects over object layouts from the natives reached code calls, so a module that
+	 * is loaded but unused (`Reflect`, which every program with a stdlib has) changes nothing. A pruned build also decides the Dynamic
+	 * dispatch of enums and structs from what is reached: an enum or struct that no reached code can have, and a helper that only
+	 * unreached code asked for, change nothing (the dispatches rewrite every `__dynamic_equal` site once any type registers). A build
+	 * that keeps what it does not reach (Wasm, whose builders emit only what they reach) rewrites every function.
 	 */
 	static function dispatchWalk(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
 		var walk = IrEntryPrune.walk(pruneInputOf(assembly, context, functions), context.pruneRoots,
 			pruneDependencies(assembly, functions), context.lineage);
 		assembly.dispatchWalk = walk;
-		assembly.unreached = [for (fn in functions) if (!walk.reached.exists(fn.name)) fn.name => true];
+		assembly.reachedNatives = walk.calledNatives;
+		if (context.pruneFromEntry)
+			assembly.unreached = [for (fn in functions) if (!walk.reached.exists(fn.name)) fn.name => true];
 		return assembly;
 	}
 
@@ -253,8 +260,9 @@ class IrPipeline {
 		reflectionInput.natives = natives == null ? [] : natives;
 		reflectionInput.cNatives = cNatives == null ? [] : cNatives;
 		// The reflection decisions of the enum dispatch read what reached code does, not what every loaded module declares.
+		reflectionInput.reachedNatives = assembly.reachedNatives;
 		var walk = assembly.dispatchWalk;
-		if (walk != null) {
+		if (walk != null && context.pruneFromEntry) {
 			reflectionInput.functions = [for (fn in assembly.functions) if (walk.reached.exists(fn.name)) fn];
 			reflectionInput.natives =
 				[for (native in reflectionInput.natives) if (walk.calledNatives.exists(native.name)) native];
@@ -281,7 +289,7 @@ class IrPipeline {
 	static function valueDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass {
 		var walk = assembly.dispatchWalk;
 		return new IrValueDynamicDispatch(assembly.objects, assembly.unreached,
-			walk == null ? null : walk.createdClasses);
+			walk == null || !context.pruneFromEntry ? null : walk.createdClasses);
 	}
 
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {

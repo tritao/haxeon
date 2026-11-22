@@ -178,7 +178,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		var program = reflectionProgram;
 		if (program != null) {
 			var roots:Array<IrType> = [];
-			if (IrObjectReflection.usesObjectLayouts(program.natives)) {
+			if (IrObjectReflection.usedByProgram(program)) {
 				var reflectable = reflectableObjects;
 				if (reflectable != null) for (name in reflectable) roots.push(Obj(name));
 				for (object in program.objects)

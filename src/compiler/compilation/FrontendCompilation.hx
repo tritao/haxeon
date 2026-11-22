@@ -1531,8 +1531,8 @@ class FrontendCompilation {
 				build.enums, build.staticFields,
 				build.initializers, entryPoint, irCNatives, build.reflectable,
 				context.state.inlineCache, context.valueArrayTarget(),
-				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget()
-				&& context.options.earlyPrune, [for (object in objects) {
+				context.exportedFunctions(), context.isWasmTarget() || !context.livePatching,
+				!context.livePatching && !context.isWasmTarget() && context.options.earlyPrune, [for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
 						var canonical = canonicalObjectCache.get(object.name);
 						if (canonical == null)
