@@ -373,6 +373,13 @@ class HlcFunctionLower {
 		return fromType == toType ? expression : '(($toType)$expression)';
 	}
 
+	/**
+	 * `value` as C text: a null constant is `NULL`, but for a payload-free enum in tag storage, whose null is the tag 0 its
+	 * constant defined (C allows no pointer for an `int`).
+	 */
+	function valueOrNull(value:IrValueId):String
+		return nullValues[value] && !isEnumTag(value) ? "NULL" : v(value);
+
 	/** Operand `index` of `row` as a C value of type `to`. */
 	function operandAs(row:Int, index:Int, to:Int):String {
 		var value = body.operand(row, index);
@@ -939,14 +946,14 @@ class HlcFunctionLower {
 		if (lowerRuntimeFastPath(row, name))
 			return;
 		var slot = module.requireSlot(name), arguments = operandsFrom(row, 0);
-		callSlot(row, slot, [for (value in arguments) nullValues[value] ? "NULL" : v(value)],
+		callSlot(row, slot, [for (value in arguments) valueOrNull(value)],
 			[for (value in arguments) typeOf(value)]);
 	}
 
 	/** The call of `row` through slot `slot`, as a C expression. */
 	function callOf(row:Int, slot:Int):String {
 		var arguments = operandsFrom(row, 0);
-		return callExpression(slot, [for (value in arguments) nullValues[value] ? "NULL" : v(value)],
+		return callExpression(slot, [for (value in arguments) valueOrNull(value)],
 			[for (value in arguments) typeOf(value)]);
 	}
 
@@ -1229,7 +1236,7 @@ class HlcFunctionLower {
 		line('${v(output)} = hl_alloc_enum(${typeAddress(type)},$constructor);');
 		for (index in 0...arguments.length) {
 			var value = arguments[index];
-			line('*(${types.cType(typeOf(value))}*)((char*)${v(output)} + ${enumOffset(type, constructor, index)}) = ${nullValues[value] ? "NULL" : v(value)};');
+			line('*(${types.cType(typeOf(value))}*)((char*)${v(output)} + ${enumOffset(type, constructor, index)}) = ${valueOrNull(value)};');
 		}
 	}
 
