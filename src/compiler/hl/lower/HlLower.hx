@@ -66,7 +66,13 @@ class HlLower {
 	var view:HlLoweringView;
 
 	/** The requests the function being lowered makes, when lowering records them. */
-	var requests:Null<Array<HlSymbolRequest>>;
+	var recordedKeys:Null<Array<Int>>;
+
+	/** The answers of `recordedKeys`, in step. */
+	var recordedAnswers:Array<Int> = [];
+
+	/** The numbers requests are recorded under (`HlRequestKeys`): the lowered cache's, or this lowering's own. */
+	final requestKeys:compiler.hl.incremental.HlRequestKeys;
 
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
@@ -233,6 +239,7 @@ class HlLower {
 		this.loweredCache = loweredCache;
 		this.checkingTrust = trustCache && checkReuse;
 		this.recordLowering = !trustCache && (recordLowering || checkingLinks || loweredCache != null);
+		this.requestKeys = loweredCache != null ? loweredCache.keys : new compiler.hl.incremental.HlRequestKeys();
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
 		this.trustCache = trustCache;
@@ -255,7 +262,10 @@ class HlLower {
 
 	function lowerProgram(program:IrProgram):HlCode {
 		typedInterfaces = new HlTypedInterfaceTables(program);
-		view = new HlLoweringView(typedInterfaces.keys);
+		var facts = loweredCache == null ? null : loweredCache.facts;
+		if (facts != null)
+			facts.checkObjects = checkingLinks;
+		view = new HlLoweringView(typedInterfaces.keys, null, facts);
 		var runtimeNatives = preparedRuntimeNatives == null
 			? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
@@ -500,6 +510,7 @@ class HlLower {
 		PeakProbe.mark("lower-metadata-done");
 		var allocationAfterMetadata = AllocationMeter.sample();
 		var environment = checkingLinks ? symbols.copy() : null;
+		var answers = new compiler.hl.incremental.HlRequestAnswers(requestKeys, symbols, functionIndices);
 		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 		for (fn in program.functions) {
 			var kept = trustCache && !regenerated.exists(fn.name)
@@ -512,11 +523,11 @@ class HlLower {
 				entries.set(fn.name, kept);
 			} else {
 				// A function whose IR is the one the last build lowered, and whose outside facts still hold, keeps its code: linking
-				// it replays its requests, which gives it this build's indices and makes the tables as lowering it would have.
+				// it asks its requests again, which gives it this build's indices and makes the tables as lowering it would have.
 				var entry = loweredCache == null || trustCache ? null : loweredCache.entries.get(fn.name);
 				if (entry != null
 					&& (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
-					var linked = compiler.hl.incremental.HlLink.link(entry, symbols, functionIndices, view);
+					var linked = compiler.hl.incremental.HlLink.link(entry, answers, functionIndices, view);
 					if (linked.fn != null) {
 						code.functions.push(linked.fn);
 						// A function whose indices moved is kept with this build's, so the cache holds the module's code rather than a
@@ -534,21 +545,22 @@ class HlLower {
 				}
 				try {
 					if (recordLowering) {
-						requests = [];
+						recordedKeys = [];
+						recordedAnswers = [];
+						requestKeys.startFunction();
 						view.beginFunction();
 					}
 					var lowered = lowerFunction(loweringBody(fn));
 					code.functions.push(lowered);
 					if (trustCache) {
 						entries.set(fn.name,
-							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], []));
-						requests = null;
+							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []));
 					} else if (recordLowering) {
-						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, requests,
-							view.endFunction());
+						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, recordedKeys,
+							recordedAnswers, view.endFunction());
 						this.lowered.set(fn.name, entry);
 						entries.set(fn.name, entry);
-						requests = null;
+						recordedKeys = null;
 					}
 				} catch (error:InternalError) {
 					throw new InternalError('HashLink lowering failed for ${fn.name}: ${error.message}', error.span);
@@ -638,11 +650,12 @@ class HlLower {
 	 * they stood before the functions, must give back the very tables lowering made, and every function must keep its indices.
 	 */
 	function verifyLinking(program:IrProgram, environment:HlSymbolTable):Void {
+		var replayed = new compiler.hl.incremental.HlRequestAnswers(requestKeys, environment, functionIndices);
 		for (fn in program.functions) {
 			var lowered = this.lowered.get(fn.name);
 			if (lowered == null)
 				throw new InternalError('--check-reuse: no lowering was recorded for ${fn.name}');
-			var linked = compiler.hl.incremental.HlLink.link(lowered, environment, functionIndices, view);
+			var linked = compiler.hl.incremental.HlLink.link(lowered, replayed, functionIndices, view);
 			if (linked.fn == null)
 				throw new InternalError('--check-reuse: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}');
 			if (linked.fn != lowered.fn)
@@ -2922,29 +2935,29 @@ class HlLower {
 	// the function being lowered is recorded: those requests are what lets another build give the function other indices.
 	function internInt(value:Int):Int {
 		var index = symbols.internInt(value);
-		if (requests != null)
-			requests.push(ConstInt(value, index));
+		if (recordedKeys != null)
+			record(ConstInt(value, index));
 		return index;
 	}
 
 	function internFloat(value:Float):Int {
 		var index = symbols.internFloat(value);
-		if (requests != null)
-			requests.push(ConstFloat(value, index));
+		if (recordedKeys != null)
+			record(ConstFloat(value, index));
 		return index;
 	}
 
 	function internString(value:String):Int {
 		var index = symbols.internString(value);
-		if (requests != null)
-			requests.push(ConstString(value, index));
+		if (recordedKeys != null)
+			record(ConstString(value, index));
 		return index;
 	}
 
 	function internType(type:IrType):Int {
 		var index = HlRemap.typeIndex(symbols, type);
-		if (requests != null)
-			requests.push(TypeOf(type, index));
+		if (recordedKeys != null)
+			record(TypeOf(type, index));
 		return index;
 	}
 
@@ -2953,51 +2966,51 @@ class HlLower {
 
 	function internReference(type:IrType):Int {
 		var index = symbols.internReference(type);
-		if (requests != null)
-			requests.push(RefTo(type, index));
+		if (recordedKeys != null)
+			record(RefTo(type, index));
 		return index;
 	}
 
 	/** An object type laid out like the runtime header `kind` (`HlSymbolTable.internRuntimeHeader`). */
 	function internRuntimeHeader(kind:HlRuntimeHeader):Int {
 		var index = symbols.internRuntimeHeader(kind);
-		if (requests != null)
-			requests.push(RuntimeHeader(kind, index));
+		if (recordedKeys != null)
+			record(RuntimeHeader(kind, index));
 		return index;
 	}
 
 	function internNativeStorage(type:IrType, layout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
 		var index = symbols.internNativeFieldStorageType(type, layout);
-		if (requests != null && layout != null)
-			requests.push(NativeStorage(type, layout, index));
+		if (recordedKeys != null && layout != null)
+			record(NativeStorage(type, layout, index));
 		return index;
 	}
 
 	function internGlobalSlot(name:String, type:IrType):Int {
 		var index = symbols.internGlobal(name, type);
-		if (requests != null)
-			requests.push(GlobalSlot(name, type, index));
+		if (recordedKeys != null)
+			record(GlobalSlot(name, type, index));
 		return index;
 	}
 
 	function requireGlobal(name:String):Int {
 		var index = symbols.requireGlobalIndex(name);
-		if (requests != null)
-			requests.push(GlobalByName(name, index));
+		if (recordedKeys != null)
+			record(GlobalByName(name, index));
 		return index;
 	}
 
 	function internStringLiteral(value:String):Int {
 		var index = symbols.internStringConstant(value);
-		if (requests != null)
-			requests.push(StringLiteral(value, index));
+		if (recordedKeys != null)
+			record(StringLiteral(value, index));
 		return index;
 	}
 
 	function internEnumValue(enumName:String, constructor:Int):Int {
 		var index = symbols.internEnumConstant(enumName, constructor);
-		if (requests != null)
-			requests.push(EnumValue(enumName, constructor, index));
+		if (recordedKeys != null)
+			record(EnumValue(enumName, constructor, index));
 		return index;
 	}
 
@@ -3013,8 +3026,8 @@ class HlLower {
 			index = publishedObjectType(name);
 		if (index == null)
 			throw new HlMissingEntity('Unknown IR object "$name"');
-		if (requests != null)
-			requests.push(TypeOf(IrType.Obj(name), index));
+		if (recordedKeys != null)
+			record(TypeOf(IrType.Obj(name), index));
 		return index;
 	}
 
@@ -3077,8 +3090,8 @@ class HlLower {
 		var byName = fieldSlots.get(typeName),
 			cached = byName == null ? null : byName.get(name);
 		if (cached != null) {
-			if (requests != null)
-				requests.push(FieldSlot(cached.owner, name, cached.index));
+			if (recordedKeys != null)
+				record(FieldSlot(cached.owner, name, cached.index));
 			return cached.index;
 		}
 		var owner = typeName;
@@ -3095,8 +3108,8 @@ class HlLower {
 						fieldSlots.set(typeName, byName);
 					}
 					byName.set(name, published);
-					if (requests != null)
-						requests.push(FieldSlot(published.owner, name, published.index));
+					if (recordedKeys != null)
+						record(FieldSlot(published.owner, name, published.index));
 					return published.index;
 				}
 				throw new HlMissingEntity('Unknown IR object "$owner"');
@@ -3120,8 +3133,8 @@ class HlLower {
 			fieldSlots.set(typeName, byName);
 		}
 		byName.set(name, {index: resolved, owner: owner});
-		if (requests != null)
-			requests.push(FieldSlot(owner, name, resolved));
+		if (recordedKeys != null)
+			record(FieldSlot(owner, name, resolved));
 		return resolved;
 	}
 
@@ -3227,8 +3240,8 @@ class HlLower {
 			default: return null;
 		};
 		var slots = symbols.objectMethodSlots(typeName);
-		if (requests != null)
-			requests.push(MethodSlotKnown(typeName, name, HlRemap.methodSlotAnswer(symbols, typeName, name)));
+		if (recordedKeys != null)
+			record(MethodSlotKnown(typeName, name, HlRemap.methodSlotAnswer(symbols, typeName, name)));
 		if (slots == null || slots.exists(name))
 			return null;
 		var owner:Null<String> = typeName;
@@ -3249,14 +3262,14 @@ class HlLower {
 			case Obj(value): value;
 			case Virtual(value):
 				var slot = symbols.requireInterfaceMethodIndex(value, name);
-				if (requests != null)
-					requests.push(InterfaceSlot(value, name, slot));
+				if (recordedKeys != null)
+					record(InterfaceSlot(value, name, slot));
 				return slot;
 			default: throw new InternalError('IR value ${(value : Int)} is not an object');
 		};
 		var slot = symbols.requireObjectMethodIndex(typeName, name);
-		if (requests != null)
-			requests.push(MethodSlot(typeName, name, slot));
+		if (recordedKeys != null)
+			record(MethodSlot(typeName, name, slot));
 		return slot;
 	}
 
@@ -3302,6 +3315,9 @@ class HlLower {
 		return result;
 	}
 
+	function record(request:HlSymbolRequest):Void
+		requestKeys.record(request, recordedKeys, recordedAnswers);
+
 	function addFunctionName(name:String, index:Int):Void {
 		if (functionIndices.exists(name))
 			throw new InternalError('Duplicate IR function "$name"');
@@ -3312,8 +3328,8 @@ class HlLower {
 		if (!functionIndices.exists(name))
 			throw new InternalError('Unknown IR function "$name"');
 		var index = functionIndices.get(name);
-		if (requests != null)
-			requests.push(FunctionRef(name, index));
+		if (recordedKeys != null)
+			record(FunctionRef(name, index));
 		return index;
 	}
 }

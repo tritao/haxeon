@@ -36,7 +36,7 @@ class LiveKeptCheckMain {
 			throw "no integer load to change in value()";
 		var wrong = new HlFunction(entry.fn.type, entry.fn.functionIndex, entry.fn.registers, opcodes,
 			entry.fn.debugLocations, entry.fn.debugAssignments);
-		cache.entries.set("value", new HlLoweredFunction("value", entry.source, wrong, [], []));
+		cache.entries.set("value", new HlLoweredFunction("value", entry.source, wrong, [], [], []));
 		var message:Null<String> = null;
 		try
 			HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false,

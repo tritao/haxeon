@@ -9,7 +9,8 @@ import compiler.ir.Ir.IrType;
  * indices the same function needs there (`HlRemap`), and the tables come out as lowering the functions in that order would make them.
  *
  * Constants, types, globals and functions are remapped. A field, a method slot or an enum constructor is a position inside a
- * type the IR names: it is not remapped, and a replay that finds a different one means the function must be lowered again.
+ * type the IR names: it is not remapped, and a replay that finds a different one means the function must be lowered again. A
+ * lowered function keeps its requests as numbers (`HlRequestKeys`).
  */
 enum HlSymbolRequest {
 	ConstInt(value:Int, index:Int);
@@ -62,7 +63,7 @@ enum abstract HlRuntimeHeader(Int) {
 	var ArrayHeader = 1;
 }
 
-/** How a function's indices change between two builds, filled by replaying its requests. */
+/** How a function's indices change between two builds, by table (`HlRequestKeys.INTS` to `FUNCTIONS`). */
 class HlRemap {
 	public final ints:Map<Int, Int> = [];
 	public final floats:Map<Int, Int> = [];
@@ -71,89 +72,18 @@ class HlRemap {
 	public final globals:Map<Int, Int> = [];
 	public final functions:Map<Int, Int> = [];
 
-	/** Whether every index maps to itself, so the function can be kept as it is. */
-	public var identity = true;
-
 	public function new() {}
 
-	function note(map:Map<Int, Int>, from:Int, to:Int):Void {
-		map.set(from, to);
-		if (from != to)
-			identity = false;
-	}
-
-	/**
-	 * Asks `symbols` and `functions` what `request` asked when the function was lowered. Null when the answer maps (or equals);
-	 * a description when a position the function bakes in has moved.
-	 */
-	public function replay(request:HlSymbolRequest, symbols:HlSymbolTable, functions:Map<String, Int>):Null<String> {
-		switch request {
-			case ConstInt(value, index):
-				note(ints, index, symbols.internInt(value));
-			case ConstFloat(value, index):
-				note(floats, index, symbols.internFloat(value));
-			case ConstString(value, index):
-				note(strings, index, symbols.internString(value));
-			case TypeOf(type, index):
-				note(types, index, typeIndex(symbols, type));
-			case RefTo(type, index):
-				note(types, index, symbols.internReference(type));
-			case RuntimeHeader(kind, index):
-				note(types, index, symbols.internRuntimeHeader(kind));
-			case NativeStorage(type, layout, index):
-				var next = symbols.internNativeFieldStorageType(type, layout);
-				if (index != null && next != null)
-					note(types, index, next);
-				else if (index != null || next != null)
-					return "native storage of " + Std.string(type);
-			case GlobalSlot(name, type, index):
-				note(globals, index, symbols.internGlobal(name, type));
-			case GlobalByName(name, index):
-				note(globals, index, symbols.requireGlobalIndex(name));
-			case StringLiteral(value, index):
-				note(globals, index, symbols.internStringConstant(value));
-			case EnumValue(enumName, constructor, index):
-				note(globals, index, symbols.internEnumConstant(enumName, constructor));
-			case FunctionRef(name, index):
-				var next = functions.get(name);
-				if (next == null)
-					return 'function $name is gone';
-				note(this.functions, index, next);
-			case FieldSlot(owner, name, index):
-				if (symbols.objectFieldIndex(owner, name) != index)
-					return 'field $owner.$name moved';
-			case MethodSlot(typeName, name, index):
-				if (symbols.requireObjectMethodIndex(typeName, name) != index)
-					return 'method $typeName.$name moved';
-			case InterfaceSlot(interfaceName, name, index):
-				if (symbols.requireInterfaceMethodIndex(interfaceName, name) != index)
-					return 'interface method $interfaceName.$name moved';
-			case MethodSlotKnown(typeName, name, answer):
-				if (methodSlotAnswer(symbols, typeName, name) != answer)
-					return 'method slot of $typeName.$name changed';
-		}
-		return null;
-	}
-
-	/** `request`, replayed, with the index this build gave it: what lowering the function in this build would have recorded. */
-	public function rebased(request:HlSymbolRequest):HlSymbolRequest
-		return switch request {
-			case ConstInt(value, index): ConstInt(value, ints.get(index));
-			case ConstFloat(value, index): ConstFloat(value, floats.get(index));
-			case ConstString(value, index): ConstString(value, strings.get(index));
-			case TypeOf(type, index): TypeOf(type, types.get(index));
-			case RefTo(type, index): RefTo(type, types.get(index));
-			case RuntimeHeader(kind, index): RuntimeHeader(kind, types.get(index));
-			case NativeStorage(type, layout, index): NativeStorage(type, layout,
-				index == null ? null : types.get(index));
-			case GlobalSlot(name, type, index): GlobalSlot(name, type, globals.get(index));
-			case GlobalByName(name, index): GlobalByName(name, globals.get(index));
-			case StringLiteral(value, index): StringLiteral(value, globals.get(index));
-			case EnumValue(enumName, constructor, index): EnumValue(enumName, constructor, globals.get(index));
-			case FunctionRef(name, index): FunctionRef(name, functions.get(index));
-			// Slots are checked to be where they were, not mapped.
-			case FieldSlot(_, _, _), MethodSlot(_, _, _), InterfaceSlot(_, _, _), MethodSlotKnown(_, _, _): request;
-		};
+	/** Notes that index `from` of `table` is `to` in this build. */
+	public function note(table:Int, from:Int, to:Int):Void (switch table {
+		case HlRequestKeys.INTS: ints;
+		case HlRequestKeys.FLOATS: floats;
+		case HlRequestKeys.STRINGS: strings;
+		case HlRequestKeys.TYPES: types;
+		case HlRequestKeys.GLOBALS: globals;
+		case HlRequestKeys.FUNCTIONS: functions;
+		default: throw new compiler.core.InternalError('HashLink link: table $table has no indices');
+	}).set(from, to);
 
 	/** The index of `type`, the way lowering asks for it. */
 	public static function typeIndex(symbols:HlSymbolTable, type:IrType):Int

@@ -17,29 +17,46 @@ typedef HlLinked = {
 
 /**
  * The link step for lowered functions: gives a function that was lowered against one set of tables and one function layout the
- * indices of another, without lowering it again. It checks the facts the function read about object types, replays its requests
- * against the new tables (which also makes the tables what lowering the functions in order would have made them), and rewrites the
- * constant, type, global and function indices in its code, registers and debug names. A function whose indices all stay is returned
- * as it is, so the encoding cached for it stays valid.
+ * indices of another, without lowering it again. It checks the facts the function read about object types, asks its requests of the
+ * new tables (`HlRequestAnswers`, which also makes the tables what lowering the functions in order would have made them), and
+ * rewrites the constant, type, global and function indices in its code, registers and debug names when some moved. A function whose
+ * indices all stay is returned as it is, so the encoding cached for it stays valid.
  */
 class HlLink {
-	public static function link(lowered:HlLoweredFunction, symbols:HlSymbolTable, functions:Map<String, Int>,
+	public static function link(lowered:HlLoweredFunction, answers:HlRequestAnswers, functions:Map<String, Int>,
 			view:HlLoweringView):HlLinked {
 		var stale = view.holds(lowered.facts);
 		if (stale != null)
 			return {fn: null, reason: 'fact $stale changed'};
-		var remap = new HlRemap();
-		for (request in lowered.requests) {
-			var reason = remap.replay(request, symbols, functions);
-			if (reason != null)
-				return {fn: null, reason: reason};
-		}
+		var keys = lowered.keys, recorded = lowered.answers, requests = answers.keys, moved = false;
+		// The questions that add nothing to the tables first, so a function that must be lowered again has added nothing before it is:
+		// lowering it asks in its own order.
+		for (pass in 0...2)
+			for (index in 0...keys.length) {
+				var key = keys[index];
+				if (requests.interns(key) != (pass == 1))
+					continue;
+				var answer = answers.answer(key), before = recorded[index];
+				if (answer == before)
+					continue;
+				var table = requests.table(key);
+				if (table == HlRequestKeys.CHECK || answer < 0 || before < 0)
+					return {fn: null, reason: describe(requests.request(key))};
+				moved = true;
+			}
 		var own = functions.get(lowered.name);
 		if (own == null)
 			return {fn: null, reason: 'function ${lowered.name} is not in the layout'};
 		var before = lowered.fn;
-		if (remap.identity && own == before.functionIndex)
+		if (!moved && own == before.functionIndex)
 			return {fn: before, reason: null};
+		var remap = new HlRemap();
+		var rebased = [for (index in 0...keys.length) {
+			var key = keys[index], answer = answers.answer(key), table = requests.table(key);
+			if (table != HlRequestKeys.CHECK)
+				remap.note(table, recorded[index], answer);
+			answer;
+		}];
 		var fn = new HlFunction(index(remap.types, before.type, "function type"), own,
 			[for (register in before.registers) index(remap.types, register, "register type")],
 			[for (instruction in before.opcodes) rewrite(instruction, remap)], before.debugLocations,
@@ -51,10 +68,20 @@ class HlLink {
 		return {
 			fn: fn,
 			reason: null,
-			rebased: new HlLoweredFunction(lowered.name, lowered.source, fn,
-				[for (request in lowered.requests) remap.rebased(request)], lowered.facts)
+			rebased: new HlLoweredFunction(lowered.name, lowered.source, fn, keys, rebased, lowered.facts)
 		};
 	}
+
+	static function describe(request:HlSymbolRequest):String
+		return switch request {
+			case FieldSlot(owner, name, _): 'field $owner.$name moved';
+			case MethodSlot(typeName, name, _): 'method $typeName.$name moved';
+			case InterfaceSlot(interfaceName, name, _): 'interface method $interfaceName.$name moved';
+			case MethodSlotKnown(typeName, name, _): 'method slot of $typeName.$name changed';
+			case FunctionRef(name, _): 'function $name is gone';
+			case NativeStorage(type, _, _): "native storage of " + Std.string(type);
+			default: 'request ${Std.string(request)} changed';
+		};
 
 	/** An index the function uses must be one of its requests: anything else would be moved by no one. */
 	static function index(map:Map<Int, Int>, from:Int, what:String):Int {
