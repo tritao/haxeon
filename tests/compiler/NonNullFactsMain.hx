@@ -155,6 +155,7 @@ class NonNullFactsMain {
 		expect(checks == 1, "HashLink keeps the first null check and omits the repeated field check");
 		checkSparseIdentities();
 		checkAllocationScaling();
+		checkProgramFacts();
 		Sys.println("PASS: non-null facts respect branches, loops, allocation and handlers");
 	}
 
@@ -219,6 +220,28 @@ class NonNullFactsMain {
 				expect(facts.has(unknownRead.block, unknownRead.index) == (checked && i > 0),
 					"unknown receiver facts require an earlier checked dereference");
 			}
+		}
+	}
+
+	/** A method's or a constructor's receiver needs no check; another function's first argument does. */
+	static function checkProgramFacts():Void {
+		var box:IrObject = {
+			name: "Box",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			fields: [{name: "next", type: Obj("Box")}],
+			methods: [{name: "read", functionName: IrSymbol.of("Box.read")}]
+		};
+		var objects:Map<String, IrObject> = ["Box" => box];
+		for (name in ["Box.read", "Box.new", "helper"]) {
+			var b = new IrBuilder(), receiver = b.argument("this", Obj("Box"));
+			var first = check(b, receiver);
+			b.returnValue(b.constInt(42));
+			var facts = new IrNonNullFacts(new IrFunction(name, b.arguments, I32, b.blocks, Ordinary), false,
+				objects.get);
+			expect(facts.has(first.block, first.index) == (name != "helper"),
+				'the receiver of $name is known non-null only for a method or a constructor');
 		}
 	}
 }

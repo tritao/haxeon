@@ -334,6 +334,10 @@ class HlcModule {
 		return '${types.cType(signature.result)} ${cNames[slot]}(${parameters.length == 0 ? "void" : parameters.join(", ")})';
 	}
 
+	/** The object named `name`, or null. */
+	public inline function object(name:String):Null<IrObject>
+		return objects.get(name);
+
 	/** The function a value class's method `name` is, called directly as `HlLower` calls it; null for other receivers. */
 	public function valueMethod(type:IrType, name:String):Null<String> {
 		var object = switch type {

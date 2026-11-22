@@ -96,8 +96,13 @@ class HlcFunctionLower {
 		directive = "";
 		linesSinceDirective = 0;
 		// The proofs that drop checks change only the text, which collecting does not write.
-		if (out != null)
-			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch);
+		if (out != null) {
+			var receiverClass = compiler.ir.analysis.IrNonNullFacts.receiverClass(body),
+				receiver = receiverClass != null
+					&& compiler.ir.analysis.IrNonNullFacts.isMethodReceiver(body, module.object(receiverClass));
+			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch,
+				receiver);
+		}
 		var limit = body.valueLimit();
 		valueTypes.resize(0);
 		nullValues.resize(0);

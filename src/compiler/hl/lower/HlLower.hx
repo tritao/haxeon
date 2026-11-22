@@ -1159,7 +1159,10 @@ class HlLower {
 				nextLabel = body.blockId(block) + 1;
 		// The analyses read the body as it is, so they share its graph.
 		var graph = scratch.graph.reset(body),
-			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull),
+			receiverClass = compiler.ir.analysis.IrNonNullFacts.receiverClass(body),
+			receiver = receiverClass != null
+				&& compiler.ir.analysis.IrNonNullFacts.isMethodReceiver(body, view.object(receiverClass)),
+			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull, receiver),
 			exactTypes = scratch.exactTypes.reset(body, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.

@@ -60,6 +60,10 @@ class IrMethodResolution {
 		return true;
 	}
 
+	/** The class named `name`, or null. */
+	public function object(name:String):Null<IrObject>
+		return objects.get(name);
+
 	/** The function `typeName` runs for `method`, looking through its bases; null when there is none or the class is unknown. */
 	public function find(typeName:String, method:String):Null<String> {
 		var table = methodsOf(typeName, 0);
