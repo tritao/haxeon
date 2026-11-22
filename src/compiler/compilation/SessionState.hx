@@ -59,6 +59,9 @@ class SessionState {
 
 	public var inlineCache(default, null):IrInlineCache = new IrInlineCache();
 
+	/** The numbers the modules' IR versions are taken from (`ModuleState.irVersions`); every copy shares it. */
+	public var irVersions(default, null):compiler.ir.IrFunctionVersions = new compiler.ir.IrFunctionVersions();
+
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
 	 * reuses both.
@@ -195,6 +198,7 @@ class SessionState {
 		result.compiledOnce = compiledOnce;
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
+		result.irVersions = irVersions;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = copyReachabilityCache(reachabilityCache);

@@ -14,6 +14,17 @@ class IrEnumDynamicDispatch {
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
 
+	static inline final BOX_PREFIX = "$enum-dynamic-box:";
+	static inline final VIEW_PREFIX = "$enum-dynamic-view:";
+	static inline final UNBOX_PREFIX = "$enum-dynamic-unbox:";
+
+	/** The box helper of `type`: what an `EnumDynamicBox` of it calls, unless a function of the program has the name. */
+	public static function boxName(type:IrType):String
+		return helperName(BOX_PREFIX, type);
+
+	static function helperName(prefix:String, type:IrType):String
+		return prefix + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type));
+
 	/** With `unreached` (the functions a plain build's walk did not reach), only the others register what they need and are rewritten; otherwise every function does. */
 	public static function rewrite(functions:Array<IrFunction>, ?reflectionProgram:IrProgram,
 			?reflectableObjects:Array<String>,
@@ -97,11 +108,13 @@ class IrEnumDynamicDispatch {
 		var names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		var boxNames:Map<String, String> = [], viewNames:Map<String, String> = [], unboxNames:Map<String, String> = [];
-		for (index in 0...names.length) {
-			var id = names[index];
-			boxNames.set(id, symbol(occupied, "$haxeon_enum_dynamic_box_" + index));
-			viewNames.set(id, symbol(occupied, "$haxeon_enum_dynamic_view_" + index));
-			unboxNames.set(id, symbol(occupied, "$haxeon_enum_dynamic_unbox_" + index));
+		// Named by the enum type, not by its place among the requests: an enum that starts or stops being requested renames no
+		// other helper, so the callers of the others keep their code.
+		for (id in names) {
+			var type = requests.get(id);
+			boxNames.set(id, symbol(occupied, helperName(BOX_PREFIX, type)));
+			viewNames.set(id, symbol(occupied, helperName(VIEW_PREFIX, type)));
+			unboxNames.set(id, symbol(occupied, helperName(UNBOX_PREFIX, type)));
 		}
 		for (id in names) {
 			if (boxes.exists(id)) {
@@ -122,8 +135,7 @@ class IrEnumDynamicDispatch {
 			typeTests:Map<String, {
 				type:IrType,
 				exact:Bool
-			}> = [],
-			nextExtraUnbox = 0;
+			}> = [];
 		for (fn in functions) {
 			if (unreached != null && unreached.exists(fn.name)) {
 				rewritten.push(fn);
@@ -152,7 +164,7 @@ class IrEnumDynamicDispatch {
 					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
 						var id = key(output.type), helper = unboxNames.get(id);
 						if (helper == null) {
-							helper = symbol(occupied, "$haxeon_enum_dynamic_unbox_extra_" + nextExtraUnbox++);
+							helper = symbol(occupied, helperName(UNBOX_PREFIX, output.type));
 							unboxNames.set(id, helper);
 						}
 						unboxes.set(helper, output.type);

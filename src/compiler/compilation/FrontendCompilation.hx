@@ -895,7 +895,7 @@ class FrontendCompilation {
 				}
 				state.irFunctions.set(fn.name, ir);
 				regenerated.push(fn.name);
-				state.irVersions.set(fn.name, previousVersion + 1);
+				state.irVersions.set(fn.name, context.state.irVersions.next());
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
@@ -1256,8 +1256,7 @@ class FrontendCompilation {
 					if (!state.typedSourceRevisions.exists(functionName))
 						throw new InternalError('Pending IR function "$functionName" has no typed source revision');
 					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
-					var version = state.irVersions.exists(functionName) ? state.irVersions.get(functionName) + 1 : 1;
-					state.irVersions.set(functionName, version);
+					state.irVersions.set(functionName, context.state.irVersions.next());
 					state.pendingIrFunctions.remove(functionName);
 					regenerated.push(functionName);
 				}
@@ -1366,8 +1365,11 @@ class FrontendCompilation {
 				if (!rehashed.keys().hasNext() && !state.editedSinceIrScan)
 					continue;
 				var writable = context.state.writableState(moduleName, build.rollbackModules);
-				for (functionName => replacement in rehashed)
+				// A rehashed function is another IR (its locations name other hashes), so it takes a version of its own.
+				for (functionName => replacement in rehashed) {
 					writable.irFunctions.set(functionName, replacement);
+					writable.irVersions.set(functionName, context.state.irVersions.next());
+				}
 				writable.editedSinceIrScan = false;
 			}
 		var cached:Array<IrFunction> = [];

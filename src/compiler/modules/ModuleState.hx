@@ -124,7 +124,12 @@ class ModuleState {
 
 	public var irFunctions:Map<String, IrFunction> = [];
 	public var irSourceRevisions:Map<String, Int> = [];
+	/**
+	 * By name, the version of the function's IR in `irFunctions`, from the session's counter (`SessionState.irVersions`): it
+	 * changes exactly when the function is given another IR, regenerated or rehashed.
+	 */
 	public var irVersions:Map<String, Int> = [];
+
 	public var dirty:Bool = true;
 	public var canonicalFunctions:Array<AstFunction> = [];
 	public var canonicalAllFunctions:Array<AstFunction> = [];

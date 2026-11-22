@@ -313,12 +313,14 @@ class IrPipeline {
 		return assembly;
 	}
 
+	/** An exported function is exposed; one already exposed is kept as it is, so it keeps its identity from build to build. */
 	static function exportedFunctions(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var names = context.exportedFunctions;
 		var exported = [for (name in names) name => true];
 		assembly.functions = [
 			for (fn in assembly.functions)
-				exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.kind,
+				exported.exists(fn.name) && fn.retention != IrFunction.IrRetention.Expose ? new IrFunction(fn.name,
+				fn.arguments, fn.result, fn.blocks, fn.kind,
 				fn.debugBindings,
 				fn.inlineHint, Expose) : fn
 		];

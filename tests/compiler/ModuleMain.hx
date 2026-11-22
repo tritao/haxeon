@@ -68,7 +68,8 @@ class ModuleMain {
 			throw "Adding a constant renumbered an existing constant";
 		var firstBytes = HlWriter.encodeFunction(functionByIndex(added.artifact.hashLink().module.functions,
 			mathIndex)),
-			unchangedMain = compiler.modules.get("Main");
+			unchangedMain = compiler.modules.get("Main"),
+			addVersion = compiler.modules.get("Math").irVersions.get("Math.add");
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { var sum = a + b; return sum; }");
 		var result = compiler.compile("Main");
 		if (compiler.modules.get("Main") != unchangedMain)
@@ -82,7 +83,7 @@ class ModuleMain {
 		if (compiler.modules.get("Main").irSourceRevisions.get("main") != 1
 			|| compiler.modules.get("Math").irSourceRevisions.get("Math.add") != 2)
 			throw "Cached IR was not tied to its source revision";
-		if (compiler.modules.get("Math").irVersions.get("Math.add") != 2)
+		if (compiler.modules.get("Math").irVersions.get("Math.add") == addVersion)
 			throw "Edited function IR was not regenerated";
 		// Typing and IR regeneration touch only the edited function, and the caller that inlined it.
 		var expectedChanged = 2;

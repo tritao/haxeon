@@ -290,7 +290,8 @@ class AuditVerifierMain {
 		collision.enums = [{name: "Example", cases: [{name: "Only", params: []}]}];
 		collision.functions = compiler.ir.IrEnumDynamicDispatch.rewrite([
 			new IrFunction("main", validBox.arguments, Dyn, validBox.blocks, Ordinary),
-			new IrFunction("$haxeon_enum_dynamic_box_0", reserved.arguments, Void, reserved.blocks, Ordinary)
+			new IrFunction(compiler.ir.IrEnumDynamicDispatch.boxName(Enum("Example")), reserved.arguments, Void,
+				reserved.blocks, Ordinary)
 		]);
 		IrVerifier.verify(collision);
 		var invalidAdapter = new IrProgram("main");
