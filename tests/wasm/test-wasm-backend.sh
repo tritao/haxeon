@@ -7,7 +7,7 @@ out_dir=$haxeon_suite_out # this suite's own directory: every file it writes and
 haxe_bin="$root_dir/.tools/haxe/haxe"
 mkdir -p "$out_dir"
 haxeon_require_haxe
-source "$root_dir/scripts/haxeon-compiler.sh"
+source "$root_dir/scripts/lib/haxeon-compiler.sh"
 
 # The committed C runtime every wasm32 module links must match native/wasm (docs/design/WASM_LINEAR_RUNTIME.md); the check
 # says it is skipped without a clang that targets wasm32.

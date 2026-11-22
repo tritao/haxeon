@@ -541,7 +541,7 @@ comparisons. For where the compiler allocates, record with
 allocation counters (`HL_GC_PROFILE=1`) give exact totals.
 
 ```sh
-python3 scripts/benchmark-incremental-project.py \
+python3 benchmarks/incremental-project.py \
   --project /path/to/haxeon.json --source /path/to/Main.hx \
   --token-a 'before' --token-b 'after' --output /tmp/edit.hl \
   --profile-output /tmp/compiler-edits.hlpc

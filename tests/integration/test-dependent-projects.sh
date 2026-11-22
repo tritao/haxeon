@@ -4,7 +4,7 @@ set -euo pipefail
 # Type-checks the projects that consume this compiler when this checkout sits inside a Materia checkout.
 # A stricter compiler rule (null flow, conversions) can reject code in those projects that no compiler fixture covers;
 # run this after changing typing or flow analysis and before moving the submodule pointer.
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 parent_dir=$(cd "$root_dir/.." && pwd)
 status=0
 checked=0

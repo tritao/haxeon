@@ -17,7 +17,7 @@ def flatten(value, prefix=""):
 
 
 if len(sys.argv) != 3:
-    raise SystemExit("usage: benchmark-compare.py BASELINE.json CANDIDATE.json")
+    raise SystemExit("usage: compare.py BASELINE.json CANDIDATE.json")
 
 with open(sys.argv[1], encoding="utf-8") as source:
     baseline = flatten(json.load(source).get("results", {}))

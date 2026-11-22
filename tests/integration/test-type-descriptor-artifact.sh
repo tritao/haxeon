@@ -7,7 +7,7 @@ mkdir -p "$output_dir"
 
 root_dir=$repo_dir
 haxe_bin="$repo_dir/.tools/haxe/haxe"
-source "$repo_dir/scripts/haxeon-compiler.sh"
+source "$repo_dir/scripts/lib/haxeon-compiler.sh"
 haxeon_compile --target=hl --output="$output_dir/native-type-info-nonflat.hl" --entry=native-type-info-nonflat --root=tests/programs \
 	 tests/programs/native-type-info-nonflat.hx
 

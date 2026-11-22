@@ -1,4 +1,4 @@
-// Times the wasm32 collector: `node benchmark-gc.js STRESS.wasm BUDGET.wasm SAMPLES`, built by scripts/benchmark-wasm32-gc.hx.
+// Times the wasm32 collector: `node benchmark-gc.js STRESS.wasm BUDGET.wasm SAMPLES`, built by benchmark.hx beside it.
 // Each workload runs once to warm the JS-to-Wasm call path, then SAMPLES times on a fresh heap; prints the medians as JSON.
 const fs = require("fs");
 const {performance} = require("perf_hooks");

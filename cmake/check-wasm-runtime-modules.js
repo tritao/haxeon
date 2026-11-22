@@ -1,4 +1,4 @@
-// Checks the wasm32 runtime modules scripts/build_wasm_runtime.hx builds: `node check-runtime-modules.js MODULE...`.
+// Checks the wasm32 runtime modules haxeon-wasm-runtime.cmake builds: `node check-wasm-runtime-modules.js MODULE...`.
 //
 // A runtime imports only linear memory and haxeon_guest functions, exports only functions, and has no table, global,
 // start, data-count or element section (the compiler links functions only). A runtime-neutral variant ("-neutral.wasm")

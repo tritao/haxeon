@@ -168,7 +168,7 @@ cross-lang-benchmarks            ci          -- python3 benchmarks/cross-lang/ru
 stdout-buffering-integration     ci          -- python3 tests/integration/test-stdout-buffering.py
 process-output-capture-integration ci        -- bash tests/integration/test-process-output-capture.sh
 
-dependent-projects               ci          -- scripts/check-dependents.sh
+dependent-projects               ci          -- bash tests/integration/test-dependent-projects.sh
 # The CLI and compiler built ahead of time (tests/aot/test-aot-compiler.sh): built and published beside the VM, run by the haxeon
 # command as the CLI and by the CLI in each role, and the suites that compile through the CLI run again with it. Last, as it builds
 # the compiler to C, and it leaves a checkout that had no current one without one.

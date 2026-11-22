@@ -8,7 +8,7 @@ haxe_bin="$root_dir/.tools/haxe/haxe"
 artifact="$out_dir/wasm-gc-reuse-zero-init.wasm"
 
 haxeon_require_haxe
-source "$root_dir/scripts/haxeon-compiler.sh"
+source "$root_dir/scripts/lib/haxeon-compiler.sh"
 
 mkdir -p "$out_dir"
 haxeon_compile \

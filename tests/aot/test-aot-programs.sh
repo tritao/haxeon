@@ -11,7 +11,7 @@ set -uo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 source "$root_dir/scripts/lib/env.sh"
-source "$root_dir/scripts/haxeon-compiler.sh"
+source "$root_dir/scripts/lib/haxeon-compiler.sh"
 verbose=0
 programs=()
 while (($# > 0)); do

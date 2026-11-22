@@ -10,7 +10,7 @@ dom_path="$root_dir/out/wasm-gc-chrome-smoke.dom"
 
 source "$root_dir/scripts/lib/env.sh"
 haxeon_require_haxe
-source "$root_dir/scripts/haxeon-compiler.sh"
+source "$root_dir/scripts/lib/haxeon-compiler.sh"
 if ! command -v "$chrome_bin" >/dev/null 2>&1; then
 	echo "missing Chrome; set CHROME_BIN or install Google Chrome" >&2
 	exit 1

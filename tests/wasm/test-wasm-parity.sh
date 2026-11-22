@@ -7,7 +7,7 @@ source "$root_dir/scripts/lib/env.sh"
 parity_output_dir=${HAXEON_WASM_PARITY_OUTPUT_DIR:-$haxeon_suite_out}
 mkdir -p "$parity_output_dir"
 haxeon_require_haxe
-source "$root_dir/scripts/haxeon-compiler.sh"
+source "$root_dir/scripts/lib/haxeon-compiler.sh"
 haxeon_export_library_path
 # Local time is the host's on every target, so the suite fixes the zone: one with a half-hour offset and no daylight saving,
 # where reading local time as UTC shows (tests/fixtures/date-local-time).

@@ -9,7 +9,7 @@
 # Building them needs a clang with a wasm32 target: HAXEON_WASM_CLANG (the cache variable, or the environment variable when
 # the build is configured), else an Emscripten SDK's clang next to this checkout, where NativeKit keeps one. Without one
 # the check says it is skipped and succeeds, and the build fails saying what to set. Each module built is checked with
-# scripts/wasm/check-runtime-modules.js (Node) before it is installed or compared.
+# cmake/check-wasm-runtime-modules.js (Node) before it is installed or compared.
 
 set(_haxeon_wasm_clang_default "$ENV{HAXEON_WASM_CLANG}")
 if(NOT _haxeon_wasm_clang_default)
@@ -75,9 +75,9 @@ endforeach()
 
 set(_haxeon_wasm_checked "${_haxeon_wasm_work}/checked.stamp")
 add_custom_command(OUTPUT "${_haxeon_wasm_checked}"
-  COMMAND "${HAXEON_NODE}" "${CMAKE_SOURCE_DIR}/scripts/wasm/check-runtime-modules.js" ${_haxeon_wasm_built}
+  COMMAND "${HAXEON_NODE}" "${CMAKE_SOURCE_DIR}/cmake/check-wasm-runtime-modules.js" ${_haxeon_wasm_built}
   COMMAND "${CMAKE_COMMAND}" -E touch "${_haxeon_wasm_checked}"
-  DEPENDS ${_haxeon_wasm_built} "${CMAKE_SOURCE_DIR}/scripts/wasm/check-runtime-modules.js"
+  DEPENDS ${_haxeon_wasm_built} "${CMAKE_SOURCE_DIR}/cmake/check-wasm-runtime-modules.js"
   COMMENT "Checking the wasm32 runtimes' imports, exports and sections"
   VERBATIM
 )

@@ -33,7 +33,7 @@ Haxeon links it; the output stays one module and embedders change nothing.
   `haxeon-wasm-runtime` target rebuilds it when a wasm32 clang is configured
   (`HAXEON_WASM_CLANG`; `cmake/haxeon-wasm-runtime.cmake`). The build checks that
   the module has no data segments, globals, table or stack
-  (`scripts/wasm/check-runtime-modules.js`), so it needs nothing from the linker
+  (`cmake/check-wasm-runtime-modules.js`), so it needs nothing from the linker
   but memory: runtime state lives in a struct at an address Haxeon reserves and
   passes in. `haxeon-wasm-runtime-check` fails when the committed module differs
   from a fresh build; the backend test runs it, and it is skipped without clang.

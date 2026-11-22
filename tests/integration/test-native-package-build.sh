@@ -18,6 +18,12 @@ run_cli() {
 	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
+# Applies a sed expression to a file in place, in the form GNU and BSD sed both take.
+edit_file() {
+	sed -i.bak "$1" "$2"
+	rm -f "$2.bak"
+}
+
 plan_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json" --plan --explain --timings)
 [[ "$plan_output" == *"foo:NativeSharedLibrary"* ]]
 [[ "$plan_output" != *"foo:NativeStaticLibrary"* ]]
@@ -43,26 +49,26 @@ if [[ $run_status -ne 42 ]]; then
 	exit 1
 fi
 
-"$repo_dir/scripts/replace-in-file.sh" 's/return Foo.answer()/return Foo.answer() + 1/' "$project_dir/app/src/Main.hx"
+edit_file 's/return Foo.answer()/return Foo.answer() + 1/' "$project_dir/app/src/Main.hx"
 haxe_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
 [[ "$haxe_edit_output" == *"native-compile:"*"clean (fingerprint match)"* ]]
 [[ "$haxe_edit_output" == *"native-link:"*"clean (fingerprint match)"* ]]
 
-"$repo_dir/scripts/replace-in-file.sh" 's/return FOO_ANSWER/return 41/' "$project_dir/foo/native/foo.c"
+edit_file 's/return FOO_ANSWER/return 41/' "$project_dir/foo/native/foo.c"
 native_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
 [[ "$native_edit_output" == *"Compile C"* ]]
 [[ "$native_edit_output" == *"native/foo.c] Compile C"* ]]
 [[ "$native_edit_output" == *"native/extra.c] clean (fingerprint match)"* ]]
 [[ "$native_edit_output" == *"Link shared library foo"* ]]
 
-"$repo_dir/scripts/replace-in-file.sh" 's/return 41/return FOO_ANSWER/' "$project_dir/foo/native/foo.c"
-"$repo_dir/scripts/replace-in-file.sh" 's/#define FOO_ANSWER 42/#define FOO_ANSWER 43/' "$project_dir/foo/native/include/foo.h"
+edit_file 's/return 41/return FOO_ANSWER/' "$project_dir/foo/native/foo.c"
+edit_file 's/#define FOO_ANSWER 42/#define FOO_ANSWER 43/' "$project_dir/foo/native/include/foo.h"
 header_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
 [[ "$header_edit_output" == *"native/foo.c] Compile C"* ]]
 [[ "$header_edit_output" == *"native/extra.c] clean (fingerprint match)"* ]]
 [[ "$header_edit_output" == *"Link shared library foo"* ]]
 
-"$repo_dir/scripts/replace-in-file.sh" 's/return FOO_ANSWER/return (/' "$project_dir/foo/native/foo.c"
+edit_file 's/return FOO_ANSWER/return (/' "$project_dir/foo/native/foo.c"
 set +e
 native_failure_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json" 2>&1)
 native_failure_status=$?
