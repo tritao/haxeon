@@ -9,14 +9,14 @@ class AstPredicates {
 	/** Inspect a statement's structure without discarding its typing-time metadata. */
 	public static function unannotatedStatement(value:AstStatement):AstStatement
 		return switch value {
-			case PrivateAccessStatement(inner, _): unannotatedStatement(inner);
+			case AnnotatedStatement(_, inner, _): unannotatedStatement(inner);
 			default: value;
 		};
 
 	/** Inspect an expression's structure without discarding its typing-time metadata. */
 	public static function unannotatedExpression(value:AstExpression):AstExpression
 		return switch value {
-			case PrivateAccessExpression(inner, _): unannotatedExpression(inner);
+			case AnnotatedExpression(_, inner, _): unannotatedExpression(inner);
 			default: value;
 		};
 

@@ -1318,12 +1318,23 @@ class Parser {
 		};
 	}
 
+	/** What `entry` on a statement or expression changes about checking it, or null for metadata the typer ignores there. */
+	static function scopeMetadata(entry:compiler.syntax.Ast.AstMetadata):Null<compiler.syntax.Ast.ScopeMetadata>
+		return switch entry.name {
+			case "privateAccess": PrivateAccess;
+			case "nullSafety" if (entry.arguments.length == 1
+				&& entry.arguments[0].match(Variable("Off", _))): NullSafetyOff;
+			default: null;
+		};
+
 	function parseStatement():AstStatement {
 		if (check(TokenKind.At)) {
 			var metadata = parseMetadata(), statement = parseStatement();
-			for (entry in metadata)
-				if (entry.name == "privateAccess")
-					return PrivateAccessStatement(statement, entry.span.merge(statementSpan(statement)));
+			for (entry in metadata) {
+				var scoped = scopeMetadata(entry);
+				if (scoped != null)
+					statement = AnnotatedStatement(scoped, statement, entry.span.merge(statementSpan(statement)));
+			}
 			return statement;
 		}
 		if (check(TokenKind.Identifier) && textOf(current()) == "scoped" && peekKind(1) == TokenKind.Var) {
@@ -1750,10 +1761,10 @@ class Parser {
 			return;
 		var index = statements.length - 1;
 		switch statements[index] {
-			case PrivateAccessStatement(inner, span):
+			case AnnotatedStatement(metadata, inner, span):
 				var wrapped = [inner];
 				returnArrowValue(wrapped);
-				statements[index] = PrivateAccessStatement(wrapped[0], span);
+				statements[index] = AnnotatedStatement(metadata, wrapped[0], span);
 			case Expression(expression, span): statements[index] = Return(expression, span);
 			case Try(body, catches, _):
 				returnArrowValue(body);
@@ -1769,11 +1780,13 @@ class Parser {
 		if (check(TokenKind.At)) {
 			var metadata = parseMetadata(), first = target.length;
 			parseStatements(target);
-			for (entry in metadata)
-				if (entry.name == "privateAccess")
+			for (entry in metadata) {
+				var scoped = scopeMetadata(entry);
+				if (scoped != null)
 					for (index in first...target.length)
-						target[index] = PrivateAccessStatement(target[index],
+						target[index] = AnnotatedStatement(scoped, target[index],
 							entry.span.merge(statementSpan(target[index])));
+			}
 			return;
 		}
 		if (!check(TokenKind.Var) && !check(TokenKind.Final)) {
@@ -2081,9 +2094,11 @@ class Parser {
 		}
 		if (check(TokenKind.At)) {
 			var metadata = parseMetadata(), expression = parsePrimary();
-			for (entry in metadata)
-				if (entry.name == "privateAccess")
-					return PrivateAccessExpression(expression, entry.span.merge(expressionSpan(expression)));
+			for (entry in metadata) {
+				var scoped = scopeMetadata(entry);
+				if (scoped != null)
+					expression = AnnotatedExpression(scoped, expression, entry.span.merge(expressionSpan(expression)));
+			}
 			return expression;
 		}
 		if (match(TokenKind.Switch))
@@ -3452,7 +3467,7 @@ class Parser {
 
 	public static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
-			case PrivateAccessExpression(_, span): span;
+			case AnnotatedExpression(_, _, span): span;
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span),
 				NullLiteral(span), Unreachable(span),
 				EmptyExpression(span), ErrorExpression(span), Variable(_, span), TemporaryVariable(_, span),
@@ -3712,7 +3727,7 @@ class Parser {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
+			case ErrorStatement(span), AnnotatedStatement(_, _, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
 				DeclaredAssignment(_, _, _, span),

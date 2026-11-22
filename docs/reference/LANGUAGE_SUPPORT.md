@@ -256,6 +256,56 @@ realtime operations remain in a separately versioned ABI.
 Unsupported ABI combinations produce explicit typed diagnostics instead of
 silently falling back to dynamic behavior.
 
+## Null safety
+
+Haxeon has Haxe's null-safety checker (`@:nullSafety`, Haxe 4.3.7's `nullSafety.ml`), with Haxe's four modes. It only checks: the
+code it lets through is the code a build without it makes (a later step is to let code generation trust what it proves).
+
+- **Turning it on.** It is off unless something turns it on. `@:nullSafety(Mode)` on a class or abstract checks its members, on a
+  field or method that member; `@:nullSafety` alone is `Loose`. A Haxe command line takes Haxe's own
+  `--macro nullSafety("pack", Strict)` (`haxe.macro.Compiler.nullSafety(path, mode, recursive)`, recursive by default), and a
+  project its `nullSafety` setting ([MANIFEST.md](MANIFEST.md)), which applies to the package's own sources: `haxeon init` writes
+  `"strict"`, a project without the key is off, and `warn` checks as `Strict` but reports warnings (`W1003`), to migrate code.
+  These combine as Haxe's metadata does: `Off` anywhere wins, `Strict` and `StrictThreaded` win over `Loose`, so a class cannot
+  lower its package's mode. `@:nullSafety(Off)` on an expression or statement leaves it unchecked. The standard library is not
+  checked. An argument Haxe does not take (`@:nullSafety(Yes)`) is an error.
+- **What it reports** (`E1005`, with Haxe's message after "Null safety:", at Haxe's position): a `Null<T>` or `null` the flow
+  facts do not prove present where a type that does not take null is expected (an assignment or declaration, an argument that is
+  not optional, a return, an array item, a field's initial value, a typed `cast` or `(value : Type)`); a `Null<T>` inside a type
+  where the expected one has none (`Array<Null<String>>` as `Array<String>`, a function that takes `String` as one that takes
+  `Null<String>`); a field read, write or method call through a nullable; a call of a nullable function; an array access on a
+  nullable or with a nullable index; arithmetic, an ordering, `!` or `-` on a nullable; a nullable condition; iterating or
+  throwing a nullable; concatenating two nullable strings. `??` and a checked value are fine. In a checked class, a static
+  needs an initial value and an instance field one or an assignment in the constructor, which may not use `this`, call a
+  method or read an unassigned field before every one is assigned (Haxe's simple flow: statements in order, both branches
+  of an `if` with an `else`).
+- **Narrowing** is the typer's own (`x != null`, an early return or throw, `while`, `&&` and `||`), per mode: `Loose` trusts a
+  field's narrowing across calls, as Haxe does; `Strict` forgets it at a call, and trusts no narrowing of a local inside a
+  closure that captures it, unless the closure is written as a call's argument (it runs during the call); `StrictThreaded`
+  narrows no field but a `final` one. In a checked body, a field read through a nullable is the checker's finding, not the
+  plain build's `E1005` ("requires an object"), so `Loose` accepts what Haxe accepts there.
+
+Known gaps, where Haxe's checker has holes and Haxeon matches it for now (the step that lets code generation trust the checker
+treats these values as unproven): `Dynamic` converts to anything, and `Reflect` results are `Dynamic`; an untyped `cast`; a type
+parameter, which a call fills with whatever it is given; a value from unchecked code typed `String` is trusted, and a callback
+unchecked code calls may be passed null; `a[i]` is an element, never null; overrides and interface implementations are not
+checked for nullability (Haxeon's own rule requires their signatures to match anyway, `E1020`).
+
+Where Haxeon differs from Haxe's checker:
+
+- Haxeon narrows more, so it accepts code Haxe rejects: `map.exists(k)` makes `map.get(k)` and `map[k]` present, a type test
+  narrows, a pure call keeps a field's narrowing in `Strict`, and Haxe's checker misses a null test that is not the first
+  operand of a chain of `||` (`a || b == null || b.f`), which Haxeon reads.
+- A lambda written as an argument of any call to a function or method is taken to run during the call; Haxe looks at whether
+  the callee stores it. A local a closure assigns keeps losing its narrowing at calls that may run the closure, where Haxe's
+  `Strict` never narrows it again.
+- `Std.downcast` is `Null<T>` in Haxeon, where Haxe types it `T`, so its result needs a check.
+- A null field of an object literal and a null branch of a `switch` or `? :` are reported at that value, where Haxe points at
+  the declaration that takes them.
+- `@:nullSafety(Off)` on a local's declaration leaves that declaration unchecked, but not the local's later assignments.
+- With `warn`, the field-initialization findings of a class that has no constructor are not reported.
+- Haxe's `?.` is not parsed yet.
+
 ## Not yet supported
 
 Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
@@ -291,8 +341,9 @@ Haxeon is stricter than Haxe only where Haxe's code would fail when it runs. Whe
 follows it, as with the scalar defaults of `Null<Int>` above (which follow Haxe's static targets; on JavaScript the
 value stays null), and a warning can point out a surprising case.
 
-- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`). Haxe
-  reads through and throws "Null access" when the program runs.
+- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`), and a
+  `Null<F>` function is not called. Haxe reads through and throws "Null access" when the program runs. In a body the null-safety
+  checker checks (above), these are its findings instead.
 - Map keys must be `Hashable` (above). The rule stays for structs, but Haxe's identity-keyed maps (`ObjectMap`, a class
   instance as key) have no Haxeon equivalent yet; one is planned.
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet

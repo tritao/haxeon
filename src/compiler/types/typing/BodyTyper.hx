@@ -40,6 +40,7 @@ import compiler.types.TypedAst.TypedSwitchArrayElement;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
+import compiler.types.typing.NullSafety.NullSafetyUse;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
@@ -593,7 +594,8 @@ class BodyTyper implements BodyTyping {
 		context.resolution = session.syntaxResolutions.ofInitializer(field);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
 		try
-			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
+			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002",
+				FieldInitializer(field.name, field.declarationSpan == null ? field.span : field.declarationSpan))
 		catch (error:haxe.Exception) {
 			session.monomorphs.discard(frame);
 			throw error;
@@ -719,7 +721,7 @@ class BodyTyper implements BodyTyping {
 			for (expression in AstChildren.statementExpressions(statement))
 				validateDeferredExpression(expression, loopDepth);
 			switch statement {
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					validateDeferredControl([inner], loopDepth);
 				case Return(_, span), ReturnVoid(span):
 					fail("E1019", "Cannot return from a deferred statement", span);
@@ -813,7 +815,7 @@ class BodyTyper implements BodyTyping {
 	static function continuesAfterFailure(statement:AstStatement):Bool
 		return switch statement {
 			case ScopedDeclaration(_, _, _, _): false;
-			case PrivateAccessStatement(inner, _): continuesAfterFailure(inner);
+			case AnnotatedStatement(_, inner, _): continuesAfterFailure(inner);
 			default: true;
 		};
 
@@ -843,7 +845,7 @@ class BodyTyper implements BodyTyping {
 				declared = type;
 				span = at;
 				initialized = false;
-			case PrivateAccessStatement(inner, _):
+			case AnnotatedStatement(_, inner, _):
 				declareFailedLocal(inner, scope);
 				return;
 			default:
@@ -880,16 +882,16 @@ class BodyTyper implements BodyTyping {
 				continue;
 			}
 			switch statement {
-				case PrivateAccessStatement(inner, _):
-					session.currentContext.privateAccessDepth++;
+				case AnnotatedStatement(metadata, inner, _):
+					session.currentContext.scopeMetadata(metadata, 1);
 					try {
 						for (typed in typeStatements([inner], scope, result))
 							output.push(typed);
 					} catch (error:haxe.Exception) {
-						session.currentContext.privateAccessDepth--;
+						session.currentContext.scopeMetadata(metadata, -1);
 						throw error;
 					}
-					session.currentContext.privateAccessDepth--;
+					session.currentContext.scopeMetadata(metadata, -1);
 				case ErrorStatement(_):
 					throw new InternalError("Simple statement was not dispatched");
 				case UninitializedDeclaration(_, _, _), TemporaryDeclaration(_, _, _, _), TemporaryAssignment(_, _, _),
@@ -1794,6 +1796,7 @@ class BodyTyper implements BodyTyping {
 
 	/** Dotted assignment syntax carries the statement span; each receiver still needs its own source range. */
 	@:allow(compiler.types.typing.CallResolver)
+	@:allow(compiler.types.typing.StatementTyper)
 	static function referencePrefixSpan(name:String, span:SourceSpan):SourceSpan {
 		var size = span.file.utf8LengthAt(span.start, name);
 		if (size < 0 || span.start + size > span.end)
@@ -2340,6 +2343,10 @@ class BodyTyper implements BodyTyping {
 		var refinedObject = scope.resolveAccess(object);
 		if (refinedObject != null && !sameType(object.type, refinedObject))
 			object = new TypedExpression(TCast(object), refinedObject, object.span);
+		// Where null safety checks, a read through a nullable is its finding, as in Haxe; elsewhere it needs a null check.
+		session.nullSafety.checkReceiver(object, name, span);
+		if (session.nullSafety.active())
+			object = unwrapNullable(object);
 		explainNullableReceiver(object, name, span, scope);
 		var property = AbstractProperties.find(session, object.type, name);
 		if (property != null)
@@ -2739,16 +2746,16 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
-	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression {
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:String,
+			?use:NullSafetyUse):TypedExpression {
 		rejectScopedDynamic(value, expected);
-		return conversionResolver.coerce(value, expected, context, code);
+		return conversionResolver.coerce(value, expected, context, code == null ? "E1009" : code, use);
 	}
 
-	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String,
-			position:Int):TypedExpression {
+	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
+			?use:NullSafetyUse):TypedExpression {
 		rejectScopedDynamic(value, expected);
-		return conversionResolver.coerceArgument(value, expected, callee, position);
+		return conversionResolver.coerceArgument(value, expected, callee, position, use);
 	}
 
 	function rejectScopedDynamic(value:TypedExpression, expected:CompilerType):Void
@@ -2997,7 +3004,8 @@ class BodyTyper implements BodyTyping {
 		if (interfaceProperty != null) {
 			var setter = InterfaceProperties.accessor(session, interfaceProperty, false, span),
 				type = InterfaceProperties.typeOf(session, object.type, interfaceProperty),
-				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
+				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002",
+					Assignment(span));
 			if (assigned != null)
 				value = assigned.bind(value, value.type);
 			// The interface's setter is any implementing class's: what it may change is unknown here.
@@ -3011,7 +3019,7 @@ class BodyTyper implements BodyTyping {
 			return null;
 		var setter = AbstractProperties.accessor(session, property, false, span),
 			type = AbstractProperties.typeOf(session, object.type, property),
-			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
+			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002", Assignment(span));
 		if (assigned != null)
 			value = assigned.bind(value, value.type);
 		var call = callResolver.typeAbstractAccessorCall(object, setter, [value], span, scope);
@@ -3283,7 +3291,7 @@ class BodyTyper implements BodyTyping {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
+			case ErrorStatement(span), AnnotatedStatement(_, _, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
 				DeclaredAssignment(_, _, _, span),

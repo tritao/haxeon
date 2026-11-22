@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.syntax.Ast.AstExpression;
@@ -28,11 +29,15 @@ interface BodyTyping {
 	// Expressions, statements and types.
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
 			inferDynamicLambdaResult:Bool = false):TypedExpression;
-	function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression;
+	function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:String,
+			?use:NullSafetyUse):TypedExpression;
 
-	/** `coerce` for argument `position` (from 1) of a call to `callee`, its mismatch message spelled only on a mismatch. */
-	function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int):TypedExpression;
+	/**
+	 * `coerce` for argument `position` (from 1) of a call to `callee`, its mismatch message spelled only on a mismatch. `use` is what
+	 * the null-safety checker names it, by default the argument of the declared `callee`.
+	 */
+	function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
+			?use:NullSafetyUse):TypedExpression;
 	function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement>;
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;

@@ -231,10 +231,19 @@ typedef AstCatch = {
 	final span:SourceSpan;
 }
 
+/** Metadata on a statement or expression that changes how the typer checks what it wraps. */
+enum ScopeMetadata {
+	/** `@:privateAccess`: private members are reachable. */
+	PrivateAccess;
+
+	/** `@:nullSafety(Off)`: the null-safety checker does not check it. */
+	NullSafetyOff;
+}
+
 /** Parsed expression tree; each constructor retains its complete source span. */
 enum AstExpression {
-	/** An expression evaluated with explicit private access. */
-	PrivateAccessExpression(expression:AstExpression, span:SourceSpan);
+	/** An expression with metadata that changes how it is checked (`@:privateAccess`, `@:nullSafety(Off)`). */
+	AnnotatedExpression(metadata:ScopeMetadata, expression:AstExpression, span:SourceSpan);
 
 	IntegerLiteral(value:Int, span:SourceSpan);
 	FloatLiteral(value:Float, span:SourceSpan);
@@ -372,8 +381,8 @@ typedef AstSwitchExpressionCase = {
 
 /** Parsed statement tree before binding resolution and type checking. */
 enum AstStatement {
-	/** A statement evaluated with explicit private access. */
-	PrivateAccessStatement(statement:AstStatement, span:SourceSpan);
+	/** A statement with metadata that changes how it is checked (`@:privateAccess`, `@:nullSafety(Off)`). */
+	AnnotatedStatement(metadata:ScopeMetadata, statement:AstStatement, span:SourceSpan);
 
 	/** Recovery-only placeholder retaining the malformed statement location. */
 	ErrorStatement(span:SourceSpan);

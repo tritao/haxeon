@@ -72,7 +72,8 @@ class StringConversion {
 			present = nullable ? hold("__haxeon_string_present", new TypedExpression(TCast(whole.local), abstractType,
 				span)) : whole,
 			call =
-				bodyTyper.coerce(bodyTyper.typeExpression(PrivateAccessExpression(MethodCall(TemporaryVariable(present.temporary,
+				bodyTyper.coerce(bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
+				MethodCall(TemporaryVariable(present.temporary,
 				span), "toString", [], span), span), inner, TString), TString, "string conversion", "E1010");
 		if (!nullable)
 			return new TypedExpression(TBlockExpression([whole.statement], call), TString, span);

@@ -26,7 +26,9 @@ typedef TypingCheckpoint = {
 	final context:Null<TypingContext>;
 	final loopDepth:Int;
 	final privateAccessDepth:Int;
+	final nullSafetyOffDepth:Int;
 	final structureSwitches:Int;
+	final nullSafetyFindings:Int;
 }
 
 /**
@@ -168,7 +170,9 @@ class TypingSession {
 			context: context,
 			loopDepth: context == null ? 0 : context.loopDepth,
 			privateAccessDepth: context == null ? 0 : context.privateAccessDepth,
-			structureSwitches: context == null ? 0 : context.structureSwitches.length
+			nullSafetyOffDepth: context == null ? 0 : context.nullSafetyOffDepth,
+			structureSwitches: context == null ? 0 : context.structureSwitches.length,
+			nullSafetyFindings: nullSafety.findings.length
 		};
 	}
 
@@ -194,6 +198,9 @@ class TypingSession {
 		if (outputs.length > mark.outputs)
 			outputs.splice(mark.outputs, outputs.length - mark.outputs);
 		output = mark.output;
+		// What typing abandons was never typed: a speculative typing's findings are not the program's.
+		if (nullSafety.findings.length > mark.nullSafetyFindings)
+			nullSafety.findings.resize(mark.nullSafetyFindings);
 		// A body typed in the output it returns to (a field initializer, in its class's) takes back the lint facts it recorded.
 		output.records.truncateLintFacts(mark.lintFacts);
 		defaultArgumentDepth = mark.defaultArgumentDepth;
@@ -201,11 +208,17 @@ class TypingSession {
 		if (context != null) {
 			context.loopDepth = mark.loopDepth;
 			context.privateAccessDepth = mark.privateAccessDepth;
+			context.nullSafetyOffDepth = mark.nullSafetyOffDepth;
 			if (context.structureSwitches.length > mark.structureSwitches)
 				context.structureSwitches.splice(mark.structureSwitches,
 					context.structureSwitches.length - mark.structureSwitches);
 		}
 	}
+
+	/** The null-safety errors of the bodies typed, which fail the typing as a failed body's error does. */
+	function recordNullSafetyFindings():Void
+		for (finding in nullSafety.takeFindings())
+			recordRecovered(finding);
 
 	function recordRecovered(diagnostic:Diagnostic):Void {
 		// A shared unit (an inline constant) that fails is typed again, and fails again, in each body that uses it: report it once.
@@ -222,6 +235,7 @@ class TypingSession {
 	 * table gave the unannotated declarations that typed.
 	 */
 	public function failIfRecovered(typed:Array<compiler.types.TypedAst.TypedFunction>):Void {
+		recordNullSafetyFindings();
 		if (recoveredErrors.length == 0)
 			return;
 		var table = types;
@@ -232,6 +246,7 @@ class TypingSession {
 
 	/** `error`, with the errors recovered before it first: what a typing that stops at `error` fails with. */
 	public function withRecovered(error:CompileError):CompileError {
+		recordNullSafetyFindings();
 		if (recoveredErrors.length == 0)
 			return error;
 		for (diagnostic in error.diagnostics)
@@ -374,7 +389,18 @@ class TypingSession {
 		this.monomorphs = new MonomorphFrames(anonymousTypeRegistry.register);
 		this.representation = new TypeRepresentation(this);
 		this.enumRepresentations = new EnumRuntimeRepresentations(this);
+		this.nullSafety = new NullSafety(this);
 	}
+
+	/** The null-safety checker of the bodies this session types. */
+	public final nullSafety:NullSafety;
+
+	/** The span of the lambda being typed as a call's argument, which runs during the call (`CallResolver.typeCallArgument`). */
+	public var immediateLambda:Null<SourceSpan> = null;
+
+	/** Whether a body is being typed. */
+	public inline function hasBody():Bool
+		return bodyContexts.length > 0;
 
 	var helperSpans:Map<String, SourceSpan> = [];
 	final builtinHelperSpan:SourceSpan = SourceSpan.generated("value-equality");
@@ -719,6 +745,7 @@ class TypingSession {
 			source = sourceFunctionName != null ? sourceFunctionName : isLambda
 				? currentContext.sourceFunctionName : null,
 			body = new TypingContext(name, typeSubstitutions, owner, source);
+		nullSafety.enter(body, bodyContexts.length == 0 ? null : currentContext);
 		if (isLambda) {
 			body.privateAccessDepth = currentContext.privateAccessDepth;
 			body.memberInitializer = currentContext.memberInitializer;

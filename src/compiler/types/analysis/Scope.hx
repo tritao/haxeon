@@ -576,6 +576,12 @@ class Scope {
 	}
 
 	/** Whether the place `access` reads had a null check or other refinement here that an assignment or call cleared. */
+	/** What `access` (a field path) resolves to when calls are taken to change no field (`FlowFacts.resolveAcrossCalls`). */
+	public function resolveAccessAcrossCalls(access:TypedExpression):Null<CompilerType> {
+		var path = FlowAnalysis.accessPath(access);
+		return path == null ? null : facts.resolveAcrossCalls('$' + 'expression:$path');
+	}
+
 	public function accessWasCleared(access:TypedExpression):Bool {
 		var path = FlowAnalysis.accessPath(access);
 		return path != null && facts.wasCleared('$' + 'expression:$path');

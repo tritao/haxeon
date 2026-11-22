@@ -62,8 +62,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	/** Make a generic class's erased code by elaborating its own-parameter typing; see `CompileOptions.elaborateGenerics`. */
 	final elaborateGenerics:Bool;
 
-	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false) {
+	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false,
+			?nullSafety:Array<compiler.NullSafetyRule>) {
 		this.bodyTyper = bodyTyper;
+		if (nullSafety != null)
+			bodyTyper.session.nullSafety.rules = nullSafety;
 		this.reverseTypingOrder = reverseTypingOrder;
 		this.elaborateGenerics = elaborateGenerics;
 		bodyTyper.genericInstantiation.elaborateGenerics = elaborateGenerics;
@@ -1704,9 +1707,18 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				session.recover(mark, error);
 			}
 		}
-		for (typedMethod in methodsTyped)
-			if (typedMethod != null)
+		// The constructor as this compile typed its body; one it did not type again is only its signature (`methodSignature`).
+		var constructor:Null<TypedFunction> = null;
+		for (methodIndex in 0...methodsTyped.length) {
+			var typedMethod = methodsTyped[methodIndex];
+			if (typedMethod != null) {
 				typedMethods.push(typedMethod);
+				if (typedMethod.isConstructor && !deferBodies
+					&& (specialization != null || selected == null
+					|| selected.exists(classDecl.name + "." + classDecl.methods[methodIndex].name)))
+					constructor = typedMethod;
+			}
+		}
 		if (units != null)
 			for (unit in methodUnits)
 				if (unit != null)
@@ -1732,8 +1744,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					specialization == null ? null : session.representation.receiverType(classDecl.name, substitutions)),
 				cells: [],
 				cellCaptures: [],
-				span: classDecl.span
+				span: classDecl.span,
+				warnings: []
 			});
+		if (specialization == null && !deferBodies) {
+			if (!hasConstructor && typedMethods.length > 0 && typedMethods[typedMethods.length - 1].isConstructor)
+				constructor = typedMethods[typedMethods.length - 1];
+			NullSafetyInitialization.check(session, classDecl, fields, constructor, constructor != null);
+		}
 		return typedMethods;
 	}
 

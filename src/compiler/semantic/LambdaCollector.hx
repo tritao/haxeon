@@ -9,7 +9,7 @@ class LambdaCollector {
 			generatedByModule:Map<String, Map<String, Bool>>):Void {
 		for (statement in statements)
 			switch statement {
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					collect([inner], functionName, module, generatedByModule);
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
@@ -65,7 +65,7 @@ class LambdaCollector {
 	public static function collectExpression(expression:AstExpression, functionName:String, module:String,
 			generatedByModule:Map<String, Map<String, Bool>>):Void
 		switch expression {
-			case PrivateAccessExpression(inner, _):
+			case AnnotatedExpression(_, inner, _):
 				collectExpression(inner, functionName, module, generatedByModule);
 			case Lambda(_, body, identity, _, isInline):
 				// A local inline function's body is typed where it is called, except where it is called through its closure

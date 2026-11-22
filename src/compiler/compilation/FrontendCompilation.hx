@@ -503,7 +503,7 @@ class FrontendCompilation {
 				previousSemantic), context.options.reverseTypingOrder, {
 					signatures: previousSignatures(context, names),
 					check: context.options.checkReuse
-				}, context.options.elaborateGenerics, semanticAssembly.entrySpan);
+				}, context.options.elaborateGenerics, semanticAssembly.entrySpan, context.options.nullSafety);
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;

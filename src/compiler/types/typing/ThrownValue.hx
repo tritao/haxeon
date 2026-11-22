@@ -18,6 +18,7 @@ class ThrownValue {
 	 */
 	public static function of(session:TypingSession, bodyTyper:BodyTyping, value:TypedExpression,
 			span:SourceSpan):TypedExpression {
+		session.nullSafety.checkThrow(value, span);
 		if (!isException(session, value.type))
 			session.output.records.nonExceptionThrows.push({
 				span: span,

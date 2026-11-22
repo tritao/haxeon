@@ -15,6 +15,7 @@ import compiler.types.IterationProtocol;
 import compiler.types.TypedAst.TypedCapture;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.typing.NullSafety.NullSafetyUse;
 
 /** Applies the conversion plan selected by the compilation's type relations. */
 class ConversionResolver {
@@ -45,12 +46,12 @@ class ConversionResolver {
 	 * condition): a nullable of one reads as that type, null giving its default, so `total += stack.pop()` and `if (flag)` work
 	 * on nullables as in Haxe. Anything else is returned as it is. Equality keeps the nullable, so `x == null` still sees null.
 	 */
-	public static function plainValue(value:TypedExpression,
-			bodyTyper:BodyTyping):TypedExpression
+	public static function plainValue(value:TypedExpression, bodyTyper:BodyTyping,
+			?use:NullSafetyUse):TypedExpression
 		return switch value.type {
 			case TNullable(element) if (TypeRelations.hasNullDefault(element)): bodyTyper.coerce(value, element,
 				"operand",
-				"E1010");
+				"E1010", use);
 			default: value;
 		};
 
@@ -110,17 +111,28 @@ class ConversionResolver {
 			span, Warning, fixes));
 	}
 
-	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression
-		return convert(value, expected, context, 0, code);
+	/**
+	 * `value` as an `expected`, `context` naming it in a mismatch. `use` is where the value meets the type, for the null-safety
+	 * checker (`NullSafety.checkConversion`), which checks after the conversion has filled the type variables on either side.
+	 */
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009",
+			?use:NullSafetyUse):TypedExpression {
+		var converted = convert(value, expected, context, 0, code);
+		if (use != null)
+			session.nullSafety.checkConversion(value, expected, use);
+		return converted;
+	}
 
 	/**
 	 * `value` as argument `position` (from 1) of a call to `callee`. A call coerces every argument, and the message's
 	 * `argument N to "callee"` is spelled only when one does not convert.
 	 */
-	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String,
-			position:Int):TypedExpression
-		return convert(value, expected, callee, position, "E1009");
+	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
+			?use:NullSafetyUse):TypedExpression {
+		var converted = convert(value, expected, callee, position, "E1009");
+		session.nullSafety.checkConversion(value, expected, use == null ? Argument(callee, position) : use);
+		return converted;
+	}
 
 	/** What a mismatch names: `context`, or, with `position` set, that argument of a call to `context`. */
 	static function subject(context:String, position:Int):String

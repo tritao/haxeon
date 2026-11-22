@@ -246,6 +246,9 @@ class ClosureTyper {
 		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, capturedIdentity),
 			lambdaContext = session.enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
+		if (session.immediateLambda != span)
+			context.nullSafetyClosure = true;
+		session.immediateLambda = null;
 		context.scope = typedBodyScope;
 		context.receiver = typedBodyScope.receiverType();
 		// A result that is an empty type variable (a callback's `T`, `CallResolver.openResult`) is the body's, as an unannotated

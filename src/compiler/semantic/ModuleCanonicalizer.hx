@@ -453,8 +453,8 @@ class ModuleCanonicalizer {
 	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:LocalScope,
 			?aliases:AliasTable):AstStatement
 		return switch s {
-			case PrivateAccessStatement(inner,
-				span): PrivateAccessStatement(canonicalStatement(inner, module, entry, locals, aliases), span);
+			case AnnotatedStatement(metadata, inner,
+				span): AnnotatedStatement(metadata, canonicalStatement(inner, module, entry, locals, aliases), span);
 			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
@@ -531,8 +531,8 @@ class ModuleCanonicalizer {
 	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:LocalScope,
 			?aliases:AliasTable):AstExpression
 		return switch e {
-			case PrivateAccessExpression(inner,
-				span): PrivateAccessExpression(canonicalExpression(inner, module, entry, locals, aliases), span);
+			case AnnotatedExpression(metadata, inner,
+				span): AnnotatedExpression(metadata, canonicalExpression(inner, module, entry, locals, aliases), span);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), TemporaryVariable(_, _), DeclaredVariable(_, _, _): e;

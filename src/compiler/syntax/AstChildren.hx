@@ -12,7 +12,7 @@ class AstChildren {
 	/** Hands each of `expressions(expression)` to `visitor`, in the same order, without building the array. */
 	public static function visit(expression:AstExpression, visitor:AstChildVisitor):Void
 		switch expression {
-			case PrivateAccessExpression(inner, _):
+			case AnnotatedExpression(_, inner, _):
 				visitor.visitChild(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
@@ -83,7 +83,7 @@ class AstChildren {
 	/** Hands each of `statementExpressions(statement)` to `visitor`, in the same order, without building the array. */
 	public static function visitStatement(statement:AstStatement, visitor:AstChildVisitor):Void
 		switch statement {
-			case PrivateAccessStatement(inner, _):
+			case AnnotatedStatement(_, inner, _):
 				visitStatement(inner, visitor);
 			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _),
 				TemporaryDeclaration(_, _, value, _), TemporaryAssignment(_, value, _),
@@ -112,7 +112,7 @@ class AstChildren {
 
 	public static function expressions(expression:AstExpression):Array<AstExpression>
 		return switch expression {
-			case PrivateAccessExpression(inner, _): [inner];
+			case AnnotatedExpression(_, inner, _): [inner];
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
@@ -163,7 +163,7 @@ class AstChildren {
 
 	public static function statementExpressions(statement:AstStatement):Array<AstExpression>
 		return switch statement {
-			case PrivateAccessStatement(inner, _): statementExpressions(inner);
+			case AnnotatedStatement(_, inner, _): statementExpressions(inner);
 			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _),
 				TemporaryDeclaration(_, _, value, _), TemporaryAssignment(_, value, _),
 				DeclaredAssignment(_, _, value, _),

@@ -25,7 +25,7 @@ class AstScan {
 				case ReturnVoid(_):
 					if (!valueOnly)
 						return true;
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					if (returnsFrom([inner], valueOnly))
 						return true;
 				case If(_, yes, no, _):
@@ -88,7 +88,7 @@ class AstScan {
 			if (isJump(statement))
 				return true;
 			switch statement {
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					if (jumpsOut([inner], isJump))
 						return true;
 				case If(_, yes, no, _):
@@ -166,7 +166,7 @@ private class ExpressionSearch implements AstChildVisitor {
 		if (found)
 			return true;
 		return switch statement {
-			case PrivateAccessStatement(inner, _): inStatement(inner);
+			case AnnotatedStatement(_, inner, _): inStatement(inner);
 			case If(_, yes, no, _): inStatements(yes) || inStatements(no);
 			case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): inStatements(body);
 			case Defer(body, _): inStatements(body);

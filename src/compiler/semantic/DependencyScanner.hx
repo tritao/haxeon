@@ -16,7 +16,7 @@ class DependencyScanner {
 	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>,
 			?typeParameters:Array<String>):Void
 		switch s {
-			case PrivateAccessStatement(inner, _):
+			case AnnotatedStatement(_, inner, _):
 				scanStatement(inner, dependencies, typeParameters);
 			case ErrorStatement(_):
 			case UninitializedDeclaration(_, type, _):
@@ -97,7 +97,7 @@ class DependencyScanner {
 	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>,
 			?typeParameters:Array<String>):Void
 		switch e {
-			case PrivateAccessExpression(inner, _):
+			case AnnotatedExpression(_, inner, _):
 				scanExpression(inner, dependencies, typeParameters);
 			case Add(a, b, _):
 				scanExpression(a, dependencies, typeParameters);

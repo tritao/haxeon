@@ -235,6 +235,7 @@ class TestCatalog {
 		"HelperRequesterIndependenceMain",
 		"GenericDelimiterMain",
 		"LoopNarrowingMain",
+		"NullSafetyMain",
 		"MapEntryFactsMain",
 		"LoopFlowMain",
 		"LoopArrayEffectsMain",

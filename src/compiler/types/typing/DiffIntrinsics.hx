@@ -327,9 +327,9 @@ class DiffIntrinsics {
 	 * keep the caller's access.
 	 */
 	static function synthesized(expression:AstExpression, span:SourceSpan):AstExpression
-		return PrivateAccessExpression(expression, span);
+		return AnnotatedExpression(PrivateAccess, expression, span);
 
 	static function synthesizedStatement(statement:AstStatement, span:SourceSpan):AstStatement
-		return PrivateAccessStatement(statement, span);
+		return AnnotatedStatement(PrivateAccess, statement, span);
 
 }

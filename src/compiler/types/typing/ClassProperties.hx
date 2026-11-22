@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
@@ -234,7 +235,7 @@ class ClassProperties {
 		session.invalidateCallEffects(setter, scope);
 		scope.invalidateExpression('static:$owner.$name');
 		return new TypedExpression(TCall(setter,
-			[bodyTyper.coerce(value, argumentTypes[0], 'property "$name"', "E1002")]),
+			[bodyTyper.coerce(value, argumentTypes[0], 'property "$name"', "E1002", Assignment(value.span))]),
 			bodyTyper.functionResultType(method, method.span), span);
 	}
 }
