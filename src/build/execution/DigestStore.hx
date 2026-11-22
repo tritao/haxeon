@@ -51,13 +51,16 @@ class DigestStore {
 		this.path = path;
 	}
 
-	/** This user's store, made on first use and shared by the whole process. */
+	/**
+	 * This user's store, made on first use and shared by the whole process. `HAXEON_DIGEST_STORE` names another file, for a
+	 * measurement (scripts/perf-guard.py) that must not depend on, or change, what the user's builds have stored.
+	 */
 	public static function shared():DigestStore {
 		#if (target.threaded && !eval)
 		sharedMutex.acquire();
 		#end
 		if (sharedStore == null)
-			sharedStore = new DigestStore(Path.join([userCacheRoot(), "content-digests"]));
+			sharedStore = new DigestStore(sharedPath());
 		var store = sharedStore;
 		#if (target.threaded && !eval)
 		sharedMutex.release();
@@ -72,11 +75,14 @@ class DigestStore {
 			store.save();
 	}
 
-	static function userCacheRoot():String {
+	static function sharedPath():String {
+		var configured = ProcessRunner.environmentValue("HAXEON_DIGEST_STORE");
+		if (configured != null && configured.length > 0)
+			return configured;
 		var home = ProcessRunner.environmentValue(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME");
 		if (home == null || home.length == 0)
 			home = Sys.getCwd();
-		return Path.join([home, ".haxeon", "cache"]);
+		return Path.join([home, ".haxeon", "cache", "content-digests"]);
 	}
 
 	/**

@@ -45,8 +45,12 @@ The small-project part (tests/perf/small-project-baseline.json) runs the CLI bui
 `haxeon check` of tests/perf/small-project) as a user does, from no compile server running: the CLI starts the project's
 server and asks it to compile. It reads instructions:u of every process the command starts, counted until the server leaves
 (perf cannot follow a detached server per thread), and the bytes the server allocated for the request (its worker
-allocations); wall of the CLI is reported, never compared. It runs in two modes, each with metrics of its own, so the result
-never depends on what happens to be built:
+allocations); wall of the CLI is reported, never compared. The CLI keeps the digests of the files it fingerprints in a store
+(build.execution.DigestStore), which the guard gives a file of its own (HAXEON_DIGEST_STORE), emptied at the start of each mode:
+an unmeasured build fills it, as a user's first build does, and each measured command then runs on a fresh copy of the project.
+One more build, with the store emptied again (`*_build_empty_store_instructions`, a regression guard), measures the build that
+hashes every input, the pinned Haxe and the compiler's sources among them. No command the guard runs reads or writes the user's
+store. It runs in two modes, each with metrics of its own, so the result never depends on what happens to be built:
   vm    always: haxeon-aot set aside for the run, so the CLI and the server are the VM running their bytecode (the server's
         compiled once into the guard's session directory)
   aot   when the CLI and compiler built ahead of time (haxeon-aot, `haxeon dev aot`) is current: it runs the CLI and serves the
@@ -549,6 +553,17 @@ def measure_small_project(hl, out):
     return metrics
 
 
+def remove_file(path):
+    if os.path.exists(path):
+        os.remove(path)
+
+
+def fresh_project(project):
+    """A new copy of the small project at `project`: its files are new to the CLI, as a project just made is."""
+    shutil.rmtree(project, ignore_errors=True)
+    shutil.copytree(SMALL_PROJECT, project)
+
+
 def measure_small_project_mode(out, mode, expected_server):
     """A cold `haxeon build` and `haxeon check` of tests/perf/small-project, as a user starts one: the CLI, which starts the
     project's compile server, and the compile; returns their metrics, named after `mode`. The server must be `expected_server`:
@@ -557,15 +572,19 @@ def measure_small_project_mode(out, mode, expected_server):
     # Kept between runs, as a user's is: it holds the server program the CLI builds once for the checkout's compiler.
     session = os.path.join(work, "session")
     project = os.path.join(work, "project")
+    # The mode's own digest store, empty until the warm-up fills it.
+    store = os.path.join(work, "content-digests")
     os.makedirs(session, exist_ok=True)
-    shutil.rmtree(project, ignore_errors=True)
-    shutil.copytree(SMALL_PROJECT, project)
+    remove_file(store)
+    fresh_project(project)
     haxeon = os.path.join(ROOT, "scripts", "haxeon")
-    env = dict(os.environ, HAXEON_COMPILER_SESSION_DIR=session, HL_GC_MARK_SERIAL="1", HAXEON_COMPILER_IDLE_SECONDS="1",
+    env = dict(os.environ, HAXEON_COMPILER_SESSION_DIR=session, HAXEON_DIGEST_STORE=store, HL_GC_MARK_SERIAL="1",
+               HAXEON_COMPILER_IDLE_SECONDS="1",
                PERF_GUARD_LOG=os.path.join(work, "command.log"), PERF_GUARD_WALL=os.path.join(work, "wall"),
                PERF_GUARD_SERVER=os.path.join(work, "server"), PERF_GUARD_PATH=os.environ.get("PATH", ""))
     stop_workers(session)
-    # Unmeasured: builds the server program when the session has none for this compiler yet, and warms the file cache.
+    # Unmeasured: builds the server program when the session has none for this compiler yet, warms the file cache and fills the
+    # digest store.
     with open(os.path.join(work, "warm-up.log"), "w") as log:
         status = subprocess.run([haxeon, "build", "--project", "haxeon.json"], cwd=project, env=env, stdout=log,
                                 stderr=subprocess.STDOUT).returncode
@@ -578,8 +597,10 @@ def measure_small_project_mode(out, mode, expected_server):
     pin, prefix = performance_cores() if skip is None else ([], "")
     events = {prefix + "instructions/u": "instructions", prefix + "cycles/u": "cycles"}
     metrics = {}
-    for command in ("build", "check"):
-        shutil.rmtree(os.path.join(project, "build"), ignore_errors=True)
+    for command, empty_store in (("build", False), ("check", False), ("build", True)):
+        fresh_project(project)
+        if empty_store:
+            remove_file(store)
         shell = pin + ["sh", "-c", SMALL_PROJECT_SHELL, "sh", haxeon, command, "--project", "haxeon.json", "-v", "detailed"]
         if skip is None:
             shell = ["perf", "stat", "-x,", "-e", ",".join(events), "--"] + shell
@@ -598,13 +619,15 @@ def measure_small_project_mode(out, mode, expected_server):
             raise SystemExit(f"perf-guard: the small project's {mode} {command} reported no worker allocations; "
                              f"log: {env['PERF_GUARD_LOG']}")
         fields = dict(field.split("=", 1) for field in line.split(":", 1)[1].split())
-        metrics[f"{mode}_{command}_allocated_bytes"] = int(fields["bytes"])
+        name = f"{mode}_{command}" + ("_empty_store" if empty_store else "")
+        if not empty_store:
+            metrics[f"{name}_allocated_bytes"] = int(fields["bytes"])
         counts = {}
         for row in (row.split(",") for row in process.stderr.splitlines()):
             if len(row) > 2 and row[0].isdigit() and row[2] in events:
                 counts[events[row[2]]] = int(row[0])
         if "instructions" in counts:
-            metrics[f"{mode}_{command}_instructions"] = counts["instructions"]
+            metrics[f"{name}_instructions"] = counts["instructions"]
         with open(env["PERF_GUARD_WALL"]) as source:
             wall = int(source.read()) / 1e9
         with open(env["PERF_GUARD_SERVER"]) as source:
@@ -612,7 +635,8 @@ def measure_small_project_mode(out, mode, expected_server):
         if server != expected_server:
             raise SystemExit(f"perf-guard: the small project's {mode} {command} was served by {server or 'nothing'}, "
                              f"not {expected_server}")
-        print(f"perf-guard: small project {mode:3} cold {command:5} wall {wall:5.2f} s"
+        print(f"perf-guard: small project {mode:3} cold {command:5}" + (" (empty digest store)" if empty_store else "")
+              + f" wall {wall:5.2f} s"
               + (f", cycles {counts['cycles'] / 1e9:.2f}G" if "cycles" in counts else "") + " (not compared), "
               + (f"instructions {counts['instructions'] / 1e9:.2f}G, " if "instructions" in counts else "")
               + f"served by {server}")
@@ -691,6 +715,9 @@ def main(arguments):
         return 0
     out = os.environ.get("HAXEON_SUITE_OUT") or os.path.join(ROOT, "out", "perf-guard")
     os.makedirs(out, exist_ok=True)
+    # Every command the guard runs keeps its file digests in a store of the guard's, never the user's (build.execution.DigestStore);
+    # the small project's modes each name one of their own.
+    os.environ["HAXEON_DIGEST_STORE"] = os.path.join(out, "content-digests")
     hl = hashlink()
     failures, improvements, compared = [], [], {}
     if "self-compile" in parts or "incremental" in parts:
