@@ -34,13 +34,11 @@ class AotBuild {
 			classPaths: [],
 			defines: []
 		}),
-			sdk = Path.join([Path.directory(HashLinkPath.directory(home)), "hlc-sdk"]),
+			sdk = build.HaxeonSdk.root(home),
 			directory = Path.join([home, "out", "aot"]),
 			output = Path.join([directory, AotCompiler.NAME + (Sys.systemName() == "Windows" ? ".exe" : "")]),
 			sourcesFile = Path.join([directory, "sources.txt"]),
 			compilerSource = Path.join([home, "src"]);
-		if (!FileSystem.exists(Path.join([sdk, "lib"])))
-			throw new InternalError('No hlc SDK at $sdk: the native build makes it (target haxeon-hlc-sdk)');
 		FileSystem.createDirectory(directory);
 		var roots = ["src", "lib/haxeon-io", "stdlib"], sources = [];
 		for (root in roots)

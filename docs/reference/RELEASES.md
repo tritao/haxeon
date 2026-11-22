@@ -19,6 +19,7 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
 | `stdlib/` | The standard library. |
 | `templates/` | The project templates of `haxeon create` ([templates/README.md](../../templates/README.md)). |
+| `sdk/` | Haxeon's SDK ([SDK_LAYOUT.md](../design/SDK_LAYOUT.md)): the VM libraries under `lib/<target>/`, `include/`, `src/` and the CMake package an app's runner finds with `find_package(Haxeon)`; an ahead-of-time build's `--c-sdk`. |
 | `LICENSE`, `NOTICE`, `README.md` | |
 
 Platforms:

@@ -1,5 +1,5 @@
-# Building an app's runner with Haxeon's SDK (docs/design/PROJECT_BUILDS.md). The generated fragment (`haxeon.cmake`) includes
-# this file from the SDK and calls haxeon_add_app; a runner's own CMakeLists.txt includes the fragment.
+# Building an app's runner with Haxeon's SDK (docs/design/PROJECT_BUILDS.md, SDK_LAYOUT.md): haxeon_add_app, which the
+# runner's CMakeLists.txt calls after the generated fragment and find_package(Haxeon).
 #
 #   haxeon_add_app(<target> MODULE <path.hl> [NATIVE_TARGETS <target>...])
 #
@@ -7,22 +7,14 @@
 # output directories so the native packages' shared libraries land beside it too, found there at run time ($ORIGIN,
 # @loader_path or the executable's directory).
 
-cmake_minimum_required(VERSION 3.24)
-
-get_filename_component(HAXEON_SDK_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
-
+# The libraries come from HaxeonConfig.cmake (find_package(Haxeon)), which includes this file.
 if(NOT TARGET Haxeon::app)
-  add_library(Haxeon::app STATIC IMPORTED)
-  set_target_properties(Haxeon::app PROPERTIES
-    IMPORTED_LOCATION "${HAXEON_SDK_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}haxeon-app${CMAKE_STATIC_LIBRARY_SUFFIX}")
-  add_library(Haxeon::ffi STATIC IMPORTED)
-  set_target_properties(Haxeon::ffi PROPERTIES
-    IMPORTED_LOCATION "${HAXEON_SDK_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}ffi${CMAKE_STATIC_LIBRARY_SUFFIX}")
-  if(WIN32)
-    set(HAXEON_APP_SYSTEM_LIBRARIES advapi32 bcrypt ws2_32 user32 winmm dbghelp dxguid)
-  else()
-    set(HAXEON_APP_SYSTEM_LIBRARIES ${CMAKE_DL_LIBS} m pthread)
-  endif()
+  message(FATAL_ERROR "HaxeonApp.cmake is part of the Haxeon package: use find_package(Haxeon)")
+endif()
+if(WIN32)
+  set(HAXEON_APP_SYSTEM_LIBRARIES advapi32 bcrypt ws2_32 user32 winmm dbghelp dxguid)
+else()
+  set(HAXEON_APP_SYSTEM_LIBRARIES ${CMAKE_DL_LIBS} m pthread)
 endif()
 
 function(haxeon_add_app target)

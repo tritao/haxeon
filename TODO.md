@@ -4,12 +4,10 @@ Concrete gaps found while compiling Materia and while matching stock Haxe.
 Longer-term direction is in `ROADMAP.md`.
 
 - **App runners: what step 1 left** (`docs/design/PROJECT_BUILDS.md`).
-  Release archives do not ship the SDK a runner links (the native build's
-  `hlc-sdk` directory, which should be renamed `sdk` with its AOT users),
-  so `haxeon create` apps build only in a checkout. A package with native
+  Releases do not ship the first-party packages (docs/design/SDK_LAYOUT.md,
+  step 4), so `haxeon create` apps build only in a checkout. A package with native
   sources and no `[native.cmake]` cannot join a runner's graph. Under
-  `--watch`, an edit to native code needs a restart. The fragment's
-  `HAXEON_RUNNER_VERSION` is written but not checked against the runner yet.
+  `--watch`, an edit to native code needs a restart.
 - **Spike: bundle a C compiler with Haxeon** (after the app template). Apps
   that use native packages build C and C++ with the user's toolchain
   (`docs/design/WEBSITE.md`, native code), which on Windows means Visual

@@ -56,12 +56,23 @@ class HlcBuild {
 		return requested;
 	}
 
-	/** The target the SDK at `sdk` was built for, from its `target` file (CMakeLists.txt writes it). */
+	/**
+	 * The target the SDK at `sdk` has libraries for: its one `lib/<target>` directory (docs/design/SDK_LAYOUT.md; the native
+	 * build stages the SDK in out/sdk).
+	 */
 	static function sdkTarget(sdk:String):{name:String, os:String, arch:String, abi:String} {
-		var path = sdk + "/target";
-		if (!FileSystem.exists(path))
-			throw new UsageError('No hlc SDK at $sdk: $path is missing (the native build makes it, target haxeon-hlc-sdk)');
-		var name = StringTools.trim(File.getContent(path)), parts = name.split("-");
+		var libraries = sdk + "/lib";
+		var targets = FileSystem.exists(libraries) && FileSystem.isDirectory(libraries) ? [
+			for (entry in FileSystem.readDirectory(libraries))
+				if (FileSystem.isDirectory(libraries + "/" + entry)) entry
+		] : [];
+		if (targets.length == 0)
+			throw new UsageError('No Haxeon SDK at $sdk: it has no lib/<target> directory (the native build stages one in out/sdk)');
+		if (targets.length > 1) {
+			targets.sort(Reflect.compare);
+			throw new UsageError('The Haxeon SDK at $sdk has libraries for ${targets.join(", ")}; an ahead-of-time build takes one');
+		}
+		var name = targets[0], parts = name.split("-");
 		return {
 			name: name,
 			os: parts[0],
@@ -78,7 +89,7 @@ class HlcBuild {
 	 */
 	public static function compile(files:Array<HlcFile>, directory:String, output:String, toolchain:String, sdk:String,
 			exactFrames:Bool):Int {
-		var driver = driverOf(toolchain), os = sdkTarget(sdk).os;
+		var driver = driverOf(toolchain), target = sdkTarget(sdk), os = target.os;
 		var objects = directory + (exactFrames ? "/obj-development" : "/obj-release");
 		FileSystem.createDirectory(objects);
 		// Every file includes `hlc.h`, and through it the SDK's `hlc_prelude.h`.
@@ -117,7 +128,9 @@ class HlcBuild {
 			if (failure != null)
 				throw new InternalError('C compilation failed: $failure');
 		File.saveContent(stamp, command);
-		var link = driver == Gnu ? gnuLink(output, outputs, sdk, os, exactFrames) : msvcLink(output, outputs, sdk);
+		var link = driver == Gnu ? gnuLink(output, outputs, library(sdk, target.name, "hl-aot", false),
+			library(sdk, target.name, "ffi", false), os, exactFrames) : msvcLink(output, outputs,
+			library(sdk, target.name, "hl-aot", true), library(sdk, target.name, "ffi", true));
 		var result = ProcessOutputCapture.capture(toolchain, link, ProcessOutputCapture.defaultDiagnosticLimit);
 		if (result.exitCode != 0)
 			throw new InternalError('C link failed:\n${result.stderr}${driver == Gnu ? "" : result.stdout}');
@@ -188,14 +201,18 @@ class HlcBuild {
 		return flags;
 	}
 
+	/** A static library of the SDK for `target`, named as the toolchain's static libraries are (`libNAME.a`, `NAME.lib`). */
+	static function library(sdk:String, target:String, name:String, msvc:Bool):String
+		return '$sdk/lib/$target/' + (msvc ? '$name.lib' : 'lib$name.a');
+
 	/** The link with gcc's driver: the whole VM library, as the loader resolves natives by name (`hlp_*`) in the executable. */
-	static function gnuLink(output:String, objects:Array<String>, sdk:String, os:String,
+	static function gnuLink(output:String, objects:Array<String>, vm:String, ffi:String, os:String,
 			exactFrames:Bool):Array<String> {
 		var link = ["-o", output].concat(objects);
 		if (os == "macos")
 			return link.concat([
-				'-Wl,-force_load,$sdk/lib/libhl.a',
-				'$sdk/lib/libffi.a',
+				'-Wl,-force_load,$vm',
+				ffi,
 				"-lm",
 				"-lpthread",
 				"-Wl,-export_dynamic"
@@ -204,9 +221,9 @@ class HlcBuild {
 			// MinGW. The entry point is wmain; the main thread gets the 8 MB stack the other platforms give it.
 			return link.concat([
 				"-Wl,--whole-archive",
-				'$sdk/lib/libhl.a',
+				vm,
 				"-Wl,--no-whole-archive",
-				'$sdk/lib/libffi.a',
+				ffi,
 				"-municode",
 				"-Wl,--stack,8388608",
 				"-lws2_32",
@@ -218,9 +235,9 @@ class HlcBuild {
 			]);
 		link = link.concat([
 			"-Wl,--whole-archive",
-			'$sdk/lib/libhl.a',
+			vm,
 			"-Wl,--no-whole-archive",
-			'$sdk/lib/libffi.a',
+			ffi,
 			"-lm",
 			"-lpthread",
 			"-ldl",
@@ -241,7 +258,7 @@ class HlcBuild {
 	 * capture expects the functions. The entry point is wmain, and the main thread gets the 8 MB
 	 * stack the other platforms give it.
 	 */
-	static function msvcLink(output:String, objects:Array<String>, sdk:String):Array<String> {
+	static function msvcLink(output:String, objects:Array<String>, vm:String, ffi:String):Array<String> {
 		return ["/nologo", '/Fe$output'].concat(objects).concat([
 			"/link",
 			"/DEBUG",
@@ -249,9 +266,9 @@ class HlcBuild {
 			"/OPT:REF",
 			"/OPT:NOICF",
 			"/STACK:8388608",
-			'/WHOLEARCHIVE:$sdk/lib/libhl.lib',
-			'$sdk/lib/libhl.lib',
-			'$sdk/lib/libffi.lib',
+			'/WHOLEARCHIVE:$vm',
+			vm,
+			ffi,
 			"ws2_32.lib",
 			"user32.lib",
 			"winmm.lib",

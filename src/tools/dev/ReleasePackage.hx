@@ -3,6 +3,7 @@ package tools.dev;
 import build.AotCompiler;
 import build.HashLinkPath;
 import build.HaxeonRelease;
+import build.HaxeonSdk;
 import build.execution.ProcessRunner;
 import compiler.core.InternalError;
 import haxe.io.Path;
@@ -20,6 +21,8 @@ import sys.io.File;
  *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
  *   stdlib/                         the standard library
  *   templates/                      the project templates of `haxeon create` (templates/README.md)
+ *   sdk/                            Haxeon's SDK (docs/design/SDK_LAYOUT.md), as the native build staged it in out/sdk, with a
+ *                                   manifest whose roots are the release's own stdlib/ and templates/
  *   LICENSE, NOTICE, README.md
  *
  * It builds what a checkout's native build does not, the compiler's bytecode: `tools.CompilerExecutable` with the pinned Haxe, as the
@@ -81,6 +84,13 @@ class ReleasePackage {
 		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(home))]), digest + "\n");
 		cmake(home, ["-E", "copy_directory", Path.join([home, "stdlib"]), Path.join([root, "stdlib"])]);
 		cmake(home, ["-E", "copy_directory", Path.join([home, "templates"]), Path.join([root, "templates"])]);
+		// The SDK as the native build staged it, but for its manifest: a release has no checkout, and its roots are its own.
+		var sdk = Path.join([root, "sdk"]);
+		for (part in ["lib", "include", "src", "cmake"])
+			cmake(home, ["-E", "copy_directory", Path.join([HaxeonSdk.root(home), part]), Path.join([sdk, part])]);
+		File.saveContent(Path.join([sdk, HaxeonSdk.MANIFEST]),
+			'# Haxeon\'s SDK manifest (docs/design/SDK_LAYOUT.md).\nversion = "${project.PackageCompatibility.CURRENT_HAXEON}"\n\n'
+			+ '[roots]\nstdlib = "../stdlib"\ntemplates = "../templates"\n');
 		// The stamps hold the digest of what the release holds: no source changed while it was made.
 		if (AotCompiler.sourcesDigest(home, compilerSource) != digest)
 			throw new InternalError("The compiler sources changed while the release was made; run it again");

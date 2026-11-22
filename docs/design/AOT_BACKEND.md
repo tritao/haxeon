@@ -93,7 +93,7 @@ failure, never silent corruption.
 The sources go to `OUTPUT.c/`:
 
 - `hlc.h`: what every file shares, and only that. What is the same for every program is a real header of the SDK,
-  `hlc_prelude.h` (`native/aot/hlc_prelude.h`, copied into `include/` by the `haxeon-hlc-sdk` target): `#include <hl.h>`,
+  `hlc_prelude.h` (`native/aot/hlc_prelude.h`, copied into the SDK's `include/` by the `haxeon-sdk` target): `#include <hl.h>`,
   the warning pragmas, the section and inlining macros (`HLC_FUNCTION`), `hlc_signature`, `hlc_f64`, the native symbol
   macros (`HLC_SYMBOL`) and the inline allocation helper `hlc_new`. The generated `hlc.h` defines the program's options
   before it includes the prelude (`HLC_INLINE_ALLOCATION` with `CompileOptions.inlineAllocation`) and adds only what
@@ -304,9 +304,10 @@ is not stable in every C library.
 
 `--target=hlc` selects the backend as `--target=wasm32` does (`BackendTargets.parse` gives `HashLinkC`). The compile writes
 the C sources into the directory `--output` names plus `.c` (`out/main.c/`). With the SDK it links against, a
-typed option on the request (`CompileOptions.cSdk`, `--c-sdk=DIR`: the native build's `hlc-sdk` directory, made by the
-`haxeon-hlc-sdk` target, with the runtime headers in `include/`, `libhl.a` (the VM library without the JIT) and `libffi.a` in
-`lib/`, the entry point in `src/`, and in `target` the target it was built for), the driver builds with a toolchain
+typed option on the request (`CompileOptions.cSdk`, `--c-sdk=DIR`: Haxeon's SDK ([SDK_LAYOUT.md](SDK_LAYOUT.md)), which a
+checkout's native build stages in `out/sdk` with the `haxeon-sdk` target: the runtime headers in `include/`, the VM library
+without the JIT (`libhl-aot`) and `libffi` in `lib/<target>/`, whose one directory names the target, and the entry point in
+`src/`), the driver builds with a toolchain
 (`CompileOptions.toolchain`, `--toolchain=NAME|PATH`): `gcc`, `clang`, `clang-cl` or `cl`, or a path to one, which chooses the
 compiler, the linker, the flag style, the debug format and the C runtime together. Without it the toolchain is the default of
 the SDK's target (`HlcBuild.toolchain`), whose ABI the compile cannot know otherwise: the compiler knows the backend and the

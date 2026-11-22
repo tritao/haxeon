@@ -108,7 +108,7 @@ class CompileOptions {
 	 */
 	public final toolchain:Null<String>;
 
-	/** The C SDK a `--target=hlc` build compiles against: a directory with `include/` and `lib/` (the native build's `hlc-sdk`). */
+	/** The SDK a `--target=hlc` build compiles against: Haxeon's SDK (`include/`, `lib/<target>/`, `src/`; docs/design/SDK_LAYOUT.md). */
 	public final cSdk:Null<String>;
 
 	/**
