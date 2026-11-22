@@ -26,6 +26,7 @@ typedef IrInlineValueSlot = {
  * objects expand recursively. Optional values contribute a presence slot followed by their payload slots. Keeping the
  * source path separate from the generated physical name lets field-place lowering preserve aliases and diagnostics.
  */
+@:nullSafety(Strict)
 class IrInlineValueLayout {
 	final objects:IrObjectTable;
 

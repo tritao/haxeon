@@ -19,6 +19,7 @@ import compiler.ir.reuse.IrFacts;
  * (`VALUE`), so a function with none keeps its form unread while those facts hold. One with a value row is rewritten each run
  * (`REWRITE`, never stated), as what the rewrite reads of the declarations is not recorded.
  */
+@:nullSafety(Strict)
 class IrValueObjectRows implements IrFunctionPass {
 	static inline final VALUE = 0;
 	static inline final REWRITE = 1;

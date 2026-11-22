@@ -16,6 +16,7 @@ import compiler.ir.passes.scalars.IrScalarReplacement;
 import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 
 /** Split a value phi into scalar snapshots when every incoming value is known to exist. */
+@:nullSafety(Strict)
 class IrValuePhiScalarization {
 	/** `rewriteBodies` with the program's type ids (`IrTypeIds.ofFunctions`) and fresh scratch, the result owned by the next stage. */
 	public static function rewrite(program:IrProgram):Void
@@ -82,12 +83,15 @@ class IrValuePhiScalarization {
 
 	static function valueObject(type:IrType, objects:Map<String, IrObject>):Null<String>
 		return switch type {
-			case Obj(name) if (objects.exists(name) && objects.get(name).isValue): name;
+			case Obj(name):
+				var object = objects.get(name);
+				object != null && object.isValue ? name : null;
 			default: null;
 		};
 }
 
 /** Value phi scalarization of one body, in place. */
+@:nullSafety(Strict)
 private class IrBodyValuePhis {
 	final objects:Map<String, IrObject>;
 	final table:IrObjectTable;
@@ -154,13 +158,16 @@ private class IrBodyValuePhis {
 		var substitutions:Map<Int, Int> = [];
 		for (id => value in singles) {
 			var seen:Map<Int, Bool> = [id => true], current = value, valid = true;
-			while (singles.exists(current)) {
+			while (true) {
+				var next = singles.get(current);
+				if (next == null)
+					break;
 				if (seen.exists(current)) {
 					valid = false;
 					break;
 				}
 				seen.set(current, true);
-				current = singles.get(current);
+				current = next;
 			}
 			if (valid)
 				substitutions.set(id, current);
@@ -279,7 +286,7 @@ private class IrBodyValuePhis {
 	}
 
 	function declared(type:IrType, field:String):IrObjectField {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: throw new InternalError("Invalid value phi field");
 		};
@@ -297,7 +304,9 @@ private class IrBodyValuePhis {
 
 	function optionalValue(field:IrObjectField):Bool
 		return switch field.type {
-			case Nullable(Obj(name)): objects.exists(name) && objects.get(name).isValue;
+			case Nullable(Obj(name)):
+				var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 

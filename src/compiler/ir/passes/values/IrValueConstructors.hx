@@ -22,6 +22,7 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  * when it is not expanded, else the version of the constructor, whose body is the form, or never stated when the form expands
  * other constructors too.
  */
+@:nullSafety(Strict)
 class IrValueConstructors implements IrFunctionPass {
 	static inline final CONSTRUCTOR = 0;
 

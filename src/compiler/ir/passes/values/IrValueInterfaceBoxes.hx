@@ -23,6 +23,7 @@ import compiler.ir.reuse.IrFactReader;
  * declares of each object and interface its conversions name (`OBJECT`, `INTERFACE`) and asks for the boxes, unboxes, type tests,
  * casts and the type-id helper it calls; the box objects the helpers need are returned (`made`), not added to the objects given.
  */
+@:nullSafety(Strict)
 class IrValueInterfaceBoxes implements IrFunctionPass {
 	public static inline final BOX_PREFIX = "$value-interface-box:";
 	public static inline final UNBOX_PREFIX = "$value-interface-unbox:";
@@ -117,14 +118,16 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 		// The function's type values and next free value id are only worked out when an instruction needs them.
 		var typesOfCurrent:Null<Map<Int, IrType>> = null, next = -1;
 		function types():Map<Int, IrType> {
-			if (typesOfCurrent == null) {
-				typesOfCurrent = [];
+			var known = typesOfCurrent;
+			if (known == null) {
+				known = [];
 				for (block in fn.blocks) for (located in block.instructions) switch located.value {
-					case TypeValue(out, type): typesOfCurrent.set(out.id, type);
+					case TypeValue(out, type): known.set(out.id, type);
 					default:
 				}
+				typesOfCurrent = known;
 			}
-			return typesOfCurrent;
+			return known;
 		}
 		function freshId():Int {
 			if (next < 0)
@@ -151,7 +154,7 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 					arguments) if ((intrinsic.name == "__std_is_of_type" || intrinsic.name == "__std_is_exact_type")
 					&& arguments.length == 2 && types().exists(arguments[1].id)):
 					var type = types().get(arguments[1].id);
-					if (objectKind(type) != 2) null;
+					if (type == null || objectKind(type) != 2) null;
 					else {
 						var exact = intrinsic.name == "__std_is_exact_type", name = valueName(type);
 						reader.request(exact ? TEST_EXACT : TEST_INSTANCE, type);
@@ -218,8 +221,8 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 			var values = [for (object in objects) if (object.isValue && object.interfaces.length > 0) object.name];
 			for (value in values) boxFor(value);
 			var byId:Map<Int, Array<String>> = [];
-			for (value in boxes.keys()) {
-				var hash = IrTypeIdentity.id(Obj(boxes.get(value))), group = byId.get(hash);
+			for (value => box in boxes) {
+				var hash = IrTypeIdentity.id(Obj(box)), group = byId.get(hash);
 				if (group == null) byId.set(hash, group = []);
 				group.push(value);
 			}
@@ -229,10 +232,11 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 				physical = builder.call("__dynamic_object_type_id", [input], I32),
 				missing = builder.createBlock();
 			IrTypeHashDispatch.emit(builder, physical, [for (id in byId.keys()) id], function(id) {
-				for (value in byId.get(id)) {
+				// Every id is one of byId's, and every value in it has its box already.
+				for (value in byId.get(id) ?? []) {
 					var matched = builder.createBlock(), next = builder.createBlock();
 					builder.branch(builder.call("__std_is_exact_type",
-						[input, builder.typeValue(Obj(boxes.get(value)))], Bool), matched, next);
+						[input, builder.typeValue(Obj(boxFor(value)))], Bool), matched, next);
 					builder.select(matched);
 					builder.returnValue(builder.constInt(IrTypeIdentity.id(Obj(value))));
 					builder.select(next);
