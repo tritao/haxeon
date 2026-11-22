@@ -846,54 +846,51 @@ class HlcFunctionLower {
 		return [for (index in from...body.operandCount(row)) body.operand(row, index)];
 
 	function lowerCall(row:Int):Void {
-		var name = body.symbol(row).name, output = body.output(row);
-		switch name {
-			case compiler.ir.names.IrReceiverCheck.NAME:
+		var name = body.symbol(row).name, output = body.output(row), base = fastPathBase(name);
+		switch HlLoweringDecisions.classifyCall(base) {
+			case ReceiverCheck:
 				nullCheck(row, body.operand(row, 0));
-				return;
-			case compiler.ir.names.IrReferenceIdentity.NAME:
+			case ReferenceIdentity:
 				line('${v(output)} = (void*)${v(body.operand(row, 0))} == (void*)${v(body.operand(row, 1))};');
-				return;
-			case compiler.ir.analysis.IrExactTypeFacts.TEST:
+			case ExactTypeTest:
 				var object = v(body.operand(row, 0));
 				line('${v(output)} = ($object ? ((vdynamic*)$object)->t : &hlt_void) == ${v(body.operand(row, 1))};');
-				return;
-			case compiler.ir.passes.scalars.IrScalarWordBits.PACK, compiler.ir.passes.scalars.IrScalarWordBits.UNPACK,
-				compiler.ir.passes.values.IrValueLaneReference.PACK,
-				compiler.ir.passes.values.IrValueLaneReference.UNPACK:
+			case WordBits, LaneReference:
 				line('${v(output)} = (${types.cType(typeOf(output))})${v(body.operand(row, 0))};');
-				return;
-			case compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS:
+			case ScalarRefAddress:
 				line('${v(output)} = (${types.cType(typeOf(output))})&${v(body.operand(row, 0))};');
-				return;
-			case compiler.ir.passes.scalars.IrHlScalarRef.LOAD:
+			case ScalarRefLoad:
 				assign(row, '*${v(body.operand(row, 0))}', types.parameter(typeOf(body.operand(row, 0))));
-				return;
-			case compiler.ir.passes.scalars.IrHlScalarRef.STORE:
+			case ScalarRefStore:
 				var reference = body.operand(row, 0), element = types.parameter(typeOf(reference));
 				store('*${v(reference)}', operandAs(row, 1, element), element);
-				return;
-			default:
+			case ArrayPush:
+				lowerArrayPush(row, base);
+			case BytesGet:
+				lowerBytesAccess(row, base, true);
+			case BytesSet:
+				lowerBytesAccess(row, base, false);
+			case ValueArrayRead:
+				// A field of the element nothing reads is dropped: the read beside it checks the element the same way.
+				if (output.exists() && uses[output] == 0 && HlLower.usedReadNearby(body, row, uses))
+					return;
+				var slot = name == HlLower.VALUE_ARRAY_READ_I32 ? HlLower.inlineValueArraySlot(body, row) : null;
+				if (slot != null)
+					lowerValueArrayRead(row, slot);
+				else
+					lowerPlainCall(row, name);
+			case ValueArrayValidate:
+				// When a read follows, it checks the same element the same way.
+				if (!HlLower.scalarReadFollows(body, row))
+					lowerPlainCall(row, name);
+			case Plain:
+				lowerPlainCall(row, name);
 		}
-		if (StringTools.startsWith(name, HlLower.VALUE_ARRAY_READ) && output.exists() && uses[output] == 0
-			&& HlLower.usedReadNearby(body, row, uses))
-			// A field of the element nothing reads; the read beside it checks the element the same way.
-			return;
-		if (name == HlLower.VALUE_ARRAY_VALIDATE && HlLower.scalarReadFollows(body, row))
-			// The read checks the same element the same way.
-			return;
-		if (name == HlLower.VALUE_ARRAY_READ_I32) {
-			var slot = HlLower.inlineValueArraySlot(body, row);
-			if (slot != null) {
-				lowerValueArrayRead(row, slot);
-				return;
-			}
-		}
-		if (lowerRuntimeFastPath(row, name))
-			return;
+	}
+
+	function lowerPlainCall(row:Int, name:String):Void {
 		var slot = module.requireSlot(name), arguments = operandsFrom(row, 0);
-		callSlot(row, slot, [for (value in arguments) valueOrNull(value)],
-			[for (value in arguments) typeOf(value)]);
+		callSlot(row, slot, [for (value in arguments) valueOrNull(value)], [for (value in arguments) typeOf(value)]);
 	}
 
 	/** The call of `row` through slot `slot`, as a C expression. */
@@ -934,26 +931,23 @@ class HlcFunctionLower {
 	}
 
 	/**
-	 * `HlLower.lowerRuntimeFastPath`'s array push and byte read and write: the common case inline, the native on the slow path,
-	 * which keeps allocation and error behavior. A call of the shared helper of one of them (`IrSharedRuntimeCalls`) is written
-	 * the same way: in C the fast path costs no start-up time.
+	 * `HlLower.lowerRuntimeFastPath`'s array push: the common case inline, the native `base` on the slow path, which keeps
+	 * allocation and error behavior. A call of the shared helper of one (`IrSharedRuntimeCalls`) is written the same way: in C
+	 * the fast path costs no start-up time.
 	 */
-	function lowerRuntimeFastPath(row:Int, name:String):Bool {
-		var base = fastPathBase(name);
-		var push = base == "__array_push_i32" || base == "__array_push_i64" || base == "__array_push_f64"
-			|| base == "__array_push_bool" || base == "__array_push_bytes" || base == "__array_push_ref";
-		var get = base == "__bytes_get", set = base == "__bytes_try_set";
-		if (!push && !get && !set)
-			return false;
+	function lowerArrayPush(row:Int, base:String):Void {
 		var native = module.requireSlot(base), slow = callOf(row, native), out = target(row);
 		var receiver = v(body.operand(row, 0)), id = temporaries++;
-		if (push) {
-			var element = module.slotArgument(native, 1), cType = types.cType(element);
-			line('{ varray *a$id = (varray*)$receiver; if( a$id && a$id->size < a$id->capacity ) { int n$id = a$id->size;');
-			store('hl_aptr(a$id,$cType)[n$id]', operandAs(row, 1, element), element);
-			line('a$id->size = n$id + 1; ${out}n$id + 1; } else ${out}$slow; }');
-			return true;
-		}
+		var element = module.slotArgument(native, 1), cType = types.cType(element);
+		line('{ varray *a$id = (varray*)$receiver; if( a$id && a$id->size < a$id->capacity ) { int n$id = a$id->size;');
+		store('hl_aptr(a$id,$cType)[n$id]', operandAs(row, 1, element), element);
+		line('a$id->size = n$id + 1; ${out}n$id + 1; } else ${out}$slow; }');
+	}
+
+	/** `HlLower.lowerRuntimeFastPath`'s byte read and write, as `lowerArrayPush` writes a push. */
+	function lowerBytesAccess(row:Int, base:String, get:Bool):Void {
+		var native = module.requireSlot(base), slow = callOf(row, native), out = target(row);
+		var receiver = v(body.operand(row, 0)), id = temporaries++;
 		var header = module.runtimeHeader(BytesHeader),
 			headerStruct = types.structName(header),
 			data = "",
@@ -970,7 +964,6 @@ class HlcFunctionLower {
 		else
 			line('((vbyte*)b$id->$data)[$index] = (vbyte)${v(body.operand(row, 2))}; ${out}true;');
 		line('} else ${out}$slow; }');
-		return true;
 	}
 
 	/** An ordinary C function's call, through the runtime's dispatch as `HlLower.lowerCNativeCall` makes it. */

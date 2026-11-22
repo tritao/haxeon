@@ -3,6 +3,7 @@ package compiler.hl.lower;
 import compiler.core.PeakProbe;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
+import compiler.hl.lower.HlLoweringDecisions.HlCallKind;
 import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrFunction;
@@ -1321,8 +1322,7 @@ class HlLower {
 						case IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal:
 							fusedCondition = condition;
 						case IrOpcode.Call if (body.operandCount(last) == 2
-							&& (body.symbol(last).name == compiler.ir.analysis.IrExactTypeFacts.TEST
-							|| body.symbol(last).name == compiler.ir.names.IrReferenceIdentity.NAME)):
+							&& isPointerTest(HlLoweringDecisions.classifyCall(body.symbol(last).name))):
 							fusedCondition = condition;
 						default:
 					}
@@ -1880,52 +1880,121 @@ class HlLower {
 	function lowerCall(row:Int, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
 			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, firstBinding:Array<Int>):Void {
-		var functionName = body.symbol(row).name;
-		if ((output:Int) == fusedCondition && functionName == compiler.ir.names.IrReferenceIdentity.NAME) {
-			// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
-			var pointers = identityPointers(row, instructions, registers, registerTypes);
-			fusedPending = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
-			fusedPendingFloat = false;
-			return;
-		}
+		var functionName = body.symbol(row).name, kind = HlLoweringDecisions.classifyCall(functionName);
 		if ((output:Int) == fusedCondition) {
-			// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
-			var actual = temporaryRegister(IrType.TypeRef, registerTypes);
-			instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
-			fusedPending = comparisonJump(2, false, false, actual, requireRegister(body.operand(row, 1), registers),
-				-1);
+			switch kind {
+				case ReferenceIdentity:
+					// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
+					var pointers = identityPointers(row, instructions, registers, registerTypes);
+					fusedPending = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
+				case ExactTypeTest:
+					// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
+					var actual = temporaryRegister(IrType.TypeRef, registerTypes);
+					instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
+					var expected = requireRegister(body.operand(row, 1), registers);
+					fusedPending = comparisonJump(2, false, false, actual, expected, -1);
+				default:
+					throw new InternalError('Call of $functionName fused into a branch');
+			}
 			fusedPendingFloat = false;
 			return;
 		}
-		var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(body, row) : null;
-		if (functionName == compiler.ir.names.IrReceiverCheck.NAME && nonNull.has(row)) {
-			// A previous successful dereference or check already proved this SSA receiver non-null.
-		} else if (StringTools.startsWith(functionName, VALUE_ARRAY_READ) && uses[output] == 0
-			&& firstBinding[output] < 0 && usedReadNearby(body, row, uses)) {
-			// A field of the element nothing reads; the read beside it checks the element the same way.
-		} else if (functionName == VALUE_ARRAY_VALIDATE && scalarReadFollows(body, row)) {
-			// The read checks the same element the same way (`realtime_value_array_check_read`).
-		} else if (inlineSlot != null) {
-			lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
-		} else if (!lowerRuntimeFastPath(row, output, functionName, instructions, registers, registerTypes)) {
-			var destination = defineRegister(output, registers, registerTypes);
-			var functionIndex = requireFunction(functionName);
-			var args = operandRegisters(row, 0, registers);
-			if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
-				for (index in 0...args.length)
-					switch body.valueType(body.operand(row, index)) {
-						case Function(_, _):
-							var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
-							instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
-							args[index] = dynamicClosure;
-						default:
-					}
-			switch args.length {
-				case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
-				case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
-				case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
-				default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
-			}
+		switch kind {
+			case ReceiverCheck:
+				// A previous successful dereference or check may already have proved this SSA receiver non-null.
+				if (!nonNull.has(row))
+					instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
+			case ReferenceIdentity:
+				var pointers = identityPointers(row, instructions, registers, registerTypes);
+				lowerEqualityBool(pointers[0], pointers[1], output, instructions, registers, registerTypes);
+			case ExactTypeTest:
+				// A plain object of exactly the class: its type pointer equals the class's. Null reads as `void`, a virtual as its own
+				// virtual type and a boxed value as its scalar type, so none of them matches an object class.
+				var actual = temporaryRegister(IrType.TypeRef, registerTypes);
+				instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
+				lowerEqualityBool(actual, requireRegister(body.operand(row, 1), registers), output, instructions,
+					registers,
+					registerTypes);
+			case WordBits:
+				if (body.operandCount(row) != 1 || !compiler.ir.passes.scalars.IrScalarWordBits.valid(functionName,
+					body.valueType(body.operand(row, 0)), body.valueType(output)))
+					throw new InternalError("Invalid scalar word transport signature");
+				var scalar = functionName == compiler.ir.passes.scalars.IrScalarWordBits.PACK
+					? body.valueType(body.operand(row, 0)) : body.valueType(output);
+				if (compiler.ir.verify.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
+					throw new InternalError("HashLink callbacks belong in the reference lane");
+				instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case LaneReference:
+				instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case ScalarRefAddress:
+				instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case ScalarRefLoad:
+				instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case ScalarRefStore:
+				instructions.push(HlInstruction.Setref(requireRegister(body.operand(row, 0), registers),
+					requireRegister(body.operand(row, 1), registers)));
+			case ArrayPush, BytesGet, BytesSet:
+				lowerRuntimeFastPath(row, output, functionName, kind, instructions, registers, registerTypes);
+			case ValueArrayRead:
+				var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(body, row) : null;
+				if (uses[output] == 0 && firstBinding[output] < 0 && usedReadNearby(body, row, uses)) {
+					// A field of the element nothing reads; the read beside it checks the element the same way.
+				} else if (inlineSlot != null)
+					lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
+				else
+					lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
+			case ValueArrayValidate:
+				// When a read follows, it checks the same element the same way (`realtime_value_array_check_read`).
+				if (!scalarReadFollows(body, row))
+					lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
+			case Plain:
+				lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
+		}
+	}
+
+	/** Whether a call of kind `kind` compares two pointers, so that ending its block it can become the branch itself. */
+	static function isPointerTest(kind:HlCallKind):Bool
+		return switch kind {
+			case ExactTypeTest, ReferenceIdentity: true;
+			default: false;
+		};
+
+	/** Bool `output`: whether registers `left` and `right` are equal. */
+	function lowerEqualityBool(left:Int, right:Int, output:IrValueId, instructions:Array<HlInstruction>,
+			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var result = defineRegister(output, registers, registerTypes), yes = freshLabel(), done = freshLabel();
+		instructions.push(HlInstruction.JumpEqual(left, right, yes));
+		instructions.push(HlInstruction.LoadBool(result, false));
+		instructions.push(HlInstruction.Jump(done));
+		instructions.push(HlInstruction.Label(yes));
+		instructions.push(HlInstruction.LoadBool(result, true));
+		instructions.push(HlInstruction.Label(done));
+	}
+
+	/** A call of function `functionName` with `row`'s operands. */
+	function lowerPlainCall(row:Int, output:IrValueId, functionName:String, instructions:Array<HlInstruction>,
+			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var destination = defineRegister(output, registers, registerTypes);
+		var functionIndex = requireFunction(functionName);
+		var args = operandRegisters(row, 0, registers);
+		if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
+			for (index in 0...args.length)
+				switch body.valueType(body.operand(row, index)) {
+					case Function(_, _):
+						var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
+						instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
+						args[index] = dynamicClosure;
+					default:
+				}
+		switch args.length {
+			case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
+			case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
+			case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
+			default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 		}
 	}
 
@@ -2697,7 +2766,6 @@ class HlLower {
 		instructions.push(HlInstruction.SetMem(data, offset, source));
 	}
 
-	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	/** The two references a reference-identity test compares, as raw pointers: a virtual is compared by the object it wraps. */
 	function identityPointers(row:Int, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Array<Int> {
@@ -2718,80 +2786,10 @@ class HlLower {
 		return pointers;
 	}
 
-	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, instructions:Array<HlInstruction>,
-			registers:Array<Int>, registerTypes:Array<Int>):Bool {
-		if (compiler.ir.passes.scalars.IrScalarWordBits.matches(name)) {
-			if (body.operandCount(row) != 1 || !compiler.ir.passes.scalars.IrScalarWordBits.valid(name,
-				body.valueType(body.operand(row, 0)), body.valueType(output)))
-				throw new InternalError("Invalid scalar word transport signature");
-			var scalar = name == compiler.ir.passes.scalars.IrScalarWordBits.PACK
-				? body.valueType(body.operand(row, 0)) : body.valueType(output);
-			if (compiler.ir.verify.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
-				throw new InternalError("HashLink callbacks belong in the reference lane");
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.values.IrValueLaneReference.PACK
-			|| name == compiler.ir.passes.values.IrValueLaneReference.UNPACK) {
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.analysis.IrExactTypeFacts.TEST) {
-			// A plain object of exactly the class: its type pointer equals the class's. Null reads as `void`, a virtual as its own
-			// virtual type and a boxed value as its scalar type, so none of them matches an object class.
-			var actual = temporaryRegister(IrType.TypeRef, registerTypes),
-				result = defineRegister(output, registers, registerTypes),
-				yes = freshLabel(),
-				done = freshLabel();
-			instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
-			instructions.push(HlInstruction.JumpEqual(actual, requireRegister(body.operand(row, 1), registers), yes));
-			instructions.push(HlInstruction.LoadBool(result, false));
-			instructions.push(HlInstruction.Jump(done));
-			instructions.push(HlInstruction.Label(yes));
-			instructions.push(HlInstruction.LoadBool(result, true));
-			instructions.push(HlInstruction.Label(done));
-			return true;
-		}
-		if (name == compiler.ir.names.IrReferenceIdentity.NAME) {
-			var pointers = identityPointers(row, instructions, registers, registerTypes);
-			var result = defineRegister(output, registers, registerTypes),
-				yes = freshLabel(),
-				done = freshLabel();
-			instructions.push(HlInstruction.JumpEqual(pointers[0], pointers[1], yes));
-			instructions.push(HlInstruction.LoadBool(result, false));
-			instructions.push(HlInstruction.Jump(done));
-			instructions.push(HlInstruction.Label(yes));
-			instructions.push(HlInstruction.LoadBool(result, true));
-			instructions.push(HlInstruction.Label(done));
-			return true;
-		}
-		if (name == compiler.ir.names.IrReceiverCheck.NAME) {
-			instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS) {
-			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.scalars.IrHlScalarRef.LOAD) {
-			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.scalars.IrHlScalarRef.STORE) {
-			instructions.push(HlInstruction.Setref(requireRegister(body.operand(row, 0), registers),
-				requireRegister(body.operand(row, 1), registers)));
-			return true;
-		}
-		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64"
-			|| name == "__array_push_bool"
-			|| name == "__array_push_bytes" || name == "__array_push_ref";
-		var get = name == "__bytes_get", set = name == "__bytes_try_set";
-		if (!push && !get && !set)
-			return false;
+	/** An array push or byte read or write: the common case inline, the native on the slow path. */
+	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, kind:HlCallKind,
+			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var push = kind == ArrayPush, get = kind == BytesGet;
 		var destination = defineRegister(output, registers, registerTypes);
 		var args = operandRegisters(row, 0, registers);
 		var slow = freshLabel(),
@@ -2837,7 +2835,6 @@ class HlLower {
 		else
 			instructions.push(HlInstruction.CallN(destination, requireFunction(name), args));
 		instructions.push(HlInstruction.Label(done));
-		return true;
 	}
 
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {

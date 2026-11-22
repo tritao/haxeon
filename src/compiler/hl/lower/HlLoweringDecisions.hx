@@ -5,6 +5,47 @@ import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrValueId;
 
+/** What a call lowers to in both HashLink backends (`HlLoweringDecisions.classifyCall`). */
+enum HlCallKind {
+	/** `IrReceiverCheck`: a null check of the receiver, unless proved non-null. */
+	ReceiverCheck;
+
+	/** `IrReferenceIdentity`: whether two references are the same object. */
+	ReferenceIdentity;
+
+	/** `IrExactTypeFacts.TEST`: whether an object's type is exactly a class. */
+	ExactTypeTest;
+
+	/** `IrScalarWordBits`: a scalar moved into or out of a word, unchanged. */
+	WordBits;
+
+	/** `IrValueLaneReference`: a reference moved into or out of a value lane, unchanged. */
+	LaneReference;
+
+	/** `IrHlScalarRef`: the address of a scalar, a load through it, and a store through it. */
+	ScalarRefAddress;
+
+	ScalarRefLoad;
+	ScalarRefStore;
+
+	/** An array push: inline while the array has room, the native otherwise. */
+	ArrayPush;
+
+	/** A byte read or write: inline in range, the native otherwise. */
+	BytesGet;
+
+	BytesSet;
+
+	/** A value array element's field read: dropped when unused beside another read, inline when it can be. */
+	ValueArrayRead;
+
+	/** A value array element's check: dropped when a read of the element follows. */
+	ValueArrayValidate;
+
+	/** Any other function: called. */
+	Plain;
+}
+
 /**
  * The lowering decisions both HashLink backends make the same way: the bytecode (`HlLower`) and the C of the AOT backend
  * (`HlcFunctionLower`). Each backend writes the decision in its own form; what is decided lives here once, so the two cannot
@@ -58,5 +99,27 @@ class HlLoweringDecisions {
 		return switch type {
 			case Array(_): true;
 			default: false;
+		};
+
+	/** What a call of function `name` lowers to. */
+	public static function classifyCall(name:String):HlCallKind
+		return switch name {
+			case compiler.ir.names.IrReceiverCheck.NAME: ReceiverCheck;
+			case compiler.ir.names.IrReferenceIdentity.NAME: ReferenceIdentity;
+			case compiler.ir.analysis.IrExactTypeFacts.TEST: ExactTypeTest;
+			case compiler.ir.passes.scalars.IrScalarWordBits.PACK,
+				compiler.ir.passes.scalars.IrScalarWordBits.UNPACK: WordBits;
+			case compiler.ir.passes.values.IrValueLaneReference.PACK,
+				compiler.ir.passes.values.IrValueLaneReference.UNPACK:
+				LaneReference;
+			case compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS: ScalarRefAddress;
+			case compiler.ir.passes.scalars.IrHlScalarRef.LOAD: ScalarRefLoad;
+			case compiler.ir.passes.scalars.IrHlScalarRef.STORE: ScalarRefStore;
+			case "__array_push_i32", "__array_push_i64", "__array_push_f64", "__array_push_bool", "__array_push_bytes",
+				"__array_push_ref": ArrayPush;
+			case "__bytes_get": BytesGet;
+			case "__bytes_try_set": BytesSet;
+			case HlLower.VALUE_ARRAY_VALIDATE: ValueArrayValidate;
+			default: StringTools.startsWith(name, HlLower.VALUE_ARRAY_READ) ? ValueArrayRead : Plain;
 		};
 }
