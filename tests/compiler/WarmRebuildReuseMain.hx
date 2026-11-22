@@ -48,8 +48,15 @@ class WarmRebuildReuseMain {
 	static final opsSource =
 		"class Ops { public static inline function twice(x:Int):Int return step(x) * 2 + bump(x); static inline function step(x:Int):Int return x + 1; static function bump(x:Int):Int return x + 3; public static function first<T>(xs:Array<T>):T return pick(xs); static function pick<T>(xs:Array<T>):T return xs[0]; }";
 
+	/** A function whose result is a structure named through typedefs another module declares, and a caller that names none of them. */
+	static final reportSource =
+		"typedef Metrics = { final count:Int; final notes:Array<String>; } typedef Report = { final metrics:Metrics; final ok:Bool; }";
+
+	static final driverSource =
+		"class Driver { public static function report():Report return {metrics: {count: 1, notes: []}, ok: true}; }";
+
 	static final mainSource =
-		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 ? 42 : 1; } }";
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -62,6 +69,8 @@ class WarmRebuildReuseMain {
 			"Encoder.hx" => encoderSource,
 			"Trail.hx" => trailSource,
 			"Ops.hx" => opsSource,
+			"Report.hx" => reportSource,
+			"Driver.hx" => driverSource,
 			"Main.hx" => mainSource
 		];
 
@@ -124,6 +133,13 @@ class WarmRebuildReuseMain {
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return x + 3;", "return x + 4;")));
 		edit(failures, "after an edit of a private generic function a generic function calls",
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return xs[0];", "return xs[xs.length - 1];")));
+		edit(failures,
+			"after an edit of a structure a function's result names through typedefs, which its caller does not name",
+			files -> {
+				files.set("Report.hx",
+					StringTools.replace(reportSource, "final notes:Array<String>;", "final note:String;"));
+				files.set("Driver.hx", StringTools.replace(driverSource, "notes: []", "note: \"\""));
+			});
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");

@@ -525,14 +525,10 @@ class SemanticAssembly {
 				owners.set(lambdaName, module);
 		// A class without a constructor has its base class's: give it one, so it is typed, tracked and invalidated like any other.
 		var changedSignatures:Map<String, Bool> = [for (name in signatureChanged.keys()) name => true];
-		for (constructor in ImplicitConstructors.add(classes)) {
+		var implicitConstructors = ImplicitConstructors.add(classes);
+		for (constructor in implicitConstructors) {
 			var qualified = constructor.owner + ".new",
 				baseConstructor = constructor.base + ".new";
-			// Its signature is the base constructor's, so it changes whenever that does; the class stands for it to callers.
-			if (changedSignatures.exists(baseConstructor)) {
-				changedSignatures.set(qualified, true);
-				changedSignatures.set(constructor.owner, true);
-			}
 			functions.push(AstFunctions.withName(constructor.method, qualified));
 			var callers = reverseCalls.get(baseConstructor);
 			if (callers == null) {
@@ -636,14 +632,24 @@ class SemanticAssembly {
 					if (!modules.exists(moduleName))
 						continue;
 					var dependencyState = modules.get(moduleName);
-					for (owner => dependencies in dependencyState.semanticDependencies)
+					for (owner => dependencies in dependencyState.semanticDependencies) {
+						// The functions the owner's first dependency on the target invalidated: the rest only say whether a signature
+						// names it.
+						var invalidatedFunctions:Null<Array<String>> = null;
 						for (dependency in dependencies) {
 							var functionOwner:String = owner;
 							var matches = dependency.targetId != null
 								&& targetId != null ? dependency.targetId
 								== targetId : SemanticDependencyCollector.sameDependencyTarget(dependency.target,
 								target);
-							if (matches) {
+							// A type a signature names changed what it stands for (a typedef's fields, say), so the signature did
+							// too, though its text did not: its callers are typed against it again.
+							var signature = dependency.kind == SemanticDependencyKind.Signature;
+							if (matches && invalidatedFunctions != null) {
+								if (signature)
+									for (name in invalidatedFunctions)
+										changedSignatures.set(name, true);
+							} else if (matches) {
 								invalidate(invalid, invalidationReasons, functionOwner, StructuralDependency, target,
 									targetId, Std.string(dependency.kind));
 								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
@@ -664,21 +670,31 @@ class SemanticAssembly {
 											structuralQueue.push(functionOwner);
 											break;
 										}
-								var matchedFunction = false;
+								var matchedFunctions:Array<String> = [];
 								for (fn in functions)
 									if (fn.name == functionOwner
 										|| StringTools.startsWith(fn.name, functionOwner + ".")) {
 										invalidate(invalid, invalidationReasons, fn.name, StructuralDependency, target,
 											targetId, Std.string(dependency.kind));
-										matchedFunction = true;
+										if (signature)
+											changedSignatures.set(fn.name, true);
+										matchedFunctions.push(fn.name);
 									}
-								if (matchedFunction)
-									break;
+								if (matchedFunctions.length > 0)
+									invalidatedFunctions = matchedFunctions;
 							}
 						}
+					}
 				}
 			}
 		}
+		// An implicit constructor's signature is its base constructor's, so it changes whenever that does, by its text or by a type it
+		// names; the class stands for it to callers. Bases come first, so a chain of them follows in one pass.
+		for (constructor in implicitConstructors)
+			if (changedSignatures.exists(constructor.base + ".new")) {
+				changedSignatures.set(constructor.owner + ".new", true);
+				changedSignatures.set(constructor.owner, true);
+			}
 		// A default argument is typed in the declaration's scope but embedded in its caller. Even a comment-only
 		// declaration edit changes that syntax's snapshot hash. Refresh exactly the callers which copied it.
 		var sourceFiles = [for (state in modules) state.source.path => state.source];
