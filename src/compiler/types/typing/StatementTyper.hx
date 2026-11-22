@@ -129,6 +129,43 @@ class StatementTyper {
 			span));
 	}
 
+	/**
+	 * Whether the local function `name` declared at `span` refers to itself in its own body. Its storage then asks for a
+	 * cell (`StorageRequirements`); a local function never assigned has no other reason to.
+	 */
+	function refersToItself(name:String, span:SourceSpan):Bool {
+		var context = session.currentContext, declaration = BindingWalker.key(name, span);
+		return context.storage.candidateKind(declaration) == MutableCapture
+			&& !context.assignedDeclarations.exists(declaration);
+	}
+
+	/**
+	 * The type a local function that refers to itself has in its own body, when it declares no result: its parameters'
+	 * types, as a declared result would give them, and a type variable for the result, which typing the body fills, as
+	 * Haxe binds the name before typing the body. Null where no body is being typed.
+	 */
+	function selfReferenceType(name:String, arguments:Array<compiler.syntax.Ast.AstArgument>,
+			span:SourceSpan):Null<CompilerType> {
+		var context = session.currentContext, parameters:Array<CompilerType> = [];
+		for (argument in arguments) {
+			var parameter = switch argument.type {
+				case InferredType: session.monomorphs.create('the type of parameter "${argument.name}"', argument.span);
+				default: session.declarations.resolve(compiler.syntax.Parser.localParameterType(argument),
+					argument.span, context.typeSubstitutions);
+			};
+			if (parameter == null)
+				return null;
+			parameters.push(parameter);
+		}
+		var result = session.monomorphs.create('the result of local function "$name"', span);
+		if (result == null)
+			return null;
+		return TFunction(parameters, result, compiler.types.FunctionTypes.canonical([
+			for (argument in arguments)
+				compiler.syntax.AstPredicates.isOptionalArgument(argument)
+		]));
+	}
+
 	/** A `var` declaration, or the declaration of `temporary`, a local the typer introduced under `name`. */
 	function typeLocalDeclaration(name:String, declared:Null<AstType>, initializer:AstExpression, span:SourceSpan,
 			scope:Scope, statements:Array<AstStatement>, statementIndex:Int,
@@ -163,12 +200,18 @@ class StatementTyper {
 		var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
 			span,
 			context.typeSubstitutions);
+		if (declaredType == null)
+			switch initializer {
+				case Lambda(arguments, _, _, _, _, true) if (refersToItself(name, span)):
+					declaredType = selfReferenceType(name, arguments, span);
+				default:
+			}
 		if (declaredType != null)
 			registerDeclaredType(declaredType);
 		var predeclared:Null<LocalBinding> = null, recursiveCell:Null<String> = null;
 		if (declaredType != null)
 			switch initializer {
-				case Lambda(_, _, _, _):
+				case Lambda(_, _, _, _, _, true):
 					var binding = scope.define(name, declaredType, span, true, null, false, localFunction, null,
 						temporary);
 					predeclared = binding;

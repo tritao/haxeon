@@ -1382,7 +1382,7 @@ class Parser {
 				span = start.merge(end),
 				declared = result == null ? null : localFunctionType(arguments, result);
 			closeLambda();
-			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined), span);
+			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined, true), span);
 		}
 		if (match(TokenKind.Defer)) {
 			var start = spanOf(previous());
@@ -1647,7 +1647,7 @@ class Parser {
 			[for (argument in arguments) AstPredicates.isOptionalArgument(argument)]);
 
 	/** The parameter type a local function exposes: nullable by Haxe's rule (`AstPredicates.isNullableArgument`), as for declared functions. */
-	static function localParameterType(argument:AstArgument):AstType {
+	public static function localParameterType(argument:AstArgument):AstType {
 		if (!AstPredicates.isNullableArgument(argument))
 			return argument.type;
 		return switch argument.type {

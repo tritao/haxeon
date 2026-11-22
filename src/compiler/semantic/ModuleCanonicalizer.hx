@@ -710,7 +710,7 @@ class ModuleCanonicalizer {
 				canonicalExpression(offset, module, entry, locals, aliases), s);
 			case PostfixIncrement(target, delta,
 				s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
-			case Lambda(arguments, body, identity, s, isInline):
+			case Lambda(arguments, body, identity, s, isInline, isNamed):
 				Lambda([for (argument in arguments)
 					{
 						name:argument.name,
@@ -722,7 +722,7 @@ class ModuleCanonicalizer {
 							aliases)
 					}],
 						canonicalBlock(body, module, entry, locals, aliases,
-						[for (argument in arguments) argument.name]), identity, s, isInline);
+						[for (argument in arguments) argument.name]), identity, s, isInline, isNamed);
 		}
 
 	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String,

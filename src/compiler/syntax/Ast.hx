@@ -343,10 +343,12 @@ enum AstExpression {
 
 	/**
 	 * `identity` is the parser's `<member>#<ordinal>` name for the lambda; see `LambdaName`. `isInline` marks a local
-	 * `inline function`, which each call replaces by its body (`LocalInlineFunctions`).
+	 * `inline function`, which each call replaces by its body (`LocalInlineFunctions`). `isNamed` marks the lambda of a
+	 * named local function (`function f() ...`), whose name is bound in its own body, as Haxe binds it; a lambda a `var`
+	 * holds is not in scope in its own initializer.
 	 */
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan,
-		?isInline:Bool);
+		?isInline:Bool, ?isNamed:Bool);
 }
 
 /** Compile-time query over a fixed native ABI layout. */

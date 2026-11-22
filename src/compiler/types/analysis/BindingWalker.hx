@@ -256,8 +256,8 @@ class BindingWalker implements AstChildVisitor {
 							height: bindingNames.length,
 							lambdaDepth: lambdaDepth
 						});
-					case Lambda(_, _, _, _):
-						// A local function can call itself, so its name is visible in its own body.
+					case Lambda(_, _, _, _, _, true):
+						// A named local function can call itself, so its name is visible in its own body.
 						declare(name, span, Local, type, initializer);
 						expression(initializer);
 					default:
