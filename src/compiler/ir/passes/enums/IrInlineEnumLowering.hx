@@ -61,12 +61,13 @@ class IrInlineEnumLowering {
 	 * stage.
 	 */
 	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
-			?reflectableObjects:Array<String>, ?types:IrTypeIds, ?builder:IrBodyBuilder):IrProgram {
+			?reflectableObjects:Array<String>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrProgram {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
 			canonicalObjects);
-		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, types, builder);
+		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, types, builder, lineage);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
 		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,

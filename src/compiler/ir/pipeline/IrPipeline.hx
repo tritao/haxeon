@@ -421,7 +421,7 @@ class IrPipeline {
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var input = assembly.functions;
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
-			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder);
+			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage);
 		assembly.functions = stableChanged("inline-enum-lowering", input, enumOutput.functions, context);
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;

@@ -121,6 +121,10 @@ class IrStageMemos {
 	/** What each function lets escape, for the closed enum tag ABI's choice (`IrTagEscapeRecord`). */
 	public final tagEscapes = new IrContributionMemo<compiler.ir.passes.enums.IrClosedEnumTagAbi.IrTagEscapeRecord>();
 
+	/** What each function lets escape or keeps in value form, for the inline enum eligibility (`IrInlineEnumUses`). */
+	public final inlineEnumUses =
+		new IrContributionMemo<compiler.ir.passes.enums.IrInlineEnumEligibility.IrInlineEnumUses>();
+
 	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
 	public final enumMentions = new IrContributionMemo<Array<String>>();
 
@@ -161,6 +165,7 @@ class IrStageMemos {
 		runtimeNeeds.begin(build);
 		enumMentions.begin(build);
 		tagEscapes.begin(build);
+		inlineEnumUses.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */
