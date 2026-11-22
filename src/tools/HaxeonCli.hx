@@ -46,6 +46,7 @@ import tools.WatchRun.WatchChange;
 import tools.WatchRun.WatchProfiling;
 
 private typedef BuildOptions = {
+	/** `--project`: a manifest, or a directory holding one (`.`, this directory's, by default). */
 	final projectPath:String;
 	final target:Null<String>;
 	final buildMode:String;
@@ -115,7 +116,7 @@ private enum BuildCommand {
 	Build;
 	Run;
 
-	/** Build the project's tests (`tests/haxeon.json`) and run them. */
+	/** Build the project's tests (the project in `tests`) and run them. */
 	Test;
 
 	/** Type the program without writing a module. */
@@ -129,8 +130,6 @@ private typedef CommandCapture = {
 
 /** Project-facing build and launch commands for Haxeon applications. */
 class HaxeonCli {
-	static final CONFIG_FILE = "haxeon.json";
-
 	/** The directory the user started the CLI from: a launched program runs in its project's directory and learns this one from `HAXEON_INVOKED_FROM`. */
 	static var invokedFrom = "";
 
@@ -167,6 +166,7 @@ class HaxeonCli {
 		try {
 			var status = switch command {
 				case "init": init(arguments);
+				case "migrate": migrate(arguments);
 				case "add": add(arguments);
 				case "install": install(arguments);
 				case "update": update(arguments);
@@ -257,9 +257,10 @@ class HaxeonCli {
 		parseTarget(target);
 
 		var projectDirectory = Sys.getCwd(),
-			configPath = Path.join([projectDirectory, CONFIG_FILE]);
-		if (FileSystem.exists(configPath))
-			throw new InternalError('$CONFIG_FILE already exists in $projectDirectory');
+			existing = PackageManifest.find(projectDirectory),
+			configPath = Path.join([projectDirectory, PackageManifest.TOML_NAME]);
+		if (existing != null)
+			throw new InternalError('${Path.withoutDirectory(existing)} already exists in $projectDirectory');
 
 		var sourcePath = "src/" + entry.split(".").join("/") + ".hx";
 		var absoluteSource = resolvePath(sourcePath, projectDirectory);
@@ -288,14 +289,50 @@ class HaxeonCli {
 		Reflect.setField(config, "package", {name: packageName});
 		if (target == "android")
 			Reflect.setField(config, "android", {applicationId: "org.haxeon.android", label: "Haxeon"});
-		File.saveContent(configPath, Json.stringify(config, null, "\t") + "\n");
-		Sys.println('Created $CONFIG_FILE and $sourcePath');
+		File.saveContent(configPath, PackageManifest.toToml(config));
+		Sys.println('Created ${PackageManifest.TOML_NAME} and $sourcePath');
+		return 0;
+	}
+
+	/** `haxeon migrate [--project PATH] [--dry-run]`: the project's haxeon.json rewritten as the haxeon.toml that replaces it. */
+	static function migrate(arguments:Array<String>):Int {
+		var projectPath = ".", dryRun = false, index = 0;
+		while (index < arguments.length) {
+			var argument = arguments[index++];
+			if (argument == "--dry-run")
+				dryRun = true;
+			else if (argument == "--project") {
+				if (index >= arguments.length)
+					throw new UsageError('Option "--project" requires a value');
+				projectPath = arguments[index++];
+			} else if (StringTools.startsWith(argument, "--project="))
+				projectPath = argument.substr("--project=".length);
+			else
+				throw new UsageError('Unknown migrate option "$argument"');
+		}
+		var manifestPath = projectManifest(projectPath);
+		if (PackageManifest.isToml(manifestPath))
+			throw new UsageError(FileSystem.exists(manifestPath)
+				? '$manifestPath is already TOML' : 'Project file not found: $manifestPath');
+		if (!FileSystem.exists(manifestPath))
+			throw new InternalError('Project file not found: $manifestPath');
+		var tomlPath = Path.join([Path.directory(manifestPath), PackageManifest.TOML_NAME]);
+		if (FileSystem.exists(tomlPath))
+			throw new UsageError('${Path.directory(manifestPath)} has both ${PackageManifest.TOML_NAME} and ${PackageManifest.JSON_NAME}; keep one');
+		var toml = PackageManifest.migrateToToml(manifestPath, File.getContent(manifestPath));
+		if (dryRun) {
+			Sys.print(toml);
+			return 0;
+		}
+		File.saveContent(tomlPath, toml);
+		FileSystem.deleteFile(manifestPath);
+		Sys.println('Migrated ${displayPath(manifestPath)} to ${displayPath(tomlPath)}');
 		return 0;
 	}
 
 	/**
 	 * `haxeon fmt [--check] PATH... | --stdin`. Each file is formatted with its project's setting (ProjectFormat: the `format` section
-	 * of the nearest haxeon.json, else tabs and 120 columns); --stdin uses the current directory's.
+	 * of the nearest haxeon.toml or haxeon.json, else tabs and 120 columns); --stdin uses the current directory's.
 	 */
 	static function fmt(arguments:Array<String>):Int {
 		var check = false, stdin = false, paths:Array<String> = [];
@@ -305,7 +342,7 @@ class HaxeonCli {
 			else if (argument == "--stdin")
 				stdin = true;
 			else if (StringTools.startsWith(argument, "-"))
-				throw new UsageError('Unknown fmt option "$argument" (indentation and line width come from the "format" section of haxeon.json)');
+				throw new UsageError('Unknown fmt option "$argument" (indentation and line width come from the [format] section of haxeon.toml or haxeon.json)');
 			else
 				paths.push(argument);
 		if (stdin && paths.length > 0)
@@ -354,38 +391,77 @@ class HaxeonCli {
 
 	static function add(arguments:Array<String>):Int {
 		var options = parseAddOptions(arguments),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd());
+			manifestPath = projectManifest(options.projectPath);
 		if (!FileSystem.exists(manifestPath))
 			throw new InternalError('Project file not found: $manifestPath');
 		var name = options.name == null ? inferPackageName(options.git) : options.name;
 		if (name == null || name.length == 0)
 			throw new UsageError('Git dependencies require a package name (pass it as the final argument or with --name)');
-		var raw:Dynamic;
-		try {
-			raw = Json.parse(File.getContent(manifestPath));
-		} catch (error:Dynamic) {
-			throw new InternalError('Could not parse $manifestPath: ${Std.string(error)}');
+		if (PackageManifest.isToml(manifestPath))
+			addTomlDependency(manifestPath, name, {git: options.git, rev: options.rev});
+		else {
+			var raw = PackageManifest.decode(manifestPath, File.getContent(manifestPath)),
+				dependencies:Dynamic = Reflect.field(raw, "dependencies");
+			if (dependencies == null) {
+				dependencies = {};
+				Reflect.setField(raw, "dependencies", dependencies);
+			}
+			if (!Reflect.isObject(dependencies) || Std.isOfType(dependencies, Array))
+				throw new InternalError('$manifestPath "dependencies" must be an object');
+			if (Reflect.hasField(dependencies, name))
+				throw new InternalError('Dependency "$name" is already declared in $manifestPath');
+			Reflect.setField(dependencies, name, {git: options.git, rev: options.rev});
+			File.saveContent(manifestPath, Json.stringify(raw, null, "\t") + "\n");
 		}
-		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw new InternalError('$manifestPath must contain a JSON object');
-		var dependencies:Dynamic = Reflect.field(raw, "dependencies");
-		if (dependencies == null) {
-			dependencies = {};
-			Reflect.setField(raw, "dependencies", dependencies);
-		}
-		if (!Reflect.isObject(dependencies) || Std.isOfType(dependencies, Array))
-			throw new InternalError('$manifestPath "dependencies" must be an object');
-		if (Reflect.hasField(dependencies, name))
-			throw new InternalError('Dependency "$name" is already declared in $manifestPath');
-		Reflect.setField(dependencies, name, {git: options.git, rev: options.rev});
-		File.saveContent(manifestPath, Json.stringify(raw, null, "\t") + "\n");
 		Sys.println('Added Git dependency ${name}@${options.rev}');
 		return 0;
 	}
 
+	/**
+	 * Adds `name = { ... }` to a haxeon.toml's `[dependencies]` section (made at the end when there is none), keeping the rest of
+	 * the file, comments included, as it is. The result must read back as a manifest that declares the dependency.
+	 */
+	static function addTomlDependency(manifestPath:String, name:String, source:Dynamic):Void {
+		var content = File.getContent(manifestPath),
+			dependencies:Dynamic = Reflect.field(PackageManifest.decode(manifestPath, content), "dependencies");
+		if (dependencies != null && Reflect.hasField(dependencies, name))
+			throw new InternalError('Dependency "$name" is already declared in $manifestPath');
+		var wrapper:Dynamic = {}, declared:Dynamic = {};
+		Reflect.setField(declared, name, source);
+		Reflect.setField(wrapper, "dependencies", declared);
+		// The printed document is the section header, then the entry.
+		var line = PackageManifest.toToml(wrapper).split("\n")[1],
+			lines = content.split("\n"),
+			section = -1;
+		for (index in 0...lines.length)
+			if (StringTools.trim(lines[index].split("#")[0]) == "[dependencies]")
+				section = index;
+		if (section < 0) {
+			while (lines.length > 0 && StringTools.trim(lines[lines.length - 1]) == "")
+				lines.pop();
+			lines = lines.concat(["", "[dependencies]", line, ""]);
+		} else {
+			var end = section + 1;
+			while (end < lines.length && !StringTools.startsWith(StringTools.trim(lines[end]), "["))
+				end++;
+			while (end > section + 1 && StringTools.trim(lines[end - 1]) == "")
+				end--;
+			lines.insert(end, line);
+		}
+		var updated = lines.join("\n"), problem = "the result does not declare it";
+		var declares = try PackageManifest.parse(manifestPath,
+			updated).dependencies.exists(name) catch (error:Dynamic) {
+				problem = Std.string(error);
+				false;
+			}
+		if (!declares)
+			throw new InternalError('Could not add "$name" to $manifestPath ($problem); add `$line` to its dependencies by hand');
+		File.saveContent(manifestPath, updated);
+	}
+
 	static function install(arguments:Array<String>):Int {
 		var options = parsePackageOptions(arguments, true, "install"),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			manifestPath = projectManifest(options.projectPath),
 			lockPath = lockfilePath(manifestPath),
 			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
 		if (options.locked && lockfile == null)
@@ -399,7 +475,7 @@ class HaxeonCli {
 
 	static function update(arguments:Array<String>):Int {
 		var options = parsePackageOptions(arguments, false, "update"),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			manifestPath = projectManifest(options.projectPath),
 			project = resolveProject(manifestPath, null, false);
 		project.lockfile.save(lockfilePath(manifestPath));
 		Sys.println('Updated ${project.packages.packages.length} packages');
@@ -408,7 +484,7 @@ class HaxeonCli {
 
 	static function publish(arguments:Array<String>):Int {
 		var options = parsePublishOptions(arguments),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			manifestPath = projectManifest(options.projectPath),
 			checksum = RegistryPublisher.publish(manifestPath, options.registry, options.version,
 				SourceCache.registryRoot());
 		Sys.println('Published ${options.version} from $manifestPath to ${options.registry} (checksum $checksum)');
@@ -419,7 +495,7 @@ class HaxeonCli {
 		if (arguments.length == 0 || arguments[0] != "check")
 			throw new UsageError('Usage: haxeon package check [--project PATH]');
 		var options = parsePackageOptions(arguments.slice(1), false, "package check"),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			manifestPath = projectManifest(options.projectPath),
 			project = discoverProject(manifestPath),
 			target = Target.parse(project.manifest.target);
 		NativeTargetSupport.validate(project, target);
@@ -438,14 +514,14 @@ class HaxeonCli {
 
 	static function tree(arguments:Array<String>):Int {
 		var options = parsePackageOptions(arguments, false, "tree"),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			manifestPath = projectManifest(options.projectPath),
 			project = discoverProject(manifestPath);
 		printTree(project.rootPackage, project, "", new Map());
 		return 0;
 	}
 
 	static function why(arguments:Array<String>):Int {
-		var projectPath = CONFIG_FILE, packageName:Null<String> = null, index = 0;
+		var projectPath = ".", packageName:Null<String> = null, index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--project") {
@@ -463,7 +539,7 @@ class HaxeonCli {
 		}
 		if (packageName == null || packageName.length == 0)
 			throw new UsageError('Usage: haxeon why <package> [--project PATH]');
-		var project = discoverProject(resolvePath(projectPath, Sys.getCwd())),
+		var project = discoverProject(projectManifest(projectPath)),
 			path = packagePath(project.rootPackage, packageName, project, new Map());
 		if (path == null)
 			throw new InternalError('Package "$packageName" is not reachable from ${project.rootPackage.name}');
@@ -535,7 +611,7 @@ class HaxeonCli {
 	static function platforms(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected platforms argument "${arguments[0]}"');
-		Sys.println("Targets (--target, and \"target\" in haxeon.json):");
+		Sys.println("Targets (--target, and \"target\" in haxeon.toml):");
 		Sys.println('  host     this machine (${Target.detectHost().toString()}): build and run HashLink bytecode (backend hl)');
 		Sys.println("  android  Android (android-arm64): build an APK, install and launch it on a device (backend hl)");
 		Sys.println("  wasm32   WebAssembly: build an experimental module; run is not wired up (backend wasm32)");
@@ -791,8 +867,7 @@ class HaxeonCli {
 	 */
 	static function buildWith(options:BuildOptions, command:BuildCommand, ?program:ProgramProject):Int {
 		var launch = command == Run || command == Test,
-			projectConfigPath = program != null ? program.manifestPath() : resolvePath(options.projectPath,
-				Sys.getCwd());
+			projectConfigPath = program != null ? program.manifestPath() : projectManifest(options.projectPath);
 		if (command == Test && program == null)
 			projectConfigPath = testProject(projectConfigPath);
 		if (program == null && !FileSystem.exists(projectConfigPath))
@@ -1103,18 +1178,19 @@ class HaxeonCli {
 	}
 
 	/**
-	 * The project `haxeon test` runs: `tests/haxeon.json` beside the project's file, where a package keeps its tests, or the project
-	 * itself when it is that tests project (its directory is `tests`).
+	 * The project `haxeon test` runs: the manifest in `tests` beside the project's file, where a package keeps its tests, or the
+	 * project itself when it is that tests project (its directory is `tests`).
 	 */
 	static function testProject(manifestPath:String):String {
-		var tests = Path.join([Path.directory(manifestPath), "tests", CONFIG_FILE]);
-		if (FileSystem.exists(tests))
+		var testsDirectory = Path.join([Path.directory(manifestPath), "tests"]),
+			tests = FileSystem.isDirectory(testsDirectory) ? PackageManifest.find(testsDirectory) : null;
+		if (tests != null)
 			return tests;
 		if (Path.withoutDirectory(Path.directory(manifestPath)) == "tests")
 			return manifestPath;
 		if (!FileSystem.exists(manifestPath))
 			throw new InternalError('Project file not found: $manifestPath (run "haxeon init" to create one)');
-		throw new InternalError('No tests for $manifestPath: a project keeps them in a project of their own, $tests');
+		throw new InternalError('No tests for $manifestPath: a project keeps them in a project of their own, ${Path.join([testsDirectory, PackageManifest.TOML_NAME])}');
 	}
 
 	/** A test run's status: 0 when the tests passed, else 1, with a line that says which. */
@@ -1134,13 +1210,14 @@ class HaxeonCli {
 	 */
 	static function clean(arguments:Array<String>):Int {
 		var options = parsePackageOptions(arguments, false, "clean"),
-			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
+			manifestPath = projectManifest(options.projectPath),
 			directories:Array<String> = [];
 		if (!FileSystem.exists(manifestPath))
 			throw new InternalError('Project file not found: $manifestPath');
-		var tests = Path.join([Path.directory(manifestPath), "tests", CONFIG_FILE]);
+		var testsDirectory = Path.join([Path.directory(manifestPath), "tests"]),
+			tests = FileSystem.isDirectory(testsDirectory) ? PackageManifest.find(testsDirectory) : null;
 		directories = buildDirectories(manifestPath);
-		if (FileSystem.exists(tests))
+		if (tests != null)
 			directories = directories.concat(buildDirectories(tests));
 		var removed = 0;
 		for (directory in directories)
@@ -1490,7 +1567,7 @@ class HaxeonCli {
 	}
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
-		var projectPath = CONFIG_FILE,
+		var projectPath = ".",
 			target:Null<String> = null,
 			buildMode = "development",
 			buildModeExplicit = false,
@@ -1690,7 +1767,7 @@ class HaxeonCli {
 	static function programOptions(buildMode:String, verbosity:Verbosity, timings:Bool, quiet:Bool,
 			runtimeArguments:Array<String>):BuildOptions
 		return {
-			projectPath: CONFIG_FILE,
+			projectPath: ".",
 			target: null,
 			buildMode: buildMode,
 			buildModeExplicit: true,
@@ -1756,7 +1833,7 @@ class HaxeonCli {
 	}
 
 	static function parsePackageOptions(arguments:Array<String>, allowLocked:Bool, command:String):PackageOptions {
-		var projectPath = CONFIG_FILE, locked = false, index = 0;
+		var projectPath = ".", locked = false, index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--locked") {
@@ -1776,7 +1853,7 @@ class HaxeonCli {
 	}
 
 	static function parseAddOptions(arguments:Array<String>):AddOptions {
-		var projectPath = CONFIG_FILE,
+		var projectPath = ".",
 			name:Null<String> = null,
 			git:Null<String> = null,
 			rev:Null<String> = null,
@@ -1826,7 +1903,7 @@ class HaxeonCli {
 	}
 
 	static function parsePublishOptions(arguments:Array<String>):PublishOptions {
-		var projectPath = CONFIG_FILE, registry:Null<String> = null, version:Null<String> = null, index = 0;
+		var projectPath = ".", registry:Null<String> = null, version:Null<String> = null, index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--registry" || argument == "--version" || argument == "--project") {
@@ -1955,6 +2032,12 @@ class HaxeonCli {
 		if (home == null || home.length == 0)
 			throw new InternalError("HAXEON_HOME is not set; run the CLI through scripts/haxeon");
 		return FileSystem.fullPath(home);
+	}
+
+	/** The manifest `--project` names: the file, or the haxeon.toml or haxeon.json of the directory (PackageManifest.find). */
+	static function projectManifest(projectPath:String):String {
+		var path = resolvePath(projectPath, Sys.getCwd());
+		return FileSystem.isDirectory(path) ? PackageManifest.pathIn(path) : path;
 	}
 
 	static function resolvePath(path:String, base:String):String {

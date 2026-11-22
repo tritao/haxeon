@@ -11,8 +11,6 @@ import sys.io.File;
 
 /** Resolves a package graph independently of the source acquisition mechanism. */
 class PackageResolver {
-	public static inline var MANIFEST_NAME = "haxeon.json";
-
 	final sourceAcquirer:SourceAcquirer;
 
 	public function new(sourceAcquirer:SourceAcquirer)
@@ -46,9 +44,9 @@ class PackageResolver {
 		for (workspacePath in rootManifest.workspace) {
 			var workspaceRoot = resolveDirectory(projectRoot, workspacePath, "workspace member",
 				rootManifest.packageName),
-				workspaceManifestPath = Path.join([workspaceRoot, MANIFEST_NAME]);
-			if (!FileSystem.exists(workspaceManifestPath))
-				throw new InternalError('Workspace member "$workspacePath" has no $MANIFEST_NAME at $workspaceManifestPath');
+				workspaceManifestPath = PackageManifest.find(workspaceRoot);
+			if (workspaceManifestPath == null)
+				throw new InternalError('Workspace member "$workspacePath" has no ${PackageManifest.TOML_NAME} or ${PackageManifest.JSON_NAME} in $workspaceRoot');
 			var workspaceManifest = PackageManifest.parse(workspaceManifestPath,
 				File.getContent(workspaceManifestPath));
 			if (workspaceManifest.packageName == rootManifest.packageName)
@@ -64,7 +62,7 @@ class PackageResolver {
 		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource, ?manifestOverride:String,
 				?manifestValue:PackageManifest):ResolvedPackage {
 			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
-				manifestFile = manifestOverride == null ? Path.join([resolvedRoot, MANIFEST_NAME]) : manifestOverride,
+				manifestFile = manifestOverride == null ? PackageManifest.pathIn(resolvedRoot) : manifestOverride,
 				resolvedManifest = manifestValue != null ? manifestFile : canonicalExistingFile(manifestFile,
 					'Project file not found: $manifestFile');
 			if (active.exists(resolvedRoot))
@@ -158,7 +156,7 @@ class PackageResolver {
 				}
 				var resolved = resolvePackage(acquiredDependency, requestedSource);
 				if (resolved.name != dependencyName)
-					throw new InternalError('Package "${manifest.packageName}" declares dependency "$dependencyName" but ${resolved.root}/$MANIFEST_NAME names package "${resolved.name}"');
+					throw new InternalError('Package "${manifest.packageName}" declares dependency "$dependencyName" but its manifest in ${resolved.root} names package "${resolved.name}"');
 				resolvedDependencies.push(resolved.name);
 			}
 			active.remove(resolvedRoot);

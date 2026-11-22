@@ -48,6 +48,8 @@ haxeon-script                    ci          -- scripts/haxeon tests/integration
 haxe-command-line                ci          -- scripts/haxeon tests/integration/test-haxe-command-line.hx
 # haxeon check, test and clean on a project.
 project-verbs                    ci          -- scripts/haxeon tests/integration/test-project-verbs.hx
+# haxeon.toml and haxeon.json: init writes TOML, migrate converts JSON, both in one directory are refused, add keeps comments.
+project-manifests                ci          -- scripts/haxeon tests/integration/test-project-manifests.hx
 hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh
 messagepack-interop              ci          -- bash tests/integration/test-messagepack-interop.sh
 run-output                       ci          -- bash tests/integration/test-run-output.sh

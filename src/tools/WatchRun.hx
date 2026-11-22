@@ -5,6 +5,7 @@ import compiler.core.InternalError;
 import compiler.tools.Verbosity;
 import haxe.Json;
 import haxe.io.Path;
+import project.PackageManifest;
 import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;
@@ -357,7 +358,9 @@ class WatchRun {
 	public static function snapshot(project:ResolvedProject):Map<String, String> {
 		var result:Map<String, String> = [];
 		for (item in project.packages.packages) {
-			record(Path.join([item.root, "haxeon.json"]), result);
+			// Either manifest name, so a migration (one appearing, the other going) is a change too.
+			for (name in [PackageManifest.TOML_NAME, PackageManifest.JSON_NAME])
+				record(Path.join([item.root, name]), result);
 			for (root in item.sourceRoots)
 				collect(root, result);
 			for (path in item.ffiInterfaces)

@@ -237,7 +237,7 @@ class HaxeArguments {
 					if (colon > 0 && colon < library.length - 1)
 						libraries.push({name: value.substr(0, colon), version: value.substr(colon + 1)});
 					else
-						unsupported.push('${argument.value} $value: give the version (-lib $value:VERSION), or declare the dependency in haxeon.json; Haxeon does not read haxelib\'s global repository');
+						unsupported.push('${argument.value} $value: give the version (-lib $value:VERSION), or declare the dependency in haxeon.toml; Haxeon does not read haxelib\'s global repository');
 				case "--hl":
 					if (Path.extension(value) == "c")
 						unsupported.push('${argument.value} $value: HashLink/C output is not supported yet; write a .hl file');

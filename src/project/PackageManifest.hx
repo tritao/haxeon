@@ -2,8 +2,12 @@ package project;
 
 import build.Target;
 import compiler.core.InternalError;
+import compiler.core.UsageError;
 import haxe.Json;
 import haxe.io.Path;
+import sys.FileSystem;
+import toml.TomlParser;
+import toml.TomlPrinter;
 
 class NativeManifest {
 	public final sources:Array<String>;
@@ -102,7 +106,10 @@ class InstrumentManifest {
 	}
 }
 
-/** Parsed package metadata. Paths remain package-relative until acquisition. */
+/**
+ * Parsed package metadata, from a project's haxeon.toml or haxeon.json: one schema, the TOML file's tables being the JSON file's
+ * objects (docs/reference/MANIFEST.md). Paths remain package-relative until acquisition.
+ */
 class PackageManifest {
 	public final version:Int;
 	public final packageName:String;
@@ -163,19 +170,111 @@ class PackageManifest {
 		this.instrument = instrument == null ? new InstrumentManifest() : instrument;
 	}
 
-	public static function parse(path:String, content:String):PackageManifest {
+	/** The manifest `haxeon init` writes and every lookup prefers. */
+	public static inline final TOML_NAME = "haxeon.toml";
+
+	/** The original manifest format, still read everywhere a TOML one is. */
+	public static inline final JSON_NAME = "haxeon.json";
+
+	/** Whether a file named `name` is a project manifest. */
+	public static function isManifestName(name:String):Bool
+		return name == TOML_NAME || name == JSON_NAME;
+
+	/**
+	 * The manifest in `directory`: its haxeon.toml or its haxeon.json, or null when it has neither. A directory with both is a usage
+	 * error, as nothing says which one is the project.
+	 */
+	public static function find(directory:String):Null<String> {
+		var toml = Path.join([directory, TOML_NAME]),
+			json = Path.join([directory, JSON_NAME]),
+			hasToml = FileSystem.exists(toml),
+			hasJson = FileSystem.exists(json);
+		if (hasToml && hasJson)
+			throw new UsageError('$directory has both $TOML_NAME and $JSON_NAME; keep one');
+		return hasToml ? toml : hasJson ? json : null;
+	}
+
+	/** `find`, else where a new project's manifest goes (its haxeon.toml), the path a missing project is reported at. */
+	public static function pathIn(directory:String):String {
+		var found = find(directory);
+		return found != null ? found : Path.join([directory, TOML_NAME]);
+	}
+
+	/** The objects and arrays a manifest holds: TOML for a `.toml` file, else JSON. Syntax errors say where. */
+	public static function decode(path:String, content:String):Dynamic {
 		var raw:Dynamic;
 		try {
-			raw = Json.parse(content);
+			raw = isToml(path) ? TomlParser.parse(content) : Json.parse(content);
 		} catch (error:Dynamic) {
 			throw new InternalError('Could not parse $path: ${Std.string(error)}');
 		}
 		if (!isObject(raw))
 			throw new InternalError('$path must contain a JSON object');
-		var rawVersion:Dynamic = Reflect.field(raw, "version"),
+		return raw;
+	}
+
+	public static function isToml(path:String):Bool
+		return Path.extension(path).toLowerCase() == "toml";
+
+	/** The order a written manifest's keys take, the schema's (version, entry, sources, ...); other keys follow alphabetically. */
+	static final FIELD_ORDER = [
+		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
+		"target",
+		"defines", "inline", "outputDir", "package", "dependencies", "native", "ffi", "android", "format",
+		"compatibility",
+		"instrument"
+	];
+
+	/** A manifest's objects (`decode`, or made by `haxeon init`) as a haxeon.toml's text. */
+	public static function toToml(raw:Dynamic):String
+		return TomlPrinter.print(raw, FIELD_ORDER);
+
+	/**
+	 * The haxeon.toml that says what the haxeon.json at `path` says. The result is checked: it must read back to the same values
+	 * (a JSON null, which TOML cannot write, means what a missing key means) and to a manifest the loader accepts.
+	 */
+	public static function migrateToToml(path:String, content:String):String {
+		parse(path, content);
+		var raw = decode(path, content), text = toToml(raw), tomlPath = Path.withExtension(path, "toml");
+		if (!sameValue(raw, TomlParser.parse(text)))
+			throw new InternalError('$path cannot be written as TOML without changing it');
+		parse(tomlPath, text);
+		return text;
+	}
+
+	static function sameValue(json:Dynamic, toml:Dynamic):Bool {
+		if (Std.isOfType(json, Array)) {
+			if (!Std.isOfType(toml, Array))
+				return false;
+			var left:Array<Dynamic> = json, right:Array<Dynamic> = toml;
+			if (left.length != right.length)
+				return false;
+			for (index in 0...left.length)
+				if (!sameValue(left[index], right[index]))
+					return false;
+			return true;
+		}
+		if (isObject(json) && !Std.isOfType(json, String)) {
+			if (!isObject(toml) || Std.isOfType(toml, String))
+				return false;
+			var fields = [for (field in Reflect.fields(json)) if (Reflect.field(json, field) != null) field];
+			if (fields.length != Reflect.fields(toml).length)
+				return false;
+			for (field in fields)
+				if (!Reflect.hasField(toml, field)
+					|| !sameValue(Reflect.field(json, field), Reflect.field(toml, field)))
+					return false;
+			return true;
+		}
+		return json == toml;
+	}
+
+	public static function parse(path:String, content:String):PackageManifest {
+		var raw = decode(path, content),
+			rawVersion:Dynamic = Reflect.field(raw, "version"),
 			version = rawVersion == null ? 1 : Std.int(rawVersion);
 		if (version != 1)
-			throw new InternalError('Unsupported haxeon.json version "$rawVersion"');
+			throw new InternalError('$path has an unsupported version "$rawVersion" (the manifest format is version 1)');
 		var packageData:Dynamic = Reflect.field(raw, "package"),
 			packageName = packageData == null
 				? Path.withoutDirectory(Path.directory(path)) : requiredString(packageData, "name", path),
@@ -292,7 +391,7 @@ class PackageManifest {
 	}
 
 	/**
-	 * The manifest of a program the CLI builds with no haxeon.json of its own (a script, a Haxe command line's compilation): a host
+	 * The manifest of a program the CLI builds with no manifest file of its own (a script, a Haxe command line's compilation): a host
 	 * project with these sources, source roots (absolute) and defines, built into `build` beside where it is resolved.
 	 * `scopeSourceRoots: false` lets its roots hold any package, as Haxe's class paths do.
 	 */

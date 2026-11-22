@@ -14,6 +14,7 @@ import haxe.crypto.Sha256;
 import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import project.CompilerInputs;
+import project.PackageManifest;
 import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
@@ -184,7 +185,7 @@ class ProjectWorkspace {
 
 	public function isConfiguration(path:String):Bool {
 		var name = Path.withoutDirectory(path);
-		return name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml")
+		return PackageManifest.isManifestName(name) || name == "haxe.json" || StringTools.endsWith(name, ".hxml")
 			|| StringTools.endsWith(name, ".hxi")
 			|| StringTools.endsWith(name, ".hxmap");
 	}
@@ -303,7 +304,8 @@ class ProjectWorkspace {
 			var files:Array<String> = [];
 			if (FileSystem.exists(directory) && FileSystem.isDirectory(directory))
 				for (name in FileSystem.readDirectory(directory))
-					if (name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml"))
+					if (PackageManifest.isManifestName(name) || name == "haxe.json"
+						|| StringTools.endsWith(name, ".hxml"))
 						files.push(normalize(Path.join([directory, name])));
 			if (files.length > 0) {
 				files.sort(Reflect.compare);
@@ -445,7 +447,7 @@ class ProjectWorkspace {
 	}
 
 	function parseJson(file:String):HaxeProjectConfiguration {
-		if (Path.withoutDirectory(file) == "haxeon.json") {
+		if (PackageManifest.isManifestName(Path.withoutDirectory(file))) {
 			// Resolved as the build resolves it, with haxeon.lock, but offline: a dependency missing from the source cache is an
 			// error to fix with `haxeon install`, never a download the editor starts. Native artifacts are not built here.
 			var resolved = ProjectDiscovery.resolve(file, null, true),

@@ -10,7 +10,7 @@ import sys.io.File;
 class WorkspaceProject {
 	public final name:String;
 
-	/** Absolute path of the project's haxeon.json. */
+	/** Absolute path of the project's manifest (haxeon.toml or haxeon.json). */
 	public final manifestPath:String;
 
 	public final tags:Array<String>;

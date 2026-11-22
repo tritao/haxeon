@@ -57,7 +57,7 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 			throw new InternalError('Could not extract registry release "$packageId"');
 		var sourceRoot = findManifestRoot(temporary);
 		if (sourceRoot == null)
-			throw new InternalError('Registry release "$packageId" does not contain haxeon.json');
+			throw new InternalError('Registry release "$packageId" does not contain ${PackageManifest.TOML_NAME} or ${PackageManifest.JSON_NAME}');
 		FileSystem.rename(sourceRoot, destination);
 		if (sourceRoot != temporary)
 			FileSystem.deleteDirectory(temporary);
@@ -71,11 +71,11 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 	}
 
 	function findManifestRoot(root:String):Null<String> {
-		if (FileSystem.exists(Path.join([root, "haxeon.json"])))
+		if (PackageManifest.find(root) != null)
 			return root;
 		for (entry in FileSystem.readDirectory(root)) {
 			var path = Path.join([root, entry]);
-			if (FileSystem.isDirectory(path) && FileSystem.exists(Path.join([path, "haxeon.json"])))
+			if (FileSystem.isDirectory(path) && PackageManifest.find(path) != null)
 				return path;
 		}
 		return null;

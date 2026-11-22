@@ -11,8 +11,8 @@ import compiler.service.UnusedImports.UnusedImport;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import haxe.Json;
 import haxe.io.Path;
+import project.PackageManifest;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -22,8 +22,8 @@ import sys.io.File;
  * `unbound-local`, `module-namespace` and `throw-non-exception` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
  * through `typedRules`, which runs it in a tool that links the compiler.
  *
- * Each file's imports resolve against its own project: the source roots of the nearest haxeon.json and of its path dependencies, the
- * directory its package declaration implies, Haxeon's standard library, and any manifest given with `--manifest`. Never against the
+ * Each file's imports resolve against its own project: the source roots of the nearest manifest (haxeon.toml or haxeon.json) and
+ * of its path dependencies, the directory its package declaration implies, Haxeon's standard library, and any manifest given with `--manifest`. Never against the
  * other files of the run, so a file gets the same answer alone or with the whole tree. An import that resolves nowhere is assumed
  * used, so a missing manifest makes the check quieter, never wrong. `--fix` deletes the
  * statements, sorts the runs that can be sorted without changing what a name means, and reformats a file that was formatted before.
@@ -156,12 +156,12 @@ class LintCommand {
 		return roots;
 	}
 
-	/** The haxeon.json in the file's directory or the nearest one above it. */
+	/** The manifest (haxeon.toml or haxeon.json) in the file's directory or the nearest one above it. */
 	static function nearestManifest(path:String):Null<String> {
 		var directory = Path.directory(FileSystem.absolutePath(path));
 		while (true) {
-			var manifest = Path.join([directory, "haxeon.json"]);
-			if (FileSystem.exists(manifest))
+			var manifest = PackageManifest.find(directory);
+			if (manifest != null)
 				return manifest;
 			var parent = Path.directory(directory);
 			if (parent == directory || parent == "")
@@ -180,7 +180,7 @@ class LintCommand {
 		visiting.push(key);
 		var roots:Array<String> = [], directory = Path.directory(key), raw:Dynamic = null;
 		try
-			raw = Json.parse(File.getContent(key))
+			raw = PackageManifest.decode(key, File.getContent(key))
 		catch (_:Dynamic) {}
 		if (raw != null) {
 			var sourceRoots:Array<String> = raw.sourceRoots == null ? ["src"] : raw.sourceRoots;
@@ -192,11 +192,11 @@ class LintCommand {
 					var dependency:Dynamic = Reflect.field(dependencies, name);
 					var location:Null<String> = dependency == null ? null : dependency.path;
 					if (location != null) {
-						var dependencyManifest = Path.join([
-							Path.isAbsolute(location) ? location : Path.join([directory, location]),
-							"haxeon.json"
-						]);
-						if (FileSystem.exists(dependencyManifest))
+						var dependencyManifest = PackageManifest.find(Path.isAbsolute(location) ? location : Path.join([
+							directory,
+							location
+						]));
+						if (dependencyManifest != null)
 							for (root in manifestRoots(dependencyManifest, visiting))
 								addTo(roots, root);
 					}

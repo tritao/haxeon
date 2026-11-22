@@ -7,7 +7,7 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * A program the CLI builds with no haxeon.json of its own: a script (`haxeon script.hx`) or one compilation of a Haxe command
+ * A program the CLI builds with no manifest of its own: a script (`haxeon script.hx`) or one compilation of a Haxe command
  * line (`haxeon build.hxml`). Its manifest is made in memory (`PackageManifest.program`) and resolved in place, and its build
  * state lives in a directory of a cache the CLI keeps for such programs, named by what identifies the program, so its next
  * build is incremental. A directory not used for `UNUSED_SECONDS` is removed.
@@ -29,7 +29,7 @@ class ProgramProject {
 
 	/** Where the manifest is placed for resolution; nothing is read from or written to it. */
 	public function manifestPath():String
-		return Path.join([root, "haxeon.json"]);
+		return Path.join([root, PackageManifest.TOML_NAME]);
 
 	/**
 	 * The directory of the program `key` names in the cache `name` (`~/.haxeon/cache/NAME`, or the directory `variable` gives),

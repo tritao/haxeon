@@ -1,8 +1,8 @@
 #!/usr/bin/env haxeon
 /**
  * `haxeon check`, `haxeon test` and `haxeon clean` on a project: a check reports a type error and a missing entry point
- * (status 1) and writes no module, then passes once they are fixed; `test` builds and runs tests/haxeon.json, 0 when it passes
- * and 1 when it fails, and names the file it looked for when there is none; `clean` removes the project's and its tests'
+ * (status 1) and writes no module, then passes once they are fixed; `test` builds and runs the project in tests (a haxeon.toml
+ * beside the root's haxeon.json), 0 when it passes and 1 when it fails, and names the file it looked for when there is none; `clean` removes the project's and its tests'
  * build directories and nothing else. Each command has its own help.
  */
 import haxe.io.Path;
@@ -52,11 +52,11 @@ function main() {
 	expectStatus(haxeon(["check", "--watch"], work, log), 2, log, "a check with a build-only option");
 
 	log = Path.join([work, "no-tests.log"]);
-	expectStatus(haxeon(["test"], work, log), 1, log, "test without tests/haxeon.json");
-	if (File.getContent(log).indexOf(Path.join(["tests", "haxeon.json"])) < 0)
-		Script.fail('FAIL: test without tests did not name tests/haxeon.json; its log:\n${File.getContent(log)}');
-	write(work, "tests/haxeon.json",
-		'{"version": 1, "package": {"name": "verbs-tests"}, "entry": "TestMain", "sourceRoots": ["src"], "target": "host"}\n');
+	expectStatus(haxeon(["test"], work, log), 1, log, "test without a tests project");
+	if (File.getContent(log).indexOf(Path.join(["tests", "haxeon.toml"])) < 0)
+		Script.fail('FAIL: test without tests did not name tests/haxeon.toml; its log:\n${File.getContent(log)}');
+	write(work, "tests/haxeon.toml",
+		'version = 1\nentry = "TestMain"\nsourceRoots = ["src"]\ntarget = "host"\n\n[package]\nname = "verbs-tests"\n');
 	// The tests fail when given arguments, so one project shows both outcomes.
 	write(work, "tests/src/TestMain.hx",
 		"function main():Int {\n\tSys.println(\"ran \" + Sys.args().length);\n\treturn Sys.args().length == 0 ? 0 : 3;\n}\n");
@@ -74,7 +74,7 @@ function main() {
 	for (removed in ["build", "tests/build"])
 		if (FileSystem.exists(Path.join([work, removed])))
 			Script.fail('FAIL: clean left $removed');
-	for (kept in ["haxeon.json", "src/Main.hx", "notes.txt", "tests/haxeon.json"])
+	for (kept in ["haxeon.json", "src/Main.hx", "notes.txt", "tests/haxeon.toml"])
 		if (!FileSystem.exists(Path.join([work, kept])))
 			Script.fail('FAIL: clean removed $kept');
 	Sys.println("PASS: check, test and clean work on a project");

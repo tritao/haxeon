@@ -7,8 +7,6 @@ import sys.io.File;
 
 /** How a project's package graph is resolved for a command, a build or the editor. */
 class ProjectDiscovery {
-	public static inline var MANIFEST_NAME = PackageResolver.MANIFEST_NAME;
-
 	/** Resolves path and workspace dependencies only, which are already on disk. */
 	public static function discover(manifestPath:String):ResolvedProject
 		return new PackageResolver(new PathSourceAcquirer()).resolve(manifestPath);

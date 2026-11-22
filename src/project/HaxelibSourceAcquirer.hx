@@ -56,12 +56,13 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 	}
 
 	function adaptIfNeeded(root:String, name:String, version:String, packageId:PackageId):Void {
-		var manifestPath = Path.join([root, "haxeon.json"]);
-		if (FileSystem.exists(manifestPath))
+		if (PackageManifest.find(root) != null)
 			return;
+		// The adapted manifest is machine-written, so it stays JSON.
+		var manifestPath = Path.join([root, PackageManifest.JSON_NAME]);
 		var haxelibPath = Path.join([root, "haxelib.json"]);
 		if (!FileSystem.exists(haxelibPath))
-			throw new InternalError('Haxelib cache entry for "$packageId" has neither haxeon.json nor haxelib.json: $root');
+			throw new InternalError('Haxelib cache entry for "$packageId" has neither a Haxeon manifest nor haxelib.json: $root');
 		var raw:Dynamic;
 		try {
 			raw = Json.parse(File.getContent(haxelibPath));

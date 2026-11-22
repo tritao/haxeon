@@ -308,6 +308,7 @@ class LspProtocol {
 							{globPattern: "**/*.hxml", kind: 7},
 							{globPattern: "**/haxe.json", kind: 7},
 							{globPattern: "**/haxeon.json", kind: 7},
+							{globPattern: "**/haxeon.toml", kind: 7},
 							{globPattern: "**/*.hxi", kind: 7},
 							{globPattern: "**/*.hxmap", kind: 7}
 						]

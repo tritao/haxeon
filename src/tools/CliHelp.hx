@@ -18,7 +18,7 @@ private typedef CommandGroup = {
 /** The CLI's help: the global overview, grouped by task, and each command's own (`haxeon help build`, `haxeon build --help`). */
 class CliHelp {
 	static final BUILD_OPTIONS = [
-		"  --project PATH               The haxeon.json to build (default: the one in this directory)",
+		"  --project PATH               The manifest to build, or its directory (default: this directory's haxeon.toml or haxeon.json)",
 		"  --target TARGET              host, android, wasm32 or OS-ARCH (default: the project's; see haxeon platforms)",
 		"  --build-mode MODE            development (default) or release",
 		"  --define NAME[=VALUE]        Add a conditional compilation define (repeatable)",
@@ -36,12 +36,24 @@ class CliHelp {
 			commands: [
 				{
 					name: "init",
-					summary: "Create haxeon.json and src/Main.hx in this directory",
+					summary: "Create haxeon.toml and src/Main.hx in this directory",
 					details: [
 						"Usage: haxeon init [--entry Main] [--target host|wasm32|android]",
 						"",
 						"  --entry NAME                 The entry module (default Main)",
 						"  --target TARGET              host (default), wasm32 or android"
+					]
+				},
+				{
+					name: "migrate",
+					summary: "Turn the project's haxeon.json into haxeon.toml",
+					details: [
+						"Usage: haxeon migrate [--dry-run] [--project PATH]",
+						"",
+						"Writes haxeon.toml with the same settings, checks that it reads back to them, and removes haxeon.json.",
+						"",
+						"  --dry-run                    Print the haxeon.toml instead of writing it",
+						"  --project PATH               The haxeon.json, or its directory (default: this directory)"
 					]
 				},
 				{
@@ -76,7 +88,7 @@ class CliHelp {
 			commands: [
 				{
 					name: "build",
-					summary: "Build the project in haxeon.json",
+					summary: "Build the project in haxeon.toml (or haxeon.json)",
 					details: [
 						"Usage: haxeon build [options]",
 						""
@@ -156,11 +168,11 @@ class CliHelp {
 			commands: [
 				{
 					name: "test",
-					summary: "Build the project's tests (tests/haxeon.json) and run them",
+					summary: "Build the project's tests (the project in tests/) and run them",
 					details: [
 						"Usage: haxeon test [options] [-- TEST ARGUMENTS]",
 						"",
-						"Builds and runs tests/haxeon.json beside the project (or the project itself in a directory named tests),",
+						"Builds and runs the project in tests/ beside the project (or the project itself in a directory named tests),",
 						"and exits with 0 when the tests pass and 1 when they fail.",
 						""
 					].concat(BUILD_OPTIONS.filter(line -> line.indexOf("--target") < 0)).concat([
@@ -176,7 +188,7 @@ class CliHelp {
 						"",
 						"  --check                      Report files that would change instead of rewriting them",
 						"  --stdin                      Format standard input to standard output",
-						"The style comes from the \"format\" section of haxeon.json (default: tabs, 120 columns)."
+						"The style comes from the [format] section of haxeon.toml or haxeon.json (default: tabs, 120 columns)."
 					]
 				},
 				{
@@ -188,7 +200,7 @@ class CliHelp {
 						"  --fix                        Remove unused imports and sort them",
 						"  --only RULE                  unused-imports, import-order; opt-in: unbound-local, module-namespace,",
 						"                               throw-non-exception",
-						"  --manifest FILE              A haxeon.json whose source roots resolve imports"
+						"  --manifest FILE              A haxeon.toml or haxeon.json whose source roots resolve imports"
 					]
 				}
 			]

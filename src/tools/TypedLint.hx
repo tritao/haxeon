@@ -31,7 +31,7 @@ typedef TypedFinding = {
  *   enum), which a catch of haxe.Exception sees wrapped in a ValueException. Code that throws only exceptions never needs the wrap.
  *
  * The rules read the analysis where the editor does: each file's project is found and configured by `ProjectWorkspace` (the nearest
- * haxeon.json or .hxml) and analyzed by `LanguageService.analyze`, with the file's module as the entry. The typer records the locals it
+ * haxeon.toml, haxeon.json or .hxml) and analyzed by `LanguageService.analyze`, with the file's module as the entry. The typer records the locals it
  * settles (`TypedProgram.unboundLocals`) and the throws of a non-exception (`TypedProgram.nonExceptionThrows`), and only for bodies
  * that typed: a body whose typing failed is not reported, though the analysis that fails with it still reports the other bodies'
  * (`TypingFailure`). Module-namespace uses come from the
