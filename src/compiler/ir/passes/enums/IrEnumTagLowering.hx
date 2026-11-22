@@ -51,52 +51,6 @@ class IrEnumTagLowering {
 					}
 	}
 
-	/**
-	 * `escapes` on bodies, at the end of assembly (the conversion point, docs/design/IR_CORE_COLUMNS.md) and as the pipeline's
-	 * last check before the inliner: each function is read as its body (`bodyIn` with
-	 * `types`), and one that changes becomes its edited body: owned by the next stage: edited in
-	 * place, or a copy when a cache holds the body. A function nothing changes stays the same object.
-	 */
-	public static function escapeBodies(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder):Void {
-		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions),
-			adapterEnums:Map<String, String> = [];
-		var symbols = IrEnumTagStorage.adapterNames(program);
-		var boxNames:Map<String, String> = [],
-			unboxNames:Map<String, String> = [];
-		for (name => pair in symbols) {
-			boxNames.set(name, pair.box);
-			unboxNames.set(name, pair.unbox);
-		}
-		for (fn in program.functions)
-			switch fn.kind {
-				case EnumTagAdapter(EnumTag(name), _):
-					adapterEnums.set(fn.name, name);
-				default:
-			}
-		var tags = symbols.keys().hasNext();
-		var walk = new IrBodyTagEscapes(program, tags, new IrTagEscapeSignatures(program, existing), adapterEnums,
-			boxNames,
-			unboxNames);
-		var functions = program.functions, result:Null<Array<IrFunction>> = null;
-		for (index in 0...functions.length) {
-			var fn = functions[index], body = fn.bodyIn(types, builder);
-			if (walk.rewrite(body, false)) {
-				var edited = body.forEditing(builder);
-				walk.rewrite(edited, true);
-				if (result == null)
-					result = functions.copy();
-				var replacement = IrFunction.ofOwnedBody(edited);
-				result[index] = replacement;
-				existing.set(fn.name, replacement);
-			}
-		}
-		if (result != null)
-			program.functions = result;
-		if (!tags)
-			return;
-		addAdapters(program, walk.required, existing, boxNames, unboxNames);
-	}
-
 	public static function addAdapters(program:IrProgram, required:Map<String, Bool>, existing:IrFunctionIndex,
 			boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
 		var names = [for (name in required.keys()) name];
@@ -399,6 +353,230 @@ interface IrTagEscapeReads {
 	function require(enumName:String):Void;
 }
 
+/**
+ * The inline-enum requests and tag escapes of each function, as the last step of assembly and the pipeline's last check before the
+ * inliner (`IrBodyTagEscapes`), per function (`IrFunctionPass`) on bodies: a function that changes becomes its edited body, owned
+ * by the next stage. The rewrite reads, through the fact reader, whether the program has tag adapters at all (`TAGS`), the
+ * signatures, fields and globals where a tag leaves the function, which callees are tag adapters, the adapters' names and the
+ * provider of each inline-enum request; it asks for the adapters it needs, which `finish` adds.
+ */
+class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
+	// Facts.
+	static inline final TAGS = 0;
+	static inline final SIGNATURE = 1;
+	static inline final METHOD = 2;
+	static inline final FIELD = 3;
+	static inline final GLOBAL = 4;
+	static inline final ADAPTER = 5;
+	static inline final ADAPTER_NAMES = 6;
+	static inline final PROVIDER = 7;
+
+	/** The helper kind of an enum's adapters (`request`). */
+	static inline final ADAPTERS = 0;
+
+	final program:IrProgram;
+	final types:IrTypeIds;
+	final builder:IrBodyBuilder;
+	final adapterEnums:Map<String, String> = [];
+	final boxNames:Map<String, String> = [];
+	final unboxNames:Map<String, String> = [];
+	final required:Map<String, Bool> = [];
+	final providers:IrInlineEnumProviders;
+	var tags = false;
+	var existing:Null<IrFunctionIndex> = null;
+	var lookups:Null<IrTagEscapeSignatures> = null;
+
+	/** The reader of the function being rewritten when it records, else null. */
+	var reader:Null<IrFactReader> = null;
+
+	/** The enums whose adapters the function being rewritten asked for, so it asks once. */
+	var asked:Map<String, Bool> = [];
+
+	public function new(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder) {
+		this.program = program;
+		this.types = types;
+		this.builder = builder;
+		providers = new IrInlineEnumProviders(program);
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+		existing = names;
+		for (name => pair in IrEnumTagStorage.adapterNames(program)) {
+			boxNames.set(name, pair.box);
+			unboxNames.set(name, pair.unbox);
+			tags = true;
+		}
+		for (fn in functions)
+			switch fn.kind {
+				case EnumTagAdapter(EnumTag(name), _):
+					adapterEnums.set(fn.name, name);
+				default:
+			}
+		lookups = new IrTagEscapeSignatures(program, names);
+	}
+
+	/** The key of a provider fact: box or unbox, then the type ids of the request's type, argument and output, and its count. */
+	function providerKey(box:Bool, type:IrType, count:Int, argument:Null<IrType>, output:IrType):String
+		return (box ? "B" : "U") + types.id(type) + ":" + count + ":" + (argument == null ? -1 : types.id(argument))
+			+ ":"
+			+ types.id(output);
+
+	public function fact(kind:Int, key:String):Int {
+		var tables = lookups;
+		return switch kind {
+			case TAGS: tags ? 1 : 0;
+			case SIGNATURE: tables == null ? -1 : IrEnumTagLoweringPass.dynMask(tables.signature(key));
+			case METHOD:
+				var split = key.indexOf("\u0001");
+				tables == null ? -1
+					: IrEnumTagLoweringPass.dynMask(tables.methodArguments(IrEnumTagLoweringPass.keyType(key.substr(0,
+					split)), key.substr(split + 1)));
+			case FIELD:
+				var split = key.indexOf("\u0001");
+				tables != null
+					&& isDyn(tables.fieldType(IrEnumTagLoweringPass.keyType(key.substr(0, split)),
+					key.substr(split + 1))) ? 1 : 0;
+			case GLOBAL: tables != null && isDyn(tables.global(key)) ? 1 : 0;
+			case ADAPTER: adapterEnums.exists(key) ? 1 : 0;
+			case ADAPTER_NAMES:
+				boxNames.get(key) == "$enum-tag-box:" + key
+					&& unboxNames.get(key) == "$enum-tag-unbox:" + key ? 0 : IrFacts.UNKNOWN;
+			case PROVIDER: providerFact(key);
+			default: IrFacts.UNKNOWN;
+		};
+	}
+
+	/** The symbol of the provider a request's key names (`providerKey`), or `IrFacts.UNKNOWN` when it has none that fits. */
+	function providerFact(key:String):Int {
+		var parts = [for (part in key.substr(1).split(":")) Std.parseInt(part) ?? -1], argument = parts[2];
+		try {
+			return IrSymbol.of(providers.provider(key.charAt(0) == "B", types.type(parts[0]), parts[1],
+				argument < 0 ? null : types.type(argument), types.type(parts[3]))).id;
+		} catch (error:InternalError) {
+			return IrFacts.UNKNOWN;
+		}
+	}
+
+	static function isDyn(type:Null<IrType>):Bool
+		return switch type {
+			case Dyn: true;
+			default: false;
+		};
+
+	/** Whether the program has tag adapters, which a rewrite reads as a fact. */
+	public function hasTags():Bool {
+		var current = reader;
+		if (current != null)
+			current.read(TAGS, "");
+		return tags;
+	}
+
+	/** The provider an inline-enum request resolves to (`IrInlineEnumProviders.provider`). */
+	public function provider(box:Bool, type:IrType, count:Int, argument:Null<IrType>, output:IrType):String {
+		var current = reader;
+		if (current != null)
+			current.read(PROVIDER, providerKey(box, type, count, argument, output));
+		return providers.provider(box, type, count, argument, output);
+	}
+
+	public function signature(name:String):Null<Array<IrType>> {
+		var current = reader, tables = lookups;
+		if (current != null)
+			current.read(SIGNATURE, name);
+		return tables == null ? null : tables.signature(name);
+	}
+
+	public function methodArguments(type:IrType, method:String):Null<Array<IrType>> {
+		var current = reader, tables = lookups, key = IrEnumTagLoweringPass.typeKey(type);
+		if (key == null)
+			return null;
+		if (current != null)
+			current.read(METHOD, key + "\u0001" + method);
+		return tables == null ? null : tables.methodArguments(type, method);
+	}
+
+	public function fieldType(type:IrType, field:String):Null<IrType> {
+		var current = reader, tables = lookups, key = switch type {
+			case Obj(_): IrEnumTagLoweringPass.typeKey(type);
+			default: null;
+		};
+		if (key == null)
+			return null;
+		if (current != null)
+			current.read(FIELD, key + "\u0001" + field);
+		return tables == null ? null : tables.fieldType(type, field);
+	}
+
+	public function global(name:String):Null<IrType> {
+		var current = reader, tables = lookups;
+		if (current != null)
+			current.read(GLOBAL, name);
+		return tables == null ? null : tables.global(name);
+	}
+
+	public function adapterOf(name:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(ADAPTER, name);
+		return adapterEnums.get(name);
+	}
+
+	public function boxName(enumName:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(ADAPTER_NAMES, enumName);
+		return boxNames.get(enumName);
+	}
+
+	public function unboxName(enumName:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(ADAPTER_NAMES, enumName);
+		return unboxNames.get(enumName);
+	}
+
+	public function require(enumName:String):Void {
+		var current = reader;
+		if (current == null)
+			required.set(enumName, true);
+		else if (!asked.exists(enumName)) {
+			asked.set(enumName, true);
+			current.request(ADAPTERS, EnumTag(enumName));
+		}
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		switch type {
+			case EnumTag(name): required.set(name, true);
+			default: throw new InternalError("An enum tag adapter request names no tag");
+		}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		this.reader = reader.records() ? reader : null;
+		if (this.reader != null)
+			asked = [];
+		var walk = new IrBodyTagEscapes(this), body = fn.bodyIn(types, builder), result = fn;
+		if (walk.rewrite(body, false)) {
+			var edited = body.forEditing(builder);
+			walk.rewrite(edited, true);
+			result = IrFunction.ofOwnedBody(edited);
+		}
+		this.reader = null;
+		return result;
+	}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		program.functions = functions;
+		var names = existing;
+		if (tags && names != null)
+			IrEnumTagLowering.addAdapters(program, required, names, boxNames, unboxNames);
+		return program.functions;
+	}
+}
+
 /** `IrTagEscapeReads` from the program's tables, as a lowering without a memo reads them. */
 class IrTagEscapeTables implements IrTagEscapeReads {
 	final lookups:IrTagEscapeSignatures;
@@ -601,31 +779,20 @@ class IrTagEscapeSignatures {
 
 /**
  * `IrEnumTagLowering.finishEscapes` on a body: inline-enum requests become calls of their providers, and, when the program has
- * tag adapters (`tags`), a tag that escapes where a `Dyn` is expected is boxed by its adapter, as the object version does. A walk that does not `edit` only says whether one that does would change the body;
- * both record the tags that need adapters in `required`.
+ * tag adapters, a tag that escapes where a `Dyn` is expected is boxed by its adapter, as the object version does. Everything it
+ * reads of the program is read through `reads` (`IrTagEscapesPass`), which records it, and so are the adapters it needs. A walk
+ * that does not `edit` only says whether one that does would change the body.
  */
 class IrBodyTagEscapes {
-	public final required:Map<String, Bool> = [];
+	final reads:IrTagEscapesPass;
 
-	final tags:Bool;
-	final lookups:IrTagEscapeSignatures;
-	final providers:IrInlineEnumProviders;
-	final adapterEnums:Map<String, String>;
-	final boxNames:Map<String, String>;
-	final unboxNames:Map<String, String>;
-
+	var tags = false;
 	var body:IrBody;
 	var edit = false;
 	var changed = false;
 
-	public function new(program:IrProgram, tags:Bool, lookups:IrTagEscapeSignatures, adapterEnums:Map<String, String>,
-			boxNames:Map<String, String>, unboxNames:Map<String, String>) {
-		this.tags = tags;
-		this.lookups = lookups;
-		this.adapterEnums = adapterEnums;
-		this.boxNames = boxNames;
-		this.unboxNames = unboxNames;
-		providers = new IrInlineEnumProviders(program);
+	public function new(reads:IrTagEscapesPass) {
+		this.reads = reads;
 		body = null;
 	}
 
@@ -633,6 +800,7 @@ class IrBodyTagEscapes {
 	public function rewrite(body:IrBody, edit:Bool):Bool {
 		this.body = body;
 		this.edit = edit;
+		tags = reads.hasTags();
 		changed = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -700,10 +868,10 @@ class IrBodyTagEscapes {
 
 	function adaptOne(block:Int, row:Int, index:Int, value:IrValueId, name:String):Void {
 		var boxed = body.newValue("$enum-tag:implicit-box", body.typeId(Dyn));
-		required.set(name, true);
+		reads.require(name);
 		body.beginRow();
 		body.pushOperand(value);
-		var made = body.endRow(IrOpcode.Call, boxed, IrSymbol.of(boxNames.get(name)).id, body.provenance(row));
+		var made = body.endRow(IrOpcode.Call, boxed, IrSymbol.of(reads.boxName(name)).id, body.provenance(row));
 		body.linkBefore(block, row, made);
 		body.setOperand(row, index, boxed);
 	}
@@ -712,50 +880,50 @@ class IrBodyTagEscapes {
 		switch body.opcode(row) {
 			case IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
 				var count = body.operandCount(row);
-				call(row, providers.provider(body.opcode(row) == IrOpcode.InlineEnumBox, body.typeOperand(row), count,
+				call(row, reads.provider(body.opcode(row) == IrOpcode.InlineEnumBox, body.typeOperand(row), count,
 					count == 1 ? body.valueType(body.operand(row, 0)) : null, body.valueType(body.output(row))));
 			case _ if (!tags):
 			case IrOpcode.ToDyn:
 				var name = tagName(body.valueType(body.operand(row, 0)));
 				if (name != null) {
-					required.set(name, true);
-					call(row, boxNames.get(name));
+					reads.require(name);
+					call(row, reads.boxName(name));
 				}
 			case IrOpcode.SafeCast:
 				var name = tagName(body.valueType(body.output(row)));
 				if (name != null) {
-					required.set(name, true);
-					call(row, unboxNames.get(name));
+					reads.require(name);
+					call(row, reads.unboxName(name));
 				}
 			case IrOpcode.EnumTagBox:
 				var name = tagName(body.typeOperand(row));
 				if (name != null) {
-					if (!boxNames.exists(name)
+					if (reads.boxName(name) == null
 						|| body.operandCount(row) != 1
 						|| !IrVerifier.sameType(body.valueType(body.operand(row, 0)), EnumTag(name))
 						|| !IrVerifier.sameType(body.valueType(body.output(row)), Dyn))
 						throw new InternalError("Invalid enum tag box signature");
-					required.set(name, true);
-					call(row, boxNames.get(name));
+					reads.require(name);
+					call(row, reads.boxName(name));
 				}
 			case IrOpcode.EnumTagUnbox:
 				var name = tagName(body.typeOperand(row));
 				if (name != null) {
-					if (!unboxNames.exists(name)
+					if (reads.unboxName(name) == null
 						|| body.operandCount(row) != 1
 						|| !IrVerifier.sameType(body.valueType(body.operand(row, 0)), Dyn)
 						|| !IrVerifier.sameType(body.valueType(body.output(row)), EnumTag(name)))
 						throw new InternalError("Invalid enum tag unbox signature");
-					required.set(name, true);
-					call(row, unboxNames.get(name));
+					reads.require(name);
+					call(row, reads.unboxName(name));
 				}
 			case IrOpcode.Call:
 				var tagArgument = hasTag(row, 0), output = body.output(row);
 				if (!tagArgument && (!output.exists() || !isTag(output)))
 					return;
-				var name = body.symbol(row).name, adapter = adapterEnums.get(name);
+				var name = body.symbol(row).name, adapter = reads.adapterOf(name);
 				if (adapter != null) {
-					required.set(adapter, true);
+					reads.require(adapter);
 					return;
 				}
 				if (!tagArgument)
@@ -765,19 +933,19 @@ class IrBodyTagEscapes {
 					case Array(EnumTag(_)): IrArrayRuntimeNatives.isStorage(name);
 					default: false;
 				});
-				var expected = lane ? null : lookups.signature(name);
+				var expected = lane ? null : reads.signature(name);
 				if (needsArguments(row, 0, expected))
 					adapt(block, row, 0, expected);
 			case IrOpcode.CNativeCall:
 				if (!hasTag(row, 0))
 					return;
-				var name = body.symbol(row).name, expected = lookups.signature(name);
+				var name = body.symbol(row).name, expected = reads.signature(name);
 				if (needsArguments(row, 0, expected))
 					adapt(block, row, 0, expected);
 			case IrOpcode.MethodCall:
 				if (!hasTag(row, 1))
 					return;
-				var expected = lookups.methodArguments(body.valueType(body.operand(row, 0)), body.symbol(row).name);
+				var expected = reads.methodArguments(body.valueType(body.operand(row, 0)), body.symbol(row).name);
 				if (needsArguments(row, 1, expected))
 					adapt(block, row, 1, expected);
 			case IrOpcode.CallClosure:
@@ -792,11 +960,11 @@ class IrBodyTagEscapes {
 			case IrOpcode.FieldSet:
 				var value = body.operand(row, 1), name = tagName(body.valueType(value));
 				if (name != null
-					&& isDyn(lookups.fieldType(body.valueType(body.operand(row, 0)), body.symbol(row).name)))
+					&& isDyn(reads.fieldType(body.valueType(body.operand(row, 0)), body.symbol(row).name)))
 					boxOperand(block, row, 1, value, name);
 			case IrOpcode.GlobalSet:
 				var value = body.operand(row, 0), name = tagName(body.valueType(value));
-				if (name != null && isDyn(lookups.global(body.symbol(row).name)))
+				if (name != null && isDyn(reads.global(body.symbol(row).name)))
 					boxOperand(block, row, 0, value, name);
 			case IrOpcode.ArraySet:
 				var value = body.operand(row, 2), name = tagName(body.valueType(value));
@@ -1077,7 +1245,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 	}
 
 	/** Encodes the positions of `Dyn` in `types` for a fact: -1 for none at all, `IrFacts.UNKNOWN` past 30 arguments. */
-	static function dynMask(types:Null<Array<IrType>>):Int {
+	public static function dynMask(types:Null<Array<IrType>>):Int {
 		if (types == null)
 			return -1;
 		var mask = 0;
@@ -1097,14 +1265,14 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 		};
 
 	/** The object type of a fact key: `O` for a class, `V` for an interface, then the name. */
-	static function typeKey(type:IrType):Null<String>
+	public static function typeKey(type:IrType):Null<String>
 		return switch type {
 			case Obj(name): "O" + name;
 			case Virtual(name): "V" + name;
 			default: null;
 		};
 
-	static function keyType(key:String):IrType {
+	public static function keyType(key:String):IrType {
 		var name = key.substr(1);
 		return key.charAt(0) == "V" ? Virtual(name) : Obj(name);
 	}

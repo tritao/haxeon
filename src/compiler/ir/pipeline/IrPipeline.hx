@@ -3,6 +3,7 @@ package compiler.ir.pipeline;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch.IrTypedInterfaceCalls;
 import compiler.ir.model.IrFunction.IrRetention;
 import compiler.ir.passes.enums.IrEnumTagLowering.IrEnumTagLoweringPass;
+import compiler.ir.passes.enums.IrEnumTagLowering.IrTagEscapesPass;
 import compiler.ir.passes.objects.IrGenericOwnerErasure;
 import compiler.ir.passes.objects.IrCheckedDynamicCasts;
 import compiler.ir.passes.enums.IrClosedEnumTagAbi;
@@ -10,7 +11,6 @@ import compiler.ir.passes.cleanup.IrConstantBranches;
 import compiler.ir.analysis.IrEntryPrune;
 import compiler.ir.passes.enums.IrEnumDynamicDispatch;
 import compiler.ir.passes.enums.IrEnumRuntimeSpecializations;
-import compiler.ir.passes.enums.IrEnumTagLowering;
 import compiler.ir.model.IrFunction;
 import compiler.ir.passes.enums.IrInlineEnumLayout;
 import compiler.ir.passes.enums.IrInlineEnumLowering;
@@ -96,7 +96,7 @@ class IrPipeline {
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
 		IrFunctionStages.stage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
-		new IrAssemblyStage("enum-tag-escapes", assemblyEnumTagEscapes)
+		IrFunctionStages.stage("enum-tag-escapes", assemblyEnumTagEscapes, escapedProgram)
 	]);
 
 	/**
@@ -121,7 +121,7 @@ class IrPipeline {
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
 		new IrStage("scalar-replacement", scalarReplacement),
 		new IrStage("nullable-scalar-flow", nullableScalarFlow),
-		new IrStage("enum-tag-escapes", enumTagEscapes),
+		IrFunctionStages.programStage("late-enum-tag-escapes", enumTagEscapes),
 		new IrStage("inliner", inliner),
 		new IrStage("verifier", verifier).when(verifiesHere),
 		new IrStage("verifier-check", verifierCheck).when(checksVerification)
@@ -576,13 +576,18 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function assemblyEnumTagEscapes(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+	static function assemblyEnumTagEscapes(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass {
 		var program = assembly.program;
 		if (program == null)
 			throw new InternalError("The enum tag escapes run on the finished program");
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
-		assembly.functions = program.functions;
-		return assembly;
+		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
+	}
+
+	/** The finished program's functions are the stage's. */
+	static function escapedProgram(assembly:IrAssembly, pass:IrFunctionPass):Void {
+		var program = assembly.program;
+		if (program != null)
+			program.functions = assembly.functions;
 	}
 
 	// Target stages.
@@ -656,10 +661,8 @@ class IrPipeline {
 	}
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
-	static function enumTagEscapes(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
-		return program;
-	}
+	static function enumTagEscapes(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
 
 	/**
 	 * The type ids of the bodies from here to the inliner: its cache's, so it takes the functions' bodies as they are. The
