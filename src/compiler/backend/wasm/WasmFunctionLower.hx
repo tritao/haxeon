@@ -104,12 +104,16 @@ private class StructuredEmission {
 class WasmFunctionLower {
 	final context:WasmFunctionLowerContext;
 	final nonNull:compiler.ir.analysis.IrNonNullFacts;
+
+	/** The class or record an object type names, for `dereferencedValue`. */
+	final objectNamed:String->Null<compiler.ir.model.Ir.IrObject>;
 	final nullValues:Map<Int, Bool> = [];
 	var diamondGraph:Null<compiler.ir.cfg.IrGraph>;
 
 	function new(context:WasmFunctionLowerContext) {
 		this.context = context;
 		var resolution = compiler.ir.analysis.IrMethodResolution.of(context.program);
+		objectNamed = resolution.object;
 		this.nonNull = new compiler.ir.analysis.IrNonNullFacts(context.irFunction, false, resolution.object,
 			compiler.ir.analysis.IrNonNullFields.of(context.program).fieldsOf);
 		for (block in context.irFunction.blocks) for (instruction in block.instructions) switch instruction.value {
@@ -877,6 +881,39 @@ class WasmFunctionLower {
 		];
 	}
 
+	/**
+	 * The value `instruction` reads through, which Haxe checks for null before it reads, as HashLink does: a null value throws a
+	 * catchable exception instead of reading address zero (wasm32) or trapping (Wasm GC). A method call and a receiver check
+	 * check their receiver themselves. A value class instance is never null, and a scalar call's result fields are locals.
+	 */
+	function dereferencedValue(instruction:IrInstruction):Null<IrValue> {
+		var value = switch instruction {
+			case FieldGet(_, object, field) if (field != compiler.ir.names.IrReceiverCheck.CHECK_FIELD
+				&& !StringTools.startsWith(field, WasmScalarAbi.RESULT_FIELD_PREFIX)): object;
+			case FieldSet(object, _, _), InstanceClosure(_, _, object), ArrayGet(_, object, _), ArraySet(object, _, _),
+				ArraySize(_, object), IteratorNew(_, object), EnumField(_, object, _, _): object;
+			case EnumIndex(_, value): switch value.type {
+					case EnumTag(_): null;
+					default: value;
+				};
+			default: null;
+		};
+		return value == null ? null : switch value.type {
+			case Obj(name):
+				var object = objectNamed(name);
+				object != null && object.isValue ? null : value;
+			default: value;
+		};
+	}
+
+	/** Throws when `value` is null (`trapOrThrow`). */
+	function nullAccessCheck(value:IrValue, values:Map<Int, Int>):Array<WasmInstruction>
+		return [
+			LocalGet(requiredLocal(values, value.id)),
+			context.representation.model.nullTest(value.type),
+			If(null)
+		].concat(trapOrThrow(1)).concat([End]);
+
 	/** A Haxe throw: the module's exception tag when it has exceptions, otherwise a trap. */
 	function emitThrow(body:Array<WasmInstruction>, valueLocal:Int):Void {
 		var tag = context.exceptionTag;
@@ -947,6 +984,9 @@ class WasmFunctionLower {
 			emit(body, scalar);
 			return;
 		}
+		var dereferenced = knownNonNull ? null : dereferencedValue(instruction);
+		if (dereferenced != null)
+			emit(body, nullAccessCheck(dereferenced, values));
 		var exceptionState = context.exceptionState;
 		switch instruction {
 			case Phi(_, _):
@@ -1292,12 +1332,7 @@ class WasmFunctionLower {
 				]);
 			case MethodCall(output, object, methodName, arguments, _):
 				// Dispatch must fail as a Haxe exception before reading the receiver's type or calling its method.
-				var receiverCheck:Array<WasmInstruction> = [
-					LocalGet(requiredLocal(values, object.id)),
-					context.representation.model.nullTest(object.type),
-					If(null)
-				];
-				if (!knownNonNull) emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
+				if (!knownNonNull) emit(body, nullAccessCheck(object, values));
 				var model = context.representation.model;
 				if (model.hasScalarVirtual(object.type, methodName)) {
 					emit(body, model.scalarVirtualCall(object,
@@ -1912,12 +1947,7 @@ class WasmFunctionLower {
 					return;
 				}
 				if (name.name == compiler.ir.names.IrReceiverCheck.NAME) {
-					var check:Array<WasmInstruction> = [
-						LocalGet(requiredLocal(values, arguments[0].id)),
-						model.nullTest(arguments[0].type),
-						If(null)
-					];
-					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
+					if (!knownNonNull) emit(body, nullAccessCheck(arguments[0], values));
 					return;
 				}
 				if (compiler.ir.passes.scalars.IrScalarWordBits.matches(name.name)) {

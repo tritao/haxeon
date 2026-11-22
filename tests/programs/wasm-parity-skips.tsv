@@ -23,4 +23,3 @@ stdlib-process	skip	sys.io.Process starts host processes, which Wasm cannot
 gc-stats	skip	Wasm has no collector: hl.Gc.stats reports zeros
 nested-call-stack	skip	haxe.CallStack natives are not implemented on Wasm
 package-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
-null-check-facts	skip	A null field read on Wasm does not raise a catchable null access (wasm32 reads on, Wasm GC traps), with or without the facts
