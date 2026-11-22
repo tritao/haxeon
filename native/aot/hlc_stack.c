@@ -39,6 +39,7 @@ extern const int hlc_function_name_count;
 #include <execinfo.h>
 #include <fcntl.h>
 #include <link.h>
+#include <pthread.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -1171,9 +1172,9 @@ static const char *hlc_call_file( hlc_scope *s ) {
 }
 #endif
 
-/* Names a frame `hlc_capture_stack` captured: a return address names the innermost generated function at the call, with the
+/* Names a frame `hlc_capture_stack` captured, under the lock: a return address names the innermost generated function at the call, with the
  * line of the call; an inlined scope names its caller, with the line where the caller calls it. */
-static uchar *hlc_resolve_symbol( void *address, uchar *out, int *outSize ) {
+static uchar *hlc_resolve_symbol_unlocked( void *address, uchar *out, int *outSize ) {
 	if( !out ) return NULL;
 #ifndef HLC_EXACT_FRAMES
 	int inlined = hlc_scope_of_frame(address);
@@ -1199,7 +1200,7 @@ static uchar *hlc_resolve_symbol( void *address, uchar *out, int *outSize ) {
 
 /* The program's frames on the stack, innermost first, as the JIT captures its own: the return address of each generated
  * function's frame, preceded by the frames of the generated functions the C compiler inlined at the call (their scopes). */
-static int hlc_capture_stack( void **stack, int size ) {
+static int hlc_capture_stack_unlocked( void **stack, int size ) {
 	void *frames[HL_EXC_MAX_STACK + 64];
 #ifdef HLC_STACK_ELF
 	int captured = backtrace(frames, HL_EXC_MAX_STACK + 64), count = 0;
@@ -1224,6 +1225,33 @@ static int hlc_capture_stack( void **stack, int size ) {
 		hlc_push_frame(stack, size, &count, frames[i]);
 	}
 	return stack && count > size ? size : count;
+}
+
+/* The DWARF tables are read on first use, and units and scopes as frames in them are first met, into shared arrays; threads
+ * capture and name frames concurrently (every thrown exception captures its stack), so one lock serializes both, as the lock
+ * around DbgHelp does with MSVC. */
+#ifdef HLC_STACK_ELF
+static pthread_mutex_t hlc_dwarf_lock = PTHREAD_MUTEX_INITIALIZER;
+#	define HLC_DWARF_LOCK() pthread_mutex_lock(&hlc_dwarf_lock)
+#	define HLC_DWARF_UNLOCK() pthread_mutex_unlock(&hlc_dwarf_lock)
+#else
+static SRWLOCK hlc_dwarf_lock = SRWLOCK_INIT;
+#	define HLC_DWARF_LOCK() AcquireSRWLockExclusive(&hlc_dwarf_lock)
+#	define HLC_DWARF_UNLOCK() ReleaseSRWLockExclusive(&hlc_dwarf_lock)
+#endif
+
+static uchar *hlc_resolve_symbol( void *address, uchar *out, int *outSize ) {
+	HLC_DWARF_LOCK();
+	uchar *name = hlc_resolve_symbol_unlocked(address, out, outSize);
+	HLC_DWARF_UNLOCK();
+	return name;
+}
+
+static int hlc_capture_stack( void **stack, int size ) {
+	HLC_DWARF_LOCK();
+	int count = hlc_capture_stack_unlocked(stack, size);
+	HLC_DWARF_UNLOCK();
+	return count;
 }
 #endif
 
