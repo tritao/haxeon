@@ -317,6 +317,7 @@ switch-branch-if-without-else	42
 lambda-count	42
 nullable-numeric-equality	42
 function-value-optional-arguments	42
+function-value-int-float	42
 arrow-block-value	42
 comprehension-if-else	42
 index-assignment-expression	42

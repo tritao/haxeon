@@ -102,7 +102,7 @@ class ClosureTyper {
 			// other way round: `(text:String) -> ...` stands for a `Dynamic->Void`.
 			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i])
 				&& !TypeRelations.equals(declaredType, expectedFunction.arguments[i])
-				&& !session.relations.isAssignable(expectedFunction.arguments[i], argumentType))
+				&& !session.relations.convertsInFunction(expectedFunction.arguments[i], argumentType))
 				fail("E1003", "Lambda argument type does not match its context", argument.span);
 			lambdaArguments.push({
 				name: lambdaScope.define(localName, argumentType, argument.span).id,

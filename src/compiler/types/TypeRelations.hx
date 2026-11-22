@@ -234,11 +234,11 @@ class TypeRelations {
 						// A function whose argument is required cannot stand for one a call may omit it from (Haxe's `Cant_force_optional`).
 						if (actualArguments.length != expectedArguments.length
 							|| !FunctionTypes.acceptsOptional(actualOptional, expectedOptional)
-							|| !isAssignable(actualResult, expectedResult)) false;
+							|| !convertsInFunction(actualResult, expectedResult)) false;
 						else {
 							var compatible = true;
 							for (index in 0...actualArguments.length)
-								if (!isAssignable(expectedArguments[index], actualArguments[index]))
+								if (!convertsInFunction(expectedArguments[index], actualArguments[index]))
 									compatible = false;
 							compatible;
 						}
@@ -247,6 +247,14 @@ class TypeRelations {
 			default: false;
 		};
 	}
+
+	/**
+	 * Whether a function's argument or result of type `actual` stands for `expected` in a function type: assignable, or an Int
+	 * read as a Float (`Int->Void` takes a `Float->Void`), which Haxe unifies there. The function value is converted by an
+	 * adapter (ConversionResolver.functionAdapter).
+	 */
+	public function convertsInFunction(actual:CompilerType, expected:CompilerType):Bool
+		return isAssignable(actual, expected) || conversion(actual, expected).match(IntToFloat);
 
 	/**
 	 * Whether `left` and `right` are a reference type that holds null and its `Null<>`, either way round: one storage, so an array of

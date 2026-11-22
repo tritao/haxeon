@@ -606,6 +606,9 @@ class TestMain {
 			'Lambda argument type does not match its context');
 		expectCompileError('function main():Int { var f:Int->Void = (x:String) -> {}; return 0; }',
 			'Lambda argument type does not match its context');
+		// An Int argument takes a Float in a function type, never the other way round, as in Haxe.
+		expectCompileError('function main():Int { var f:Float->Void = (x:Int) -> {}; return 0; }',
+			'Lambda argument type does not match its context');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }',
 			'Switch expression requires a default branch');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; var Triangle = 3; } function main():Int { var shape = Shape.Square; return switch shape { case Circle: 0; case Square: 42; }; }',
