@@ -513,7 +513,11 @@ class HaxeonCli {
 				? 'ok: compiler bytecode, which the VM runs without the compiler built ahead of time ($bytecode)'
 				: 'stale: compiler bytecode ($bytecode), not built from these sources');
 		reportPath("Android SDK", androidSdk, false);
-		reportPath("Android NDK 30.0.16248370", Path.join([androidSdk, "ndk", "30.0.16248370"]), false);
+		// A release does not ship android/, whose versions name the NDK.
+		if (!release) {
+			var ndk = androidVersion(home, "ndk");
+			reportPath('Android NDK $ndk', Path.join([androidSdk, "ndk", ndk]), false);
+		}
 		reportPath("Android platform tools (adb)", androidExecutable(home, "adb"), false);
 		if (!release)
 			Sys.println("CMake and Ninja are only needed to rebuild the native runtime.");
@@ -1345,7 +1349,7 @@ class HaxeonCli {
 	/** Has Gradle package the module and native libraries `gradleInputs` describes into the APK at `output`. */
 	static function buildAndroid(home:String, project:ResolvedProject, output:String, gradleInputs:String):Int {
 		var sdk = Path.join([home, ".tools", "android-sdk"]),
-			ndk = Path.join([sdk, "ndk", "30.0.16248370"]);
+			ndk = Path.join([sdk, "ndk", androidVersion(home, "ndk")]);
 		if (!FileSystem.exists(sdk) || !FileSystem.exists(ndk))
 			throw new InternalError('Android SDK/NDK are missing under ${Path.join([home, ".tools", "android-sdk"])}');
 		var androidDirectory = Path.join([home, "android"]),
@@ -1439,20 +1443,30 @@ class HaxeonCli {
 		var sdk = Path.join([home, ".tools", "android-sdk"]);
 		Sys.putEnv("ANDROID_SDK_ROOT", sdk);
 		Sys.putEnv("ANDROID_HOME", sdk);
-		Sys.putEnv("ANDROID_NDK_ROOT", Path.join([sdk, "ndk", "30.0.16248370"]));
+		Sys.putEnv("ANDROID_NDK_ROOT", Path.join([sdk, "ndk", androidVersion(home, "ndk")]));
 		Sys.putEnv("ANDROID_AVD_HOME", Path.join([home, ".tools", "android-avd"]));
 		var paths = [
 			Path.join([sdk, "platform-tools"]),
 			Path.join([sdk, "emulator"]),
 			Path.join([sdk, "cmdline-tools", "latest", "bin"]),
-			Path.join([sdk, "build-tools", "36.0.0"]),
-			Path.join([sdk, "cmake", "3.30.5", "bin"]),
-			Path.join([home, ".tools", "gradle", "gradle-9.5.0", "bin"])
+			Path.join([sdk, "build-tools", androidVersion(home, "build-tools")]),
+			Path.join([sdk, "cmake", androidVersion(home, "cmake"), "bin"]),
+			Path.join([home, ".tools", "gradle", "gradle-" + androidVersion(home, "gradle"), "bin"])
 		];
 		var existing = Sys.getEnv("PATH");
 		if (existing != null && existing.length > 0)
 			paths.push(existing);
 		Sys.putEnv("PATH", paths.join(Sys.systemName() == "Windows" ? ";" : ":"));
+	}
+
+	/** An Android tool version from android/versions.txt, which scripts/android-env.sh reads too. */
+	static function androidVersion(home:String, tool:String):String {
+		for (line in File.getContent(Path.join([home, "android", "versions.txt"])).split("\n")) {
+			var fields = line.split("=");
+			if (fields.length == 2 && fields[0] == tool && StringTools.trim(fields[1]) != "")
+				return StringTools.trim(fields[1]);
+		}
+		throw new InternalError('Missing Android $tool version in android/versions.txt');
 	}
 
 	static function androidExecutable(home:String, executable:String):String
