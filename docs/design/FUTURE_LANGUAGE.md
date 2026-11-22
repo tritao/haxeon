@@ -53,13 +53,17 @@ meaning of existing code and so need the new dialect; the others can land in Hax
 - **Why:** removes null checks on dereferences and a common class of bugs, and lets the compiler choose flat layouts
   without first proving that a value is present.
 
-### 2. UTF-8 strings (break)
+### 2. Encoding-free strings (break)
 
 - **Haxe:** encoding depends on the target; on HashLink strings are UTF-16 and `length` and `charAt` count UTF-16 units.
 - **Haxeon today:** UTF-16 on HashLink; the Wasm backends carry UTF-16 coordinate translation to match.
-- **Proposal:** UTF-8 storage, byte offsets as the primitive index, and explicit iteration by code point or grapheme.
-- **Why:** files, the network, C APIs and text rendering use UTF-8. Every native boundary pays a conversion today, and
-  the coordinate translation exists only for compatibility.
+- **Proposal:** the API exposes no encoding. Strings have opaque index values and explicit views over code points,
+  graphemes and UTF-8 bytes, as Swift's do; there is no integer `charAt(i)` tied to a code-unit size. Each backend
+  chooses its storage: UTF-8 on native and Wasm32, host strings on Wasm GC and on a JavaScript backend
+  ([Targets that constrain the design](#targets-that-constrain-the-design)).
+- **Why:** files, the network, C APIs and text rendering use UTF-8, while browsers use UTF-16. Every boundary pays a
+  conversion today, and the coordinate translation exists only for compatibility. An encoding-free API lets each
+  backend store what its boundary wants.
 
 ### 3. 64-bit `Int`, with explicitly sized types (break)
 
@@ -68,6 +72,10 @@ meaning of existing code and so need the new dialect; the others can land in Hax
 - **Proposal:** `Int` is 64-bit; `Int8` through `Int64` and the unsigned types are available for layouts and FFI.
 - **Why:** sizes, offsets, timestamps and identifiers outgrow 32 bits, and two integer worlds complicate every API that
   touches them.
+- **Depends on JavaScript output.** JavaScript has no 64-bit integer, so every integer operation there would pay for
+  emulation. If a JavaScript backend becomes a first-class target, Haxe's original choice returns for its original
+  reason: a 32-bit wrapping `Int` and an explicit `Int64`
+  ([Targets that constrain the design](#targets-that-constrain-the-design)).
 
 ### 4. `Dynamic` and reflection by opt-in only (partly a break)
 
@@ -130,8 +138,8 @@ meaning of existing code and so need the new dialect; the others can land in Hax
 | Change | In Haxeon today | Needs the new dialect |
 |---|---|---|
 | 1. Non-null by default | Partly: `Null<T>` layouts | Yes |
-| 2. UTF-8 strings | No | Yes |
-| 3. 64-bit `Int` | `Int64` work | Yes |
+| 2. Encoding-free strings | No | Yes |
+| 3. 64-bit `Int` | `Int64` work | Yes; reconsider if JavaScript is first-class |
 | 4. Opt-in `Dynamic` | Direction only | Partly |
 | 5. No anonymous structures | Opposite: the compatibility track | Yes |
 | 6. Conformances and extensions | Planned | No |
@@ -163,8 +171,8 @@ changes.
 - **`Int`**: 64-bit, with `Int8` through `Int64` and `UInt8` through `UInt64`; the `Int64` abstract goes away (change 3).
   Overflow wraps, as in Haxe, because it is predictable and identical on every backend; checked and saturating
   operations are methods.
-- **`String`**: immutable UTF-8 with byte-offset indices and explicit code point or grapheme iteration (change 2).
-  `StringBuf` becomes an ordinary library builder.
+- **`String`**: immutable, with opaque indices and explicit code point, grapheme and UTF-8 views; storage is the
+  backend's choice (change 2). `StringBuf` becomes an ordinary library builder.
 - **`Array<T>`**: still a growable reference type, but always specialized to its element type: `Array<Rect>` stores
   contiguous structs and `Array<Int>` raw integers. Haxeon already does much of this as an optimization; the new
   language guarantees it.
@@ -342,6 +350,91 @@ matches enums with payloads, nested patterns, alternatives (`case A | B:`) and g
   expression. Dropping the ternary is preferred. This affects the current Haxeon plan and is decided there first.
 - **String quotes.** Haxe interpolates single-quoted strings (`'$x'`) and not double-quoted ones. Either both
   interpolate or one quote style remains.
+
+## Targets that constrain the design
+
+### What Haxe's targets decided
+
+Many of the Haxe decisions changed above were made so that Haxe could compile to JavaScript, Flash, PHP, Python, Lua,
+Java, C# and C++, and had to fit what all of them could express:
+
+| Haxe decision | Target reason |
+|---|---|
+| 32-bit `Int`, `Int64` as a library abstract | JavaScript bitwise operations, Flash and Java `int` are 32-bit; JavaScript had no 64-bit integer |
+| `Float` only 64-bit | JavaScript `number` |
+| String encoding left to the target | JavaScript, Java, C# and Flash use UTF-16; PHP, Python and Lua differ. HashLink followed JavaScript and Flash |
+| Null everywhere, `Null<T>` for basic types | Dynamic targets allow null everywhere; static targets cannot make basic types null |
+| Anonymous structures, structural typing | JavaScript object literals and JSON map onto them directly |
+| `Dynamic`, `Reflect` | Natural on dynamic targets and needed for untyped target APIs |
+| Abstracts with implicit conversions | Zero-cost wrappers over native target types, and APIs that take several types |
+| `untyped`, `__js__`, `@:native`, externs | Escape hatches into each target language |
+| `dynamic` methods | Function-valued properties on JavaScript and Flash |
+| `Iterator` as a structural typedef | Any JavaScript object with `hasNext` and `next` iterates without interface dispatch |
+| `Map` selecting `IntMap`, `StringMap` or `ObjectMap` | Each maps to the target's native map; object keys need per-target identity |
+| Throwing any value | JavaScript throws any value |
+| ECMAScript syntax | Haxe came from the ActionScript compiler world |
+| Macros | Generated code adapts to each target |
+
+What the changes remove were Haxe's interop strengths on dynamic targets. Haxeon targets runtimes it controls
+(HashLink, Wasm32, Wasm GC, possibly C), so most of those reasons no longer apply.
+
+### What still constrains us
+
+- **The JavaScript boundary on Wasm GC.** Browser strings are UTF-16 and 64-bit integers cross as `BigInt`. The
+  encoding-free string API (change 2) lets Wasm GC hold host strings; 64-bit values crossing to JavaScript need cheap
+  bindings or 32-bit types at the boundary.
+- **Typed bindings in place of `Dynamic`.** JavaScript calls, JSON and scripting go through bindings generated from Web
+  IDL or TypeScript declarations, as C and C++ go through generated header bindings, and an explicit variant type for
+  data. This is the cost of changes 4 and 5.
+- **Wasm GC is the tightest backend.** It has no interior pointers, no raw memory and no arrays inside structs. New
+  types are designed against it first: `Span<T>` is an array reference with offset and length, fixed arrays inside
+  structs flatten into fields or move to a separate array, and value types flatten as they do today.
+- **The C ABI.** Sized integers, `T?` as a nullable pointer and C-layout structs match C. Layouts stay explicit
+  (`Flat`, `Portable` in [STRUCTS.md](STRUCTS.md)) so that a C backend inherits them.
+- **Hot patching.** Final-by-default classes and static dispatch let calls be inlined and devirtualized, so every
+  backend's patching needs dispatch tables or invalidation of dependent code for a patched method to take effect.
+
+### Specify what Haxe left open
+
+Haxe left some behaviour unspecified so that each target could use its native form: evaluation order in some cases,
+integer overflow on JavaScript, `Map` iteration order, float formatting, `Std.int` at the edges and static
+initialization order. Haxeon aims for identical results on every backend, enforced by parity tests, and owns every
+runtime, so the new language specifies them: strict left-to-right evaluation, wrapping integers, `Map` iteration in
+insertion order (or explicitly unordered but deterministic), shortest round-trip float formatting (Ryu is already in
+the standard library), and a defined initialization order.
+
+### If JavaScript output is kept
+
+Haxeon has no JavaScript backend today. Keeping one possible puts pressure on three decisions:
+
+- **`Int`.** JavaScript has no 64-bit integer. `BigInt` is correct and slow; pairs of 32-bit halves, as Haxe's `Int64`,
+  turn every operation into several and usually allocate; doubles are wrong beyond 2^53. A 64-bit `Int` would make
+  every loop counter pay. If JavaScript is first-class, `Int` stays 32-bit and wrapping (`|0` in JavaScript) with an
+  explicit `Int64`; if it is secondary, `Int` stays 64-bit and the JavaScript output is slower (change 3).
+- **Strings.** JavaScript engines optimize only native strings, and the DOM takes them. The encoding-free API
+  (change 2) lets JavaScript store native strings.
+- **Value types.** Structs become objects or scalars. Immutable structs share a reference safely, so their copies are
+  free; mutable structs copy on assignment, which allocates. Arrays of structs become parallel typed arrays or arrays of
+  objects, and `Span<T>` an array with offset and length. Semantics hold; flat-memory performance does not. This favours
+  immutable structs by default, as the UI value types already are.
+
+The rest erases cleanly: non-null types, `Result`, enums, conformances, newtypes, `let` and `var`, `switch`,
+`let ... else`, attributes and modules are compile-time features. Sized integers up to 32 bits use `|0`, `>>>0` and
+typed arrays; `Float32` uses `Math.fround`. JavaScript `Map` iterates in insertion order, though `Hashable` keys still
+need our own hash map since JavaScript compares keys by identity. Number formatting is already shortest round-trip.
+Hot patching is simplest there, since functions can be replaced.
+
+JavaScript adds the most restricted target profile ([ADR 0003](../adr/0003-compiler-architecture.md)): no native
+memory, no C or C++ bindings and no shared-memory threads except through Wasm, so packages built on them (`gpu`,
+`audio`, native SDKs) are unavailable.
+
+A JavaScript backend earns its place through bundle size, startup, readable output for debugging, embedding in existing
+JavaScript and TypeScript applications or npm packages, and older browsers. Running applications in a browser alone is
+covered by Wasm GC, which every major browser ships, and needs only the string decision above.
+
+Decisions that help JavaScript and are right anyway are taken now: the encoding-free string API and immutable structs
+by default. `Int` is decided explicitly once JavaScript's role is known. New types are designed against the two most
+constrained targets, Wasm GC and JavaScript.
 
 ## What we would lose
 
