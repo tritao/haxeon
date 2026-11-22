@@ -141,7 +141,7 @@ class HashLinkBackendSession implements BackendSession {
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
-		compiler.ir.analysis.IrReachabilityReport.report("final program", ir);
+		compiler.ir.analysis.IrReachability.IrReachabilityReport.report("final program", ir);
 		var summaries = this.loweredCache.summaries;
 		var nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir, summaries.abiSignatures) : null,
 			previousAbi = context.state.publishedAbi,

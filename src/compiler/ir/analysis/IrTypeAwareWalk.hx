@@ -1,6 +1,7 @@
 package compiler.ir.analysis;
 
 import compiler.core.Provides.ProviderOperation;
+import compiler.ir.analysis.IrReachability.IrConstructed;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;

@@ -24,7 +24,7 @@ import compiler.ir.passes.nullability.IrOptionalScalarFlow;
 import compiler.ir.passes.nullability.IrOptionalValueFlow;
 import compiler.ir.passes.objects.IrOverrideBridges;
 import compiler.ir.model.IrProviders;
-import compiler.ir.analysis.IrReachabilityReport;
+import compiler.ir.analysis.IrReachability.IrReachabilityReport;
 import compiler.ir.passes.scalars.IrScalarArguments;
 import compiler.ir.passes.scalars.IrScalarClosures;
 import compiler.ir.passes.scalars.IrScalarReplacement;

@@ -75,7 +75,7 @@ class WasmBackendSession implements BackendSession {
 			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
-		compiler.ir.analysis.IrReachabilityReport.report("final program", ir);
+		compiler.ir.analysis.IrReachability.IrReachabilityReport.report("final program", ir);
 		var abi = RuntimeAbi.describe(ir), abiPlanningDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAbi = AllocationMeter.sample();
 		var chosen = options(context), key = Json.stringify(chosen), last = encoded, known = last;
