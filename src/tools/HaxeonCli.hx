@@ -498,6 +498,10 @@ class HaxeonCli {
 		if (FileSystem.exists(aot) && AotCompiler.current(home, compilerSource) == null)
 			Sys.println('stale: CLI and compiler built ahead of time ($aot), not built from these sources; the VM runs them. '
 				+ 'Rebuild it with "haxeon dev aot"');
+		else if (release && !FileSystem.exists(aot))
+			// A release cannot build it: `haxeon dev aot` needs the sources and the native build, which only a checkout has.
+			Sys.println('not built: CLI and compiler built ahead of time ($aot); this release runs them on the VM from their '
+				+ 'bytecode, which works the same with a slower start');
 		else
 			reportPath("CLI and compiler built ahead of time", aot, false);
 		var bytecode = AotCompiler.bytecode(home);
