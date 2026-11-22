@@ -74,4 +74,13 @@ with tempfile.TemporaryDirectory() as directory:
     debug = json.loads(result.stdout)['contributors']['debug']
     assert debug['snapshots'] == [{'hash': '00001234', 'bytes': 3, 'paths': ['x.h']}]
     assert debug['spanFiles'][0]['path'] == 'x.h'
+    # A compressed section (flag 1) is its decoded size and an LZ4 block, here literals only.
+    packed = bytes([len(snapshots), len(snapshots) << 4]) + snapshots
+    tail = bytes([2, 2, 2, 0, len(spans)]) + spans + bytes([3, 1, 1, len(packed)]) + packed
+    module.write_bytes(b'HLB' + tail)
+    row.update({'debugSections': len(tail), 'sections': [{'kind': 2, 'version': 2, 'payload': len(spans)},
+                                                         {'kind': 3, 'version': 1, 'payload': len(packed)}]})
+    log.write_text('SIZE_CENSUS ' + json.dumps(row) + '\n')
+    result = subprocess.run([report, module, log], check=True, text=True, capture_output=True)
+    assert json.loads(result.stdout)['contributors']['debug']['snapshots'][0]['paths'] == ['x.h']
 print('PASS: binary size accounting and mismatch rejection')

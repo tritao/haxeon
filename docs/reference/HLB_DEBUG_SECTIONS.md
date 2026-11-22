@@ -6,6 +6,15 @@ an unsigned kind, version, flags, payload length, and exactly that many payload
 bytes. Readers must reject malformed known sections and skip unknown kinds or
 versions by payload length.
 
+Flag bit 0 (`HlWriter.COMPRESSED`) marks a compressed payload: the decoded size as an
+unsigned index, then one LZ4 block (lz4's block format, no frame) that decodes to
+exactly that many bytes. Every reader decodes it before reading the payload: the VM
+at load (`hl_code_read`), `HlModuleReader`, and `scripts/report-binary-size.py`. The
+compiler compresses the function identities with LZ4 HC (level 9) and the
+development sections with LZ4's fast mode, through HashLink's `bytes_lz4_compress`
+native over its vendored lz4, so every build of the compiler writes the same bytes.
+Under the Haxe interpreter, which has no natives, sections are written uncompressed.
+
 Section kinds are independently versioned:
 
 - `1:1` — function identities. Each record associates a stable function ID and

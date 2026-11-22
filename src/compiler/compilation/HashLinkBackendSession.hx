@@ -346,6 +346,6 @@ class HashLinkBackendSession implements BackendSession {
 			> right.sourceHash ? 1 : 0);
 		if (code.sourceSnapshots.length > 0)
 			code.debugSections.push(compiler.hl.HlCode.HlDebugSection.lazy(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
-				_ -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots)));
+				_ -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots), compiler.hl.HlLz4.FAST));
 	}
 }

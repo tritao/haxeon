@@ -148,8 +148,9 @@ push CI's format check would fail is refused before it leaves (`git push --no-ve
 The compiler builds itself. Three scripts cover that:
 
 - `haxeon scripts/check-self-hosting.hx` is the check to run after a compiler change, and CI runs it. It builds a seed by running the
-  sources under the pinned Haxe interpreter, builds stage 1 with the seed and stage 2 with stage 1, and requires stages 1 and 2
-  to be identical. It does not use the checked-in compiler.
+  sources under the pinned Haxe interpreter, then stages 1, 2 and 3, each with the one before, and requires stages 2 and 3 to be
+  identical (the seed writes its debug sections uncompressed: the interpreter has no HashLink natives). It does not use the
+  checked-in compiler.
 - `scripts/bootstrap-compiler.sh` refreshes the checked-in compiler, `bootstrap/compiler.hl`. It builds the native runtime,
   builds a seed with the pinned Haxe, then has each stage build the next until two consecutive stages are byte-identical (at most
   eight), and copies the result over `bootstrap/compiler.hl` and `bootstrap/compiler.hl.functions`.

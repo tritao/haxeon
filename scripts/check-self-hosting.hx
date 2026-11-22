@@ -3,8 +3,9 @@
  * Checks that the compiler in this tree can build itself, to a fixed point, in about a minute and a half:
  * `haxeon scripts/check-self-hosting.hx`.
  *
- * The seed is built by running the compiler sources under the pinned Haxe interpreter; stage 1 is built by the seed and stage
- * 2 by stage 1. Stages 1 and 2 must be identical. Unlike `haxeon dev bootstrap --self` this does not use the checked-in
+ * The seed is built by running the compiler sources under the pinned Haxe interpreter; stage 1 is built by the seed, stage 2
+ * by stage 1 and stage 3 by stage 2. Stages 2 and 3 must be identical: stage 1 is not, because the interpreter has none of
+ * HashLink's natives and the seed writes its debug sections uncompressed. Unlike `haxeon dev bootstrap --self` this does not use the checked-in
  * compiler, so it also catches a change that the sources can no longer be built with.
  */
 import haxe.io.Path;
@@ -43,15 +44,15 @@ function main() {
 		'--output=$work/seed.hl'].concat(arguments),
 		root, '$work/seed.log', "the compiler sources do not build under the Haxe interpreter");
 	var previous = '$work/seed.hl';
-	for (stage in 1...3) {
+	for (stage in 1...4) {
 		Sys.println('stage $stage: building the compiler with ${Path.withoutDirectory(previous)}');
 		step(hl, [previous, '--output=$work/stage-$stage.hl'].concat(arguments), root, '$work/stage-$stage.log',
 			'${Path.withoutDirectory(previous)} could not build the compiler sources');
 		previous = '$work/stage-$stage.hl';
 	}
 	for (suffix in ["", ".functions"])
-		if (!Script.sameContent('$work/stage-1.hl$suffix', '$work/stage-2.hl$suffix'))
-			Script.fail('FAIL: stage 1 and stage 2 differ ($work/stage-1.hl$suffix, $work/stage-2.hl$suffix)');
+		if (!Script.sameContent('$work/stage-2.hl$suffix', '$work/stage-3.hl$suffix'))
+			Script.fail('FAIL: stage 2 and stage 3 differ ($work/stage-2.hl$suffix, $work/stage-3.hl$suffix)');
 	Sys.println("PASS: the compiler builds itself to a fixed point");
 
 	var entrySources = Path.join([work, "entry-sources.txt"]);

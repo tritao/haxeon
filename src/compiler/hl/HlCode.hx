@@ -42,28 +42,35 @@ typedef HlConstant = {
 class HlDebugSection {
 	public final kind:Int;
 	public final version:Int;
+
+	/** The header flags, less HlWriter.COMPRESSED, which the writer sets when it compresses the payload. */
 	public final flags:Int;
+
+	/** The LZ4 level the writer compresses the payload at (HlLz4.FAST or HC's 1 to 12), or null to store it as it is. */
+	public final compression:Null<Int>;
+
 	public var payload(get, never):haxeon.io.SegmentedBytes;
 
 	final stored:Null<haxeon.io.SegmentedBytes>;
 	final produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>;
 
-	function new(kind:Int, version:Int, flags:Int, stored:Null<haxeon.io.SegmentedBytes>,
+	function new(kind:Int, version:Int, flags:Int, compression:Null<Int>, stored:Null<haxeon.io.SegmentedBytes>,
 			produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>) {
 		this.kind = kind;
 		this.version = version;
 		this.flags = flags;
+		this.compression = compression;
 		this.stored = stored;
 		this.produce = produce;
 	}
 
-	public static function of(kind:Int, version:Int, flags:Int, payload:haxe.io.Bytes):HlDebugSection
-		return new HlDebugSection(kind, version, flags, haxeon.io.SegmentedBytes.ofBytes(payload), null);
+	public static function of(kind:Int, version:Int, flags:Int, payload:haxe.io.Bytes, ?compression:Int):HlDebugSection
+		return new HlDebugSection(kind, version, flags, compression, haxeon.io.SegmentedBytes.ofBytes(payload), null);
 
 	/** `produce` gets the writer cache the module is being written with, if any, so it can reuse what it encoded for unchanged functions. */
-	public static function lazy(kind:Int, version:Int, flags:Int,
-			produce:Null<HlWriterCache>->haxeon.io.SegmentedBytes):HlDebugSection
-		return new HlDebugSection(kind, version, flags, null, produce);
+	public static function lazy(kind:Int, version:Int, flags:Int, produce:Null<HlWriterCache>->haxeon.io.SegmentedBytes,
+			?compression:Int):HlDebugSection
+		return new HlDebugSection(kind, version, flags, compression, null, produce);
 
 	/** Whether the section has a payload at all, without producing a derived one. */
 	public function hasPayload():Bool

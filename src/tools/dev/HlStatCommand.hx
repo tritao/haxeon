@@ -104,7 +104,8 @@ class HlStatCommand {
 		if (arguments.indexOf("--sections") >= 0)
 			for (section in module.sections)
 				Sys.println('  ${pad(sectionName(section.kind), 22)} version ${section.version}, flags ${section.flags}: '
-					+ '${section.payload.length} bytes');
+					+ '${section.payload.length} bytes'
+					+ (section.stored != section.payload.length ? ', ${section.stored} stored' : ''));
 		return 0;
 	}
 

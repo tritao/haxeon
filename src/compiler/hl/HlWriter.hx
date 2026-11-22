@@ -1,6 +1,7 @@
 package compiler.hl;
 
 import compiler.core.InternalError;
+import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlFunction.HlInstruction;
@@ -19,11 +20,20 @@ typedef HlOpcodeSourceSpanGroup = {
 	final opcodes:Array<HlInstruction>;
 }
 
+/** A debug section's header flags and payload as a module stores them. */
+private typedef HlStoredSection = {
+	final flags:Int;
+	final payload:SegmentedBytes;
+}
+
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
 class HlWriter {
 	public static inline final FUNCTION_IDENTITIES = 1;
 	public static inline final OPCODE_SOURCE_SPANS = 2;
 	public static inline final SOURCE_SNAPSHOTS = 3;
+
+	/** A debug section flag: the payload is its decoded size (an unsigned index) followed by one LZ4 block (HlLz4). */
+	public static inline final COMPRESSED = 1;
 
 	final output:ByteSink = new ByteSink();
 	final cache:Null<HlWriterCache>;
@@ -217,6 +227,8 @@ class HlWriter {
 				+ ',"version":'
 				+ section.version
 				+ ',"payload":'
+				+ storedSection(section, null).payload.length
+				+ ',"decoded":'
 				+ section.payload.length
 				+ '}'
 		];
@@ -361,13 +373,27 @@ class HlWriter {
 		for (section in code.debugSections) {
 			if (section.kind <= 0 || section.version <= 0 || section.flags < 0)
 				throw new InternalError("Invalid HLB debug section header");
+			var stored = storedSection(section, cache);
 			writeUnsignedIndex(section.kind);
 			writeUnsignedIndex(section.version);
-			writeUnsignedIndex(section.flags);
-			var payload = section.payloadFor(cache);
-			writeUnsignedIndex(payload.length);
-			output.appendSegments(payload);
+			writeUnsignedIndex(stored.flags);
+			writeUnsignedIndex(stored.payload.length);
+			output.appendSegments(stored.payload);
 		}
+	}
+
+	/** A section's header flags and payload as the module stores them: compressed when it asks to be and the natives are there. */
+	static function storedSection(section:HlDebugSection, cache:Null<HlWriterCache>):HlStoredSection {
+		var payload = section.payloadFor(cache), level = section.compression;
+		if (level == null)
+			return {flags: section.flags, payload: payload};
+		var decoded = payload.flatten(), block = HlLz4.compress(decoded, level);
+		if (block == null)
+			return {flags: section.flags, payload: payload};
+		var writer = new HlWriter();
+		writer.writeUnsignedIndex(decoded.length);
+		writer.writeShared(block);
+		return {flags: section.flags | COMPRESSED, payload: writer.output.finish()};
 	}
 
 	public static function encodeFunctionIdentities(identities:Array<compiler.hl.HlCode.HlFunctionIdentity>):HaxeBytes {

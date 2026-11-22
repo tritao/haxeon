@@ -42,6 +42,49 @@ def hl_index(data, pos):
     return (-value if byte & 0x20 else value), pos + width
 
 
+def lz4_block(data, size):
+    """Decode one LZ4 block (a compressed HashLink debug section's payload after its size)."""
+    out = bytearray()
+    pos = 0
+
+    def extended(count):
+        nonlocal pos
+        if count == 15:
+            while True:
+                if pos >= len(data):
+                    raise ValueError('truncated LZ4 block')
+                count += data[pos]
+                pos += 1
+                if data[pos - 1] != 255:
+                    break
+        return count
+
+    while True:
+        if pos >= len(data):
+            raise ValueError('truncated LZ4 block')
+        token = data[pos]
+        pos += 1
+        literals = extended(token >> 4)
+        if literals > len(data) - pos:
+            raise ValueError('truncated LZ4 literals')
+        out += data[pos:pos + literals]
+        pos += literals
+        if pos == len(data):
+            break
+        if pos + 2 > len(data):
+            raise ValueError('truncated LZ4 match')
+        offset = data[pos] | (data[pos + 1] << 8)
+        pos += 2
+        match = extended(token & 15) + 4
+        if offset == 0 or offset > len(out):
+            raise ValueError('invalid LZ4 match')
+        for _ in range(match):
+            out.append(out[-offset])
+    if len(out) != size:
+        raise ValueError('LZ4 block does not decode to its size')
+    return bytes(out)
+
+
 def hl_debug_contributors(module, size, expected):
     """Decode trailing debug sections and rank spans and embedded sources."""
     start = len(module) - size
@@ -57,11 +100,18 @@ def hl_debug_contributors(module, size, expected):
         length, pos = hl_index(data, pos)
         if length < 0 or pos + length > len(data):
             raise ValueError('truncated HashLink debug section')
-        sections.append((kind, version, data[pos:pos + length]))
+        sections.append((kind, version, flags, data[pos:pos + length]))
         pos += length
-    if pos != len(data) or [(k, v, len(b)) for k, v, b in sections] != [
+    if pos != len(data) or [(k, v, len(b)) for k, v, _, b in sections] != [
             (s['kind'], s['version'], s['payload']) for s in expected]:
         raise ValueError('HashLink debug sections do not match census')
+    decoded = []
+    for kind, version, flags, payload in sections:
+        if flags & 1:  # HlWriter.COMPRESSED: the decoded size, then one LZ4 block
+            raw_size, start = hl_index(payload, 0)
+            payload = lz4_block(payload[start:], raw_size)
+        decoded.append((kind, version, payload))
+    sections = decoded
     hashes = collections.defaultdict(set)
     span_files = collections.Counter()
     snapshots = []

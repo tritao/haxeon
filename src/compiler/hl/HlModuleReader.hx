@@ -115,12 +115,14 @@ class HlModuleReader {
 				var kind = unsigned(input),
 					sectionVersion = unsigned(input),
 					sectionFlags = unsigned(input),
-					size = unsigned(input);
+					size = unsigned(input),
+					payload = input.read(size);
 				sections.push({
 					kind: kind,
 					version: sectionVersion,
 					flags: sectionFlags,
-					payload: input.read(size)
+					stored: size,
+					payload: sectionFlags & HlWriter.COMPRESSED != 0 ? decompress(payload) : payload
 				});
 			}
 		part("debug sections");
@@ -144,6 +146,12 @@ class HlModuleReader {
 			sections: sections,
 			sizes: sizes
 		};
+	}
+
+	/** A COMPRESSED section's payload: its decoded size, then the LZ4 block. */
+	static function decompress(payload:Bytes):Bytes {
+		var input = new BytesInput(payload), size = unsigned(input);
+		return HlLz4.decompress(payload, input.position, payload.length - input.position, size);
 	}
 
 	/** The function identities of a FUNCTION_IDENTITIES section, as HlWriter.encodeFunctionIdentities writes them. */
@@ -267,6 +275,11 @@ typedef HlModuleSection = {
 	final kind:Int;
 	final version:Int;
 	final flags:Int;
+
+	/** The payload's size in the module, compressed or not. */
+	final stored:Int;
+
+	/** The payload, decompressed. */
 	final payload:Bytes;
 }
 

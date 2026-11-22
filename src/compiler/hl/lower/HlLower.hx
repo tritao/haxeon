@@ -15,6 +15,7 @@ import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlFunction.HlDebugAssignment;
+import compiler.hl.HlLz4;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolTable;
@@ -575,7 +576,7 @@ class HlLower {
 		// The VM uses function identities for stack-trace and profiler names in every mode.
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
 		code.debugSections.push(HlDebugSection.of(HlWriter.FUNCTION_IDENTITIES, 1, 0,
-			HlWriter.encodeFunctionIdentities(identities)));
+			HlWriter.encodeFunctionIdentities(identities), HlLz4.HIGH));
 		var allocationAfterIdentities = AllocationMeter.sample(),
 			allocationAfterSpanGroups = allocationAfterIdentities;
 		if (developmentMetadata) {
@@ -592,7 +593,7 @@ class HlLower {
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written.
 			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0,
-				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache)));
+				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache), HlLz4.FAST));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();

@@ -121,7 +121,9 @@ class HlValidator {
 			throw new InternalError('Entry point ${code.entryPoint} is not a function');
 		var debugSections:Map<String, Bool> = [];
 		for (section in code.debugSections) {
-			if (section.kind <= 0 || section.version <= 0 || section.flags < 0 || !section.hasPayload())
+			if (section.kind <= 0 || section.version <= 0 || section.flags < 0
+				|| section.flags & HlWriter.COMPRESSED != 0
+				|| !section.hasPayload())
 				throw new InternalError("Invalid HLB debug section");
 			var key = section.kind + ":" + section.version;
 			if (debugSections.exists(key))

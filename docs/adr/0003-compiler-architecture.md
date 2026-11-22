@@ -298,7 +298,7 @@ crash reports finding a sidecar matched to the module (`.hl.build-id` would key 
 indices. They are for a distribution need, end-user, mobile or Wasm downloads symbolicated offline, as `--debug-info=inline |
 separate | none`; development metadata is the first candidate for a sidecar if development builds' load time ever matters.
 
-**Compressed debug sections (decided 2026-11-17, queued).** A debug-section header flag says its payload is LZ4 HC compressed;
+**Compressed debug sections (decided 2026-11-17, implemented 2026-11-22).** A debug-section header flag says its payload is LZ4 HC compressed;
 the VM decompresses it at load, or on first use for sections only traces and the profiler read. The function identities come
 first (the compile server's 1.15 MB section is 234 KB, decoded in 0.4 ms), then the development sections (source snapshots and
 opcode spans, most of a development module's size). The compressor is a native of the HashLink runtime over the LZ4 the fork
@@ -307,6 +307,14 @@ section: LZ4 fast 286 KB, zlib -9 (miniz's format) 195 KB decoded in 5 ms, zstd 
 distribution need). Deduplicating the section's strings first (a path table, names over a string table) gains only 22 KB after
 compression, so the section keeps its format. HashLink's per-instruction line table is part of the bytecode format, not a
 section, and stays as it is.
+
+As built: flag bit 0, the payload being the decoded size then one LZ4 block (docs/reference/HLB_DEBUG_SECTIONS.md); the VM
+decodes every compressed section at load, which is cheap next to the JIT. The function identities use LZ4 HC level 9 (level 12
+gains 0.5% at five times the time); the opcode spans and source snapshots use LZ4's fast mode, because a development build
+writes them on every rebuild and HC would cost it about 0.6 s on the compiler's own sources. The compiler's own module: release
+6.80 MB to 5.49 MB (identities 1.60 MB to 292 KB), development 30.3 MB to 15.9 MB (spans 15.5 MB to 6.8 MB, snapshots 7.0 MB to
+2.6 MB). Under the Haxe interpreter, which has no HashLink natives, sections are written uncompressed, so the self-hosting check
+compares stages 2 and 3, both built by a compiler running on HashLink.
 
 **To decide separately:** the bootstrap binary in git adds its whole size to the history at every refresh. Pinning it by hash
 and fetching it, as `.tools/haxe` is, or building it from the pinned Haxe on first use, would end that.
