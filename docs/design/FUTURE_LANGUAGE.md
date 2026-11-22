@@ -382,6 +382,35 @@ When a call's last argument is a function, it may follow the parentheses:
 `new TrackedScope("panel") { ... }`, and likewise `forEach`, `withLock` and test blocks. This gives most of what result
 builders would have given the UI ([UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md)) without a builder transform.
 
+### 16. Structured conditional compilation
+
+Haxe's `#if` works on tokens like a preprocessor: it can wrap part of an expression, code in an inactive branch may not
+even parse, tools see one configuration, and conditions test string defines (`-D foo`), so a misspelled define is just
+false. The spelling stays; the mechanism follows Swift's `#if`:
+
+```haxe
+#if target == Target.wasmGc
+function hostString(s:String):JsString { ... }
+function fromHost(s:JsString):String { ... }
+#elseif target.hasThreads
+...
+#end
+```
+
+- **Whole units only.** Branches hold complete declarations, statements, fields or `case` arms.
+- **Every branch parses.** Inactive branches are parsed and formatted, so code for other targets cannot rot silently.
+- **Typed conditions.** Conditions read the target profile and typed compile options; string defines become typed
+  options, and an unknown or misspelled condition is an error.
+- **Checking.** The active branch is type-checked and inactive branches only parsed; parity builds on each target check
+  the rest. Checking inactive branches against every target's declarations is a possible later step.
+- **Constant expressions.** `#cfg(...)` is a compile-time `Bool`: in `if (#cfg(target.hasThreads)) ... else ...` both
+  branches are type-checked and the inactive one is folded away. Prefer it when both paths compile everywhere.
+
+`#` marks what the compiler decides (later also `#file`, `#line`), and `@` stays for attributes that describe a
+declaration (change 1). A `@cfg` attribute, as in Rust, was considered: it gives the same guarantees, but it puts "does
+not exist on this target" in the same form as "is pure", and it must be repeated on each item where `#if` groups them.
+Most Haxe `#if` uses already wrap whole declarations or statements, so migration is mechanical.
+
 ### Smaller changes
 
 - **`package` inferred from the file path.** Haxe requires it to match the directory, so declaring it is redundant.
@@ -392,8 +421,6 @@ builders would have given the UI ([UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES
   `function` remains for declarations.
 - **Constraints with `&`.** `T:Hashable & Diffable` in place of `T:(Hashable, Diffable)`.
 - **No call-site `inline f()`.** Inlining is the optimizer's decision, or a declaration attribute.
-- **`#if` around whole declarations and statements only.** Haxe's `#if` works on tokens like a preprocessor. Target
-  differences go through target profiles and typed compile options.
 
 Kept as they are: array and map comprehensions (`[for (x in xs) f(x)]`), a required `override`, no C-style `for (;;)`,
 and `??=`, `?.` and `??`.
