@@ -9,6 +9,7 @@ import compiler.ir.model.IrSymbol;
 import compiler.ir.names.IrReceiverCheck;
 
 /** Remove receiver checks only when a shared must-analysis proves the receiver non-null. */
+@:nullSafety(Strict)
 class IrReceiverCheckElision {
 	/** On a body, in place; whether it changed the body. `scratch` is the caller's, reused across functions. */
 	public static function runBody(body:IrBody, scratch:IrPassScratch):Bool {
