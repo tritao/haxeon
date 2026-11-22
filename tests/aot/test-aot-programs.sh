@@ -6,12 +6,17 @@
 # NAME is a tests/programs file without .hx, or a path to a .hx file; --all takes every program of expected-exits.tsv.
 # TEST_JOBS programs run at once (default 4); TOOLCHAIN is the hlc build's --toolchain (gcc, clang, clang-cl, cl; default the
 # hlc SDK's target's);
-# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines).
+# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines). AOT_PROGRAMS_COMPILER, when
+# set, is a compiler executable that does both compiles instead of the compiler on the VM, which stock Haxe built: the aot-compiler
+# suite sets it to the compiler built ahead of time, so the C backend's own code also runs as Haxeon compiles it.
 set -uo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 source "$root_dir/scripts/lib/env.sh"
 source "$root_dir/scripts/lib/haxeon-compiler.sh"
+if [[ -n ${AOT_PROGRAMS_COMPILER:-} ]]; then
+	haxeon_compile() { (cd "$root_dir" && "$AOT_PROGRAMS_COMPILER" "$@"); }
+fi
 verbose=0
 programs=()
 while (($# > 0)); do
