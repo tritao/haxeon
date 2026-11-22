@@ -1,554 +1,86 @@
 # Warm rebuild reuse
 
-Status: plan (step 1), not implemented. Branch `warm-rebuild-reuse`, from `4b460ad2`.
-
-## Problem
-
-A warm `haxeon build` (same compiler worker, "reusing compiler session") retypes only what changed, but the rest of the
-pipeline runs over the whole program every time. `materia/app`, `--compiler-only --timings`, same compiler build:
-
-| build | compile-count | wall | functions retyped | final functions | final IR changed |
-|---|---|---|---|---|---|
-| cold | 792.4M | 66-67 s | 30502 | 34445 | 34445 |
-| warm no-op (new output path) | 288.8M | 36-40 s | 0 | 34449 | 0 |
-| warm after a one-statement `Main.hx` edit | 357.1M | 41 s | 625 | 34489 | 372 (840 regenerated) |
-
-(`final IR changed` = `IrInliner.run` result; `regenerated` is what the backend is asked to lower. Measured with a
-temporary probe in `FrontendCompilation.run`, not committed.)
-
-So after an edit about 2.4% of the final functions differ, and the warm build still pays for all 34489.
-
-## Profile (warm no-op, hlprof-live, 250 Hz, compile thread only)
-
-Percent of the compile thread's samples (8658 samples, `CompilationPipeline.compile`).
-
-| phase | samples | share | what it is |
-|---|---|---|---|
-| `FrontendCompilation.run` | 4839 | 56% | everything before the backend, see below |
-| - `IrGenerator.assemble` (`IrProgramAssembler.assemble`) | 1771 | 20% | whole-program IR passes #1 |
-| - `IrInliner.run` | 808 | 9% | inliner + `IrInlineCache` comparison |
-| - `SemanticAssembly.run` | 479 | 6% | semantic reuse / canonicalization |
-| - `IrScalarArguments` / `IrScalarClosures` / `IrValueArrayProgramRewrite` | 365 / 254 / 253 | 4% / 3% / 3% | value lanes and scalar ABI |
-| - other IR passes (constructors, phi scalarization, replacement, nullable flow) | ~340 | 4% | |
-| `BackendAssembly.assemble` | 3753 | 43% | |
-| - `HlLower.lowerProgram` | 2582 | 30% | per-function lowering (1690 in `lowerFunction`) + metadata |
-| - `IrVerifier.verify` | 898 | 10% | whole-program verification, every build |
-| `HlWriter.writeFile` | 654 | 8% | encode and write |
-
-Allocation counts per phase from `--timings` (objects), pre-merge vs merged vs merged-cold:
-
-| phase | pre-merge no-op | merged no-op | merged cold |
-|---|---|---|---|
-| semantic + typing | ~20M | ~20M | ~65M |
-| `ir-assembly` | 98.5M | 153.0M | 196.8M |
-| backend (`backend-assembly`) | 100.2M | 111.1M | 110.7M |
-| ABI | 2.6M | 2.6M | 2.6M |
-
-Where the extra 65M of the merge went: 54M in `ir-assembly`, 11M in the backend. In the `IrProgramAssembler` profile the
-passes origin added are `IrInlineEnumLowering.run` (21% of that phase, plus `IrVerifier.verifyInlineEnumsLowered` 360
-samples), `IrValueInterfaceBoxes.rewrite` (12%), `IrEnumDynamicDispatch` (7%), `IrValueDynamicDispatch` (6%),
-`IrEnumRuntimeSpecializations.materialize` (5%) and `IrTypedInterfaceDispatch` (4%). Each one visits and, in part,
-reconstructs every function; `IrInlineEnumLowering.run` allocates `IrBlock`s for functions it does not change.
-
-Conclusions:
-
-1. Warm no-op: about 55% of the objects are IR passes, 38% the backend, 7% frontend. Nothing in the IR pipeline or the
-   backend depends on what changed.
-2. Everything after the frontend runs on the whole program, and an edit changes ~2.4% of it. The achievable floor is
-   frontend + changed functions + their dependents, roughly 30-40M objects for the no-op and well under 100M for the edit.
-3. The IR pipeline is the larger half and the harder one: its passes read other functions (see "IR passes").
-
-## What exists today
-
-- `IrInlineCache` keeps the previous build's final IR per function and `IrInliner.run` returns the names whose final IR
-  differs (structural equality, provenance and file hash included, `IrFunctionStateEquality.same`). That set is exactly
-  the "changed" input the backend needs, and is already computed on every build.
-- `HlModuleAssembler` + `HlFunctionCache` reuse lowered `HlFunction`s for functions not in `regenerated`, but only under
-  live patching. They keep absolute indices into append-only tables (`HlSymbolTable`, stable function slots), so the module
-  produced depends on the session's history. `BackendAssembly.hx:74` therefore gives a plain build a fresh
-  `HlModuleAssembler`: "the result depends only on the source, never on what the session compiled before".
-- `HlLower` lowers metadata first (enums, interfaces, objects, static globals), then each function. Function bodies intern
-  types, ints, floats, strings, globals and function types into the shared tables in encounter order, and resolve callees
-  through `functionIndices`, which a plain build derives from the order of `program.functions`.
-
-So a lowered function is not reusable across plain builds because its operands are absolute indices that shift whenever
-any function, constant or type is added or removed anywhere before it.
-
-## Design
-
-Goal: output of a warm build is a pure function of the sources and the compiler (byte-identical to cold), and the work
-done is proportional to the change.
-
-### A. Relocatable lowering (backend, HashLink)
-
-`HlLower.lowerFunction` stops writing absolute table indices. Every reference goes through a sink:
-
-- A function is lowered to `HlLoweredFunction`: the `HlFunction` with provisional operands plus a relocation list
-  `(instruction, operand, kind, key)`. `kind` is int / float / string / type / global / function / object field / method
-  slot, and `key` is the value or name. Debug metadata is already per-function.
-- A link step assigns canonical indices and patches operands. It is the only code that touches `HlSymbolTable`:
-  it replays each function's references in function order, so tables get the encounter order a cold lowering would give.
-  Cold and warm both go through the link step, so byte identity holds by construction; the test checks it.
-- Live patching keeps its append-only tables and keeps its lowered functions by name (done in 3c). Plan A had it replay each
-  kept function's requests through an append-only assigner. That would only cost time: append-only tables and stable slots
-  keep a kept function's absolute operands valid, and the patch planner already decides which functions are regenerated.
-  So a live build puts its functions in the same `HlLoweredCache`, with no requests, and `HlLower` trusts every entry it is not
-  told to regenerate (`trustCache`); plain builds compare the IR and link. The two modes are chosen by
-  `HlModuleAssembler.livePatching`, and the assembler refuses a live build with a lowered cache and a plain one without.
-  Trust relies on the regenerated set being right, so `--check-reuse` lowers each kept function again and throws,
-  naming it, if its code differs or the symbol tables grew. No second lowering path, no compat form.
-
-Cache entry: `LoweredEntry { relocatable function, facts }`.
-
-- Key: function name + the function's final-IR identity (the inliner cache already decides "same structurally,
-  provenance and file hash included") + `LoweringEnvironment` (target, `fieldReserve`, `developmentMetadata`, native
-  ABI set; changing any of these drops the whole cache, which is a different build configuration, not a fallback).
-- Facts: the cache is also valid only while the things lowering read *about other entities* are unchanged. `HlLower`
-  reads `objects`, `valueObjects`, `interfaceBases`, `typedInterfaces`, `nativeVisible` and the object/interface layouts.
-  These reads go through one narrow `LoweringView` that records `(query, answer digest)` for each function. On reuse the
-  recorded queries are re-evaluated against the new program; any different answer relowers that function (e.g. a field's
-  storage type changed, an object turned into a value type). This is the precise invalidation rule, not a fallback.
-  Callee signatures, field offsets and method slots are *not* facts: they are relocations resolved at link time.
-- Verification: `IrVerifier.verify` runs on the whole program today. It becomes per function keyed by the same final-IR
-  identity (a verified function stays verified) plus the whole-program checks that really are global
-  (`verifyValueArraysLowered`, `verifyInlineEnumsLowered`, duplicate names), which become incremental over the changed set.
-
-Removed functions disappear at link time; added functions are just lowered. Order is `program.functions` order, as today.
-
-Wasm: `WasmFunctionLower` runs per function over `IrProgramIndex`/`WasmLayout`/type-id plan with whole-module layout
-decisions (type ids, flattened value fields, reflection table), and `WasmOptimizer` works on the whole module. The same
-relocation approach applies to the function bodies, but the layout inputs are wider. Step 2 will say after reading
-`WasmFunctionLower`: I expect HashLink first and Wasm for function bodies only if the layout facts record the same way;
-if not, I will report why instead of shipping a half reuse.
-
-Expected: backend 111M -> ~10M for a no-op (link only) and ~15M for the edit case; the 898-sample verification and most
-of the 654-sample write step (encoding unchanged functions' bytes can be cached as well, since the bytes are index
-dependent only through relocations) shrink with it.
-
-### Program-level shortcut (step 2)
-
-Before any per-function reuse, a build whose pipeline input and lowering environment are unchanged reuses everything:
-
-- *Pipeline input* = what `FrontendCompilation.run` hands to `IrGenerator.assemble`: the cached typed-function IR in order,
-  natives, objects, interfaces, enums, statics, static initializers, entry point, C natives, reflectable objects, the static
-  check cache identity, value-lane target and exported functions. Functions compare by object identity, falling back to
-  `IrFunctionStateEquality.same` (a regenerated but equal function); the small tables compare by a canonical digest.
-- *Lowering environment* = target, `fieldReserve`, `developmentMetadata`, live patching flag, the native set, debug-file list.
-- Equal on both: keep the previous final IR and the previous encoded module bytes; run no pass, no verification, no lowering,
-  no encoding; write the bytes to the requested output path (a new path included).
-- Not equal on either: the normal path. There is no partial use of this cache; per-function reuse is steps 3-4.
-
-### B. IR passes: summary plus local rewrite (ADR 0003 layers 4-6, milestone M2)
-
-The first draft of B added recorded facts to each existing pass. That multiplies per-stage caches (typer metadata,
-`IrInlineCache`, `HlFunctionCache`, `IrStaticCheckCache`, ...) and leaves the cause alone: passes mix global decisions into
-per-function rewrites, so rewrites read other functions and every new pass touches the whole program (the merge's +54M).
-B is therefore a pass interface, and one dependency mechanism shared with A.
-
-#### B.1 The pass interface
-
-```
-Pass<S>
-  contribution(fn: IrFunction, view: View) -> C        // optional; per-function facts, cached by function identity
-  summarize(contributions: Map<name, C>, tables: ProgramTables, view: View) -> S   // optional; small, comparable by value
-  rewrite(fn: IrFunction, summary: S, view: View) -> IrFunction                    // maps one function to one function
-  helpers(summary: S, view: View) -> Array<IrFunction>                             // generated entities are a function of S
-```
-
-- `rewrite` sees its function, the summaries and what it reads through `view`. It does not see the program. It returns the
-  *same object* when it changes nothing; check mode asserts that.
-- `helpers` is derived from the summary, so a helper exists exactly while something needs it. This replaces ownership by
-  name (`DeclarationOwners` for IR, `retained/origin` rules) for the generated functions of these passes. Each helper is
-  itself a cache entry keyed by its structured identity (B.4).
-- `summarize` runs over contributions, not bodies: a contribution is computed once per function identity and survives
-  builds, so a summary is a merge over 34k small values rather than a scan of 34k functions. Summaries compare by value
-  (structural digest); an unchanged summary lets every `rewrite` of that pass be reused.
-- A pass lists the tables it changes (objects, interfaces, enums, statics, natives). Those changes are part of its summary
-  (`inline enum storage`, `physical objects`), not a side effect on shared arrays. Today `IrValueInterfaceBoxes`,
-  `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `IrGenericOwnerErasure.generate` and `IrObjectReflection` push
-  into input arrays in place; that goes away with their port.
-
-#### B.2 One dependency mechanism, shared with A
-
-`View` is the single read interface of the pipeline (ADR decision 1). `LoweringView` in A is the HashLink-lowering
-specialization of it, and the inliner's `InlineMemo.dependencies` is the same idea already in the code.
-
-- Every read goes through the view: another function's signature, another function's body (inliner), an object layout, a
-  summary field, the target profile. Each read records `(query, answer digest)`.
-- A cached rewrite is reused while its input function is the same object and every recorded answer is unchanged. When a
-  summary changes, only the rewrites that read the changed part run again. A read of `summary.closureTypes` is tracked per
-  key (the closure type), not per summary, so one new closure type does not rerun every function.
-- `--check-reuse` recomputes every reused rewrite, contribution and helper and compares; it throws naming the pass,
-  the function and the first differing instruction. It is part of the warm == cold test and runs once on app warm builds
-  before each port merges.
-- One cache per pass (rewrites + contributions), one engine, one invalidation rule. `IrStaticCheckCache`,
-  `IrInlineCache.cleaned/memo` and similar per-pass caches are deleted as their passes are ported.
-
-#### B.3 Inventory (24 passes, 2026-11-08)
-
-Class: **L** already local; **LS** local rewrite plus a summary; **G** needs facts about other functions' bodies or a
-fixpoint. "Edit risk" is how likely an edit to one body forces other functions to be rewritten. Evidence file:lines are in the
-audit notes at the end of the doc. CPU is the share of the warm no-op compile thread; objects are from the per-pass probe
-(functions a pass changes on a cold app compile, of ~34k).
-
-| pass | class | summary / what makes it global | reads other functions | program tables / helpers | edit risk | CPU |
-|---|---|---|---|---|---|---|
-| IrEnumDynamicDispatch | LS | enum box descriptors and the `needsEqual/Reflect/Compare` flags, merged from per-function Call names | bodies (reachability pruning of `$enum-reflect-equals:*`) | adds box/view/unbox/dispatch functions; set = f(names in all bodies) | medium: the first body that needs an enum box flips a flag and rewrites every `__dynamic_equal` call | in 20% group |
-| IrValueDynamicDispatch | LS | `suffixes` from value objects and `$value$equality:` names | names only | one dispatcher | low | in group |
-| IrGenericOwnerErasure.generate | generator | helper set = f(Call/InstanceClosure names, objects) | callee signatures (`findMethod`) | adds erased/test/call helpers | low | in group |
-| IrValueInterfaceBoxes | LS | value objects with interfaces + implementation signatures | signatures | adds `$value-interface-box:*` objects and wrappers (pushes into `objects`) | low | 12% of group (220) |
-| IrTypedInterfaceDispatch.rewriteValueCalls | L | none | none | none | none | 54 |
-| IrTypedInterfaceDispatch.generate | generator | helper set = f(`$typed-interface:` names) | signatures; replaces entries in place | dispatchers/adapters | low | 24 |
-| IrCheckedDynamicCasts | L | none (helpers keyed by type) | names | appends helpers | none | 67 |
-| IrEnumRuntimeSpecializations.materialize | summary only | concrete enum specializations from all signature/body types, closed over payloads | all types | filters `enums` | low | 86 |
-| IrInlineEnumLowering (+Eligibility, Escapes) | LS | `allowed` enums: per-function escape facts unioned, then a closure over the type graph | method signatures | rewrites objects, interfaces, statics, enums, natives; adds objects/helpers; re-runs rewriteValueCalls/generate | **high**: one new escape in one body rejects an enum and reverts it everywhere | 373 + 360 verify |
-| IrOptionalScalarFlow | **G** (candidate-pruning fixpoint) | `candidates` = greatest set such that each `eligible(fn)` holds given the others | callee bodies (`snapshotOnlyReceiver`), signatures, method resolution over all objects | pushes wrapper objects; `$optional-scalar:` clone of every candidate; receiver-check helpers | high | 315 |
-| IrOptionalValueFlow.addHelpers | L + generator | helper set = f(Call names) | none | copy/box/unbox helpers | none | 10 |
-| IrStaticNullChecks | LS | functions reachable from `__init` (`IrInitializationCalls`, with a closure-origin fixpoint of its own) | bodies (call graph) | `__static$nonnull$*` helpers | medium: an `__init` call-graph change instruments unrelated functions | 68 |
-| IrObjectReflection.generate | generator | helper set = f(declared natives, reflectable objects) | signatures | layout functions, renamed natives | low | 42 |
-| IrOptionalFieldStorage | LS | `plans` from objects only | value-method bodies (cloned per owner/field/path) | accessors, place getters/setters, method clones; `physicalObjects` | low (callers keep names) | 129 |
-| IrNullableScalarFields | L | none | none | normalize helpers | none | 18 |
-| IrValueArrayProgramRewrite | LS | concrete value-array element types (objects, enums, interfaces, statics, natives, all bodies) | place-method bodies (clones), helper bodies inlined by `ScalarLowering` | many shape helpers, natives | medium | 253 |
-| IrValueConstructors | G (bounded) | small `.new` value constructors (<=16 blocks, <=64 instructions) | callee bodies (inlines them) | none | medium: callers of an edited small constructor | 98 |
-| IrValuePhiScalarization (run twice) | L | none | none | none | none | 67 |
-| IrScalarArguments | **G** (heavy fixpoint) | `candidates`: functions whose value arguments/results can travel as scalars; the loop re-clones, re-rewrites calls, re-phi-scalarizes and re-SROAs every candidate until stable | callee bodies (`fieldOnly`, `receiverSnapshotOnly`, `freshReceiver`) and signatures | `$scalar-arguments:` clones, `$receiver:` variants | **highest**: flipping a candidacy retargets all callers and other candidates | 365 |
-| IrScalarClosures | LS | `candidates - excluded`: scalar closure function types, from all bodies and natives | existence of the `$scalar-arguments:` clone of a closure target | rewrites objects, interfaces, enums, statics, natives; makers/environments; re-runs ValueInterfaceBoxes and CheckedDynamicCasts | high: one use of a closure type that excludes it changes its ABI everywhere | 254 |
-| IrScalarReplacement | L | none | none | none | none (only follows other passes' changes) | 97 |
-| IrNullableScalarFlow | **G** (candidate-pruning fixpoint by trial rewrite) | `candidates` pruned until stable | callee candidacy (a body-derived fact) | `$nullable-scalar:*` clones, require/equal helpers | high | 75 |
-| IrInliner | G, already memoized | per-callee transitive dependency list (`InlineMemo.dependencies`) | callee bodies, object table | none | the dependents set is already recorded | 808 |
-
-Findings that shape the design:
-
-1. **Only three passes have true candidate fixpoints**: `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`.
-   All three compute a *greatest* set (start with everything plausible, remove what fails), where whether `f` stays depends
-   on the candidacy of the functions it calls or passes values to. That is a monotone computation over a call-dependency
-   graph, so it can be made incremental by re-running it only over the *cone* of a changed function:
-   1. reset the candidacy of the changed functions and of every function whose recorded read depends on them,
-   2. re-run the removal loop over that set with everyone else's candidacy as fixed input,
-   3. if a candidacy flipped, the same step repeats for the readers of the flipped functions.
-   Cost: the cone, which for an edit that does not flip any candidacy is the changed function alone. It can grow to a
-   transitive caller set when a candidacy flips; that is the true cost of the semantics, not an artifact. The soundness
-   obligation is that the removal loop reads candidacy only through the view, so the cone is complete; check mode verifies it.
-2. **Everything else is local plus a summary, or a generator.** `IrInlineEnumLowering` is the only large LS pass whose summary
-   is itself a closure over a type graph, but each body contributes independent escape facts, so the summary is a union
-   plus one graph closure over small data.
-3. **Passes call other passes.** `IrInlineEnumLowering` re-runs `rewriteValueCalls`/`generate`; `IrScalarClosures` re-runs
-   `IrValueInterfaceBoxes` and `IrCheckedDynamicCasts`; `IrValueArrayProgramRewrite` and `IrScalarArguments` invoke phi
-   scalarization and scalar replacement inside their loops. The pipeline is not linear. In the framework each such call is a
-   separate stage with its own summary input; the nested calls become explicit stages (ADR layer 5 then 6 per target) rather
-   than helpers called from inside a pass.
-4. **Hidden global state**: `IrGenerator.genericOwnerOrigin`, `usesNativeReflectionDispatch`, `observableClassFieldCount`
-   and `IrInliner.packedValueFields` are read by passes but are not part of the `IrProgram`. They must move into the target
-   profile or summaries (ADR M1) before the passes that read them are memoized, or a cached rewrite can go stale silently.
-
-#### B.4 Name-encoded structure, and which summary replaces it
-
-Rendered names stay as link-time output (ADR decision 5). Where a pass parses a name back, the structured identity of the
-generated entity replaces it. Per family (pass that owns it in parentheses):
-
-| name family | parsed in | replaced by |
-|---|---|---|
-| `$enum-equals:`, `$enum-reflect-equals:`, enum box/view names, Base64 types (IrEnumDynamicDispatch) | same pass, `IrInlineEnumEscapes` | identity `EnumHelper(kind, enumType)`; the box descriptor set is the summary |
-| `$value$equality:` suffixes (IrValueDynamicDispatch, IrOptionalScalarFlow exclusions) | `substr` | identity `ValueEquality(valueType)` |
-| `$generic-erased:`, `$generic-type-test:`, `$generic-method-reference:` (IrGenericOwnerErasure, `methodReferenceOf`) | `split(":")` | identity `ErasedGeneric(owner, member, typeArgs)`; the owner/member fields replace splitting `Owner.member` |
-| `$value-interface-box:` (`BOX_PREFIX`) (ValueInterfaceBoxes) | IrTypedInterfaceDispatch, InlineEnumEligibility, IrObjectReflection, `IrValueInterfaceBoxes` | identity `InterfaceBox(valueType, interface)`; box objects are part of the box summary |
-| `$typed-interface:` entries/adapters | `split(":")`, `originalEntryName` | identity `TypedInterface(entry|adapter, interface, method, object)` |
-| `$optional-scalar:`, `$optional-value:*`, `$optional-field:method:` (+Json), `$nullable-scalar:*` | startsWith chains, `Json.parse` | identities per family; the Json-in-name encodings (OptionalFieldStorage) become typed fields |
-| `$scalar-arguments:`, `$receiver:` | prefix allowlists in IrScalarArguments, IrScalarClosures, `originalEntryName`, `WasmScalarAbi` | identity `ScalarClone(original, kind)`: "the original of this clone" is a field, not `substr` |
-| `$value-array:` shape helpers | prefix/suffix/Base64 in `ScalarLowering` | identity `ValueArray(elementType, operation)` |
-| `$inline-enum-global:<len>:<name>:<field>` | `HlLower`-side parsers | identity `InlineEnumGlobal(global, field)` |
-| `.new`, `Owner.member` splits (`lastIndexOf(".")`) | IrValueConstructors, IrInitializationCalls | owner and member as fields on every method function |
-| `EnumRuntimeType.declaration` (`indexOf(SEPARATOR)`) | IrEnumRuntimeSpecializations | specialization = (declaration, type args) structured |
-
-Ordering rule: a name family is converted in the commit that ports its owning pass, and the parser is deleted in the same
-commit (ADR M3 rides with M2).
-
-#### B.5 Migration and order
-
-The framework runs every pass that is not ported as one opaque whole-program step, so each commit is correct. A port moves
-one pass onto the interface, deletes its old entry point (no compat form), and adds its warm == cold case.
-
-Order, by what a port saves in the edit case (CPU share of the warm build x probability that an unchanged function is
-reused), after the framework commit and the target-profile milestone (ADR M1):
-
-1. `IrScalarArguments` + `IrScalarReplacement` + `IrValuePhiScalarization` (365 + 97 + 67 samples, and 820+918 functions changed
-   per build): the largest edit-case cost; ScalarReplacement and Phi follow its changes. The fixpoint cone is the hard part.
-2. `IrInlineEnumLowering` + Eligibility + Escapes (373 + 360): the source of most of the merge's +54M; summary is the inline
-   set.
-3. `IrScalarClosures` (254) and `IrValueArrayProgramRewrite` (253).
-4. `IrNullableScalarFlow`, `IrOptionalScalarFlow` (75, 315): second fixpoint pair, reusing the cone mechanism from step 1.
-5. The helper generators and dispatch passes (`IrValueInterfaceBoxes`, `IrEnumDynamicDispatch`, `IrValueDynamicDispatch`,
-   `IrGenericOwnerErasure`, `IrTypedInterfaceDispatch`, `IrObjectReflection`, `IrOptionalValueFlow`, `IrEnumRuntimeSpecializations`):
-   cheap per pass; most of their benefit is that helpers become derived from summaries (no ownership by name).
-6. `IrInliner` last: it already has the only correct dependency recorder; it moves onto the shared view, which deletes
-   `IrInlineCache.memo/cleaned/instrumented` as separate stores.
-
-For each pass left on the whole-program path the doc records the reason (for example a fixpoint whose cone is the whole
-program because its candidacy depends on a table every function reads).
-
-#### B.6 Package-level separate compilation (not built)
-
-A summary is a small value computed from per-function contributions, and a contribution is the unit a package could export.
-The framework therefore keeps contributions and summaries serializable by construction (plain data, no object identity in
-their values). Cached rewrites key on function identity today; the digest form of that key is what a package interface would
-carry. No package code is written here.
-
-## Cache lifetime and invalidation, summary
-
-| entry | key | invalid when |
-|---|---|---|
-| lowered function (A) | name + final-IR identity + lowering environment | function IR differs; recorded view query answers differ (object/value/interface facts); lowering environment (target, field reserve, dev metadata, native set) differs (drops all) |
-| link output (tables, indices) | none, recomputed | always (cheap, canonical) |
-| verified function | final-IR identity | function IR differs |
-| pass output (B) | input identity + recorded query answers | input differs; any recorded answer differs (callee signature/body, object layout, enum use, method resolution) |
-| pipeline output (shortcut) | raw input digest | any function/shape differs |
-| encoded function bytes | lowered function + its link-time operand values | lowered entry differs or a relocation resolves to a different index |
-
-Session lifetime: caches live with the compiler worker session, like `IrInlineCache`. A new session starts cold and
-produces the same bytes. They are rebuilt (not patched) when the compiler is rebuilt, which restarts the worker anyway.
-
-## Approved order and safety rules (dev-71)
-
-Each item is its own commit, full suite before each commit. After each: compile-count for cold / no-op / edit.
-
-1. Pass allocation fixes, no caching: the merged passes that rebuild every function (`IrInlineEnumLowering`,
-   `IrValueInterfaceBoxes`, the enum/value/typed-interface dispatch passes) return the same `IrFunction` and blocks when
-   they change nothing. Helps cold builds too.
-2. Program-level shortcut extended to the backend: if the raw pipeline input digest and the lowering environment both equal
-   the previous build's, reuse the previous final IR and the previous module bytes; no pass, no lowering, only write the
-   bytes (also to a new output path). Test: warm no-op output == cold output.
-3. Relocatable lowering:
-   a. relocatable lowering + link step, cold path only; no output byte changes (byte equality against the pre-change
-      compiler on cnckit/tests in the same install path, and on the test programs);
-   b. plain warm builds reuse lowered functions; warm == cold test (no-op, body edit, signature edit, generic
-      specialization edit, added/removed function, an added constant or string that shifts tables);
-   c. port live patching onto the same relocatables (all Live*, Profiler*Lsp and HotReload tests keep passing);
-   d. per-function verification.
-4. IR pass ports, ordered by what they save in the edit case. Each skipped pass gets the reason it is not reusable.
-
-Safety:
-
-- `LoweringView` is the only way `HlLower` sees other entities. It must not hold the `IrProgram` or the object maps, so an
-  unrecorded fact cannot be read.
-- Check mode (`--check-reuse`): every reused entry (lowered function, later pass outputs) is also recomputed and
-  compared; the build throws, naming the function and what differed. It runs in the warm == cold test and once on the app
-  warm builds before each pass port. A test aid, not a fallback.
-- Worker RSS after a warm app build is reported before and after the caches.
-- Wasm: as planned, the decision is reported.
-
-## Steps
-
-Order and safety rules are in "Approved order and safety rules". Mapping to ADR 0003: steps 1-3 are M0, the target profile is
-M1, B is M2 together with M3 (structured identities of the families it ports).
-
-1. Done: pass allocation fixes (`fc02b21d`).
-2. Program-level shortcut including module bytes.
-3. Relocatable lowering: (a) link step on the cold path, byte-identical; (b) plain warm builds reuse lowered functions;
-   (c) live patching on the shared cache (done: trusted by name instead of replaying requests, see Design A); (d) per-function verification.
-4. B (after review of this doc and after ADR M1): framework with the opaque step, then ports in the order of B.5.
-
-Gates for each step: full `HAXEON_NATIVE_READY=1 scripts/test-driver.sh 8`, and app cold / no-op / edit compile-count with
-the same compiler build path, plus worker RSS after a warm app build once caches exist.
-
-## Audit notes (where the inventory comes from)
-
-File:line evidence from the 2026-11-08 read of `src/compiler/ir` (a classification agent read each pass; the fixpoint claims
-for `IrOptionalScalarFlow.hx:30-39`, `IrScalarArguments.hx:76-120` and the `canPassAliases` callee-body read at
-`IrOptionalScalarFlow.hx:285-295` were re-read by hand):
-
-- Cross-function body reads: `IrEnumDynamicDispatch.hx:103-121` (reachability pruning), `IrOptionalScalarFlow.hx:285-295`,
-  `IrStaticNullChecks.hx:30-38` + `IrInitializationCalls.hx:44-66`, `IrOptionalFieldStorage.hx:98-117`,
-  `IrValueArrayPlaceMethods` clones and `ScalarLowering` inlining, `IrValueConstructors.hx:11-30,121-137`,
-  `IrScalarArguments.hx:180-216,296-323`, `IrNullableScalarFlow.hx:28-35,156-161`, `IrInliner.hx` memo
-  (`InlineMemo.dependencies`).
-- Signature/name-only reads: `IrGenericOwnerErasure.hx:230-236` (`findMethod`), `IrValueInterfaceBoxes.hx:38-56`,
-  `IrTypedInterfaceDispatch.hx:107,130-137`, `IrObjectReflection.hx:154-186`, `IrScalarClosures.hx:80-83`.
-- In-place mutation of inputs: `IrValueInterfaceBoxes.hx:64`, `IrOptionalScalarFlow.hx:52`,
-  `IrTypedInterfaceDispatch.hx:196,209`, `IrGenericOwnerErasure.hx:75,102,144`.
-- Hidden state: `IrGenerator.hx:64` (`genericOwnerOrigins`), `usesNativeReflectionDispatch`, `observableClassFieldCount`,
-  `IrInliner.packedValueFields`.
-- Name parsing sites: see B.4 for the families; the heaviest users are `IrOptionalFieldStorage` (Json in names),
-  `IrTypedInterfaceDispatch` (`split(":")` on interface names) and the prefix allowlists in `IrScalarArguments.hx:34-47`.
-
-Not traced: `IrInitializationCalls.calls()` beyond its fixpoint header, and the internals of `IrLoadStoreForwarding` and
-`IrStrengthReduction` (both inside `IrInliner.run`).
-
-## Open questions for dev-71
-
-- ADR M1 (target profile) before B ports: assumed. The hidden globals above are the reason.
-- B.5 puts the scalar-argument fixpoint first because it dominates the edit case; its cone mechanism is also the risk. If you
-  prefer to start with the inline-enum pass (the merge regression, simpler summary) and bring the fixpoint passes second,
-  say so.
+Status: in use. A warm build reuses the lowering, the verification and the IR stages already moved onto bodies; moving the
+rest of the passes is the query engine's work ([QUERY_ENGINE.md](QUERY_ENGINE.md), [IR_PASS_INVENTORY.md](IR_PASS_INVENTORY.md)).
+The open items are at the end.
+
+A warm build is a build in a compiler session that has built before: the compile server, the language server, or a
+`haxeon build` that reuses its worker. The rule is ADR 0003 decision 10: a warm build's output is the bytes a fresh compiler
+makes from the same sources, and its work is proportional to the edit.
+
+## What a warm build reuses
+
+- **Typing:** only what changed is typed again (`LAZY_DECLARATION_TYPING.md`); a unit not typed again keeps its records,
+  anonymous types included.
+- **The whole pipeline, when nothing it reads changed:** `PipelineSnapshot` holds everything the IR pipeline read (the typed
+  functions' IR, the program tables, the environment). When the snapshot and the lowering environment both equal the last
+  build's, the build keeps the last final IR and the last module bytes, and only writes them (`reused: ir+module`).
+- **IR stages on bodies:** each stage moved onto IR bodies keeps what it made of each function, with the facts it read
+  (`IrStageMemo`), and reuses it while the function and the facts are unchanged. The session caching model is in
+  [IR_CORE_COLUMNS.md](IR_CORE_COLUMNS.md#session-caching-model).
+- **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
+- **Lowering (HashLink):** a function is lowered with relocations instead of table indices (`HlLoweredFunction`); a link step
+  assigns the indices in the order a cold lowering would, so cold and warm output are equal by construction.
+  `HlLoweredCache` keeps the last plain build's lowered functions by name. What lowering reads about other entities goes
+  through `HlLoweringView`, which records each answer, and a changed answer lowers the function again. A live build keeps
+  its append-only tables and trusts every lowered function it is not told to regenerate.
+- **Verification:** a function stays verified while it and what the verifier read about the rest of the program
+  (`IrVerifyMemo`) are unchanged.
+- **Source hashes:** a function kept across an edit of its file is given the file's current content hash
+  (`IrSourceRehash`), so its debug spans name a snapshot the module has.
+
+A failed or rejected build leaves every cache as the last successful build left it: a build works on a copy of the
+`SessionState` it started from.
+
+## Rules
+
+- A shared generated artifact's attributes are a function of its subject, never of the code that asked for it.
+- No name contains a counter the process keeps across builds; temporaries are numbered per function.
+- A shared artifact is ordered by a stable key (its name), never by creation or map order.
+- Code that may change what a warm build reuses needs a warm-equals-fresh case.
+
+## Checks
+
+- `--check-reuse` computes every reused result again and compares, naming what differs.
+- `tests/compiler/WarmRebuildReuseMain.hx`: a warm build after each kind of edit equals a fresh build, and a build with no
+  edit reuses everything.
+- The checked suite builds every program a third time (`Main --warm-edit`): it appends a function nothing reaches, then a
+  kept one, then moves both inside the file, rebuilding in one session each time; every rebuild must equal a fresh build.
+- The program-case runner builds every program as a live build and as a plain build (`Main --plain`), since only plain
+  builds prune.
 
 ## Open items
 
-- **Generated helper units keep their anonymous-type records** while the build keeps their functions
-  (`RetainedFromPrevious.units`: not typed again, and neither the function nor its origin invalidated, as pruning decides), and
-  a function's signature types are recorded under its own unit, so a build that does not type it again keeps them. A shared
-  unit's types become the program's only when its output is merged: an abstract member typed for its errors and never called
-  added its types to every fresh build and to no warm one, so the first no-op after a cold build missed reuse
-  (`reflectable -$anon:{...}`). The performance guard's incremental part checks the no-op reuses.
-- **Remaining cold/warm differences found while making the first no-op reuse** (all fixed): process-wide temporaries counters in
-  `IrGenerator`, the typing-order list of reflectable classes, the anonymous types of unchanged units, generated helpers cached by two
-  modules. Each was an input the pipeline could not tell was equal. The class of problem is the mutable `IrGenerator` state
-  (`inputState()` hashes the part the passes read); ADR M1 replaces it.
-- **Worker memory.** The warm app worker reaches 9-12 GB; `earlyoom` ends it when free memory drops under 10%. The reuse caches add about
-  0.4 GB (kept final IR, module and encoded bytes). Tracked separately.
+- **A shared helper's origin** is its first requester's ([HELPER_OWNERSHIP.md](HELPER_OWNERSHIP.md)).
+- **Live builds are not pruned.** A live host can call any function by id, and a patch cannot add or drop functions and
+  class-table entries. Pruning them needs a rule for host-called functions (the live protocol on the entry class: `start`,
+  `tick`, `close`, `saveState`, `restoreState`, `liveRelease`, `liveRebuild`), keeping every constructor, every function the
+  running module holds, and each class's `__liveinit` with its class without making it a root.
+- **Pruning is per class, not per method.** A reachable class keeps all its methods, because its class table is built from
+  the method list; a method can leave only once its slot is derived after pruning.
+- **A new constant or global relinks the functions after it.** The tables are dense and ordered by first use, so one entry
+  early in lowering order shifts the indices of later functions, which are relinked and encoded again. Patching the cached
+  encoding at its index operands would skip relowering and validation; HashLink's variable-length indices still force
+  encoding a function whose length changes.
+- **Positions are absolute.** IR provenance and debug locations carry byte offsets in the file, so a comment at the top of
+  a file lowers every function after it again. Positions relative to the declaration, made absolute when the debug section
+  is encoded, would confine an edit to its function; it changes the IR codec, `HlLower`, the debug section and the patch
+  format.
+- **The frontend can run twice** when typing asks for a runtime module the graph lacks
+  ([FRONTEND_RESTART.md](FRONTEND_RESTART.md)).
+- **The inliner does not memoize functions in call cycles** whose inlining depends on the walk order; they are inlined
+  again on every build.
+- **A value-array shape's pass visits every function** to learn it is not selected, about 95 bytes per function per shape
+  (`ValueArrayLoweringSelectionMain` bounds it at 128). Indexing functions by the element shapes they mention would let a
+  shape's pass walk only those.
+- **Worker memory** after the reuse caches is tracked in TODO.md ("Session memory after the IR columns chain").
 
+## Decided against
 
-## M1: TargetProfile and ProgramFacts (landed 2026-11-09)
-
-What landed, one commit each (driver suite, outputs, app counts and the hot-reload scripts at every step):
-
-1. `TargetProfile` (`TargetKind` is `HashLink` or `Wasm`; C is added when one of its values first differs) replaces `IrInliner.packedValueFields`;
-   `IrInliner.run` takes it and its memo fingerprint uses `profile.key()`.
-2. The other target flags (`headerlessValueClasses`, `dynamicObjectLiterals`, `nativeArrayChecks`, `nativeStringFastPaths`,
-   `nativeReflectionDispatch`) moved onto the profile, with `hashLink`, `wasm` and `portable` (what `Frontend.compile` builds).
-3. `FunctionScratch` holds the per-function state (cleanup regions, scoped disposal, optional places, the two serials, the constructor flag);
-   `generateCfg` gives each function a fresh one.
-4. `ProgramFacts.of(typed)` holds the enum, class, generic, equatable and observable facts and renders them as `inputState(profile)`.
-   `IrGenerator` is `new IrGenerator(facts, profile)`, an instance; `IrProgramAssembler` takes it where it lowers types or generates functions;
-   `IrGenericOwnerErasure` and `IrObjectReflection` take the facts. `ProgramFacts` is derived on every build; keeping it on the identity of the typed
-   program is the M4 item.
-5. Generation creates no objects of its own (the `generatedObjects` list was assigned and never read), so nothing is returned from it. The flat and
-   inline value-object tables are final inputs built from the program's object list with `IrGenerator.withObjects(objects)`.
-
-Left on purpose: `IrInliner.enabled`, `IrLoadStoreForwarding.enabled`, `IrStrengthReduction.enabled` (`HAXEON_*` debug switches read at class load),
-`HlLower.lastDebugLocation` (a one-slot memo with no effect on results), `HlRuntimeIdentity.sequence`, and `HlLower.skippedKeptTotal` /
-`reportedSkips` (check-mode diagnostics). Follow-up, not M1: the Wasm statics that are per-build caches (`WasmModuleSupport.hostCNativeProgram`,
-`hostCNatives`, `IrProgramIndex.cached`) and the per-process byte caches (`WasmCryptoRuntime.runtime*`, `WasmLinearModuleBuilder.cachedRuntime*`,
-the `WasmLinearRuntime` flags).
-
-Numbers at the end of M1 (app, same machine): cold 785.6M, no-op 25.3M, edit 236.6M allocations; 585 of 620 program outputs byte-identical
-(the 35 that differ link the compiler's own sources); driver suite 829 of 830 (`LspProtocolMain`, fixed on main).
-
-## Commit point of a build (2026-11-09)
-
-A failed or rejected build leaves every cache as the last successful build left it. The snapshot holds the
-inline cache, the pipeline snapshot, the lowered cache, the reachability cache and the declaration owners next to the modules and
-types, and `restore` puts them back together; the candidate of a build only ever works on copies. (Since 2026-11-16 all of these are one
-`SessionState`, and the snapshot is the state the build was copied from.) Before this, a rejected
-publication (the artifact write failed) restored the modules and the assembler but kept the caches of the rejected build, so the next
-build compared against the rejected sources and kept a stale `main` in the live module (found by `--check-reuse`).
-Test: `CompilerSessionMain` (build, failed write, rebuild runs the new value and still writes the output).
-
-## Deferred options from the edit-build measurements (2026-11-10)
-
-Measured on the pre-merge app tree (0405feb5), one edit that inserts a line with a new string literal and constant, one that appends a comment.
-
-- **Re-indexing on a new constant or global.** The insert edit relinks 5,499 functions with new indices (5,216 by globals, 133 by globals and ints, 150 by ints; none by types, strings, floats, call targets or their own slot, none a lambda). The tables are dense and ordered by first use, so one new entry early in lowering order shifts the rest; warm must equal cold, so the order cannot be avoided. The cost of a relink is allocation (a new `HlFunction`, validation, encoding, debug arrays), about 100 to 150 MB per such edit. A deferred option is link-time relocation in the writer and the validator: keep each function's cached encoding with the positions of its index operands and patch them. HashLink's variable-length indices mean a shift can change a function's encoded length, so a patched function is still re-encoded; what it skips is re-lowering, re-validation and the debug arrays. A smaller variant: for a function relinked with an unchanged structure, the validator only range-checks the moved indices, and the debug arrays are shared from the cached entry. An edit that adds no constant or global relinks none.
-- **Position independence of the IR (M3-adjacent).** Appending a comment re-lowers 490 functions (226 with positional lambda names), because IR provenance and debug locations carry absolute byte offsets, so every function after the edit in that file differs. The long-term fix is for the IR and the debug locations to keep positions relative to the function (or its declaration) and rebase them to absolute only when the debug section is encoded; then a comment or whitespace edit changes only the edited function. Not built.
-- **Positional lambda names** account for 46% of the re-lowered functions in both edits (113 of 245, 226 of 490), 0.3 to 0.7% of the program. Stable lambda identity (M3 for that family) is not worth pulling forward on this evidence.
-- **The inliner never memoizes 907 functions.** Every build re-inlines the same 907 functions (609 ordinary functions such as `haxeon.reactive.ReactiveRuntime.invalidateObservable`, 255 lambdas, 38 `$generic:` entries): they are the functions the inliner marks impure (a function whose inlining skipped an ancestor of the walk, or hit the chain-depth limit, depends on the order of the walk, so `inlinedVersion` records no `InlineMemo` for it). They sit in call cycles. The same set misses in the insert and in the in-place edit.
-
-## Cold build findings (2026-11-10)
-
-Measured on the app at 0405feb5 (the app does not build against main's tree here), fresh worker. Raw files: `/media/joao/DATA1/warm-prof/`.
-
-- **The frontend runs two passes today, and the second costs about 9 s.** Typing can request a module the graph lacks (`haxeon.DynamicOps` for arithmetic on a Dynamic is the only one in the app; six functions name it), and `FrontendCompilation.includeTypedRuntimeDependencies` then adds it and runs the frontend again over the published first pass. The second pass reruns the whole semantic assembly (3.9 s, 1.14 GB) and signature inference (2.0 s, 0.83 GB) and types only the new module (2.1 s, 1.1 s of IR generation): 9.2 s and ~2.7 GB (66.9M objects) of a 63 to 78 s build. Every runtime module the compiler may introduce is requested through `RuntimeDependencyTracker`: `HashMap` (already seeded because it changes a representation), `haxeon.DynamicOps`, `Reflect`, `Std`, `runtime.FloatBits`, `haxe.Int64`, `haxeon.reactive.ObservableSource` and `ReactiveRuntime`, and `runtime.DynamicObject` (Wasm only). Nothing else restarts the frontend. A commit that declared them in one list (`RuntimeModules`) and seeded them all before the graph removed the second pass (compile-count -66.9M, -2.9 GB, byte-identical function bodies on the app); it is kept as a patch, not merged: `/media/joao/DATA1/warm-prof/dropped-ed211f40-one-pass-frontend.patch`. It failed 15 driver tests, for two reasons.
-  1. **Modules are only valid where their natives exist** (`ReactiveRuntime` on Wasm, `Std` in a harness without `CompilerIntrinsics.register`), so an up-front list needs the target and native availability.
-  2. **Presence of a module changes the representation of unrelated code.** Seeding `haxeon.DynamicOps` or `Reflect` alone makes `SourceInlineEnumMain` ("Incorrect program-wide enum classification") and `MethodClosureValueMain` ("Enum callback unexpectedly boxed") fail, and the generic/closure runtime tests return the wrong exit code; `Std`, `Int64`/`FloatBits` and the reactive modules do not. The program-wide enum and closure classification looks at every function in the program, including stdlib helpers nothing calls, so the Dynamic-taking functions of those modules box enums the user's code never passes to Dynamic. The module is "call-only" in what it does and not in what it changes.
-- **Adding a module to an analysis incrementally (option D) is blocked.** (1) `SemanticAssembly` reuses a module's canonical contribution only when `canonicalAliasKey == aliasKey`, and `aliasKey` is the sorted join of every source alias and enum case in the whole program, so adding any module invalidates every contribution (this is why pass 2 shows `contribution-reuse=0`, `canonicalization=3.0 s`). (2) `SemanticProgram.analyze` and `SignatureInference.inferProgram` are whole-program; the only reuse is `replaceBodies` over identical declarations. Both need per-module alias visibility (ADR 0003 M3/M4: one dependency model, structured identities) and an `extend analysis with modules` operation; it is not a small change.
-- **HashLink emits dead functions; the Wasm backends do not.** `WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots` walks calls, closures and `MethodCall` over the class hierarchy from the entry, `@:keep`/`@:expose` (`IrFunction.retention`), reflection helpers and native `generatedFunctionDependencies`, and both Wasm builders emit only that set. HashLink emits everything in the reachable modules, and the reachable-module set (`ReachabilityCache`: module names, dependency keys, initialization classes) is the only reachability the frontend keeps. A conservative walk over the final HL bytecode of the app (calls, static and instance closures, and all methods of any class a reachable function holds a register of; hldump text, `reach.py`) finds **at least 14,531 of the 34,435 functions (42.2%) unreachable, holding 34.6% of the 2.97M instructions**. Most are in `machinekit` (1,930), `nativekit` (1,152), `haxeon` (815), `materia` (788), `Reflect` (649), `cadkit` (615) and `robotkit` (573), plus `$json`, lambdas and generic specializations. Roots not modeled: `@:keep`/`@:expose`, native callbacks and generated-function dependencies, reflection by name, and live-patch roots; the real share is somewhat lower.
-  - **A sound reachable set can be computed after IR generation** with the Wasm walk (the IR has calls resolved and the object hierarchy), before the program-wide passes. Computing it earlier, during typing, would need demand-driven typing (type a function when something reaches it), which saves typing and IR generation of dead code too (11.4 s and 9.6 s in the cold profile) but changes diagnostics (an error in an unreachable library function is not reported unless unreachable workspace code is still typed).
-  - **Program-wide analyses that take every function today:** `IrEnumRuntimeSpecializations.materialize` and `IrInlineEnumLowering.run` (the enum classification above), `IrOptionalScalarFlow`, `IrNullableScalarFields`, `IrStaticNullChecks`, `IrInliner` (including the SCCs), `IrScalarArguments`, `IrScalarClosures`, the verifier and `ProgramFacts.of`. All are called with `allFunctions` or the whole typed program in `IrProgramAssembler`/`FrontendCompilation`; none filters by reachability. Running them over the reachable set makes unused runtime modules unable to change representation decisions, removes the output growth of seeding the declared modules, lets the frontend run once, and skips lowering, encoding and pass work for dead code.
-
-### HashLink drops what nothing reaches (2026-11-10)
-
-`IrReachability` (compiler.ir) is the one reachability walker: the Wasm builders and the plain HashLink build use it. After the inliner, `BackendAssembly` gives the HashLink module assembler a pruned copy of the program (`IrReachability.prune`): functions nothing reaches from the entry leave the module, and a class no reachable function mentions by type loses its methods; a mentioned class keeps all its methods and those of the classes it extends (so a method reached by name, `Reflect.field`, still works). `result.ir`, the pipeline snapshot, verification and the ABI keep the complete program. App at 0405feb5, cold: 34,440 -> 23,525 functions, 101.4 -> 82.7 MB, lowering -22%, encode -43%, the walk costs 0.2 s. The passes still see everything, so the large saving (about 20 s of IR passes and verification) is the next step: run the walk before the program-wide passes.
-
-Open items:
-
-- **Live builds are not pruned.** A live host can call any function by id (`testRetainedPatchedClosure` calls a function nothing reaches), and a reachability change must not add or drop functions and class-table entries in a patch. Pruning live builds needs a rule for host-called functions (for example `@:expose`) and a patch that handles functions entering and leaving the program; `HlModuleAssembler.assemble` must also treat a function the running module never held as changed, since its IR did not change but its body is not in the module.
-- **Per-method pruning** (the exact walk over dispatch edges, not class-granular) would remove more: a class table is built from a method list, so a method can leave only when its slot is derived after pruning.
-- **A Wasm32 nondeterminism**: four Wasm32 modules built by the driver suite differ between two runs of the same commit (lengths 22396/22398 and 23806); the source is not found. It predates this work.
-- **Strings with NUL in HashLink maps.** `haxe.ds.StringMap` on HashLink hashes and compares the key's bytes as a NUL-terminated string (`hl_hash_gen` in `vendor/hashlink/src/std/obj.c` stops at NUL, and the key comparison stops there too), so two keys that differ only after a NUL are the same key. Repro with stock Haxe: `var m = new Map<String,Int>(); m.set("a\0x", 1); m.set("a\0y", 2);` then `m.get("a\0x")` is 2 and there is one entry, while `x == y` is false and `Reflect.compare` is -1. Haxeon rejects NUL in a String (the parser: "a String cannot contain NUL (U+0000); use Bytes", and the writer), so a Haxeon-built program cannot reach it; code built by stock Haxe (the compiler itself, tools) can, and a map key with a NUL separator in it (found by the reachability walker's memo) silently merged. No fix is one line: `StringMap` passes `key.bytes` without a length. Do not put NUL in a map key.
-
-### What the "suite green" claims for reachability pruning did not cover (2026-11-10)
-
-The first reports of the pruning work (the final walk in `BackendAssembly`, and the early walk before the passes) said the driver suite passed. That was true and weaker than it sounded: a bare `new Compiler()` builds for live patching, so almost every compiler unit test, and every program case, ran a live build, which did not prune. Only the builds the CLI makes were plain. Two things followed:
-
-- **The early prune (before the passes) was unsound and was committed as 0509a62d; it is reverted (fa5c9914).** Per-type equality, hash and dispatch helpers (`$value$equality:<hash>` and the enum ones) are generated when a type is typed and are called only by dispatchers that later passes create over all types; at the early walk nothing called them, so they were pruned and the dispatchers lacked those types. Running the 613 programs of `tests/programs` as plain builds, seven returned a wrong exit code or failed to compile (dynamic array references, dynamic equality, enum dynamic equality and allocations, reflected enum arrays, struct-array equality, nullable struct storage), and `dynamic-equality-semantics` returned 1 instead of 42.
-- **The final walk (after the passes, `bea44889`) matches the unpruned build on all 613 programs as a plain build** (same exit code and same compile result for every program).
-
-The gate for all reachability work is now that the program-case runner (`tests/driver/TestRunner.hx`) builds and runs every program twice, as a live build and as a plain build (`Main --plain`), and the checked suite does the same. A redo of the early prune has to pass it. The design constraint for that redo: a helper generated for a type and an operation is recorded with what it serves (the type, and the operation that needs it), and the walk follows that edge, so that "the type is reachable and a dynamic-equality site is reachable" makes the helper reachable; a list of helper name families to treat as roots would be a second copy of that knowledge. The fallback is to run the early prune after the dispatcher-introducing passes.
-
-Live-build pruning is parked (`/media/joao/DATA1/warm-prof/live-prune-wip2.patch`). What the attempt found: the live host calls a fixed protocol on its entry class (`start`, `tick`, `close`, `saveState`, `restoreState`, optional `liveRelease`/`liveRebuild`), which a live build must export (the app's `DevEntry` does not mark them `@:keep`); every constructor must stay (a removed constructor is a reload in `PatchPlanner`); every function the running module already holds must stay (a closure made before an edit may still call it, and the runtime refuses a patch that deletes a function something holds); a class's `__liveinit` must stay with its class and must not be a root of its own (it mentions the class and keeps all its methods alive); and the many fixtures that call a function by id without the program calling it need `@:keep`.
-
-### Array growth policy (measured 2026-11-10, dropped)
-
-`hl.types.ArrayObj.__expand` grows from capacity 0 by 1, 2, 3, 4, 6, 9 ... (x1.5, minimum newlen), so the first five pushes of every
-array each reallocate. A scratch override with a minimum capacity of 4 (`size < 4 ? 4 : size * 3 >> 1`), placed first on the class path
-of the 0405feb5 app build, three fresh-worker cold builds each, interleaved, load 8 to 15 from other sessions:
-
-| | allocations (compile-count) | compiler s | wall s | peak RSS GB |
-| --- | --- | --- | --- | --- |
-| stock | 785.6M | 81.5 / 62.1 / 63.4 | 84.4 / 64.1 / 65.2 | 3.07 / 6.21 / 5.45 |
-| min 4 | 746.6M (-5.0%) | 62.5 / 63.1 / 72.7 | 72.8 / 64.9 / 74.5 | 5.36 / 5.64 / 5.64 |
-
-Allocation count drops 5.0% and is stable across runs, but wall median (65.2 vs 72.8 s, within the load noise) and compiler time median
-(63.4 vs 63.1 s) show no gain, and peak RSS does not move. Under the 2% wall bar, so no override is kept: it would be a
-fork of a stock std file for no measurable time. Revisit when the Haxeon-built worker (ADR 0003 section 12) applies our own Array policy.
-
-
-## Warm output equals fresh output: what the edit sweep found
-
-The checked suite builds every program a third time (`Main --warm-edit`): it compiles, appends a function nothing reaches, rebuilds in
-the same compiler session, appends a kept function and rebuilds, then puts both inside the file and rebuilds again. Each rebuild must be
-the bytes of a fresh compiler's build of the same text. It found 20 programs where that was false; they fail the same way on
-origin/main (090589e5 fails 23), so the warm path was wrong before this branch. Causes and fixes:
-
-- **Stale file hash.** A function whose own range did not change is kept when its file is edited, and its locations still carried the
-  content hash of the old text, so the debug spans named a source snapshot the module does not have. `IrSourceRehash` gives cached
-  functions and static initializers the current hashes; a module remembers that its file was edited (`editedSinceIrScan`) and only then
-  is every cached function checked, allocation-free when nothing is stale. Check mode asserts it for every cached function.
-  Byte offsets need no such repair: a function that moved is typed again (change detection compares the line, and generics the offset).
-  The position-independent design remains the later option: spans carry a path, and the hash is looked up from the current snapshot
-  when the debug section is encoded; it changes the IR codec, `HlLower`, `HlWriter`'s section 2, the snapshot collection and the
-  hot-reload patch format, so it needs its own version bump and gate.
-- **Process-wide counters in names.** `DiffIntrinsics` numbered its temporaries with a static counter, so a name depended on what the
-  process had compiled before. Every temporary is now numbered per function being typed.
-- **Order-dependent shared artifacts.** The enum list followed specialization creation order (now sorted by name); a key path definition
-  took the span of the last use typed (now a generated span that is a function of the path); the environment of a moved key path
-  composition outlived its functions (now orphaned like a lambda's).
-- **An owner lookup** for a function typed in an earlier build and kept (`includeTypedRuntimeDependencies`).
-- **Open: a shared helper's origin** is chosen by the first requester; see HELPER_OWNERSHIP.md. One program, listed by name in the sweep.
-
-The audit rule that came out of it: a shared generated artifact's attributes are a function of its subject, never of its uses; and no
-name may contain a counter that a process keeps across builds.
-
-## Cold build findings, continued (2026-11-11)
-
-Profile of the cold app build after the method-resolution table (coldprof9 to 11 in the scratch directory, 199 Hz, shares load-independent):
-
-- **SsaBuilder.run** was 5.9% of cold CPU, mostly string hashing of local names; locals are numbered once and indexed by slot: 4.5%.
-- **IrInliner** was 10.9% (`calleeOf` hashed a callee name five or six times per call): functions are numbered once and the per-function
-  state is indexed by the number: 9.6%.
-- **Map iteration** is 3% of cold CPU in dynamic calls (`hl_dyn_call_obj`): in the stock-Haxe worker an iterator is a structural type, so
-  every `for (x in map)` and `for (k => v in map)` call is dynamic. `Scope`, the declaration lifecycle, the declaration index, the
-  object list of `IrInitializationCalls`, and the iterator-replacement pre-check were fixed by holding the data in the shape it is
-  iterated in, next to the map. Sites under 0.1% each were left.
-- **Not worth doing:** Name ids inside `IrProgramIndex` and `IrMethodResolution` (0.01% and 0.12%; see INTERNED_NAMES.md).
-
-### Typing: the four whole-function binding walks do not fuse (decision, 2026-11-11)
-
-`BodyTyper.typeFunction` runs `ScopedEscapeChecker`, `LexicalStorageAnalysis`, `AssignedDeclarations` and `MapEscapeAnalysis` over every
-function body, each as its own `BindingWalker` (together `walkFunction` is 2.4% of cold CPU). They are not four consumers of one walk:
-
-- `ScopedEscapeChecker.rejectDirect` walks sub-expressions itself (`scoped(...)`, `this.statement(...)`), which in a shared traversal
-  would run every other consumer's `statement` override a second time over the same statements.
-- `MapEscapeAnalysis.receiver` decides whether a variable that is a collection receiver is reported as a use at all (it is not, the
-  other three do report it), so the hooks carry different traversal semantics, not only different observations.
-
-Fusing them means events with a context ("at a receiver") and turning `rejectDirect` into a check on the main traversal: a change to
-analyses that decide escape and capture and so what code is generated. The realistic partial win is fusing `LexicalStorageAnalysis`,
-`AssignedDeclarations` and `MapEscapeAnalysis`, about 1% of cold CPU, with the risk that a map stops being treated as private somewhere
-the gates do not see. Decision: not done; revisit with the typing rework (ADR 0003 M2 pass framework), where the walk is one pass by
-construction.
-
-## Recorded option: value-array shape passes that skip unrelated functions
-
-`IrValueArrayProgramRewrite.rewriteIndexed` runs once per element shape and still visits every function of the program to learn that most of them are
-not selected, and fills one slot of the result for each: about 95 bytes per function per shape (`ValueArrayLoweringSelectionMain` asserts the slope with a
-128-byte bound). The zero-cost version indexes functions by the element shapes they mention once, and a shape's pass walks only that list; it changes how
-`rewriteAll` and the per-shape result are assembled,; its cost on the app has not been measured separately.
+- **Fusing the four binding walks of `BodyTyper.typeFunction`** (`ScopedEscapeChecker`, `LexicalStorageAnalysis`,
+  `AssignedDeclarations`, `MapEscapeAnalysis`): they differ in traversal, not only in what they observe
+  (`rejectDirect` walks sub-expressions itself; `MapEscapeAnalysis` does not report a collection receiver as a use). Fusing
+  three of them would save about 1% of a cold build at the risk of changing escape decisions. Revisit when typing becomes
+  passes on the query engine.
+- **A minimum array capacity of 4 in the stock-Haxe-built worker:** 5% fewer allocations but no measurable build time.
+  Revisit when the worker is built by Haxeon (ADR 0003 decision 12) and uses its own array policy.

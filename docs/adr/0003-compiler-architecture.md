@@ -123,7 +123,7 @@ A query records what it read through one read interface. On the next build it is
 gives the same answer, and recomputed otherwise.
 
 - There is one engine and one invalidation rule. Each existing cache becomes a query or is deleted. The precise recorders
-  we already have (semantic edges, purity and no-return answers, inline-cache dependencies, `LoweringView` in
+  we already have (semantic edges, purity and no-return answers, inline-cache dependencies, `HlLoweringView`, see
   `../design/WARM_REBUILD_REUSE.md`) become reads in this model.
 - A coarse reset is allowed only where an input really is global (a different target, a different compiler), and it is
   a named input of the queries, not a separate path.
@@ -146,7 +146,7 @@ Each layer reads only the layers above it, through queries:
    helper set, method resolution tables.
 6. **Target IR:** per-function rewrites that read only their function, the summaries and declared reads such as callee
    signatures, or callee bodies for the inliner.
-7. **Backend lowering:** per function, relocatable (`../design/WARM_REBUILD_REUSE.md` design A), for HashLink and each Wasm backend.
+7. **Backend lowering:** per function, relocatable (`../design/WARM_REBUILD_REUSE.md`), for HashLink and each Wasm backend.
 8. **Link:** assigns indices and writes the module or the patch.
 
 The Wasm builders stop running IR passes themselves: whatever they need runs in layer 6 for their target. A pass that
@@ -390,7 +390,7 @@ their last user is ported; there are no compatibility aliases.
 - **M0 (landed, `../design/WARM_REBUILD_REUSE.md`):**
   - merged passes return unchanged functions;
   - the program-level no-op shortcut;
-  - relocatable HashLink lowering with a link step, `LoweringView` as the only way lowering sees other entities, and the
+  - relocatable HashLink lowering with a link step, `HlLoweringView` as the only way lowering sees other entities, and the
     check mode;
   - per-function verification;
   - live patching ported onto the same relocatables.
@@ -441,11 +441,11 @@ This record is not where the current state lives.
   typing. The measure is `app` warm builds after a one-line edit (357M objects on 2026-11-08), together with the cold
   build.
 - **Upfront work.** The pass interface, summaries and structured identities come before the edit-case win from caching
-  individual passes. The plan in `../design/WARM_REBUILD_REUSE.md` (step 4) is reordered to match.
+  individual passes.
 - **Memory.** Retained queries cost memory. Each migration step reports the compiler worker's resident memory after a
   warm `app` build.
 - **Rejected alternatives:**
-  - **More per-stage caches** (the original step 4 of `../design/WARM_REBUILD_REUSE.md`) gives faster wins on the passes ported
+  - **More per-stage caches** (the original plan for the passes) gives faster wins on the passes ported
     first, but adds a cache and an invalidation rule per pass. That is the source of the bugs described above.
   - **The pass framework before the engine** (the original order): a recorded-read mechanism for passes alone, which
     M4 would then replace. Rejected 2026-11-19.

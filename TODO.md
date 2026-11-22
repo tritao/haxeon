@@ -259,6 +259,14 @@ The Haxe code Haxeon rejects or runs differently is listed in
 Planned in this order unless noted. Timings so far were taken on a loaded
 machine; re-measure on a quiet one before acting on a ratio.
 
+- **Wasm32 output is not deterministic for a few programs.** Four Wasm32
+  modules of the driver suite differed between two runs of the same commit
+  (lengths 22396/22398 and 23806), seen on 2026-11-10; the source was not found.
+- **HashLink string maps stop a key at NUL.** `hl_hash_gen` and the key
+  comparison in `vendor/hashlink/src/std/obj.c` read a NUL-terminated string,
+  so `"a\0x"` and `"a\0y"` are one key in stock Haxe's `StringMap`. Haxeon
+  rejects NUL in a String, so only code built by stock Haxe (the compiler,
+  tools) can hit it: never put NUL in a map key there.
 - **`haxe.ds.ObjectMap` is a linear search on Wasm.** Wasm references have no
   stable identity hash, so the Wasm `ObjectMap` keeps parallel key and value
   arrays and compares keys one by one: every lookup is O(n). Give both Wasm

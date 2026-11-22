@@ -2,8 +2,8 @@
 
 Status: proposal; the pass order of the frontend is in one place (`compiler.ir.pipeline.IrPipeline`), the per-pass interface below is not
 written yet. Since 2026-11-19 it is built on the query engine ([QUERY_ENGINE.md](QUERY_ENGINE.md), ADR 0003 M4a): `view`
-is the engine's read interface, and contributions, summaries and rewrites are query kinds. Builds on section B of [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) (pass interface, name families,
-file:line evidence). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
+is the engine's read interface, and contributions, summaries and rewrites are query kinds. What a warm build reuses today is in
+[`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
 Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so they will change first).
 
 ## Internal marker migration (a1)
