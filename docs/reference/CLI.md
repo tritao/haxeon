@@ -250,6 +250,12 @@ A compile server keeps a session between requests and builds on it (`--session=r
 other settings starts it over anyway. `--session=fresh` starts it over before compiling, so the result depends on the
 request alone, never on what the server compiled before.
 
+`--null-safety=MODE[:PATH[:shallow]]` gives the classes and abstracts at the dot path `PATH` (every one when it is left out) the
+null-safety mode `MODE` (`off`, `loose`, `strict`, `strict-threaded` or `warn`), as Haxe's `nullSafety(PATH, MODE)` does;
+`:shallow` keeps a package's rule out of its subpackages. The flag may repeat. A build passes one per package path from each
+package's `nullSafety` setting ([MANIFEST.md](MANIFEST.md#null-safety)) and one per `--macro nullSafety(...)` of a Haxe command
+line.
+
 `run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
 capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.
 `SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `instrument`, which
@@ -572,22 +578,30 @@ to compile (no `-main` and no dot path) prints the help and succeeds, as Haxe's 
 | `--debug` | a development build (otherwise release), and the define `debug` |
 | `--dce std`, `--dce full` | accepted: Haxeon always removes what the entry cannot reach |
 | `--no-inline` | the project setting `"inline": false` |
+| `--macro nullSafety("PATH", MODE, RECURSIVE)` | Haxe's null-safety macro, also as `haxe.macro.Compiler.nullSafety(...)`; see below |
 | `-lib NAME:VERSION`, `-L`, `--library` | a Haxelib dependency of that exact version, from the Haxelib cache (see Haxelib above) |
 | `--cmd COMMAND` | run by the shell in the working directory after the compilation succeeds |
 | `-v`, `--verbose`; `--times` | `-v normal`; `--timings` |
 
 Anything else is one usage error (status 2) that lists each unsupported argument with what to do instead, before anything
 is built: another target (`--js`, `--cpp`, ...; HashLink/C `--hl FILE.c` too, for now), `--interp`, `--run` and `-x` (Haxeon
-has no interpreter: build with `--hl` and run the module with `hl`, or make a project and `haxeon run`), `--macro`, `-lib`
+has no interpreter: build with `--hl` and run the module with `hl`, or make a project and `haxeon run`), any `--macro` but
+`nullSafety(...)`, `-lib`
 without a version (Haxeon does not read haxelib's global repository), `--dce no`, `--resource` and the server and display
 options.
 
 ```text
 haxeon: this Haxe command line uses what Haxeon does not support:
   --js bin/main.js: Haxeon generates HashLink (--hl FILE) only
-  --macro include("app"): macros are not supported
+  --macro include("app"): macros are not supported, but for nullSafety("path", Mode, recursive)
 See 'Haxe command lines' in docs/reference/CLI.md.
 ```
+
+`--macro nullSafety("app.ui", Strict)` is the one macro Haxeon takes, as Haxe states it: the classes and abstracts at the dot
+path (a package, a module or a type; `""` is everything) are checked as if marked `@:nullSafety(MODE)`. The path is a string in
+double or single quotes; the mode is `Off`, `Loose` (the default), `Strict` or `StrictThreaded`, bare or as `NullSafetyMode.Strict`;
+the optional third argument, `false`, keeps a package's rule out of its subpackages. A command line without the macro is not
+checked. The checker's rules are in [LANGUAGE_SUPPORT.md](LANGUAGE_SUPPORT.md#null-safety), "Null safety".
 
 Each compilation is a project the CLI makes in memory, as it does for a script, and builds like any host project. Its
 build state lives in the CLI's cache, `~/.haxeon/cache/hxml/<digest>` (`HAXEON_HXML_CACHE` names another directory), one

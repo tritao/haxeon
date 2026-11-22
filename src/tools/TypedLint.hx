@@ -107,7 +107,7 @@ class TypedLint {
 			service.configure("default", "default", []);
 		else
 			service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi,
-				configuration.ffiIdentity);
+				configuration.ffiIdentity, configuration.nullSafety.copy());
 		if (typed.exists(scope + ":" + module))
 			return true;
 		try {

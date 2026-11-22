@@ -30,9 +30,12 @@ class HaxeProjectConfiguration {
 	public final ffi:compiler.ffi.FfiRegistry.FfiConfiguration;
 	public final ffiIdentity:String;
 
+	/** The project's null-safety rules, as its build passes them (`CompilerInputs.nullSafety`). */
+	public final nullSafety:ReadOnlyArray<compiler.NullSafetyRule>;
+
 	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>,
 			libraries:Array<String>,
-			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration) {
+			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration, ?nullSafety:Array<compiler.NullSafetyRule>) {
 		this.ffi = ffi == null ? new compiler.ffi.FfiRegistry.FfiConfiguration() : ffi;
 		ffiIdentity = TextDigest.sha256(haxe.Json.stringify({
 			interfaces: this.ffi.interfaceSources(),
@@ -43,6 +46,7 @@ class HaxeProjectConfiguration {
 		this.entries = sortedCopy(entries);
 		this.defines = sortedCopy(defines);
 		this.libraries = sortedCopy(libraries);
+		this.nullSafety = nullSafety == null ? [] : nullSafety.copy();
 		scopeId = TextDigest.sha256([
 			file,
 			this.classPaths.join("|"),
@@ -50,7 +54,8 @@ class HaxeProjectConfiguration {
 			this.libraries.join("|"),
 			ffiIdentity
 		].join("\n"));
-		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|"));
+		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|") + "\n"
+			+ [for (rule in this.nullSafety) rule.argument()].join("|"));
 	}
 
 	public function owns(path:String):Bool {
@@ -521,7 +526,7 @@ class ProjectWorkspace {
 			}]);
 			var defines = inputs.defines.concat(compiler.tools.CompilerDriver.targetDefines(inputs.target));
 			return new HaxeProjectConfiguration(file, roots, inputs.entry == null ? [] : [inputs.entry], defines, [],
-				ffi);
+				ffi, inputs.nullSafety);
 		}
 		var value:Dynamic = Json.parse(File.getContent(file)),
 			base = Path.directory(file),

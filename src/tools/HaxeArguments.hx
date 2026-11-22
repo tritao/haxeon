@@ -1,5 +1,7 @@
 package tools;
 
+import compiler.NullSafetyRule;
+import compiler.NullSafetyRule.NullSafetyMode;
 import compiler.core.InternalError;
 import compiler.core.UsageError;
 import haxe.io.Path;
@@ -41,6 +43,10 @@ typedef HaxeCompilation = {
 	final debug:Bool;
 
 	final noInline:Bool;
+
+	/** `--macro nullSafety(...)`, in order: the only macro Haxeon runs, as the rules it states. */
+	final nullSafety:Array<NullSafetyRule>;
+
 	final verbose:Bool;
 	final times:Bool;
 
@@ -213,6 +219,7 @@ class HaxeArguments {
 			noOutput = false,
 			debug = false,
 			noInline = false,
+			nullSafety:Array<NullSafetyRule> = [],
 			verbose = false,
 			times = false,
 			commands:Array<String> = [],
@@ -268,7 +275,11 @@ class HaxeArguments {
 					unsupported.push(argument.value + (value == null ? "" : " " + value)
 						+ ": Haxeon has no interpreter; build with --hl FILE and run it with hl, or use 'haxeon run'");
 				case "--macro":
-					unsupported.push('${argument.value} $value: macros are not supported');
+					var rule = nullSafetyMacro(value);
+					if (rule != null)
+						nullSafety.push(rule);
+					else
+						unsupported.push('${argument.value} $value: macros are not supported, but for nullSafety("path", Mode, recursive)');
 				case _ if (TARGETS.indexOf(flag) >= 0):
 					unsupported.push('${argument.value} $value: Haxeon generates HashLink (--hl FILE) only');
 				case _ if (StringTools.startsWith(flag, "-")):
@@ -297,10 +308,37 @@ class HaxeArguments {
 			noOutput: noOutput,
 			debug: debug,
 			noInline: noInline,
+			nullSafety: nullSafety,
 			verbose: verbose,
 			times: times,
 			commands: commands
 		};
+	}
+
+	/**
+	 * The rule of Haxe's `nullSafety(path, mode = Loose, recursive = true)` macro (`haxe.macro.Compiler.nullSafety`), as `--macro`
+	 * gives it, or null for any other macro. The mode is one of Haxe's `NullSafetyMode` constructors, bare or qualified.
+	 */
+	public static function nullSafetyMacro(call:String):Null<NullSafetyRule> {
+		var pattern =
+			~/^\s*(?:haxe\.macro\.Compiler\.)?nullSafety\s*\(\s*(?:"([^"\\]*)"|'([^'\\]*)')\s*(?:,\s*(?:(?:haxe\.macro\.Compiler\.)?NullSafetyMode\.)?([A-Za-z]+)\s*(?:,\s*(true|false)\s*)?)?\)\s*;?\s*$/;
+		if (!pattern.match(call))
+			return null;
+		// A group that took no part reads as null on some targets and as "" on others.
+		var doubleQuoted = pattern.matched(1),
+			path = doubleQuoted != null && doubleQuoted != "" ? doubleQuoted : pattern.matched(2),
+			mode:Null<NullSafetyMode> = switch pattern.matched(3) {
+				case null, "", "Loose": Loose;
+				case "Off": Off;
+				case "Strict": Strict;
+				case "StrictThreaded": StrictThreaded;
+				case _: null;
+			};
+		if (path == null)
+			path = "";
+		if (mode == null || (path != "" && !~/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.match(path)))
+			return null;
+		return new NullSafetyRule(path, mode, pattern.matched(4) != "false");
 	}
 
 	/** The file of module `dotPath` in the first class path that has it, or null. */

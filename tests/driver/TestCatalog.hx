@@ -323,6 +323,7 @@ class TestCatalog {
 		"LspProtocolMain",
 		"UtestDiscoveryMain",
 		"BuildSystemMain",
+		"NullSafetySettingMain",
 		"SuiteRunnerBuildFailureMain",
 		"ArtifactBuildMain",
 		"LiveNativeShiftMain",

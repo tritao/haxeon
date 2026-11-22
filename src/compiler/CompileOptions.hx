@@ -146,8 +146,15 @@ class CompileOptions {
 
 	/** These options with `inlining` set, the others kept. */
 	public function withInlining(value:Bool):CompileOptions
+		return copy(value, nullSafety);
+
+	/** These options with the null-safety rules `rules`, the others kept: what a language server takes from the project. */
+	public function withNullSafety(rules:Array<NullSafetyRule>):CompileOptions
+		return copy(inlining, rules);
+
+	function copy(inlining:Bool, nullSafety:Array<NullSafetyRule>):CompileOptions
 		return new CompileOptions({
-			inlining: value,
+			inlining: inlining,
 			loadStoreForwarding: loadStoreForwarding,
 			strengthReduction: strengthReduction,
 			earlyPrune: earlyPrune,

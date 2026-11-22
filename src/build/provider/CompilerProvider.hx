@@ -7,6 +7,7 @@ import build.execution.ExecutionAction.ActionKind;
 import build.execution.ProcessRunner;
 import build.execution.CompilerClient;
 import build.execution.Directories;
+import compiler.CompileOptions;
 import compiler.core.InternalError;
 import project.CompilerInputs;
 import project.ResolvedProject;
@@ -68,6 +69,10 @@ class CompilerProvider {
 		// The passes are the request's (`CompileOptions`): the manifest's `inline: false` turns inlining off.
 		if (!compilerInputs.inlineEnabled)
 			arguments.push("--no-inline");
+		// The committed bootstrap compiler predates the flag and would refuse it, so a self-hosted compile goes without.
+		if (!context.selfHosted)
+			for (rule in compilerInputs.nullSafety)
+				arguments.push(CompileOptions.NULL_SAFETY + rule.argument());
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
 		if (live)
 			arguments.push("--live");

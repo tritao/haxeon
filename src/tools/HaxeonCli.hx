@@ -289,6 +289,8 @@ class HaxeonCli {
 		Reflect.setField(config, "package", {name: packageName});
 		if (target == "android")
 			Reflect.setField(config, "android", {applicationId: "org.haxeon.android", label: "Haxeon"});
+		// A new project starts null safe; an existing one turns it on when it is ready (docs/reference/MANIFEST.md).
+		Reflect.setField(config, "nullSafety", "strict");
 		File.saveContent(configPath, PackageManifest.toToml(config));
 		Sys.println('Created ${PackageManifest.TOML_NAME} and $sourcePath');
 		return 0;
@@ -1262,8 +1264,8 @@ class HaxeonCli {
 	 * (`HAXEON_HXML_CACHE`, else `~/.haxeon/cache/hxml`), in a directory named by the compilation's working directory, entry and
 	 * output: the entry and the dot paths given are its sources, the class paths its source roots, and each `-lib NAME:VERSION`
 	 * a Haxelib dependency. It builds in release mode (development with `--debug`), and its module is copied to `--hl FILE`;
-	 * with no target, or `--no-output`, the program is only checked, as Haxe then only types it. Its `--cmd`s run after it
-	 * succeeds.
+	 * with no target, or `--no-output`, the program is only checked, as Haxe then only types it. Its `--macro nullSafety(...)`
+	 * rules go to the compile as they are. Its `--cmd`s run after it succeeds.
 	 */
 	static function haxeCompilation(compilation:HaxeCompilation):Int {
 		var main = compilation.main;
@@ -1293,7 +1295,7 @@ class HaxeonCli {
 					ContentDigest.makeHex(Bytes.ofString(key)).substr(0, 16)),
 				// A class path holds any package, as Haxe's do.
 				PackageManifest.program(main, main, sources, compilation.classPaths, false, compilation.defines,
-					compilation.noInline ? false : null, dependencies),
+					compilation.noInline ? false : null, dependencies, compilation.nullSafety),
 				output
 			),
 			options = programOptions(compilation.debug ? "development" : "release",

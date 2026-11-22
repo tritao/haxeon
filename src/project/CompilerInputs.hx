@@ -2,6 +2,9 @@ package project;
 
 import build.Target;
 import build.TargetLayout;
+import compiler.NullSafetyRule;
+import compiler.NullSafetyRule.NullSafetyMode;
+import haxe.io.Path;
 
 /** A source root whose files belong to a package: `X.hx` directly under it is the module `<packageName>.X`. */
 typedef PackageSourceRoot = {
@@ -53,9 +56,15 @@ class CompilerInputs {
 	/** False when the manifest turns inlining off (`"inline": false`). */
 	public final inlineEnabled:Bool;
 
+	/**
+	 * Each package's null-safety setting as rules on its own paths (`nullSafetyRules`), then the rules a program's manifest states.
+	 */
+	public final nullSafety:Array<NullSafetyRule>;
+
 	function new(target:String, entry:Null<String>, roots:Array<String>, packageRoots:Array<PackageSourceRoot>,
 			sources:Array<String>, ffiInterfaces:Array<String>, ffiProjections:Array<String>,
-			generatedFfi:Array<GeneratedFfiInputs>, defines:Array<String>, inlineEnabled:Bool) {
+			generatedFfi:Array<GeneratedFfiInputs>, defines:Array<String>, inlineEnabled:Bool,
+			nullSafety:Array<NullSafetyRule>) {
 		this.target = target;
 		this.entry = entry;
 		this.roots = roots;
@@ -66,6 +75,7 @@ class CompilerInputs {
 		this.generatedFfi = generatedFfi;
 		this.defines = defines;
 		this.inlineEnabled = inlineEnabled;
+		this.nullSafety = nullSafety;
 	}
 
 	/** The compiler inputs of `project` built for `layout`'s target, with generated files at `layout`'s paths. */
@@ -77,7 +87,8 @@ class CompilerInputs {
 			sources:Array<String> = [],
 			ffiInterfaces:Array<String> = [],
 			ffiProjections:Array<String> = [],
-			generatedFfi:Array<GeneratedFfiInputs> = [];
+			generatedFfi:Array<GeneratedFfiInputs> = [],
+			nullSafety:Array<NullSafetyRule> = [];
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
 				roots.push(sourceRoot);
@@ -86,10 +97,17 @@ class CompilerInputs {
 				&& (resolvedPackage.name != project.rootPackage.name
 				|| entry == resolvedPackage.name
 				|| (entry != null && StringTools.startsWith(entry, resolvedPackage.name + ".")));
-			if (scoped)
-				for (sourceRoot in resolvedPackage.sourceRoots)
-					if (resolvedPackage.unscopedSourceRoots.indexOf(sourceRoot) < 0)
-						packageRoots.push({packageName: resolvedPackage.name, path: sourceRoot});
+			var unscopedRoots:Array<String> = [];
+			for (sourceRoot in resolvedPackage.sourceRoots)
+				if (scoped && resolvedPackage.unscopedSourceRoots.indexOf(sourceRoot) < 0)
+					packageRoots.push({packageName: resolvedPackage.name, path: sourceRoot});
+				else
+					unscopedRoots.push(sourceRoot);
+			for (rule in nullSafetyRules(resolvedPackage, unscopedRoots.length < resolvedPackage.sourceRoots.length,
+				unscopedRoots))
+				nullSafety.push(rule);
+			for (rule in resolvedPackage.manifest.nullSafetyRules)
+				nullSafety.push(rule);
 			for (source in resolvedPackage.sources)
 				sources.push(source);
 			for (projection in resolvedPackage.ffiProjections)
@@ -112,7 +130,39 @@ class CompilerInputs {
 		for (define in project.manifest.defines)
 			defines.push(define);
 		return new CompilerInputs(compilerTarget(buildTarget), entry, roots, packageRoots, sources, ffiInterfaces,
-			ffiProjections, generatedFfi, defines, project.manifest.inlineEnabled != false);
+			ffiProjections, generatedFfi, defines, project.manifest.inlineEnabled != false, nullSafety);
+	}
+
+	/**
+	 * The rules that give `resolvedPackage`'s own types its manifest's mode, and nothing else's: its package name when it has
+	 * `scoped` roots, and for its `unscopedRoots` each top-level entry they hold among its sources, a directory as a package and a
+	 * file as a module (both recursive, so they reach every type below them).
+	 */
+	static function nullSafetyRules(resolvedPackage:ResolvedPackage, scoped:Bool,
+			unscopedRoots:Array<String>):Array<NullSafetyRule> {
+		var mode = resolvedPackage.manifest.nullSafety;
+		if (mode == NullSafetyMode.Off)
+			return [];
+		var paths:Array<String> = scoped ? [resolvedPackage.name] : [],
+			entries:Array<String> = [],
+			roots = [for (root in unscopedRoots) Path.addTrailingSlash(Path.normalize(root))];
+		for (source in resolvedPackage.sources) {
+			var path = Path.normalize(source), owner:Null<String> = null;
+			// The innermost root holding the file, as nested roots would name its module.
+			for (root in roots)
+				if (StringTools.startsWith(path, root) && (owner == null || root.length > owner.length))
+					owner = root;
+			if (owner == null)
+				continue;
+			var relative = path.substr(owner.length),
+				slash = relative.indexOf("/"),
+				entry = slash < 0 ? Path.withoutExtension(relative) : relative.substr(0, slash);
+			// A name that is no identifier holds no module the compiler could name.
+			if (entries.indexOf(entry) < 0 && ~/^[A-Za-z_][A-Za-z0-9_]*$/.match(entry))
+				entries.push(entry);
+		}
+		entries.sort(Reflect.compare);
+		return [for (path in paths.concat(entries)) new NullSafetyRule(path, mode)];
 	}
 
 	/** The compiler's name for what a build target runs: Wasm modules for a Wasm target, HashLink code otherwise. */

@@ -1,6 +1,8 @@
 package project;
 
 import build.Target;
+import compiler.NullSafetyRule;
+import compiler.NullSafetyRule.NullSafetyMode;
 import compiler.core.InternalError;
 import compiler.core.UsageError;
 import haxe.Json;
@@ -129,6 +131,15 @@ class PackageManifest {
 	/** Explicit project choice; `false` builds with `--no-inline`, null keeps the default (inlining on). */
 	public final inlineEnabled:Null<Bool>;
 
+	/** The package's null-safety mode (`nullSafety`): Off when the manifest says nothing, as for a Haxelib package without one. */
+	public final nullSafety:NullSafetyMode;
+
+	/**
+	 * Rules stated beside the package's mode, as a Haxe command line's `--macro nullSafety(...)` states them; only a program's
+	 * manifest made in memory (`program`) has any.
+	 */
+	public final nullSafetyRules:Array<NullSafetyRule>;
+
 	public final outputDir:String;
 	public final dependencies:Map<String, PackageDependency>;
 	public final native:Null<NativeManifest>;
@@ -147,7 +158,7 @@ class PackageManifest {
 			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>,
 			androidApplicationId:String,
 			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
-			?instrument:InstrumentManifest) {
+			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -160,6 +171,8 @@ class PackageManifest {
 		this.target = target;
 		this.defines = defines.copy();
 		this.inlineEnabled = inlineEnabled;
+		this.nullSafety = nullSafety;
+		this.nullSafetyRules = nullSafetyRules.copy();
 		this.outputDir = outputDir;
 		this.dependencies = dependencies;
 		this.native = native;
@@ -220,7 +233,7 @@ class PackageManifest {
 	static final FIELD_ORDER = [
 		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
 		"target",
-		"defines", "inline", "outputDir", "package", "dependencies", "native", "ffi", "android", "format",
+		"defines", "inline", "nullSafety", "outputDir", "package", "dependencies", "native", "ffi", "android", "format",
 		"compatibility",
 		"instrument"
 	];
@@ -387,7 +400,7 @@ class PackageManifest {
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
 			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
-			parseInstrument(raw, path));
+			parseNullSafety(raw, path), [], parseInstrument(raw, path));
 	}
 
 	/**
@@ -397,13 +410,15 @@ class PackageManifest {
 	 */
 	public static function program(name:String, entry:String, sources:Array<String>, sourceRoots:Array<String>,
 			scopeSourceRoots:Bool, defines:Array<String>, inlineEnabled:Null<Bool>,
-			dependencies:Map<String, PackageSource>):PackageManifest {
+			dependencies:Map<String, PackageSource>, ?nullSafetyRules:Array<NullSafetyRule>):PackageManifest {
 		var declared:Map<String, PackageDependency> = [];
 		for (dependency => source in dependencies)
 			declared.set(dependency, new PackageDependency(new PackageId(dependency), source));
 		return new PackageManifest(1, name, entry, sources, sourceRoots, [], scopeSourceRoots, [], "host", defines,
 			"build",
-			declared, null, null, "org.haxeon.android", "Haxeon", new PackageCompatibility(), inlineEnabled);
+			declared, null, null, "org.haxeon.android", "Haxeon", new PackageCompatibility(), inlineEnabled,
+			NullSafetyMode.Off,
+			nullSafetyRules == null ? [] : nullSafetyRules);
 	}
 
 	/** A Java package name with at least two parts, as Android requires of an application ID. */
@@ -425,6 +440,21 @@ class PackageManifest {
 
 	static function isAsciiLetter(code:Int):Bool
 		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+
+	/** The modes a manifest's `nullSafety` names; `strict-threaded` stays a compiler option, for metadata and command lines. */
+	public static final NULL_SAFETY_VALUES = ["strict", "loose", "off", "warn"];
+
+	static function parseNullSafety(raw:Dynamic, path:String):NullSafetyMode {
+		var value:Dynamic = Reflect.field(raw, "nullSafety");
+		if (value == null)
+			return NullSafetyMode.Off;
+		var mode = Std.isOfType(value, String)
+			&& NULL_SAFETY_VALUES.indexOf(value) >= 0 ? NullSafetyMode.parse(value) : null;
+		if (mode == null)
+			throw new InternalError('$path "nullSafety" must be one of '
+				+ [for (name in NULL_SAFETY_VALUES) '"$name"'].join(", "));
+		return mode;
+	}
 
 	static function parseInstrument(raw:Dynamic, path:String):Null<InstrumentManifest> {
 		var data:Dynamic = Reflect.field(raw, "instrument");

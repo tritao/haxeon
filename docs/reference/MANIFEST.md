@@ -98,6 +98,7 @@ Paths are relative to the manifest's directory.
 | `target` | string | `"host"` | `host`, `android`, `wasm32` or `OS-ARCH`. |
 | `defines` | array of strings | `[]` | Conditional compilation defines, `NAME` or `NAME=VALUE`. |
 | `inline` | boolean | inlining on | `false` builds with `--no-inline`. |
+| `nullSafety` | string | `"off"` | `"strict"`, `"loose"`, `"off"` or `"warn"`: the null-safety checker's mode for this package (below). |
 | `outputDir` | string | `"build"` | Where builds go. |
 | `dependencies.NAME` | table | | One dependency: `path`, `workspace`, `git` + `rev`, `registry` + `version`, or `haxelib` + `version`. |
 | `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). |
@@ -106,6 +107,20 @@ Paths are relative to the manifest's directory.
 | `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([CLI.md](CLI.md)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |
 | `instrument` | table | everything | What `--profile=instrument` probes ([PROFILING.md](PROFILING.md)). |
+
+### Null safety
+
+`nullSafety` turns on the null-safety checker for the package's own code, in one of Haxe's modes: `"strict"` or `"loose"`
+(`@:nullSafety(Strict)` and `@:nullSafety(Loose)`), or `"off"`, the default when the key is absent. `"warn"` checks as
+`"strict"` does and reports what it finds as warnings, so a project can see what is left to fix while it migrates; any other
+value is a manifest error. `haxeon init` writes `nullSafety = "strict"`, so a new project starts null safe.
+
+Each package uses its own setting: the root project's applies to its sources, each dependency's to its sources, and a Haxelib
+package without a Haxeon manifest is off. A package's setting reaches what its source roots hold: its package for a root that
+holds only the package (`scopeSourceRoots`), and each top-level package and module of a root that may hold any. As in Haxe,
+`@:nullSafety` metadata in the source applies on top of the setting: `@:nullSafety(Off)` turns the checker off for what it marks,
+and `Loose` cannot lower what `Strict` covers. What the checker reports is in
+[LANGUAGE_SUPPORT.md](LANGUAGE_SUPPORT.md#null-safety), "Null safety".
 
 ## How commands find the manifest
 
