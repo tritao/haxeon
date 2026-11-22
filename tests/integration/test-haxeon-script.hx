@@ -2,7 +2,7 @@
 /**
  * `haxeon script.hx` (tools.ScriptRun): a script builds quietly and runs with its arguments, its exit status, a dashed file name, the caller's
  * working directory and the modules beside it; a sibling that does not compile is not built; a compile error goes to
- * standard error and fails the run; and, outside Windows, a `#!/usr/bin/env haxeon` script runs as a program.
+ * standard error and fails the run; a script in a package's folders traces the package path; and, outside Windows, a `#!/usr/bin/env haxeon` script runs as a program.
  */
 import haxe.io.Path;
 import haxeon.Script;
@@ -38,6 +38,16 @@ function main() {
 	status = Script.run(Script.haxeon(), [Path.join([work, "mistyped.hx"])], {env: env, log: mistyped});
 	if (status == 0 || File.getContent(mistyped).indexOf("mistyped.hx:2:") < 0)
 		Script.fail('FAIL: a script that does not compile exited with $status; its log:\n${File.getContent(mistyped)}');
+
+	// A script that declares a package and lives in its folders is rooted where the package starts, as a project is, so its
+	// positions carry the package path.
+	FileSystem.createDirectory(Path.join([work, "tool", "b"]));
+	File.saveContent(Path.join([work, "tool", "b", "Main.hx"]),
+		"package b;\n\nfunction main() {\n\ttrace(\"traced\");\n}\n");
+	var packaged = Path.join([work, "packaged.log"]);
+	status = Script.run(Script.haxeon(), [Path.join([work, "tool", "b", "Main.hx"])], {env: env, log: packaged});
+	if (status != 0 || File.getContent(packaged) != "b/Main.hx:4: traced\n")
+		Script.fail('FAIL: a script in package b printed ${haxe.Json.stringify(File.getContent(packaged))} and exited with $status, expected its trace at b/Main.hx');
 
 	if (Sys.systemName() != "Windows") {
 		Script.check("chmod", ["+x", Path.join([work, "say-hello.hx"])]);
