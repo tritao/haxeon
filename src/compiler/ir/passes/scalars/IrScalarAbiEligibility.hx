@@ -8,6 +8,7 @@ import compiler.ir.model.IrProviders;
  * Which declared kinds of function may use each target's scalar calling convention: the one predicate. A `$`-named function that is not
  * listed is a boundary helper whose signature the ABI must not change; functions not named `$` always take part and callers test that.
  */
+@:nullSafety(Strict)
 class IrScalarAbiEligibility {
 	public static function permits(kind:IrFunctionKind, wasm:Bool):Bool
 		return switch kind {

@@ -19,6 +19,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 
 /** HashLink's scalar argument/result convention applied to typed, non-erased closures. */
+@:nullSafety(Strict)
 class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	/** The fact of a function type, by its key: never stated for a candidate, 0 for any other. */
 	static inline final CANDIDATE = 0;
@@ -138,8 +139,10 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 
 	static function addFunctionKeys(type:IrType, keys:Array<String>):Void
 		switch type {
-			case Abstract(_) if (IrHlScalarRef.element(type) != null):
-				addFunctionKeys(IrHlScalarRef.element(type), keys);
+			case Abstract(_):
+				var element = IrHlScalarRef.element(type);
+				if (element != null)
+					addFunctionKeys(element, keys);
 			case Function(arguments, result):
 				var name = key(type);
 				if (keys.indexOf(name) < 0)
@@ -346,8 +349,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 
 	function mapType(type:IrType):IrType
 		return switch type {
-			case Abstract(_) if (IrHlScalarRef.element(type) != null)
-				: IrHlScalarRef.type(mapType(IrHlScalarRef.element(type)));
+			case Abstract(_):
+				var element = IrHlScalarRef.element(type);
+				element == null ? type : IrHlScalarRef.type(mapType(element));
 			case Function(arguments, result) if (candidates.exists(key(type))):
 				var physical:Array<IrType> = [];
 				for (argument in arguments)
@@ -371,7 +375,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	/** The exact recursive type boundary rewritten by mapType. */
 	function changesType(type:IrType):Bool
 		return switch type {
-			case Abstract(_) if (IrHlScalarRef.element(type) != null): changesType(IrHlScalarRef.element(type));
+			case Abstract(_):
+				var element = IrHlScalarRef.element(type);
+				element != null && changesType(element);
 			case Function(arguments, result): candidates.exists(key(type)) || Lambda.exists(arguments, changesType)
 				|| changesType(result);
 			case Array(element), Iterator(element), Nullable(element): changesType(element);
@@ -416,15 +422,17 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				var following = body.nextRow(row), where = body.provenance(row);
 				switch body.opcode(row) {
 					case IrOpcode.Call if (body.operandCount(row) == 2
-						&& body.symbol(row).name == "__closure_is_of_type"
-						&& typeValues.exists(body.operand(row, 1))
-						&& needsBoundaryAdapter(typeValues.get(body.operand(row, 1)))):
-						body.beginRow();
-						body.pushOperand(body.operand(row, 0));
-						var check = body.endRow(IrOpcode.Call, body.output(row),
-							IrSymbol.of(ensureSignatureCheck(typeValues.get(body.operand(row, 1)))).id, where);
-						body.linkAfter(block, row, check);
-						body.removeRow(block, row);
+						&& body.symbol(row).name == "__closure_is_of_type"):
+						var tested = typeValues.get(body.operand(row, 1));
+						if (tested != null && needsBoundaryAdapter(tested)) {
+							body.beginRow();
+							body.pushOperand(body.operand(row, 0));
+							var check = body.endRow(IrOpcode.Call, body.output(row),
+								IrSymbol.of(ensureSignatureCheck(tested)).id,
+								where);
+							body.linkAfter(block, row, check);
+							body.removeRow(block, row);
+						}
 					case IrOpcode.ToDyn if (needsBoundaryAdapter(body.valueType(body.operand(row, 0)))):
 						var input = body.operand(row, 0),
 							type = body.valueType(input),
@@ -873,7 +881,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 
 	function isValue(type:IrType):Bool
 		return switch type {
-			case Obj(name): objects.exists(name) && objects.get(name).isValue;
+			case Obj(name):
+				var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 
@@ -913,6 +923,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
  * receiver's type), whose candidacy depends on the program. It depends on the body alone, so a session keeps it by the function's
  * version (`IrStageMemos.closureUses`).
  */
+@:nullSafety(Strict)
 class IrClosureUses {
 	public static inline final NOTE = 0;
 	public static inline final EXCLUDE = 1;

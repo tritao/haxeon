@@ -4,6 +4,7 @@ import compiler.ir.codec.IrTypeCodec;
 import compiler.ir.model.Ir.IrType;
 
 /** Compiler-internal, nonescaping reference to a scalar in a live HashLink stack frame. */
+@:nullSafety(Strict)
 class IrHlScalarRef {
 	static inline final TYPE_PREFIX = "$hl:scalar-ref:";
 	public static inline final ADDRESS = "$hl:scalar-address";

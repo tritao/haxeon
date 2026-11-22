@@ -35,6 +35,7 @@ private typedef ScalarCallPlan = {
  * (docs/design/IR_CORE_COLUMNS.md, migration): value joins are split first (`IrValuePhiScalarization`), then each candidate is
  * cloned with its value arguments expanded into slots, and direct calls are redirected to the clones in place.
  */
+@:nullSafety(Strict)
 class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	public static inline final PREFIX = "$scalar-arguments:";
 
@@ -202,8 +203,8 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			clones = [];
 			pinnedClones = [];
 			var allCandidates = candidates.copy();
-			for (name in pinnedCandidates.keys())
-				allCandidates.set(name, pinnedCandidates.get(name));
+			for (name => pinned in pinnedCandidates)
+				allCandidates.set(name, pinned);
 			for (fn in functions) {
 				var body = candidates.get(fn.name);
 				if (body != null) {
@@ -309,9 +310,12 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
 			return rewritten;
 		rewritten = rewritten.copy();
-		for (fn in originals)
-			if (candidates.exists(fn.name))
-				rewritten.push(publish(clones.get(fn.name)));
+		// Every candidate left has its clone.
+		for (fn in originals) {
+			var clone = clones.get(fn.name);
+			if (clone != null)
+				rewritten.push(publish(clone));
+		}
 		if (!pinnedClones.keys().hasNext())
 			return rewritten;
 		// Receiver-preserving variants are only useful when a rewritten call selects one.
@@ -342,7 +346,10 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		for (fn in rewritten)
 			discover(fn.bodyIn(types, scratch.bodyBuilder));
 		while (pending.length > 0) {
-			var name = pending.pop(), dependency = pinnedByName.get(name);
+			var name = pending.pop();
+			if (name == null)
+				break;
+			var dependency = pinnedByName.get(name);
 			if (dependency == null)
 				throw new InternalError('Missing receiver-preserving clone "$name"');
 			discover(dependency);
@@ -469,7 +476,9 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 
 	static function isValueIn(type:IrType, objects:Map<String, IrObject>):Bool
 		return switch type {
-			case Obj(name): objects.exists(name) && objects.get(name).isValue;
+			case Obj(name):
+				var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 
@@ -544,16 +553,18 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 						case IrOpcode.FieldGet if (aliases.exists(body.operand(row, 0))):
 						case IrOpcode.FieldSet if (aliases.exists(body.operand(row, 0))
 							&& !aliases.exists(body.operand(row, 1))):
-						case IrOpcode.Call if (candidates.exists(body.symbol(row).name)):
+						case IrOpcode.Call:
 							var target = candidates.get(body.symbol(row).name);
+							if (target == null)
+								return false;
 							for (index in 0...body.operandCount(row))
 								if (aliases.exists(body.operand(row, index)) && !isValue(argumentType(target, index)))
 									return false;
 						case IrOpcode.MethodCall if (methodNames.exists(body.symbol(row).name)):
 							var name = resolveMethod(body.valueType(body.operand(row, 0)), body.symbol(row).name);
-							if (name == null || !candidates.exists(name))
+							var target = name == null ? null : candidates.get(name);
+							if (target == null)
 								return false;
-							var target = candidates.get(name);
 							for (index in 1...body.operandCount(row))
 								if (aliases.exists(body.operand(row, index)) && !isValue(argumentType(target, index)))
 									return false;

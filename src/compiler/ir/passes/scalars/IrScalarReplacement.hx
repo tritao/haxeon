@@ -45,6 +45,7 @@ typedef ScalarReplacementResult = {
 @:allow(compiler.ir.passes.scalars.IrNestedScalarReplacement)
 @:allow(compiler.ir.passes.scalars.IrBodyScalarReplacement)
 @:allow(compiler.ir.passes.scalars.IrBodyNestedScalarReplacement)
+@:nullSafety(Strict)
 class IrScalarReplacement {
 	/** Run independently of inlining, without mutating the source function held by incremental compilation. */
 	public static function rewrite(fn:IrFunction, objects:IrObjectTable, forcePhis = false,
@@ -490,6 +491,8 @@ class IrScalarReplacement {
 				while (graph.isReachable(runner) && runner != graph.immediateDominator(id)
 					&& guard <= graph.order.length) {
 					var entries = frontier.get(runner);
+					if (entries == null)
+						throw new InternalError("Scalar replacement reached a block outside the graph's order");
 					if (entries.indexOf(id) < 0)
 						entries.push(id);
 					var parent = graph.immediateDominator(runner);
@@ -509,8 +512,12 @@ class IrScalarReplacement {
 			children.set(id, []);
 		for (id in graph.order) {
 			var parent = graph.immediateDominator(id);
-			if (parent >= 0 && parent != id)
-				children.get(parent).push(id);
+			if (parent < 0 || parent == id)
+				continue;
+			var siblings = children.get(parent);
+			if (siblings == null)
+				throw new InternalError("Scalar replacement met a dominator outside the graph's order");
+			siblings.push(id);
 		}
 		return children;
 	}
@@ -524,11 +531,14 @@ class IrScalarReplacement {
 			}, descriptor:IrObject, substitutions:Map<Int, IrValue>,
 			nextValue:Int, forcePhis = false):Int {
 		var object = candidate.object, home = candidate.block;
-		var fieldTypes:Map<String, IrType> = [],
-			fields:Map<String, IrObjectField> = [];
-		for (field in descriptor.fields) {
-			fieldTypes.set(field.name, field.type);
+		var fields:Map<String, IrObjectField> = [];
+		for (field in descriptor.fields)
 			fields.set(field.name, field);
+		function fieldType(name:String):IrType {
+			var field = fields.get(name);
+			if (field == null)
+				throw new InternalError('Scalar replacement read field "$name", which its object does not have');
+			return field.type;
 		}
 		// Which fields are written where, and which are read at all.
 		var writers:Map<String, Array<Int>> = [], reads:Map<String, Bool> = [];
@@ -536,21 +546,21 @@ class IrScalarReplacement {
 			for (located in block.instructions)
 				switch located.value {
 					case FieldSet(target, name, _) if (target.id == object.id):
-						if (!writers.exists(name))
-							writers.set(name, []);
-						if (writers.get(name).indexOf(block.id) < 0)
-							writers.get(name).push(block.id);
+						var blocks = writers.get(name);
+						if (blocks == null)
+							writers.set(name, blocks = []);
+						if (blocks.indexOf(block.id) < 0)
+							blocks.push(block.id);
 					case FieldGet(_, target, name) if (target.id == object.id):
 						reads.set(name, true);
 					default:
 				}
 		// Phis for a field go at the iterated dominance frontier of its writes and of the allocation (the zero default),
 		// but only where the object exists, that is, in blocks the allocation's block dominates.
-		var phis:Map<Int, Map<String, IrValue>> = [],
-			phiInputs:Map<Int, Map<String, Array<IrPhiInput>>> = [];
+		var phis:Map<Int, Map<String, {output:IrValue, inputs:Array<IrPhiInput>}>> = [];
 		for (name in reads.keys()) {
 			var work = [home.id], defined:Map<Int, Bool> = [home.id => true];
-			var writerBlocks = writers.exists(name) ? writers.get(name) : [];
+			var writerBlocks = writers.get(name) ?? [];
 			for (writer in writerBlocks)
 				if (!defined.exists(writer)) {
 					defined.set(writer, true);
@@ -561,19 +571,18 @@ class IrScalarReplacement {
 				var current = work.pop();
 				if (current == null)
 					break;
-				if (!frontier.exists(current))
+				var targets = frontier.get(current);
+				if (targets == null)
 					continue;
-				for (target in frontier.get(current)) {
+				for (target in targets) {
 					if (placed.exists(target) || !dominates(graph, home.id, target))
 						continue;
 					placed.set(target, true);
-					var output = new IrValue(nextValue++, object.name + "." + name, fieldTypes.get(name));
-					if (!phis.exists(target)) {
-						phis.set(target, []);
-						phiInputs.set(target, []);
-					}
-					phis.get(target).set(name, output);
-					phiInputs.get(target).set(name, []);
+					var output = new IrValue(nextValue++, object.name + "." + name, fieldType(name)),
+						blockPhis = phis.get(target);
+					if (blockPhis == null)
+						phis.set(target, blockPhis = []);
+					blockPhis.set(name, {output: output, inputs: []});
 					if (!defined.exists(target)) {
 						defined.set(target, true);
 						work.push(target);
@@ -595,7 +604,7 @@ class IrScalarReplacement {
 			var known = zeros.get(name);
 			if (known != null)
 				return known;
-			var type = fieldTypes.get(name);
+			var type = fieldType(name);
 			var value = new IrValue(nextValue++, object.name + "." + name, type);
 			zeros.set(name, value);
 			zeroInstructions.push(new Located(zeroValue(value, type), allocation.provenance));
@@ -604,23 +613,27 @@ class IrScalarReplacement {
 		var removed:Map<Int, Map<Int, Bool>> = [],
 			inserted:Map<Int, Map<Int, Array<Located<IrInstruction>>>> = [];
 		var markRemoved = function(blockId:Int, position:Int):Void {
-			if (!removed.exists(blockId))
-				removed.set(blockId, []);
-			removed.get(blockId).set(position, true);
+			var positions = removed.get(blockId);
+			if (positions == null)
+				removed.set(blockId, positions = []);
+			positions.set(position, true);
 		};
 		// Rename along the dominator tree from the allocation's block.
 		var work:Array<{blockId:Int, incoming:Map<String, IrValue>}> = [{blockId: home.id, incoming: []}];
 		while (work.length > 0) {
-			var pending:{blockId:Int, incoming:Map<String, IrValue>} = cast work.pop(),
-				blockId = pending.blockId,
+			var pending = work.pop();
+			if (pending == null)
+				break;
+			var blockId = pending.blockId,
 				incoming = pending.incoming;
 			if (!graph.contains(blockId))
 				throw new InternalError("Scalar replacement walked to an unknown block");
 			var block = graph.block(blockId);
 			var current:Map<String, IrValue> = [for (name => value in incoming) name => value];
-			if (phis.exists(blockId))
-				for (name => output in phis.get(blockId))
-					current.set(name, output);
+			var blockPhis = phis.get(blockId);
+			if (blockPhis != null)
+				for (name => phi in blockPhis)
+					current.set(name, phi.output);
 			var start = blockId == home.id ? candidate.position : -1;
 			if (blockId == home.id)
 				markRemoved(blockId, candidate.position);
@@ -636,9 +649,10 @@ class IrScalarReplacement {
 							nextValue = normalized.next;
 							stored = normalized.value;
 							if (scratch.instructions.length > 0) {
-								if (!inserted.exists(blockId))
-									inserted.set(blockId, []);
-								inserted.get(blockId).set(position, scratch.instructions);
+								var blockInserted = inserted.get(blockId);
+								if (blockInserted == null)
+									inserted.set(blockId, blockInserted = []);
+								blockInserted.set(position, scratch.instructions);
 							}
 						}
 						current.set(name, stored);
@@ -653,17 +667,19 @@ class IrScalarReplacement {
 				}
 			}
 			for (edge in 0...graph.successorCount(blockId)) {
-				var successor = graph.successor(blockId, edge);
-				if (phis.exists(successor))
-					for (name => output in phis.get(successor)) {
+				var successorPhis = phis.get(graph.successor(blockId, edge));
+				if (successorPhis != null)
+					for (name => phi in successorPhis) {
 						var known = current.get(name);
-						phiInputs.get(successor).get(name).push({
+						phi.inputs.push({
 							block: blockId,
 							value: known == null ? zeroFor(name) : known
 						});
 					}
 			}
-			var descendants:Array<Int> = cast children.get(blockId);
+			var descendants = children.get(blockId);
+			if (descendants == null)
+				throw new InternalError("Scalar replacement walked to a block outside the dominator tree");
 			var index = descendants.length;
 			while (index > 0) {
 				var child = descendants[--index];
@@ -675,15 +691,16 @@ class IrScalarReplacement {
 		for (block in blocks) {
 			var drop = removed.get(block.id),
 				rewritten:Array<Located<IrInstruction>> = [];
-			var phiBlock = phis.exists(block.id);
-			if (drop == null && !phiBlock)
+			var blockPhis = phis.get(block.id), blockInserted = inserted.get(block.id);
+			if (drop == null && blockPhis == null)
 				continue;
-			if (phiBlock)
-				for (name => output in phis.get(block.id))
-					rewritten.push(new Located(Phi(output, phiInputs.get(block.id).get(name)), allocation.provenance));
+			if (blockPhis != null)
+				for (phi in blockPhis)
+					rewritten.push(new Located(Phi(phi.output, phi.inputs), allocation.provenance));
 			for (position in 0...block.instructions.length) {
-				if (inserted.exists(block.id) && inserted.get(block.id).exists(position))
-					for (instruction in inserted.get(block.id).get(position))
+				var before = blockInserted == null ? null : blockInserted.get(position);
+				if (before != null)
+					for (instruction in before)
 						rewritten.push(instruction);
 				if (drop != null && drop.exists(position)) {
 					if (block == home && position == candidate.position)
@@ -773,8 +790,11 @@ class IrScalarReplacement {
 
 	public static function resolve(value:IrValue, substitutions:Map<Int, IrValue>):IrValue {
 		var current = value, steps = 0;
-		while (substitutions.exists(current.id) && steps < 4096) {
-			current = substitutions.get(current.id);
+		while (steps < 4096) {
+			var next = substitutions.get(current.id);
+			if (next == null)
+				break;
+			current = next;
 			steps++;
 		}
 		return current;
@@ -798,6 +818,7 @@ class IrScalarReplacement {
  */
 @:allow(compiler.ir.passes.scalars.IrScalarReplacement)
 @:allow(compiler.ir.passes.scalars.IrBodyNestedScalarReplacement)
+@:nullSafety(Strict)
 class IrBodyScalarReplacement {
 	var body:Null<IrBody> = null;
 	var objects:Null<IrObjectTable> = null;
@@ -878,7 +899,6 @@ class IrBodyScalarReplacement {
 	var zeroAnchor = -1;
 
 	var zeroBlock = -1;
-	var zeroProvenance:Null<SourceProvenance> = null;
 
 	/** What a nested replacement may have to undo (`IrBody.beginTrial`). */
 	final trial = new IrBodyTrial();
@@ -887,6 +907,21 @@ class IrBodyScalarReplacement {
 	final nested = new IrBodyNestedScalarReplacement();
 
 	public function new() {}
+
+	/** The body being run on; set by `runOn` for the methods it calls. */
+	inline function requireBody():IrBody {
+		var current = body;
+		if (current == null)
+			throw new InternalError("Scalar replacement has no body to run on");
+		return current;
+	}
+
+	inline function requireObjects():IrObjectTable {
+		var current = objects;
+		if (current == null)
+			throw new InternalError("Scalar replacement has no object table");
+		return current;
+	}
 
 	/** `run`, then `constructInPlace` when `constructFields`, then the aliases swept; whether the body changed. */
 	function runOn(body:IrBody, objects:IrObjectTable, forcePhis:Bool, constructFields:Bool):Bool {
@@ -905,7 +940,6 @@ class IrBodyScalarReplacement {
 		this.body = null;
 		this.objects = null;
 		graphReady = false;
-		zeroProvenance = null;
 		candidateTypes.resize(0);
 		nested.release();
 		return changed;
@@ -917,6 +951,7 @@ class IrBodyScalarReplacement {
 		if (graphReady)
 			return graph;
 		graphReady = true;
+		var body = requireBody();
 		graph.reset(body);
 		var size = 0;
 		for (block in 0...body.blockCount())
@@ -988,6 +1023,8 @@ class IrBodyScalarReplacement {
 	}
 
 	function findCandidates():Int {
+		var body = requireBody();
+		var objects = requireObjects();
 		candidateValues.resize(0);
 		candidateBlocks.resize(0);
 		candidateTypes.resize(0);
@@ -1012,6 +1049,8 @@ class IrBodyScalarReplacement {
 
 	/** `IrScalarReplacement.run`. */
 	function replaceCandidates(forcePhis:Bool):Bool {
+		var body = requireBody();
+		var objects = requireObjects();
 		var hasHandlers = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -1066,6 +1105,7 @@ class IrBodyScalarReplacement {
 	}
 
 	function knownFields(object:IrValueId, descriptor:IrObject):Bool {
+		var body = requireBody();
 		setFields(descriptor);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -1084,6 +1124,7 @@ class IrBodyScalarReplacement {
 
 	/** `IrScalarReplacement.usesAreFieldAccesses`: rows up to the allocation in its block count as before it. */
 	function usesAreFieldAccesses(object:IrValueId, home:Int, allocation:Int, singleBlock:Bool):Bool {
+		var body = requireBody();
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), after = false;
 			while (row >= 0) {
@@ -1125,6 +1166,7 @@ class IrBodyScalarReplacement {
 	/** `IrScalarReplacement.replace`; whether it replaced the object, or declined phis that would not pay. */
 	function replace(object:IrValueId, typeName:String, home:Int, allocation:Int, descriptor:IrObject,
 			forcePhis:Bool):Bool {
+		var body = requireBody();
 		var graph = this.graph, homeId = body.blockId(home), fields = descriptor.fields;
 		setFields(descriptor);
 		IrPassScratch.filledBools(fieldRead, fields.length, false);
@@ -1178,6 +1220,8 @@ class IrBodyScalarReplacement {
 			}
 			while (work.length > 0) {
 				var current = work.pop();
+				if (current == null)
+					break;
 				if (!graph.isReachable(current))
 					continue;
 				var entry = frontierHead[current];
@@ -1221,7 +1265,7 @@ class IrBodyScalarReplacement {
 		IrPassScratch.filledInts(state, body.blockCount() * fieldCount, -1);
 		zeroBlock = home;
 		zeroAnchor = body.previousRow(allocation);
-		zeroProvenance = body.provenance(allocation);
+		var provenance = body.provenance(allocation);
 		// Rename along the dominator tree from the allocation's block.
 		work.resize(0);
 		workParents.resize(0);
@@ -1229,6 +1273,8 @@ class IrBodyScalarReplacement {
 		workParents.push(-1);
 		while (work.length > 0) {
 			var id = work.pop(), parent = workParents.pop();
+			if (id == null || parent == null)
+				break;
 			if (!graph.contains(id))
 				throw new InternalError("Scalar replacement walked to an unknown block");
 			var block = graph.indexOf(id), base = block * fieldCount;
@@ -1255,7 +1301,7 @@ class IrBodyScalarReplacement {
 					} else {
 						var known = state[base + field];
 						body.alias(body.output(row),
-							IrValueId.of(known >= 0 ? known : zeroFor(field, fields[field], objectName)));
+							IrValueId.of(known >= 0 ? known : zeroFor(field, fields[field], objectName, provenance)));
 					}
 					body.removeRow(block, row);
 				}
@@ -1268,7 +1314,7 @@ class IrBodyScalarReplacement {
 						var field = phiFields[phi], known = state[base + field];
 						phiInputs.push(phi);
 						phiInputs.push(id);
-						phiInputs.push(known >= 0 ? known : zeroFor(field, fields[field], objectName));
+						phiInputs.push(known >= 0 ? known : zeroFor(field, fields[field], objectName, provenance));
 					}
 			}
 			var index = childCount[id];
@@ -1296,7 +1342,7 @@ class IrBodyScalarReplacement {
 							start = at;
 						first = false;
 					}
-				var row = body.endRow(IrOpcode.Phi, IrValueId.of(phiValues[phi]), start, zeroProvenance);
+				var row = body.endRow(IrOpcode.Phi, IrValueId.of(phiValues[phi]), start, provenance);
 				body.linkAfter(block, after, row);
 				after = row;
 			}
@@ -1328,6 +1374,8 @@ class IrBodyScalarReplacement {
 			work.push(graph.successor(id, index));
 		while (work.length > 0) {
 			var current = work.pop();
+			if (current == null)
+				break;
 			if (current == id)
 				return true;
 			if (defined[current] == seen)
@@ -1355,13 +1403,14 @@ class IrBodyScalarReplacement {
 	}
 
 	/** The zero default of `field`, made the first time it is needed, after the earlier ones where the allocation was. */
-	function zeroFor(field:Int, declared:IrObjectField, objectName:String):Int {
+	function zeroFor(field:Int, declared:IrObjectField, objectName:String, provenance:SourceProvenance):Int {
+		var body = requireBody();
 		var known = zeros[field];
 		if (known >= 0)
 			return known;
 		var value = body.newValue(objectName + "." + declared.name, body.typeId(declared.type));
 		zeros[field] = value;
-		var row = zeroRow(body, value, declared.type, zeroProvenance);
+		var row = zeroRow(body, value, declared.type, provenance);
 		body.linkAfter(zeroBlock, zeroAnchor, row);
 		zeroAnchor = row;
 		return value;
@@ -1380,6 +1429,7 @@ class IrBodyScalarReplacement {
 
 	/** `IrScalarReplacement.normalizeStore`, its rows linked before `row`. */
 	function normalizeStore(block:Int, row:Int, value:IrValueId, field:IrObjectField):IrValueId {
+		var body = requireBody();
 		var provenance = body.provenance(row),
 			native = IrFieldStorage.scalar(field),
 			width = native == null ? 0 : native.size,
@@ -1425,6 +1475,8 @@ class IrBodyScalarReplacement {
 
 	/** `IrScalarReplacement.constructInPlace`. */
 	function constructInPlace():Bool {
+		var body = requireBody();
+		var objects = requireObjects();
 		var stored = this.stored, changed = false;
 		stored.clear();
 		for (block in 0...body.blockCount()) {
@@ -1469,6 +1521,7 @@ class IrBodyScalarReplacement {
 
 	/** The row at `position` in block `block`, or -1 past its last. */
 	function rowAt(block:Int, position:Int):Int {
+		var body = requireBody();
 		var row = body.firstRow(block);
 		while (row >= 0 && position-- > 0)
 			row = body.nextRow(row);
@@ -1477,6 +1530,7 @@ class IrBodyScalarReplacement {
 
 	/** `IrScalarReplacement.storeOnly`: the store in `storeRow`, `storeDestination` and `storeField`. */
 	function storeOnly(home:Int, allocation:Int, object:IrValueId):Bool {
+		var body = requireBody();
 		var found = -1;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), after = false;
@@ -1527,6 +1581,7 @@ class IrBodyScalarReplacement {
 
 	/** `IrScalarReplacement.placeInSlot`. */
 	function placeInSlot(block:Int, allocation:Int, object:IrValueId, descriptor:IrObject):Void {
+		var body = requireBody();
 		var fields = descriptor.fields, store = storeRow;
 		setFields(descriptor);
 		IrPassScratch.filledInts(written, fields.length, -1);
