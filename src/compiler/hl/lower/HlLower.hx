@@ -1344,16 +1344,7 @@ class HlLower {
 				var instructionStart = instructions.length, opcode = body.opcode(row);
 				if (!keepsArrayBounds(opcode))
 					provenInRange.clear();
-				var output = body.output(row);
-				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
-				// Emit an explicit check so the active handler works on every thread.
-				var receiver = switch opcode {
-					case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure,
-						IrOpcode.ArrayGet, IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew,
-						IrOpcode.IteratorHasNext, IrOpcode.IteratorNext, IrOpcode.EnumIndex, IrOpcode.EnumField:
-						body.operand(row, 0);
-					default: IrValueId.of(-1);
-				};
+				var output = body.output(row), receiver = HlLoweringDecisions.receiverOf(body, row);
 				if (receiver.exists() && scalarOptionals.get(receiver) == null && !nonNull.has(row))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				lowerRow(row, opcode, output, id, fusedCondition, registers, registerTypes, instructions, uses,

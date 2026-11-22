@@ -5,6 +5,7 @@ import compiler.core.InternalError;
 import compiler.hl.HlType;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.hl.lower.HlLower;
+import compiler.hl.lower.HlLoweringDecisions;
 import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBody;
@@ -19,8 +20,8 @@ class HlcUnsupported extends InternalError {}
 /**
  * Lowers one function's IR body to C (docs/design/AOT_BACKEND.md). Each SSA value is a C local of its HashLink register type;
  * phis are assigned on the edges into their block; names resolve through the HashLink assembly's symbol table, as `HlLower`
- * resolves them, so both backends agree on every slot, field and type. The receiver null checks, string literals and enum
- * constants follow `HlLower`'s decisions.
+ * resolves them, so both backends agree on every slot, field and type. What both backends decide alike, such as which rows
+ * check their receiver for null, is decided once in `HlLoweringDecisions`.
  */
 class HlcFunctionLower {
 	final module:HlcModule;
@@ -295,6 +296,12 @@ class HlcFunctionLower {
 			position(row);
 			if (!HlLower.keepsArrayBounds(body.opcode(row)))
 				provenInRange.clear();
+			var receiver = HlLoweringDecisions.receiverOf(body, row);
+			if (receiver.exists())
+				nullCheck(row, receiver, switch body.opcode(row) {
+					case IrOpcode.FieldGet, IrOpcode.FieldSet: body.symbol(row).name;
+					default: null;
+				});
 			lowerRow(row, traps);
 			if (body.output(row).exists() && body.opcode(row) != IrOpcode.Catch)
 				defineView(body.output(row));
@@ -482,7 +489,6 @@ class HlcFunctionLower {
 				assign(row, '&cl$id', module.dyn);
 			case IrOpcode.InstanceClosure:
 				var slot = module.requireSlot(body.symbol(row).name), receiver = body.operand(row, 0);
-				nullCheck(row, receiver);
 				assign(row,
 					'hl_alloc_closure_ptr(${typeAddress(module.slotType(slot))},${module.functionPointer(slot)},(void*)${v(receiver)})',
 					module.dyn);
@@ -521,7 +527,6 @@ class HlcFunctionLower {
 				line('s$slot = ${operandAs(row, 1, scalarLocalTypes[slot])};');
 			case IrOpcode.FieldGet:
 				var object = body.operand(row, 0), name = body.symbol(row).name;
-				nullCheck(row, object, name);
 				if (types.kind(typeOf(object)) == HlType.Virtual) {
 					virtualFieldGet(row, object, name);
 					return;
@@ -541,7 +546,6 @@ class HlcFunctionLower {
 				}
 			case IrOpcode.FieldSet:
 				var object = body.operand(row, 0), name = body.symbol(row).name;
-				nullCheck(row, object, name);
 				if (types.kind(typeOf(object)) == HlType.Virtual) {
 					virtualFieldSet(row, object, name);
 					return;
@@ -557,7 +561,6 @@ class HlcFunctionLower {
 			case IrOpcode.ArrayGet:
 				var array = body.operand(row, 0), index = body.operand(row, 1);
 				requireArray(array);
-				nullCheck(row, array);
 				if (!inRange(array, index))
 					line('if( (unsigned)${v(index)} >= (unsigned)${v(array)}->size ) hl_array_out_of_bounds(${v(array)},${v(index)});');
 				provenInRange.set('$array:$index', true);
@@ -567,7 +570,6 @@ class HlcFunctionLower {
 			case IrOpcode.ArraySet:
 				var array = body.operand(row, 0), index = body.operand(row, 1), value = body.operand(row, 2);
 				requireArray(array);
-				nullCheck(row, array);
 				var key = '$array:$index';
 				// `HlLower.lowerRawArrayWrite`: an Int or Float array write that an earlier access in the block validated is
 				// not tested again, so `a[i] += f()` keeps Haxe's rule when `f` shrinks the array.
@@ -580,18 +582,14 @@ class HlcFunctionLower {
 			case IrOpcode.ArraySize:
 				var array = body.operand(row, 0);
 				requireArray(array);
-				nullCheck(row, array);
 				assign(row, '${v(array)}->size', module.i32);
 			case IrOpcode.IteratorNew:
-				var array = body.operand(row, 0);
-				nullCheck(row, array);
-				callSlot(row, module.requireSlot("__iterator_new"), ['(vdynamic*)${v(array)}'], [module.dyn]);
+				callSlot(row, module.requireSlot("__iterator_new"), ['(vdynamic*)${v(body.operand(row, 0))}'],
+					[module.dyn]);
 			case IrOpcode.IteratorHasNext:
-				nullCheck(row, body.operand(row, 0));
 				callSlot(row, module.requireSlot("__iterator_has_next"), [v(body.operand(row, 0))],
 					[typeOf(body.operand(row, 0))]);
 			case IrOpcode.IteratorNext:
-				nullCheck(row, body.operand(row, 0));
 				var next = compiler.hl.lower.HlLower.iteratorNextNative(body.valueType(output)),
 					slot = module.requireSlot(next.name),
 					call = callExpression(slot, [v(body.operand(row, 0))],
@@ -606,14 +604,12 @@ class HlcFunctionLower {
 				lowerMakeEnum(row);
 			case IrOpcode.EnumIndex:
 				var value = body.operand(row, 0);
-				nullCheck(row, value);
 				if (isEnumTag(value))
 					line('${v(output)} = ${v(value)} - 1;');
 				else
 					line('${v(output)} = ((venum*)${v(value)})->index;');
 			case IrOpcode.EnumField:
 				var value = body.operand(row, 0), constructor = body.auxInt(row, 0), field = body.auxInt(row, 1);
-				nullCheck(row, value);
 				assign(row,
 					'*(${types.cType(typeOf(output))}*)((char*)${v(value)} + ${enumOffset(typeOf(value), constructor, field)})',
 					typeOf(output));
@@ -1095,7 +1091,6 @@ class HlcFunctionLower {
 			name = body.symbol(row).name,
 			arguments = operandsFrom(row, 0),
 			type = typeOf(object);
-		nullCheck(row, object);
 		var direct = module.valueMethod(body.valueType(object), name);
 		if (direct != null) {
 			var slot = module.requireSlot(direct);
