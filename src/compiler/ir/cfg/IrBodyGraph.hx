@@ -34,6 +34,10 @@ class IrBodyGraph {
 	final dominators:Array<Int> = [];
 
 	final rank:Array<Int> = [];
+
+	/** Whether a reachable block begins a try region, so a handler can be entered from inside it. */
+	public var hasTry(default, null) = false;
+
 	var hasDominators = false;
 	var body:Null<IrBody> = null;
 
@@ -62,6 +66,7 @@ class IrBodyGraph {
 		successorTargets.resize(0);
 		predecessorSources.resize(0);
 		hasDominators = false;
+		hasTry = false;
 		for (block in 0...count) {
 			var id = body.blockId(block);
 			if (indices[id] >= 0)
@@ -229,6 +234,7 @@ class IrBodyGraph {
 		var row = body.firstRow(block);
 		while (row != terminator) {
 			if (body.opcode(row) == IrOpcode.BeginTry) {
+				hasTry = true;
 				var handler = body.auxInt(row, 0), after = body.auxInt(row, 1);
 				if (!contains(after))
 					throw new InternalError('Unknown IR block $after');

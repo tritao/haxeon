@@ -1285,7 +1285,7 @@ class HlLower {
 		viewedArrays.clear();
 		definedViews.clear();
 		hasViewedArrays = false;
-		arrayBounds.startFunction(body);
+		arrayBounds.startFunction(body, graph);
 		var valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);

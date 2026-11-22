@@ -1,7 +1,7 @@
 package compiler.hl.lower;
 
 import compiler.ir.analysis.IrLoopBounds;
-import compiler.ir.model.Ir.IrValue;
+import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrValueId;
@@ -12,14 +12,12 @@ import compiler.ir.model.IrValueId;
  * block validated, and the loops' proofs (`IrLoopBounds`), made when an access first asks. One serves every function
  * lowered: `startFunction` and `startBlock` empty it.
  */
-@:nullSafety(Strict)
 class HlArrayBounds {
 	@:processWide("an empty set of calls known not to resize arrays, never added to")
 	static final noPureCalls:Map<String, Bool> = [];
 
-	/** The function being lowered (`startFunction`), null before the first. */
-	var body:Null<IrBody> = null;
-	var loops:Null<IrLoopBounds> = null;
+	/** The loops' proofs of the function being lowered. */
+	final loops = new IrLoopBounds(noPureCalls);
 
 	/** The block's pairs, numbered in the order first met; chained by array value from `heads`. */
 	final pairIndices:Array<Int> = [];
@@ -40,11 +38,9 @@ class HlArrayBounds {
 
 	public function new() {}
 
-	/** Starts the function `body`: the loops' proofs of the previous one are dropped. */
-	public function startFunction(body:IrBody):Void {
-		this.body = body;
-		loops = null;
-	}
+	/** Starts the function `body`, whose graph `graph` is: the loops' proofs of the previous one are dropped. */
+	public function startFunction(body:IrBody, graph:IrBodyGraph):Void
+		loops.reset(body, graph);
 
 	/** Starts a block: nothing is proved or validated in it yet. */
 	public function startBlock():Void {
@@ -108,15 +104,8 @@ class HlArrayBounds {
 	}
 
 	/** Whether the loops around block `blockId` prove `index` in range of `array`. */
-	public function provenByLoop(array:IrValueId, index:IrValueId, blockId:Int):Bool {
-		var bounds = loops;
-		if (bounds == null) {
-			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new IrLoopBounds(requireBody().toFunction(), noPureCalls);
-			loops = bounds;
-		}
-		return bounds.proven(valueOf(array), valueOf(index), blockId);
-	}
+	public function provenByLoop(array:IrValueId, index:IrValueId, blockId:Int):Bool
+		return loops.proven(array, index, blockId);
 
 	function find(array:IrValueId, index:IrValueId):Int {
 		var id:Int = array;
@@ -129,17 +118,5 @@ class HlArrayBounds {
 			at = pairNext[at];
 		}
 		return -1;
-	}
-
-	function valueOf(value:IrValueId):IrValue {
-		var body = requireBody();
-		return new IrValue(value, body.valueName(value), body.valueType(value));
-	}
-
-	function requireBody():IrBody {
-		var current = body;
-		if (current == null)
-			throw new compiler.core.InternalError("Array bounds were asked about before a function was started");
-		return current;
 	}
 }

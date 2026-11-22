@@ -120,7 +120,7 @@ class HlcFunctionLower {
 			return scalarLocalTypes.length - 1;
 		});
 		hasTry = false;
-		arrayBounds.startFunction(body);
+		arrayBounds.startFunction(body, graph);
 		viewedArrays.clear();
 		var phis:Map<Int, Bool> = [];
 		eachRow(function(block, row) {

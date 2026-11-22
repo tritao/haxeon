@@ -1,8 +1,12 @@
 import compiler.Frontend;
 import compiler.ir.analysis.IrLoopBounds;
+import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.Ir;
+import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrTypeIds;
+import compiler.ir.model.IrValueId;
 
 class LoopBoundsMain {
 	static function expect(ok:Bool, message:String):Void {
@@ -19,13 +23,15 @@ class LoopBoundsMain {
 		if (found == null)
 			throw "missing function " + name;
 		var before = IrFunctionStateCodec.encode(found),
-			proof = new IrLoopBounds(found, IrLoopBounds.pureNativeCalls(program.natives)),
+			body = IrBodyBuilder.encode(found, IrTypeIds.ofFunctions([found])),
+			proof = new IrLoopBounds(IrLoopBounds.pureNativeCalls(program.natives)).reset(body,
+				new IrBodyGraph().reset(body)),
 			result = 0;
 		for (block in found.blocks)
 			for (located in block.instructions)
 				switch located.value {
 					case ArrayGet(_, array, index):
-						if (proof.proven(array, index, block.id))
+						if (proof.proven(IrValueId.of(array.id), IrValueId.of(index.id), block.id))
 							result++;
 					default:
 				}
