@@ -1,6 +1,7 @@
 /* Directory change notifications for the host watch loop (`haxeon run --watch`). A wait reports that something under a
    watched directory changed, not what: the caller compares its own snapshot, so a missed or coarse event costs only a
-   scan. Windows uses ReadDirectoryChangesW; elsewhere open returns null and the caller polls. */
+   scan. Windows uses ReadDirectoryChangesW; elsewhere open returns null and the caller polls. The path is a Haxe String
+   and the watch an opaque handle, so the CLI binds these the same way whether stock Haxe or Haxeon built it. */
 #define DIR_WATCH_MAX 64
 
 #ifdef HL_WIN
@@ -36,19 +37,15 @@ HL_PRIM void *HL_NAME(__dir_watch_open)(void) {
 #endif
 }
 
-/* Watches a UTF-8 directory path; false when it cannot be watched. */
-HL_PRIM bool HL_NAME(__dir_watch_add)(void *handle, vbyte *path, bool recursive) {
+/* Watches a directory path; false when it cannot be watched. */
+HL_PRIM bool HL_NAME(__dir_watch_add)(void *handle, vstring *path, bool recursive) {
 #ifdef HL_WIN
 	realtime_dir_watch *watch = (realtime_dir_watch *)handle;
 	if (watch == NULL || path == NULL || watch->count >= DIR_WATCH_MAX) return false;
-	int length = MultiByteToWideChar(CP_UTF8, 0, (const char *)path, -1, NULL, 0);
-	if (length <= 0) return false;
-	WCHAR *wide = (WCHAR *)malloc(sizeof(WCHAR) * (size_t)length);
-	if (wide == NULL) return false;
-	MultiByteToWideChar(CP_UTF8, 0, (const char *)path, -1, wide, length);
-	HANDLE directory = CreateFileW(wide, FILE_LIST_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
-		OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
-	free(wide);
+	/* A String's data is NUL-terminated UTF-16, what CreateFileW takes. */
+	HANDLE directory = CreateFileW((const wchar_t *)realtime_string_data(path), FILE_LIST_DIRECTORY,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL, OPEN_EXISTING,
+		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, NULL);
 	if (directory == INVALID_HANDLE_VALUE) return false;
 	realtime_dir_watch_entry *entry = (realtime_dir_watch_entry *)calloc(1, sizeof(realtime_dir_watch_entry));
 	if (entry == NULL) {
@@ -117,7 +114,7 @@ HL_PRIM void HL_NAME(__dir_watch_close)(void *handle) {
 #endif
 }
 
-DEFINE_PRIM(_BYTES,__dir_watch_open,_NO_ARG);
-DEFINE_PRIM(_BOOL,__dir_watch_add,_BYTES _BYTES _BOOL);
-DEFINE_PRIM(_I32,__dir_watch_wait,_BYTES _I32);
-DEFINE_PRIM(_VOID,__dir_watch_close,_BYTES);
+DEFINE_PRIM(_ABSTRACT(realtime_dir_watch),__dir_watch_open,_NO_ARG);
+DEFINE_PRIM(_BOOL,__dir_watch_add,_ABSTRACT(realtime_dir_watch) _STRING _BOOL);
+DEFINE_PRIM(_I32,__dir_watch_wait,_ABSTRACT(realtime_dir_watch) _I32);
+DEFINE_PRIM(_VOID,__dir_watch_close,_ABSTRACT(realtime_dir_watch));
