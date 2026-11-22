@@ -380,7 +380,7 @@ which is mostly start-up: 1.15 s against 0.13 s, peak RSS 97 MB against 67 MB (t
 Built with exact frames (no C inlining) the AOT compiler runs the same (9.0 to 9.1 s, 39.2 G instructions, 25 MB less
 RSS), and with `--inline-allocation` too (9.4 to 9.8 s, 39.3 G): neither C inlining nor inline allocation pays for the
 compiler, so both stay as they are (inlining in release, as traces lose nothing; inline allocation opt-in). The AOT build
-allocates about 4 MB more than the JIT's over the compile (1.936 GB against 1.932 GB), not yet looked into. This base
+allocates about 4 MB more than the JIT's over the compile (1.936 GB against 1.932 GB): see below. This base
 predates the scalar-valued maps of the fork and of `origin/main`, so the box counts here are the old ones (about 4.8
 million scalar box requests in a self-compile, nearly all served by the shared Bool and small-Int boxes): the fork pin
 has the new maps API, which this base does not use.
@@ -405,11 +405,46 @@ output. Per-function `optimize("O1")` on the largest functions was measured and 
 file's functions, not one function's size), so it is not done. A declaration change still rebuilds more files than use it
 when it renumbers types or slots, as struct and native names are indices; stable names would fix that.
 
-The AOT-built compiler allocates about 4 MB more than the JIT-built one over the self-compile (1.936 against 1.932 GB):
-by the compiler's own phase counts, 3.8 MB of it in `backend-functions` and 0.4 MB in `ir-assembly`, the same with exact
-frames (so not C inlining), and not exceptions (a program throwing and catching allocates the same both ways); scalar
-boxing goes through the same shared boxes (`hl_make_dyn` and the JIT's inline boxing both use `hl_static_ints` and the
-shared Bools). Not found yet; next is an allocation sampler by site under both.
+Where the Haxe side of a C build goes. The compiler's phases are reported for a C build as for a HashLink one
+(`CompilerDriver.writeC`: the compile, writing the C, the C compiler; the C emission is the backend's publication phase).
+Measured on the compiler's own sources, release, stock-built compiler on the VM (load about 6 to 8): to HashLink bytecode
+19.2 s, to C 26.7 s. The same frontend, typing and IR; the C build adds the C emission, 7.1 s (lowering functions 4.1 s, each
+file's declarations 1.9 s, the module image 0.8 s and its declarations 0.3 s), and the HashLink assembly before it lowers every
+function to bytecode too (1.9 s), which the C backend reads only for the image's signatures; writing 105 MB of C is 0.3 s
+(1.3 s when it compares against an earlier build's files), and splitting modules into files 0.1 to 0.3 s. A file's
+declarations came from five `indexOf` scans for name prefixes, two of them over the file concatenated with its declarations;
+one pass now reads each identifier once (`HlcNames`), a `#line` path is quoted once, and the image's words are written digit by
+digit. The C is byte-identical; the emission went from 7.1 s to 5.3 s on the JIT. With the AOT-built compiler, which is what
+builds a release's: the C build's compile from 17.1 s to 14.8 s, main-thread instructions 79 G to 64 G (its HashLink build of
+the same sources: 10.4 s, 44 G). What is left of the difference: the C emission (3.9 s built ahead of time), and the bytecode
+lowering of function bodies the C backend does not read (1.4 s), which needs `HlLower` to intern without lowering (the types,
+constants and natives a body names are interned as it is lowered). The `aot-compiler` build of `tools.CompilerExecutable` also
+pays a frontend restart (graph 8.6 s against 1.5 s) for standard library modules only typing finds (`haxe.io.BytesHex`,
+`haxeon.DynamicOps`); that is the frontend's, not the C backend's.
 
-Next: macOS and MSVC stack traces when they can be built; the static type tables; the allocation difference; the
+Per-function C emission in parallel (designed, a later track). Each function lowers into its own text and files are joined in
+slot order, so the output stays deterministic; declarations are per file and independent once lowering is done. What is shared
+and mutated while lowering, and must be settled first: the HashLink symbol table interns a type the first time a value asks
+for it (`typeOf` through `HlRemap.typeIndex`), the inline allocation descriptors are numbered on first use
+(`allocationIndex`), the `#line` paths are recorded (`linePath`), and `readsValueArrays` is set. A sequential pre-pass that
+interns every value type of every body and numbers allocation types in slot order would leave lowering read-only on the module,
+and the rest are per-function results merged in slot order. The workers would be `compiler.core.Parallel` threads, as the C
+compiles are; the limit is the collector, since emission allocates strings at a high rate, so the gain would be less than the
+core count. Peak memory would not grow: the C text is all held at once already (2.1 GB peak for a C build of the compiler
+against 1.3 GB for its bytecode build).
+
+The AOT-built compiler allocates about 4 MB more than the JIT-built one over the self-compile (1.936 against 1.932 GB): 3.8 MB in
+`backend-functions` and 0.4 MB in `ir-assembly`. An allocation census of both builds by type finds it: 284,000 more 16-byte
+untyped blocks built ahead of time (and 17,000 fewer Int boxes), at `HlSymbolTable.internType`. There a generic map's value
+(`IrTypeMap<Int>`, erased to Dynamic) is cast to `Null<Int>` by `hl_dyn_castp`, in both backends; the runtime returns the box
+as it is only when it is a collector pointer (`hl_is_gc_ptr`, as a JIT box on the stack must be copied), else it allocates a
+copy. The JIT's `ToDyn` allocates a fresh box inline (`emit_box_alloc`), so the cast returns it; the C backend boxes through
+`hl_make_dyn`, which gives the shared small-Int boxes (`hl_static_ints`), which are not collector pointers, so each lookup of a
+small Int allocates. The fix is the runtime's: `hl_dyn_castp` returning a shared static box as it returns a collector one
+(they are immutable and never on a stack), which removes the copies for the JIT's static boxes too. Not done: it is a fork
+change.
+
+Next: macOS and MSVC stack traces when they can be built; the static type tables; the static boxes in `hl_dyn_castp`; skipping
+the bytecode lowering of bodies for `hlc`; stable struct and native names (an added class renumbers types, and a rebuild of the
+compiler then compiles 629 of its 642 C files again); the
 self-compile against `origin/main`'s map changes.
