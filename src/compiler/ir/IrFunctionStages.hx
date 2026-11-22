@@ -31,7 +31,7 @@ class IrFunctionStages {
 			lineage:Null<IrLineage>, checks:Bool):Array<IrFunction> {
 		if (lineage == null) {
 			var summaries = [for (fn in functions) pass.summarize(fn)];
-			pass.prepare(functions, summaries);
+			pass.prepare(functions, summaries, new IrFunctionIndex(name, functions));
 			var reader = new IrFactReader(name, pass);
 			return pass.finish([for (index in 0...functions.length) {
 				reader.begin(false);
@@ -50,7 +50,7 @@ class IrFunctionStages {
 			entries.push(entry);
 			summaries.push(entry != null ? entry.summary : pass.summarize(fn));
 		}
-		pass.prepare(functions, summaries);
+		pass.prepare(functions, summaries, new IrFunctionIndex(name, functions, lineage));
 		var reader = new IrFactReader(name, pass, facts), output:Array<IrFunction> = [];
 		for (index in 0...count) {
 			var fn = functions[index], entry = entries[index];

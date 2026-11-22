@@ -45,7 +45,7 @@ class IrConstantBranches implements IrFunctionPass {
 		}
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		constants = [];
 		for (index in 0...functions.length)
 			if (summaries[index] != NOT_CONSTANT)

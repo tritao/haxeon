@@ -144,6 +144,9 @@ class IrLineageCell {
 	public var version:Int;
 	public var build:Int;
 
+	/** The last settling that found the name in the program (`IrLineage.settle`). */
+	public var seen = 0;
+
 	public function new(fn:IrFunction, version:Int, build:Int) {
 		this.fn = fn;
 		this.version = version;
@@ -172,6 +175,11 @@ class IrLineage {
 	final cells:Map<String, IrLineageCell> = [];
 	var cellCount = 0;
 
+	/** How many names stand for a function in this build. */
+	var live = 0;
+
+	var settling = 0;
+
 	public function new(memos:IrStageMemos)
 		this.memos = memos;
 
@@ -186,6 +194,7 @@ class IrLineage {
 		memos.startBuild();
 		var lineage = memos.lineage, memo = memos.stage(INPUT);
 		lineage.checks = checks;
+		lineage.live = 0;
 		if (lineage.cellCount > functions.length * 2)
 			lineage.sweep();
 		for (index in 0...functions.length) {
@@ -218,23 +227,40 @@ class IrLineage {
 		return cell == null || cell.build != memos.build ? 0 : cell.version;
 	}
 
+	/**
+	 * The function `name` stands for as the stages stand, or null: the program's shared name index before the encode point
+	 * (`IrFunctionIndex`). Within a stage that rewrites functions one by one, one it already rewrote is its rewritten form.
+	 */
+	public function named(name:String):Null<IrFunction> {
+		var cell = cells.get(name);
+		return cell == null || cell.build != memos.build ? null : cell.fn;
+	}
+
+	/** `--check-reuse`: the names that stand for a function are those of `functions`, as `pass` indexes them through `named`. */
+	public function checkIndex(pass:String, functions:Array<IrFunction>):Void {
+		if (functions.length != live)
+			throw new compiler.core
+				.InternalError('--check-reuse: $pass indexes ${functions.length} functions by name, but $live names stand for one');
+		for (fn in functions)
+			if (named(fn.name) == null)
+				throw new compiler.core
+					.InternalError('--check-reuse: $pass indexes "${fn.name}", which no name stands for');
+	}
+
 	/** Records `version` as the version of `fn`. */
 	public function set(fn:IrFunction, version:Int):Void {
 		var cell = cells.get(fn.name);
 		if (cell == null) {
 			cells.set(fn.name, new IrLineageCell(fn, version, memos.build));
 			cellCount++;
+			live++;
 		} else {
+			if (cell.build != memos.build)
+				live++;
 			cell.fn = fn;
 			cell.version = version;
 			cell.build = memos.build;
 		}
-	}
-
-	/** Whether `fn` is the function its name stands for in this build. */
-	inline function current(fn:IrFunction):Bool {
-		var cell = cells.get(fn.name);
-		return cell != null && cell.fn == fn && cell.build == memos.build;
 	}
 
 	/**
@@ -243,14 +269,24 @@ class IrLineage {
 	 * is changed in place.
 	 */
 	public function settle(stage:String, functions:Array<IrFunction>):Void {
-		var memo:Null<IrStageMemo> = null;
+		var memo:Null<IrStageMemo> = null, mark = ++settling;
 		for (index in 0...functions.length) {
-			var fn = functions[index];
-			if (current(fn))
-				continue;
-			if (memo == null)
-				memo = memos.stage(stage);
-			functions[index] = settleOne(memo, fn, version(fn.name));
+			var fn = functions[index], cell = cells.get(fn.name);
+			if (cell == null || cell.fn != fn || cell.build != memos.build) {
+				if (memo == null)
+					memo = memos.stage(stage);
+				functions[index] = settleOne(memo, fn, version(fn.name));
+				cell = cells.get(fn.name);
+			}
+			if (cell != null)
+				cell.seen = mark;
+		}
+		// A name the stage dropped stands for nothing from here on.
+		if (live > functions.length) {
+			for (cell in cells)
+				if (cell.build == memos.build && cell.seen != mark)
+					cell.build = 0;
+			live = functions.length;
 		}
 	}
 

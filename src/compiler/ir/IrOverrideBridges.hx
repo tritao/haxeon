@@ -65,9 +65,9 @@ class IrOverrideBridges implements IrFunctionPass {
 	public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		byName = [for (object in objects) object.name => object];
-		var functionIndex = new IrFunctionIndex("override-bridges", functions), bridged:Map<String, Bool> = [];
+		var functionIndex = names, bridged:Map<String, Bool> = [];
 		index = functionIndex;
 		var rewritten = [for (object in objects) {
 			if (object.base == null || object.methods.length == 0) object;

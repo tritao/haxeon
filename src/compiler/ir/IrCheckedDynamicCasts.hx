@@ -49,8 +49,11 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 	public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void
-		index(functions);
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
+		if (existingFunctions == null)
+			known = names;
+		else
+			index(functions);
 
 	public function fact(kind:Int, key:String):Int {
 		var declaration = declarations.get(key),

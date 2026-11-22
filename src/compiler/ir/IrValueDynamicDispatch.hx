@@ -57,9 +57,9 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
-		names = new IrFunctionIndex("value-dynamic-dispatch", functions);
+		this.names = names;
 		objectsByName = [for (object in objects) object.name => object];
 		var registeredValues:Map<String, Bool> = [];
 		function valueType(type:IrType):Null<IrType> return switch type {

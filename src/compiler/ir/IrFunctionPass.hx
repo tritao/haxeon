@@ -15,8 +15,11 @@ interface IrFunctionPass {
 	/** What the whole-program step needs of `fn`, as a number: it may depend on `fn` alone. */
 	function summarize(fn:IrFunction):Int;
 
-	/** The whole-program step, from the functions in program order and their summaries. */
-	function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void;
+	/**
+	 * The whole-program step, from the functions in program order and their summaries. `names` indexes them: in a session, through
+	 * the program's shared index (`IrLineage.named`).
+	 */
+	function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void;
 
 	/** The value of this stage's fact of `kind` and `key`, as the program stands after `prepare`. */
 	function fact(kind:Int, key:String):Int;

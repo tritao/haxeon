@@ -200,7 +200,7 @@ class IrTypedInterfaceDispatch {
 				request(found.name, {arguments: found.arguments, result: found.result});
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
-			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions),
+			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions, lineage),
 			functionIndices:Map<String, Int> = [for (index in 0...functions.length) functions[index].name => index];
 		function extendsInterface(actual:String, expected:String, visited:Map<String, Bool>):Bool {
 			if (actual == expected) return true;
@@ -357,7 +357,7 @@ class IrTypedInterfaceCalls implements IrFunctionPass {
 	public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>):Void {}
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
 
 	public function fact(kind:Int, key:String):Int
 		return (kind == VALUE ? values : contracts).exists(key) ? 1 : 0;
