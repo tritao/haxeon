@@ -379,23 +379,10 @@ class TomlParser {
 			case "r".code: output.addChar(13);
 			case "\"".code: output.addChar(34);
 			case "\\".code: output.addChar(92);
-			case "u".code: addCodePoint(output, unicode(4, start));
-			case "U".code: addCodePoint(output, unicode(8, start));
+			case "u".code: output.addChar(unicode(4, start));
+			case "U".code: output.addChar(unicode(8, start));
 			case _: throw error("unknown escape sequence", start);
 		}
-	}
-
-	/** Through UTF-8, the encoding every target decodes alike (not every `String.fromCharCode` takes a code point above U+FFFF). */
-	static function addCodePoint(output:StringBuf, code:Int):Void {
-		var length = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4, encoded = Bytes.alloc(length);
-		if (length == 1)
-			encoded.set(0, code);
-		else {
-			for (index in 1...length)
-				encoded.set(index, 0x80 | ((code >>> ((length - index - 1) * 6)) & 63));
-			encoded.set(0, (length == 2 ? 0xC0 : length == 3 ? 0xE0 : 0xF0) | (code >>> ((length - 1) * 6)));
-		}
-		output.add(encoded.getString(0, length));
 	}
 
 	function unicode(digits:Int, start:Int):Int {
