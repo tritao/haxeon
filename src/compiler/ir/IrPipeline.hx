@@ -46,7 +46,7 @@ class IrPipeline {
 		IrFunctionStages.stage("checked-dynamic-casts", checkedDynamicCasts).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("exported-functions", exportedFunctions).when(exportsFunctions),
 		new IrAssemblyStage("enum-specializations", enumSpecializations).when(lowersEnums),
-		new IrAssemblyStage("enum-tag-lowering", enumTagLowering).when(lowersEnums),
+		IrFunctionStages.stage("enum-tag-lowering", enumTagLowering, loweredEnumInput).when(lowersEnums),
 		new IrAssemblyStage("encode-bodies", encodeBodies).encodes(),
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
 		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
@@ -354,13 +354,18 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function enumTagLowering(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+	static function enumTagLowering(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass {
 		var enumInput = assembly.enumInput;
 		if (enumInput == null)
 			throw new InternalError("Enum tag lowering needs the enum specializations' input");
-		IrEnumTagLowering.run(enumInput);
-		assembly.functions = enumInput.functions;
-		return assembly;
+		return new IrEnumTagLowering.IrEnumTagLoweringPass(enumInput, context.lineage);
+	}
+
+	/** The enum input is the program the tag lowering finished: its tables and, from here, its functions. */
+	static function loweredEnumInput(assembly:IrAssembly, pass:IrFunctionPass):Void {
+		var enumInput = assembly.enumInput;
+		if (enumInput != null)
+			enumInput.functions = assembly.functions;
 	}
 
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {

@@ -23,6 +23,10 @@ class IrFactReader {
 		this.facts = facts;
 	}
 
+	/** Whether it records what it reads: a reader without a memo only computes, so a pass may read its tables directly. */
+	public function records():Bool
+		return facts != null;
+
 	/** The value of the stage's fact of `kind` and `key` (`IrFunctionPass.fact`). */
 	public function read(kind:Int, key:String):Int {
 		var table = facts;

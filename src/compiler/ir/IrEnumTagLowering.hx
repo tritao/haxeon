@@ -7,349 +7,10 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Select nominal scalar storage independently of payload-enum escape eligibility. */
 class IrEnumTagLowering {
+	/** Lowers the tag-stored enums of `program` (`IrEnumTagLoweringPass`), without a memo. */
 	public static function run(program:IrProgram):IrProgram {
-		var dynamicUnboxes:Map<String, IrType> = [];
-		for (fn in program.functions)
-			switch fn.kind {
-				case EnumDynamicUnbox(type):
-					dynamicUnboxes.set(fn.name, type);
-				default:
-			}
-		var names:Map<String, Bool> = [
-			for (entry in program.enums)
-				if (IrEnumTagStorage.eligible(entry)) entry.name => true
-		];
-		if (!names.keys().hasNext())
-			return program;
-		var tags:Map<String, IrType> = [for (name in names.keys()) name => EnumTag(name)];
-		function changes(type:IrType):Bool
-			return switch type {
-				case Enum(name):
-					names.exists(name);
-				case Array(inner), Iterator(inner), Nullable(inner):
-					changes(inner);
-				case Function(arguments, result):
-					var changed = changes(result);
-					for (argument in arguments)
-						if (changes(argument)) {
-							changed = true;
-							break;
-						}
-					changed;
-				default:
-					false;
-			};
-		function mapped(type:IrType):IrType
-			return switch type {
-				case Enum(name) if (names.exists(name)):
-					tags.get(name);
-				case Nullable(Enum(name)) if (names.exists(name)):
-					tags.get(name);
-				case Array(inner) if (changes(inner)):
-					Array(mapped(inner));
-				case Iterator(inner) if (changes(inner)):
-					Iterator(mapped(inner));
-				case Nullable(inner) if (changes(inner)):
-					Nullable(mapped(inner));
-				case Function(arguments, result) if (changes(type)):
-					Function([for (argument in arguments) mapped(argument)], mapped(result));
-				default:
-					type;
-			};
-		// Payload-free enums cannot override equality. Their synthesized calls are
-		// scalar comparisons even with source inlining disabled.
-		var tagEqualities:Map<String, Bool> = [];
-		for (fn in program.functions)
-			if ((switch fn.provides {
-				case Serves(_,
-					operation): (IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.Equals
-					|| IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.ReflectEquals);
-				case None: false;
-			}) && fn.arguments.length == 2)
-				switch mapped(fn.arguments[0].type) {
-				case EnumTag(name):
-					if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
-						tagEqualities.set(fn.name, true);
-				default:
-			}
-		var nativeWrappers:Map<String, String> = [],
-			generated:Array<IrFunction> = [];
-		function nativeWrapper(name:String, arguments:Array<IrType>, result:IrType, cNative:Bool):Void {
-			function directTag(type:IrType):Bool
-				return switch mapped(type) {
-					case EnumTag(_): true;
-					default: false;
-				};
-			if (!Lambda.exists(arguments, directTag) && !directTag(result))
-				return;
-			var wrapper = "$enum-tag:native:" + name,
-				b = new IrBuilder(),
-				converted:Array<IrValue> = [];
-			for (index in 0...arguments.length) {
-				var logical = arguments[index],
-					physical = mapped(logical),
-					value = b.argument('argument$index', physical);
-				converted.push(switch physical {
-					case EnumTag(enumName): b.safeCast(b.intrinsic(EnumTagBox(EnumTag(enumName)), [value], Dyn),
-						logical);
-					default: value;
-				});
-			}
-			var called = cNative ? b.cNativeCall(name, converted, result) : b.call(name, converted, result);
-			var returned = switch mapped(result) {
-				case EnumTag(enumName): b.intrinsic(EnumTagUnbox(EnumTag(enumName)), [b.toDyn(called)], mapped(result));
-				default: called;
-			};
-			b.returnValue(returned);
-			generated.push(new IrFunction(wrapper, b.arguments, mapped(result), b.blocks, GeneratedHelper));
-			nativeWrappers.set(name, wrapper);
-		}
-		for (native in program.natives)
-			nativeWrapper(native.name, native.arguments, native.result, false);
-		for (native in program.cNatives)
-			nativeWrapper(native.name, native.arguments, native.result, true);
-		program.objects = [for (object in program.objects)
-			{
-				name:object.name,
-					isValue:object.isValue,
-					nativeLayout:object.nativeLayout,
-					base:object.base,
-					interfaces:object.interfaces,
-					methods:object.methods,
-					fields:[for (field in object.fields)
-					{
-						name:field.name,
-							type:mapped(field.type),
-							nativeLayout:field.nativeLayout,
-							scalarStorage:field.scalarStorage,
-							nullableScalarStorage:field.nullableScalarStorage
-					}]
-			}];
-		program.staticFields = [for (field in program.staticFields) {
-			name:field.name, type:mapped(field.type)
-		}];
-		program.interfaces = [for (entry in program.interfaces)
-			{
-				name:entry.name,
-					bases:entry.bases,
-					methods:[for (method in entry.methods)
-					{
-						name:method.name,
-							arguments:[for (argument in method.arguments) mapped(argument)],
-							result:mapped(method.result)
-					}]
-			}];
-		program.enums = [for (entry in program.enums)
-			{
-				name:entry.name,
-					isRecursive:entry.isRecursive,
-					inlineStorage:entry.inlineStorage,
-					cases:[for (constructor in entry.cases)
-					{
-						name:constructor.name, params:[for (parameter in constructor.params) mapped(parameter)]
-					}]
-			}];
-		function valueChanges(value:IrValue):Bool
-			return changes(value.type);
-		function nonOutputChanges(instruction:IrInstruction):Bool {
-			switch instruction {
-				case Call(_, name, _) if (tagEqualities.exists(name.name)):
-					return true;
-				case Call(_, target, _) if (nativeWrappers.exists(target.name)):
-					return true;
-				case CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
-					return true;
-				case TypeValue(_, type):
-					switch type {
-						case Enum(_):
-						default:
-							if (changes(type)) return true;
-					}
-				default:
-			}
-			return false;
-		}
-		function instructionChanges(instruction:IrInstruction):Bool
-			return nonOutputChanges(instruction) || IrOperands.anyValue(instruction, valueChanges);
-		function functionChanges(fn:IrFunction):Bool {
-			if (changes(fn.result))
-				return true;
-			for (argument in fn.arguments)
-				if (valueChanges(argument))
-					return true;
-			for (binding in fn.debugBindings)
-				if (valueChanges(binding.value))
-					return true;
-			// Valid SSA uses have the type of their definition. Discover changed carriers once per definition;
-			// instruction rewriting below still visits every operand, and the verifier checks every use.
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null && valueChanges(output))
-						return true;
-					if (nonOutputChanges(located.value))
-						return true;
-				}
-			return false;
-		}
-		var changedFunctions:Array<IrFunction> = [];
-		program.functions = [for (fn in program.functions)
-			if (!functionChanges(fn)) fn else {
-				var values:Map<Int, IrValue> = [];
-				function use(value:IrValue):IrValue {
-					if (!valueChanges(value))
-						return value;
-					if (!values.exists(value.id))
-						values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
-					return values.get(value.id);
-				}
-				var indexTags:Map<Int, IrValue> = [],
-					replacedIndices:Map<Int, Bool> = [];
-				for (block in fn.blocks)
-					for (located in block.instructions)
-						switch located.value {
-							case EnumIndex(output, input):
-								switch use(input).type {
-									case EnumTag(_): indexTags.set(output.id, use(input));
-									default:
-								}
-							default:
-						}
-				var blocks = [for (block in fn.blocks) {
-					var result = new IrBlock(block.id);
-					for (located in block.instructions) {
-						var tagIndexEquality = switch located.value {
-							case Equal(_, left, right): indexTags.exists(left.id) && indexTags.exists(right.id);
-							default: false;
-						};
-						if (!tagIndexEquality && !instructionChanges(located.value)) {
-							result.instructions.push(located);
-							continue;
-						}
-						var instruction = IrInliner.remap(located.value, use, id -> id);
-						switch located.value {
-							case Call(output, name, arguments) if (tagEqualities.exists(name.name)):
-								instruction = Equal(use(output), use(arguments[0]), use(arguments[1]));
-							case Equal(output, left, right)
-								if (indexTags.exists(left.id)
-								&& indexTags.exists(right.id)
-								&& IrVerifier.sameType(indexTags.get(left.id).type, indexTags.get(right.id).type)):
-								instruction = Equal(use(output), indexTags.get(left.id), indexTags.get(right.id));
-								replacedIndices.set(left.id, true);
-								replacedIndices.set(right.id, true);
-							case Call(output, target, arguments) if (nativeWrappers.exists(target.name)):
-								instruction = Call(use(output), IrSymbol.of(nativeWrappers.get(target.name)),
-									[for (argument in arguments) use(argument)]);
-							case CNativeCall(output, name, arguments) if (nativeWrappers.exists(name)):
-								instruction = Call(use(output), IrSymbol.of(nativeWrappers.get(name)),
-									[for (argument in arguments) use(argument)]);
-							case Call(output, name, arguments) if (dynamicUnboxes.exists(name.name)):
-								if (!IrVerifier.sameType(dynamicUnboxes.get(name.name), output.type))
-									throw new InternalError("Malformed enum unbox signature");
-								switch use(output).type {
-									case EnumTag(enumName): instruction = Intrinsic(use(output),
-										EnumTagUnbox(EnumTag(enumName)),
-										[for (argument in arguments) use(argument)]);
-									default:
-								}
-							case TypeValue(output, type):
-								// A bare enum descriptor describes its nominal box, not its private scalar carrier.
-								instruction = TypeValue(use(output), switch type {
-									case Enum(_): type;
-									default: mapped(type);
-								});
-							default:
-						}
-						result.instructions.push(new Located(instruction, located.provenance));
-					}
-					var terminator = block.terminator;
-					if (terminator != null) result.terminator = new Located(switch terminator.value {
-						case Unreachable: Unreachable;
-						case Return(value): Return(use(value));
-						case Throw(value): Throw(use(value));
-						case Rethrow(value): Rethrow(use(value));
-						case Jump(id): Jump(id);
-						case Branch(condition, yes, no): Branch(use(condition), yes, no);
-						case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
-							switchTargets.copy(), switchOtherwise);
-					}, terminator.provenance);
-					result;
-				}];
-				if (replacedIndices.keys().hasNext()) {
-					var used:Map<Int, Bool> = [];
-					for (block in blocks) {
-						for (located in block.instructions) {
-							for (input in IrOperands.inputs(located.value))
-								used.set(input.id, true);
-							switch located.value {
-								case Phi(_, inputs):
-									for (input in inputs)
-										used.set(input.value.id, true);
-								default:
-							}
-						}
-						if (block.terminator != null)
-							switch block.terminator.value {
-								case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
-									Switch(value, _, _):
-									used.set(value.id, true);
-								case Jump(_), Unreachable:
-							}
-					}
-					for (binding in fn.debugBindings)
-						used.set(binding.value.id, true);
-					for (block in blocks) {
-						var kept = [for (located in block.instructions)
-							if (switch located.value {
-								case EnumIndex(output, _): !replacedIndices.exists(output.id) || used.exists(output.id);
-								default: true;
-							}) located];
-						block.instructions.splice(0, block.instructions.length);
-						for (located in kept)
-							block.instructions.push(located);
-					}
-				}
-				var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)],
-					mapped(fn.result), blocks, fn.kind, [for (binding in fn.debugBindings)
-					{
-						identity:binding.identity,
-							name:binding.name,
-							value:use(binding.value),
-							path:binding.path,
-							scopeStart:binding.scopeStart,
-							scopeEnd:binding.scopeEnd
-					}], fn.inlineHint, fn.retention);
-				changedFunctions.push(rewrittenFunction);
-				rewrittenFunction;
-			}];
-		var kept:Map<String, Bool> = [];
-		kept.set(program.entryPoint, true);
-		for (fn in program.functions.concat(generated)) {
-			if (fn.retention != Reachable)
-				kept.set(fn.name, true);
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _):
-							kept.set(name.name, true);
-						default:
-					}
-		}
-		for (object in program.objects)
-			for (method in object.methods)
-				kept.set(method.functionName.name, true);
-		for (native in program.natives)
-			if (native.generatedFunctionDependencies != null)
-				for (name in native.generatedFunctionDependencies)
-					kept.set(name, true);
-		program.functions = [
-			for (fn in program.functions)
-				if (!tagEqualities.exists(fn.name) || kept.exists(fn.name)) fn
-		];
-		program.functions = program.functions.concat(generated);
-		// Only rewritten definitions can introduce tag escapes. Finish that representation transition
-		// here; the later helper pass checks code generated after this lowering.
-		finishEscapes(program, changedFunctions.concat(generated));
+		var pass = new IrEnumTagLoweringPass(program, null);
+		program.functions = IrFunctionStages.apply("enum-tag-lowering", pass, program.functions);
 		return program;
 	}
 
@@ -417,7 +78,7 @@ class IrEnumTagLowering {
 		addAdapters(program, walk.required, existing, boxNames, unboxNames);
 	}
 
-	static function addAdapters(program:IrProgram, required:Map<String, Bool>, existing:IrFunctionIndex,
+	public static function addAdapters(program:IrProgram, required:Map<String, Bool>, existing:IrFunctionIndex,
 			boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
 		var names = [for (name in required.keys()) name];
 		names.sort(Reflect.compare);
@@ -460,14 +121,17 @@ class IrEnumTagLowering {
 			}
 		if (!symbols.keys().hasNext())
 			return;
-		rewriteEscapes(program, required, adapterEnums, existing, changedFunctions, boxNames, unboxNames);
+		rewriteEscapes(new IrTagEscapeTables(new IrTagEscapeSignatures(program, existing), adapterEnums, boxNames,
+			unboxNames, required), changedFunctions);
 		addAdapters(program, required, existing, boxNames, unboxNames);
 	}
 
-	static function rewriteEscapes(program:IrProgram, required:Map<String, Bool>, adapterEnums:Map<String, String>,
-			functions:IrFunctionIndex,
-			selectedFunctions:Array<IrFunction>, boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
-		var lookups = new IrTagEscapeSignatures(program, functions);
+	/**
+	 * Boxes, in `selectedFunctions`, each tag that escapes where a `Dyn` is expected by its adapter, and turns tag boxes, unboxes
+	 * and casts into adapter calls, in place: the functions are this lowering's own. What it expects where a value leaves, and the
+	 * adapters, are `lookups`'s, which records the adapters it needs.
+	 */
+	public static function rewriteEscapes(lookups:IrTagEscapeReads, selectedFunctions:Array<IrFunction>):Void {
 		function isTag(value:IrValue):Bool
 			return switch value.type {
 				case EnumTag(_):
@@ -518,8 +182,8 @@ class IrEnumTagLowering {
 				if (next < 0)
 					next = currentFunction.nextValueId();
 				var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
-				required.set(name, true);
-				rewritten.push(new Located(Call(boxed, IrSymbol.of(boxNames.get(name)), [value]),
+				lookups.require(name);
+				rewritten.push(new Located(Call(boxed, IrSymbol.of(lookups.boxName(name)), [value]),
 					currentBlock.instructions[position].provenance));
 				boxed;
 				default: value;
@@ -544,8 +208,8 @@ class IrEnumTagLowering {
 								default:
 									throw new InternalError("Expected tag");
 							};
-							required.set(name, true);
-							Call(output, IrSymbol.of(boxNames.get(name)), [value]);
+							lookups.require(name);
+							Call(output, IrSymbol.of(lookups.boxName(name)), [value]);
 						case SafeCast(output, value) if (isTag(output)):
 							markChanged();
 							changed = true;
@@ -555,34 +219,34 @@ class IrEnumTagLowering {
 								default:
 									throw new InternalError("Expected tag");
 							};
-							required.set(name, true);
-							Call(output, IrSymbol.of(unboxNames.get(name)), [value]);
+							lookups.require(name);
+							Call(output, IrSymbol.of(lookups.unboxName(name)), [value]);
 						case Intrinsic(output, EnumTagBox(EnumTag(name)), arguments):
-							if (!boxNames.exists(name)
+							if (lookups.boxName(name) == null
 								|| arguments.length != 1
 								|| !IrVerifier.sameType(arguments[0].type, EnumTag(name))
 								|| !IrVerifier.sameType(output.type, Dyn))
 								throw new InternalError("Invalid enum tag box signature");
 							markChanged();
 							changed = true;
-							required.set(name, true);
-							Call(output, IrSymbol.of(boxNames.get(name)), arguments);
+							lookups.require(name);
+							Call(output, IrSymbol.of(lookups.boxName(name)), arguments);
 						case Intrinsic(output, EnumTagUnbox(EnumTag(name)), arguments):
-							if (!unboxNames.exists(name)
+							if (lookups.unboxName(name) == null
 								|| arguments.length != 1
 								|| !IrVerifier.sameType(arguments[0].type, Dyn)
 								|| !IrVerifier.sameType(output.type, EnumTag(name)))
 								throw new InternalError("Invalid enum tag unbox signature");
 							markChanged();
 							changed = true;
-							required.set(name, true);
-							Call(output, IrSymbol.of(unboxNames.get(name)), arguments);
+							lookups.require(name);
+							Call(output, IrSymbol.of(lookups.unboxName(name)), arguments);
 						case Call(output, name, arguments):
 							var tagArgument = hasTag(arguments);
 							if (!tagArgument && !isTag(output)) located.value else {
-								var adapter = adapterEnums.get(name.name);
+								var adapter = lookups.adapterOf(name.name);
 								if (adapter != null) {
-									required.set(adapter, true);
+									lookups.require(adapter);
 									located.value;
 								} else if (!tagArgument)
 									located.value
@@ -693,9 +357,78 @@ class IrEnumTagLowering {
 	}
 }
 
+/** What the escape rewrite of a function reads (`IrEnumTagLowering.rewriteEscapes`), and the adapters it records as needed. */
+interface IrTagEscapeReads {
+	/** The argument types of the function or native `name`, or null when there is none. */
+	function signature(name:String):Null<Array<IrType>>;
+
+	/** The argument types, receiver left out, of `method` called on a value of `type`, or null. */
+	function methodArguments(type:IrType, method:String):Null<Array<IrType>>;
+
+	/** The declared type of `field` on an object of `type`, or null. */
+	function fieldType(type:IrType, field:String):Null<IrType>;
+
+	function global(name:String):Null<IrType>;
+
+	/** The enum `name` is a tag adapter of, or null. */
+	function adapterOf(name:String):Null<String>;
+
+	function boxName(enumName:String):Null<String>;
+	function unboxName(enumName:String):Null<String>;
+
+	/** The adapters of the tag-stored enum `enumName` are needed. */
+	function require(enumName:String):Void;
+}
+
+/** `IrTagEscapeReads` from the program's tables, as a lowering without a memo reads them. */
+class IrTagEscapeTables implements IrTagEscapeReads {
+	final lookups:IrTagEscapeSignatures;
+	final adapterEnums:Map<String, String>;
+	final boxNames:Map<String, String>;
+	final unboxNames:Map<String, String>;
+	final required:Map<String, Bool>;
+
+	public function new(lookups:IrTagEscapeSignatures, adapterEnums:Map<String, String>, boxNames:Map<String, String>,
+			unboxNames:Map<String, String>, required:Map<String, Bool>) {
+		this.lookups = lookups;
+		this.adapterEnums = adapterEnums;
+		this.boxNames = boxNames;
+		this.unboxNames = unboxNames;
+		this.required = required;
+	}
+
+	public function signature(name:String):Null<Array<IrType>>
+		return lookups.signature(name);
+
+	public function methodArguments(type:IrType, method:String):Null<Array<IrType>>
+		return lookups.methodArguments(type, method);
+
+	public function fieldType(type:IrType, field:String):Null<IrType>
+		return lookups.fieldType(type, field);
+
+	public function global(name:String):Null<IrType>
+		return lookups.global(name);
+
+	public function adapterOf(name:String):Null<String>
+		return adapterEnums.get(name);
+
+	public function boxName(enumName:String):Null<String>
+		return boxNames.get(enumName);
+
+	public function unboxName(enumName:String):Null<String>
+		return unboxNames.get(enumName);
+
+	public function require(enumName:String):Void
+		required.set(enumName, true);
+}
+
 /** The types an escape check expects where a value leaves its function: arguments of calls, fields, globals. Memoized by name. */
 class IrTagEscapeSignatures {
 	final functions:IrFunctionIndex;
+
+	/** The argument types of a function by name, when given: in place of the functions' own (`IrEnumTagLoweringPass`). */
+	final argumentsOf:Null<String->Null<Array<IrType>>>;
+
 	final signatures:Map<String, Array<IrType>> = [];
 	final objects:Map<String, IrObject>;
 	final globals:Map<String, IrType>;
@@ -705,8 +438,9 @@ class IrTagEscapeSignatures {
 	final objectMethods:Map<String, Map<String, Null<Array<IrType>>>> = [];
 	final methodNames:Map<String, Map<String, String>> = [];
 
-	public function new(program:IrProgram, functions:IrFunctionIndex) {
+	public function new(program:IrProgram, functions:IrFunctionIndex, ?argumentsOf:String->Null<Array<IrType>>) {
 		this.functions = functions;
+		this.argumentsOf = argumentsOf;
 		objects = [for (object in program.objects) object.name => object];
 		globals = [for (field in program.staticFields) field.name => field.type];
 		contracts = [for (entry in program.interfaces) entry.name => entry];
@@ -720,6 +454,13 @@ class IrTagEscapeSignatures {
 	public function signature(name:String):Null<Array<IrType>> {
 		if (signatures.exists(name))
 			return signatures.get(name);
+		var resolve = argumentsOf;
+		if (resolve != null) {
+			var given = resolve(name);
+			if (given != null)
+				signatures.set(name, given);
+			return given;
+		}
 		var fn = functions.get(name);
 		if (fn == null)
 			return null;
@@ -1053,5 +794,625 @@ class IrBodyTagEscapes {
 		changed = true;
 		if (edit)
 			adaptOne(block, row, index, value, name);
+	}
+}
+
+/**
+ * Selects nominal scalar storage for the payload-free enums that can have it (`IrEnumTagStorage.eligible`), per function
+ * (`IrFunctionPass`). A function whose values, calls or type values involve such an enum is rewritten to carry its tag, and the
+ * tags its rewrite lets escape where a `Dyn` is expected are boxed by the enum's adapter (`IrEnumTagLowering.rewriteEscapes`).
+ * The rewrite reads, through the fact reader: which enums are eligible (`ELIGIBLE`), which callees are tag equalities, native
+ * wrappers or Dynamic unboxes, the signatures, fields and globals where a tag leaves the function, which callees are tag
+ * adapters and the adapters' names; it asks for the adapters it needs. The program's tables, the native wrappers, the adapters
+ * and the dropping of tag equalities nothing calls are the whole-program steps around it.
+ */
+class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeReads {
+	// Facts.
+	static inline final ELIGIBLE = 0;
+	static inline final TAG_EQUALITY = 1;
+	static inline final WRAPPER = 2;
+	static inline final UNBOX = 3;
+	static inline final SIGNATURE = 4;
+	static inline final METHOD = 5;
+	static inline final FIELD = 6;
+	static inline final GLOBAL = 7;
+	static inline final ADAPTER = 8;
+	static inline final ADAPTER_NAMES = 9;
+
+	/** Of a function with inline enum requests, which its providers resolve: never stated, so such a function is always redone. */
+	static inline final INLINE_REQUESTS = 10;
+
+	/** The summary of a function with inline enum box or unbox requests. */
+	static inline final HAS_INLINE_REQUESTS = 1;
+
+	/** The helper kind of an enum's adapters (`request`). */
+	static inline final ADAPTERS = 0;
+
+	final program:IrProgram;
+	final lineage:Null<compiler.ir.IrStageMemo.IrLineage>;
+	var names:Map<String, Bool> = [];
+	final dynamicUnboxes:Map<String, IrType> = [];
+	final tagEqualities:Map<String, Bool> = [];
+	final nativeWrappers:Map<String, String> = [];
+	final generated:Array<IrFunction> = [];
+	final adapterEnums:Map<String, String> = [];
+	final boxNames:Map<String, String> = [];
+	final unboxNames:Map<String, String> = [];
+	final required:Map<String, Bool> = [];
+	var input:Null<IrFunctionIndex> = null;
+	var lookups:Null<IrTagEscapeSignatures> = null;
+	var generatedByName:Map<String, IrFunction> = [];
+
+	/** The reader of the function being transformed; null outside a transform, where the program's tables are read directly. */
+	var reader:Null<IrFactReader> = null;
+
+	public function new(program:IrProgram, lineage:Null<compiler.ir.IrStageMemo.IrLineage>) {
+		this.program = program;
+		this.lineage = lineage;
+	}
+
+	function eligible(name:String):Bool {
+		var current = reader;
+		return current != null ? current.read(ELIGIBLE, name) == 1 : names.exists(name);
+	}
+
+	function changes(type:IrType):Bool
+		return switch type {
+			case Enum(name):
+				eligible(name);
+			case Array(inner), Iterator(inner), Nullable(inner):
+				changes(inner);
+			case Function(arguments, result):
+				var changed = changes(result);
+				for (argument in arguments)
+					if (changes(argument)) {
+						changed = true;
+						break;
+					}
+				changed;
+			default:
+				false;
+		};
+
+	function mapped(type:IrType):IrType
+		return switch type {
+			case Enum(name) if (eligible(name)):
+				EnumTag(name);
+			case Nullable(Enum(name)) if (eligible(name)):
+				EnumTag(name);
+			case Array(inner) if (changes(inner)):
+				Array(mapped(inner));
+			case Iterator(inner) if (changes(inner)):
+				Iterator(mapped(inner));
+			case Nullable(inner) if (changes(inner)):
+				Nullable(mapped(inner));
+			case Function(arguments, result) if (changes(type)):
+				Function([for (argument in arguments) mapped(argument)], mapped(result));
+			default:
+				type;
+		};
+
+	function isTagEquality(name:String):Bool {
+		var current = reader;
+		return current != null ? current.read(TAG_EQUALITY, name) == 1 : tagEqualities.exists(name);
+	}
+
+	function wrapperOf(name:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(WRAPPER, name);
+		return nativeWrappers.get(name);
+	}
+
+	function wrapperName(name:String):String {
+		var wrapper = wrapperOf(name);
+		if (wrapper == null)
+			throw new InternalError('Native "$name" has no enum tag wrapper');
+		return wrapper;
+	}
+
+	function unboxOf(name:String):Null<IrType> {
+		var current = reader;
+		if (current != null)
+			current.read(UNBOX, name);
+		return dynamicUnboxes.get(name);
+	}
+
+	public function summarize(fn:IrFunction):Int {
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case Intrinsic(_, InlineEnumBox(_) | InlineEnumUnbox(_), _):
+						return HAS_INLINE_REQUESTS;
+					default:
+				}
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
+		input = index;
+		for (fn in functions)
+			switch fn.kind {
+				case EnumDynamicUnbox(type):
+					dynamicUnboxes.set(fn.name, type);
+				default:
+			}
+		names = [for (entry in program.enums) if (IrEnumTagStorage.eligible(entry)) entry.name => true];
+		if (!names.keys().hasNext())
+			return;
+		// Payload-free enums cannot override equality. Their synthesized calls are
+		// scalar comparisons even with source inlining disabled.
+		for (fn in functions)
+			if ((switch fn.provides {
+				case Serves(_,
+					operation): (IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.Equals
+					|| IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.ReflectEquals);
+				case None: false;
+			}) && fn.arguments.length == 2)
+				switch mapped(fn.arguments[0].type) {
+				case EnumTag(name):
+					if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
+						tagEqualities.set(fn.name, true);
+				default:
+			}
+		for (native in program.natives)
+			nativeWrapper(native.name, native.arguments, native.result, false);
+		for (native in program.cNatives)
+			nativeWrapper(native.name, native.arguments, native.result, true);
+		generatedByName = [for (fn in generated) fn.name => fn];
+		program.objects = [for (object in program.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					methods:object.methods,
+					fields:[for (field in object.fields)
+					{
+						name:field.name,
+							type:mapped(field.type),
+							nativeLayout:field.nativeLayout,
+							scalarStorage:field.scalarStorage,
+							nullableScalarStorage:field.nullableScalarStorage
+					}]
+			}];
+		program.staticFields = [for (field in program.staticFields) {
+			name:field.name, type:mapped(field.type)
+		}];
+		program.interfaces = [for (entry in program.interfaces)
+			{
+				name:entry.name,
+					bases:entry.bases,
+					methods:[for (method in entry.methods)
+					{
+						name:method.name,
+							arguments:[for (argument in method.arguments) mapped(argument)],
+							result:mapped(method.result)
+					}]
+			}];
+		program.enums = [for (entry in program.enums)
+			{
+				name:entry.name,
+					isRecursive:entry.isRecursive,
+					inlineStorage:entry.inlineStorage,
+					cases:[for (constructor in entry.cases)
+					{
+						name:constructor.name, params:[for (parameter in constructor.params) mapped(parameter)]
+					}]
+			}];
+		// What the escapes read: the program's tables as lowered, and the functions' signatures as their rewrite makes them.
+		for (fn in functions)
+			switch fn.kind {
+				case EnumTagAdapter(EnumTag(name), _):
+					adapterEnums.set(fn.name, name);
+				default:
+			}
+		var view = new IrProgram(program.entryPoint);
+		view.enums = program.enums;
+		view.functions = functions.concat(generated);
+		for (name => pair in IrEnumTagStorage.adapterNames(view)) {
+			boxNames.set(name, pair.box);
+			unboxNames.set(name, pair.unbox);
+		}
+		lookups = new IrTagEscapeSignatures(program, index, argumentsOf);
+	}
+
+	/** The argument types of `name` as the rewrite makes them: a generated wrapper's own, a function's lowered. */
+	function argumentsOf(name:String):Null<Array<IrType>> {
+		var made = generatedByName.get(name);
+		if (made != null)
+			return [for (argument in made.arguments) argument.type];
+		var functions = input, fn = functions == null ? null : functions.get(name);
+		return fn == null ? null : [for (argument in fn.arguments) mapped(argument.type)];
+	}
+
+	function nativeWrapper(name:String, arguments:Array<IrType>, result:IrType, cNative:Bool):Void {
+		function directTag(type:IrType):Bool
+			return switch mapped(type) {
+				case EnumTag(_): true;
+				default: false;
+			};
+		if (!Lambda.exists(arguments, directTag) && !directTag(result))
+			return;
+		var wrapper = "$enum-tag:native:" + name,
+			b = new IrBuilder(),
+			converted:Array<IrValue> = [];
+		for (index in 0...arguments.length) {
+			var logical = arguments[index],
+				physical = mapped(logical),
+				value = b.argument('argument$index', physical);
+			converted.push(switch physical {
+				case EnumTag(enumName): b.safeCast(b.intrinsic(EnumTagBox(EnumTag(enumName)), [value], Dyn), logical);
+				default: value;
+			});
+		}
+		var called = cNative ? b.cNativeCall(name, converted, result) : b.call(name, converted, result);
+		var returned = switch mapped(result) {
+			case EnumTag(enumName): b.intrinsic(EnumTagUnbox(EnumTag(enumName)), [b.toDyn(called)], mapped(result));
+			default: called;
+		};
+		b.returnValue(returned);
+		generated.push(new IrFunction(wrapper, b.arguments, mapped(result), b.blocks, GeneratedHelper));
+		nativeWrappers.set(name, wrapper);
+	}
+
+	/** Encodes the positions of `Dyn` in `types` for a fact: -1 for none at all, `IrFacts.UNKNOWN` past 30 arguments. */
+	static function dynMask(types:Null<Array<IrType>>):Int {
+		if (types == null)
+			return -1;
+		var mask = 0;
+		for (index in 0...types.length)
+			if (isDyn(types[index])) {
+				if (index >= 30)
+					return IrFacts.UNKNOWN;
+				mask |= 1 << index;
+			}
+		return mask;
+	}
+
+	static function isDyn(type:Null<IrType>):Bool
+		return switch type {
+			case Dyn: true;
+			default: false;
+		};
+
+	/** The object type of a fact key: `O` for a class, `V` for an interface, then the name. */
+	static function typeKey(type:IrType):Null<String>
+		return switch type {
+			case Obj(name): "O" + name;
+			case Virtual(name): "V" + name;
+			default: null;
+		};
+
+	static function keyType(key:String):IrType {
+		var name = key.substr(1);
+		return key.charAt(0) == "V" ? Virtual(name) : Obj(name);
+	}
+
+	public function fact(kind:Int, key:String):Int {
+		var tables = lookups;
+		return switch kind {
+			case ELIGIBLE: names.exists(key) ? 1 : 0;
+			case TAG_EQUALITY: tagEqualities.exists(key) ? 1 : 0;
+			case WRAPPER: nativeWrappers.exists(key) ? 1 : 0;
+			case UNBOX: dynamicUnboxes.exists(key) ? 1 : 0;
+			case SIGNATURE: tables == null ? -1 : dynMask(tables.signature(key));
+			case METHOD:
+				var split = key.indexOf("\u0001");
+				tables == null
+					? -1 : dynMask(tables.methodArguments(keyType(key.substr(0, split)), key.substr(split + 1)));
+			case FIELD:
+				var split = key.indexOf("\u0001");
+				tables != null && isDyn(tables.fieldType(keyType(key.substr(0, split)), key.substr(split + 1))) ? 1 : 0;
+			case GLOBAL: tables != null && isDyn(tables.global(key)) ? 1 : 0;
+			case ADAPTER: adapterEnums.exists(key) ? 1 : 0;
+			case ADAPTER_NAMES:
+				boxNames.get(key) == "$enum-tag-box:" + key
+					&& unboxNames.get(key) == "$enum-tag-unbox:" + key ? 0 : IrFacts.UNKNOWN;
+			default: IrFacts.UNKNOWN;
+		};
+	}
+
+	// What the escape rewrite reads (`IrTagEscapeReads`), recorded as facts while a function is transformed.
+
+	public function signature(name:String):Null<Array<IrType>> {
+		var current = reader, tables = lookups;
+		if (current != null)
+			current.read(SIGNATURE, name);
+		return tables == null ? null : tables.signature(name);
+	}
+
+	public function methodArguments(type:IrType, method:String):Null<Array<IrType>> {
+		var current = reader, tables = lookups, key = typeKey(type);
+		if (key == null)
+			return null;
+		if (current != null)
+			current.read(METHOD, key + "\u0001" + method);
+		return tables == null ? null : tables.methodArguments(type, method);
+	}
+
+	public function fieldType(type:IrType, field:String):Null<IrType> {
+		var current = reader, tables = lookups, key = switch type {
+			case Obj(_): typeKey(type);
+			default: null;
+		};
+		if (key == null)
+			return null;
+		if (current != null)
+			current.read(FIELD, key + "\u0001" + field);
+		return tables == null ? null : tables.fieldType(type, field);
+	}
+
+	public function global(name:String):Null<IrType> {
+		var current = reader, tables = lookups;
+		if (current != null)
+			current.read(GLOBAL, name);
+		return tables == null ? null : tables.global(name);
+	}
+
+	public function adapterOf(name:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(ADAPTER, name);
+		return adapterEnums.get(name);
+	}
+
+	public function boxName(enumName:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(ADAPTER_NAMES, enumName);
+		return boxNames.get(enumName);
+	}
+
+	public function unboxName(enumName:String):Null<String> {
+		var current = reader;
+		if (current != null)
+			current.read(ADAPTER_NAMES, enumName);
+		return unboxNames.get(enumName);
+	}
+
+	public function require(enumName:String):Void {
+		var current = reader;
+		if (current != null)
+			current.request(ADAPTERS, EnumTag(enumName));
+		else
+			required.set(enumName, true);
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		switch type {
+			case EnumTag(name): required.set(name, true);
+			default: throw new InternalError("An enum tag adapter request names no tag");
+		}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		if (!names.keys().hasNext())
+			return fn;
+		// A reader that records nothing gains nothing from the reads: the tables are read directly, adapters required at once.
+		this.reader = reader.records() ? reader : null;
+		var result = lower(fn);
+		if (result != fn) {
+			if (summary == HAS_INLINE_REQUESTS) {
+				reader.read(INLINE_REQUESTS, "");
+				result = IrInlineEnumRequests.resolve(program, [result])[0];
+			}
+			if (boxNames.keys().hasNext())
+				IrEnumTagLowering.rewriteEscapes(this, [result]);
+		}
+		this.reader = null;
+		return result;
+	}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		if (!names.keys().hasNext())
+			return functions;
+		// A tag equality nothing calls goes: its callers compare tags. What a function calls is its walk summary (`IrWalkSummary`).
+		var kept:Map<String, Bool> = [], scratch = IrTypeAwareWalk.IrWalkSummary.scratch();
+		kept.set(program.entryPoint, true);
+		for (fn in functions.concat(generated)) {
+			if (fn.retention != Reachable)
+				kept.set(fn.name, true);
+			var summary = IrTypeAwareWalk.IrWalkSummary.of(fn, lineage, scratch);
+			for (name in summary.calls)
+				kept.set(name, true);
+			for (name in summary.staticClosures)
+				kept.set(name, true);
+			for (name in summary.instanceClosures)
+				kept.set(name, true);
+		}
+		for (object in program.objects)
+			for (method in object.methods)
+				kept.set(method.functionName.name, true);
+		for (native in program.natives)
+			if (native.generatedFunctionDependencies != null)
+				for (name in native.generatedFunctionDependencies)
+					kept.set(name, true);
+		var result = [for (fn in functions) if (!tagEqualities.exists(fn.name) || kept.exists(fn.name)) fn];
+		// The wrappers are made each build: their escapes are finished here, as a rewritten function's are in its transform.
+		var wrappers = IrInlineEnumRequests.resolve(program, generated);
+		if (boxNames.keys().hasNext())
+			IrEnumTagLowering.rewriteEscapes(this, wrappers);
+		program.functions = result.concat(wrappers);
+		if (boxNames.keys().hasNext())
+			IrEnumTagLowering.addAdapters(program, required,
+				new IrFunctionIndex("enum-tag-lowering", program.functions),
+				boxNames, unboxNames);
+		return program.functions;
+	}
+
+	/** `fn` with its eligible enums carried as tags, or `fn` itself when none of its values, calls or type values involves one. */
+	function lower(fn:IrFunction):IrFunction {
+		function valueChanges(value:IrValue):Bool
+			return changes(value.type);
+		function nonOutputChanges(instruction:IrInstruction):Bool {
+			switch instruction {
+				case Call(_, name, _) if (isTagEquality(name.name)):
+					return true;
+				case Call(_, target, _) if (wrapperOf(target.name) != null):
+					return true;
+				case CNativeCall(_, name, _) if (wrapperOf(name) != null):
+					return true;
+				case TypeValue(_, type):
+					switch type {
+						case Enum(_):
+						default:
+							if (changes(type)) return true;
+					}
+				default:
+			}
+			return false;
+		}
+		function instructionChanges(instruction:IrInstruction):Bool
+			return nonOutputChanges(instruction) || IrOperands.anyValue(instruction, valueChanges);
+		function functionChanges(fn:IrFunction):Bool {
+			if (changes(fn.result))
+				return true;
+			for (argument in fn.arguments)
+				if (valueChanges(argument))
+					return true;
+			for (binding in fn.debugBindings)
+				if (valueChanges(binding.value))
+					return true;
+			// Valid SSA uses have the type of their definition. Discover changed carriers once per definition;
+			// instruction rewriting below still visits every operand, and the verifier checks every use.
+			for (block in fn.blocks)
+				for (located in block.instructions) {
+					var output = IrOperands.output(located.value);
+					if (output != null && valueChanges(output))
+						return true;
+					if (nonOutputChanges(located.value))
+						return true;
+				}
+			return false;
+		}
+		if (!functionChanges(fn))
+			return fn;
+
+		var values:Map<Int, IrValue> = [];
+		function use(value:IrValue):IrValue {
+			if (!valueChanges(value))
+				return value;
+			if (!values.exists(value.id))
+				values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
+			return values.get(value.id);
+		}
+		var indexTags:Map<Int, IrValue> = [],
+			replacedIndices:Map<Int, Bool> = [];
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case EnumIndex(output, input):
+						switch use(input).type {
+							case EnumTag(_): indexTags.set(output.id, use(input));
+							default:
+						}
+					default:
+				}
+		var blocks = [for (block in fn.blocks) {
+			var result = new IrBlock(block.id);
+			for (located in block.instructions) {
+				var tagIndexEquality = switch located.value {
+					case Equal(_, left, right): indexTags.exists(left.id) && indexTags.exists(right.id);
+					default: false;
+				};
+				if (!tagIndexEquality && !instructionChanges(located.value)) {
+					result.instructions.push(located);
+					continue;
+				}
+				var instruction = IrInliner.remap(located.value, use, id -> id);
+				switch located.value {
+					case Call(output, name, arguments) if (isTagEquality(name.name)):
+						instruction = Equal(use(output), use(arguments[0]), use(arguments[1]));
+					case Equal(output, left, right)
+						if (indexTags.exists(left.id)
+						&& indexTags.exists(right.id)
+						&& IrVerifier.sameType(indexTags.get(left.id).type, indexTags.get(right.id).type)):
+						instruction = Equal(use(output), indexTags.get(left.id), indexTags.get(right.id));
+						replacedIndices.set(left.id, true);
+						replacedIndices.set(right.id, true);
+					case Call(output, target, arguments) if (wrapperOf(target.name) != null):
+						instruction = Call(use(output), IrSymbol.of(wrapperName(target.name)),
+							[for (argument in arguments) use(argument)]);
+					case CNativeCall(output, name, arguments) if (wrapperOf(name) != null):
+						instruction = Call(use(output), IrSymbol.of(wrapperName(name)),
+							[for (argument in arguments) use(argument)]);
+					case Call(output, name, arguments) if (unboxOf(name.name) != null):
+						if (!IrVerifier.sameType(unboxOf(name.name), output.type))
+							throw new InternalError("Malformed enum unbox signature");
+						switch use(output).type {
+							case EnumTag(enumName): instruction = Intrinsic(use(output),
+								EnumTagUnbox(EnumTag(enumName)),
+								[for (argument in arguments) use(argument)]);
+							default:
+						}
+					case TypeValue(output, type):
+						// A bare enum descriptor describes its nominal box, not its private scalar carrier.
+						instruction = TypeValue(use(output), switch type {
+							case Enum(_): type;
+							default: mapped(type);
+						});
+					default:
+				}
+				result.instructions.push(new Located(instruction, located.provenance));
+			}
+			var terminator = block.terminator;
+			if (terminator != null) result.terminator = new Located(switch terminator.value {
+				case Unreachable: Unreachable;
+				case Return(value): Return(use(value));
+				case Throw(value): Throw(use(value));
+				case Rethrow(value): Rethrow(use(value));
+				case Jump(id): Jump(id);
+				case Branch(condition, yes, no): Branch(use(condition), yes, no);
+				case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
+					switchTargets.copy(), switchOtherwise);
+			}, terminator.provenance);
+			result;
+		}];
+		if (replacedIndices.keys().hasNext()) {
+			var used:Map<Int, Bool> = [];
+			for (block in blocks) {
+				for (located in block.instructions) {
+					for (input in IrOperands.inputs(located.value))
+						used.set(input.id, true);
+					switch located.value {
+						case Phi(_, inputs):
+							for (input in inputs)
+								used.set(input.value.id, true);
+						default:
+					}
+				}
+				if (block.terminator != null)
+					switch block.terminator.value {
+						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+							Switch(value, _, _):
+							used.set(value.id, true);
+						case Jump(_), Unreachable:
+					}
+			}
+			for (binding in fn.debugBindings)
+				used.set(binding.value.id, true);
+			for (block in blocks) {
+				var kept = [for (located in block.instructions)
+					if (switch located.value {
+						case EnumIndex(output, _): !replacedIndices.exists(output.id) || used.exists(output.id);
+						default: true;
+					}) located];
+				block.instructions.splice(0, block.instructions.length);
+				for (located in kept)
+					block.instructions.push(located);
+			}
+		}
+		var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)],
+			mapped(fn.result), blocks, fn.kind, [for (binding in fn.debugBindings)
+			{
+				identity:binding.identity,
+					name:binding.name,
+					value:use(binding.value),
+					path:binding.path,
+					scopeStart:binding.scopeStart,
+					scopeEnd:binding.scopeEnd
+			}], fn.inlineHint, fn.retention);
+		return rewrittenFunction;
 	}
 }
