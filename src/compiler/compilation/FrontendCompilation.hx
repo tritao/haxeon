@@ -229,6 +229,12 @@ private class FrontendBuild {
 	}
 }
 
+/** What a previous IR function names that `FrontendCompilation.retainedFromPrevious` may retain: classes and enums, each once. */
+typedef TypeMentions = {
+	final classes:Array<String>;
+	final enums:Array<String>;
+}
+
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	/**
@@ -1084,7 +1090,7 @@ class FrontendCompilation {
 		build.allocationBeforeModulePrune = AllocationMeter.sample();
 		// Shared generated helpers have one origin, but every retained caller needs their dependencies.
 		var calledGeneratedHelpers = generatedHelpersStillCalled(modules, names, build.typedByName, owners,
-			build.semanticAssembly.invalidated);
+			build.semanticAssembly.invalidated, context.state.irCalls);
 		for (name in names) {
 			checkCancelled(build.token);
 			if (!modules.exists(name))
@@ -1893,14 +1899,51 @@ class FrontendCompilation {
 				for (member in members)
 					pending.push(member);
 		}
-		function visitType(type:IrType):Void {
+		var mentions = context.state.irTypeMentions;
+		while (pending.length > 0) {
+			var name = pending.pop(), fn = functions.get(name);
+			if (fn == null)
+				throw new InternalError('Missing function $name during inline enum reflection reachability');
+			var named = mentions.get(fn);
+			if (named == null) {
+				named = typeMentions(fn);
+				mentions.set(fn, named);
+			}
+			for (target in named.classes)
+				if (known.exists(target))
+					retain(target);
+			for (target in named.enums)
+				if (knownEnums.exists(target))
+					retainEnum(target);
+		}
+		mentions.endBuild();
+		return {
+			program: previous,
+			classes: result,
+			enums: retainedEnums,
+			units: units
+		};
+	}
+
+	/**
+	 * The classes and specialized-enum candidates `fn` names in its signature, values, type values and globals, each
+	 * once: what `retainedFromPrevious` reads of a function, kept by the session while the function is the same object
+	 * (`SessionState.irTypeMentions`), so an unchanged one is not read again.
+	 */
+	static function typeMentions(fn:IrFunction):TypeMentions {
+		var names:TypeMentions = {classes: [], enums: []};
+		function add(mention:String):Void
+			if (names.classes.indexOf(mention) < 0)
+				names.classes.push(mention);
+		function addEnum(mention:String):Void
+			if (names.enums.indexOf(mention) < 0)
+				names.enums.push(mention);
+		function visitType(type:IrType):Void
 			switch type {
 				case Obj(name):
-					if (known.exists(name))
-						retain(name);
+					add(name);
 				case Enum(name):
-					if (knownEnums.exists(name))
-						retainEnum(name);
+					addEnum(name);
 				case Array(element), Iterator(element), Nullable(element):
 					visitType(element);
 				case Function(arguments, value):
@@ -1909,39 +1952,53 @@ class FrontendCompilation {
 					visitType(value);
 				default:
 			}
-		}
-		while (pending.length > 0) {
-			var name = pending.pop(), fn = functions.get(name);
-			if (fn == null)
-				throw new InternalError('Missing function $name during inline enum reflection reachability');
-			for (argument in fn.arguments)
-				visitType(argument.type);
-			visitType(fn.result);
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var instruction = located.value,
-						output = compiler.ir.model.IrOperands.output(instruction);
-					if (output != null)
-						visitType(output.type);
-					for (input in compiler.ir.model.IrOperands.inputs(instruction))
-						visitType(input.type);
-					switch instruction {
-						case TypeValue(_, type):
-							visitType(type);
-						case GlobalGet(_, field), GlobalSet(field, _):
-							var separator = field.lastIndexOf(".");
-							if (separator > 0 && known.exists(field.substr(0, separator)))
-								retain(field.substr(0, separator));
+		for (argument in fn.arguments)
+			visitType(argument.type);
+		visitType(fn.result);
+		// A function kept as its body alone is read from the body: its value types, type values and globals, not decoded.
+		var body = fn.body;
+		if (body != null) {
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					var output = body.output(row);
+					if (output.exists())
+						visitType(body.valueType(output));
+					for (index in 0...body.operandCount(row))
+						visitType(body.valueType(body.operand(row, index)));
+					switch body.opcode(row) {
+						case compiler.ir.model.IrOpcode.TypeValue:
+							visitType(body.types.type(body.aux(row)));
+						case compiler.ir.model.IrOpcode.GlobalGet, compiler.ir.model.IrOpcode.GlobalSet:
+							var field = body.symbol(row).name, separator = field.lastIndexOf(".");
+							if (separator > 0)
+								add(field.substr(0, separator));
 						default:
 					}
+					row = body.nextRow(row);
 				}
+			}
+			return names;
 		}
-		return {
-			program: previous,
-			classes: result,
-			enums: retainedEnums,
-			units: units
-		};
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var instruction = located.value,
+					output = compiler.ir.model.IrOperands.output(instruction);
+				if (output != null)
+					visitType(output.type);
+				for (input in compiler.ir.model.IrOperands.inputs(instruction))
+					visitType(input.type);
+				switch instruction {
+					case TypeValue(_, type):
+						visitType(type);
+					case GlobalGet(_, field), GlobalSet(field, _):
+						var separator = field.lastIndexOf(".");
+						if (separator > 0)
+							add(field.substr(0, separator));
+					default:
+				}
+			}
+		return names;
 	}
 
 	/**
@@ -2052,7 +2109,7 @@ class FrontendCompilation {
 
 	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>,
-			invalidated:Map<String, Bool>):Map<String, Bool> {
+			invalidated:Map<String, Bool>, calls:compiler.ir.reuse.IrFunctionMemo<Array<String>>):Map<String, Bool> {
 		var reachable = [for (name in names) name => true];
 		var holders:Map<String, compiler.modules.ModuleState> = [],
 			kept:Map<String, Bool> = [],
@@ -2086,23 +2143,19 @@ class FrontendCompilation {
 			for (cached => body in state.irFunctions) {
 				if (!owners.exists(cached) || typedByName.exists(cached))
 					continue;
-				for (block in body.blocks)
-					for (instruction in block.instructions)
-						switch instruction.value {
-							case Call(_, callee,
-								_) if (holders.exists(callee.name) && !invalidated.exists(callee.name)):
-								result.set(callee.name, true);
-								var dependencyOwner = holders.get(callee.name).name;
-								if (!reachable.exists(dependencyOwner)) {
-									reachable.set(dependencyOwner, true);
-									names.push(dependencyOwner);
-								}
-								if (!kept.exists(callee.name)) {
-									kept.set(callee.name, true);
-									pending.push(callee.name);
-								}
-							default:
+				for (callee in callsOf(body, calls))
+					if (holders.exists(callee) && !invalidated.exists(callee)) {
+						result.set(callee, true);
+						var dependencyOwner = holders.get(callee).name;
+						if (!reachable.exists(dependencyOwner)) {
+							reachable.set(dependencyOwner, true);
+							names.push(dependencyOwner);
 						}
+						if (!kept.exists(callee)) {
+							kept.set(callee, true);
+							pending.push(callee);
+						}
+					}
 			}
 		}
 		while (pending.length > 0) {
@@ -2112,25 +2165,59 @@ class FrontendCompilation {
 			var body = holder.irFunctions.get(current);
 			if (body == null)
 				continue;
-			for (block in body.blocks)
-				for (instruction in block.instructions)
-					switch instruction.value {
-						case Call(_, callee, _) if (holders.exists(callee.name)):
-							result.set(callee.name, true);
-							var dependencyOwner = holders.get(callee.name).name;
-							if (!reachable.exists(dependencyOwner)) {
-								reachable.set(dependencyOwner, true);
-								names.push(dependencyOwner);
-							}
-							if (!kept.exists(callee.name)) {
-								kept.set(callee.name, true);
-								pending.push(callee.name);
-							}
-						default:
+			for (callee in callsOf(body, calls))
+				if (holders.exists(callee)) {
+					result.set(callee, true);
+					var dependencyOwner = holders.get(callee).name;
+					if (!reachable.exists(dependencyOwner)) {
+						reachable.set(dependencyOwner, true);
+						names.push(dependencyOwner);
 					}
+					if (!kept.exists(callee)) {
+						kept.set(callee, true);
+						pending.push(callee);
+					}
+				}
 		}
+		calls.endBuild();
 		names.sort(Reflect.compare);
 		return result;
+	}
+
+	/**
+	 * The functions `fn` calls, each once, in the order it first calls them: kept by the session while `fn` is the same object
+	 * (`SessionState.irCalls`), so the helpers a build keeps are found without reading every function that stays.
+	 */
+	static function callsOf(fn:IrFunction, calls:compiler.ir.reuse.IrFunctionMemo<Array<String>>):Array<String> {
+		var known = calls.get(fn);
+		if (known != null)
+			return known;
+		var found:Array<String> = [], body = fn.body;
+		// A function kept as its body alone is read from the body, not decoded.
+		if (body != null) {
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == compiler.ir.model.IrOpcode.Call) {
+						var callee = body.symbol(row).name;
+						if (found.indexOf(callee) < 0)
+							found.push(callee);
+					}
+					row = body.nextRow(row);
+				}
+			}
+			calls.set(fn, found);
+			return found;
+		}
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case Call(_, callee, _) if (found.indexOf(callee.name) < 0):
+						found.push(callee.name);
+					default:
+				}
+		calls.set(fn, found);
+		return found;
 	}
 
 	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {

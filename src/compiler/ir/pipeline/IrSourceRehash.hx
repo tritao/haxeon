@@ -59,8 +59,18 @@ class IrSourceRehash {
 		return current != null && current != location.sourceHash;
 	}
 
-	/** Whether any location of `fn` names a file by a hash other than the file's current one. */
+	/**
+	 * Whether any location of `fn` names a file by a hash other than the file's current one. A function that has its body is read
+	 * from the body's provenance table, not decoded: a session keeps most functions as their bodies alone.
+	 */
 	public static function isStale(fn:IrFunction, hashes:Map<String, Int>):Bool {
+		var body = fn.body;
+		if (body != null) {
+			for (provenance in body.provenanceTable())
+				if (stale(provenance, hashes))
+					return true;
+			return false;
+		}
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
 				if (stale(instruction.provenance, hashes))

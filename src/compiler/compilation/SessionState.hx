@@ -70,6 +70,15 @@ class SessionState {
 	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
 
 	/**
+	 * What each previous IR function names of classes and enums (`FrontendCompilation.typeMentions`), while it is the same object;
+	 * every copy shares it, as an object's answer never changes.
+	 */
+	public var irTypeMentions(default, null) = new compiler.ir.reuse.IrFunctionMemo<FrontendCompilation.TypeMentions>();
+
+	/** The functions each IR function of the modules calls (`FrontendCompilation.callsOf`), while it is the same object. */
+	public var irCalls(default, null) = new compiler.ir.reuse.IrFunctionMemo<Array<String>>();
+
+	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
 	 * reuses both.
 	 */
@@ -209,6 +218,8 @@ class SessionState {
 		result.inlineCache = inlineCache.copy();
 		result.irVersions = irVersions;
 		result.stageMemos = stageMemos;
+		result.irTypeMentions = irTypeMentions;
+		result.irCalls = irCalls;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
 		result.reachabilityCache = copyReachabilityCache(reachabilityCache);

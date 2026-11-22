@@ -210,6 +210,13 @@ class IrBody {
 	public inline function provenance(row:Int):SourceProvenance
 		return provenancePool[provenances[row]];
 
+	/**
+	 * The distinct provenances the rows name, each once, without decoding: a frozen body's pool holds only those (`freeze`); one
+	 * still edited may hold some its edits dropped.
+	 */
+	public function provenanceTable():Array<SourceProvenance>
+		return provenancePool;
+
 	public inline function float(row:Int):Float
 		return floats[auxes[row]];
 
