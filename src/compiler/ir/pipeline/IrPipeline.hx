@@ -110,12 +110,12 @@ class IrPipeline {
 		IrFunctionStages.programStage("closed-enum-tag-abi", closedEnumTagAbi,
 			closedEnumTagProgram).when(closesEnumTags),
 		new IrStage("value-array-rewrite", valueArrayRewrite),
-		new IrStage("value-constructors", valueConstructors).when(wasmValueLanes),
+		IrFunctionStages.programStage("value-constructors", valueConstructors).when(wasmValueLanes),
 		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
-		new IrStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
+		IrFunctionStages.programStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
-		new IrStage("value-constructors", valueConstructors).when(hashLink),
+		IrFunctionStages.programStage("value-constructors", valueConstructors).when(hashLink),
 		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
 		new IrStage("scalar-closures", scalarClosures).when(hashLink),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
@@ -612,10 +612,8 @@ class IrPipeline {
 	 * Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen; its call rewrite can
 	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
-	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValueConstructors.rewrite(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrValueConstructors(program, bodyTypes(context), context.passScratch, context.lineage);
 
 	/** The last value phi scalarization before scalar replacement. */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrFunctionPass
