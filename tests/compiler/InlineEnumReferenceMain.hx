@@ -1,7 +1,7 @@
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
-import compiler.ir.passes.enums.IrInlineEnumReferenceAccess;
+import compiler.ir.passes.enums.IrInlineEnumCaseAccess.IrInlineEnumReferenceAccess;
 import compiler.ir.passes.values.IrValueLaneReference;
 import compiler.ir.tools.IrInterpreter;
 import compiler.ir.verify.IrVerifier;

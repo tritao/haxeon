@@ -118,7 +118,8 @@ class InlineEnumPayloadMain {
 			checks.push(b.equal(b.call("__f64_to_i64_bits", [access.field(b, wide, 2, 0)], I64),
 				b.call("__f64_to_i64_bits", [floating], I64)));
 			for (index in 0...mixed.references)
-				checks.push(b.equal(compiler.ir.passes.enums.IrInlineEnumReferenceAccess.read(b, wide, index,
+				checks.push(b.equal(compiler.ir.passes.enums.IrInlineEnumCaseAccess.IrInlineEnumReferenceAccess.read(b,
+					wide, index,
 					Obj("Source")),
 					b.constNull(Obj("Source"))));
 		}
