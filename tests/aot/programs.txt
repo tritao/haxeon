@@ -385,6 +385,7 @@ nested-value-scalar-replace
 non-null-facts
 null-check-facts
 null-access-throws
+anonymous-local-null
 nullable-abstract-cast
 nullable-abstract-places
 nullable-abstract-value

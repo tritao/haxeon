@@ -162,6 +162,8 @@ class StatementTyper {
 		var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
 			span,
 			context.typeSubstitutions);
+		if (declaredType != null)
+			registerDeclaredType(declaredType);
 		var predeclared:Null<LocalBinding> = null, recursiveCell:Null<String> = null;
 		if (declaredType != null)
 			switch initializer {
@@ -214,6 +216,13 @@ class StatementTyper {
 		return [TVar(binding.id, value, span)];
 	}
 
+	/**
+	 * A local's written type is a type of the program even when no value of it is ever made (`var o:{x:Int} = null`): the local,
+	 * an environment capturing it and a field read through it all name the structure.
+	 */
+	function registerDeclaredType(type:CompilerType):Void
+		new AnonymousTypeRegistry(session).register(type);
+
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>,
 			statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
@@ -226,6 +235,7 @@ class StatementTyper {
 					default: false;
 				}) ? uninitializedType(name, span) : session.declarations.resolve(declared, span,
 					context.typeSubstitutions);
+				registerDeclaredType(declaredType);
 				var binding = scope.define(name, declaredType, span, false);
 				bodyTyper.bindCell(binding, declaredType);
 				[TDeclare(binding.id, declaredType, span)];
