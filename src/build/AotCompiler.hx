@@ -12,10 +12,16 @@ import sys.io.File;
  * language server). It starts in a tenth of the time the VM takes to JIT the compiler's bytecode. A release ships it prebuilt for
  * its platform, so a user needs no C compiler; in a checkout `haxeon dev aot-compiler` builds it (`tools.dev.AotCompilerBuild`).
  *
- * It is used only while it is current: built from the compiler sources the CLI would otherwise build to bytecode. Its stamp,
- * `haxeon-compiler.sources` beside it, holds the digest of those sources when it was built; an executable without one, or with
- * another digest, is ignored and the compiler runs on the VM as before. So an edit to the compiler in a checkout never runs an
- * older compiler, and nothing chooses between the two but what is installed.
+ * A release also ships the same entry point as bytecode, `haxeon-compiler.hl` beside the VM (`tools.dev.ReleasePackage`), which
+ * it runs on the VM when it has no executable: a release has no pinned Haxe to build the compiler's bytecode from its sources, as
+ * a checkout does.
+ *
+ * Each is used only while it is current: built from the compiler sources the CLI would otherwise build to bytecode. Its stamp
+ * (`haxeon-compiler.sources`, `haxeon-compiler.hl.sources`) holds the digest of those sources when it was built; a program
+ * without one, or with another digest, is ignored and the CLI builds the compiler from its sources as before. So an edit to the
+ * compiler in a checkout never runs an older compiler, and nothing chooses between them but what is installed. A release ships
+ * no compiler sources, as its compiler cannot change: there the digest to match is the one its marker records
+ * (`HaxeonRelease.COMPILER_SOURCES`), written when the release was made.
  */
 class AotCompiler {
 	public static inline final NAME = "haxeon-compiler";
@@ -23,29 +29,71 @@ class AotCompiler {
 	/** Bump when what the digest covers changes. */
 	static inline final FORMAT = 1;
 
+	/**
+	 * Whether `program` says, once, that the executable is stale and the compiler runs on the VM instead (`staleNotice`). The CLI
+	 * turns it on for builds that print progress, so a quiet build or a script says nothing.
+	 */
+	public static var announceStale = false;
+
+	static var staleAnnounced = false;
+
 	/** Where the executable is, whether or not it exists. */
 	public static function executable(home:String):String
 		return HashLinkPath.executable(home, NAME);
 
+	/** Where the compiler's bytecode for the VM is, whether or not it exists. */
+	public static function bytecode(home:String):String
+		return Path.join([HashLinkPath.directory(home), NAME + ".hl"]);
+
 	/** The stamp beside the executable: the digest of the sources it was built from. */
 	public static function stamp(home:String):String
 		return Path.join([HashLinkPath.directory(home), NAME + ".sources"]);
+
+	/** The stamp beside the bytecode. */
+	public static function bytecodeStamp(home:String):String
+		return bytecode(home) + ".sources";
 
 	/**
 	 * The executable when it was built from the compiler in `compilerSource` (a `src` directory, as `CompilerSources` takes) and
 	 * `home`'s standard library, else null: when it is missing, has no stamp, or is stale.
 	 */
 	public static function current(home:String, compilerSource:String, ?digests:ContentDigestCache):Null<String> {
-		try {
-			var path = executable(home), stampPath = stamp(home);
-			if (!FileSystem.exists(path) || !FileSystem.exists(stampPath))
-				return null;
-			return StringTools.trim(File.getContent(stampPath)) == sourcesDigest(home, compilerSource, digests)
-				? path : null;
-		} catch (_:Dynamic) {
-			return null;
-		}
+		var digest = new LazyDigest(home, compilerSource, digests);
+		return digest.matches(executable(home), stamp(home)) ? executable(home) : null;
 	}
+
+	/** The bytecode when it was built from those sources, else null. */
+	public static function currentBytecode(home:String, compilerSource:String,
+			?digests:ContentDigestCache):Null<String> {
+		var digest = new LazyDigest(home, compilerSource, digests);
+		return digest.matches(bytecode(home), bytecodeStamp(home)) ? bytecode(home) : null;
+	}
+
+	/**
+	 * The command that runs the compiler without building it from its sources, to which a role's arguments are added (`serve
+	 * STATE`, `lsp`, or a compile's): the executable when it is current, else the VM with the bytecode when that is current, else
+	 * null. A stale executable is said once (`staleNotice`) when `announceStale` is on.
+	 */
+	public static function program(home:String, compilerSource:String,
+			?digests:ContentDigestCache):Null<CompilerProgram> {
+		var digest = new LazyDigest(home, compilerSource, digests), native = executable(home);
+		if (digest.matches(native, stamp(home)))
+			return {command: [native], native: true};
+		if (announceStale && !staleAnnounced && FileSystem.exists(native)) {
+			staleAnnounced = true;
+			BuildOutput.error(staleNotice());
+		}
+		var code = bytecode(home);
+		return digest.matches(code, bytecodeStamp(home)) ? {
+			command: [HashLinkPath.executable(home), code],
+			native: false
+		} : null;
+	}
+
+	/** What a build says when the executable is stale, so a checkout's slower start has a stated cause and remedy. */
+	public static function staleNotice():String
+		return 'note: $NAME is older than the compiler sources, so the compiler runs on the VM (a slower start); '
+			+ 'rebuild it with "haxeon dev aot-compiler"';
 
 	/**
 	 * The digest of every file of the compiler's sources (`CompilerSources.roots`) and of the standard library it is built with, by
@@ -75,4 +123,44 @@ class AotCompiler {
 				into.add('$child ${digests.file(path)}\n');
 		}
 	}
+}
+
+/**
+ * The sources' digest, computed at most once and only when a stamp is there to compare it with; in a release, the one its marker
+ * records.
+ */
+private class LazyDigest {
+	final home:String;
+	final compilerSource:String;
+	final digests:Null<ContentDigestCache>;
+	var digest:Null<String> = null;
+
+	public function new(home:String, compilerSource:String, digests:Null<ContentDigestCache>) {
+		this.home = home;
+		this.compilerSource = compilerSource;
+		this.digests = digests;
+	}
+
+	/** Whether `path` and its stamp `stampPath` exist and the stamp holds the sources' digest. */
+	public function matches(path:String, stampPath:String):Bool {
+		try {
+			if (!FileSystem.exists(path) || !FileSystem.exists(stampPath))
+				return false;
+			if (digest == null)
+				digest = HaxeonRelease.isRelease(home) ? HaxeonRelease.field(home,
+					HaxeonRelease.COMPILER_SOURCES) : AotCompiler.sourcesDigest(home, compilerSource, digests);
+			return digest != null && StringTools.trim(File.getContent(stampPath)) == digest;
+		} catch (_:Dynamic) {
+			return false;
+		}
+	}
+}
+
+/** How the CLI runs a compiler it did not build from sources (`AotCompiler.program`). */
+typedef CompilerProgram = {
+	/** The program and the arguments before a role's. */
+	final command:Array<String>;
+
+	/** The executable built ahead of time, rather than the VM running bytecode. */
+	final native:Bool;
 }

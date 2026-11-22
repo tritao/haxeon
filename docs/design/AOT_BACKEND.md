@@ -350,10 +350,16 @@ Nothing else chooses between the two: no option, no environment variable. The ex
 built from the compiler sources the CLI would otherwise build to bytecode. Its stamp, `haxeon-compiler.sources`, holds the
 digest of those sources (`CompilerSources.roots` and the standard library, by relative path and content, so it does not depend on
 where the files are unpacked); when the executable or the stamp is missing, or the digest differs, the CLI runs the compiler on
-the VM as before. So an edit to the compiler in a checkout never runs an older compiler, and a release, whose sources are the
-ones it was built from, always runs the executable. `haxeon doctor` says which: ok, stale or not built.
+the VM as before. So an edit to the compiler in a checkout never runs an older compiler. A release ships no compiler sources,
+as its compiler cannot change: its marker (`haxeon-release.txt`, `build.HaxeonRelease`) records the digest of the sources it was
+made from, and the stamps are matched against that, so a release always runs what it ships. `haxeon doctor` says which: ok,
+stale or not built.
 
-A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler. They are
+A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler
+(docs/reference/RELEASES.md). It also ships the same entry point as bytecode with a stamp of its own (`haxeon-compiler.hl`),
+which `AotCompiler.program` runs on the VM when there is no current executable: a release has
+no pinned Haxe to build the compiler from its sources, and the Windows release does not build the executable yet. A build
+with a stale executable says so once, with the command that rebuilds it. They are
 made by `haxeon dev aot-compiler [--toolchain=NAME]` (`tools.dev.AotCompilerBuild`): the native build (for the hlc SDK), the
 checkout's compiler built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`)
 with the SDK's default toolchain or the one given, then the executable published by rename (`cmake/haxeon-replace.cmake`, so a running worker

@@ -6,6 +6,7 @@ import build.BuildScope;
 import build.BuildSession;
 import build.HashLinkPath;
 import build.HaxeonProjectBuild;
+import build.HaxeonRelease;
 import build.NativeTargetSupport;
 import build.Target;
 import build.WorkspaceBuild;
@@ -467,14 +468,19 @@ class HaxeonCli {
 	static function doctor(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected doctor argument "${arguments[0]}"');
-		var home = haxeonHome(), suffix = executableSuffix();
+		var home = haxeonHome(), suffix = executableSuffix(), release = HaxeonRelease.isRelease(home);
 		var haxePath = Path.join([home, ".tools", "haxe", "haxe" + suffix]);
 		var hashlinkPath = Path.join([HashLinkPath.directory(home), "hl" + suffix]);
 		var compilerPath = Path.join([home, "bootstrap", "compiler.hl"]);
 		var androidSdk = Path.join([home, ".tools", "android-sdk"]);
+		var compilerSource = Path.join([home, "src"]);
 		var missingRequired = false;
 
-		missingRequired = reportPath("pinned Haxe compiler", haxePath, true) || missingRequired;
+		if (release)
+			Sys.println('ok: Haxeon release ${HaxeonRelease.field(home, "version")} (${HaxeonRelease.field(home, "platform")}, $home)');
+		// A checkout builds the compiler from its sources with the pinned Haxe; a release ships it built.
+		if (!release || AotCompiler.program(home, compilerSource) == null)
+			missingRequired = reportPath("pinned Haxe compiler", haxePath, true) || missingRequired;
 		missingRequired = reportPath("HashLink VM, with the Haxeon runtime", hashlinkPath, true) || missingRequired;
 		if (!missingRequired && !RuntimeLibrary.skipped()) {
 			var lacking = RuntimeLibrary.missing(home);
@@ -483,16 +489,24 @@ class HaxeonCli {
 				missingRequired = true;
 			}
 		}
-		reportPath("self-hosted compiler", compilerPath, false);
+		if (!release)
+			reportPath("self-hosted compiler", compilerPath, false);
 		var aot = AotCompiler.executable(home);
-		if (FileSystem.exists(aot) && AotCompiler.current(home, Path.join([home, "src"])) == null)
-			Sys.println('stale: compiler built ahead of time ($aot), not built from these sources; the VM runs the compiler');
+		if (FileSystem.exists(aot) && AotCompiler.current(home, compilerSource) == null)
+			Sys.println('stale: compiler built ahead of time ($aot), not built from these sources; the VM runs the compiler. '
+				+ 'Rebuild it with "haxeon dev aot-compiler"');
 		else
 			reportPath("compiler built ahead of time", aot, false);
+		var bytecode = AotCompiler.bytecode(home);
+		if (FileSystem.exists(bytecode))
+			Sys.println(AotCompiler.currentBytecode(home, compilerSource) != null
+				? 'ok: compiler bytecode, which the VM runs without the compiler built ahead of time ($bytecode)'
+				: 'stale: compiler bytecode ($bytecode), not built from these sources');
 		reportPath("Android SDK", androidSdk, false);
 		reportPath("Android NDK 30.0.16248370", Path.join([androidSdk, "ndk", "30.0.16248370"]), false);
 		reportPath("Android platform tools (adb)", androidExecutable(home, "adb"), false);
-		Sys.println("CMake and Ninja are only needed to rebuild the native runtime.");
+		if (!release)
+			Sys.println("CMake and Ninja are only needed to rebuild the native runtime.");
 		if (missingRequired)
 			Sys.stderr().writeString("Run the repository's setup/bootstrap tools to install missing dependencies.\n");
 		return missingRequired ? 1 : 0;
@@ -686,12 +700,13 @@ class HaxeonCli {
 		return new tools.dev.ToolArtifacts(haxeonHome()).run({main: main, classPaths: [], defines: []}, arguments);
 
 	/**
-	 * `haxeon lsp`: the language server, in the compiler built ahead of time when it is current (`build.AotCompiler`), else in its
-	 * own bytecode build on the VM.
+	 * `haxeon lsp`: the language server, in the compiler built ahead of time or a release's compiler bytecode when it is current
+	 * (`build.AotCompiler.program`), else in its own bytecode build on the VM.
 	 */
 	static function languageServer(arguments:Array<String>):Int {
-		var home = haxeonHome(), aot = AotCompiler.current(home, Path.join([home, "src"]));
-		return aot == null ? runTool("LspMain", arguments) : Sys.command(aot, ["lsp"].concat(arguments));
+		var home = haxeonHome(), program = AotCompiler.program(home, Path.join([home, "src"]));
+		return program == null ? runTool("LspMain",
+			arguments) : Sys.command(program.command[0], program.command.slice(1).concat(["lsp"]).concat(arguments));
 	}
 
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
@@ -769,6 +784,8 @@ class HaxeonCli {
 		if (program == null && !FileSystem.exists(projectConfigPath))
 			throw new InternalError('Project file not found: $projectConfigPath (run "haxeon init" to create one)');
 		var requestedTarget:Null<Target> = options.target == null ? null : parseTarget(options.target);
+		// A checkout whose compiler built ahead of time is stale says so once, unless the build prints no progress.
+		AotCompiler.announceStale = !options.quiet && !options.plan && options.verbosity.atLeast(Verbosity.Minimal);
 		function resolveProject():ResolvedProject
 			return program != null ? ProjectDiscovery.resolve(projectConfigPath, requestedTarget, false,
 				program.manifest) : discoverProject(projectConfigPath, requestedTarget);
@@ -1978,7 +1995,9 @@ class HaxeonCli {
 	/** `haxeon version`: this CLI's version, the checkout's commit, which names the compiler, and the VM's version. */
 	static function version():Int {
 		var home = haxeonHome(),
-			commit = ProcessRunner.capture("git", ["-C", home, "rev-parse", "--short=12", "HEAD"]),
+			released = HaxeonRelease.field(home, "commit"),
+			commit = released != null ? {status: 0, output: released} : ProcessRunner.capture("git",
+				["-C", home, "rev-parse", "--short=12", "HEAD"]),
 			hashlink = ProcessRunner.capture(Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]),
 				["--version"]);
 		Sys.println('haxeon ${project.PackageCompatibility.CURRENT_HAXEON} (compiler '
