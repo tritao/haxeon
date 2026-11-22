@@ -27,6 +27,9 @@ typedef SemanticAssemblyResult = {
 	final invalidations:Array<InvalidatedArtifact>;
 	final entryPoint:String;
 
+	/** Where a missing entry point is reported (SessionState.executableEntrySpan). */
+	final entrySpan:compiler.core.Source.SourceSpan;
+
 	/** The canonical names of the declarations whose type is inferred from their own body or initializer. */
 	final inferredDeclarations:Map<String, Bool>;
 
@@ -948,6 +951,7 @@ class SemanticAssembly {
 			selected: selected,
 			invalidations: orderedInvalidations(invalidationReasons),
 			entryPoint: entryPoint,
+			entrySpan: context.state.executableEntrySpan(entryModule),
 			inferredDeclarations: inferredDeclarations,
 			facts: {
 				pure: freshInferredPure,

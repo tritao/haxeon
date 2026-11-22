@@ -1,6 +1,8 @@
 package compiler.compilation;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.core.QualifiedName;
+import compiler.core.Source.SourceSpan;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrInliner.IrInlineCache;
@@ -222,6 +224,36 @@ class SessionState {
 				if (method.name == "main" && method.isStatic)
 					return ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name) + ".main";
 		return "main";
+	}
+
+	/**
+	 * Where a missing entry point is reported: at the entry module's type named as the module, as Haxe reports `-main Main` at
+	 * class Main, else at the module's first declaration, else at the start of its file.
+	 */
+	public function executableEntrySpan(entryModule:String):SourceSpan {
+		var state:ModuleState = modules.get(entryModule),
+			ast = state.parsedAst(),
+			typeName = QualifiedName.last(entryModule);
+		for (classDecl in ast.classes)
+			if (classDecl.name == typeName)
+				return classDecl.span;
+		var first:Null<SourceSpan> = null;
+		function consider(span:SourceSpan)
+			if (first == null || span.start < first.start)
+				first = span;
+		for (classDecl in ast.classes)
+			consider(classDecl.span);
+		for (fn in ast.functions)
+			consider(fn.span);
+		for (enumDecl in ast.enums)
+			consider(enumDecl.span);
+		for (abstractDecl in ast.abstracts)
+			consider(abstractDecl.span);
+		for (interfaceDecl in ast.interfaces)
+			consider(interfaceDecl.span);
+		for (alias in ast.aliases)
+			consider(alias.span);
+		return first ?? new SourceSpan(state.source, 0, 0);
 	}
 
 	/** Of the regenerated functions, those that differ from the resumed module's (all of them when nothing was resumed). */

@@ -88,10 +88,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>,
 			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts,
-			?retained:RetainedFromPrevious, ?previousSignatures:PreviousSignatures):MeasuredTypedProgram {
+			?retained:RetainedFromPrevious, ?previousSignatures:PreviousSignatures,
+			?entrySpan:SourceSpan):MeasuredTypedProgram {
 		try {
 			var typed = typeProgramPhases(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retained,
-				previousSignatures);
+				previousSignatures, entrySpan);
 			session.failIfRecovered([]);
 			return typed;
 		} catch (error:CompileError) {
@@ -104,7 +105,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function typeProgramPhases(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>, cachedMetadata:Null<TypedProgram>, facts:Null<compiler.semantic.ProgramFacts>,
-			retained:Null<RetainedFromPrevious>, previousSignatures:Null<PreviousSignatures>):MeasuredTypedProgram {
+			retained:Null<RetainedFromPrevious>, previousSignatures:Null<PreviousSignatures>,
+			entrySpan:Null<SourceSpan>):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
@@ -237,7 +239,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			else
 				throw new CompileError(new compiler.core.Diagnostic("E1000",
 					'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"',
-					session.declarations.fallbackSpan));
+					entrySpan ?? session.declarations.fallbackSpan));
 			var result = main.arguments.length == 0 ? bodyTyper.functionResultType(main, main.span) : TVoid,
 				returnsIntOrVoid = switch result {
 					case TInt, TVoid: true;
