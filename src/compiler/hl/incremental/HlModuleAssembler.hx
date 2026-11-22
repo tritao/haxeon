@@ -766,13 +766,26 @@ class HlModuleAssembler {
 		return result;
 	}
 
+	/** Of the regenerated functions, those that differ from their form in the resumed module, or that it does not have. */
+	static function changedSinceResumed(regenerated:Array<String>, program:IrProgram,
+			resumed:Map<String, haxe.io.Bytes>):Array<String> {
+		var current:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn];
+		return [for (name in regenerated) {
+			var old = resumed.get(name), next = current.get(name);
+			if (old == null || next == null
+				|| old.compare(compiler.ir.codec.IrFunctionStateCodec.encode(next)) != 0) name;
+		}];
+	}
+
 	/**
 	 * `dispatched`: the functions object prototypes dispatch to (`PatchPlanner.dispatchedFunctions`), which keep their slots
-	 * when their signatures change; described from `program` when not given.
+	 * when their signatures change; described from `program` when not given. `resumed`: the functions of the module a session resumed
+	 * from (`SessionState.rehydrationBaseline`), encoded as this assembler's cache held them; a regenerated function equal to its
+	 * resumed form is not a change.
 	 */
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision,
 			?relocated:Array<String>,
-			?dispatched:Map<String, Bool>):HlAssemblyResult {
+			?dispatched:Map<String, Bool>, ?resumed:Map<String, haxe.io.Bytes>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
 		// has not published yet is new code, which a patch must carry.
@@ -780,7 +793,8 @@ class HlModuleAssembler {
 			loweredCache == null ? null : loweredCache.sharedCalls),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;
-		regenerated = regenerated.copy();
+		// The cache holds each function as this rewrite left it, so a resumed function is compared in that form.
+		regenerated = resumed == null ? regenerated.copy() : changedSinceResumed(regenerated, program, resumed);
 		for (name in shared.helpers)
 			if (!slotted.exists(name) && regenerated.indexOf(name) < 0)
 				regenerated.push(name);

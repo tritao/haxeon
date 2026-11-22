@@ -205,9 +205,9 @@ class HashLinkBackendSession implements BackendSession {
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		// Only a live build keeps slots for the functions prototypes dispatch to; a plain one lays out a fresh module.
-		var assembly = candidateAssembler.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
-			decision, relocated,
-			nextAbi == null || !context.livePatching ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+		var assembly = candidateAssembler.assemble(assemblyIr, regenerated, decision, relocated,
+			nextAbi == null || !context.livePatching ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
+			context.state.rehydrationBaseline);
 		summaries.endBuild();
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
@@ -226,10 +226,9 @@ class HashLinkBackendSession implements BackendSession {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new HlLoweredCache();
-			var freshAssembly = fresh.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
-				decision,
-				relocated,
-				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+			var freshAssembly = fresh.assemble(assemblyIr, regenerated, decision, relocated,
+				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi),
+				context.state.rehydrationBaseline);
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);
 			var difference = moduleDifference(assembly.module, freshAssembly.module);

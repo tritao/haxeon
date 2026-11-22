@@ -4,7 +4,6 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.QualifiedName;
 import compiler.core.Source.SourceSpan;
 import compiler.ir.model.Ir.IrObject;
-import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.verify.IrVerifyMemo;
 import compiler.modules.ModuleState;
@@ -284,26 +283,6 @@ class SessionState {
 		for (alias in ast.aliases)
 			consider(alias.span);
 		return first ?? new SourceSpan(state.source, 0, 0);
-	}
-
-	/** Of the regenerated functions, those that differ from the resumed module's (all of them when nothing was resumed). */
-	public function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
-		var baseline = rehydrationBaseline;
-		if (baseline == null)
-			return regenerated;
-		var current:Map<String, compiler.ir.model.IrFunction> = [], changed = [];
-		for (fn in program.functions)
-			current.set(fn.name, fn);
-		for (name in regenerated) {
-			if (!baseline.exists(name) || !current.exists(name)) {
-				changed.push(name);
-				continue;
-			}
-			var old = baseline.get(name), next = current.get(name);
-			if (old.compare(compiler.ir.codec.IrFunctionStateCodec.encode(next)) != 0)
-				changed.push(name);
-		}
-		return changed;
 	}
 
 	public function cachedReachability(entry:String):Null<ReachabilityCache>
