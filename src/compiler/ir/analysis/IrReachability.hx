@@ -26,6 +26,7 @@ import compiler.semantic.SemanticSignature;
  * through a class or interface type, or reflection by field name) reaches a class's methods only once a reached function constructs
  * that class (rapid type analysis): a class nothing constructs has no instance to receive the call.
  */
+@:nullSafety(Strict)
 class IrReachability {
 	/** The functions reachable from `entry` and `additionalRoots` by calls, closures and method calls. */
 	public static function functions(program:IrProgram, entry:String,
@@ -353,6 +354,7 @@ typedef IrTrimSummary = {
 }
 
 /** One walk over a program that takes more roots as they appear. */
+@:nullSafety(Strict)
 class IrReachabilityWalk {
 	public final reachable:Map<String, Bool> = [];
 
@@ -397,6 +399,8 @@ class IrReachabilityWalk {
 		var pending = [root];
 		while (pending.length > 0) {
 			var name = pending.pop();
+			if (name == null)
+				break;
 			if (reachable.exists(name))
 				continue;
 			var fn = byName.get(name);
@@ -601,6 +605,7 @@ class IrReachabilityWalk {
  * native, std native or FFI native bound by the project allocates an object of a class its declaration does not name (`__reflect_copy` copies an
  * instance of its argument's own class, which its caller already constructed).
  */
+@:nullSafety(Strict)
 class IrConstructed {
 	/** Whether the class has instances without any function constructing them. `object` is its table entry, or null when there is none. */
 	public static function withoutConstruction(typeName:String, object:Null<IrObject>):Bool
@@ -647,6 +652,7 @@ class IrConstructed {
  * type-aware walk (`IrTypeAwareWalk.compare`). The step 1 diagnostic of `docs/design/REACHABILITY_WALK.md`: it changes nothing and is off unless the
  * variable is set. The roots are the entry and every `@:keep` / `@:expose` function.
  */
+@:nullSafety(Strict)
 class IrReachabilityReport {
 	public static function enabled():Bool {
 		var path = Sys.getEnv("HAXEON_REACHABILITY_REPORT");

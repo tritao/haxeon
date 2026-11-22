@@ -32,6 +32,7 @@ typedef IrPruneResult = {
  * What the early prune removed, which check mode (`--check-reuse`) watches the passes after it for: a lookup of a removed function, or
  * a method lookup that visits a removed table entry, is a decision made on something that is gone.
  */
+@:nullSafety(Strict)
 class IrPruneWatch {
 	final functions:Map<String, Bool>;
 	final methods:Map<String, Bool>;
@@ -50,6 +51,7 @@ class IrPruneWatch {
 			throw new InternalError('early prune: a lookup of method "$method" visited class "$className", whose entry the prune removed');
 }
 
+@:nullSafety(Strict)
 class IrEntryPrune {
 	/** The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. */
 	public static function walk(program:IrProgram, roots:Array<String>,

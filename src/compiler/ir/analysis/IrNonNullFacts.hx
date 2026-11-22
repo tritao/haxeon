@@ -16,6 +16,7 @@ import compiler.ir.model.IrPassScratch.IrNonNullScratch;
 import compiler.ir.model.IrPassScratch.IrValueMarks;
 
 /** Must facts at instruction entry; SSA values are never invalidated by a call or a store. */
+@:nullSafety(Strict)
 class IrNonNullFacts {
 	/**
 	 * The rows of the scratch the analysis ran in: per block id, where its run of words starts in `provenWords` (-1 for a block
@@ -149,6 +150,7 @@ class IrNonNullFacts {
 }
 
 /** The analysis of one body: per row, whether its receiver is proven non-null on entry. */
+@:nullSafety(Strict)
 private class NonNullBodyFlow {
 	final body:IrBody;
 	final checkedDereferences:Bool;

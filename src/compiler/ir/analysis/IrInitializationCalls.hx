@@ -1,5 +1,6 @@
 package compiler.ir.analysis;
 
+import compiler.core.InternalError;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -12,6 +13,7 @@ import compiler.ir.model.IrTypeIds;
  * Calls that can execute while evaluating a function, excluding callbacks only stored for later. Reads the functions' bodies
  * (docs/design/IR_CORE_COLUMNS.md).
  */
+@:nullSafety(Strict)
 class IrInitializationCalls {
 	final bodies:Map<String, IrBody>;
 	final methods:Map<String, Array<String>> = [];
@@ -29,19 +31,20 @@ class IrInitializationCalls {
 	public function new(program:Array<IrFunction>, types:IrTypeIds, ?objects:Array<IrObject>, ?builder:IrBodyBuilder) {
 		this.objects = objects == null ? [] : [for (object in objects) object.name => object];
 		objectList = objects == null ? [] : objects;
-		bodies = [for (fn in program) fn.name => fn.bodyIn(types, builder)];
+		var listed = [for (fn in program) fn.bodyIn(types, builder)];
+		bodies = [for (index in 0...program.length) program[index].name => listed[index]];
 		for (fn in program) {
 			var dot = fn.name.lastIndexOf(".");
 			if (dot < 0)
 				continue;
-			var method = fn.name.substr(dot + 1);
-			if (!methods.exists(method))
-				methods.set(method, []);
-			methods.get(method).push(fn.name);
+			var method = fn.name.substr(dot + 1), named = methods.get(method);
+			if (named == null)
+				methods.set(method, named = []);
+			named.push(fn.name);
 		}
 		var summaries:Array<IrBody> = [];
-		for (fn in program) {
-			var body = bodies.get(fn.name);
+		for (index in 0...program.length) {
+			var fn = program[index], body = listed[index];
 			var relevant = switch fn.result {
 				case Function(_, _), Dyn: true;
 				case _: false;
@@ -66,11 +69,13 @@ class IrInitializationCalls {
 					var row = body.firstRow(block);
 					while (row >= 0) {
 						switch body.opcode(row) {
-							case IrOpcode.GlobalSet if (origins.exists(body.operand(row, 0))):
-								if (merge(globals, body.symbol(row).name, origins.get(body.operand(row, 0))))
+							case IrOpcode.GlobalSet:
+								var stored = origins.get(body.operand(row, 0));
+								if (stored != null && merge(globals, body.symbol(row).name, stored))
 									changed = true;
-							case IrOpcode.Return if (origins.exists(body.operand(row, 0))):
-								if (merge(returns, body.name, origins.get(body.operand(row, 0))))
+							case IrOpcode.Return:
+								var returned = origins.get(body.operand(row, 0));
+								if (returned != null && merge(returns, body.name, returned))
 									changed = true;
 							case _:
 						}
@@ -82,12 +87,13 @@ class IrInitializationCalls {
 	}
 
 	static function merge(target:Map<String, Array<String>>, key:String, values:Array<String>):Bool {
-		if (!target.exists(key))
-			target.set(key, []);
+		var merged = target.get(key);
+		if (merged == null)
+			target.set(key, merged = []);
 		var changed = false;
 		for (value in values)
-			if (!target.get(key).contains(value)) {
-				target.get(key).push(value);
+			if (!merged.contains(value)) {
+				merged.push(value);
 				changed = true;
 			}
 		return changed;
@@ -102,15 +108,21 @@ class IrInitializationCalls {
 				switch body.opcode(row) {
 					case IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
 						origins.set(out, [body.symbol(row).name]);
-					case IrOpcode.GlobalGet if (globals.exists(body.symbol(row).name)):
-						origins.set(out, globals.get(body.symbol(row).name).copy());
-					case IrOpcode.Call if (returns.exists(body.symbol(row).name)):
-						origins.set(out, returns.get(body.symbol(row).name).copy());
+					case IrOpcode.GlobalGet:
+						var stored = globals.get(body.symbol(row).name);
+						if (stored != null)
+							origins.set(out, stored.copy());
+					case IrOpcode.Call:
+						var returned = returns.get(body.symbol(row).name);
+						if (returned != null)
+							origins.set(out, returned.copy());
 					case IrOpcode.MethodCall:
 						var found:Array<String> = [];
-						for (callee in methodTargets(body.valueType(body.operand(row, 0)), body.symbol(row).name))
-							if (returns.exists(callee))
-								found = found.concat(returns.get(callee));
+						for (callee in methodTargets(body.valueType(body.operand(row, 0)), body.symbol(row).name)) {
+							var returned = returns.get(callee);
+							if (returned != null)
+								found = found.concat(returned);
+						}
 						if (found.length > 0)
 							origins.set(out, found);
 					case _:
@@ -124,14 +136,17 @@ class IrInitializationCalls {
 
 	/** What evaluating the function named `name`, one of the program's, can call. */
 	public function calls(name:String):Array<String> {
-		var body = bodies.get(name);
+		var found = bodies.get(name);
+		if (found == null)
+			throw new InternalError('"$name" is not a function of the program');
+		var body:IrBody = found;
 		var result:Array<String> = [], closures = closureOrigins(body);
 		// The callbacks among the operands from `first` on, the callee's arguments from `offset` on.
 		function addCallbacks(callee:String, row:Int, first:Int, offset:Int):Void {
 			for (index in first...body.operandCount(row)) {
-				var argument:Int = body.operand(row, index);
-				if (closures.exists(argument) && invokesArgument(callee, index - first + offset, []))
-					for (target in closures.get(argument))
+				var targets = closures.get(body.operand(row, index));
+				if (targets != null && invokesArgument(callee, index - first + offset, []))
+					for (target in targets)
 						result.push(target);
 			}
 		}
@@ -144,9 +159,9 @@ class IrInitializationCalls {
 						result.push(callee);
 						addCallbacks(callee, row, 0, 0);
 					case IrOpcode.CallClosure:
-						var closure:Int = body.operand(row, 0);
-						if (closures.exists(closure))
-							result = result.concat(closures.get(closure));
+						var targets = closures.get(body.operand(row, 0));
+						if (targets != null)
+							result = result.concat(targets);
 					case IrOpcode.MethodCall:
 						for (callee in methodTargets(body.valueType(body.operand(row, 0)), body.symbol(row).name)) {
 							result.push(callee);
@@ -166,10 +181,10 @@ class IrInitializationCalls {
 			case _: null;
 		};
 		if (owner == null || !objects.exists(owner))
-			return methods.exists(method) ? methods.get(method) : [];
-		var key = owner + "." + method;
-		if (resolvedMethods.exists(key))
-			return resolvedMethods.get(key);
+			return methods.get(method) ?? [];
+		var key = owner + "." + method, known = resolvedMethods.get(key);
+		if (known != null)
+			return known;
 		var result:Array<String> = [];
 		for (object in objectList) {
 			var current:Null<IrObject> = object, matches = false;
@@ -204,12 +219,13 @@ class IrInitializationCalls {
 	}
 
 	function invokesArgument(name:String, index:Int, seen:Map<String, Bool>):Bool {
-		var key = name + ":" + index;
-		if (invoked.exists(key))
-			return invoked.get(key);
-		if (!bodies.exists(name) || seen.exists(key))
+		var key = name + ":" + index, known = invoked.get(key);
+		if (known != null)
+			return known;
+		var named = bodies.get(name);
+		if (named == null || seen.exists(key))
 			return false;
-		var body = bodies.get(name);
+		var body:IrBody = named;
 		if (index >= body.argumentCount())
 			return false;
 		var root = !seen.keys().hasNext();
@@ -252,13 +268,14 @@ class IrInitializationCalls {
 		var fields:Map<String, Array<String>> = [];
 		// Adds the origins of `input` to those of `output`.
 		function flow(input:Int, output:Int):Bool {
-			var changed = false;
-			if (origins.exists(input))
-				for (origin in origins.get(input)) {
-					if (!origins.exists(output))
-						origins.set(output, []);
-					if (!origins.get(output).contains(origin)) {
-						origins.get(output).push(origin);
+			var changed = false, from = origins.get(input);
+			if (from != null)
+				for (origin in from) {
+					var to = origins.get(output);
+					if (to == null)
+						origins.set(output, to = []);
+					if (!to.contains(origin)) {
+						to.push(origin);
 						changed = true;
 					}
 				}
@@ -271,25 +288,27 @@ class IrInitializationCalls {
 				var row = body.firstRow(block);
 				while (row >= 0) {
 					var opcode = body.opcode(row), output:Int = body.output(row);
-					if (opcode == IrOpcode.FieldSet && origins.exists(body.operand(row, 1))) {
-						var key = (body.operand(row, 0):Int) + ":" + body.symbol(row).name;
-						if (!fields.exists(key))
-							fields.set(key, []);
-						for (origin in origins.get(body.operand(row, 1)))
-							if (!fields.get(key).contains(origin)) {
-								fields.get(key).push(origin);
+					var stored = opcode == IrOpcode.FieldSet ? origins.get(body.operand(row, 1)) : null;
+					if (stored != null) {
+						var key = (body.operand(row, 0):Int) + ":" + body.symbol(row).name, field = fields.get(key);
+						if (field == null)
+							fields.set(key, field = []);
+						for (origin in stored)
+							if (!field.contains(origin)) {
+								field.push(origin);
 								changed = true;
 							}
 					}
 					if (output >= 0) {
 						if (opcode == IrOpcode.FieldGet) {
-							var key = (body.operand(row, 0):Int) + ":" + body.symbol(row).name;
-							if (fields.exists(key)) {
-								if (!origins.exists(output))
-									origins.set(output, []);
-								for (origin in fields.get(key))
-									if (!origins.get(output).contains(origin)) {
-										origins.get(output).push(origin);
+							var field = fields.get((body.operand(row, 0):Int) + ":" + body.symbol(row).name);
+							if (field != null) {
+								var to = origins.get(output);
+								if (to == null)
+									origins.set(output, to = []);
+								for (origin in field)
+									if (!to.contains(origin)) {
+										to.push(origin);
 										changed = true;
 									}
 							}

@@ -8,6 +8,7 @@ import compiler.ir.model.IrBody;
  * block the header dominates) without passing the header. Loops by index, outer ones before the ones they hold; blocks by id.
  * An irreducible cycle has no back edge in this sense and is no loop here.
  */
+@:nullSafety(Strict)
 class IrLoopForest {
 	/** By loop, its header block id, its parent loop (-1 for an outermost one) and its depth (1 for an outermost one). */
 	final headers:Array<Int> = [];
@@ -40,6 +41,8 @@ class IrLoopForest {
 				var pending = [tail];
 				while (pending.length > 0) {
 					var id = pending.pop();
+					if (id == null)
+						break;
 					if (claimed[id] == loop)
 						continue;
 					claimed[id] = loop;

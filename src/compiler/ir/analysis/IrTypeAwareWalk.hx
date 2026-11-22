@@ -77,6 +77,7 @@ typedef IrClassDependencies = {
  * called native's signature, stores it in a static field the code touches, or holds it in a field of a created class; and when a root
  * names it. A type that is only mentioned by an argument type is not created. Keeping more never miscompiles.
  */
+@:nullSafety(Strict)
 class IrTypeAwareWalk {
 	/**
 	 * `dynamicSites`: the native a dynamic site calls, to the provider operations it needs of every created type (default `defaultDynamicSites`).
@@ -183,6 +184,7 @@ private typedef DispatchSite = {
 	final isInterface:Bool;
 }
 
+@:nullSafety(Strict)
 private class IrTypeAwareWalkState {
 	final program:IrProgram;
 	final roots:IrWalkRoots;
@@ -241,9 +243,9 @@ private class IrTypeAwareWalkState {
 				case Serves(type, operation):
 					// Indexed by the whole operation and by its base: a typed operation names the former (`inline-enum-helper:box`), a dynamic
 					// site asks for the latter (every `equals:...` helper of a type).
-					addProvider(operation, type.toString(), fn.name);
+					addProvider(providers, operation, type.toString(), fn.name);
 					if (IrProviders.base(operation) != operation)
-						addProvider(IrProviders.base(operation), type.toString(), fn.name);
+						addProvider(providers, IrProviders.base(operation), type.toString(), fn.name);
 				case None:
 			}
 		}
@@ -256,7 +258,8 @@ private class IrTypeAwareWalkState {
 			staticTypes.set(field.name, field.type);
 	}
 
-	function addProvider(operation:String, type:String, name:String):Void {
+	static function addProvider(providers:Map<String, Map<String, Array<String>>>, operation:String, type:String,
+			name:String):Void {
 		var byType = providers.get(operation);
 		if (byType == null) {
 			byType = [];
@@ -299,10 +302,10 @@ private class IrTypeAwareWalkState {
 	}
 
 	function reach(name:String, root:Bool):Void {
-		if (!reached.exists(name) && byName.exists(name)) {
+		var fn = byName.get(name);
+		if (!reached.exists(name) && fn != null) {
 			pending.push(name);
 			if (root) {
-				var fn = byName.get(name);
 				create(fn.result);
 				for (argument in fn.arguments)
 					create(argument.type);
@@ -313,6 +316,8 @@ private class IrTypeAwareWalkState {
 	function drain():Void {
 		while (pending.length > 0) {
 			var name = pending.pop();
+			if (name == null)
+				break;
 			if (reached.exists(name))
 				continue;
 			var fn = byName.get(name);
@@ -496,13 +501,14 @@ private class IrTypeAwareWalkState {
 		// Code is generated in place of a native that reached code calls, for every class; what it calls is reached here, once per symbol.
 		if (classDependencies != null)
 			for (name in [for (name in calledNatives.keys()) name]) {
-				var native = natives.get(name);
-				if (native == null || dependencySymbolsDone.exists(native.symbol)
-					|| classDependencies.symbols.indexOf(native.symbol) < 0)
+				var native = natives.get(name), dependencies = classDependencies;
+				if (native == null || dependencies == null)
+					continue;
+				if (dependencySymbolsDone.exists(native.symbol) || dependencies.symbols.indexOf(native.symbol) < 0)
 					continue;
 				dependencySymbolsDone.set(native.symbol, true);
 				for (object in program.objects)
-					for (dependency in classDependencies.of(object.name, native.symbol))
+					for (dependency in dependencies.of(object.name, native.symbol))
 						reach(dependency, false);
 			}
 		if (stringUsed)
@@ -519,6 +525,7 @@ private class IrTypeAwareWalkState {
  * depend on, each kind in the order the instructions first name it. The walk resolves them against the program (`follow`), so
  * the summary depends on the function alone, and a session keeps it by the function's version (`IrStageMemos.walkSummaries`).
  */
+@:nullSafety(Strict)
 class IrWalkSummary {
 	/** The classes an instruction's output has (made created when they need no construction). */
 	public final outputObjects:Array<String> = [];

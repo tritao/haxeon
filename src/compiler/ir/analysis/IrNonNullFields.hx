@@ -13,6 +13,7 @@ import compiler.ir.reuse.IrFunctionMemo;
  * one is named: a contribution keeps numbers, and the whole-program step reads them without making a key. A session's memo keeps
  * one (`IrFieldStoreMemo`), which only grows, as the field names of a program do.
  */
+@:nullSafety(Strict)
 class IrFieldKeys {
 	final ids:Map<String, Map<String, Int>> = [];
 
@@ -52,6 +53,7 @@ class IrFieldKeys {
  * while the function is the same object, with the field keys the contributions name. A session keeps one with its lowered
  * functions (`HlLoweredCache`).
  */
+@:nullSafety(Strict)
 class IrFieldStoreMemo {
 	public final keys = new IrFieldKeys();
 	public final functions = new IrFunctionMemo<IrFieldStores>();
@@ -67,6 +69,7 @@ class IrFieldStoreMemo {
  * stored value is non-null when its definition says so at a glance (`IrNonNullFields.fresh`); one that is a field read is non-null
  * when that field is.
  */
+@:nullSafety(Strict)
 class IrFieldStores {
 	@:processWide("the contribution of a function that stores, makes and reflects nothing, never changed")
 	public static final NONE = new IrFieldStores();
@@ -133,6 +136,7 @@ class IrFieldStores {
  * A call of a constructor on it is followed: the fields that constructor sets count (`IrNonNullFields`), and when the constructor
  * lets nothing see the object, so do the fields set after the call.
  */
+@:nullSafety(Strict)
 class IrObjectInit {
 	/** A set value that is non-null at a glance, rather than a field's (`sources`). */
 	public static inline final FRESH = -1;
@@ -200,6 +204,7 @@ class IrObjectInit {
  * the same object (`IrFieldStoreMemo`), so a build reads only the functions it made. The step over the program combines them on
  * numbers: each declared field of the program is a slot, and a contribution's keys resolve to slots once per build.
  */
+@:nullSafety(Strict)
 class IrNonNullFields {
 	@:processWide("an empty set of fields, only ever read")
 	static final NONE:Map<String, Bool> = [];
@@ -345,6 +350,8 @@ class IrNonNullFields {
 					var pending = direct == null ? [] : direct.copy();
 					while (pending.length > 0) {
 						var next = pending.pop();
+						if (next == null)
+							break;
 						if (foreign[next])
 							continue;
 						foreign[next] = true;
@@ -379,7 +386,10 @@ class IrNonNullFields {
 		while (index < written.length) {
 			var name = written[index + 1], pending = [written[index]], depth = 0;
 			while (pending.length > 0 && depth++ < 100000) {
-				var type = pending.pop(), start = indices.get(type), owner = start == null ? -1 : start, hops = 0;
+				var type = pending.pop();
+				if (type == null)
+					break;
+				var start = indices.get(type), owner = start == null ? -1 : start, hops = 0;
 				while (owner >= 0 && hops++ < 256) {
 					var slot = slots[owner];
 					for (field in objects[owner].fields) {
@@ -581,7 +591,7 @@ class IrNonNullFields {
 				row = body.nextRow(row);
 			}
 		}
-		if (receiver.exists() && body.name == receiverClass + ".new")
+		if (receiverClass != null && receiver.exists() && body.name == receiverClass + ".new")
 			made.inits.push(initOf(body, 0, -1, receiver, receiverClass, true, receiver, keys));
 		return made.settled();
 	}

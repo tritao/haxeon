@@ -11,6 +11,7 @@ import compiler.ir.model.Ir.IrObject;
  * that extends it runs the same function. A table is valid for one list of objects; `of` hands back the cached table while the
  * objects are the same instances in the same order, and builds a new one when a pass has replaced or added a class.
  */
+@:nullSafety(Strict)
 class IrMethodResolution {
 	final source:Array<IrObject>;
 	final objects:Map<String, IrObject> = [];
@@ -108,6 +109,8 @@ class IrMethodResolution {
 			var pending = [typeName], visited:Map<String, Bool> = [];
 			while (pending.length > 0) {
 				var name = pending.pop();
+				if (name == null)
+					break;
 				if (visited.exists(name))
 					continue;
 				visited.set(name, true);

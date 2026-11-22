@@ -10,6 +10,7 @@ import compiler.semantic.SemanticSignature;
 /** The shared transitive storage reach of Dynamic, reflection, descriptors and host boundaries.
  * Value-layout classification remains with its caller; reference traversal is defined only here.
  */
+@:nullSafety(Strict)
 class IrEnumEscapeReach {
 	final objects:Map<String, IrObject>;
 	final contracts:Map<String, IrInterface>;
@@ -45,15 +46,17 @@ class IrEnumEscapeReach {
 				separator = field.name.indexOf(".", separator + 1);
 			}
 		}
-		for (object in program.objects)
-			if (object.base != null) {
-				var children = subclasses.get(object.base);
+		for (object in program.objects) {
+			var base = object.base;
+			if (base != null) {
+				var children = subclasses.get(base);
 				if (children == null) {
 					children = [];
-					subclasses.set(object.base, children);
+					subclasses.set(base, children);
 				}
 				children.push(object);
 			}
+		}
 		// A function read past the encode point is its body; one before it, its objects.
 		for (fn in functions) {
 			if (scans != null && !scans(fn))
