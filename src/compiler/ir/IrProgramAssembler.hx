@@ -27,7 +27,6 @@ import compiler.ir.Ir.IrObjectMethod;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
-import compiler.ir.SourceProvenance.Located;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
