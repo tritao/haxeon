@@ -128,7 +128,7 @@ class HlcStableNames {
 
 	/** What a type is, naming the types it refers to by their references in turn: the same text in every build. */
 	function reference(index:Int):String {
-		var cached = references[index];
+		var cached = index < references.length ? references[index] : null;
 		if (cached != null)
 			return cached;
 		if (visiting.exists(index))

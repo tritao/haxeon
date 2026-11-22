@@ -282,9 +282,6 @@ HashLink):
   Lambda.count(values); values.push(1);`): `E1003`. Haxeon names and types a generic call's specialization when it types the
   call, so it cannot follow a variable fixed later; one that only the argument's own value carries (`Lambda.empty([])`) is
   Dynamic, as in Haxe. The differential case `lambda-unfixed-before-call` records it.
-- Reading an `Array` element at or past its length (`var a:Array<Null<Bool>> = []; a[3]`): HashLink throws "Array index
-  out of bounds". Haxe gives null there (the type's default value for a basic type on static targets). Writing past the
-  end grows the array, as in Haxe. Found on 2026-11-19; the Wasm backends are not checked yet.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 
@@ -306,6 +303,12 @@ value stays null), and a warning can point out a surprising case.
   one win. Nor does this meet the rule, but it is almost always a mistake, and Rust rejects it too. Declaring a local
   again in the same block is allowed, as in Haxe: the later declaration shadows the earlier for the code after it
   (`local-redeclared-same-block`).
+- Reading an `Array` element at a negative index or at or past its length (`var a:Array<Int> = []; a[3]`) throws "Array
+  index out of bounds" on every backend. The Haxe manual promises that array access does not throw and returns a
+  target-dependent value (null, or the type's default for a basic type on static targets). Writing past the end grows the
+  array and fills the gap with the default, as in Haxe; writing at a negative index throws (Haxe leaves it unspecified).
+  Nor does this meet the rule: it is kept so that a bug surfaces at the read that goes wrong rather than later. To port
+  code that relies on Haxe's read, write `i < a.length ? a[i] : null` or a small helper (`array-read-out-of-range`).
 
 An unannotated field's type is its initializer's, and an unannotated function's result and arguments are what its body
 gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must

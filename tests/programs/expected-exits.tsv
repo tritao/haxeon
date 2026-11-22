@@ -662,3 +662,4 @@ bytes-encoding	42
 conditional-lambda-dynamic-argument	42
 nested-call-stack	42
 package-stack-trace	42
+array-read-out-of-range	42

@@ -22,6 +22,7 @@ array-expression-mutation
 array-field-mutation
 array-filter-map-join
 array-fused-boundaries
+array-read-out-of-range
 array-fused-elements
 array-fused-growth-alias
 array-fused-shrink
