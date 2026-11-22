@@ -111,6 +111,9 @@ class IrStageMemos {
 	/** The typed interface dispatchers each function calls (`IrTypedInterfaceDispatch.generate`). */
 	public final interfaceRequests = new IrContributionMemo<Array<IrTypedInterfaceRequest>>();
 
+	/** What each function needs of the runtime surface (`IrRuntimeNeeds`). */
+	public final runtimeNeeds = new IrContributionMemo<compiler.ir.pipeline.IrProgramAssembler.IrRuntimeNeeds>();
+
 	/** The method references, erased operations and type tests each function asks for (`IrGenericOwnerErasure.requestsOf`). */
 	public final erasureRequests =
 		new IrContributionMemo<Array<compiler.ir.passes.objects.IrGenericOwnerErasure.IrErasureRequest>>();
@@ -152,6 +155,7 @@ class IrStageMemos {
 		walkSummaries.begin(build);
 		interfaceRequests.begin(build);
 		erasureRequests.begin(build);
+		runtimeNeeds.begin(build);
 		enumMentions.begin(build);
 	}
 
