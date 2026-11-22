@@ -35,3 +35,9 @@ its runtime (`nk_init`, the UI thread); it cannot be linked into the compiler's 
 The plan is one implementation: NativeKit ports `nk_file_watch` onto this C core, extended where it needs more than a
 change/rescan answer (the changed paths and kinds, moves paired by cookie, a background walk of large trees, its
 readiness event), and the FSEvents backend is written once, here.
+
+The component's home is then NativeKit, the lower layer Haxeon already vendors: it moves there as a standalone plain-C
+component with its own small CMake target and no GUI dependencies or `nk_init`, NativeKit's C++ `nk_file_watch` wraps it,
+and Haxeon's runtime compiles those C files from `vendor/nativekit`. It stays out of the HashLink fork, which keeps only
+what the VM needs. Until that port, it lives here in `native/watch/`, free of Haxeon runtime dependencies so the move is
+a plain move.
