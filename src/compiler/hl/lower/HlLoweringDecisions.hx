@@ -23,4 +23,19 @@ class HlLoweringDecisions {
 				body.operand(row, 0);
 			default: IrValueId.of(-1);
 		};
+
+	/**
+	 * Whether a row of opcode `opcode` leaves every proven array bound intact: it runs no code and shrinks no array. Anything
+	 * else, including every call, forgets them. Array writes only ever grow an array, so they keep them.
+	 */
+	public static function keepsArrayBounds(opcode:IrOpcode):Bool
+		return switch opcode {
+			case IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString, IrOpcode.ConstBool,
+				IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64,
+				IrOpcode.FloatToInt, IrOpcode.FloatToFloat, IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.BitAnd,
+				IrOpcode.BitXor, IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight,
+				IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal, IrOpcode.FieldGet, IrOpcode.ArrayGet,
+				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.Phi: true;
+			default: false;
+		};
 }

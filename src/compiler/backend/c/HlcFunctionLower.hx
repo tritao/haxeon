@@ -55,23 +55,14 @@ class HlcFunctionLower {
 	/** How many operands of the body read each value. */
 	final uses:Array<Int> = [];
 
-	/** The `array:index` pairs of Int and Float arrays an access in the block being lowered validated. */
-	final validatedAccesses:Map<String, Bool> = [];
-
-	/** The `array:index` pairs a check proved in range, until a row that may shrink an array (`HlLower.keepsArrayBounds`). */
-	final provenInRange:Map<String, Bool> = [];
-
-	/** The loops' proofs of array indices in range (`IrLoopBounds`), made when an access first asks. */
-	var loopBounds:Null<compiler.ir.analysis.IrLoopBounds> = null;
+	/** The array bounds proved and validated in the block being lowered, and the loops' proofs of the function. */
+	final arrayBounds = new compiler.hl.lower.HlArrayBounds();
 
 	/** The block being lowered, by id. */
 	var currentBlock = -1;
 
 	/** The array values read inline (`HlLower.inlineValueArraySlot`), whose value array view is resolved where they are defined. */
 	final viewedArrays:Map<Int, Bool> = [];
-
-	@:processWide("an empty set of calls known not to resize arrays, never added to")
-	static final noPureCalls:Map<String, Bool> = [];
 
 	public function new(module:HlcModule) {
 		this.module = module;
@@ -129,7 +120,7 @@ class HlcFunctionLower {
 			return scalarLocalTypes.length - 1;
 		});
 		hasTry = false;
-		loopBounds = null;
+		arrayBounds.startFunction(body);
 		viewedArrays.clear();
 		var phis:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
@@ -287,15 +278,13 @@ class HlcFunctionLower {
 		var id = body.blockId(block);
 		write('b$id:;\n');
 		currentBlock = id;
-		validatedAccesses.clear();
-		provenInRange.clear();
+		arrayBounds.startBlock();
 		var terminator = body.terminatorRow(block), row = body.firstRow(block);
 		if (terminator < 0)
 			throw new InternalError('Reachable IR block $id of ${body.name} has no terminator');
 		while (row >= 0 && row != terminator) {
 			position(row);
-			if (!HlLower.keepsArrayBounds(body.opcode(row)))
-				provenInRange.clear();
+			arrayBounds.step(body.opcode(row));
 			var receiver = HlLoweringDecisions.receiverOf(body, row);
 			if (receiver.exists())
 				nullCheck(row, receiver, switch body.opcode(row) {
@@ -563,21 +552,20 @@ class HlcFunctionLower {
 				requireArray(array);
 				if (!inRange(array, index))
 					line('if( (unsigned)${v(index)} >= (unsigned)${v(array)}->size ) hl_array_out_of_bounds(${v(array)},${v(index)});');
-				provenInRange.set('$array:$index', true);
+				arrayBounds.prove(array, index);
 				assign(row, 'hl_aptr(${v(array)},${types.cType(typeOf(output))})[${v(index)}]', typeOf(output));
 				if (rawArray(array))
-					validatedAccesses.set('$array:$index', true);
+					arrayBounds.validate(array, index);
 			case IrOpcode.ArraySet:
 				var array = body.operand(row, 0), index = body.operand(row, 1), value = body.operand(row, 2);
 				requireArray(array);
-				var key = '$array:$index';
 				// `HlLower.lowerRawArrayWrite`: an Int or Float array write that an earlier access in the block validated is
 				// not tested again, so `a[i] += f()` keeps Haxe's rule when `f` shrinks the array.
-				if (!inRange(array, index) && !(rawArray(array) && validatedAccesses.exists(key)))
+				if (!inRange(array, index) && !(rawArray(array) && arrayBounds.isValidated(array, index)))
 					line('if( (unsigned)${v(index)} >= (unsigned)${v(array)}->size ) hl_array_ensure(${v(array)},${v(index)});');
-				provenInRange.set(key, true);
+				arrayBounds.prove(array, index);
 				if (rawArray(array))
-					validatedAccesses.set(key, true);
+					arrayBounds.validate(array, index);
 				store('hl_aptr(${v(array)},${types.cType(typeOf(value))})[${v(index)}]', v(value), typeOf(value));
 			case IrOpcode.ArraySize:
 				var array = body.operand(row, 0);
@@ -713,20 +701,9 @@ class HlcFunctionLower {
 		};
 
 	/** Whether `index` is in range of `array`: checked since nothing could shrink it, or proved by the loops around the access. */
-	function inRange(array:IrValueId, index:IrValueId):Bool {
-		if (out == null || provenInRange.exists('$array:$index'))
-			return true;
-		var bounds = loopBounds;
-		if (bounds == null) {
-			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new compiler.ir.analysis.IrLoopBounds(body.toFunction(), noPureCalls);
-			loopBounds = bounds;
-		}
-		return bounds.proven(valueOf(array), valueOf(index), currentBlock);
-	}
-
-	function valueOf(value:IrValueId):compiler.ir.model.Ir.IrValue
-		return new compiler.ir.model.Ir.IrValue(value, body.valueName(value), body.valueType(value));
+	function inRange(array:IrValueId, index:IrValueId):Bool
+		return out == null || arrayBounds.isProven(array, index)
+			|| arrayBounds.provenByLoop(array, index, currentBlock);
 
 	function requireArray(array:IrValueId):Void
 		if (types.kind(typeOf(array)) != HlType.Array)

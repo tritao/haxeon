@@ -24,7 +24,6 @@ import compiler.ir.model.Ir.IrCNative;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.Ir.IrType;
-import compiler.ir.model.Ir.IrValue;
 import compiler.ir.verify.IrVerifier;
 import compiler.hl.incremental.HlSymbolRequest;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
@@ -926,7 +925,7 @@ class HlLower {
 			position = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.JumpNull(view.array, slow));
 		// A loop that runs the index up to the array's length, and resizes nothing, proved it in range.
-		if (!provenByLoop(arrayValue, indexValue, block)) {
+		if (!arrayBounds.provenByLoop(arrayValue, indexValue, block)) {
 			instructions.push(HlInstruction.GetMem(size, view.array,
 				constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
@@ -1274,7 +1273,7 @@ class HlLower {
 		viewedArrays.clear();
 		definedViews.clear();
 		hasViewedArrays = false;
-		loopBounds = null;
+		arrayBounds.startFunction(body);
 		var valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -1335,15 +1334,13 @@ class HlLower {
 						default:
 					}
 			}
-			provenInRange.clear();
+			arrayBounds.startBlock();
 			elementOffsets.clear();
 			valueArrayViews.clear();
-			validatedArrayAccesses.clear();
 			var row = body.firstRow(block);
 			while (row >= 0 && row != terminator) {
 				var instructionStart = instructions.length, opcode = body.opcode(row);
-				if (!keepsArrayBounds(opcode))
-					provenInRange.clear();
+				arrayBounds.step(opcode);
 				var output = body.output(row), receiver = HlLoweringDecisions.receiverOf(body, row);
 				if (receiver.exists() && scalarOptionals.get(receiver) == null && !nonNull.has(row))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
@@ -1833,9 +1830,8 @@ class HlLower {
 				instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
 					requireRegister(array, registers), requireRegister(index, registers)));
 				if (rawArrayShift(body.valueType(array)) != null) {
-					var key = '${array}:${index}';
-					provenInRange.set(key, true);
-					validatedArrayAccesses.set(key, true);
+					arrayBounds.prove(array, index);
+					arrayBounds.validate(array, index);
 				}
 			case IrOpcode.ArraySet:
 				var array = body.operand(row, 0), index = body.operand(row, 1), value = body.operand(row, 2);
@@ -2645,18 +2641,15 @@ class HlLower {
 		instructions.push(HlInstruction.Label(done));
 	}
 
-	/** Array and index pairs, as `arrayId:indexId`, already known to be in range at this point of the block being lowered. */
-	final provenInRange:Map<String, Bool> = [];
-
-	/** Historical validation within this block, preserving compound-write semantics after a callee shrinks an array. */
-	final validatedArrayAccesses:Map<String, Bool> = [];
+	/** The array bounds proved and validated in the block being lowered, and the loops' proofs of the function. */
+	final arrayBounds = new HlArrayBounds();
 
 	/**
-	 * The byte-offset register of every array and index pair accessed so far in the block being lowered. The offset
-	 * depends only on the index, so it stays valid however much code runs in between. Read validation is recorded
-	 * separately, since fused reads no longer need an offset register.
+	 * The byte-offset register of every array and index pair accessed so far in the block being lowered, by its number
+	 * (`HlArrayBounds.pair`). The offset depends only on the index, so it stays valid however much code runs in between.
+	 * Read validation is recorded separately, since fused reads no longer need an offset register.
 	 */
-	final elementOffsets:Map<String, Int> = [];
+	final elementOffsets:Map<Int, Int> = [];
 
 	/** The value array each array value's header leads to, resolved in the block being lowered (`valueArrayView`). */
 	final valueArrayViews:Map<Int, ValueArrayView> = [];
@@ -2667,42 +2660,6 @@ class HlLower {
 	final definedViews:Map<Int, ValueArrayView> = [];
 
 	var hasViewedArrays = false;
-
-	/** The proofs of the loops' array indices of the function being lowered, made when a read first asks for one. */
-	var loopBounds:Null<compiler.ir.analysis.IrLoopBounds> = null;
-
-	@:processWide("an empty set of calls known not to resize arrays, never added to")
-	static final noPureCalls:Map<String, Bool> = [];
-
-	/** Whether the loops around `block` prove `index` in range of `array` (`IrLoopBounds`). */
-	function provenByLoop(array:IrValueId, index:IrValueId, block:Int):Bool {
-		var bounds = loopBounds;
-		if (bounds == null) {
-			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new compiler.ir.analysis.IrLoopBounds(body.toFunction(), noPureCalls);
-			loopBounds = bounds;
-		}
-		return bounds.proven(valueOf(array), valueOf(index), block);
-	}
-
-	/** `value` of the body being lowered as an `IrValue`, for an analysis that reads objects. */
-	function valueOf(value:IrValueId):IrValue
-		return new IrValue(value, body.valueName(value), body.valueType(value));
-
-	/**
-	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
-	 * including every call, forgets them. Array writes only ever grow an array, so they keep them.
-	 */
-	public static function keepsArrayBounds(opcode:IrOpcode):Bool
-		return switch opcode {
-			case IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString, IrOpcode.ConstBool,
-				IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64,
-				IrOpcode.FloatToInt, IrOpcode.FloatToFloat, IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.BitAnd,
-				IrOpcode.BitXor, IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight,
-				IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal, IrOpcode.FieldGet, IrOpcode.ArrayGet,
-				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.Phi: true;
-			default: false;
-		};
 
 	/**
 	 * An Int or Float array write with the bounds test in the bytecode. Reads use OGetArray, whose x86-64 JIT
@@ -2725,9 +2682,8 @@ class HlLower {
 		if (elementShift == null)
 			throw new InternalError("Inline array access requires an Int or Float array");
 		var arrayRegister = requireRegister(array, registers),
-			indexRegister = requireRegister(index, registers),
-			key = '${array}:${index}';
-		if (!provenInRange.exists(key) && !validatedArrayAccesses.exists(key)) {
+			indexRegister = requireRegister(index, registers);
+		if (!arrayBounds.isProven(array, index) && !arrayBounds.isValidated(array, index)) {
 			var outOfRange = freshLabel(),
 				inRange = freshLabel(),
 				size = temporaryRegister(IrType.I32, registerTypes),
@@ -2738,10 +2694,10 @@ class HlLower {
 			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(arrayType, "ensure")),
 				arrayRegister, indexRegister));
 			instructions.push(HlInstruction.Label(inRange));
-			provenInRange.set(key, true);
+			arrayBounds.prove(array, index);
 		}
-		validatedArrayAccesses.set(key, true);
-		var offset = elementOffsets.get(key);
+		arrayBounds.validate(array, index);
+		var key = arrayBounds.pair(array, index), offset = elementOffsets.get(key);
 		if (offset == null) {
 			var shift = temporaryRegister(IrType.I32, registerTypes);
 			offset = temporaryRegister(IrType.I32, registerTypes);
