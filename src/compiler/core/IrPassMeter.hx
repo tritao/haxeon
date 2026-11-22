@@ -6,6 +6,15 @@ typedef IrPassCost = {
 	final milliseconds:Float;
 	final bytes:Float;
 	final count:Float;
+
+	/** Functions whose blocks or body the pass read (`IrFunction.census`). */
+	final read:Int;
+
+	/** Functions the pass made: a new object for one it changed, or one it added. */
+	final made:Int;
+
+	/** Functions of its input the pass did not hand on: replaced by one it made, or removed. */
+	final dropped:Int;
 }
 
 /** Where a pass started: the time and the allocation counters. */
@@ -24,6 +33,9 @@ class IrPassMeter {
 	final milliseconds:Map<String, Float> = [];
 	final bytes:Map<String, Float> = [];
 	final counts:Map<String, Float> = [];
+	final reads:Map<String, Int> = [];
+	final made:Map<String, Int> = [];
+	final dropped:Map<String, Int> = [];
 
 	public function new() {}
 
@@ -47,16 +59,31 @@ class IrPassMeter {
 		counts.set(name, (counts.exists(name) ? counts.get(name) : 0.0) + after.count - before.allocation.count);
 	}
 
+	/** Records, under `name`, how many functions a pass read, made and dropped (`compiler.ir.IrStage.IrStageHooks.census`). */
+	public function functions(name:String, read:Int, madeCount:Int, droppedCount:Int):Void {
+		reads.set(name, (reads.exists(name) ? reads.get(name) : 0) + read);
+		made.set(name, (made.exists(name) ? made.get(name) : 0) + madeCount);
+		dropped.set(name, (dropped.exists(name) ? dropped.get(name) : 0) + droppedCount);
+	}
+
 	/** One entry per pass: name, milliseconds, bytes, objects. */
 	public function entries():Array<IrPassCost> {
 		var result:Array<IrPassCost> = [];
 		for (name in order) {
-			var passBytes = bytes.get(name), passCount = counts.get(name), passTime = milliseconds.get(name);
+			var passBytes = bytes.get(name),
+				passCount = counts.get(name),
+				passTime = milliseconds.get(name),
+				passReads = reads.get(name),
+				passMade = made.get(name),
+				passDropped = dropped.get(name);
 			result.push({
 				name: name,
 				milliseconds: passTime == null ? 0.0 : passTime,
 				bytes: passBytes == null ? 0.0 : passBytes,
-				count: passCount == null ? 0.0 : passCount
+				count: passCount == null ? 0.0 : passCount,
+				read: passReads == null ? 0 : passReads,
+				made: passMade == null ? 0 : passMade,
+				dropped: passDropped == null ? 0 : passDropped
 			});
 		}
 		return result;

@@ -110,6 +110,15 @@ class IrFunction {
 
 	var decodedBindings:Null<Array<IrDebugBinding>>;
 
+	/**
+	 * The stage census's marks (`IrPassMeter.census`): `CENSUS_INPUT` while the function is in the input of the stage being
+	 * counted, `CENSUS_READ` once its blocks or body were read since the census cleared it. Diagnostics only: nothing decides on it.
+	 */
+	public var census = 0;
+
+	public static inline final CENSUS_INPUT = 1;
+	public static inline final CENSUS_READ = 2;
+
 	@:processWide("a placeholder for blocks not decoded yet, replaced at once and never read or added to")
 	static final NOT_DECODED:Array<IrBlock> = [];
 
@@ -158,6 +167,7 @@ class IrFunction {
 	 * the stages over bodies, which edit it in place, until a cache takes the function (`freezeBody`).
 	 */
 	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
+		census |= CENSUS_READ;
 		var known = body;
 		// Every body of a program has its table (`IrStageHooks`): one made with another is a caller's mistake, which would read
 		// its type ids wrong.
@@ -206,6 +216,7 @@ class IrFunction {
 	}
 
 	inline function get_blocks():Array<IrBlock> {
+		census |= CENSUS_READ;
 		var known = decodedBlocks;
 		return known != null ? known : decode().blocks;
 	}

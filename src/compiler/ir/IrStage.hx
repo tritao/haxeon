@@ -49,6 +49,42 @@ class IrStageHooks {
 	function setPrunePoint():Void
 		prunePoint = true;
 
+	/**
+	 * The stage census: a copy of a stage's input with every function marked as input and not read (`IrFunction.census`), taken
+	 * before the stage runs, as a stage may replace functions in the array it is given.
+	 */
+	public static function censusStart(functions:Array<IrFunction>):Array<IrFunction> {
+		for (fn in functions)
+			fn.census = IrFunction.CENSUS_INPUT;
+		return functions.copy();
+	}
+
+	/**
+	 * Records in `meter` what the stage did to the functions: how many it read, made (an object not in its input) and dropped (an
+	 * input function not in its output), and clears the marks.
+	 */
+	public static function census(name:String, input:Array<IrFunction>, output:Array<IrFunction>,
+			meter:compiler.core.IrPassMeter):Void {
+		var read = 0, made = 0, kept = 0;
+		for (fn in output) {
+			var marks = fn.census;
+			if (marks & IrFunction.CENSUS_INPUT != 0)
+				kept++;
+			else {
+				made++;
+				if (marks & IrFunction.CENSUS_READ != 0)
+					read++;
+				fn.census = 0;
+			}
+		}
+		for (fn in input) {
+			if (fn.census & IrFunction.CENSUS_READ != 0)
+				read++;
+			fn.census = 0;
+		}
+		meter.functions(name, read, made, input.length - kept);
+	}
+
 	/** The check-mode hooks after `stage`, whether it ran or not; `functions` are the program's after it. */
 	public static function after(stage:IrStageHooks, functions:Array<IrFunction>, context:IrPipelineContext):Void {
 		var label = stage.pruneCheck;
@@ -136,9 +172,12 @@ class IrStageList {
 			var enabled = stage.enabled;
 			if (enabled == null || enabled(program, context)) {
 				if (context.meter != null) {
-					var meter:compiler.core.IrPassMeter = context.meter, before = meter.start();
+					var meter:compiler.core.IrPassMeter = context.meter,
+						input = IrStageHooks.censusStart(program.functions),
+						before = meter.start();
 					program = stage.run(program, context);
 					meter.stop(stage.name, before);
+					IrStageHooks.census(stage.name, input, program.functions, meter);
 				} else
 					program = stage.run(program, context);
 				IrStageHooks.release(program.functions, context);
@@ -169,9 +208,12 @@ class IrAssemblyStageList {
 				var enabled = stage.enabled;
 				if (enabled == null || enabled(assembly, context)) {
 					if (context.meter != null) {
-						var meter:compiler.core.IrPassMeter = context.meter, before = meter.start();
+						var meter:compiler.core.IrPassMeter = context.meter,
+							input = IrStageHooks.censusStart(assembly.functions),
+							before = meter.start();
 						assembly = stage.run(assembly, context);
 						meter.stop(stage.name, before);
+						IrStageHooks.census(stage.name, input, assembly.functions, meter);
 					} else
 						assembly = stage.run(assembly, context);
 					IrStageHooks.release(assembly.functions, context);
