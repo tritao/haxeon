@@ -1605,12 +1605,11 @@ class HlLower {
 				instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes),
 					body.aux(row) == 1));
 			case IrOpcode.ConstNull:
-				switch body.valueType(output) {
-					case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers,
-						registerTypes), internInt(0)));
-					default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers,
-						registerTypes)));
-				}
+				if (HlLoweringDecisions.isEnumTag(body.valueType(output)))
+					instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+						internInt(HlLoweringDecisions.NULL_ENUM_TAG)));
+				else
+					instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
 			case IrOpcode.TypeValue:
 				instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes),
 					internType(body.typeOperand(row))));
@@ -1741,7 +1740,7 @@ class HlLower {
 					instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"),
 						requireRegister(closure, registers)));
 					instructions.push(HlInstruction.JumpTrue(callable, valid));
-					lowerStringLiteral(error, "Cannot call a non-function value", registerTypes, instructions);
+					lowerStringLiteral(error, HlLoweringDecisions.CALL_ERROR, registerTypes, instructions);
 					instructions.push(HlInstruction.Throw(error));
 					instructions.push(HlInstruction.Label(valid));
 				}
@@ -1839,32 +1838,29 @@ class HlLower {
 					requireRegister(body.operand(row, 0), registers)));
 			case IrOpcode.MakeEnum:
 				var constructor = body.auxInt(row, 1), outputType = body.valueType(output);
-				switch outputType {
-					case EnumTag(_):
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
-							internInt(constructor + 1)));
-					default:
-						var typeName = body.symbol(row).name,
-							destination = defineRegister(output, registers, registerTypes),
-							enumConstructor = requireEnumConstructor(typeName, outputType, constructor),
-							args = operandRegisters(row, 0, registers);
-						if (args.length == 0)
-							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
-						else
-							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+				if (HlLoweringDecisions.isEnumTag(outputType))
+					instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+						internInt(constructor + HlLoweringDecisions.ENUM_TAG_BIAS)));
+				else {
+					var typeName = body.symbol(row).name,
+						destination = defineRegister(output, registers, registerTypes),
+						enumConstructor = requireEnumConstructor(typeName, outputType, constructor),
+						args = operandRegisters(row, 0, registers);
+					if (HlLoweringDecisions.isEnumConstant(body, row))
+						lowerEnumConstant(destination, typeName, enumConstructor, instructions);
+					else
+						instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
 				}
 			case IrOpcode.EnumIndex:
 				var value = body.operand(row, 0);
-				switch body.valueType(value) {
-					case EnumTag(_):
-						var one = temporaryRegister(IrType.I32, registerTypes);
-						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
-						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers), one));
-					default:
-						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-				}
+				if (HlLoweringDecisions.isEnumTag(body.valueType(value))) {
+					var bias = temporaryRegister(IrType.I32, registerTypes);
+					instructions.push(HlInstruction.LoadInt(bias, internInt(HlLoweringDecisions.ENUM_TAG_BIAS)));
+					instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
+						requireRegister(value, registers), bias));
+				} else
+					instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
+						requireRegister(value, registers)));
 			case IrOpcode.EnumField:
 				instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes),
 					requireRegister(body.operand(row, 0), registers), body.auxInt(row, 0), body.auxInt(row, 1)));
@@ -2125,7 +2121,7 @@ class HlLower {
 				requireObjectField(objectType, object, fieldName)));
 		// Inline records produce an HSTRUCT pointer into their owner. Only scalar
 		// narrow fields need sign or zero extension after the field load.
-		if (nativeLayout != null && nativeLayout.size < 4) {
+		if (HlLoweringDecisions.extendsNarrowStorage(nativeLayout)) {
 			var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 				bits = nativeLayout.size * 8;
 			instructions.push(HlInstruction.LoadInt(maskOrShift,

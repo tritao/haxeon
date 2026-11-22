@@ -193,9 +193,6 @@ class HlcFunctionLower {
 		write("}\n\n");
 	}
 
-	/** The message of the error a call of a Dynamic value that is not a function throws. */
-	static inline final CALL_ERROR = "Cannot call a non-function value";
-
 	inline function write(text:String):Void
 		if (out != null)
 			out.add(text);
@@ -438,7 +435,7 @@ class HlcFunctionLower {
 				assign(row, body.aux(row) == 1 ? "true" : "false", module.bool);
 			case IrOpcode.ConstNull:
 				if (isEnumTag(output))
-					assign(row, "0", module.i32);
+					assign(row, '${HlLoweringDecisions.NULL_ENUM_TAG}', module.i32);
 				else
 					line('${v(output)} = NULL;');
 			case IrOpcode.ConstString:
@@ -527,7 +524,8 @@ class HlcFunctionLower {
 					line('${v(body.output(row))} = (${types.cType(typeOf(body.output(row)))})&$place;');
 				else {
 					var storage = integerStorage(body.valueType(object), name, field.type);
-					if (storage != null && (storage.size < 4 || types.kind(typeOf(body.output(row))) == HlType.I64))
+					if (storage != null && (HlLoweringDecisions.extendsNarrowStorage(storage)
+						|| types.kind(typeOf(body.output(row))) == HlType.I64))
 						// As `HlLower.lowerFieldGet`: a narrow stored integer is widened by its signedness.
 						line('${v(body.output(row))} = (${types.cType(typeOf(body.output(row)))})(${storageType(storage)})$place;');
 					else
@@ -593,7 +591,7 @@ class HlcFunctionLower {
 			case IrOpcode.EnumIndex:
 				var value = body.operand(row, 0);
 				if (isEnumTag(value))
-					line('${v(output)} = ${v(value)} - 1;');
+					line('${v(output)} = ${v(value)} - ${HlLoweringDecisions.ENUM_TAG_BIAS};');
 				else
 					line('${v(output)} = ((venum*)${v(value)})->index;');
 			case IrOpcode.EnumField:
@@ -650,15 +648,9 @@ class HlcFunctionLower {
 			default: throw new InternalError('IR value ${(value : Int)} of ${body.name} is not an object');
 		};
 
-	/**
-	 * Whether `value` is a payload-free enum in tag storage (`index + 1`, 0 for null). Decided by the IR type, as `HlLower`
-	 * decides it: in a release build a tag nothing boxes has the plain I32 runtime type.
-	 */
+	/** Whether `value` is a payload-free enum in tag storage (`HlLoweringDecisions.isEnumTag`). */
 	function isEnumTag(value:IrValueId):Bool
-		return switch body.valueType(value) {
-			case EnumTag(_): true;
-			default: false;
-		};
+		return HlLoweringDecisions.isEnumTag(body.valueType(value));
 
 	/** The native storage of an integer field (`HlLower.internNativeStorage` has one only for those), or null. */
 	function integerStorage(type:IrType, name:String, fieldType:Int):Null<compiler.ir.model.Ir.IrScalarStorage>
@@ -1011,7 +1003,7 @@ class HlcFunctionLower {
 		line('if( !${v(closure)} ) hl_null_access();');
 		if (types.kind(typeOf(closure)) == HlType.Dyn) {
 			var slot = module.requireSlot("__reflect_is_function");
-			var error = module.stringConstant(CALL_ERROR);
+			var error = module.stringConstant(HlLoweringDecisions.CALL_ERROR);
 			line('if( !${callExpression(slot, [v(closure)], [typeOf(closure)])} ) hl_throw((vdynamic*)*${globalAddress(error)});');
 			var id = temporaries++;
 			line('{ vdynamic *args$id[] = {${[for (value in arguments) '(vdynamic*)${v(value)}'].concat(["NULL"]).join(",")}};');
@@ -1160,12 +1152,11 @@ class HlcFunctionLower {
 	function lowerMakeEnum(row:Int):Void {
 		var output = body.output(row), type = typeOf(output), constructor = body.auxInt(row, 1);
 		if (isEnumTag(output)) {
-			line('${v(output)} = ${constructor + 1};');
+			line('${v(output)} = ${constructor + HlLoweringDecisions.ENUM_TAG_BIAS};');
 			return;
 		}
 		var arguments = operandsFrom(row, 0);
-		if (arguments.length == 0) {
-			// As `HlLower.lowerEnumConstant`: a constructor without fields is made once and kept in a global.
+		if (HlLoweringDecisions.isEnumConstant(body, row)) {
 			var global = module.enumConstant(body.symbol(row).name, constructor);
 			line('${v(output)} = (venum*)*${globalAddress(global)};');
 			line('if( !${v(output)} ) { ${v(output)} = hl_alloc_enum(${typeAddress(type)},$constructor); *${globalAddress(global)} = (${types.cType(module.code.globals[global])})${v(output)}; }');

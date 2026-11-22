@@ -1,5 +1,6 @@
 package compiler.hl.lower;
 
+import compiler.ir.model.Ir.IrScalarStorage;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
@@ -52,6 +53,39 @@ enum HlCallKind {
  * drift apart.
  */
 class HlLoweringDecisions {
+	/** The error a call of a Dynamic value that is not a function throws. */
+	public static inline final CALL_ERROR = "Cannot call a non-function value";
+
+	/**
+	 * A payload-free enum in tag storage is its constructor's index plus this, so that 0 is null (`NULL_ENUM_TAG`). Whether a
+	 * value is in tag storage is decided by its IR type (`isEnumTag`): in a release build a tag nothing boxes has the plain
+	 * I32 runtime type.
+	 */
+	public static inline final ENUM_TAG_BIAS = 1;
+
+	public static inline final NULL_ENUM_TAG = 0;
+
+	/** Whether values of IR type `type` are enum tags (`ENUM_TAG_BIAS`). */
+	public static function isEnumTag(type:IrType):Bool
+		return switch type {
+			case EnumTag(_): true;
+			default: false;
+		};
+
+	/**
+	 * Whether `MakeEnum` row `row` makes a constructor without fields of an enum in boxed storage: it denotes one value, so it
+	 * is made the first time it is evaluated and kept in a global, and every later evaluation is a global load.
+	 */
+	public static function isEnumConstant(body:IrBody, row:Int):Bool
+		return body.operandCount(row) == 0 && !isEnumTag(body.valueType(body.output(row)));
+
+	/**
+	 * Whether an integer field read from native storage `storage` (`IrScalarStorage`) is narrower than its register and
+	 * extended by its signedness: a byte or 16-bit field always.
+	 */
+	public static function extendsNarrowStorage(storage:Null<IrScalarStorage>):Bool
+		return storage != null && storage.size < 4;
+
 	/**
 	 * The value row `row` dereferences and checks for null first, or no value. A native field, enum or array load cannot turn
 	 * a hardware fault into a Haxe exception, so the check is explicit and the active handler works on every thread.
