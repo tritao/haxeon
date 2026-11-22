@@ -329,6 +329,15 @@ typer's drain order) and 5 (live pruning).
 
 ### Compiler speed
 
+- **Optional scalar arguments through `$dispatch` (parked).** Calling a statically
+  known target's flag-plus-value specialization removes most Bool box requests
+  (1,265K to 329K on the self-compile) but saves no allocation, since small Ints
+  and Bools already use the VM's shared boxes, and it cost +1.4% instructions:
+  each specialization copies the whole method body while the boxed original stays
+  for the vtable. The census put these boxes at about 0.33% of JIT time. If taken
+  up again: make the boxed original a small adapter over the split body instead of
+  cloning large bodies, and find the downstream cost with a symbolized profile first.
+
 - **Session memory after the IR columns chain.** A compile server keeps the
   generator's IR objects for the stages before the encode point and the bodies
   after it, so the incremental baselines were moved up when the chain landed:
