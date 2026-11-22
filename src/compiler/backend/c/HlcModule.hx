@@ -62,14 +62,20 @@ class HlcModule {
 	final allocationTypes:Map<Int, Bool> = [];
 
 	/**
-	 * The type and global tables' lengths once the collection pass has interned everything the functions use (`emit`): lowering
-	 * only reads the tables, and a type or global it would add is the collection's bug, reported as such.
+	 * Whether the functions are being collected (`HlcFunctionLower.collect`): their lowering interns what it uses and is
+	 * handed no C names, as it writes nothing. `settleNames` ends it.
+	 */
+	var collecting = true;
+
+	/**
+	 * The type and global tables' lengths once the collection has interned everything the functions use (`emit`): lowering
+	 * only reads the tables, and a type or global it would add is a difference between collecting and writing, reported as such.
 	 */
 	var typeLimit = 0x7FFFFFFF;
 
 	var globalLimit = 0x7FFFFFFF;
 
-	/** The C names of types, globals and natives (`HlcStableNames`), by table position, settled after the collection pass. */
+	/** The C names of types, globals and natives (`HlcStableNames`), by table position, settled after the collection. */
 	var typeNames:Array<String> = [];
 
 	var globalNames:Array<String> = [];
@@ -217,6 +223,8 @@ class HlcModule {
 	 * runtime resolved.
 	 */
 	public function functionPointer(slot:Int):String {
+		if (collecting)
+			return "";
 		var text = usage;
 		if (native[slot]) {
 			if (text != null)
@@ -266,6 +274,8 @@ class HlcModule {
 
 	/** The descriptor of type `type` (`hl_type*`), a pointer the entry point sets before anything runs (`image`). */
 	public function typeDescriptor(type:Int):String {
+		if (collecting)
+			return "";
 		if (usage != null)
 			usage.types.set(type, true);
 		return typeNames[type];
@@ -273,20 +283,23 @@ class HlcModule {
 
 	/** The address of global `global`'s value (`void*`), a pointer the entry point sets before anything runs (`image`). */
 	public function globalPointer(global:Int):String {
+		if (collecting)
+			return "";
 		if (usage != null)
 			usage.globals.set(global, true);
 		return globalNames[global];
 	}
 
 	/**
-	 * Records that object type `type` is allocated inline, while the functions are collected: the entry point fills its
-	 * descriptor with the collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything runs.
+	 * The inline allocation descriptor of object type `type` (`hl_jit_alloc_data`), recorded while the functions are collected:
+	 * the entry point fills it with the collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything
+	 * runs.
 	 */
-	public function collectAllocation(type:Int):Void
-		allocationTypes.set(type, true);
-
-	/** The inline allocation descriptor of object type `type` (`hl_jit_alloc_data`). */
 	public function allocation(type:Int):String {
+		if (collecting) {
+			allocationTypes.set(type, true);
+			return "";
+		}
 		if (!allocationTypes.exists(type))
 			throw new InternalError('C backend: the inline allocation of ${types.typeName(type)} was not collected before lowering');
 		if (usage != null)
@@ -294,8 +307,9 @@ class HlcModule {
 		return allocationNames[type];
 	}
 
-	/** Settles every C name once the collection pass has interned all that the functions use. */
+	/** Settles every C name once the collection has interned all that the functions use. */
 	function settleNames():Void {
+		collecting = false;
 		typeLimit = symbols.types.length;
 		globalLimit = symbols.globals.length;
 		if (code.types.length != typeLimit || code.globals.length != globalLimit)
@@ -389,7 +403,9 @@ class HlcModule {
 		// lowering only reads the tables.
 		for (index in 0...functions.length)
 			try
-				lowering.collect(bodies[index])
+				lowering.collect(bodies[index], slots.get(functions[index].name))
+			catch (error:HlcFunctionLower.HlcUnsupported)
+				throw error
 			catch (error:InternalError)
 				throw new InternalError('C backend, collecting ${bodies[index].name}: ${error.message}');
 		settleNames();

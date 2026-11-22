@@ -127,11 +127,13 @@ and an added class does not rewrite the files that do not use it (`HlcStableName
 
 A name part longer than 64 characters is cut and given a digest of the whole. Names that come out the same get a
 digest of what each item is (a type's fields, a global's type), and items that are the same in that too are numbered in
-table order. The names are settled before any C is written: a collection pass (`HlcFunctionLower.collect`) walks every
-function's IR in slot order and interns what its lowering will use (every value's type, the scalar locals' types, String
-literal and cached enum constant globals, the runtime header of the byte fast paths, the typed interface keys, the types
-allocated inline). Lowering then only reads the tables and writes final names; a type or global it would intern is the
-collection's bug and stops the build (`HlcModule.typeIndex` and the others). While a file is written the names it uses are
+table order. The names are settled before any C is written: every function is first collected, in slot order
+(`HlcFunctionLower.collect`): it is lowered as it will be written, but with no output, so whatever its lowering uses is
+interned (the values' and scalar locals' types, String literal and cached enum constant globals, the runtime header of
+the byte fast paths, the typed interface keys, the types allocated inline) and no C name is handed out (`HlcModule` gives
+empty names while it collects). Proofs that only drop checks from the text (non-null facts, loop bounds) are skipped
+then. There is one lowering, so collection cannot miss what writing uses; writing then only reads the tables, and a type
+or global it would intern still stops the build (`HlcModule.typeIndex` and the others). While a file is written the names it uses are
 recorded (`HlcUsage`: structs, descriptors, globals, natives, allocation descriptors, functions), and its declarations are
 made from that record, each kind sorted by name. The descriptors,
 globals and natives are pointers (`hl_type *hlc_t_Point`, `void *hlc_g_Main_count`, `void *hlc_np_…`) that `image.c`

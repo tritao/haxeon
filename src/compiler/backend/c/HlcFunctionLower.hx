@@ -35,7 +35,9 @@ class HlcFunctionLower {
 	final scalarLocalTypes:Array<Int> = [];
 
 	var body:IrBody;
-	var out:StringBuf;
+
+	/** Where the C text goes; null while the function is collected (`collect`), which writes nothing. */
+	var out:Null<StringBuf>;
 	var valueTypes:Array<Int> = [];
 	var nullValues:Array<Bool> = [];
 	var nonNull:IrValueMarks;
@@ -45,6 +47,9 @@ class HlcFunctionLower {
 	var hasTry = false;
 	var functionResult = -1;
 	final reachable:Array<Bool> = [];
+
+	/** The C locals' names by value id (`v`). */
+	final valueNames:Array<String> = [];
 
 	/** How many operands of the body read each value. */
 	final uses:Array<Int> = [];
@@ -72,8 +77,17 @@ class HlcFunctionLower {
 		this.types = module.types;
 	}
 
-	/** Writes the C definition of the function in slot `slot`, whose body is `source`, to `output`. */
-	public function lower(source:IrBody, slot:Int, output:StringBuf):Void {
+	/**
+	 * Records what lowering the function in slot `slot`, whose body is `source`, uses, and writes nothing: it is lowered as
+	 * `lower` lowers it, so every type, global and inline allocation it names is interned in the module's tables (`HlcModule`
+	 * hands out no C names while it collects). Every function is collected before any is written, so the C names are settled
+	 * first and lowering then only reads the tables (`HlcModule.typeIndex` and the others fail for anything not collected).
+	 */
+	public function collect(source:IrBody, slot:Int):Void
+		lower(source, slot, null);
+
+	/** Writes the C definition of the function in slot `slot`, whose body is `source`, to `output`; `collect` passes none. */
+	public function lower(source:IrBody, slot:Int, output:Null<StringBuf>):Void {
 		body = source;
 		out = output;
 		temporaries = 0;
@@ -81,7 +95,9 @@ class HlcFunctionLower {
 		lastPath = "";
 		directive = "";
 		linesSinceDirective = 0;
-		nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch);
+		// The proofs that drop checks change only the text, which collecting does not write.
+		if (out != null)
+			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph.reset(body), nonNullScratch);
 		var limit = body.valueLimit();
 		valueTypes.resize(0);
 		nullValues.resize(0);
@@ -137,7 +153,7 @@ class HlcFunctionLower {
 		lastLine = -1;
 		// The definition repeats the declaration's section and inlining (`HLC_FUNCTION`): MSVC's `code_seg` applies where a
 		// function is defined.
-		out.add('HLC_FUNCTION ${module.prototype(slot, [for (argument in arguments) v(argument)])} {\n');
+		write('HLC_FUNCTION ${module.prototype(slot, [for (argument in arguments) v(argument)])} {\n');
 		var isArgument:Map<Int, Bool> = [];
 		for (index in 0...arguments.length)
 			isArgument.set(arguments[index], true);
@@ -149,14 +165,14 @@ class HlcFunctionLower {
 				return;
 			declared.set(value, true);
 			var qualifier = hasTry && phis.exists(value) ? " volatile" : "";
-			out.add('\t${types.cType(typeOf(value))}$qualifier v$value;\n');
+			write('\t${types.cType(typeOf(value))}$qualifier v$value;\n');
 		});
 		for (local in 0...scalarLocalTypes.length)
 			if (!types.isVoid(scalarLocalTypes[local]))
-				out.add('\t${types.cType(scalarLocalTypes[local])}${hasTry ? " volatile" : ""} s$local;\n');
+				write('\t${types.cType(scalarLocalTypes[local])}${hasTry ? " volatile" : ""} s$local;\n');
 		for (array in viewedArrays.keys()) {
 			module.readsValueArrays = true;
-			out.add('\tvbyte *${hasTry ? " volatile" : ""} va$array = NULL; int vs$array = 0;\n');
+			write('\tvbyte *${hasTry ? " volatile" : ""} va$array = NULL; int vs$array = 0;\n');
 		}
 		var traps:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
@@ -164,7 +180,7 @@ class HlcFunctionLower {
 				var catchBlock = body.auxInt(row, 0);
 				if (!traps.exists(catchBlock)) {
 					traps.set(catchBlock, true);
-					out.add(body.auxInt(row, 2) == 1
+					write(body.auxInt(row, 2) == 1
 						? '\thl_cleanup_trap_ctx trap$catchBlock;\n' : '\thl_trap_ctx trap$catchBlock;\n');
 				}
 			}
@@ -177,64 +193,15 @@ class HlcFunctionLower {
 		for (block in 0...body.blockCount())
 			if (reachable[block])
 				lowerBlock(block, traps);
-		out.add("}\n\n");
+		write("}\n\n");
 	}
 
 	/** The message of the error a call of a Dynamic value that is not a function throws. */
 	static inline final CALL_ERROR = "Cannot call a non-function value";
 
-	/**
-	 * Interns what lowering `source` will use: every value's type, the scalar locals' types, the String literal and cached
-	 * enum constant globals, the runtime header of the byte fast paths, the typed interface key, and the types allocated
-	 * inline. It runs for every function before any is lowered, so the C names are settled first and lowering only reads the
-	 * tables (`HlcModule.typeIndex` and the others fail for anything missed here). Each case mirrors the lowering that uses it.
-	 */
-	public function collect(source:IrBody):Void {
-		body = source;
-		var locals = 0;
-		scalarLocals.reset(body, module.view, function(type) {
-			module.typeIndex(type);
-			return locals++;
-		});
-		for (index in 0...body.argumentCount())
-			module.typeIndex(body.valueType(body.argument(index)));
-		var key = module.view.typedInterfaceKey(body.name);
-		if (key != null)
-			module.typeIndex(IrType.Abstract(key));
-		for (block in 0...body.blockCount()) {
-			var row = body.firstRow(block);
-			while (row >= 0) {
-				var output = body.output(row);
-				if (output.exists())
-					module.typeIndex(body.valueType(output));
-				for (operand in 0...body.operandCount(row))
-					module.typeIndex(body.valueType(body.operand(row, operand)));
-				switch body.opcode(row) {
-					case IrOpcode.ConstString:
-						module.stringConstant(body.string(row));
-					case IrOpcode.TypeValue:
-						module.typeIndex(body.typeOperand(row));
-					case IrOpcode.CallClosure:
-						if (types.kind(module.typeIndex(body.valueType(body.operand(row, 0)))) == HlType.Dyn)
-							module.stringConstant(CALL_ERROR);
-					case IrOpcode.MakeEnum:
-						if (body.operandCount(row) == 0 && !isEnumTag(output))
-							module.enumConstant(body.symbol(row).name, body.auxInt(row, 1));
-					case IrOpcode.ValueInit if (scalarLocals.get(output) != null):
-					case IrOpcode.NewObject, IrOpcode.ValueInit:
-						var type = module.typeIndex(body.valueType(output));
-						if (module.inlineAllocation && types.kind(type) == HlType.Obj)
-							module.collectAllocation(type);
-					case IrOpcode.Call:
-						var base = fastPathBase(body.symbol(row).name);
-						if (base == "__bytes_get" || base == "__bytes_try_set")
-							module.runtimeHeader(BytesHeader);
-					default:
-				}
-				row = body.nextRow(row);
-			}
-		}
-	}
+	inline function write(text:String):Void
+		if (out != null)
+			out.add(text);
 
 	/** The runtime call `name` is, or is the shared helper of (`IrSharedRuntimeCalls`). */
 	static function fastPathBase(name:String):String {
@@ -253,13 +220,13 @@ class HlcFunctionLower {
 			keyType = module.typeIndex(IrType.Abstract(key)),
 			slotType = module.slotResult(slotNative);
 		var receiver = '(vdynamic*)${v(arguments[0])}';
-		out.add('\t{ static ${types.cType(slotType)} slot; if( !slot ) slot = ${callExpression(slotNative, [typeAddress(keyType)], [module.typeRef])};\n');
-		out.add('\tvclosure *entry = ${callExpression(entryNative, [receiver, "slot"], [module.dyn, slotType])};\n');
+		write('\t{ static ${types.cType(slotType)} slot; if( !slot ) slot = ${callExpression(slotNative, [typeAddress(keyType)], [module.typeRef])};\n');
+		write('\tvclosure *entry = ${callExpression(entryNative, [receiver, "slot"], [module.dyn, slotType])};\n');
 		var parameters = ["vdynamic*"]
 			.concat([for (index in 1...signature.arguments.length) types.cType(signature.arguments[index])]),
 			values = [receiver].concat([for (index in 1...arguments.length) v(arguments[index])]);
 		var call = '((${types.cType(signature.result)} (*)(${parameters.join(",")}))entry->fun)(${values.join(",")})';
-		out.add(types.isVoid(signature.result)
+		write(types.isVoid(signature.result)
 			? '\tif( entry ) { $call; return; } }\n' : '\tif( entry ) return $call; }\n');
 	}
 
@@ -312,7 +279,7 @@ class HlcFunctionLower {
 
 	function lowerBlock(block:Int, traps:Map<Int, Bool>):Void {
 		var id = body.blockId(block);
-		out.add('b$id:;\n');
+		write('b$id:;\n');
 		currentBlock = id;
 		validatedAccesses.clear();
 		provenInRange.clear();
@@ -334,6 +301,8 @@ class HlcFunctionLower {
 
 	/** A `#line` directive when the row's source line differs from the last one written, so C debug info names Haxe lines. */
 	function position(row:Int):Void {
+		if (out == null)
+			return;
 		var location = body.provenance(row).location;
 		// Rows of no source are where `HlLower` puts them: line 1 of `<generated>`.
 		var line = location == null ? 1 : location.line, path = location == null ? "<generated>" : location.path;
@@ -342,7 +311,7 @@ class HlcFunctionLower {
 		lastLine = line;
 		lastPath = path;
 		directive = '#line $line ${module.linePath(path)}\n';
-		out.add(directive);
+		write(directive);
 		linesSinceDirective = 0;
 	}
 
@@ -352,17 +321,25 @@ class HlcFunctionLower {
 	var linesSinceDirective = 0;
 
 	function line(text:String):Void {
+		var output = out;
+		if (output == null)
+			return;
 		if (linesSinceDirective++ > 0 && directive != "")
-			out.add(directive);
-		out.add("\t");
-		out.add(text);
-		out.add("\n");
+			output.add(directive);
+		output.add("\t");
+		output.add(text);
+		output.add("\n");
 	}
 
-	inline function v(value:IrValueId):String
-		return "v" + (value:Int);
+	/** The C local of `value`, `v<id>`; the names are kept, as every row's text names its values. */
+	function v(value:IrValueId):String {
+		var id:Int = value;
+		while (valueNames.length <= id)
+			valueNames.push("v" + valueNames.length);
+		return valueNames[id];
+	}
 
-	/** The HashLink type of `value`, which `collect` interned: a value no reachable row defines may name a type the assembly never registered. */
+	/** The HashLink type of `value`, interned on first use: a value no reachable row defines may name a type the assembly never registered. */
 	function typeOf(value:IrValueId):Int {
 		var known = valueTypes[value];
 		if (known < 0) {
@@ -407,7 +384,7 @@ class HlcFunctionLower {
 	}
 
 	function nullCheck(row:Int, receiver:IrValueId, ?field:String):Void {
-		if (nonNull.has(row) || scalarLocals.get(receiver) != null)
+		if (out == null || nonNull.has(row) || scalarLocals.get(receiver) != null)
 			return;
 		// The JIT names the field a failed check was for; a check before anything else reads "Null access".
 		if (field != null)
@@ -736,7 +713,7 @@ class HlcFunctionLower {
 
 	/** Whether `index` is in range of `array`: checked since nothing could shrink it, or proved by the loops around the access. */
 	function inRange(array:IrValueId, index:IrValueId):Bool {
-		if (provenInRange.exists('$array:$index'))
+		if (out == null || provenInRange.exists('$array:$index'))
 			return true;
 		var bounds = loopBounds;
 		if (bounds == null) {
