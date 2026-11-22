@@ -97,75 +97,40 @@ class IrReachability {
 	 * declares natives, classes and globals leaves no trace in it). `walk` is a walk made with `keepLiveClasses`. The enums and interfaces
 	 * stay, and so does every class their types mention.
 	 */
-	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk):Void {
-		// An `Unreachable` terminator lowers to a call of the fatal native, which no `Call` instruction names.
-		var fatal = false;
-		for (fn in program.functions) {
-			var body = fn.body;
-			if (body != null) {
-				for (block in 0...body.blockCount()) {
-					var terminator = body.terminatorRow(block);
-					if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Unreachable)
-						fatal = true;
-				}
-				continue;
+	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk,
+			?memo:IrFunctionMemo<IrTrimSummary>):Void {
+		var fatal = false, globals:Map<String, Bool> = [];
+		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
+		var kept:Map<String, Bool> = [], classes:Array<String> = [];
+		function keep(name:String):Void
+			if (!kept.exists(name)) {
+				kept.set(name, true);
+				classes.push(name);
 			}
-			for (block in fn.blocks)
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Unreachable:
-							fatal = true;
-						default:
-					}
+		function mention(type:IrType):Void
+			namedClasses(type, keep);
+		for (fn in program.functions) {
+			var summary = memo == null ? null : memo.get(fn);
+			if (summary == null) {
+				summary = trimSummary(fn);
+				if (memo != null)
+					memo.set(fn, summary);
+			}
+			if (summary.fatal)
+				fatal = true;
+			for (name in summary.globals)
+				globals.set(name, true);
+			for (name in summary.classes)
+				keep(name);
 		}
 		program.natives = [
 			for (native in program.natives)
 				if (walk.used.exists(native.name) || (fatal && native.name == "__unreachable")) native
 		];
-		var globals:Map<String, Bool> = [];
-		for (fn in program.functions) {
-			var body = fn.body;
-			if (body != null) {
-				for (block in 0...body.blockCount()) {
-					var row = body.firstRow(block);
-					while (row >= 0) {
-						var opcode = body.opcode(row);
-						if (opcode == IrOpcode.GlobalGet || opcode == IrOpcode.GlobalSet)
-							globals.set(body.symbol(row).name, true);
-						row = body.nextRow(row);
-					}
-				}
-				continue;
-			}
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case GlobalGet(_, name), GlobalSet(name, _):
-							globals.set(name, true);
-						default:
-					}
-		}
 		program.staticFields = [for (field in program.staticFields) if (globals.exists(field.name)) field];
-		// The classes the written program names, and what those classes hold: `namedTypes` is the one list of where a program names a type, shared with
-		// `checkTables`, so what the trim keeps and what the check demands cannot drift apart.
-		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
-		var kept:Map<String, Bool> = [], classes:Array<String> = [];
-		function mention(type:IrType):Void
-			switch type {
-				case Obj(name):
-					if (!kept.exists(name)) {
-						kept.set(name, true);
-						classes.push(name);
-					}
-				case Array(element), Nullable(element), Iterator(element):
-					mention(element);
-				case Function(arguments, result):
-					for (argument in arguments)
-						mention(argument);
-					mention(result);
-				default:
-			}
-		namedTypes(program, (_, type) -> mention(type));
+		// The classes the written program names, and what those classes hold: `functionTypes` and `tableTypes` are the one list of where a
+		// program names a type, shared with `checkTables`, so what the trim keeps and what the check demands cannot drift apart.
+		tableTypes(program, (_, type) -> mention(type));
 		var index = 0;
 		while (index < classes.length) {
 			var object = objects.get(classes[index++]);
@@ -175,6 +140,71 @@ class IrReachability {
 		program.objects = [for (object in program.objects) if (kept.exists(object.name)) object];
 	}
 
+	/** What `trimTables` keeps for function `fn`, which depends on nothing else. */
+	public static function trimSummary(fn:IrFunction):IrTrimSummary {
+		// An `Unreachable` terminator lowers to a call of the fatal native, which no `Call` instruction names.
+		var fatal = false,
+			globals:Array<String> = [],
+			seenGlobals:Map<String, Bool> = [],
+			classes:Array<String> = [],
+			seenClasses:Map<String, Bool> = [];
+		function global(name:String):Void
+			if (!seenGlobals.exists(name)) {
+				seenGlobals.set(name, true);
+				globals.push(name);
+			}
+		function keep(name:String):Void
+			if (!seenClasses.exists(name)) {
+				seenClasses.set(name, true);
+				classes.push(name);
+			}
+		var body = fn.body;
+		if (body != null) {
+			for (block in 0...body.blockCount()) {
+				var terminator = body.terminatorRow(block);
+				if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Unreachable)
+					fatal = true;
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					var opcode = body.opcode(row);
+					if (opcode == IrOpcode.GlobalGet || opcode == IrOpcode.GlobalSet)
+						global(body.symbol(row).name);
+					row = body.nextRow(row);
+				}
+			}
+		} else
+			for (block in fn.blocks) {
+				if (block.terminator != null)
+					switch block.terminator.value {
+						case Unreachable:
+							fatal = true;
+						default:
+					}
+				for (located in block.instructions)
+					switch located.value {
+						case GlobalGet(_, name), GlobalSet(name, _):
+							global(name);
+						default:
+					}
+			}
+		functionTypes(fn, (_, type) -> namedClasses(type, keep));
+		return {fatal: fatal, globals: globals, classes: classes};
+	}
+
+	/** Calls `keep` with every class `type` names. */
+	static function namedClasses(type:IrType, keep:String->Void):Void
+		switch type {
+			case Obj(name):
+				keep(name);
+			case Array(element), Nullable(element), Iterator(element):
+				namedClasses(element, keep);
+			case Function(arguments, result):
+				for (argument in arguments)
+					namedClasses(argument, keep);
+				namedClasses(result, keep);
+			default:
+		}
+
 	/**
 	 * Every type the functions and tables of `program` name, as `visit(owner, type)`: the types of a function's arguments, result and instruction outputs;
 	 * the types an instruction names without producing a value of them (a type value, the type operand of an enum intrinsic); the signatures of the
@@ -182,44 +212,53 @@ class IrReachability {
 	 * (`objectTypes`): the trim follows them from the classes named here, the check looks at every one.
 	 */
 	public static function namedTypes(program:IrProgram, visit:(String, IrType) -> Void):Void {
-		for (fn in program.functions) {
-			visit(fn.name, fn.result);
-			for (argument in fn.arguments)
-				visit(fn.name, argument.type);
-			var body = fn.body;
-			if (body != null) {
-				for (block in 0...body.blockCount()) {
-					var row = body.firstRow(block), terminator = body.terminatorRow(block);
-					while (row >= 0 && row != terminator) {
-						var output = body.output(row);
-						if (output.exists())
-							visit(fn.name, body.valueType(output));
-						switch body.opcode(row) {
-							case IrOpcode.TypeValue, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView,
-								IrOpcode.EnumTagBox,
-								IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
-								visit(fn.name, body.typeOperand(row));
-							default:
-						}
-						row = body.nextRow(row);
-					}
-				}
-				continue;
-			}
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null)
-						visit(fn.name, output.type);
-					switch located.value {
-						case TypeValue(_, type):
-							visit(fn.name, type);
-						case Intrinsic(_, operation, _):
-							visit(fn.name, intrinsicType(operation));
+		for (fn in program.functions)
+			functionTypes(fn, visit);
+		tableTypes(program, visit);
+	}
+
+	/** The types function `fn` names (see `namedTypes`). */
+	public static function functionTypes(fn:IrFunction, visit:(String, IrType) -> Void):Void {
+		visit(fn.name, fn.result);
+		for (argument in fn.arguments)
+			visit(fn.name, argument.type);
+		var body = fn.body;
+		if (body != null) {
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block), terminator = body.terminatorRow(block);
+				while (row >= 0 && row != terminator) {
+					var output = body.output(row);
+					if (output.exists())
+						visit(fn.name, body.valueType(output));
+					switch body.opcode(row) {
+						case IrOpcode.TypeValue, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView,
+							IrOpcode.EnumTagBox,
+							IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
+							visit(fn.name, body.typeOperand(row));
 						default:
 					}
+					row = body.nextRow(row);
 				}
+			}
+			return;
 		}
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null)
+					visit(fn.name, output.type);
+				switch located.value {
+					case TypeValue(_, type):
+						visit(fn.name, type);
+					case Intrinsic(_, operation, _):
+						visit(fn.name, intrinsicType(operation));
+					default:
+				}
+			}
+	}
+
+	/** The types the tables of `program` name, its functions aside (see `namedTypes`). */
+	public static function tableTypes(program:IrProgram, visit:(String, IrType) -> Void):Void {
 		for (native in program.natives) {
 			for (argument in native.arguments)
 				visit("native " + native.name, argument);
@@ -294,6 +333,13 @@ class IrReachability {
 				IrReachabilityWalk.collectCalled(fn, result);
 		return result;
 	}
+}
+
+/** What `IrReachability.trimTables` reads of one function: whether a block of it ends unreachable, and the globals and classes it names. */
+typedef IrTrimSummary = {
+	final fatal:Bool;
+	final globals:Array<String>;
+	final classes:Array<String>;
 }
 
 /** One walk over a program that takes more roots as they appear. */

@@ -839,8 +839,9 @@ class HlModuleAssembler {
 			startFresh();
 		var cachePreparedAt = Sys.time() * 1000.0;
 		var previousNatives = runtimeNatives;
+		var nativeUses = loweredCache == null ? null : loweredCache.summaries.natives;
 		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0
-			? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null);
+			? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null, nativeUses);
 		// New runtime imports shift every function slot. Publish a fresh module,
 		// never reuse opcodes or patch a live module with the old slot layout.
 		if (reuseLowered && runtimeNatives.length != previousNatives.length) {
@@ -850,7 +851,7 @@ class HlModuleAssembler {
 				+ [for (native in runtimeNatives) if (!known.exists(native.name)) native.name].join(", "));
 			reuseLowered = false;
 			startFresh();
-			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
+			runtimeNatives = HlLower.discoverRuntimeNatives(ordered, null, null, nativeUses);
 		}
 		// C dispatch natives sit with the runtime natives, before every function slot. When they change, every function slot
 		// moves, so publish a fresh module.
@@ -860,7 +861,7 @@ class HlModuleAssembler {
 			layoutReasons.push("dispatch natives");
 			reuseLowered = false;
 			startFresh();
-			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
+			runtimeNatives = HlLower.discoverRuntimeNatives(ordered, null, null, nativeUses);
 		}
 		dispatchNatives = nextDispatch;
 		function slotLayout():Map<String, Int> {

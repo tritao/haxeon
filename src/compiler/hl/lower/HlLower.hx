@@ -335,8 +335,12 @@ class HlLower {
 		return result;
 	}
 
+	/**
+	 * The runtime natives lowering `program` calls, in the order lowering meets them: the program's own, then those its functions'
+	 * rows need. `memo` keeps each function's own list (`functionNatives`) while the function is the same object.
+	 */
 	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>,
-			?selected:Array<String>):Array<IrNative> {
+			?selected:Array<String>, ?memo:compiler.ir.IrFunctionMemo<Array<IrNative>>):Array<IrNative> {
 		var runtimeNatives = baseline == null ? program.natives.copy() : baseline.copy(),
 			selectedNames:Map<String, Bool> = [];
 		if (baseline != null)
@@ -356,20 +360,37 @@ class HlLower {
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
-		var types = compiler.ir.IrTypeIds.ofFunctions(program.functions),
-			valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
+		var types:Null<compiler.ir.IrTypeIds> = null;
 		for (fn in program.functions)
 			if (selected == null || selectedNames.exists(fn.name)) {
-				var body = fn.bodyIn(types);
-				for (block in 0...body.blockCount()) {
-					var row = body.firstRow(block), terminator = body.terminatorRow(block);
-					while (row >= 0 && row != terminator) {
-						discoverRowNatives(runtimeNatives, body, row, valueArrayRead);
-						row = body.nextRow(row);
-					}
+				var own = memo == null ? null : memo.get(fn);
+				if (own == null) {
+					if (types == null)
+						types = compiler.ir.IrTypeIds.ofFunctions(program.functions);
+					own = functionNatives(fn, types);
+					if (memo != null)
+						memo.set(fn, own);
 				}
+				for (native in own)
+					ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library,
+						native.symbol);
 			}
 		return runtimeNatives;
+	}
+
+	/** The runtime natives lowering the rows of `fn` calls, each once, in the order they come; they depend on nothing else. */
+	static function functionNatives(fn:IrFunction, types:compiler.ir.IrTypeIds):Array<IrNative> {
+		var own:Array<IrNative> = [],
+			valueArrayRead = compiler.ir.IrSymbol.of(VALUE_ARRAY_READ_I32).id,
+			body = fn.bodyIn(types);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				discoverRowNatives(own, body, row, valueArrayRead);
+				row = body.nextRow(row);
+			}
+		}
+		return own;
 	}
 
 	/** The runtime natives lowering row `row` of `body` calls, added to `runtimeNatives`. */
@@ -432,7 +453,8 @@ class HlLower {
 		}
 		// Patches cannot add object types, so every base module carries String.
 		internType(IrType.Bytes);
-		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program);
+		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program,
+			loweredCache == null ? null : loweredCache.summaries.enumUses);
 		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
 		for (declaration in program.enums)
 			if (!boxedEnums.exists(declaration.name))

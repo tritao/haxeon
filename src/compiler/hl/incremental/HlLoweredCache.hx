@@ -19,6 +19,9 @@ class HlLoweredCache {
 	/** The facts the entries read, with their prints (`HlLoweredFunction.facts`), shared by the copies like `keys`. */
 	public final facts:compiler.hl.lower.HlLoweringView.HlFactPrints;
 
+	/** What the steps around lowering work out from each function alone, shared by the copies like `keys`. */
+	public final summaries:HlFunctionSummaries;
+
 	/** Each function's form with its runtime calls through helpers, while its IR is the same object (`IrSharedRuntimeCalls`). */
 	public var sharedCalls = new compiler.ir.IrSharedRuntimeCalls.IrSharedCallsMemo();
 
@@ -26,14 +29,15 @@ class HlLoweredCache {
 	public var environment = "";
 
 	public function new(?debug:HlDebugMetadataCache, ?keys:HlRequestKeys,
-			?facts:compiler.hl.lower.HlLoweringView.HlFactPrints) {
+			?facts:compiler.hl.lower.HlLoweringView.HlFactPrints, ?summaries:HlFunctionSummaries) {
+		this.summaries = summaries == null ? new HlFunctionSummaries() : summaries;
 		this.debug = debug == null ? new HlDebugMetadataCache() : debug;
 		this.keys = keys == null ? new HlRequestKeys() : keys;
 		this.facts = facts == null ? new compiler.hl.lower.HlLoweringView.HlFactPrints() : facts;
 	}
 
 	public function copy():HlLoweredCache {
-		var result = new HlLoweredCache(debug, keys, facts);
+		var result = new HlLoweredCache(debug, keys, facts, summaries);
 		result.entries = [for (name => entry in entries) name => entry];
 		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;

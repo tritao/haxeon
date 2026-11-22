@@ -1,0 +1,34 @@
+package compiler.hl.incremental;
+
+import compiler.ir.Ir.IrNative;
+import compiler.ir.IrFunctionMemo;
+import compiler.ir.IrReachability.IrTrimSummary;
+
+/**
+ * What the whole-program steps around HashLink lowering work out from each function alone, kept while the function is the same
+ * object (`IrFunctionMemo`), so a build scans only the functions an edit made. The session keeps one with the lowered functions
+ * (`HlLoweredCache`), which the copies share.
+ */
+class HlFunctionSummaries {
+	/** The signature text of each function, for the runtime ABI (`RuntimeAbi.describe`). */
+	public final abiSignatures = new IrFunctionMemo<String>();
+
+	/** The globals and classes each function names, for a plain build's tables (`IrReachability.trimTables`). */
+	public final trim = new IrFunctionMemo<IrTrimSummary>();
+
+	/** The enums each function may need boxed descriptors of (`IrEnumRuntimeTypes.declarations`). */
+	public final enumUses = new IrFunctionMemo<Array<String>>();
+
+	/** The runtime natives each function's rows call (`HlLower.discoverRuntimeNatives`). */
+	public final natives = new IrFunctionMemo<Array<IrNative>>();
+
+	public function new() {}
+
+	/** Drops what the build that just ended did not ask for. */
+	public function endBuild():Void {
+		abiSignatures.endBuild();
+		trim.endBuild();
+		enumUses.endBuild();
+		natives.endBuild();
+	}
+}

@@ -12,15 +12,16 @@ class HlPlainBuild {
 	/**
 	 * What a plain module is made of: a copy of `program` without the functions the entry does not reach, and without the methods of
 	 * a class no reachable function mentions, with the reachable names. `program` keeps everything (other backends and tools read it).
+	 * `summaries` keeps what the trim reads of each function.
 	 */
-	public static function reachable(program:IrProgram, checkReuse:Bool = false):{
+	public static function reachable(program:IrProgram, checkReuse:Bool = false, ?summaries:HlFunctionSummaries):{
 		program:IrProgram,
 		reachable:Map<String, Bool>
 	} {
 		var pruned = program.copy(),
 			walk = IrReachability.walkWithGeneratedRuntimeRoots(program, program.entryPoint, null, true);
 		IrReachability.prune(pruned, walk.reachable);
-		IrReachability.trimTables(pruned, walk);
+		IrReachability.trimTables(pruned, walk, summaries == null ? null : summaries.trim);
 		if (checkReuse)
 			IrReachability.checkTables(pruned);
 		return {program: pruned, reachable: walk.reachable};

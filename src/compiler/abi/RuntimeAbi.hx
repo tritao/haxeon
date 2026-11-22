@@ -30,14 +30,23 @@ typedef RuntimeAbiDescriptor = {
 
 /** Canonical description of the runtime-visible ABI emitted to HashLink. */
 class RuntimeAbi {
-	public static function describe(program:IrProgram):RuntimeAbiDescriptor {
+	/** `signatures` keeps each function's signature text while the function is the same object. */
+	public static function describe(program:IrProgram,
+			?signatures:compiler.ir.IrFunctionMemo<String>):RuntimeAbiDescriptor {
 		var functions:Map<String, String> = [],
 			objects:Map<String, String> = [],
 			interfaces:Map<String, String> = [],
 			enums:Map<String, String> = [],
 			globals:Map<String, String> = [];
-		for (fn in program.functions)
-			functions.set(fn.name, functionSignature(fn));
+		for (fn in program.functions) {
+			var signature = signatures == null ? null : signatures.get(fn);
+			if (signature == null) {
+				signature = functionSignature(fn);
+				if (signatures != null)
+					signatures.set(fn, signature);
+			}
+			functions.set(fn.name, signature);
+		}
 		for (object in program.objects)
 			objects.set(object.name,
 				'kind=${object.isValue ? "value" : "object"};base=${object.base};interfaces=${object.interfaces.join(",")};fields=${[for (field in object.fields) fieldSignature(field)].join(",")};methods=${[for (method in object.methods) method.name + ":" + method.functionName].join(",")}');

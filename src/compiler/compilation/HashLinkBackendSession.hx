@@ -142,7 +142,8 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
 		compiler.ir.IrReachabilityReport.report("final program", ir);
-		var nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir) : null,
+		var summaries = this.loweredCache.summaries;
+		var nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir, summaries.abiSignatures) : null,
 			previousAbi = context.state.publishedAbi,
 			baseAssembler = assembler;
 		var assemblyIr = ir;
@@ -151,7 +152,8 @@ class HashLinkBackendSession implements BackendSession {
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
 			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
 			// them by id and a reachability change must not move its layout.
-			var plain = HlPlainBuild.reachable(ir, context.options.checkReuse), reachable = plain.reachable;
+			var plain = HlPlainBuild.reachable(ir, context.options.checkReuse, summaries),
+				reachable = plain.reachable;
 			assemblyIr = plain.program;
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
 			relocated = [for (name in relocated) if (reachable.exists(name)) name];
@@ -202,9 +204,11 @@ class HashLinkBackendSession implements BackendSession {
 		}
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
+		// Only a live build keeps slots for the functions prototypes dispatch to; a plain one lays out a fresh module.
 		var assembly = candidateAssembler.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
 			decision, relocated,
-			nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+			nextAbi == null || !context.livePatching ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+		summaries.endBuild();
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
 		for (reason in assembly.objectReasons)
