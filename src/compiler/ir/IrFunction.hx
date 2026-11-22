@@ -159,10 +159,13 @@ class IrFunction {
 	 */
 	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
 		var known = body;
-		// A body is read with its own table (`IrBody.types`), whichever `types` is asked for; splicing rows and comparing bodies
-		// across tables is checked where it happens (the inliner's sources, `IrFunctionStateEquality.sameBodies`).
-		if (known != null)
+		// Every body of a program has its table (`IrStageHooks`): one made with another is a caller's mistake, which would read
+		// its type ids wrong.
+		if (known != null) {
+			if (known.types != types)
+				throw new InternalError('IR function $name has a body made with another type table');
 			return known;
+		}
 		var encoded = IrBodyBuilder.encode(this, types, builder);
 		body = encoded;
 		return encoded;

@@ -256,7 +256,7 @@ class IrClosedEnumTagAbi {
 		for (value in 0...body.valueLimit()) {
 			var id = IrValueId.of(value), type = body.valueTypeId(id);
 			if (type >= 0 && changesId(type))
-				body.setValueType(id, body.typeId(physical(types.type(type))));
+				body.setValueType(id, body.typeId(physical(body.types.type(type))));
 		}
 		var i32 = body.typeId(I32);
 		for (block in 0...body.blockCount()) {
@@ -274,7 +274,7 @@ class IrClosedEnumTagAbi {
 				row = body.nextRow(row);
 			}
 		}
-		body.setResult(body.typeId(physical(types.type(body.result))));
+		body.setResult(body.typeId(physical(body.types.type(body.result))));
 		return IrFunction.ofOwnedBody(body);
 	}
 

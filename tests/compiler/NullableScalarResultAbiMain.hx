@@ -34,7 +34,9 @@ class NullableScalarResultAbiMain {
 			target == HashLink)];
 		compiler.ir.IrNullableScalarFlow.rewrite(p);
 		compiler.ir.IrVerifier.verify(p);
-		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+		compiler.ir.IrInliner.run(p,
+			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(p.functions)),
+			compiler.ir.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.IrVerifier.verify(p);
 		var root = Sys.getEnv("TMPDIR");

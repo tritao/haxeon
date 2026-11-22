@@ -103,7 +103,7 @@ class IrScalarArguments {
 		for (body in bodies) {
 			if (!IrScalarAbiEligibility.permits(body.kind, false))
 				continue;
-			var resultType = types.type(body.result),
+			var resultType = body.types.type(body.result),
 				hasValue = isValue(resultType),
 				eligible = true,
 				pinnedEligible = !argumentsOnly,
@@ -282,7 +282,7 @@ class IrScalarArguments {
 	 */
 	function keepsValue(body:IrBody, specialized:IrBody, first:Int):Bool {
 		var places = new IrScalarValuePlaces(specialized, name -> objects.get(name)),
-			resultType = types.type(body.result),
+			resultType = body.types.type(body.result),
 			valueResult = isValue(resultType);
 		for (block in 0...specialized.blockCount()) {
 			var row = specialized.firstRow(block);
@@ -387,7 +387,7 @@ class IrScalarArguments {
 		};
 
 	function fieldOnly(body:IrBody, arg:IrValueId, candidates:Map<String, IrBody>):Bool {
-		var aliases = aliasesOf(body, arg), valueResult = isValue(types.type(body.result));
+		var aliases = aliasesOf(body, arg), valueResult = isValue(body.types.type(body.result));
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -612,10 +612,10 @@ class IrScalarArguments {
 		var origin = SourceProvenance.generated("scalar-argument");
 		function define(name:String, type:IrType):IrValueId {
 			var id = IrValueId.of(next++);
-			builder.defineValue(id, name, types.id(type));
+			builder.defineValue(id, name, source.types.id(type));
 			return id;
 		}
-		var resultType = types.type(source.result),
+		var resultType = source.types.type(source.result),
 			returnSlots = isValue(resultType) ? slots(resultType) : [],
 			outputs:Array<IrValueId> = [];
 		// The entry rows, written once the entry block begins: opcode, output, auxiliary field, and up to two operands (-1 for none).
@@ -705,7 +705,7 @@ class IrScalarArguments {
 		for (index in 0...source.bindingCount())
 			builder.copyBinding(source, index, source.bindingValue(index));
 		return builder.finishAs(PREFIX + (preserveReceiver ? "$receiver:" : "") + source.name, ScalarArguments,
-			returnSlots.length > 0 ? types.id(Void) : source.result, source.inlineHint, Reachable);
+			returnSlots.length > 0 ? source.types.id(Void) : source.result, source.inlineHint, Reachable);
 	}
 
 	/**
@@ -872,7 +872,7 @@ class IrScalarArguments {
 					expanded.push(current);
 				}
 			}
-			var targetResult = types.type(target.result),
+			var targetResult = target.types.type(target.result),
 				returnSlots = isValue(targetResult) ? slots(targetResult) : [],
 				references:Array<IrValueId> = [];
 			for (slot in returnSlots) {

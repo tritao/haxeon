@@ -118,7 +118,11 @@ class IrInlineCache {
 	var objectIds:Map<String, Int> = [];
 	var lastObjectId = 0;
 
-	public function new() {}
+	/** A cache whose bodies are made with `types`: the program's table, when its functions already have bodies. */
+	public function new(?types:IrTypeIds) {
+		if (types != null)
+			this.types = types;
+	}
 
 	/**
 	 * A number that names a program-wide fingerprint: the same while the fingerprint text is unchanged, a new one when it

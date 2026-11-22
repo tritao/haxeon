@@ -240,7 +240,8 @@ class IteratorTypeDescriptorMain {
 			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects,
 				false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
+			compiler.ir.IrInliner.run(program,
+				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
 				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,
@@ -272,7 +273,8 @@ class IteratorTypeDescriptorMain {
 			runtime.addStandardLibrarySourceRoot("stdlib");
 			runtime.update("Main.hx", source);
 			var program = runtime.compile("Main").ir;
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
+			compiler.ir.IrInliner.run(program,
+				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
 				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,

@@ -91,7 +91,9 @@ function main():Int return 42;
 		var table = IrObjectTable.of([for (object in program.objects) object.name => object]);
 		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false,
 			target == HashLink)];
-		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+		compiler.ir.IrInliner.run(program,
+			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
+			compiler.ir.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		IrVerifier.verify(program);
 		var temp = Sys.getEnv("TMPDIR"), directory = temp == null ? "/tmp" : temp;

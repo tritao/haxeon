@@ -61,10 +61,29 @@ class IrStageHooks {
 	}
 
 	/**
+	 * After a stage that ran: every body of the program reads its types from one table, the session's (`IrInlineCache.types`),
+	 * else the first body's, so type ids mean the same in every body a stage reads, splices or compares.
+	 */
+	static function checkTables(functions:Array<IrFunction>, context:IrPipelineContext):Void {
+		var cache = context.inlineCache, table:Null<IrTypeIds> = cache == null ? null : cache.types;
+		for (fn in functions) {
+			var body = fn.body;
+			if (body == null)
+				continue;
+			if (table == null)
+				table = body.types;
+			else if (body.types != table)
+				throw new compiler.core
+					.InternalError('IR function ${fn.name} has a body made with another type table than the program\'s');
+		}
+	}
+
+	/**
 	 * After a stage that ran: in a compile that keeps no session, a function that has a body keeps only its body, the objects
 	 * the stage made it from or decoded to read it included. A session keeps them while a cache before the encode point reads them.
 	 */
 	public static function release(functions:Array<IrFunction>, context:IrPipelineContext):Void {
+		checkTables(functions, context);
 		if (context.options.keepSession)
 			return;
 		for (fn in functions)

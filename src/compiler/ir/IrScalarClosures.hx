@@ -94,7 +94,7 @@ class IrScalarClosures {
 			if (fn.name == program.entryPoint || fn.retention != Reachable) {
 				for (argument in 0...body.argumentCount())
 					excludeNested(body.valueType(body.argument(argument)));
-				excludeNested(types.type(body.result));
+				excludeNested(body.types.type(body.result));
 			}
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
@@ -333,7 +333,7 @@ class IrScalarClosures {
 
 	/** Whether a type `body` holds changes: a value's (an argument's, a row's, a binding's), the result, a `TypeValue`'s. */
 	function needsRewrite(body:IrBody):Bool {
-		if (changesType(types.type(body.result)))
+		if (changesType(body.types.type(body.result)))
 			return true;
 		for (value in 0...body.valueLimit())
 			if (body.valueTypeId(IrValueId.of(value)) >= 0 && changesType(body.valueType(IrValueId.of(value))))
@@ -409,9 +409,9 @@ class IrScalarClosures {
 		for (value in 0...limit) {
 			var id = IrValueId.of(value), type = body.valueTypeId(id);
 			if (type >= 0)
-				body.setValueType(id, body.typeId(mapType(types.type(type))));
+				body.setValueType(id, body.typeId(mapType(body.types.type(type))));
 		}
-		body.setResult(body.typeId(mapType(types.type(body.result))));
+		body.setResult(body.typeId(mapType(body.types.type(body.result))));
 		return IrFunction.ofOwnedBody(body);
 	}
 

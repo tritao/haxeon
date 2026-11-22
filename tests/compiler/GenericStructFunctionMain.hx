@@ -68,7 +68,8 @@ class GenericStructFunctionMain {
 			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects,
 				false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
+			compiler.ir.IrInliner.run(program,
+				new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
 				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: WasmGc,

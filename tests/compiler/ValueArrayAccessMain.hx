@@ -2290,7 +2290,8 @@ class ValueArrayAccessMain {
 							IrScalarReplacement.rewrite(fn, table, false, true)
 					];
 					compiler.ir.IrNullableScalarFlow.rewrite(rangeProgram);
-					compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(),
+					compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner
+						.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(rangeProgram.functions)),
 						compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(rangeProgram, {

@@ -180,7 +180,8 @@ class InlineEnumEqualityAbiMain {
 		compiler.ir.IrScalarArguments.rewrite(program, target != HashLink);
 		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false,
 			target == HashLink)];
-		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
+		compiler.ir.IrInliner.run(program,
+			new compiler.ir.IrInliner.IrInlineCache(compiler.ir.IrTypeIds.ofFunctions(program.functions)),
 			target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.IrVerifier.verify(program);
