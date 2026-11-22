@@ -19,7 +19,7 @@ private typedef CommandGroup = {
 class CliHelp {
 	static final BUILD_OPTIONS = [
 		"  --project PATH               The haxeon.json to build (default: the one in this directory)",
-		"  --target TARGET              host, wasm32 or android (default: the project's)",
+		"  --target TARGET              host, android, wasm32 or OS-ARCH (default: the project's; see haxeon platforms)",
 		"  --build-mode MODE            development (default) or release",
 		"  --define NAME[=VALUE]        Add a conditional compilation define (repeatable)",
 		"  --output PATH                Write the module to PATH",

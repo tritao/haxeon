@@ -81,11 +81,24 @@ class Target {
 		return cachedHostTarget;
 	}
 
+	/**
+	 * The target names, for messages and help. A target names where a program runs; the compiler's backend (`hl`, `wasm32`,
+	 * `wasm-gc`) follows from it (`project.CompilerInputs.compilerTarget`). Architectures are spelled `x86_64` and `arm64`, as
+	 * `toString` writes them; `aarch64`, `amd64`, `x64` and the i386 family are read too.
+	 */
+	public static final NAMES = "host, android, wasm32, or OS-ARCH[-ABI] such as linux-x86_64 or macos-arm64";
+
 	/** Parse the stable target names accepted by manifests and the CLI. */
 	public static function parse(value:String):Target {
 		var normalized = StringTools.trim(value).toLowerCase();
 		if (normalized == "host")
 			return detectHost();
+		// Haxe names its targets by what the compiler generates; Haxeon's by where the program runs.
+		if (normalized == "hl" || normalized == "hashlink")
+			throw new InternalError('Unknown target "$value": HashLink on this machine is the target "host". Valid: $NAMES');
+		if (["js", "cpp", "cs", "java", "jvm", "python", "lua", "php", "neko", "swf", "flash", "interp", "eval"]
+			.indexOf(normalized) >= 0)
+			throw new InternalError('Unknown target "$value": Haxeon builds HashLink and WebAssembly programs. Valid: $NAMES');
 		if (normalized == "wasm32" || normalized == "wasm32-wasi")
 			return new Target(TargetOs.Wasm, TargetArch.Wasm32, TargetAbi.Wasm);
 		if (normalized == "wasm64" || normalized == "wasm64-wasi")
@@ -98,7 +111,7 @@ class Target {
 			case "macos", "darwin", "mac": TargetOs.MacOS;
 			case "linux": TargetOs.Linux;
 			case "android": TargetOs.Android;
-			case _: throw new InternalError('Unknown target "$value". Valid: host, wasm32, android, or an OS-architecture[-ABI] triple such as linux-x86_64-gnu');
+			case _: throw new InternalError('Unknown target "$value". Valid: $NAMES');
 		};
 		var archText = parts.length > 1 ? parts[1] : (os == TargetOs.Android ? "aarch64" : "x86_64"),
 			arch = switch archText {
@@ -106,7 +119,7 @@ class Target {
 				case "x86_64", "amd64", "x64": TargetArch.X64;
 				case "aarch64", "arm64": TargetArch.Arm64;
 				case "wasm32": TargetArch.Wasm32;
-				case _: throw new InternalError('Unknown target architecture in "$value"');
+				case _: throw new InternalError('Unknown target architecture in "$value". Valid: x86_64, arm64, x86');
 			};
 		var abi = if (parts.length > 2) switch parts[2] {
 			case "msvc": TargetAbi.Msvc;

@@ -57,7 +57,7 @@ saying it is not supported yet and to create a project with `haxeon init`; both 
 with status 2.
 
 A value the CLI does not take is reported with the values it does, as in `Unknown
-target "hlc". Valid: host, wasm32, android, ...`. Every command exits with 0 when it
+target "hlc". Valid: host, android, wasm32, ...`. Every command exits with 0 when it
 succeeds, 1 when a build, a test or another step fails, 2 for a usage error (an unknown
 command or option, a missing or invalid value) and 70 for an internal error, which is a
 bug in Haxeon. The compiler run directly takes each valued option as `--name=value` or
@@ -421,8 +421,8 @@ build semantics.
 The normal host build requests the shared HashLink library; static archives are
 available to other build consumers without being produced unnecessarily. Target
 and toolchain selection is centralized: examples include
-`windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-aarch64`, `android-aarch64`,
-and `wasm32`.
+`windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-arm64`, `android-arm64`,
+and `wasm32` (see [Targets and backends](#targets-and-backends)).
 
 Git dependencies can be added and installed reproducibly:
 
@@ -498,9 +498,26 @@ rebuilt and repackaged when its C sources change; Haxe-only edits continue to
 use the Android HLB asset path.
 
 The `doctor` command checks the local compiler, HashLink runtime, and Android
-SDK tools. `platforms` lists CLI targets, and `devices` reports connected
+SDK tools. `platforms` lists the targets with the backend each builds, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the
 current machine.
+
+## Targets and backends
+
+Two names describe a build, and Haxeon keeps them apart:
+
+- The **target** (`--target`, `"target"` in `haxeon.json`, `compatibility.targets` and `native.targets`) says where the
+  program runs: `host` (this machine, the default), `android` (`android-arm64`), `wasm32`, or an explicit
+  `OS-ARCH[-ABI]` such as `linux-x86_64`, `macos-arm64` or `windows-x86_64-msvc`. Architectures are spelled `x86_64` and
+  `arm64`; `aarch64`, `amd64` and `x64` are read too, and `wasm32-wasi` is `wasm32`. `haxeon platforms` lists them with this
+  machine's name.
+- The **backend** says what the compiler generates: `hl` (HashLink bytecode, run by the VM's JIT), `wasm32` (WebAssembly
+  with linear memory) or `wasm-gc` (WebAssembly GC). The compiler takes it as `--target=NAME`, which is Haxe's sense of
+  "target"; the project build passes it.
+
+The target chooses the backend: `host`, `android` and the other native targets build `hl`, and `wasm32` builds `wasm32`.
+`wasm-gc` is reached by calling the compiler directly. Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
+and a Haxe target name given to `--target` is refused with Haxeon's (`--target hl` says to use `host`).
 
 ## Language server and FFI tools
 

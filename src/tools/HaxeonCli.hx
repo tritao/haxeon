@@ -484,10 +484,11 @@ class HaxeonCli {
 	static function platforms(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected platforms argument "${arguments[0]}"');
-		Sys.println("Available through this CLI:");
-		Sys.println('  host     build and run HashLink on the current host (${Sys.systemName()})');
-		Sys.println("  wasm32   build experimental WebAssembly output; run is not wired up");
-		Sys.println("  android  build APKs and install/launch on a connected device (Android SDK required)");
+		Sys.println("Targets (--target, and \"target\" in haxeon.json):");
+		Sys.println('  host     this machine (${Target.detectHost().toString()}): build and run HashLink bytecode (backend hl)');
+		Sys.println("  android  Android (android-arm64): build an APK, install and launch it on a device (backend hl)");
+		Sys.println("  wasm32   WebAssembly: build an experimental module; run is not wired up (backend wasm32)");
+		Sys.println("An explicit OS-ARCH[-ABI] (linux-x86_64, macos-arm64, windows-x86_64-msvc) names a host by its platform.");
 		Sys.println("Use \"haxeon devices\" to list connected Android devices.");
 		return 0;
 	}
