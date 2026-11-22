@@ -140,8 +140,8 @@ A command of this tree is a `haxeon` command (`haxeon dev ...`, `haxeon lsp`, `h
 none of those can be, and no alias for any of them:
 
 - what runs before `haxeon` exists: `bootstrap-tools.sh`/`setup.ps1`, `build-native.sh`/`.ps1`, `bootstrap-compiler.sh`
-  (the checked-in compiler, with the pinned Haxe only), and `build-libffi.sh` with `libffi-libtool-compat.m4`, which
-  `cmake/Bootstrap.cmake` runs;
+  (the checked-in compiler, with the pinned Haxe only); the pinned libffi is built by `cmake/libffi.cmake`, which
+  `cmake/Bootstrap.cmake` includes;
 - the launchers of the checkout's builds: `haxeon` (`haxeon.cmd`, `haxeon.ps1`), `hl`, `hlprof-live`, with
   `hashlink-launch.sh` and `hashlink-path.sh` under them; `android-env.sh`, sourced to put the Android tools on `PATH`;
 - the test entry points: `test.sh`, `test-driver.sh`, `check-self-hosting.hx`, `perf-guard.py`, `smoke-test-release.sh`,
