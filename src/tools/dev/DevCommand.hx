@@ -36,7 +36,7 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *   haxeon dev bootstrap [--self]
  *       Refresh the checked-in compiler, or check it against the sources (build.HaxeonBuild). scripts/bootstrap-compiler.sh runs it.
  *
- *   haxeon dev aot-compiler [--c-compiler=CC]
+ *   haxeon dev aot-compiler [--toolchain=NAME]
  *       Build the compiler ahead of time to C and publish it beside the VM, where the CLI runs it while it is current
  *       (build.AotCompiler, AotCompilerBuild): what a release ships prebuilt.
  *
@@ -193,8 +193,8 @@ class DevCommand {
 		out.writeString("      Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)\n");
 		out.writeString("  bootstrap [--self]\n");
 		out.writeString("      Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically\n");
-		out.writeString("  aot-compiler [--c-compiler=CC]\n");
-		out.writeString("      Build the compiler to C (default C compiler: cc; gcc on Windows) and publish it beside the VM\n");
+		out.writeString("  aot-compiler [--toolchain=NAME]\n");
+		out.writeString("      Build the compiler to C (default toolchain: the hlc SDK's target's) and publish it beside the VM\n");
 		out.writeString("  check-tests\n");
 		out.writeString("      Fail on a test file under tests/ that no suite, test driver case or workflow runs\n");
 		return status;

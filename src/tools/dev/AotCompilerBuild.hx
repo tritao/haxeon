@@ -10,20 +10,21 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * `haxeon dev aot-compiler [--c-compiler=CC]`: builds the compiler ahead of time (`build.AotCompiler`) from this checkout and
+ * `haxeon dev aot-compiler [--toolchain=NAME]`: builds the compiler ahead of time (`build.AotCompiler`) from this checkout and
  * publishes it beside the VM with its stamp, which is what a release ships for its platform. The checkout's compiler, built to
  * bytecode with the pinned Haxe, compiles `tools.CompilerExecutable` to C against the native build's hlc SDK, in release mode as
- * every tool artifact (`HaxeonBuild.TOOL_BUILD_MODE`); the C compiler is `cc`, or `gcc` (MinGW) on Windows. The C sources and
+ * every tool artifact (`HaxeonBuild.TOOL_BUILD_MODE`), with the toolchain given or else the default of the SDK's target
+ * (`compiler.backend.c.HlcBuild.toolchain`: `cc`, `clang-cl` on Windows with MSVC, MinGW's gcc with GNU's). The C sources and
  * objects stay in `out/aot-compiler`, so a rebuild after an edit compiles only the C files that changed.
  */
 class AotCompilerBuild {
 	public static function run(arguments:Array<String>, home:String):Int {
-		var cCompiler = Sys.systemName() == "Windows" ? "gcc" : "cc";
+		var toolchain:Null<String> = null;
 		for (argument in arguments)
-			if (StringTools.startsWith(argument, "--c-compiler="))
-				cCompiler = argument.substr("--c-compiler=".length);
+			if (StringTools.startsWith(argument, "--toolchain="))
+				toolchain = argument.substr("--toolchain=".length);
 			else
-				throw new InternalError('Usage: haxeon dev aot-compiler [--c-compiler=CC] (unexpected "$argument")');
+				throw new InternalError('Usage: haxeon dev aot-compiler [--toolchain=NAME] (unexpected "$argument")');
 		home = Path.normalize(home);
 		var nativeStatus = build.HaxeonBuild.buildNative(new build.BuildEnvironment(home, Path.join([home, "out"])));
 		if (nativeStatus != 0)
@@ -53,10 +54,9 @@ class AotCompilerBuild {
 				"--entry=tools.CompilerExecutable",
 				'--sources-file=$sourcesFile',
 				"--target=hlc",
-				'--c-compiler=$cCompiler',
 				'--c-sdk=$sdk',
 				'--output=$output'
-			].concat([for (root in roots) '--root=$root']);
+			].concat([for (root in roots) '--root=$root']).concat(toolchain == null ? [] : ['--toolchain=$toolchain']);
 		var status = ProcessRunner.run(HashLinkPath.executable(home), arguments, home,
 			CompilerClient.runtimeLibraryEnvironment(home));
 		if (status != 0)

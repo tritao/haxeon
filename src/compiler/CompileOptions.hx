@@ -16,7 +16,7 @@ typedef CompileOptionsInit = {
 	final ?checkIrBody:Bool;
 	final ?typingArenas:TypingArenas;
 	final ?phaseCollections:Bool;
-	final ?cCompiler:String;
+	final ?toolchain:String;
 	final ?cSdk:String;
 	final ?inlineAllocation:Bool;
 }
@@ -122,10 +122,11 @@ class CompileOptions {
 	public final phaseCollections:Bool;
 
 	/**
-	 * The C compiler a `--target=hlc` build compiles and links its C with (`cc`, `clang`, `gcc`), or null to write the C sources
-	 * only (docs/design/AOT_BACKEND.md). Changes no output of the compile itself, so `key` leaves it out.
+	 * The toolchain a `--target=hlc` build compiles and links its C with (`--toolchain`: `gcc`, `clang`, `clang-cl`, `cl`, or a
+	 * path to one), or null for the default of the target the SDK was built for (`HlcBuild.toolchain`, docs/design/AOT_BACKEND.md).
+	 * Changes no output of the compile itself, so `key` leaves it out.
 	 */
-	public final cCompiler:Null<String>;
+	public final toolchain:Null<String>;
 
 	/** The C SDK a `--target=hlc` build compiles against: a directory with `include/` and `lib/` (the native build's `hlc-sdk`). */
 	public final cSdk:Null<String>;
@@ -151,7 +152,7 @@ class CompileOptions {
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 		typingArenas = init == null || init.typingArenas == null ? Off : init.typingArenas;
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
-		cCompiler = init == null ? null : init.cCompiler;
+		toolchain = init == null ? null : init.toolchain;
 		cSdk = init == null ? null : init.cSdk;
 		inlineAllocation = init != null && init.inlineAllocation == true;
 	}
@@ -173,7 +174,7 @@ class CompileOptions {
 			checkIrBody: checkIrBody,
 			typingArenas: typingArenas,
 			phaseCollections: phaseCollections,
-			cCompiler: cCompiler,
+			toolchain: toolchain,
 			cSdk: cSdk,
 			inlineAllocation: inlineAllocation
 		});
@@ -215,8 +216,8 @@ class CompileOptions {
 			flags.push(PHASE_COLLECTIONS);
 		if (!phaseCollections && !keepSession)
 			flags.push(NO_PHASE_COLLECTIONS);
-		if (cCompiler != null)
-			flags.push(C_COMPILER + cCompiler);
+		if (toolchain != null)
+			flags.push(TOOLCHAIN + toolchain);
 		if (cSdk != null)
 			flags.push(C_SDK + cSdk);
 		if (inlineAllocation)
@@ -226,8 +227,8 @@ class CompileOptions {
 
 	static inline final PARSE_THREADS = "--parse-threads=";
 
-	/** The C compiler of a `--target=hlc` build (`cCompiler`). */
-	public static inline final C_COMPILER = "--c-compiler=";
+	/** The toolchain of a `--target=hlc` build (`toolchain`). */
+	public static inline final TOOLCHAIN = "--toolchain=";
 
 	/** The C SDK of a `--target=hlc` build (`cSdk`). */
 	public static inline final C_SDK = "--c-sdk=";
@@ -265,7 +266,7 @@ class CompileOptions {
 	public function key():String
 		return [
 			for (flag in arguments())
-				if (!StringTools.startsWith(flag, PARSE_THREADS) && !StringTools.startsWith(flag, C_COMPILER)
+				if (!StringTools.startsWith(flag, PARSE_THREADS) && !StringTools.startsWith(flag, TOOLCHAIN)
 				&& !StringTools.startsWith(flag, C_SDK) && flag != NO_KEEP_SESSION && flag != TYPING_ARENAS
 				&& flag != TYPING_ARENAS_CHECK && flag != TYPING_ARENAS_STRICT && flag != PHASE_COLLECTIONS
 				&& flag != NO_PHASE_COLLECTIONS) flag
@@ -279,7 +280,7 @@ class CompileOptions {
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, TYPING_ARENAS, TYPING_ARENAS_CHECK,
 				TYPING_ARENAS_STRICT, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS, INLINE_ALLOCATION: true;
-			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, C_COMPILER)
+			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, TOOLCHAIN)
 				|| StringTools.startsWith(argument, C_SDK);
 		};
 
@@ -302,7 +303,7 @@ class CompileOptions {
 				>= 0 ? Check : arguments.indexOf(TYPING_ARENAS) >= 0 ? On : Off,
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
-			cCompiler: lastValue(arguments, C_COMPILER),
+			toolchain: lastValue(arguments, TOOLCHAIN),
 			cSdk: lastValue(arguments, C_SDK),
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0
 		});

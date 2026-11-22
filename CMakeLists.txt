@@ -215,8 +215,28 @@ add_library(hlvm_aot STATIC
 set_target_properties(hlvm_aot PROPERTIES OUTPUT_NAME hl-aot)
 
 # The SDK a `--target=hlc` build compiles against (`--c-sdk`, docs/design/AOT_BACKEND.md): the VM library without the JIT and libffi in
-# lib/, the runtime headers in include/, and the entry point the generated C links with in src/.
+# lib/, the runtime headers in include/, the entry point the generated C links with in src/, and in `target` the target it was built
+# for, as build.Target spells it (OS-ARCH-ABI, macos-ARCH), from which the C build takes its default toolchain and checks a chosen one.
 set(HAXEON_HLC_SDK_DIR "${CMAKE_BINARY_DIR}/hlc-sdk")
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _hlc_sdk_arch)
+if(_hlc_sdk_arch MATCHES "^(amd64|x86_64|x64)$")
+  set(_hlc_sdk_arch x86_64)
+elseif(_hlc_sdk_arch MATCHES "^(aarch64|arm64)$")
+  set(_hlc_sdk_arch arm64)
+endif()
+if(WIN32)
+  if(MSVC)
+    set(_hlc_sdk_target "windows-${_hlc_sdk_arch}-msvc")
+  else()
+    set(_hlc_sdk_target "windows-${_hlc_sdk_arch}-gnu")
+  endif()
+elseif(APPLE)
+  set(_hlc_sdk_target "macos-${_hlc_sdk_arch}")
+else()
+  set(_hlc_sdk_target "linux-${_hlc_sdk_arch}-gnu")
+endif()
+file(MAKE_DIRECTORY "${HAXEON_HLC_SDK_DIR}")
+file(CONFIGURE OUTPUT "${HAXEON_HLC_SDK_DIR}/target" CONTENT "${_hlc_sdk_target}\n")
 set(_hlc_sdk_headers
   vendor/hashlink/src/hl.h vendor/hashlink/src/hlc.h vendor/hashlink/src/hlmodule.h vendor/hashlink/src/hlsystem.h
   vendor/hashlink/src/opcodes.h vendor/hashlink/src/gc_write.h vendor/hashlink/src/hl_ffi.h

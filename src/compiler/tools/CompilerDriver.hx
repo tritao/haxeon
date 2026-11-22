@@ -285,16 +285,15 @@ class CompilerDriver {
 		var files = BackendArtifacts.c(result.artifact).files, directory = request.output + ".c";
 		var changed = HlcBuild.write(files, directory);
 		var writtenAt = Sys.time() * 1000.0;
-		var options = request.options, cCompiler = options.cCompiler, sdk = options.cSdk;
-		if (cCompiler != null) {
-			if (sdk == null)
-				throw new InternalError("--c-compiler requires --c-sdk");
-			var compiled = HlcBuild.compile(files, directory, request.output, cCompiler, sdk,
+		var sdk = request.options.cSdk;
+		if (sdk != null) {
+			var compiled = HlcBuild.compile(files, directory, request.output,
+				HlcBuild.toolchain(sdk, request.options.toolchain), sdk,
 				request.buildMode == "development");
 			report('compiled $compiled C files');
 		}
 		report("driver phases (ms): compile=" + milliseconds(compiledAt - preparedAt) + " write-c="
-			+ milliseconds(writtenAt - compiledAt) + " c-compiler=" + milliseconds(Sys.time() * 1000.0 - writtenAt));
+			+ milliseconds(writtenAt - compiledAt) + " c-build=" + milliseconds(Sys.time() * 1000.0 - writtenAt));
 		report(phaseReport(result, 0));
 		var status = owner.publicationStatus();
 		if (status.hasPendingRevision && status.pendingRevision == result.revision)

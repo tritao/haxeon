@@ -49,7 +49,7 @@ jobs:
 
       - name: AOT programs
         env:
-          CC: ${{ matrix.compiler }}
+          TOOLCHAIN: ${{ matrix.compiler }}
           PROGRAMS: ${{ inputs.programs }}
         run: |
           # Git Bash has a coreutils link.exe: MSVC's goes first, as cl runs the first one on PATH.
@@ -60,8 +60,8 @@ jobs:
             specialized-map-scalar-keys string-interpolation struct-closure-abi"}
           status=0
           for mode in development release; do
-            echo "::group::$CC, $mode"
-            HLC_BUILD_MODE=$mode HAXEON_AOT_OUTPUT_DIR=$PWD/out/aot-msvc/$CC-$mode bash tests/aot/test-aot-programs.sh -v $programs \
+            echo "::group::$TOOLCHAIN, $mode"
+            HLC_BUILD_MODE=$mode HAXEON_AOT_OUTPUT_DIR=$PWD/out/aot-msvc/$TOOLCHAIN-$mode bash tests/aot/test-aot-programs.sh -v $programs \
               || status=1
             echo "::endgroup::"
           done
