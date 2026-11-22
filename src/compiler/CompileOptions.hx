@@ -1,5 +1,7 @@
 package compiler;
 
+import compiler.NullSafetyRule.NullSafetyMode;
+
 /** The options a request sets, each left out for its default. */
 typedef CompileOptionsInit = {
 	final ?inlining:Bool;
@@ -18,6 +20,7 @@ typedef CompileOptionsInit = {
 	final ?toolchain:String;
 	final ?cSdk:String;
 	final ?inlineAllocation:Bool;
+	final ?nullSafety:Array<NullSafetyRule>;
 }
 
 /**
@@ -114,6 +117,13 @@ class CompileOptions {
 	 */
 	public final inlineAllocation:Bool;
 
+	/**
+	 * The null-safety rules of the compile (`--null-safety=MODE[:PATH[:shallow]]`): what Haxe's `--macro nullSafety(...)` states,
+	 * and what a project's `nullSafety` setting becomes. Empty by default, so only `@:nullSafety` metadata turns the checker on.
+	 * They change what a compile reports, so `key` keeps them.
+	 */
+	public final nullSafety:Array<NullSafetyRule>;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -131,6 +141,7 @@ class CompileOptions {
 		toolchain = init == null ? null : init.toolchain;
 		cSdk = init == null ? null : init.cSdk;
 		inlineAllocation = init != null && init.inlineAllocation == true;
+		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -151,7 +162,8 @@ class CompileOptions {
 			phaseCollections: phaseCollections,
 			toolchain: toolchain,
 			cSdk: cSdk,
-			inlineAllocation: inlineAllocation
+			inlineAllocation: inlineAllocation,
+			nullSafety: nullSafety
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -191,6 +203,8 @@ class CompileOptions {
 			flags.push(C_SDK + cSdk);
 		if (inlineAllocation)
 			flags.push(INLINE_ALLOCATION);
+		for (rule in nullSafety)
+			flags.push(NULL_SAFETY + rule.argument());
 		return flags;
 	}
 
@@ -204,6 +218,10 @@ class CompileOptions {
 
 	/** Allocates objects inline in a `--target=hlc` build (`inlineAllocation`). */
 	public static inline final INLINE_ALLOCATION = "--inline-allocation";
+
+	/** One null-safety rule (`nullSafety`). */
+	public static inline final NULL_SAFETY = "--null-safety=";
+
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 	public static inline final NO_VERIFY_IR = "--no-verify-ir";
 
@@ -240,7 +258,7 @@ class CompileOptions {
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
 				INLINE_ALLOCATION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, TOOLCHAIN)
-				|| StringTools.startsWith(argument, C_SDK);
+				|| StringTools.startsWith(argument, C_SDK) || StringTools.startsWith(argument, NULL_SAFETY);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -262,8 +280,24 @@ class CompileOptions {
 				>= 0 ? false : null,
 			toolchain: lastValue(arguments, TOOLCHAIN),
 			cSdk: lastValue(arguments, C_SDK),
-			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0
+			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
+			nullSafety: nullSafetyFrom(arguments)
 		});
+
+	/** The rules of the `--null-safety=` flags among `arguments`, in order. A malformed one is a usage error. */
+	static function nullSafetyFrom(arguments:Array<String>):Array<NullSafetyRule> {
+		var rules:Array<NullSafetyRule> = [];
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, NULL_SAFETY)) {
+				var value = argument.substr(NULL_SAFETY.length), rule = NullSafetyRule.parse(value);
+				if (rule == null)
+					throw new compiler.core
+						.UsageError('Compiler option "$NULL_SAFETY" takes MODE, MODE:PATH or MODE:PATH:shallow, '
+						+ 'MODE one of ${NullSafetyMode.NAMES.join(", ")}, not "$value"');
+				rules.push(rule);
+			}
+		return rules;
+	}
 
 	/** The value of the last `PREFIXvalue` among `arguments`, or null. */
 	static function lastValue(arguments:Array<String>, prefix:String):Null<String> {

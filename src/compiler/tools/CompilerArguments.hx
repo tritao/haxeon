@@ -17,7 +17,7 @@ class CompilerArguments {
 		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
 		"--ffi-projection", "--define", "--dump-function", "--session", "--verbosity", "--diagnostic-format", "--color",
-		"--diagnostic-directory", "--wasm-memory-base", "--wasm-memory-contract", "--export"
+		"--diagnostic-directory", "--wasm-memory-base", "--wasm-memory-contract", "--export", "--null-safety"
 	];
 
 	public static function parse(arguments:Array<String>):CompilerRequest {
