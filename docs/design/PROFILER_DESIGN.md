@@ -454,7 +454,7 @@ leaf first.
   returns early under sampling.
 - **Naming.** An exported function is named by `dladdr` while recording. One
   that is not exported is recorded by its image and offset, and the exporter
-  names it from the image's ELF symbol table (`tools/elf_symbols.c`) when the
+  names it from the image's ELF symbol table (`vendor/hashlink/tools/elf_symbols.c`) when the
   image is readable on the exporting machine and not stripped; otherwise it
   stays `libfoo.so+0x...`. A stripped image is named from its detached
   debug file (`/usr/lib/debug/.build-id/`, as `libc6-dbg` installs), found by

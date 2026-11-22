@@ -378,7 +378,7 @@ lowering 17%, IR generation and SSA 11%, parsing 5.5%.
   Strings now cache their map hash (fork 36197c5), which cut 4%; it is a
   complement, not the fix.
 - **SSA value names.** Every SSA temporary carries a `"v<id>"` String
-  (`SsaScratch.valueName` makes each once). A temporary needs no name; drop
+  (`IrSsaVariables` makes each once). A temporary needs no name; drop
   the field for temporaries with ADR 0003 M3's structured identities.
 - **Lowering facts digest objects as text.** `HlLoweringView.objectDigest` is
   `Std.string(object)`, paid by every compile-server build (a one-shot compile

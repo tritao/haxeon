@@ -22,7 +22,7 @@ The hottest callers (profile of 2026-11-19, before the hash cache), by what they
 | `DeclarationIndex.resolveNamedType`, `AliasTable.get` | qualified or bare type name |
 | `MemberAccess.classField`, `findMethods` | class name, then member name |
 | `IrFunctionIndex.new`, `FrontendCompilation.publishFunctions` | function name |
-| `SsaBuilder.slotFor`, `CfgVerifier.local` | CFG local name |
+| `IrLocalsBuilder.load`/`store`, `IrSsaVariables.variable` | local name |
 | `LexicalStorageAnalysis.declared`, `FlowFacts.resolve` | binding key, binding id text |
 | `HlSymbolTable.internString`, `HlLower.requireFunction` | string constant, function name |
 
@@ -47,7 +47,7 @@ Each family gets one kind of id, one interner and one owner. Two scopes exist:
 | Declarations (classes, enums, abstracts, typedefs) | global | `DeclarationId` | a process-wide interner of qualified paths | by qualified name |
 | Members | per declaration | index into the declaration's member list | declaration indexing | by member name |
 | Bindings (a local's declaration) | local | dense `Int` per function body | `BindingWalker` | `name@offset` strings |
-| CFG locals | local | dense `Int` per function | `CfgBuilder` | names (`LoadLocal(_, name)`) |
+| Locals while IR is generated | local | dense `Int` per function | `IrSsaVariables` | names, numbered at first use |
 | SSA values, blocks, registers, labels | local | dense `Int` | their stages | done |
 
 ## Rules
@@ -75,8 +75,9 @@ code touched; Wasm parity when a stage touches the typer or a pass the Wasm back
    program keeps functions and objects in arrays by id. Consumers move: `IrProgramIndex`, `IrObjectTable`,
    `IrFunctionIndex`, `HlLower.requireFunction`, `FrontendCompilation.publishFunctions`, the inliner, the reachability
    walks.
-2. **Function-local names as numbers.** `CfgBuilder` numbers locals and the CFG carries the number (`LoadLocal(_, local)`),
-   so `SsaBuilder.slotFor` and `CfgVerifier.local` index arrays and `SsaBuilder`'s slot map goes. `BindingWalker` numbers
+2. **Function-local names as numbers.** The IR generator reads and writes locals by name (`IrLocalsBuilder.load`,
+   `store`), and `IrSsaVariables` numbers each name at its first use; the generator would pass the binding's number
+   instead, so no local is looked up by name. `BindingWalker` numbers
    bindings per body, and `LexicalStorageAnalysis`, `BindingStoragePlan`, `FlowFacts` and the scope's binding ids key
    by that number; the `name@offset` text stays only where a diagnostic or a cell class name needs it.
 3. **Declarations.** A `DeclarationId` interner over qualified paths; the typer's declaration tables (`classDecls` and

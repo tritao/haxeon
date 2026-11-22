@@ -12,7 +12,7 @@ Not all of it needs a global `Name` type. Reading the hottest spots, three diffe
 
 | Hot spot | What it does | What fixes it |
 | --- | --- | --- |
-| `SsaBuilder.computeLiveness` | a `Map<String, Bool>` per block for use, def, liveIn, liveOut, keyed by local variable name | number the function's locals once (name to dense int), use bit sets. Function-local, no global type. |
+| `SsaBuilder.computeLiveness` | a `Map<String, Bool>` per block for use, def, liveIn, liveOut, keyed by local variable name | gone: the IR is built in SSA form directly (`DIRECT_SSA.md`), with no liveness pass over names. |
 | `ModuleCanonicalizer.bindNames` | copies the whole scope map for every binder (quadratic in scope size) | a scope chain (parent pointer plus one small map), no copy. Not an interning problem. |
 | `SemanticAssembly.visibleTypeAliases` | for each package segment scans every source alias with `startsWith` and `substring` (string allocations) | index the aliases by package once, then walk segments. An algorithmic fix. |
 | `ModuleAnalyzer.isImportedMember` | linear scan of a module's declaration lists comparing names | a per-module `Map<name, kind>` built once when the module AST is analyzed. |

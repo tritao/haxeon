@@ -464,7 +464,7 @@ this machine's noise but worth the milestone 5 measurement of inlining with DWAR
 Milestone 4: the executable initializes its module with `hl_module_init_aot` and calls through generated trampolines; the
 JIT is never initialized, and since this round not linked either. The SDK's `libhl.a` is `hlvm_aot` (`libhl-aot.a` in the
 build): `hlvm`'s objects but for the JIT's (`jit*.c`), whose entry points the fork's `jit_none.c` gives for a VM without
-it (`HL_NO_JIT_SOURCES` in `cmake/hl-sources.cmake`): `hl_jit_alloc` returns nothing, so a bytecode module cannot be
+it (`HL_NO_JIT_SOURCES` in `vendor/hashlink/cmake/hl-sources.cmake`): `hl_jit_alloc` returns nothing, so a bytecode module cannot be
 initialized or patched, and nothing writes code. `hl_jit_null_field_access`, which compiled code of both kinds calls,
 moved from `jit.c` to `module.c`. The default `hlvm` and `hl` are unchanged. PCRE's own JIT is not compiled in either
 library. Measured: a hello-world executable's code goes from 1.78 MB to 1.60 MB (stripped file 1.82 MB to 1.65 MB), the

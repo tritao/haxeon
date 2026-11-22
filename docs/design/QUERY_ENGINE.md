@@ -12,7 +12,7 @@ already incremental (5% of the edit); the IR passes rerun over all ~8,200 functi
 (`IR_PASS_INVENTORY.md`, "Edit time"). The gain is one mechanism applied to every stage, not a faster stage.
 
 Today each reuse path has its own cache and rule: the typer's semantic edges and `DeclarationTypes` reads, the inline
-cache's dependency lists, the verifier memo, `LoweringView`, the program-level no-op shortcut, the pipeline snapshot. The
+cache's dependency lists, the verifier memo, `HlLoweringView`, the program-level no-op shortcut, the pipeline snapshot. The
 identity-keyed stage cache tried on 2026-11-18 never hit, because each build makes fresh table objects. The engine
 replaces them with one rule.
 

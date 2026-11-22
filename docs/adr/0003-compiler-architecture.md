@@ -400,7 +400,7 @@ their last user is ported; there are no compatibility aliases.
   The M0 program-level shortcut must include this state in its input digest until M1 lands.
 Order amended 2026-11-19: the engine core comes first, and the pass framework is built on it. M2's interface already
 records every read with a digest of its answer, which is the engine. Built for passes alone, it would be one more
-mechanism next to the typer's recorded reads (`DeclarationTypes`, semantic edges) and the backend's `LoweringView`,
+mechanism next to the typer's recorded reads (`DeclarationTypes`, semantic edges) and the backend's `HlLoweringView`,
 which M4 would then have to merge. The passes are where an edit's time goes (66% of a one-string edit of the compiler,
 `IR_PASS_INVENTORY.md`), so they are the first client of the engine, not a separate design.
 

@@ -88,7 +88,7 @@ A method an object dispatches to through its prototype keeps its slot: the proto
 running module's types never change. A changed signature of such a method (`Point.sum()` given a parameter, an
 override, an interface implementation) still reloads with `function_signature_changed` (`PatchPlanner.plan`).
 
-A fresh module (a reload) drops the retired functions and their stable IDs (`BackendAssembly.freshLayout`), since only
+A fresh module (a reload) drops the retired functions and their stable IDs (`HlModuleAssembler`), since only
 closures of the module it replaces call them.
 
 ### Stored closures
@@ -232,7 +232,7 @@ place, so the edit patches instead of reloading.
 
 ### Design: reserved slots
 
-A live build (`--live`) gives every class that can take fields later `BackendAssembly.liveFieldReserve` (4) **reserved
+A live build (`--live`) gives every class that can take fields later `Compiler.liveFieldReserve` (4) **reserved
 slots**: unnamed `Dynamic` fields after the class's own fields and interface caches. Every instance is allocated with
 them, zeroed. A patch that adds a field gives it the class's first free slot: the patch names the slot and gives it the
 field's type (HLP section 7), and code addresses it like any field.
