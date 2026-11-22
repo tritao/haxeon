@@ -61,12 +61,18 @@ class HlcModule {
 
 	final allocationIndices:Map<Int, Int> = [];
 
-	/** The source paths the `#line` directives name, as written. */
-	final sourcePaths:Map<String, Bool> = [];
+	/** The source paths the `#line` directives name, as written, each with its C string literal. */
+	final sourcePaths:Map<String, String> = [];
 
-	/** Records that a `#line` directive names `path`. */
-	public function useSourcePath(path:String):Void
-		sourcePaths.set(path, true);
+	/** The C string literal of `path` for a `#line` directive, recording that a directive names it. */
+	public function linePath(path:String):String {
+		var quoted = sourcePaths.get(path);
+		if (quoted == null) {
+			quoted = quote(path);
+			sourcePaths.set(path, quoted);
+		}
+		return quoted;
+	}
 
 	/** Whether objects are allocated inline (`CompileOptions.inlineAllocation`), else by `hl_alloc_obj`. */
 	public final inlineAllocation:Bool;
@@ -432,13 +438,15 @@ class HlcModule {
 	 * file is not compiled again when a declaration it does not use changes, and no file parses the whole program's.
 	 */
 	function declarations(text:String):String {
+		var names = new HlcNames();
+		names.scan(text);
 		var functions:Array<Int> = [], natives:Array<Int> = [];
-		for (name in identifiers(text, "hx_")) {
+		for (name in names.functions) {
 			var slot = cNameSlots.get(name);
 			if (slot != null)
 				functions.push(slot);
 		}
-		for (name in identifiers(text, "hlc_native_")) {
+		for (name in names.natives) {
 			var slot = Std.parseInt(name.substr("hlc_native_".length));
 			if (slot != null && slot < slotTypes.length && native[slot] && nativeSymbols[slot] != null)
 				natives.push(slot);
@@ -451,9 +459,12 @@ class HlcModule {
 		for (slot in functions)
 			calls.add('HLC_FUNCTION ${prototype(slot)}; /* ${slotName(slot)} */\n');
 		var callText = calls.toString(), definitions = new StringBuf();
-		types.structDefinitions(structsNamed(text + callText), definitions);
+		names.scan(callText);
+		types.structDefinitions(structsNamed(names), definitions);
 		var definitionText = definitions.toString(), buffer = new StringBuf();
-		for (index in structsNamed(definitionText + text + callText))
+		// The definitions name the structs of their fields, which need typedefs too.
+		names.scan(definitionText);
+		for (index in structsNamed(names))
 			buffer.add('typedef struct ${types.structName(index)} ${types.structName(index)};\n');
 		buffer.add(definitionText);
 		buffer.add(callText);
@@ -461,10 +472,10 @@ class HlcModule {
 		return buffer.toString();
 	}
 
-	/** The struct types `text` names, ascending. */
-	function structsNamed(text:String):Array<Int> {
+	/** The struct types of the `hlc_obj` names found, ascending. */
+	function structsNamed(names:HlcNames):Array<Int> {
 		var indices:Array<Int> = [];
-		for (name in identifiers(text, "hlc_obj")) {
+		for (name in names.structs) {
 			var index = Std.parseInt(name.substr("hlc_obj".length));
 			if (index != null && index < code.types.length && types.isObject(index))
 				indices.push(index);
@@ -473,26 +484,7 @@ class HlcModule {
 		return indices;
 	}
 
-	/** The distinct C identifiers of `text` that start with `prefix`. */
-	static function identifiers(text:String, prefix:String):Array<String> {
-		var found:Map<String, Bool> = [], result:Array<String> = [], at = text.indexOf(prefix);
-		while (at >= 0) {
-			var end = at + prefix.length;
-			if (at == 0 || !identifierCode(StringTools.fastCodeAt(text, at - 1))) {
-				while (end < text.length && identifierCode(StringTools.fastCodeAt(text, end)))
-					end++;
-				var name = text.substring(at, end);
-				if (!found.exists(name)) {
-					found.set(name, true);
-					result.push(name);
-				}
-			}
-			at = text.indexOf(prefix, end);
-		}
-		return result;
-	}
-
-	static inline function identifierCode(code:Int):Bool
+	public static inline function identifierCode(code:Int):Bool
 		return (code >= "a".code && code <= "z".code) || (code >= "A".code && code <= "Z".code)
 			|| (code >= "0".code && code <= "9".code) || code == "_".code;
 
@@ -677,19 +669,19 @@ class HlcModule {
 		while (index < bytes.length) {
 			if (index % 128 == 0)
 				buffer.add("\n");
-			var word = new StringBuf(), started = false;
-			var byte = 7;
-			while (byte >= 0) {
-				var value = index + byte < bytes.length ? bytes.get(index + byte) : 0;
-				if (started || value != 0 || byte == 0) {
-					word.add(started ? StringTools.hex(value, 2) : StringTools.hex(value));
+			// The word's hexadecimal digits, most significant first, without leading zeros.
+			buffer.add("0x");
+			var started = false, nibble = 15;
+			while (nibble >= 0) {
+				var at = index + (nibble >> 1),
+					value = at < bytes.length ? (bytes.get(at) >> ((nibble & 1) << 2)) & 15 : 0;
+				if (started || value != 0 || nibble == 0) {
+					buffer.addChar(value < 10 ? "0".code + value : "A".code + value - 10);
 					started = true;
 				}
-				byte--;
+				nibble--;
 			}
-			buffer.add("0x");
-			buffer.add(word.toString());
-			buffer.add(",");
+			buffer.addChar(",".code);
 			index += 8;
 		}
 		buffer.add("0};\n\n");
@@ -735,5 +727,54 @@ class HlcModule {
 			}
 		buffer.add("\t-1};\n");
 		return buffer.toString();
+	}
+}
+
+/**
+ * The distinct C identifiers of some C text that name declarations (`HlcModule.declarations`): generated functions (`hx_`),
+ * natives (`hlc_native_`) and structs (`hlc_obj`), each list in the order the names first occur. One pass reads each identifier
+ * once, at its first character; texts scanned one after another add to the same lists.
+ */
+private class HlcNames {
+	public final functions:Array<String> = [];
+	public final natives:Array<String> = [];
+	public final structs:Array<String> = [];
+
+	final found:Map<String, Bool> = [];
+
+	public function new() {}
+
+	public function scan(text:String):Void {
+		var at = 0, length = text.length;
+		while (at < length) {
+			var code = StringTools.fastCodeAt(text, at);
+			if (!HlcModule.identifierCode(code)) {
+				at++;
+				continue;
+			}
+			var start = at;
+			while (++at < length && HlcModule.identifierCode(StringTools.fastCodeAt(text, at))) {}
+			// Every name of interest starts with "h" and is longer than its prefix.
+			if (code != "h".code || at - start < 4)
+				continue;
+			var into = startsWith(text, start, "hx_") ? functions : startsWith(text, start, "hlc_native_") ? natives
+				: startsWith(text, start, "hlc_obj") ? structs : null;
+			if (into == null)
+				continue;
+			var name = text.substring(start, at);
+			if (!found.exists(name)) {
+				found.set(name, true);
+				into.push(name);
+			}
+		}
+	}
+
+	static function startsWith(text:String, at:Int, prefix:String):Bool {
+		if (at + prefix.length > text.length)
+			return false;
+		for (index in 0...prefix.length)
+			if (StringTools.fastCodeAt(text, at + index) != StringTools.fastCodeAt(prefix, index))
+				return false;
+		return true;
 	}
 }
