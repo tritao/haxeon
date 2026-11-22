@@ -12,6 +12,7 @@ import compiler.ir.model.IrTypeTools;
 import compiler.ir.model.TypeKey;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.ProgramFacts;
+import compiler.ir.verify.IrVerifier;
 import compiler.semantic.GeneratedNames;
 
 /**
@@ -58,9 +59,12 @@ class IrGenericOwnerErasure {
 			return false;
 		for (index in 0...left.length) {
 			var a = left[index], b = right[index];
-			if (a.kind != b.kind || a.name != b.name || !Type.enumEq(a.result, b.result)
-				|| !sameTypes(a.arguments, b.arguments))
+			if (a.kind != b.kind || a.name != b.name || !IrVerifier.sameType(a.result, b.result)
+				|| a.arguments.length != b.arguments.length)
 				return false;
+			for (position in 0...a.arguments.length)
+				if (!IrVerifier.sameType(a.arguments[position], b.arguments[position]))
+					return false;
 		}
 		return true;
 	}
@@ -139,7 +143,7 @@ class IrGenericOwnerErasure {
 					var name = request.name,
 						signature = {arguments: request.arguments, result: request.result},
 						previous = requests.get(name);
-					if (previous != null && (!Type.enumEq(previous.result, signature.result)
+					if (previous != null && (!IrVerifier.sameType(previous.result, signature.result)
 						|| !sameTypes(previous.arguments, signature.arguments)))
 						throw new InternalError('Conflicting erased generic operation "$name"');
 					requests.set(name, signature);
@@ -367,7 +371,7 @@ class IrGenericOwnerErasure {
 
 	static function sameTypes(a:Array<IrType>, b:Array<IrType>):Bool {
 		if (a.length != b.length) return false;
-		for (index in 0...a.length) if (!Type.enumEq(a[index], b[index])) return false;
+		for (index in 0...a.length) if (!IrVerifier.sameType(a[index], b[index])) return false;
 		return true;
 	}
 
