@@ -14,6 +14,7 @@ import compiler.syntax.Ast.AstType;
 import compiler.syntax.AstChildren;
 import compiler.syntax.AstPredicates;
 import compiler.types.FunctionTypes;
+import compiler.types.InlineConstantEvaluator;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
@@ -2415,8 +2416,10 @@ class BodyTyper implements BodyTyping {
 			for (target in resolved.dependencies)
 				recordInlineConstantDependency(target);
 		}
-		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span,
-			false, null, null, owner + "." + name);
+		if (resolved == null)
+			return null;
+		var value = InlineConstantEvaluator.locatedAt(resolved.value, span);
+		return new TypedExpression(value.expression, value.type, span, false, null, null, owner + "." + name);
 	}
 
 	/** Substitution must retain the dependencies erased by constant folding, including inside default arguments. */

@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstEnumAbstractValue;
+import compiler.types.InlineConstantEvaluator;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.analysis.Scope;
@@ -74,7 +75,7 @@ class EnumAbstractValues {
 	public static function typed(typer:BodyTyper, declaration:AstAbstract, value:AstEnumAbstractValue,
 			span:SourceSpan):TypedExpression {
 		typer.recordInlineConstantDependency(declaration.name);
-		var expression = raw(typer, declaration, value);
+		var expression = InlineConstantEvaluator.locatedAt(raw(typer, declaration, value), span);
 		return typer.session.constants.enumAbstractConstantOwner == declaration.name
 			? new TypedExpression(expression.expression,
 			expression.type,

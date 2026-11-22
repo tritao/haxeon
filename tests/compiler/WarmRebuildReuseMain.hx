@@ -107,9 +107,17 @@ class WarmRebuildReuseMain {
 			StringTools.replace(libSource, "return \"lib\";",
 			"return \"lib\";"
 			+ " public static function shifted():String return \"a-constant-that-shifts-the-string-table\";")));
-		// A reader inlines an enum abstract's value where the value is declared, so moving the declaration retypes the reader.
-		edit(failures, "after an enum abstract moved down its file",
-			files -> files.set("Level.hx", "\n\n" + levelSource));
+		// A reader's copy of an enum abstract's value is located where it reads it, so moving the abstract, down its file or along a
+		// line, changes nothing the module holds: it is reused, and equals a fresh build's.
+		for (check in [false, true]) {
+			var checked = check ? ", checked" : "";
+			attempt(failures, "after an enum abstract moved down its file" + checked, true,
+				files -> files.set("Level.hx", "\n\n" + levelSource), check);
+			attempt(failures, "after an enum abstract value moved along its line" + checked, true,
+				files -> files.set("Level.hx",
+				StringTools.replace(levelSource, "var High", "/* the higher level */ var High")),
+				check);
+		}
 		edit(failures, "after an edit of a private inline function an inline function expands into",
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return x + 1;", "return x + 2;")));
 		edit(failures, "after an edit of a private function an inline function calls",

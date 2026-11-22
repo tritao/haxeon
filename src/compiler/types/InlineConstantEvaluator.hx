@@ -23,6 +23,16 @@ class InlineConstantEvaluator {
 		return literal(value, expression.span, expression.type);
 	}
 
+	/**
+	 * The constant `expression` located at `span`, where it is used, as Haxe locates an inlined constant; `expression` itself when it
+	 * does not evaluate. A use then holds no position of the declaration, which a warm build does not retype the use for when only
+	 * the declaration's position moves.
+	 */
+	public static function locatedAt(expression:TypedExpression, span:compiler.core.Source.SourceSpan):TypedExpression {
+		var value = evaluateValue(expression);
+		return value == null ? expression : literal(value, span, expression.type);
+	}
+
 	static function evaluateValue(expression:TypedExpression):Null<InlineConstantValue> {
 		return switch expression.expression {
 			case TIntLiteral(number): InlineConstantValue.Integer(number);
