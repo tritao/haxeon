@@ -121,7 +121,7 @@ class IrPipeline {
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
 		IrFunctionStages.programStage("scalar-replacement", scalarReplacement),
-		new IrStage("nullable-scalar-flow", nullableScalarFlow),
+		IrFunctionStages.programStage("nullable-scalar-flow", nullableScalarFlow),
 		new IrStage("late-enum-tag-escapes", lateEnumTagEscapes),
 		new IrStage("inliner", inliner),
 		new IrStage("verifier", verifier).when(verifiesHere),
@@ -653,10 +653,9 @@ class IrPipeline {
 			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, types, scratch, hashLink));
 	}
 
-	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrNullableScalarFlow.rewrite(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrNullableScalarFlow(program, bodyTypes(context), context.passScratch, context.lineage,
+			context.options.checkReuse);
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
 	/**

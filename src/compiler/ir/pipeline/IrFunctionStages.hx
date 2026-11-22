@@ -112,6 +112,56 @@ class IrFunctionStages {
 		return result;
 	}
 
+	/** The input of a function `derived` makes from nothing but its name, such as a helper its name describes. */
+	public static inline final FROM_NAME = -1;
+
+	/**
+	 * A function `stage` makes in its `finish` besides the functions' own forms, named `name`: a specialization of the function of
+	 * version `input`, or a helper (`FROM_NAME`). With `lineage`, last build's when it was made from the same input and the facts it
+	 * read still hold (its requests are replayed); else `make` makes it with a reader that records what it reads and asks for, in the
+	 * stage's own facts, and past the encode point it is encoded with `types` and frozen. Call it while the stage runs, after
+	 * `prepare`.
+	 */
+	public static function derived(stage:String, name:String, pass:IrFunctionPass, input:Int, lineage:Null<IrLineage>,
+			checks:Bool, types:compiler.ir.model.IrTypeIds, builder:Null<compiler.ir.model.IrBodyBuilder>,
+			make:IrFactReader->IrFunction):IrFunction {
+		if (lineage == null) {
+			var reader = new IrFactReader(stage, pass);
+			reader.begin(false);
+			return make(reader);
+		}
+		var memos = lineage.memos,
+			memo = memos.stage(stage + IrLineage.DERIVED),
+			facts = memos.facts,
+			reader = new IrFactReader(stage, pass, facts),
+			entry = memo.last(name);
+		if (entry != null && input != 0 && entry.input == input && facts.hold(entry.facts, pass)) {
+			var requests = entry.requests;
+			if (requests != null)
+				for (request in requests)
+					pass.request(request.kind, request.type);
+			if (checks) {
+				reader.begin(true);
+				var now = make(reader);
+				if (!compiler.ir.codec.IrFunctionStateEquality.same(now, entry.output)
+					|| !IrFunctionPass.IrStageRequest.same(reader.requests(), entry.requests))
+					throw new InternalError('--check-reuse: stage $stage reused $name, which differs from what it makes now');
+			}
+		} else {
+			reader.begin(false);
+			var made = make(reader);
+			// What the memo keeps is frozen, so the stages after this one edit copies.
+			if (lineage.bodies) {
+				made.bodyIn(types, builder);
+				made.freezeBody(builder);
+			}
+			entry = new IrStageEntry(input, reader.recorded(), made, memos.versions.next(), 0, reader.requests());
+		}
+		memo.keep(name, entry);
+		lineage.set(entry.output, entry.outputVersion);
+		return entry.output;
+	}
+
 	/** `--check-reuse`: `entry`, reused for `fn`, is what the stage makes of it now. */
 	static function check(name:String, pass:IrFunctionPass, reader:IrFactReader, fn:IrFunction,
 			entry:IrStageEntry):Void {

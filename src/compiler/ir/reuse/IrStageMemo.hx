@@ -204,6 +204,9 @@ class IrLineage {
 	/** What the memo of the frozen functions a stage without a memo hands on is named after the stage (`handedOn`). */
 	public static inline final SETTLED = ":settled";
 
+	/** What a stage's memo of the functions it derives (`IrFunctionStages.derived`) is named after the stage. */
+	public static inline final DERIVED = ":derived";
+
 	/** The name the input's settling is metered and memoized under. */
 	public static inline final INPUT = "assembly-input";
 
