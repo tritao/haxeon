@@ -549,13 +549,10 @@ class IrPipeline {
 
 	/**
 	 * The conversion point (docs/design/IR_CORE_COLUMNS.md, migration): every function is encoded, and the stages from here on read
-	 * bodies. A session takes last compile's object for a function rebuilt the same, which has its body; a one-shot compile lets the
-	 * objects go.
+	 * bodies. In a session the stage memos before it hand on last build's object for a function nothing changed (`IrLineage`),
+	 * which has its frozen body already, so only what this build made is encoded.
 	 */
 	static function encodeBodies(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		if (retained && cache != null)
-			assembly.functions = cache.stableBodySources(assembly.functions, context.passScratch.bodyBuilder);
 		encodeAll(assembly.functions, context);
 		var enumInput = assembly.enumInput;
 		if (enumInput != null)

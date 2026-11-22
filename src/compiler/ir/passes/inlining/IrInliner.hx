@@ -182,12 +182,6 @@ class IrInlineCache {
 	var sources:Map<String, IrFunction> = [];
 
 	/**
-	 * The same for the functions where the pipeline starts reading bodies (docs/design/IR_CORE_COLUMNS.md, the conversion point):
-	 * a function rebuilt the same as last time is then the object that has its body already, so it is not encoded again.
-	 */
-	var bodySources:Map<String, IrFunction> = [];
-
-	/**
 	 * The same for the functions a stage past the conversion point generates as objects, by stage: each build makes them anew,
 	 * so one generated the same as last time is then last time's object, with its body.
 	 */
@@ -196,12 +190,6 @@ class IrInlineCache {
 	public function stableSources(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
 		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next, builder);
 		sources = next;
-		return result;
-	}
-
-	public function stableBodySources(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
-		var next:Map<String, IrFunction> = [], result = stable(functions, bodySources, next, builder);
-		bodySources = next;
 		return result;
 	}
 
@@ -249,8 +237,6 @@ class IrInlineCache {
 				found = result;
 		for (f in sources)
 			note(fn("source", f));
-		for (f in bodySources)
-			note(fn("body source", f));
 		for (stage => made in generatedSources)
 			for (f in made)
 				note(fn('generated ($stage)', f));
@@ -287,7 +273,6 @@ class IrInlineCache {
 	/** Lets the sources go, for a compile no next one reuses: they are the objects the stage's bodies were made from. */
 	public function forgetSources():Void {
 		sources = [];
-		bodySources = [];
 		generatedSources = [];
 		arrayFactories = [];
 		staticChecks.copies = [];
@@ -297,7 +282,6 @@ class IrInlineCache {
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
-		result.bodySources = bodySources;
 		result.generatedSources = generatedSources.copy();
 		result.arrayFactories = arrayFactories;
 		result.types = types;
