@@ -103,10 +103,11 @@ project only names it.
   executable, so `haxeon run --watch --live` patches the running app as today.
 - **Release builds** (`haxeon build --build-mode=release`) compile the program ahead of time: the compiler writes its C at
   `build/host/main.c/` (the build's `CModule` artifact), the fragment names that directory as `HAXEON_MODULE_C` instead of
-  `HAXEON_MODULE`, and `haxeon_add_app` compiles it with the SDK's `hlc_main.c` and links the VM without the JIT
-  (`Haxeon::aot`), through CMake and the user's toolchain, with the generated code's flags (`HlcBuild`). The compiler
-  rewrites only the C files whose text changed, so the runner recompiles only those. A release build cannot be watched or
-  patched live. The private driver's compile and link (`--c-sdk`) stays for `haxeon` itself and scripts.
+  `HAXEON_MODULE`, and `haxeon_add_app` compiles it with the SDK's `haxeon_add_c_executable`, which adds the SDK's
+  `hlc_main.c` and links the VM without the JIT (`Haxeon::aot`), through CMake and the user's toolchain, with the generated
+  code's flags. The compiler rewrites only the C files whose text changed, so the runner recompiles only those. A release
+  build cannot be watched or patched live. That function is the only build of generated C: `haxeon dev aot` and the AOT
+  tests call it too, through `cmake/aot` ([AOT_BACKEND.md](AOT_BACKEND.md), Building the C).
 
 ## One native graph per app
 

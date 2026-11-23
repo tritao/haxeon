@@ -17,8 +17,6 @@ typedef CompileOptionsInit = {
 	final ?verifyIr:Bool;
 	final ?checkIrBody:Bool;
 	final ?phaseCollections:Bool;
-	final ?toolchain:String;
-	final ?cSdk:String;
 	final ?inlineAllocation:Bool;
 	final ?nullSafety:Array<NullSafetyRule>;
 }
@@ -102,16 +100,6 @@ class CompileOptions {
 	public final phaseCollections:Bool;
 
 	/**
-	 * The toolchain a `--target=hlc` build compiles and links its C with (`--toolchain`: `gcc`, `clang`, `clang-cl`, `cl`, or a
-	 * path to one), or null for the default of the target the SDK was built for (`HlcBuild.toolchain`, docs/design/AOT_BACKEND.md).
-	 * Changes no output of the compile itself, so `key` leaves it out.
-	 */
-	public final toolchain:Null<String>;
-
-	/** The SDK a `--target=hlc` build compiles against: Haxeon's SDK (`include/`, `lib/<target>/`, `src/`; docs/design/SDK_LAYOUT.md). */
-	public final cSdk:Null<String>;
-
-	/**
 	 * Allocate objects in a `--target=hlc` build's C from the thread's allocation buffer inline, as the JIT does on Linux.
 	 * Off by default: the C build allocates through `hl_alloc_obj` unless asked.
 	 */
@@ -138,8 +126,6 @@ class CompileOptions {
 		checkIrBody = init != null && init.checkIrBody == true;
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
-		toolchain = init == null ? null : init.toolchain;
-		cSdk = init == null ? null : init.cSdk;
 		inlineAllocation = init != null && init.inlineAllocation == true;
 		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
 	}
@@ -167,8 +153,6 @@ class CompileOptions {
 			verifyIr: verifyIr,
 			checkIrBody: checkIrBody,
 			phaseCollections: phaseCollections,
-			toolchain: toolchain,
-			cSdk: cSdk,
 			inlineAllocation: inlineAllocation,
 			nullSafety: nullSafety
 		});
@@ -204,10 +188,6 @@ class CompileOptions {
 			flags.push(PHASE_COLLECTIONS);
 		if (!phaseCollections && !keepSession)
 			flags.push(NO_PHASE_COLLECTIONS);
-		if (toolchain != null)
-			flags.push(TOOLCHAIN + toolchain);
-		if (cSdk != null)
-			flags.push(C_SDK + cSdk);
 		if (inlineAllocation)
 			flags.push(INLINE_ALLOCATION);
 		for (rule in nullSafety)
@@ -216,12 +196,6 @@ class CompileOptions {
 	}
 
 	static inline final PARSE_THREADS = "--parse-threads=";
-
-	/** The toolchain of a `--target=hlc` build (`toolchain`). */
-	public static inline final TOOLCHAIN = "--toolchain=";
-
-	/** The C SDK of a `--target=hlc` build (`cSdk`). */
-	public static inline final C_SDK = "--c-sdk=";
 
 	/** Allocates objects inline in a `--target=hlc` build (`inlineAllocation`). */
 	public static inline final INLINE_ALLOCATION = "--inline-allocation";
@@ -251,8 +225,7 @@ class CompileOptions {
 	public function key():String
 		return [
 			for (flag in arguments())
-				if (!StringTools.startsWith(flag, PARSE_THREADS) && !StringTools.startsWith(flag, TOOLCHAIN)
-				&& !StringTools.startsWith(flag, C_SDK) && flag != NO_KEEP_SESSION && flag != PHASE_COLLECTIONS
+				if (!StringTools.startsWith(flag, PARSE_THREADS) && flag != NO_KEEP_SESSION && flag != PHASE_COLLECTIONS
 				&& flag != NO_PHASE_COLLECTIONS) flag
 		].join(" ");
 
@@ -264,8 +237,7 @@ class CompileOptions {
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
 				INLINE_ALLOCATION: true;
-			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, TOOLCHAIN)
-				|| StringTools.startsWith(argument, C_SDK) || StringTools.startsWith(argument, NULL_SAFETY);
+			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -285,8 +257,6 @@ class CompileOptions {
 			checkIrBody: arguments.indexOf(CHECK_IR_BODY) >= 0,
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
-			toolchain: lastValue(arguments, TOOLCHAIN),
-			cSdk: lastValue(arguments, C_SDK),
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
 			nullSafety: nullSafetyFrom(arguments)
 		});
@@ -304,15 +274,6 @@ class CompileOptions {
 				rules.push(rule);
 			}
 		return rules;
-	}
-
-	/** The value of the last `PREFIXvalue` among `arguments`, or null. */
-	static function lastValue(arguments:Array<String>, prefix:String):Null<String> {
-		var found:Null<String> = null;
-		for (argument in arguments)
-			if (StringTools.startsWith(argument, prefix))
-				found = argument.substr(prefix.length);
-		return found;
 	}
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

@@ -256,10 +256,9 @@ add_library(hlvm_aot STATIC
 )
 set_target_properties(hlvm_aot PROPERTIES OUTPUT_NAME hl-aot)
 
-# The SDK a `--target=hlc` build compiles against (`--c-sdk`, docs/design/AOT_BACKEND.md): the VM library without the JIT and libffi in
-# lib/, the runtime headers and the generated C's fixed part (native/aot/hlc_prelude.h) in include/, the entry point the generated C
-# links with in src/, and in `target` the target it was built for, as build.Target spells it (OS-ARCH-ABI, macos-ARCH), from which
-# the C build takes its default toolchain and checks a chosen one.
+# What a `--target=hlc` build's C compiles against (docs/design/AOT_BACKEND.md): the VM library without the JIT and libffi in
+# lib/<target>, the target it was built for as build.Target spells it (OS-ARCH-ABI, macos-ARCH), the runtime headers and the
+# generated C's fixed part (native/aot/hlc_prelude.h) in include/, and the entry point the generated C links with in src/.
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _sdk_arch)
 if(_sdk_arch MATCHES "^(amd64|x86_64|x64)$")
   set(_sdk_arch x86_64)

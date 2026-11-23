@@ -307,7 +307,7 @@ Runtime authoring, a modder editing scripts inside the game, needs the compiler 
 
 The compiler would be built by `hlc` as a static library without the CLI, LSP, formatter, the clang importer and the
 backends it does not use. The estimate below comes from the object files of the current `haxeon-aot` build
-(`out/aot/haxeon-aot.c/obj-release`), grouped by the source each file comes from:
+(now under `out/aot/build`), grouped by the source each file comes from:
 
 | Part | Text |
 |---|---:|

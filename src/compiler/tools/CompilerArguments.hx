@@ -215,13 +215,6 @@ class CompilerArguments {
 		if (memoryContract != null && memoryBase != 0)
 			throw new UsageError("--wasm-memory-contract and --wasm-memory-base are mutually exclusive");
 		var options = compiler.CompileOptions.fromArguments(optionFlags);
-		if ((options.toolchain != null || options.cSdk != null) && backend != HashLinkC)
-			throw new UsageError("--toolchain and --c-sdk require --target=hlc");
-		if (options.toolchain != null && options.cSdk == null)
-			throw new UsageError("--toolchain requires --c-sdk");
-		// A toolchain of the other ABI than the SDK's is a usage error, found before anything compiles.
-		if (options.cSdk != null)
-			compiler.backend.c.HlcBuild.toolchain(options.cSdk, options.toolchain);
 		return {
 			target: target,
 			buildMode: buildMode,

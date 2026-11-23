@@ -1,5 +1,5 @@
 # Haxeon's SDK as a CMake package (docs/design/SDK_LAYOUT.md): find_package(Haxeon) gives an app's runner the VM libraries of
-# the platform it builds for and haxeon_add_app (HaxeonApp.cmake).
+# the platform it builds for, haxeon_add_app and haxeon_add_c_executable (HaxeonApp.cmake).
 #
 #   Haxeon::app   the JIT VM with the app entry point (lib/<target>/libhaxeon-app)
 #   Haxeon::vm    the JIT VM alone (lib/<target>/libhl)

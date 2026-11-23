@@ -4,7 +4,7 @@ import compiler.Compiler.CompileResult;
 import compiler.abi.AbiChangeSchema;
 import compiler.backend.BackendTargets;
 import compiler.backend.MemoryContract.MemoryContractCodec;
-import compiler.backend.c.HlcBuild;
+import compiler.backend.c.HlcModule.HlcFile;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
@@ -277,8 +277,8 @@ class CompilerDriver {
 	}
 
 	/**
-	 * A C build (docs/design/AOT_BACKEND.md): the sources go to `OUTPUT.c/`; with a C compiler and SDK the executable is linked
-	 * at `OUTPUT`. Like a Wasm module, it has no live host: writing it publishes it.
+	 * A C build (docs/design/AOT_BACKEND.md): the sources go to `OUTPUT.c/`, from which the SDK's CMake package builds the
+	 * executable (`haxeon_add_c_executable`). Like a Wasm module, it has no live host: writing it publishes it.
 	 */
 	static function writeC(owner:compiler.Compiler, result:CompileResult, request:CompilerRequest,
 			report:String->Void, preparedAt:Float):CompileResult {
@@ -287,26 +287,40 @@ class CompilerDriver {
 		// whose text changed are written, so a C build (this one's or an app runner's) compiles only those again.
 		var published = request.publishedOutput == null ? request.output : request.publishedOutput;
 		var files = BackendArtifacts.c(result.artifact).files, directory = published + ".c";
-		var changed = HlcBuild.write(files, directory);
+		var changed = writeCSources(files, directory);
 		// What the program was compiled from, which a project build reads to know when to compile it again.
 		if (request.inputsOutput != null)
 			File.saveContent(request.inputsOutput, inputsReport(owner, result.moduleNames, request));
 		var writtenAt = Sys.time() * 1000.0;
-		var sdk = request.options.cSdk;
-		if (sdk != null) {
-			var compiled = HlcBuild.compile(files, directory, request.output,
-				HlcBuild.toolchain(sdk, request.options.toolchain), sdk,
-				request.buildMode == "development");
-			report('compiled $compiled C files');
-		}
 		report("driver phases (ms): compile=" + milliseconds(compiledAt - preparedAt) + " write-c="
-			+ milliseconds(writtenAt - compiledAt) + " c-build=" + milliseconds(Sys.time() * 1000.0 - writtenAt));
+			+ milliseconds(writtenAt - compiledAt));
 		report(phaseReport(result, 0));
 		var status = owner.publicationStatus();
 		if (status.hasPendingRevision && status.pendingRevision == result.revision)
 			owner.acknowledgePublication(result.revision);
 		report('wrote ${files.length} C sources ($changed changed) -> $directory');
 		return result;
+	}
+
+	/**
+	 * Writes a C build's `files` into `directory`; returns how many changed. A file whose text did not change is not written,
+	 * so the C build compiles only what an edit changed. Files of an earlier build that this one lacks are removed.
+	 */
+	static function writeCSources(files:Array<HlcFile>, directory:String):Int {
+		FileSystem.createDirectory(directory);
+		var changed = 0, kept:Map<String, Bool> = [];
+		for (file in files) {
+			var path = directory + "/" + file.path;
+			kept.set(file.path, true);
+			if (FileSystem.exists(path) && File.getContent(path) == file.content)
+				continue;
+			File.saveContent(path, file.content);
+			changed++;
+		}
+		for (name in FileSystem.readDirectory(directory))
+			if ((StringTools.endsWith(name, ".c") || StringTools.endsWith(name, ".h")) && !kept.exists(name))
+				FileSystem.deleteFile(directory + "/" + name);
+		return changed;
 	}
 
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */

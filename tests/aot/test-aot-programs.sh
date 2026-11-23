@@ -4,8 +4,8 @@
 # the C backend stops with "C backend:" counts as unsupported, not as a failure.
 #   tests/aot/test-aot-programs.sh [-v] [--all] [NAME...]
 # NAME is a tests/programs file without .hx, or a path to a .hx file; --all takes every program of expected-exits.tsv.
-# TEST_JOBS programs run at once (default 4); TOOLCHAIN is the hlc build's --toolchain (gcc, clang, clang-cl, cl; default the
-# hlc SDK's target's);
+# The C is built through cmake/aot with the SDK's CMake package (HAXEON_SDK, default out/sdk). TEST_JOBS programs run at once
+# (default 4); TOOLCHAIN is the C compiler CMake builds with (gcc, clang, clang-cl, cl, or a path; default CMake's choice, CC);
 # HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines). AOT_PROGRAMS_COMPILER, when
 # set, is a compiler executable that does both compiles instead of the compiler on the VM, which stock Haxe built: the aot-compiler
 # suite sets it to the compiler built ahead of time, so the C backend's own code also runs as Haxeon compiles it.
@@ -35,7 +35,20 @@ sdk=${HAXEON_SDK:-$root_dir/out/sdk}
 toolchain=${TOOLCHAIN:-}
 build_mode=${HLC_BUILD_MODE:-development}
 jobs=${TEST_JOBS:-4}
+ninja=ninja
+for pinned in "$root_dir/.tools/ninja/ninja" "$root_dir/.tools/ninja/ninja.exe"; do
+	if [[ -x $pinned ]]; then ninja=$pinned; fi
+done
+development=$([[ $build_mode == development ]] && echo ON || echo OFF)
 mkdir -p "$out_dir"
+
+# Builds the executable WORK/NAME from the C in WORK/NAME.c.
+build_c() {
+	local work=$1 name=$2
+	cmake -S "$root_dir/cmake/aot" -B "$work/build" -G Ninja -DCMAKE_MAKE_PROGRAM="$ninja" -DHaxeon_DIR="$sdk/cmake" \
+		-DC_SOURCES="$work/$name.c" -DOUTPUT="$work/$name" -DDEVELOPMENT="$development" ${toolchain:+-DCMAKE_C_COMPILER="$toolchain"} \
+		&& cmake --build "$work/build"
+}
 export TZ=Asia/Kolkata
 
 # Compiles and runs one program both ways; writes its verdict to WORK/result: ok, FAIL ..., UNSUPPORTED ... or SKIP ...
@@ -57,13 +70,17 @@ check_program() {
 		return
 	fi
 	run hl "$haxeon_hl" "$work/$name.hl"
-	if ! haxeon_compile --target=hlc --build-mode="$build_mode" ${toolchain:+--toolchain="$toolchain"} --c-sdk="$sdk" --output="$work/$name" --entry="$name" --root="$root" \
+	if ! haxeon_compile --target=hlc --build-mode="$build_mode" --output="$work/$name" --entry="$name" --root="$root" \
 		--root=stdlib "$source_file" > "$work/hlc.log" 2>&1; then
 		if grep -q "C backend:" "$work/hlc.log"; then
 			echo "UNSUPPORTED $name: $(grep -o 'C backend: .*' "$work/hlc.log" | head -1 | cut -c1-160)" > "$work/result"
 		else
 			echo "FAIL $name (hlc compile: $(grep -m1 'Uncaught\|failed' "$work/hlc.log" | cut -c1-160))" > "$work/result"
 		fi
+		return
+	fi
+	if ! build_c "$work" "$name" > "$work/c-build.log" 2>&1; then
+		echo "FAIL $name (C build: $(grep -m1 'error' "$work/c-build.log" | cut -c1-160); $work/c-build.log)" > "$work/result"
 		return
 	fi
 	run hlc "$work/$name"
