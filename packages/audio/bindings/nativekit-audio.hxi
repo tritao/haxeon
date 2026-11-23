@@ -442,6 +442,14 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		NK_AUDIO_EFFECT_DUCKING = 6;
 	}
 	/**
+	 * Sample encoding for interleaved PCM clip data.
+	 */
+	enum nk_audio_pcm_format : c_int {
+		NK_AUDIO_PCM_U8 = 1;
+		NK_AUDIO_PCM_S16_LE = 2;
+		NK_AUDIO_PCM_F32_LE = 3;
+	}
+	/**
 	 * Coordinate space used by a voice's spatial position.
 	 */
 	enum nk_audio_positioning : u32 {
@@ -875,6 +883,11 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	 * call. The source currently supports WAV, FLAC, and MP3.
 	 */
 	extern fn nk_audio_clip_create_from_memory(data: ptr<const<void>>, data_size: u64, out_clip: ptr<nk_audio_clip> @out @owned) -> nk_result;
+	/**
+	 * Creates a clip from complete interleaved mono or stereo PCM frames. NativeKit
+	 * copies the samples. Each voice has an independent cursor over the shared data.
+	 */
+	extern fn nk_audio_clip_create_from_pcm(data: ptr<const<void>>, data_size: u64, sample_rate: u32, channels: u32, format: nk_audio_pcm_format, out_clip: ptr<nk_audio_clip> @out @owned) -> nk_result;
 	/**
 	 * Creates a reusable streaming clip from a readable URI resource descriptor.
 	 * Each voice opens and owns an independent provider stream; the complete

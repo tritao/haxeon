@@ -21,6 +21,7 @@ import haxeon.gpu.Uniforms;
 
 import haxeon.gpu.GpuResult;
 import nativekit.ffi.NativeKitGpu;
+import nativekit.ffi.NativeKitGpu.GpuStatus;
 
 import haxeon.gpu.Pipeline.PipelineBuilder;
 import haxeon.gpu.Shader.ShaderBuilder;
@@ -89,9 +90,35 @@ class Renderer {
 		ensureLive();
 		if (!frameActive)
 			throw BindingError.invalidState("Renderer.endFrame", "GPU frame is not active");
-		GpuResult.check(NativeKitGpu.nkgpu_end_frame(value), "renderer.endFrame");
-		frameActive = false;
-		passActive = false;
+		finishFrame(NativeKitGpu.nkgpu_end_frame(value), "renderer.endFrame");
+	}
+
+	/** Draws one surface frame and preserves the original error if cleanup also fails. */
+	public function withFrame(draw:Void->Void):Void {
+		beginFrame();
+		try {
+			draw();
+			endFrame();
+		} catch (error:Dynamic) {
+			try abortFrame() catch (_:Dynamic) {}
+			throw error;
+		}
+	}
+
+	/** Ends an interrupted frame so the renderer can be reused or disposed. */
+	public function abortFrame():Void {
+		ensureLive();
+		if (!frameActive)
+			return;
+		finishFrame(NativeKitGpu.nkgpu_frame_abort(value), "renderer.abortFrame");
+	}
+
+	function finishFrame(status:GpuStatus, operation:String):Void {
+		if (status == GpuStatus.Ok || status == GpuStatus.ErrorDeviceLost) {
+			frameActive = false;
+			passActive = false;
+		}
+		GpuResult.check(status, operation);
 	}
 
 	/** Begins a frame that will contain explicit render, compute, or copy passes. */

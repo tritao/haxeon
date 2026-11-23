@@ -332,6 +332,13 @@ class BuildContext {
 		textInput.attach(surface);
 	}
 
+	public function clearPlatformSurface(surface:Surface):Void {
+		if (platformSurface == surface) {
+			textInput.detach();
+			platformSurface = null;
+		}
+	}
+
 	/** Installs the logical viewport used while building the current frame. */
 	public function setViewport(width:Float, height:Float):Void {
 		if (width <= 0.0 || height <= 0.0

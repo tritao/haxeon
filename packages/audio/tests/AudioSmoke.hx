@@ -18,6 +18,7 @@ import haxeon.audio.Bus;
 import haxeon.audio.BusConcurrencyOptions;
 import haxeon.audio.BusEffect;
 import haxeon.audio.Clip;
+import haxeon.audio.PcmFormat;
 import haxeon.audio.Cone;
 import haxeon.audio.DeviceOptions;
 import haxeon.audio.DistanceLimits;
@@ -62,6 +63,29 @@ class AudioSmoke {
 		for (index in 0...8)
 			bytes.set(44 + index, 128);
 		return bytes;
+	}
+
+	static function verifyPcmClip(data:Bytes, channels:Int, format:PcmFormat, frames:Int):Void {
+		var clip = Clip.fromPcm(data, 48000, channels, format);
+		var voice = clip.createVoice();
+		clip.dispose();
+		var duration = voice.lengthSeconds();
+		voice.dispose();
+		if (Math.abs(duration - frames / 48000.0) > 0.000001)
+			throw "PCM clip duration did not match its frame count";
+	}
+
+	static function verifyPcmClips():Void {
+		verifyPcmClip(Bytes.alloc(481), 1, Unsigned8, 481);
+		verifyPcmClip(Bytes.alloc(1920), 2, Signed16LE, 480);
+		verifyPcmClip(Bytes.alloc(3840), 2, Float32LE, 480);
+		var rejected = false;
+		try Clip.fromPcm(Bytes.alloc(3), 48000, 2, Signed16LE)
+		catch (error:haxeon.platform.BindingError) {
+			rejected = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument;
+		}
+		if (!rejected)
+			throw "Incomplete PCM frame should raise InvalidArgument";
 	}
 
 	static function main():Void {
@@ -321,6 +345,7 @@ class AudioSmoke {
 			bus.scheduleStart(haxe.Int64.add(nowFrames, haxe.Int64.ofInt(sampleRate * 5)));
 			bus.scheduleStop(haxe.Int64.add(nowFrames, haxe.Int64.ofInt(sampleRate * 6)));
 			bus.clearSchedule();
+			verifyPcmClips();
 			clip = Clip.fromMemory(tinyWav());
 			var options = new VoiceOptions();
 			options.looping = true;

@@ -56,6 +56,27 @@ class Clip {
 		return new Clip(made.out_clip);
 	}
 
+	/** Creates a clip from complete, interleaved mono or stereo PCM frames. */
+	public static function fromPcm(data:Bytes, sampleRate:Int, channels:Int, format:PcmFormat):Clip {
+		if (data == null || data.length == 0 || format == null || sampleRate <= 0 || (channels != 1 && channels != 2))
+			throw BindingError.invalidArgument("Clip.fromPcm", "PCM data, sample rate, channel count, or format is invalid");
+		var sampleSize = switch format {
+			case Unsigned8: 1;
+			case Signed16LE: 2;
+			case Float32LE: 4;
+		};
+		if (data.length % (channels * sampleSize) != 0)
+			throw BindingError.invalidArgument("Clip.fromPcm", "PCM data must contain complete frames");
+		var encoding = switch format {
+			case Unsigned8: NativePcmFormat.U8;
+			case Signed16LE: NativePcmFormat.S16Le;
+			case Float32LE: NativePcmFormat.F32Le;
+		};
+		var made = NativeKitAudio.nk_audio_clip_create_from_pcm(data, data.length, sampleRate, channels, encoding);
+		AudioResult.check(made.status, "audio.clip.fromPcm");
+		return new Clip(made.out_clip);
+	}
+
 	public function nativeHandle():ClipHandle {
 		ensureLive();
 		return value;

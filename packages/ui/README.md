@@ -29,6 +29,13 @@ UI has no dependency on a Materia or SceneKit checkout.
 Compiler and native artifacts should live under Haxeon’s `out/` tree or an
 explicit build directory, rather than inside the package’s source folders.
 
+For an app that already owns a desktop window and event loop, use
+`DesktopUiSurface.mount(window, events, width, height, view, onError)` to add a
+UI region. The mount owns its UI resources and input subscription, schedules
+frames on demand, and cleans up with the window. Call `invalidate()` after
+app-driven state changes that affect the view. The normal `DesktopUiHost`
+uses the same input binding and frame rendering helpers.
+
 ## Search pickers and tooltips
 
 `widgets.commands.SearchPicker` owns input focus, a virtualized result viewport,
@@ -386,6 +393,11 @@ Prepared text publishes those immutable objects itself through
 `TextEngine::published_glyphs()`, which returns the same snapshot for the same
 layout generation, geometry, scale, and mode, so sealing cost follows the number of
 bindings rather than the size of the glyph buffers.
+
+Desktop host diagnostic captures include monotonic callback, submission, and
+presentation timestamps in `frame-timeline.jsonl`. The backend frame ID
+correlates the timestamps. The presentation field can be empty when feedback
+is pending or the backend does not provide it.
 
 ## Custom native window chrome
 

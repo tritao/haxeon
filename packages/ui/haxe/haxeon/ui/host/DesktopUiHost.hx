@@ -52,6 +52,7 @@ class DesktopUiHost {
 		var session:Null<UiHostSession> = null;
 		var eventHistory:Array<String> = [];
 		var frameHistory:Array<Dynamic> = [];
+		var pendingPresentation:Array<{timing:haxeon.platform.SurfaceFrameTiming, record:Dynamic}> = [];
 		var allocationCensusStarted = false;
 		var callbackSeconds = 0.0;
 		var loopTiming = {
@@ -422,6 +423,7 @@ class DesktopUiHost {
 						liveRuntime.setSurfaceReady(size.out_width > 0 && size.out_height > 0);
 						if (frameSubscription == null)
 							frameSubscription = borrowedSurface.onFrame(function(width, height) {
+								var callbackAt = options.captureDirectory == null ? 0.0 : Sys.monotonicTime();
 								try {
 									framePending = false;
 									if (!active || !surfaceAvailable || !frameRequested) return;
@@ -456,6 +458,7 @@ class DesktopUiHost {
 									// macOS reports SurfaceReady before its Metal layer has a size, so the ready
 									// event's framebuffer query can be 0x0. The first frame carries the real size.
 									liveRuntime.setSurfaceReady(width > 0 && height > 0);
+									var presentation = options.captureDirectory == null ? null : borrowedSurface.captureFrameTiming(callbackAt);
 									var frameStartedAt = Sys.time();
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
@@ -469,6 +472,8 @@ class DesktopUiHost {
 										defer ProfileSpan.end("ui.frame");
 										frameGc.beginFrame();
 										rendered = liveRuntime.render(Sys.time(), repaintOnly);
+										if (rendered && presentation != null)
+											presentation.markSubmitted();
 										collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
 										{
 											ProfileSpan.begin("ui.frame.gc");
@@ -509,6 +514,7 @@ class DesktopUiHost {
 									if (options.captureDirectory != null) {
 										var metrics = liveRuntime.app() == null
 											? null : liveRuntime.app().context().frameMetrics;
+										var displayedAt:Null<Float> = null;
 										var record = {
 											frame: liveRuntime.rendered,
 											pointerMoveCount: pointerCount,
@@ -527,6 +533,11 @@ class DesktopUiHost {
 											prepareAllocatedBytes: liveRuntime.lastPrepareAllocatedBytes,
 											submitAllocatedBytes: liveRuntime.lastSubmitAllocatedBytes,
 											startedAtSeconds: frameStartedAt,
+											presentationFrameId: presentation == null || presentation.frameId == null
+												? null : Std.string(presentation.frameId),
+											callbackMonotonicSeconds: presentation == null ? null : presentation.callbackSeconds,
+											submittedMonotonicSeconds: presentation == null ? null : presentation.submittedSeconds,
+											presentedMonotonicSeconds: displayedAt,
 											requestReason: requestReason,
 											requestSerial: requestSerial,
 											scriptedInputCount: scriptedFrameCount,
@@ -563,6 +574,21 @@ class DesktopUiHost {
 											nativeRenderSeconds: metrics == null ? null : metrics.nativeRenderSeconds,
 											nodeCount: metrics == null ? null : metrics.nodeCount
 										};
+										var pendingIndex = pendingPresentation.length - 1;
+										while (pendingIndex >= 0) {
+											var pending = pendingPresentation[pendingIndex];
+											var presented = pending.timing.presentationSeconds();
+											if (presented != null) {
+												pending.record.presentedMonotonicSeconds = presented;
+												pendingPresentation.splice(pendingIndex, 1);
+											}
+											pendingIndex--;
+										}
+										if (presentation != null && presentation.frameId != null) {
+											if (pendingPresentation.length >= 8)
+												pendingPresentation.shift();
+											pendingPresentation.push({timing: presentation, record: record});
+										}
 										frameHistory.push(record);
 										record.bookkeepingSeconds = Sys.time() - frameFinishedAt;
 										record.gcCollectionsTotal = Gc.collections();

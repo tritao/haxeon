@@ -1,12 +1,18 @@
 package haxeon.platform;
 
+import haxe.Int64;
 import haxeon.platform.DisposalRegistration;
+import haxeon.platform.NativeKitError;
+import haxeon.platform.SurfaceFrameTiming;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.Window;
 import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.Result;
 import nativekit.ffi.NativeKitTypes.OwnedSurfaceHandle;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameCallbackCallback;
 import nativekit.ffi.NativeKitTypes.SurfaceHandle;
+import nativekit.ffi.NativeKitTypes.Handle;
+import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
 
 /** Owns one graphics surface attached to a NativeKit window. */
 class Surface {
@@ -34,6 +40,10 @@ class Surface {
 	private static function adopt(owned:OwnedSurfaceHandle):Surface
 		return new Surface(owned.borrow(), true);
 
+	/** Whether a platform event came from this surface. */
+	public function ownsEventSource(source:Handle):Bool
+		return !disposed && source.rawValue() == value.rawValue();
+
 	public function nativeHandle():SurfaceHandle {
 		ensureLive();
 		return value;
@@ -42,8 +52,7 @@ class Surface {
 	/** Replaces the current frame handler and roots it until dispose/detach succeeds. */
 	public function onFrame(handler:Int->Int->Void):SurfaceFrameSubscription {
 		ensureLive();
-		if (frameSubscription != null)
-			frameSubscription.dispose();
+		clearFrameCallback();
 		var handlerBridge = new SurfaceFrameHandler(handler);
 		var callback = new SurfaceFrameCallbackCallback(handlerBridge.invoke);
 		try
@@ -57,11 +66,53 @@ class Surface {
 		return subscription;
 	}
 
+	/** Captures timing for the current frame callback. Backends may omit a presentation ID. */
+	public function captureFrameTiming(?callbackSeconds:Float):SurfaceFrameTiming {
+		ensureLive();
+		var started = callbackSeconds == null ? Sys.monotonicTime() : callbackSeconds;
+		var feedback = NativeKit.nk_surface_get_presentation_feedback(value, Int64.ofInt(-1));
+		if (feedback.status == Result.ErrorUnsupported)
+			return new SurfaceFrameTiming(this, null, started);
+		if (feedback.status != Result.Ok)
+			throw new NativeKitError(feedback.status, "surface.captureFrameTiming", NativeKit.nk_last_error());
+		return new SurfaceFrameTiming(this, feedback.out_frame_id, started);
+	}
+
+	@:allow(haxeon.platform.SurfaceFrameTiming)
+	function presentationSeconds(frameId:Int64):Null<Float> {
+		if (disposed)
+			return null;
+		var feedback = NativeKit.nk_surface_get_presentation_feedback(value, frameId);
+		if (feedback.status == Result.ErrorUnsupported)
+			return null;
+		if (feedback.status != Result.Ok)
+			throw new NativeKitError(feedback.status, "surface.presentationSeconds", NativeKit.nk_last_error());
+		return feedback.out_presentation_seconds > 0.0 ? feedback.out_presentation_seconds : null;
+	}
+
+	/** Detaches the installed frame handler, if any. */
+	public function clearFrameCallback():Void {
+		ensureLive();
+		if (frameSubscription != null)
+			frameSubscription.dispose();
+	}
+
+	/** Selects continuous or on-demand callbacks for this surface. */
+	public function setFrameMode(mode:SurfaceFrameMode):Void {
+		ensureLive();
+		NativeKit.nk_surface_set_frame_mode_checked(value, mode);
+	}
+
+	/** Queues a redraw, including when the surface is in on-demand mode. */
+	public function requestFrame():Void {
+		ensureLive();
+		NativeKit.nk_surface_request_frame_checked(value);
+	}
+
 	public function dispose():Void {
 		if (disposed)
 			return;
-		if (frameSubscription != null)
-			frameSubscription.dispose();
+		clearFrameCallback();
 		if (ownsHandle)
 			NativeKit.nk_surface_destroy_checked(value);
 		disposed = true;

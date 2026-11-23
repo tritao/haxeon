@@ -261,6 +261,55 @@ class Triangle {
 		}
 	}
 
+	static function pumpEvents(runtime:Runtime, seconds:Float):Void {
+		var deadline = Sys.monotonicTime() + seconds;
+		while (Sys.monotonicTime() < deadline) {
+			if (!runtime.events.poll())
+				runtime.events.wait(0.01);
+		}
+	}
+
+	static function verifyFrameCallbacks(runtime:Runtime, surface:Surface, renderer:Renderer) {
+		var staleCalls = 0;
+		var calls = 0;
+		var lastTime = 0.0;
+		var timing:haxeon.platform.SurfaceFrameTiming = null;
+		var first = surface.onFrame(function(_) { staleCalls++; });
+		var second = surface.onFrame(function(frame) {
+			if (frame.timeSeconds < lastTime || frame.width <= 0 || frame.height <= 0)
+				throw "Invalid frame callback payload";
+			lastTime = frame.timeSeconds;
+			timing = surface.captureFrameTiming(frame.timeSeconds);
+			renderer.withFrame(function() {});
+			timing.markSubmitted();
+			calls++;
+		});
+		pumpEvents(runtime, 0.25);
+		if (!first.isDisposed() || staleCalls != 0 || calls < 2 || lastTime <= 0.0)
+			throw "Continuous GPU frame callback did not replace its predecessor";
+		if (timing == null || timing.callbackSeconds != lastTime || (timing.submittedSeconds ?? 0.0) < lastTime)
+			throw "Frame timing did not record callback and submission in the same clock domain";
+		timing.presentationSeconds();
+
+		surface.setFrameMode(SurfaceFrameMode.OnDemand);
+		pumpEvents(runtime, 0.1);
+		var idleCalls = calls;
+		pumpEvents(runtime, 0.1);
+		if (calls != idleCalls)
+			throw "On-demand frame callback kept running without a request";
+		surface.requestFrame();
+		pumpEvents(runtime, 0.25);
+		if (calls != idleCalls + 1)
+			throw "GPU frame request did not deliver one frame";
+
+		second.dispose();
+		surface.requestFrame();
+		pumpEvents(runtime, 0.1);
+		if (!second.isDisposed() || calls != idleCalls + 1)
+			throw "Disposed GPU frame subscription still received callbacks";
+		return surface.onFrame(function(_) {});
+	}
+
 	static function main():Int {
 		verifyGeneratedEnumMembers();
 		verifyStructuredErrors();
@@ -427,6 +476,18 @@ class Triangle {
 			}
 		}
 
+		renderer.beginFrame();
+		renderer.abortFrame();
+		renderer.abortFrame();
+		var originalError = "draw failed";
+		var frameError:Dynamic = null;
+		try renderer.withFrame(function() { throw originalError; })
+		catch (error:Dynamic) frameError = error;
+		if (frameError != originalError)
+			throw "Frame scope did not preserve the draw error";
+		renderer.withFrame(function() {});
+		var frameSubscription = verifyFrameCallbacks(runtime, surface, renderer);
+
 		var stalePipeline = pipeline.nativeHandle();
 		sampler.dispose();
 		sampler.dispose();
@@ -447,6 +508,8 @@ class Triangle {
 			throw "runtime shut down with a retained graphics image";
 		retainedImage.dispose();
 		surface.dispose();
+		if (!frameSubscription.isDisposed())
+			throw "Surface disposal did not detach its frame callback";
 		eventSubscription.dispose();
 		runtime.dispose();
 

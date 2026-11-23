@@ -289,6 +289,12 @@ class UiContext {
 		buildContext.setPlatformSurface(surface);
 	}
 
+	/** Releases platform services for this surface when it is still attached. */
+	public function detachPlatformSurface(surface:PlatformSurface):Void {
+		ensureLive();
+		buildContext.clearPlatformSurface(surface);
+	}
+
 	/** Attaches the NativeKit-owned window that receives declarative chrome regions. */
 	public function attachPlatformWindow(window:WindowHandle):Void {
 		ensureLive();
@@ -1522,6 +1528,13 @@ class UiContext {
 	}
 
 	public function isDirty():Bool return dirtyFlags != UiDirtyFlag.None;
+
+	/** Asks the host for a frame when input dirtied the submitted UI. */
+	public function requestFrameIfDirty():Void {
+		var request = onAnimationFrameRequested;
+		if (request != null && isDirty())
+			request();
+	}
 
 	public var needsAnimationFrame(get, never):Bool;
 

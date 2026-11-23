@@ -16,6 +16,7 @@ class NativeInputAdapter {
 	final window:WindowHandle;
 	var attachedEvents:Null<EventPump>;
 	var eventSubscription:Null<EventSubscription>;
+	var redrawOnInput = false;
 	final eventListener:PlatformEvent->Void;
 	/**
 		Phone form-factor override (EXOSUIT_FORM_FACTOR=phone): the left mouse button is delivered as touch pointer 0, so
@@ -41,21 +42,25 @@ class NativeInputAdapter {
 		attachedEvents = null;
 		eventSubscription = null;
 		eventListener = function(event) {
-			consume(event);
+			if (consume(event) && redrawOnInput)
+				context.requestFrameIfDirty();
 		};
 		pointerX = 0.0;
 		pointerY = 0.0;
 	}
 
 	/** Subscribes this adapter to the runtime's shared event pump. */
-	public function attach(events:EventPump):Void {
+	public function attach(events:EventPump, redrawOnInput:Bool = false):Void {
 		if (events == null)
 			throw "Native input requires a NativeKit event pump";
 		if (events.isDisposed())
 			throw "Native input cannot attach to a disposed NativeKit event pump";
-		if (attachedEvents == events)
+		if (attachedEvents == events) {
+			this.redrawOnInput = redrawOnInput;
 			return;
+		}
 		detach();
+		this.redrawOnInput = redrawOnInput;
 		eventSubscription = events.listen(eventListener);
 		attachedEvents = events;
 		context.setPointerCaptureHandler(function(captured) {

@@ -3809,6 +3809,13 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 */
 	extern fn nk_surface_get_framebuffer_size(surface: nk_surface, out_width: ptr<i32> @out, out_height: ptr<i32> @out) -> nk_result;
 	/**
+	 * Queries presentation feedback in the monotonic time domain. Pass -1 to
+	 * select the current frame and retrieve its ID. Pass that ID on a later
+	 * call to read the presentation timestamp. Zero means feedback is pending
+	 * or unavailable for that frame. Backends without feedback return unsupported.
+	 */
+	extern fn nk_surface_get_presentation_feedback(surface: nk_surface, frame_id: i64, out_frame_id: ptr<i64> @out, out_presentation_seconds: ptr<f64> @out) -> nk_result;
+	/**
 	 * Resolves a graphics function for the current OpenGL surface context.
 	 *
 	 * `name` is a non-null UTF-8 function name. On NK_OK, writes a callable
@@ -4089,9 +4096,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 */
 	extern fn nk_tray_set_tooltip(tray: nk_tray, tooltip: utf8) -> nk_result;
 	/**
-	 * Shows `menu` as a popup at the pointer and returns at once: the popup's modal
-	 * loop runs on its own thread, so the application's event loop keeps running
-	 * while the menu is open. A chosen item is reported later as
+	 * Shows `menu` as a popup at the pointer and returns at once. On Windows the
+	 * popup's modal loop runs on its own thread, so the application's event loop
+	 * keeps running while the menu is open; AppKit tracks menus on the main thread
+	 * only, so on macOS the loop pauses until the menu closes. A chosen item is reported later as
 	 * NK_EVENT_MENU_ITEM_ACTIVATED, as for application menus. The menu is copied;
 	 * the caller may destroy it after this returns. While a tray menu is open,
 	 * another call shows nothing and returns NK_OK. Destroying the tray closes its
@@ -6953,13 +6961,15 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 */
 	handle nk_transport : u32 @destroy("nk_transport_close");
 	/**
-	 * A status icon in the desktop notification area (the Windows system tray).
-	 * Only the Windows backend implements trays; other backends return
+	 * A status icon in the desktop notification area (the Windows system tray,
+	 * the macOS menu bar). Windows and macOS implement trays; other backends return
 	 * NK_ERROR_UNSUPPORTED. Events carry the tray handle as their source:
 	 * NK_EVENT_TRAY_ACTIVATED for a primary click (flags is 1 for a double click)
 	 * and NK_EVENT_TRAY_MENU_REQUESTED for a secondary click or the keyboard
-	 * context-menu gesture. The application answers a menu request by building a
-	 * menu and calling nk_tray_show_menu, so the menu reflects current state.
+	 * context-menu gesture. On macOS every click is a menu request, the platform
+	 * convention for status items. The application answers a menu request by
+	 * building a menu and calling nk_tray_show_menu, so the menu reflects current
+	 * state.
 	 */
 	handle nk_tray : u32 @destroy("nk_tray_destroy");
 	/**

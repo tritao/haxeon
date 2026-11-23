@@ -22,10 +22,12 @@
     "nk_audio_dsp_waveform": "NativeDspWaveform",
     "nk_audio_dsp_source_kind": "NativeDspSourceKind",
     "nk_audio_dsp_source_parameter": "NativeDspSourceParameter",
-    "nk_audio_resource_loading": "NativeResourceLoading"
+    "nk_audio_resource_loading": "NativeResourceLoading",
+    "nk_audio_pcm_format": "NativePcmFormat"
   },
   "enumValuePrefixes": [
-    "NK_AUDIO_VOICE_"
+    "NK_AUDIO_VOICE_",
+    "NK_AUDIO_PCM_"
   ],
   "enumValueNames": {
     "nk_audio_voice_flags": {

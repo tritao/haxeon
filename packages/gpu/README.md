@@ -14,6 +14,33 @@ Run tools from this package's `tools/` directory. Platform `tools/test-haxe-bind
 
 Generator source labels retain their original paths to preserve reviewed HXI content during extraction.
 
+## Frame callbacks
+
+`Surface.onFrame` delivers a `FrameTick` with monotonic callback time and
+framebuffer dimensions in pixels. Registering a new handler replaces the
+previous one. Dispose the returned subscription to stop delivery early. Surface
+disposal also detaches the handler.
+
+Continuous callbacks are the default. For on-demand rendering, call
+`surface.setFrameMode(SurfaceFrameMode.OnDemand)` and use
+`surface.requestFrame()` whenever the surface needs a redraw.
+`SurfaceFrameMode` is available from `nativekit.ffi.NativeKitTypes`.
+
+Use `Renderer.withFrame(draw)` to begin and end a frame around draw commands.
+It tries to abort an interrupted frame before rethrowing the original error.
+Call `Renderer.abortFrame()` for recovery when managing frame boundaries directly.
+
+For diagnostics, call `surface.captureFrameTiming(tick.timeSeconds)` inside the
+callback and `markSubmitted()` after submission. Query `presentationSeconds()`
+on a subsequent callback using the same timing object. GTK can report display
+feedback. The timestamp is optional because feedback may still be pending or
+unavailable on the current backend.
+
+## Examples
+
+[Circuit Run](examples/circuit-run/) is a Linux desktop maze-chase sample using
+NativeKit keyboard events and a single draw call per frame.
+
 ## License
 
 The extracted NativeKit bindings and wrappers retain their Apache License 2.0 license; see `LICENSE`.

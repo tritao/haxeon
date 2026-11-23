@@ -54,6 +54,14 @@ class TextInputBridge {
 			activatePlatform();
 	}
 
+	public function detach():Void {
+		ensureLive();
+		deactivatePlatform();
+		surface = null;
+		platformSupported = false;
+		platformChecked = false;
+	}
+
 	/** Activates the platform editor for one focused UI text control. */
 	public function activate(?owner:WidgetId):Void {
 		ensureLive();

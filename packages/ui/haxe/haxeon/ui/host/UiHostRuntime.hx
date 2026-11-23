@@ -7,12 +7,8 @@ import NativeKitUI.UiStatus;
 import haxeon.ProfileCounter;
 import haxeon.ProfileRecording;
 import haxeon.ProfileSpan;
-import haxeon.ui.FrameInfo;
-import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
 import haxeon.ui.UiResult.UiError;
-import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.debug.AllocationProbe;
 import nativekit.ffi.NativeKitTypes;
 
@@ -42,11 +38,10 @@ class UiHostRuntime {
 	final surface:SurfaceHandle;
 	final context:UiHostContext;
 	var application:Null<UiApplication> = null;
-	var input:Null<NativeInputAdapter> = null;
+	var binding:Null<UiSurfaceBinding> = null;
 	var nativeSurface:Null<PlatformSurface> = null;
 	var renderer:Null<Renderer> = null;
-	var frame:LayoutFrame;
-	var frameInfo:FrameInfo;
+	final frame:UiSurfaceFrame;
 	final frameState:UiHostFrameState;
 	final zoomChanged:Null<Float->Void>;
 	var disposed:Bool = false;
@@ -64,8 +59,7 @@ class UiHostRuntime {
 		frameState = new UiHostFrameState(width, height);
 		context.onZoomChanged = applyZoom;
 		frameState.setZoom(context.zoom);
-		frame = new LayoutFrame(width, height);
-		frameInfo = new FrameInfo(width, height, width, height, 1.0);
+		frame = new UiSurfaceFrame(surface, width, height);
 	}
 
 	function get_logicalWidth():Float return frameState.logicalWidth;
@@ -93,18 +87,9 @@ class UiHostRuntime {
 				application = created;
 				renderer = Renderer.create();
 				nativeSurface = PlatformSurface.borrowNativeHandle(surface);
-				created.context().attachPlatformSurface(nativeSurface);
 				created.context().density = context.touchPrimary ? Density.Touch : Density.Pointer;
-				// Hosts without a top-level window (Android) pass an invalid handle: skip window chrome, and let
-				// the input adapter use the surface as its target.
-				if (window.isValid()) created.context().attachPlatformWindow(window);
-				input = new NativeInputAdapter(created.context(),
-					new Handle(window.isValid() ? window.rawValue() : surface.rawValue()),
-					new Handle(surface.rawValue()));
-				input.coordinateScale = context.zoom;
-				created.context().textInput.coordinateScale = context.zoom;
-				created.context().platformCoordinateScale = context.zoom;
-				input.attach(context.events);
+				binding = UiSurfaceBinding.attachNative(created.context(), window, nativeSurface, context.events);
+				binding.setCoordinateScale(context.zoom);
 				session.transition(UiHostLifecycle.Running);
 			}
 		} catch (error:Dynamic) {
@@ -124,11 +109,7 @@ class UiHostRuntime {
 	function applyZoom(value:Float):Void {
 		if (zoomChanged != null) zoomChanged(value);
 		frameState.setZoom(value);
-		if (input != null) input.coordinateScale = value;
-		if (application != null) {
-			application.context().textInput.coordinateScale = value;
-			application.context().platformCoordinateScale = value;
-		}
+		if (binding != null) binding.setCoordinateScale(value);
 	}
 	public function setSurfaceReady(value:Bool):Void frameState.setSurfaceAvailable(value);
 
@@ -142,28 +123,26 @@ class UiHostRuntime {
 			callbackDepth++;
 			var phaseStarted = Sys.time();
 			var phaseAllocated = AllocationProbe.now();
-			var renderSurface = {ProfileSpan.begin("ui.prepare");
-			defer ProfileSpan.end("ui.prepare");
-			var preparedSurface = Surface.fromNativeHandle(surface);
-			context.setGpuRenderer(renderer.prepare(preparedSurface));
-			preparedSurface;
-			};
+			{
+				ProfileSpan.begin("ui.prepare");
+				defer ProfileSpan.end("ui.prepare");
+				context.setGpuRenderer(frame.prepare(renderer));
+			}
 			lastPrepareSeconds = Sys.time() - phaseStarted;
 			lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
 			phaseStarted = Sys.time();
 			phaseAllocated = AllocationProbe.now();
-			frame.setViewport(frameState.layoutWidth, frameState.layoutHeight);
-			// A frame that ends an animation's wait must count the whole wait, not one capped frame.
+			// Include a whole animation wait when the frame ends it.
 			var animationWait = application.context().animationWaitSeconds();
-			frame.deltaSeconds = frameState.nextDelta(timeSeconds, animationWait >= 0.0 ? animationWait + 0.1 : 0.1);
-			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight,
-				frameState.renderScale);
+			var delta = frameState.nextDelta(timeSeconds, animationWait >= 0.0 ? animationWait + 0.1 : 0.1);
+			frame.configure(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight,
+				frameState.renderScale, delta);
 			context.repaintOnly = repaintOnly;
 			application.context().buildContext.environment.pixelDensity = frameState.renderScale;
 			{
 				ProfileSpan.begin("ui.submit");
 				defer ProfileSpan.end("ui.submit");
-				application.submit(frame);
+				application.submit(frame.layout);
 			}
 			lastApplicationSubmitSeconds = Sys.time() - phaseStarted;
 			lastSubmitAllocatedBytes = AllocationProbe.now() - phaseAllocated;
@@ -177,7 +156,7 @@ class UiHostRuntime {
 			{
 				ProfileSpan.begin("ui.render");
 				defer ProfileSpan.end("ui.render");
-				application.context().render(renderer, renderSurface, frameInfo);
+				frame.render(application.context(), renderer);
 			}
 			lastContextRenderSeconds = Sys.time() - phaseStarted;
 			lastPaintSeconds = lastContextRenderSeconds;
@@ -246,10 +225,10 @@ class UiHostRuntime {
 		if (disposed) return;
 		disposed = true;
 		context.onZoomChanged = null;
-		var ownedInput = input;
-		input = null;
-		if (ownedInput != null)
-			try ownedInput.detach() catch (error:Dynamic) session.cleanupFailed("input-detach", error);
+		var ownedBinding = binding;
+		binding = null;
+		if (ownedBinding != null)
+			try ownedBinding.dispose() catch (error:Dynamic) session.cleanupFailed("input-detach", error);
 		var ownedApplication = application;
 		application = null;
 		if (ownedApplication != null)

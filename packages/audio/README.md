@@ -55,6 +55,14 @@ and ping-pong feedback through `EffectParameter` and
 The miniaudio dependency is pinned to `tritao/miniaudio`'s `nativekit` branch,
 based on upstream `dev`, with graph-clock synchronization fixes and regression tests.
 
+## PCM clips
+
+Use `Clip.fromPcm(bytes, sampleRate, channels, format)` for generated or decoded
+PCM. Pass complete, interleaved mono or stereo frames with
+`PcmFormat.Unsigned8`, `PcmFormat.Signed16LE`, or `PcmFormat.Float32LE`. The
+clip owns one copy of the samples, which its voices share. Use `AudioCue.fromClip` for reusable
+one-shot playback.
+
 ## Specialized DaisySP sources
 
 Set `DspPatchBuilder.source` to `new DspSourceOptions(DspSourceKind.Fm2)` or

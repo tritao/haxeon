@@ -1,5 +1,8 @@
 package haxeon.audio;
 
+import haxeon.audio.DspEnums.DspParameter;
+import haxeon.audio.DspEnums.DspOscillatorParameter;
+
 import haxeon.platform.BindingError;
 
 import nativekit.ffi.NativeKitAudio;
