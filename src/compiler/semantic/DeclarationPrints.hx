@@ -67,9 +67,14 @@ class DeclarationPrints {
 	function declarations(before:Null<CanonicalContribution>, after:CanonicalContribution):Void {
 		compare(before == null ? [] : before.aliases, after.aliases, alias -> alias.name, (left, right) -> {
 			facts.markExpanded(facts.id(FactAspect.Shape, either(left, right).name));
-			shape(left, right, DeclarationFacts.KIND_ALIASES,
-				(left, right) -> CanonicalComparison.aliases(left, right, PositionsCount.Ignored), alias -> alias.name,
-				alias -> [alias.type]);
+			var name = either(left, right).name;
+			var changed = left == null || right == null
+				|| !CanonicalComparison.aliases(left, right, PositionsCount.Ignored);
+			var through = right == null ? null : shapesOf([right.type]), wireId = facts.id(FactAspect.WireShape, name);
+			shapeChanged(name, DeclarationFacts.KIND_ALIASES, changed, through);
+			if (changed)
+				facts.changed(wireId);
+			facts.setDependencies(wireId, through);
 		});
 		compare(before == null ? [] : before.enums, after.enums, decl -> decl.name,
 			(left, right) -> enumFacts(left, right));
@@ -90,7 +95,12 @@ class DeclarationPrints {
 				? null : shapesOf([right.underlying].concat(right.fromTypes).concat(right.toTypes)
 				.concat([for (field in right.fields) if (field.type != null) field.type])
 				.concat(signatureTypes(right.methods)));
-			shapeChanged(either(left, right).name, DeclarationFacts.KIND_ABSTRACTS, !same, through);
+			var name = either(left, right).name;
+			shapeChanged(name, DeclarationFacts.KIND_ABSTRACTS, !same, through);
+			var wireId = facts.id(FactAspect.WireShape, name);
+			if (!same)
+				facts.changed(wireId);
+			facts.setDependencies(wireId, right == null ? null : shapesOf([right.underlying]));
 		});
 		compare(before == null ? [] : before.classes, after.classes, decl -> decl.name,
 			(left, right) -> classFacts(left, right));
@@ -140,6 +150,9 @@ class DeclarationPrints {
 			&& CanonicalComparison.enums(left, right, PositionsCount.Ignored, ENUM_SHAPE_PARTS);
 		var sameMembers = sameShape && left != null && right != null
 			&& CanonicalComparison.enums(left, right, PositionsCount.Lines);
+		if (left == null || right == null
+			|| !CanonicalComparison.enums(left, right, PositionsCount.Ignored, ["methods"]))
+			facts.changed(facts.id(FactAspect.WireShape, name));
 		if (!sameShape)
 			facts.changed(shapeId);
 		if (!sameMembers) {
@@ -150,6 +163,7 @@ class DeclarationPrints {
 			? null : shapesOf([for (enumCase in right.cases) for (parameter in enumCase.params) parameter.type]);
 		facts.setDependencies(shapeId, null);
 		facts.setDependencies(membersId, through);
+		facts.setDependencies(facts.id(FactAspect.WireShape, name), through);
 		var previous:Map<String, {index:Int, enumCase:AstEnumCase}> = [];
 		if (left != null)
 			for (index in 0...left.cases.length)
@@ -192,13 +206,22 @@ class DeclarationPrints {
 			facts.changed(shapeId);
 			changedKinds.set(DeclarationFacts.KIND_CLASSES, true);
 		}
+		// JSON writes named record fields in declaration order, and decoders can use their initializers.
+		var wireId = facts.id(FactAspect.WireShape, name);
+		var wireFields = right == null ? [] : [for (field in right.fields) if (!field.isStatic) field];
+		if (left == null || right == null
+			|| !CanonicalComparison.fieldList([for (field in left.fields) if (!field.isStatic) field],
+			wireFields, PositionsCount.Ignored))
+			facts.changed(wireId);
+		facts.setDependencies(wireId, shapesOf([for (field in wireFields) if (field.type != null) field.type]));
 		var sameMembers = false;
-		// Members are found by name, so their order is no part of them (a value type's field order is part of its shape).
-		if (sameShape && left != null && right != null)
+		if (sameShape && left != null && right != null) {
+			// Members are found by name, so their order is no part of them (a value type's field order is part of its shape).
 			sameMembers = sameByName(left.fields, right.fields, field -> field.name,
 				(previous, current) -> CanonicalComparison.fieldList([previous], [current], PositionsCount.Ignored,
 				MEMBER_PARTS))
 				&& sameByName(left.methods, right.methods, method -> method.name, sameMethodKind);
+		}
 		if (!sameMembers) {
 			facts.changed(membersId);
 			if (accessors(left) != accessors(right))

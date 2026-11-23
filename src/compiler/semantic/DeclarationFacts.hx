@@ -40,6 +40,12 @@ enum abstract FactAspect(Int) to Int {
 
 	/** One constructor of an enum (`Enum.Case`): its index and its parameters, which code constructing or matching it holds. */
 	var Case = 10;
+
+	/** A declaration's layout and annotations as consumed by a wire codec. */
+	var WireShape = 11;
+
+	/** The ordered typedef candidates for an anonymous record's set of field names. */
+	var WireAliases = 12;
 }
 
 /** What one typed unit read, and the revision it was typed at (`DeclarationFacts`). */
@@ -82,7 +88,7 @@ class DeclarationFacts {
 	/** The revision of the build in progress: 1 for the first. */
 	public var revision(default, null) = 0;
 
-	var ids:Array<Map<String, Int>> = [for (_ in 0...11)[]];
+	var ids:Array<Map<String, Int>> = [for (_ in 0...(FactAspect.WireAliases + 1))[]];
 	var aspects:Array<Int> = [];
 	var names:Array<String> = [];
 	var changedAt:Array<Int> = [];
@@ -108,7 +114,7 @@ class DeclarationFacts {
 	 * them. The revision stays, so a fact named again is new.
 	 */
 	public function clear():Void {
-		ids = [for (_ in 0...11)[]];
+		ids = [for (_ in 0...(FactAspect.WireAliases + 1))[]];
 		aspects = [];
 		names = [];
 		changedAt = [];

@@ -1,4 +1,5 @@
 package compiler.compilation;
+import compiler.syntax.CanonicalComparison.PositionsCount;
 
 import compiler.abi.PositionalName;
 import compiler.compilation.PipelineSnapshot.PipelineInputs;
@@ -2219,14 +2220,21 @@ class FrontendCompilation {
 	}
 
 	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {
+		// Structural type signatures ignore field order and metadata, which the codec reads from the declaration.
+		if (previous.aliases.length != current.aliases.length)
+			return false;
+		for (index in 0...current.aliases.length)
+			if (previous.aliases[index] != current.aliases[index]
+				&& !compiler.syntax.CanonicalComparison.aliases(previous.aliases[index], current.aliases[index],
+				PositionsCount.Ignored))
+				return false;
 		return sameNames([for (decl in previous.enums) decl.name], [for (decl in current.enums) decl.name])
 			&& sameNames([for (decl in previous.abstracts) decl.name], [for (decl in current.abstracts) decl.name])
 			&& sameNames([for (decl in previous.abstracts) if (decl.values != null) decl.name],
 			[for (decl in current.abstracts) if (decl.values != null) decl.name])
 			&& sameNames([for (decl in previous.interfaces) decl.name], [for (decl in current.interfaces) decl.name])
 			&& sameNames([for (decl in previous.classes) decl.name], [for (decl in current.classes) decl.name])
-			&& sameNames([for (decl in previous.functions) decl.name], [for (decl in current.functions) decl.name])
-			&& sameNames([for (decl in previous.aliases) decl.name], [for (decl in current.aliases) decl.name]);
+			&& sameNames([for (decl in previous.functions) decl.name], [for (decl in current.functions) decl.name]);
 	}
 
 	static function sameNames(previous:Array<String>, current:Array<String>):Bool {

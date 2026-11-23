@@ -79,10 +79,11 @@ class DeclarationIndex {
 		FactAspect.Shape,
 		DeclarationFacts.KIND_ENUM_ABSTRACTS);
 
-	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
+	/** The same enum abstracts in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
 	final enumAbstractList:Array<compiler.syntax.Ast.AstAbstract> = [];
 
-	final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
+	final aliasList:Array<AstTypeAlias>;
+	var wireAliases:Null<Map<String, Array<AstTypeAlias>>> = null;
 
 	/** Where the lookups of the unit being typed are recorded (`DeclarationReads`); null where nothing records. */
 	public var reads(default, null):Null<DeclarationReads> = null;
@@ -113,12 +114,38 @@ class DeclarationIndex {
 		return enumAbstractList;
 	}
 
-	/** The aliases in declaration order: a read of every one of them. */
-	public function aliasesInOrder():Array<compiler.syntax.Ast.AstTypeAlias> {
-		var recorder = reads;
-		if (recorder != null && recorder.recording)
-			recorder.read(FactAspect.Kind, DeclarationFacts.KIND_ALIASES);
-		return aliasList;
+	public function wireAliasCandidates(names:Array<String>):Array<AstTypeAlias> {
+		var groups = wireAliases;
+		if (groups == null)
+			wireAliases = groups = indexWireAliases(aliasList);
+		var key = wireFieldNames(names), recorder = reads, candidates = groups.get(key) ?? [];
+		if (recorder != null && recorder.recording) {
+			recorder.read(FactAspect.WireAliases, key);
+			for (alias in candidates)
+				recorder.read(FactAspect.WireShape, alias.name);
+		}
+		return candidates;
+	}
+
+	static function wireFieldNames(names:Array<String>):String {
+		names.sort(Reflect.compare);
+		return names.join(",");
+	}
+
+	public static function indexWireAliases(aliases:Array<AstTypeAlias>):Map<String, Array<AstTypeAlias>> {
+		var groups:Map<String, Array<AstTypeAlias>> = [];
+		for (alias in aliases)
+			switch alias.type {
+				case AnonymousType(fields) if (alias.typeParameters.length == 0):
+					var key = wireFieldNames([for (field in fields) field.name]), group = groups.get(key);
+					if (group == null) {
+						group = [];
+						groups.set(key, group);
+					}
+					group.push(alias);
+				default:
+			}
+		return groups;
 	}
 
 	// This index belongs to one semantic declaration snapshot; rebuilding the index drops the cache.
@@ -228,10 +255,10 @@ class DeclarationIndex {
 		declaredTypes = new DeclaredTypes(this);
 		types = declaredTypes;
 		fallbackSpan = firstSpan(program, emptySpan);
+		aliasList = program.aliases;
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias);
-			aliasList.push(alias);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {

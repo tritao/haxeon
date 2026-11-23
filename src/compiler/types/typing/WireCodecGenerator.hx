@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
+import compiler.semantic.DeclarationReads;
 import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceFile;
@@ -74,21 +75,30 @@ class WireCodecGenerator {
 	 */
 	public static function request(session:TypingSession, type:CompilerType, origin:String,
 			span:SourceSpan):CompilerType {
-		type = session.monomorphs.closeReached(type);
-		if (!isRequestType(session, type))
-			BodyTyper.fail("E1024", 'MessagePack does not support type "$type" in the current wire profile', span);
-		var key = typeKey(type);
-		session.output.requests.add(WireCodecHelper(key, {type: type, origin: origin, span: span}));
-		return type;
+		return registerRequest(session, type, origin, span, false);
 	}
 
 	public static function requestJson(session:TypingSession, type:CompilerType, origin:String,
 			span:SourceSpan):CompilerType {
+		return registerRequest(session, type, origin, span, true);
+	}
+
+	static function registerRequest(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan, json:Bool):CompilerType {
 		type = session.monomorphs.closeReached(type);
-		if (!isRequestType(session, type))
-			BodyTyper.fail("E1024", 'JSON does not support type "$type" in the current wire profile', span);
-		var key = typeKey(type);
-		session.output.requests.add(JsonCodecHelper(key, {type: type, origin: origin, span: span}));
+		if (!isRequestType(session, type)) {
+			var format = json ? "JSON" : "MessagePack";
+			BodyTyper.fail("E1024", '$format does not support type "$type" in the current wire profile', span);
+		}
+		var key = typeKey(type), request:WireCodecRequest = {type: type, origin: origin, span: span};
+		var added = session.output.requests.add(json ? JsonCodecHelper(key, request) : WireCodecHelper(key, request));
+		// Helpers are emitted after the requesting unit's read sink has closed.
+		var reads = session.declarations.reads;
+		if (added && reads != null && reads.recording)
+			switch type {
+				case TInt, TInt64, TFloat, TBool, TString, TBytes:
+				default: readWireShape(session, reads, type, new Map());
+			}
 		return type;
 	}
 
@@ -267,22 +277,77 @@ class WireCodecGenerator {
 			default: false;
 		};
 
+	static function readWireShape(session:TypingSession, reads:DeclarationReads, type:CompilerType,
+			seen:Map<String, Bool>):Void {
+		if (!isRequestType(session, type))
+			return;
+		switch type {
+			case TInt, TInt64, TFloat, TBool, TString, TBytes: return;
+			default:
+		}
+		var key = typeKey(type);
+		if (seen.exists(key))
+			return;
+		seen.set(key, true);
+		function visit(child:CompilerType, span:SourceSpan):Void
+			readWireShape(session, reads, child, seen);
+		switch type {
+			case TAbstract(name, _, _):
+				reads.read(WireShape, name);
+			case TAnonymous(_, fields):
+				session.declarations.wireAliasCandidates([for (field in fields) field.name]);
+			case TInstance(NominalKind.Class, name, arguments) if (arguments.length == 0):
+				var declaration = session.classDecls.header(name);
+				reads.read(WireShape, name);
+				if (declaration != null)
+					for (field in declaration.fields)
+						if (!field.isStatic) {
+							if (field.initializer != null)
+								session.readUnit(compiler.semantic.InitializerUnit.of(name, field.name));
+							visit(session.declarations.types.fieldType(name, field), field.span);
+						}
+			case TInstance(NominalKind.Enum, name, arguments) if (arguments.length == 0):
+				var declaration = session.enumDecls.entry(name);
+				reads.read(WireShape, name);
+				if (declaration != null)
+					for (enumCase in declaration.cases)
+						for (parameter in enumCase.params)
+							visit(session.representation.enumParameterType(declaration.typeParameters, parameter, type),
+								parameter.span);
+			default:
+		}
+		walkStructuralChildren(type, syntheticSpan, visit);
+	}
+
+	static function walkStructuralChildren(type:CompilerType, span:SourceSpan,
+			visit:(CompilerType, SourceSpan) -> Void):Void {
+		switch type {
+			case TAbstract(_, _, element), TNullable(element), TArray(element):
+				visit(element, span);
+			case TAnonymous(_, fields):
+				for (field in fields)
+					visit(field.type, span);
+			case TMap(key, value):
+				switch key {
+					case TInstance(NominalKind.Enum, _, _): visit(key, span);
+					default:
+				}
+				visit(value, span);
+			default:
+		}
+	}
+
 	static function wireAlias(session:TypingSession, type:CompilerType):Null<AstTypeAlias> {
 		var fields = switch type {
 			case TAnonymous(_, fields): fields;
 			default: throw new InternalError("Expected a structural wire type");
 		};
 		var explicit:Null<AstTypeAlias> = null, inferred:Null<AstTypeAlias> = null;
-		for (alias in session.declarations.aliasesInOrder()) {
-			if (alias.typeParameters.length != 0)
-				continue;
+		for (alias in session.declarations.wireAliasCandidates([for (field in fields) field.name])) {
 			var source = switch alias.type {
 				case AnonymousType(fields): fields;
-				default: continue;
+				default: throw new InternalError("Wire alias must be anonymous");
 			};
-			if (source.length != fields.length
-				|| !Lambda.foreach(source, member -> Lambda.exists(fields, field -> field.name == member.name)))
-				continue;
 			var annotated = Lambda.exists(alias.metadata, meta -> meta.name == "wire")
 				|| Lambda.exists(source, field -> Lambda.exists(field.metadata, meta -> meta.name == "id"));
 			if (!annotated && inferred != null)
@@ -394,24 +459,12 @@ class WireCodecGenerator {
 		}
 		visiting.set(key, true);
 		path.push(key);
+		function visit(child:CompilerType, childSpan:SourceSpan):Void
+			collectType(session, child, classes, enums, reachable, visiting, path, origin, childSpan);
 		switch type {
-			case TAbstract(_, _, representation):
-				collectType(session, representation, classes, enums, reachable, visiting, path, origin, span);
 			case TAnonymous(_, _):
 				for (wireField in anonymousWireFields(session, type, span))
-					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path, origin,
-						wireField.field.span);
-			case TNullable(element):
-				collectType(session, element, classes, enums, reachable, visiting, path, origin, span);
-			case TArray(element):
-				collectType(session, element, classes, enums, reachable, visiting, path, origin, span);
-			case TMap(key, value):
-				switch key {
-					case TInstance(NominalKind.Enum, _, _):
-						collectType(session, key, classes, enums, reachable, visiting, path, origin, span);
-					default:
-				}
-				collectType(session, value, classes, enums, reachable, visiting, path, origin, span);
+					visit(wireField.field.type, wireField.field.span);
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = classes.get(name);
 				if (declaration == null)
@@ -427,8 +480,7 @@ class WireCodecGenerator {
 					BodyTyper.fail("E1024", 'MessagePack record "$name" must declare at least one instance field',
 						declaration.span);
 				for (wireField in fields)
-					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path, origin,
-						wireField.field.span);
+					visit(wireField.field.type, wireField.field.span);
 			case TInstance(NominalKind.Enum, name, _):
 				validateWireMarker(session.enumDecls.get(name).metadata);
 				var declaration = requiredEnum(enums, name, span),
@@ -438,9 +490,9 @@ class WireCodecGenerator {
 						declaration.span);
 				for (wireCase in cases)
 					for (parameter in wireCase.caseDecl.params)
-						collectType(session, parameter, classes, enums, reachable, visiting, path, origin,
-							wireCase.caseDecl.span);
+						visit(parameter, wireCase.caseDecl.span);
 			default:
+				walkStructuralChildren(type, span, visit);
 		}
 		path.pop();
 		visiting.remove(key);
@@ -1374,7 +1426,9 @@ class WireCodecGenerator {
 	}
 
 	static function isNullaryWireEnum(session:TypingSession, name:String):Bool {
-		var declaration = session.enumDecls.get(name);
+		var declaration = session.enumDecls.header(name), reads = session.declarations.reads;
+		if (reads != null)
+			reads.read(WireShape, name);
 		if (declaration == null)
 			return false;
 		for (constructor in declaration.cases)

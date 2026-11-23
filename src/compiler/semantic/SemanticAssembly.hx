@@ -476,6 +476,37 @@ class SemanticAssembly {
 			contributionRebuildMs += Sys.time() * 1000.0 - contributionStartedAt;
 		}
 
+		// A newly matching typedef can change a structural codec even when its caller never names the typedef.
+		var previousSemantic = context.state.semanticProgram;
+		if (previousSemantic != null) {
+			var previousAliases = previousSemantic.program.aliases;
+			var sameAliases = previousAliases.length == typeAliases.length;
+			if (sameAliases)
+				for (index in 0...typeAliases.length)
+					if (previousAliases[index] != typeAliases[index]) {
+						sameAliases = false;
+						break;
+					}
+			if (!sameAliases) {
+				var before:Null<Map<String, Array<AstTypeAlias>>> = null;
+				var after:Null<Map<String, Array<AstTypeAlias>>> = null;
+				facts.forEach(FactAspect.WireAliases, (id, key) -> {
+					before = before ?? compiler.types.DeclarationIndex.indexWireAliases(previousAliases);
+					after = after ?? compiler.types.DeclarationIndex.indexWireAliases(typeAliases);
+					var left = before.get(key) ?? [], right = after.get(key) ?? [];
+					if (left.length != right.length) {
+						facts.changed(id);
+						return;
+					}
+					for (index in 0...right.length)
+						if (left[index].name != right[index].name) {
+							facts.changed(id);
+							return;
+						}
+				});
+			}
+		}
+
 		var canonicalizedAt = Sys.time() * 1000.0;
 		for (module => lambdaNames in generatedByModule)
 			for (lambdaName in lambdaNames.keys())
@@ -835,6 +866,8 @@ class SemanticAssembly {
 			case Members: {kind: StructuralDependency, via: "members"};
 			case Kind: {kind: StructuralDependency, via: "kind"};
 			case Case: {kind: StructuralDependency, via: "case"};
+			case WireShape: {kind: StructuralDependency, via: "wire-shape"};
+			case WireAliases: {kind: StructuralDependency, via: "wire-aliases"};
 			case Purity | NoReturn: {kind: PurityDependency, via: null};
 			case Snapshot: {kind: SourceRevision, via: "default-argument"};
 		};
