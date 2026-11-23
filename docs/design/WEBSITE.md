@@ -70,14 +70,17 @@ prove range rather than define the audience: an ordinary forms-and-lists app, an
 
 ## Platforms, as the site states them
 
-| Platform | Site wording |
-| --- | --- |
-| Linux, macOS (x86-64, Apple Silicon), Windows | Supported |
-| Android (`arm64-v8a`, `x86_64`) | Supported, with live editing |
-| Web (WebAssembly) | Experimental |
-| iOS | Planned |
+| Platform | Status | Live editing |
+| --- | --- | --- |
+| Linux (x86-64, arm64) | Supported | Yes |
+| macOS (Intel, Apple Silicon) | Supported | Yes |
+| Windows (x86-64) | Supported | Yes |
+| Android (`arm64-v8a`, `x86_64`) | Supported | Yes |
+| Web (WebAssembly) | Experimental | Not yet |
+| iOS | In progress | Not yet |
 
-The table follows README.md; when a platform's status changes there, it changes here and on the site.
+One row per platform, each with a small generic icon (no vendor logos). When a platform's status changes, it changes
+here and on the site.
 
 ## Page map
 
