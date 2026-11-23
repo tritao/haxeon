@@ -23,4 +23,7 @@ typedef InferredProgramFacts = {
 
 	/** Whether a function is pure by annotation (or as an intrinsic), over the same program. */
 	final isAnnotatedPure:String->Bool;
+
+	/** What each body was found to depend on, for the next inference (`PurityInference.infer`). */
+	final dependencies:compiler.types.analysis.PurityInference.PurityDependencies;
 }

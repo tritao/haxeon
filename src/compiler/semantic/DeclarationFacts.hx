@@ -70,6 +70,15 @@ class DeclarationFacts {
 	public static inline final KIND_INTERFACES = "interfaces";
 	public static inline final KIND_ALIASES = "aliases";
 
+	/**
+	 * Which fields have accessors, by name over every class (a `get`, `set` or `dynamic` access), and which functions are named
+	 * as setters (`set_`): what purity inference asks of a field it reads or writes (`PurityInference`).
+	 */
+	public static inline final KIND_ACCESSORS = "accessors";
+
+	/** Which classes override which methods: the override methods of every class (their bases are `KIND_CLASSES`). */
+	public static inline final KIND_OVERRIDES = "overrides";
+
 	/** The revision of the build in progress: 1 for the first. */
 	public var revision(default, null) = 0;
 

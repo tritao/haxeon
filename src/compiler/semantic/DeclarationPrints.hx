@@ -199,8 +199,13 @@ class DeclarationPrints {
 				(previous, current) -> CanonicalComparison.fieldList([previous], [current], PositionsCount.Ignored,
 				MEMBER_PARTS))
 				&& sameByName(left.methods, right.methods, method -> method.name, sameMethodKind);
-		if (!sameMembers)
+		if (!sameMembers) {
 			facts.changed(membersId);
+			if (accessors(left) != accessors(right))
+				changedKinds.set(DeclarationFacts.KIND_ACCESSORS, true);
+			if (overrides(left) != overrides(right))
+				changedKinds.set(DeclarationFacts.KIND_OVERRIDES, true);
+		}
 		var fields:Map<String, AstField> = left == null ? [] : [for (field in left.fields) field.name => field];
 		if (right != null) {
 			var named = right.interfaces.concat([for (field in right.fields) if (field.type != null) field.type]);
@@ -218,6 +223,28 @@ class DeclarationPrints {
 		}
 		for (field in fields)
 			initializer(name + "." + field.name, field.initializer, null, field.span, null);
+	}
+
+	/** A class's fields with accessors, with their accesses, in declaration order; empty for none or no class. */
+	static function accessors(decl:Null<AstClass>):String {
+		if (decl == null)
+			return "";
+		var text = new StringBuf();
+		for (field in decl.fields)
+			if (field.readAccess != null || field.writeAccess != null)
+				text.add(field.name + ":" + Std.string(field.readAccess) + "," + Std.string(field.writeAccess) + ";");
+		return text.toString();
+	}
+
+	/** A class's override methods by name, in declaration order; empty for none or no class. */
+	static function overrides(decl:Null<AstClass>):String {
+		if (decl == null)
+			return "";
+		var text = new StringBuf();
+		for (method in decl.methods)
+			if (method.isOverride == true)
+				text.add(method.name + ";");
+		return text.toString();
 	}
 
 	function initializer(key:String, left:Null<AstExpression>, right:Null<AstExpression>,
@@ -242,6 +269,9 @@ class DeclarationPrints {
 			facts.changed(signatureId);
 			changedKinds.set(KIND_FUNCTIONS, true);
 		}
+		// A function named as a setter, added or removed, is a setter some type may have (`DeclarationFacts.KIND_ACCESSORS`).
+		if ((left == null || right == null) && StringTools.startsWith(name.substr(name.lastIndexOf(".") + 1), "set_"))
+			changedKinds.set(DeclarationFacts.KIND_ACCESSORS, true);
 		if (right != null)
 			facts.setDependencies(signatureId, shapesOf(signatureTypes([right])));
 		var generic = right != null && right.typeParameters != null && right.typeParameters.length > 0;

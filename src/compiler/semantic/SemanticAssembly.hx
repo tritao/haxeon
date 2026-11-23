@@ -510,8 +510,14 @@ class SemanticAssembly {
 		];
 		var previousFacts = context.state.programFacts, inferred = previousFacts;
 		if (inferred == null || !sameContributions(inferred.contributions, contributions)) {
-			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions);
+			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions, facts,
+				previousFacts == null ? null : previousFacts.dependencies);
 			context.state.programFacts = inferred;
+			// `--check-reuse`: what the bodies whose facts held were taken to depend on gives what walking every body gives.
+			if (context.options.checkReuse && previousFacts != null)
+				checkPurity(inferred,
+					inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions,
+					facts, null));
 			if (previousFacts != null)
 				moveAnswers(facts, previousFacts, inferred);
 		}
@@ -682,7 +688,8 @@ class SemanticAssembly {
 	static function inferProgramFacts(contributions:Array<Array<AstFunction>>, classes:Array<AstClass>,
 			interfaces:Array<compiler.syntax.Ast.AstInterface>, enums:Array<compiler.syntax.Ast.AstEnum>,
 			abstracts:Array<compiler.syntax.Ast.AstAbstract>,
-			programFunctions:Array<AstFunction>):InferredProgramFacts {
+			programFunctions:Array<AstFunction>, declarationFacts:DeclarationFacts,
+			previous:Null<compiler.types.analysis.PurityInference.PurityDependencies>):InferredProgramFacts {
 		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
 		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
 			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
@@ -699,11 +706,13 @@ class SemanticAssembly {
 		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
 			.isTypeName(candidate, purityScopeClasses,
 			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
+		var dependencies = new compiler.types.analysis.PurityInference.PurityDependencies(declarationFacts);
 		return {
 			contributions: contributions,
+			dependencies: dependencies,
 			facts: {
 				pure: compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
-					purityScopeAbstracts, purityScopeEnums, isAnnotatedPure, isTypeName),
+					purityScopeAbstracts, purityScopeEnums, isAnnotatedPure, isTypeName, previous, dependencies),
 				noReturn: compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures)
 			},
 			isAnnotatedPure: isAnnotatedPure
@@ -725,6 +734,39 @@ class SemanticAssembly {
 			if (previous.facts.noReturn.exists(name) != current.facts.noReturn.exists(name))
 				facts.changed(id);
 		});
+	}
+
+	/** `--check-reuse`: `reused`, inferred taking unchanged bodies' dependencies, says what `fresh`, inferred anew, says. */
+	static function checkPurity(reused:InferredProgramFacts, fresh:InferredProgramFacts):Void {
+		var left = reused.facts.pure, right = fresh.facts.pure;
+		for (name in left.keys())
+			if (!right.exists(name))
+				throw new compiler.core
+					.InternalError('--check-reuse: purity inference reused dependencies that make $name pure');
+		for (name in right.keys())
+			if (!left.exists(name))
+				throw new compiler.core
+					.InternalError('--check-reuse: purity inference reused dependencies that leave $name impure');
+		for (name => dependency in fresh.dependencies.entries) {
+			var kept = reused.dependencies.entries.get(name);
+			if (kept == null || !sameDependencies(kept.dependencies, dependency.dependencies))
+				throw new compiler.core
+					.InternalError('--check-reuse: purity inference reused what $name depends on, which differs');
+		}
+	}
+
+	static function sameDependencies(left:Null<Map<String, Bool>>, right:Null<Map<String, Bool>>):Bool {
+		if (left == null || right == null)
+			return left == right;
+		var count = 0;
+		for (name in left.keys()) {
+			if (!right.exists(name))
+				return false;
+			count++;
+		}
+		for (_ in right.keys())
+			count--;
+		return count == 0;
 	}
 
 	/** A module's canonical declarations as its state holds them, which `DeclarationPrints` compares. */
