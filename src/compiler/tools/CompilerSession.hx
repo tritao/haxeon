@@ -32,6 +32,14 @@ class CompilerSession {
 	var requestSources:Map<String, String> = [];
 
 	/**
+	 * Each source file's text as the session last read it, with the file's version then (`FileVersion`): a request whose file
+	 * still has that version takes the text without reading the file. A version is trusted once a later request has read the
+	 * file at it again, so a write that left the version as it was (the same size, within the file system's timestamp
+	 * resolution of the read) is read by that later request.
+	 */
+	var sourceReads:Map<String, {version:Bytes, text:String, settled:Bool}> = [];
+
+	/**
 	 * The build of the compiler its live history is keyed by: the running program's fingerprint
 	 * (`CodeIdentityTable.compilerVersion`) unless one is given.
 	 */
@@ -61,25 +69,40 @@ class CompilerSession {
 		encodedModule = null;
 		functionMap = new IndexText();
 		functionIds = new IndexText();
+		sourceReads = [];
 	}
 
 	/**
 	 * The bytes of the module last written, with the module they encode. Encoding is a function of the module alone, so a build
 	 * that reuses the module (see `PipelineSnapshot`) writes the same bytes without validating and encoding it again.
 	 */
-	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes}>;
+	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>}>;
 
-	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes {
+	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes
+		return encoded(code).bytes;
+
+	function encoded(code:HlCode):{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>} {
 		var known = encodedModule;
 		if (known == null || known.code != code) {
 			var session = compiler;
 			known = {
 				code: code,
-				bytes: HlWriter.encode(code, writerCache, session != null && session.options.checkReuse)
+				bytes: HlWriter.encode(code, writerCache, session != null && session.options.checkReuse),
+				buildId: null
 			};
 			encodedModule = known;
 		}
-		return known.bytes;
+		return known;
+	}
+
+	/** The build id of `code`'s module: the SHA-256 of the bytes `writeHashLink` writes, worked out once for them. */
+	public function hashLinkBuildId(code:HlCode):String {
+		var known = encoded(code), id = known.buildId;
+		if (id == null) {
+			id = build.execution.ContentDigest.makeHex(known.bytes.flatten());
+			known.buildId = id;
+		}
+		return id;
 	}
 
 	public function writeHashLink(code:HlCode, path:String):Void
@@ -395,7 +418,20 @@ class CompilerSession {
 		var cached = requestSources.get(key);
 		if (cached != null)
 			return cached;
-		var text = FileVersion.readSource(key);
+		var known = sourceReads.get(key), text:String;
+		var current = known != null && known.settled ? FileVersion.of(key) : null;
+		if (known != null && current != null && current.compare(known.version) == 0)
+			text = known.text;
+		else {
+			var read = FileVersion.readVersionedSource(key);
+			// The same text keeps the String the modules hold, which they then find unchanged without reading it.
+			text = known != null && known.text == read.text ? known.text : read.text;
+			sourceReads.set(key, {
+				version: read.version,
+				text: text,
+				settled: known != null && known.version.compare(read.version) == 0
+			});
+		}
 		requestSources.set(key, text);
 		return text;
 	}

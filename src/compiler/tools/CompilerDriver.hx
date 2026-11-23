@@ -182,8 +182,11 @@ class CompilerDriver {
 			var baselineOutput = request.baselineOutput;
 			if (baselineOutput != null)
 				compilerSession.writeBaseline(baselineOutput);
-			File.saveContent(request.output + ".build-id",
-				build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
+			// A session works the HashLink module's id out from the bytes it wrote, once for an unchanged module.
+			var buildId = session == null
+				|| isWasm ? build.execution.ContentDigest.makeHex(File.getBytes(request.output))
+				: session.hashLinkBuildId(BackendArtifacts.hashLink(result.artifact).module);
+			File.saveContent(request.output + ".build-id", buildId);
 			if (request.xmlOutput != null)
 				File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 			if (request.irOutput != null)
