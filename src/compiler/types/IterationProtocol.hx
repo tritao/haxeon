@@ -37,16 +37,62 @@ class IterationProtocol {
 		return TAnonymous(SemanticSignature.anonymousTypeName(fields), fields);
 	}
 
+	/**
+	 * Haxe's `KeyValueIterator<K, V>`, an `Iterator<{key:K, value:V}>`, or its `KeyValueIterable<K, V>`, a structure whose
+	 * `keyValueIterator()` makes one (`StdTypes.hx`).
+	 */
+	public static function keyValueContract(name:String, key:CompilerType, value:CompilerType):CompilerType {
+		var entryFields:Array<AnonymousField> = [
+			{
+				name: "key",
+				type: key,
+				optional: false,
+				isFinal: false
+			},
+			{
+				name: "value",
+				type: value,
+				optional: false,
+				isFinal: false
+			}
+		];
+		var iterator = contract("Iterator", TAnonymous(SemanticSignature.anonymousTypeName(entryFields), entryFields));
+		if (name == "KeyValueIterator")
+			return iterator;
+		var fields:Array<AnonymousField> = [
+			{
+				name: "keyValueIterator",
+				type: TFunction([], iterator, []),
+				optional: false,
+				isFinal: true
+			}
+		];
+		return TAnonymous(SemanticSignature.anonymousTypeName(fields), fields);
+	}
+
+	/** The iteration contract `type` is: "Iterator", "Iterable", "KeyValueIterable", or null for any other type. */
 	public static function name(type:CompilerType):Null<String>
 		return switch type {
 			case TAnonymous(_, fields) if (iteratorFields(fields)): "Iterator";
-			case TAnonymous(_, [field]) if (field.name == "iterator" && field.isFinal && !field.optional):
+			case TAnonymous(_,
+				[field]) if ((field.name == "iterator" || field.name == "keyValueIterator") && field.isFinal
+				&& !field.optional):
 				switch field.type {
-					case TFunction([], TAnonymous(_, fields), _) if (iteratorFields(fields)): "Iterable";
+					case TFunction([], TAnonymous(_, fields), _) if (iteratorFields(fields)):
+						field.name == "iterator" ? "Iterable" : "KeyValueIterable";
 					default: null;
 				}
 			default: null;
 		};
+
+	/** The element `type` gives as the iteration contract `protocol` (`name`) reads it: a key-value iterable's is its entry. */
+	public static function protocolElement(declarations:DeclarationIndex, type:CompilerType,
+			protocol:String):Null<CompilerType> {
+		if (protocol != "KeyValueIterable")
+			return element(declarations, type, protocol == "Iterable");
+		var iterator = result(declarations, type, "keyValueIterator");
+		return iterator == null ? null : element(declarations, iterator, false);
+	}
 
 	static function iteratorFields(fields:Array<AnonymousField>):Bool {
 		if (fields.length != 2)

@@ -189,6 +189,12 @@ class StringTools {
 		return s.charCodeAt(index);
 	}
 
+	/** Each index of `s` with its UTF-16 code unit, as Haxe's `haxe.iterators.StringKeyValueIterator`. */
+	public static function keyValueIterator(s:String):KeyValueIterator<Int, Int> {
+		var offset = 0;
+		return {hasNext: () -> offset < s.length, next: () -> {key: offset, value: unsafeCodeAt(s, offset++)}};
+	}
+
 	/** Tells whether `c`, as returned by `fastCodeAt`, marks the end of the string. */
 	public static inline function isEof(c:Int):Bool {
 		return c == -1;

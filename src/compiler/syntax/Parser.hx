@@ -1669,7 +1669,8 @@ class Parser {
 	}
 
 	function parseArrowFunctionBody():Array<AstStatement> {
-		if (check(TokenKind.LeftBrace)) {
+		// `{name: ...}` is an object literal, as anywhere a value starts (`() -> {key: k, value: v}`); any other brace opens a block.
+		if (check(TokenKind.LeftBrace) && !startsObjectLiteralFields()) {
 			var statements = parseStatementOrBlock();
 			// As in Haxe, the value of an arrow function's block is its last expression. A callback that is expected
 			// to return nothing discards it, as it does the value of an expression body.
@@ -1685,6 +1686,11 @@ class Parser {
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
 	}
+
+	/** Whether the `{` at the current token starts an object literal's first field, `name:` or `"name":`. */
+	function startsObjectLiteralFields():Bool
+		return (peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral)
+			&& peekKind(2) == TokenKind.Colon;
 
 	/** An `if` without an `else` in an expression's place, as Haxe reads it: a statement whose branch ends with the expression. */
 	function parseVoidIf():AstStatement {
@@ -2427,10 +2433,7 @@ class Parser {
 		}
 		// `{` opens an object literal when empty or starting with `name:` or `"name":`, and a block expression valued by its last expression
 		// otherwise.
-		if (check(TokenKind.LeftBrace)
-			&& peekKind(1) != TokenKind.RightBrace
-			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral)
-			&& peekKind(2) == TokenKind.Colon))
+		if (check(TokenKind.LeftBrace) && peekKind(1) != TokenKind.RightBrace && !startsObjectLiteralFields())
 			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
 			var start = spanOf(previous()), fields = [];

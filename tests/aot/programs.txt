@@ -334,6 +334,7 @@ map-for-in
 map-hash-index
 map-int
 map-key-value-for-in
+map-key-value-iterator
 map-literal
 map-nested-values
 map-nullable-get

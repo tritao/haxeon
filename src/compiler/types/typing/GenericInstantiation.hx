@@ -112,9 +112,9 @@ class GenericInstantiation {
 				fn.arguments[index].span))) {
 				// The value's element meets the parameter's, as a coerced argument's type does: `Lambda.has([], 3)` makes `[]` an
 				// Array<Int>.
-				var iterates = IterationProtocol.name(expected) == "Iterable",
-					actualElement = IterationProtocol.element(session.declarations, argument.type, iterates),
-					expectedElement = IterationProtocol.element(session.declarations, expected, iterates);
+				var protocol = IterationProtocol.name(expected),
+					actualElement = IterationProtocol.protocolElement(session.declarations, argument.type, protocol),
+					expectedElement = IterationProtocol.protocolElement(session.declarations, expected, protocol);
 				if (actualElement != null && expectedElement != null)
 					Monomorphs.unify(actualElement, expectedElement);
 				if (!session.relations.isAssignable(argument.type, expected))
@@ -478,6 +478,18 @@ class GenericInstantiation {
 					var element = IterationProtocol.element(session.declarations, actual, name == "Iterable");
 					if (element != null)
 						inferTypeParameters(patternArguments[0], element, parameters, substitutions, span);
+				}
+				// A key-value iterator's entries fix its key and value types: `{key:K, value:V}`.
+				if ((name == "KeyValueIterator" || name == "KeyValueIterable") && patternArguments.length == 2) {
+					var entry = IterationProtocol.protocolElement(session.declarations, actual,
+						name == "KeyValueIterator" ? "Iterator" : name);
+					if (entry != null)
+						for (index => field in ["key", "value"]) {
+							var found = IterationProtocol.method(session.declarations, entry, field);
+							if (found != null)
+								inferTypeParameters(patternArguments[index], found.type, parameters, substitutions,
+									span);
+						}
 				}
 				var projected = session.declarations.inheritance.project(actual, name);
 				if (projected != null)

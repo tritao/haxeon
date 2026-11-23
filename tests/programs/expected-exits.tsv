@@ -141,6 +141,7 @@ wasm-bytes-compare	42
 map-for-in	52
 map-nested-values	42
 map-key-value-for-in	42
+map-key-value-iterator	42
 map-nullable-get	42
 map-unboxed-values	42
 map-string-equality	42
@@ -674,3 +675,4 @@ array-native-null-access	42
 float-to-int-range	42
 loop-bounds-replaced-array	42
 enum-abstract-value-scope	42
+key-value-iteration	42

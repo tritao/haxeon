@@ -540,6 +540,11 @@ class DeclarationIndex {
 					if (arguments.length != 1)
 						fail('Type "$name" expects 1 type argument, got ${arguments.length}', span);
 					IterationProtocol.contract(name, resolveInner(arguments[0], span, resolving, substitutions));
+				} else if (name == "KeyValueIterator" || name == "KeyValueIterable") {
+					if (arguments.length != 2)
+						fail('Type "$name" expects 2 type arguments, got ${arguments.length}', span);
+					IterationProtocol.keyValueContract(name, resolveInner(arguments[0], span, resolving, substitutions),
+						resolveInner(arguments[1], span, resolving, substitutions));
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)

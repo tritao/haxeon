@@ -150,8 +150,8 @@ class ConversionResolver {
 			// A value that iterates meets an iteration structure element by element: an Array<String> fills `Iterable<?>`.
 			var protocol = IterationProtocol.name(expected);
 			if (protocol != null) {
-				var actualElement = IterationProtocol.element(session.declarations, value.type, protocol == "Iterable"),
-					expectedElement = IterationProtocol.element(session.declarations, expected, protocol == "Iterable");
+				var actualElement = IterationProtocol.protocolElement(session.declarations, value.type, protocol),
+					expectedElement = IterationProtocol.protocolElement(session.declarations, expected, protocol);
 				if (actualElement != null && expectedElement != null) {
 					Monomorphs.unify(actualElement, expectedElement);
 					expected = Monomorphs.resolve(expected);

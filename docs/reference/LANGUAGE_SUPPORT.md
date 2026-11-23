@@ -70,6 +70,13 @@ The current subset includes:
 - Haxe's `Lambda` over arrays, maps and iterables, `flatten` and `flatMap` included. A callback's result that names a type
   parameter nothing has fixed yet is a type variable its body fills, as in Haxe: `Lambda.flatMap(words, w -> w.split(""))`
   returns an array as the `Iterable<S>` it declares, and a statement body makes it Void.
+- Key/value iteration as in Haxe: `for (key => value in x)` and key/value comprehensions over a class or structure,
+  through `x.keyValueIterator()` or over `x` itself when it is an iterator of `{key, value}`; the
+  `KeyValueIterator<K, V>` and `KeyValueIterable<K, V>` types, which a class with a `keyValueIterator()` converts to;
+  `keyValueIterator()` on a map (`haxeon.MapMethods`: its keys taken when the iterator is made, each value read when
+  `next()` reaches it), an array or a `ReadOnlyArray` (`haxeon.ArrayMethods`), and a String with `using StringTools`.
+  Not yet: a map or an array passed where a `KeyValueIterable` is expected, `Map.toString()` (and Haxe's printing of a
+  map), and `keys()`, `iterator()`, `keyValueIterator()` and `copy()` on `haxe.ds.ObjectMap`.
 - Arrays and compiler-owned primitive, string, and reference array operations
 - `Map` keyed by `String`, `Int`, an enum, or a struct that conforms to `Hashable`, holding primitive, reference or
   value-class values. A class or interface cannot be a key (classes cannot conform to `Hashable`), so there is no

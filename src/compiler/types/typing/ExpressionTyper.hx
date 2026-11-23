@@ -1383,22 +1383,50 @@ class ExpressionTyper {
 	 */
 	static function bindElement(element:String, held:TemporaryLocal, index:String, expression:AstExpression,
 			span:SourceSpan):AstExpression
-		return switch expression {
-			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
-				ArrayComprehension(innerKey, innerValue, bindElement(element, held, index, iterable, span),
-					bindOptional(element, held, index, filter, span),
-					bindElement(element, held, index, value, span), true, innerSpan);
-			default:
-				BlockExpression([
-					VarDeclaration(element, null,
-						Index(TemporaryVariable(held, span), DeclaredVariable(index, span.start,
-						span), span), span)
-				], expression, span);
-		};
+		return bindAround([
+			VarDeclaration(element, null,
+				Index(TemporaryVariable(held, span), DeclaredVariable(index, span.start, span), span),
+				span)
+		], expression, span);
 
 	static function bindOptional(element:String, held:TemporaryLocal, index:String, expression:Null<AstExpression>,
 			span:SourceSpan):Null<AstExpression>
 		return expression == null ? null : bindElement(element, held, index, expression, span);
+
+	/** `expression` evaluated after `bindings`, which go into each part of a flattened inner comprehension (`bindElement`). */
+	static function bindAround(bindings:Array<AstStatement>, expression:AstExpression, span:SourceSpan):AstExpression
+		return switch expression {
+			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
+				ArrayComprehension(innerKey, innerValue, bindAround(bindings, iterable, span),
+					filter == null ? null : bindAround(bindings, filter, span), bindAround(bindings, value, span), true,
+					innerSpan);
+			default:
+				BlockExpression(bindings, expression, span);
+		};
+
+	/**
+	 * A comprehension `for (key => value in iterable)` over anything but an array or a map, as a loop over its entries
+	 * (`StatementTyper.keyValueSource`): `make` builds it from the entries' iterator, the loop variable and the bindings of `key`
+	 * and `value` from each entry. Null for an array, a map or a range, which have their own key-value loops.
+	 */
+	function keyValueComprehension(keyName:String, valueName:String, iterable:AstExpression,
+			typedIterable:TypedExpression,
+			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
+			make:(AstExpression, String, Array<AstStatement>) -> AstExpression):Null<TypedExpression> {
+		var type = typedIterable.type;
+		if (!IterationProtocol.structuralIterator(type) && !type.match(TIterator(_)))
+			return null;
+		var held = new TemporaryLocal("__haxeon_key_value_iterator" + span.start),
+			entry = "__haxeon_key_value_entry" + span.start,
+			bindings:Array<AstStatement> = [
+				VarDeclaration(keyName, null, Member(DeclaredVariable(entry, span.start, span), "key", span), span),
+				VarDeclaration(valueName, null, Member(DeclaredVariable(entry, span.start, span), "value", span), span)
+			];
+		return bodyTyper.typeExpression(BlockExpression([
+			TemporaryDeclaration(held, null, StatementTyper.keyValueSource(session, iterable, typedIterable, span),
+				span)
+		], make(TemporaryVariable(held, span), entry, bindings), span), scope, expectedType);
+	}
 
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression,
 			predicate:Null<AstExpression>, value:AstExpression,
@@ -1424,6 +1452,15 @@ class ExpressionTyper {
 			keyName,
 			valueName
 		]);
+		if (valueName != null) {
+			var entries = keyValueComprehension(keyName, valueName, iterable, typedIterable, span, scope, expectedType,
+				(entries, entry, bindings) -> ArrayComprehension(entry, null, entries,
+				predicate == null ? null : bindAround(bindings, predicate, span), bindAround(bindings, value, span),
+				flattened,
+				span));
+			if (entries != null)
+				return entries;
+		}
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {
@@ -1563,6 +1600,14 @@ class ExpressionTyper {
 				keyName,
 				valueName
 			]);
+		if (valueName != null) {
+			var entries = keyValueComprehension(keyName, valueName, iterable, typedIterable, span, scope, expectedType,
+				(entries, entry, bindings) -> MapComprehension(entry, null, entries,
+				predicate == null ? null : bindAround(bindings, predicate, span), bindAround(bindings, key, span),
+				bindAround(bindings, value, span), span));
+			if (entries != null)
+				return entries;
+		}
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {

@@ -10,6 +10,7 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.ArrayLibrary;
+import compiler.runtime.MapLibrary;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstAbstract;
@@ -2917,7 +2918,8 @@ class CallResolver {
 			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("contains"), [receiver, value]),
 				TBool, span) : arraySearch("contains", receiver, value, span, false);
 		}
-		var library = typeLibraryArrayMethod(receiver, name, arguments, span, scope);
+		var library = ArrayLibrary.provides(name) ? typeLibraryMethod(ArrayLibrary.CLASS_NAME, "Array", receiver, name,
+			arguments, span, scope) : null;
 		if (library != null)
 			return library;
 		throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
@@ -2937,21 +2939,22 @@ class CallResolver {
 			default: false;
 		};
 
-	/** `values.name(arguments)` as `haxeon.ArrayMethods.name(values, arguments)`, when the library defines it. */
-	function typeLibraryArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
-			span:SourceSpan, scope:Scope):Null<TypedExpression> {
-		if (!ArrayLibrary.provides(name))
-			return null;
-		var methodKey = ArrayLibrary.CLASS_NAME + "." + name,
+	/**
+	 * `receiver.name(arguments)` as `library.name(receiver, arguments)` when the stdlib class `library` defines it, for the array
+	 * and map methods written in Haxe (`ArrayLibrary`, `MapLibrary`); `kind` names the receiver's type in errors.
+	 */
+	function typeLibraryMethod(library:String, kind:String, receiver:TypedExpression, name:String,
+			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		var methodKey = library + "." + name,
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			return null;
 		if (arguments.length + 1 > method.arguments.length)
-			fail("E1008", 'Array.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}',
+			fail("E1008", '$kind.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}',
 				span);
 		var prepared = typeGenericCallArguments(method, arguments, scope, span, [receiver]);
-		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope,
-			ArrayLibrary.CLASS_NAME, true, prepared.substitutions);
+		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, library, true,
+			prepared.substitutions);
 	}
 
 	function iterator(values:TypedExpression, element:CompilerType, span:SourceSpan):TypedExpression {
@@ -3060,8 +3063,13 @@ class CallResolver {
 				fail("E1008", "Map.size expects no arguments", span);
 			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
 		}
-		if (name != "exists" && name != "remove" && name != "get")
+		if (name != "exists" && name != "remove" && name != "get") {
+			var library = MapLibrary.provides(name) ? typeLibraryMethod(MapLibrary.CLASS_NAME, "Map", receiver, name,
+				arguments, span, scope) : null;
+			if (library != null)
+				return library;
 			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
+		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, mapType.key), mapType.key, "map key",

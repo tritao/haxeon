@@ -984,6 +984,9 @@ class StatementTyper {
 							Range(IntegerLiteral(0, span), Member(TemporaryVariable(array, span), "length",
 							span), span), loopBody, span)
 					], [], span, scope, result);
+				case TMap(_, _):
+				case type if (IterationProtocol.structuralIterator(type) || type.match(TIterator(_))):
+					return typeKeyValueForIn(name, valueName, iterable, typedIterable, body, span, scope, result);
 				default:
 			}
 		var originalIterable = typedIterable;
@@ -1054,6 +1057,46 @@ class StatementTyper {
 		}
 		return TForIn(keyBinding.id, valueId, valueName == null ? typedIterable : originalIterable,
 			typedBody, span);
+	}
+
+	/**
+	 * `for (key => value in iterable)` over anything but an array or a map, as Haxe types it: a loop over the entries of
+	 * `keyValueSource`, each `next()` giving the `key` and `value` fields the loop binds afresh for every step.
+	 */
+	function typeKeyValueForIn(name:String, valueName:String, iterable:AstExpression, typedIterable:TypedExpression,
+			body:Array<AstStatement>, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+		var iterator = new TemporaryLocal("__haxeon_key_value_iterator" + span.start),
+			entry = new TemporaryLocal("__haxeon_key_value_entry" + span.start),
+			step:Array<AstStatement> = [
+				TemporaryDeclaration(entry, null, MethodCall(TemporaryVariable(iterator, span), "next", [], span),
+					span),
+				VarDeclaration(name, null, Member(TemporaryVariable(entry, span), "key", span), span),
+				VarDeclaration(valueName, null, Member(TemporaryVariable(entry, span), "value", span), span)
+			];
+		for (statement in body)
+			step.push(statement);
+		return typeIf(BoolLiteral(true, span), [
+			TemporaryDeclaration(iterator, null, keyValueSource(session, iterable, typedIterable, span), span),
+			While(MethodCall(TemporaryVariable(iterator, span), "hasNext", [], span), step, span)
+		], [], span, scope, result);
+	}
+
+	/**
+	 * The iterator a key-value loop over `iterable` (typed as `typedIterable`, neither an array nor a map) reads its entries from,
+	 * as Haxe finds it: the value's `keyValueIterator()`, else the value itself when it is an iterator. Its entries must have
+	 * `key` and `value` fields; Haxe reports a missing one at the iterated expression (`Int has no field key`).
+	 */
+	public static function keyValueSource(session:TypingSession, iterable:AstExpression, typedIterable:TypedExpression,
+			span:SourceSpan):AstExpression {
+		var type = typedIterable.type, declarations = session.declarations;
+		var iteratorType = IterationProtocol.result(declarations, type, "keyValueIterator");
+		var entryType = IterationProtocol.element(declarations, iteratorType ?? type, false);
+		if (entryType == null)
+			throw MissingMember.field(MissingMember.haxeType(type), "keyValueIterator", typedIterable.span);
+		for (field in ["key", "value"])
+			if (!entryType.match(TDynamic) && IterationProtocol.method(declarations, entryType, field) == null)
+				throw MissingMember.field(MissingMember.haxeType(entryType), field, typedIterable.span);
+		return iteratorType == null ? iterable : MethodCall(iterable, "keyValueIterator", [], span);
 	}
 
 	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>,

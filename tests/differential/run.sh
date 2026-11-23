@@ -476,6 +476,10 @@ in_background run_compile_failure switch-wrong-enum-pattern-call
 in_background run_compile_failure switch-wrong-enum-pattern-nested
 in_background run_compile_failure switch-wrong-enum-pattern-array
 in_background run_compile_failure tuple-switch-wrong-enum-pattern
+# Key-value loops over a custom type's keyValueIterator(), KeyValueIterable and KeyValueIterator, and Map's.
+in_background run_case key-value-custom-iteration 0 hl main
+in_background run_error_case key-value-for-in-missing
+in_background run_error_case key-value-entry-fields
 status=0
 for index in "${!pids[@]}"; do
 	wait "${pids[$index]}" || status=1
