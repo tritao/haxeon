@@ -170,6 +170,8 @@ perf-guard                       ci          -- python3 scripts/perf-guard.py
 # The last commits that change src/compiler replayed as edits in one compile server session with the reuse checks, each warm
 # build the bytes of a fresh one: the byte-identical self-compile never builds warm.
 edit-replay                      ci          -- python3 tests/integration/test-edit-replay.py
+# The same with the last two commits, in the wave: a warm build that differs from a fresh one shows before CI.
+edit-replay-short                wave        -- python3 tests/integration/test-edit-replay.py 2
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py
 jit-stack-probe                  ci          -- python3 tests/integration/test-jit-stack-probe.py
 jit-catch-registers              ci          -- python3 tests/integration/test-jit-catch-registers.py

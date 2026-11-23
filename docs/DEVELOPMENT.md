@@ -80,7 +80,9 @@ it is skipped and passes. This part adds about three minutes.
 The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
 no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
 instructions of every process the command starts and the bytes the server allocated for the request; the CLI's wall is printed.
-`--only=self-compile`, `--only=incremental` or `--only=small-project` runs one part.
+`--only=self-compile`, `--only=incremental` or `--only=small-project` runs one part. The `edit-replay-short` suite (`wave`)
+replays the last two commits that change `src/compiler` as warm builds in one server, each checked against a fresh build;
+`edit-replay` (`ci`) replays four.
 
 Every metric fails the run beyond its tolerance, but the primary ones are what the compiler is optimized for, in this order:
 edit latency in the compile server (the no-op floor, the body edit, the signature edit), startup (the small project's cold build and check), and the server's live data, weighted
