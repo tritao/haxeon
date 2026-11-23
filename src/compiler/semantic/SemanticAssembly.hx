@@ -941,10 +941,10 @@ class SemanticAssembly {
 			[for (decl in abstracts) decl.name => decl];
 		var purityScopeSignatures:Map<String, AstFunction> = [];
 		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
-		var isAnnotatedPure =
-			function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
-			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures,
-			purityScopeClasses);
+		// The typer's own seed (`TypingSession.isDeclaredPure`): with any other, a body that asked about a generated helper the
+		// typer counts as pure (a flags or raw-representable helper) looks drifted on every edit.
+		var isAnnotatedPure = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
+			.isDeclaredPure(candidate, purityScopeSignatures, purityScopeClasses);
 		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
 			.isTypeName(candidate, purityScopeClasses,
 			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);

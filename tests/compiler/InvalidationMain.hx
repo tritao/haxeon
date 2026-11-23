@@ -72,6 +72,25 @@ class InvalidationMain {
 		var commented = wire.compile("messagepack-wire");
 		expect(commented.retyped.length == 0, "a comment-only edit retyped " + commented.retyped);
 
+		// The typer counts a generated flags helper as pure. The drift check must count it the same way, or a body that calls one
+		// looks drifted whenever purity is inferred again: on every edit anywhere.
+		var flags = new Compiler();
+		CompilerIntrinsics.register(flags);
+		flags.addStandardLibrarySourceRoot("stdlib");
+		flags.update("Perm.hx", "enum abstract Perm(Int) implements Flags { var Read = 1; var Write = 2; }");
+		// A call the typer knows is pure keeps what a check narrowed: `name` stays a String across `contains`.
+		flags.update("Uses.hx", "class Uses { var name:Null<String> = \"a\"; public function new() {}\n"
+			+ "public function allowed(p:Perm):Int { if (name != null && p.contains(Perm.Read)) return name.length; return 0; } }");
+		var flagsMain = (value:Int) -> "function other():Int return " + value + ";\n"
+			+ "function main():Int return new Uses().allowed(Perm.Read) + other();";
+		flags.update("Main.hx", flagsMain(1));
+		flags.compile("Main");
+		flags.update("Main.hx", flagsMain(2));
+		var flagsEdit = flags.compile("Main");
+		for (name in flagsEdit.retyped)
+			expect(!StringTools.startsWith(name, "Uses."), "an edit elsewhere retyped a caller of a flags helper: "
+				+ flagsEdit.retyped);
+
 		// A lambda is retyped with the function it is written in, and only then: editing `run` retypes the lambda inside it, while
 		// editing `other` leaves it alone.
 		var closures = new Compiler();
