@@ -1,5 +1,7 @@
 package compiler.hl.lower;
 
+import compiler.core.InternalError;
+import compiler.ir.model.Ir.IrCNative;
 import compiler.ir.model.Ir.IrScalarStorage;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBody;
@@ -147,7 +149,245 @@ class HlLoweringDecisions {
 				"__array_push_ref": ArrayPush;
 			case "__bytes_get": BytesGet;
 			case "__bytes_try_set": BytesSet;
-			case HlLower.VALUE_ARRAY_VALIDATE: ValueArrayValidate;
-			default: StringTools.startsWith(name, HlLower.VALUE_ARRAY_READ) ? ValueArrayRead : Plain;
+			case VALUE_ARRAY_VALIDATE: ValueArrayValidate;
+			default: StringTools.startsWith(name, VALUE_ARRAY_READ) ? ValueArrayRead : Plain;
 		};
+
+	/** The runtime's value array natives: the check of an element, and its scalar reads, `VALUE_ARRAY_READ` and a width. */
+	public static inline final VALUE_ARRAY_VALIDATE = "__value_array_validate";
+
+	public static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
+
+	public static inline final VALUE_ARRAY_READ = "__value_array_read_";
+
+	/**
+	 * Whether a scalar read of the same element as the read at `position`, whose value is used, is beside it, with nothing
+	 * but constants and reads of that element between: that read checks the element (in range, present) as this one would.
+	 */
+	public static function usedReadNearby(body:IrBody, row:Int, uses:Array<Int>):Bool {
+		return usedReadBeside(body, row, uses, true) || usedReadBeside(body, row, uses, false);
+	}
+
+	/** `usedReadNearby` on one side of `row`: the rows before it, or those after it. */
+	static function usedReadBeside(body:IrBody, row:Int, uses:Array<Int>, before:Bool):Bool {
+		var array = body.operand(row, 0),
+			index = body.operand(row, 1),
+			at = before ? body.previousRow(row) : body.nextRow(row);
+		while (at >= 0) {
+			switch body.opcode(at) {
+				case IrOpcode.ConstInt, IrOpcode.ConstBool:
+				case IrOpcode.Call if (StringTools.startsWith(body.symbol(at).name, VALUE_ARRAY_READ)
+					&& body.operandCount(at) >= 2 && (body.operand(at, 0):Int) == (array:Int)
+					&& (body.operand(at, 1):Int) == (index:Int)):
+					if (uses[body.output(at)] > 0)
+						return true;
+				default:
+					break;
+			}
+			at = before ? body.previousRow(at) : body.nextRow(at);
+		}
+		return false;
+	}
+
+	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
+	public static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
+
+	public static inline final VALUE_ARRAY_FORWARD_TYPE = "__value_array_forward_type";
+
+	/** Where a value array keeps its scalar stride in bits, and an array its size and data; `value_arrays.c` asserts them. */
+	public static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
+
+	public static inline final ARRAY_SIZE_OFFSET = 16;
+
+	/** Where a value array keeps its validity lane (`value_arrays.c` asserts it). */
+	public static inline final VALUE_ARRAY_VALIDITY_OFFSET = 104;
+	public static inline final ARRAY_DATA_OFFSET = 24;
+
+	/** The type word at the start of an array's storage. */
+	public static inline final LANE_HEADER_BYTES = 8;
+
+	/** How far back from a call its constant arguments are looked for; the IR emits them right before it. */
+	public static inline final CONSTANT_LOOKBACK = 8;
+
+	/** The Int or Bool constant (a Bool as 0 or 1) `value` is, when its definition is just before `index`; else -1. */
+	static function constantBefore(body:IrBody, row:Int, value:IrValueId):Int {
+		var position = body.previousRow(row), remaining = CONSTANT_LOOKBACK;
+		while (position >= 0 && remaining > 0) {
+			if ((body.output(position):Int) == (value:Int))
+				switch body.opcode(position) {
+					case IrOpcode.ConstInt:
+						return body.aux(position);
+					case IrOpcode.ConstBool:
+						return body.aux(position) == 1 ? 1 : 0;
+					default:
+				}
+			position = body.previousRow(position);
+			remaining--;
+		}
+		return -1;
+	}
+
+	/** Whether a value array of `array`'s type is read inline (`hasValidity` tells how). */
+	public static function readsInline(array:IrType):Bool
+		return switch array {
+			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))), Array(Obj(_)): true;
+			default: false;
+		};
+
+	/**
+	 * Whether a value array of `array`'s type keeps a presence bit per element (`IrValueArrayLayout`): arrays of non-null
+	 * structs do; enums (their null is tag zero) and nullable structs do not.
+	 */
+	public static function hasValidity(array:IrType):Bool
+		return switch array {
+			case Array(Obj(_)): true;
+			default: false;
+		};
+
+	/**
+	 * The slot `__value_array_read_i32` at `index` of `instructions` reads, as constants, when it is read inline
+	 * (`lowerValueArrayRead`); null otherwise.
+	 */
+	public static function inlineValueArraySlot(body:IrBody, row:Int):Null<InlineValueSlot> {
+		if (body.operandCount(row) != 5 || !readsInline(body.valueType(body.operand(row, 0))))
+			return null;
+		var offset = constantBefore(body, row, body.operand(row, 2)),
+			width = constantBefore(body, row, body.operand(row, 3)),
+			signed = constantBefore(body, row, body.operand(row, 4));
+		return offset >= 0 && offset % 8 == 0 && signed >= 0 && (width == 8 || width == 16 || width == 32)
+			? {offset: offset, width: width, signed: signed == 1} : null;
+	}
+
+	/**
+	 * Whether the first instruction from `start` on that is not a constant reads a scalar of the element `validate` checks.
+	 * The HashLink runtime's scalar reads validate their element as `__value_array_validate` does, with the same errors, so
+	 * a validation right before one adds nothing: a payload-free enum element is read as exactly that pair.
+	 */
+	public static function scalarReadFollows(body:IrBody, row:Int):Bool {
+		if (body.operandCount(row) != 2)
+			return false;
+		var array = body.operand(row, 0), index = body.operand(row, 1), position = body.nextRow(row);
+		while (position >= 0) {
+			switch body.opcode(position) {
+				case IrOpcode.ConstInt, IrOpcode.ConstBool:
+				case IrOpcode.Call:
+					return StringTools.startsWith(body.symbol(position).name, "__value_array_read_")
+						&& body.operandCount(position) >= 2 && (body.operand(position, 0):Int) == (array:Int)
+						&& (body.operand(position, 1):Int) == (index:Int);
+				default:
+					return false;
+			}
+			position = body.nextRow(position);
+		}
+		return false;
+	}
+
+	/** The native an iterator's `next` calls for elements of type `element`, and what it returns. */
+	public static function iteratorNextNative(element:IrType):{name:String, result:IrType} return switch element {
+		case F64: {name: "__iterator_next_f64", result: IrType.F64};
+		case I32: {name: "__iterator_next_i32", result: IrType.I32};
+		default: {name: "__iterator_next", result: IrType.Dyn};
+	};
+
+	/**
+	 * How a call of ordinary C function `native` with `argumentCount` arguments goes through the runtime's dispatch: the invoke
+	 * native, the strings (library, symbol, signature, then for a pointer result its ownership, release and length) and the
+	 * nullable flag, which go before the boxed arguments with the flag last, the type the invoker returns, and whether
+	 * that is cast to the result. Both HashLink backends call it so.
+	 */
+	public static function cNativeInvocation(native:IrCNative, argumentCount:Int):{
+		invoker:String,
+		strings:Array<String>,
+		nullable:Null<Bool>,
+		result:IrType,
+		castsResult:Bool,
+		isVoid:Bool
+	} {
+		var functionName = native.name;
+		for (type in native.arguments)
+			if (unsupportedCDispatchArgument(type))
+				throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
+		var isVoid = switch (native.result) {
+			case Void: true;
+			default: false;
+		};
+		if (!isVoid && unsupportedCDispatchResult(native.result))
+			throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
+		var strings = [native.library, native.symbol, native.signature];
+		var pointerResult = isNativePointer(native.result),
+			bytesResult = isManagedPointerBytes(native),
+			aggregateResult = isAggregateResult(native),
+			utf8Result = isUtf8Result(native);
+		var nullable:Null<Bool> = null;
+		if (pointerResult || bytesResult || utf8Result) {
+			strings.push(native.pointerOwnership);
+			strings.push(native.pointerRelease == null ? "" : native.pointerRelease);
+			// A bytes result is one with a length (`isManagedPointerBytes`).
+			var length = native.pointerLength;
+			if (bytesResult && length != null)
+				strings.push(length);
+			nullable = native.pointerNullable;
+		}
+		return {
+			invoker: pointerResult ? '__c_native_pointer_invoke_${argumentCount}' : bytesResult
+				? '__c_native_bytes_invoke_${argumentCount}' : aggregateResult
+				? '__c_native_aggregate_invoke_${argumentCount}' : utf8Result
+				? '__c_native_utf8_invoke_${argumentCount}' : '__c_native_invoke_${argumentCount}',
+			strings: strings,
+			nullable: nullable,
+			result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
+				? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
+			castsResult: !(pointerResult || bytesResult || aggregateResult || utf8Result),
+			isVoid: isVoid
+		};
+	}
+
+	static function unsupportedCDispatchArgument(type:IrType):Bool
+		return switch type {
+			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
+				IrType.Abstract("realtime_bytes"),
+				IrType.Abstract("native_pointer"), IrType.Abstract("native_callback"): false;
+			default: true;
+		};
+
+	static function unsupportedCDispatchResult(type:IrType):Bool
+		return switch type {
+			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
+				IrType.Abstract("native_pointer"),
+				IrType.Abstract("realtime_bytes"): false;
+			default: true;
+		};
+
+	public static function isNativePointer(type:IrType):Bool
+		return switch type {
+			case IrType.Abstract("native_pointer"): true;
+			case _: false;
+		};
+
+	public static function isManagedPointerBytes(native:IrCNative):Bool
+		return native.pointerLength != null && switch native.result {
+			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
+			case _: false;
+		};
+
+	public static function isAggregateResult(native:IrCNative):Bool
+		return native.pointerLength == null && switch (native.result) {
+			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
+			case _: false;
+		};
+
+	public static function isUtf8Result(native:IrCNative):Bool {
+		var separator = native.signature.indexOf(">");
+		if (separator < 0)
+			return false;
+		var result = native.signature.substr(separator + 1);
+		return StringTools.startsWith(result, "13") || StringTools.startsWith(result, "14");
+	}
+}
+
+/** A value array scalar slot read inline: its bit offset in the element, its width in bits and whether it is signed. */
+typedef InlineValueSlot = {
+	final offset:Int;
+	final width:Int;
+	final signed:Bool;
 }

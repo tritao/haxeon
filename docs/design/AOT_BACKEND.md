@@ -442,7 +442,7 @@ JIT's exact exit code, stdout and stderr, stack traces included; `tests/aot/prog
 default, and the `ci` suite `aot-programs` runs it. No IR construct of the programs is unsupported.
 
 Milestone 2: the C lowering writes what `HlLower` writes inline, from the same decisions
-(`HlLower`'s value array constants and read selection, `HlLower.cNativeInvocation`): the array push and byte read and write
+(`HlLoweringDecisions`: the value array constants and read selection, `cNativeInvocation`): the array push and byte read and write
 fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves the JIT start-up time, which C does not pay);
 value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
 table prologue of dispatch functions; ordinary C function calls (`CNativeCall`) through the runtime's dispatch. Array bounds

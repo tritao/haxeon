@@ -4,7 +4,6 @@ import compiler.backend.c.HlcTypes.HlcField;
 import compiler.core.InternalError;
 import compiler.hl.HlType;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
-import compiler.hl.lower.HlLower;
 import compiler.hl.lower.HlLoweringDecisions;
 import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.Ir.IrType;
@@ -61,7 +60,7 @@ class HlcFunctionLower {
 	/** The block being lowered, by id. */
 	var currentBlock = -1;
 
-	/** The array values read inline (`HlLower.inlineValueArraySlot`), whose value array view is resolved where they are defined. */
+	/** The array values read inline (`HlLoweringDecisions.inlineValueArraySlot`), whose value array view is resolved where they are defined. */
 	final viewedArrays:Map<Int, Bool> = [];
 
 	public function new(module:HlcModule) {
@@ -125,8 +124,8 @@ class HlcFunctionLower {
 		viewedArrays.clear();
 		var phis:Map<Int, Bool> = [];
 		eachRow(function(block, row) {
-			if (body.opcode(row) == IrOpcode.Call && body.symbol(row).name == HlLower.VALUE_ARRAY_READ_I32
-				&& HlLower.inlineValueArraySlot(body, row) != null)
+			if (body.opcode(row) == IrOpcode.Call && body.symbol(row).name == HlLoweringDecisions.VALUE_ARRAY_READ_I32
+				&& HlLoweringDecisions.inlineValueArraySlot(body, row) != null)
 				viewedArrays.set(body.operand(row, 0), true);
 			switch body.opcode(row) {
 				case IrOpcode.ConstNull:
@@ -583,7 +582,7 @@ class HlcFunctionLower {
 				callSlot(row, module.requireSlot("__iterator_has_next"), [v(body.operand(row, 0))],
 					[typeOf(body.operand(row, 0))]);
 			case IrOpcode.IteratorNext:
-				var next = compiler.hl.lower.HlLower.iteratorNextNative(body.valueType(output)),
+				var next = compiler.hl.lower.HlLoweringDecisions.iteratorNextNative(body.valueType(output)),
 					slot = module.requireSlot(next.name),
 					call = callExpression(slot, [v(body.operand(row, 0))],
 						[typeOf(body.operand(row, 0))]);
@@ -875,16 +874,17 @@ class HlcFunctionLower {
 				lowerBytesAccess(row, base, false);
 			case ValueArrayRead:
 				// A field of the element nothing reads is dropped: the read beside it checks the element the same way.
-				if (output.exists() && uses[output] == 0 && HlLower.usedReadNearby(body, row, uses))
+				if (output.exists() && uses[output] == 0 && HlLoweringDecisions.usedReadNearby(body, row, uses))
 					return;
-				var slot = name == HlLower.VALUE_ARRAY_READ_I32 ? HlLower.inlineValueArraySlot(body, row) : null;
+				var slot = name == HlLoweringDecisions.VALUE_ARRAY_READ_I32
+					? HlLoweringDecisions.inlineValueArraySlot(body, row) : null;
 				if (slot != null)
 					lowerValueArrayRead(row, slot);
 				else
 					lowerPlainCall(row, name);
 			case ValueArrayValidate:
 				// When a read follows, it checks the same element the same way.
-				if (!HlLower.scalarReadFollows(body, row))
+				if (!HlLoweringDecisions.scalarReadFollows(body, row))
 					lowerPlainCall(row, name);
 			case Plain:
 				lowerPlainCall(row, name);
@@ -914,23 +914,23 @@ class HlcFunctionLower {
 	 * an index in range (or proved by its loop) of an element present, the slot is loaded from the scalar lane; anything
 	 * else calls the native, which raises its errors.
 	 */
-	function lowerValueArrayRead(row:Int, slot:compiler.hl.lower.HlLower.InlineValueSlot):Void {
+	function lowerValueArrayRead(row:Int, slot:compiler.hl.lower.HlLoweringDecisions.InlineValueSlot):Void {
 		var array = body.operand(row, 0), index = body.operand(row, 1), i = v(index), va = 'va$array';
 		var conditions = [va];
 		if (!inRange(array, index))
-			conditions.push('(unsigned)$i < *(unsigned int*)($va + ${HlLower.ARRAY_SIZE_OFFSET})');
-		if (HlLower.hasValidity(body.valueType(array)))
-			conditions.push('((*(vbyte**)($va + ${HlLower.VALUE_ARRAY_VALIDITY_OFFSET}))[${HlLower.LANE_HEADER_BYTES} + ((unsigned)$i >> 3)] >> ($i & 7) & 1)');
+			conditions.push('(unsigned)$i < *(unsigned int*)($va + ${HlLoweringDecisions.ARRAY_SIZE_OFFSET})');
+		if (HlLoweringDecisions.hasValidity(body.valueType(array)))
+			conditions.push('((*(vbyte**)($va + ${HlLoweringDecisions.VALUE_ARRAY_VALIDITY_OFFSET}))[${HlLoweringDecisions.LANE_HEADER_BYTES} + ((unsigned)$i >> 3)] >> ($i & 7) & 1)');
 		var storage = switch slot.width {
 			case 8: slot.signed ? "signed char" : "unsigned char";
 			case 16: slot.signed ? "short" : "unsigned short";
 			default: "int";
 		};
 		var address =
-			'*(vbyte**)($va + ${HlLower.ARRAY_DATA_OFFSET}) + $i * vs$array + ${HlLower.LANE_HEADER_BYTES + (slot.offset >> 3)}';
+			'*(vbyte**)($va + ${HlLoweringDecisions.ARRAY_DATA_OFFSET}) + $i * vs$array + ${HlLoweringDecisions.LANE_HEADER_BYTES + (slot.offset >> 3)}';
 		var id = temporaries++;
 		line('if( ${conditions.join(" && ")} ) { $storage e$id; memcpy(&e$id,$address,sizeof(e$id)); ${target(row)}e$id; }');
-		line('else ${target(row)}${callOf(row, module.requireSlot(HlLower.VALUE_ARRAY_READ_I32))};');
+		line('else ${target(row)}${callOf(row, module.requireSlot(HlLoweringDecisions.VALUE_ARRAY_READ_I32))};');
 	}
 
 	/**
@@ -975,7 +975,8 @@ class HlcFunctionLower {
 		var name = body.symbol(row).name, native = module.cNatives.get(name), count = body.operandCount(row);
 		if (native == null)
 			throw new InternalError('Unknown ordinary C function "$name"');
-		var invocation = HlLower.cNativeInvocation(native, count), slot = module.requireSlot(invocation.invoker);
+		var invocation = HlLoweringDecisions.cNativeInvocation(native, count),
+			slot = module.requireSlot(invocation.invoker);
 		var parameters = module.slotArguments(slot), arguments:Array<String> = [];
 		for (text in invocation.strings) {
 			for (index in 0...text.length)

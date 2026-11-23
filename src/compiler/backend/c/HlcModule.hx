@@ -617,8 +617,8 @@ class HlcModule {
 	 * itself, or a forwarding header's data; null for anything else), and its stride in bytes.
 	 */
 	function valueArrayHelper(buffer:StringBuf):Void {
-		var header = functionPointer(requireSlot(compiler.hl.lower.HlLower.VALUE_ARRAY_HEADER_TYPE)),
-			forward = functionPointer(requireSlot(compiler.hl.lower.HlLower.VALUE_ARRAY_FORWARD_TYPE));
+		var header = functionPointer(requireSlot(compiler.hl.lower.HlLoweringDecisions.VALUE_ARRAY_HEADER_TYPE)),
+			forward = functionPointer(requireSlot(compiler.hl.lower.HlLoweringDecisions.VALUE_ARRAY_FORWARD_TYPE));
 		buffer.add("static hl_type *hlc_value_array_header_t, *hlc_value_array_forward_t;\n");
 		buffer.add("static inline vbyte *hlc_value_array_view( void *header, int *stride ) {\n");
 		buffer.add("\thl_type *t = header ? ((vdynamic*)header)->t : &hlt_void;\n\tvbyte *a;\n");
@@ -626,8 +626,8 @@ class HlcModule {
 		buffer.add("\tif( t == hlc_value_array_header_t ) a = (vbyte*)header;\n\telse {\n");
 		buffer.add('\t\tif( !hlc_value_array_forward_t ) hlc_value_array_forward_t = (hl_type*)$forward();\n');
 		buffer.add('\t\tif( t != hlc_value_array_forward_t ) return NULL;\n');
-		buffer.add('\t\ta = *(vbyte**)((vbyte*)header + ${compiler.hl.lower.HlLower.ARRAY_DATA_OFFSET});\n\t}\n');
-		buffer.add('\tif( a ) *stride = (int)(*(unsigned int*)(a + ${compiler.hl.lower.HlLower.VALUE_ARRAY_STRIDE_OFFSET}) >> 3);\n');
+		buffer.add('\t\ta = *(vbyte**)((vbyte*)header + ${compiler.hl.lower.HlLoweringDecisions.ARRAY_DATA_OFFSET});\n\t}\n');
+		buffer.add('\tif( a ) *stride = (int)(*(unsigned int*)(a + ${compiler.hl.lower.HlLoweringDecisions.VALUE_ARRAY_STRIDE_OFFSET}) >> 3);\n');
 		buffer.add("\treturn a;\n}\n\n");
 	}
 }

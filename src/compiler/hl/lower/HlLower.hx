@@ -4,6 +4,7 @@ import compiler.core.PeakProbe;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.hl.lower.HlLoweringDecisions.HlCallKind;
+import compiler.hl.lower.HlLoweringDecisions.InlineValueSlot;
 import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrFunction;
@@ -284,7 +285,8 @@ class HlLower {
 			var arity = native.arguments.length;
 			if (arity > 16)
 				throw new InternalError('Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"');
-			if ((isNativePointer(native.result) || isManagedPointerBytes(native) || isUtf8Result(native))
+			if ((HlLoweringDecisions.isNativePointer(native.result) || HlLoweringDecisions.isManagedPointerBytes(native)
+				|| HlLoweringDecisions.isUtf8Result(native))
 				&& native.pointerOwnership == "unspecified")
 				throw new InternalError('Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution');
 		}
@@ -303,10 +305,10 @@ class HlLower {
 			dispatchArities:Map<String, Bool> = [];
 		for (native in program.cNatives) {
 			var arity = native.arguments.length;
-			var pointerResult = isNativePointer(native.result),
-				bytesResult = isManagedPointerBytes(native),
-				aggregateResult = isAggregateResult(native),
-				utf8Result = isUtf8Result(native),
+			var pointerResult = HlLoweringDecisions.isNativePointer(native.result),
+				bytesResult = HlLoweringDecisions.isManagedPointerBytes(native),
+				aggregateResult = HlLoweringDecisions.isAggregateResult(native),
+				utf8Result = HlLoweringDecisions.isUtf8Result(native),
 				dispatchKey = '$arity:$pointerResult:$bytesResult:$aggregateResult:$utf8Result';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
@@ -393,7 +395,7 @@ class HlLower {
 	/** The runtime natives lowering the rows of `fn` calls, each once, in the order they come; they depend on nothing else. */
 	static function functionNatives(fn:IrFunction, types:compiler.ir.model.IrTypeIds):Array<IrNative> {
 		var own:Array<IrNative> = [],
-			valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id,
+			valueArrayRead = compiler.ir.model.IrSymbol.of(HlLoweringDecisions.VALUE_ARRAY_READ_I32).id,
 			body = fn.bodyIn(types);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
@@ -422,15 +424,15 @@ class HlLower {
 				ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")],
 					IrType.Bool);
 			case IrOpcode.Call if (body.aux(row) == valueArrayRead && body.operandCount(row) == 5
-				&& readsInline(body.valueType(body.operand(row, 0)))):
-				ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
-				ensureNative(runtimeNatives, VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
+				&& HlLoweringDecisions.readsInline(body.valueType(body.operand(row, 0)))):
+				ensureNative(runtimeNatives, HlLoweringDecisions.VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
+				ensureNative(runtimeNatives, HlLoweringDecisions.VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
 			case IrOpcode.ArrayGet:
 				ensureRawArrayNative(runtimeNatives, body.valueType(body.operand(row, 0)), "check");
 			case IrOpcode.ArraySet:
 				ensureRawArrayNative(runtimeNatives, body.valueType(body.operand(row, 0)), "ensure");
 			case IrOpcode.IteratorNext:
-				var nextNative = iteratorNextNative(body.valueType(body.output(row)));
+				var nextNative = HlLoweringDecisions.iteratorNextNative(body.valueType(body.output(row)));
 				ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")],
 					nextNative.result);
 			default:
@@ -810,111 +812,6 @@ class HlLower {
 			default: true;
 		};
 
-	/** Byte shift of one element of an Int or Float array, whose storage the compiler lays out itself; null for any other array. */
-	public static inline final VALUE_ARRAY_VALIDATE = "__value_array_validate";
-
-	public static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
-
-	public static inline final VALUE_ARRAY_READ = "__value_array_read_";
-
-	/**
-	 * Whether a scalar read of the same element as the read at `position`, whose value is used, is beside it, with nothing
-	 * but constants and reads of that element between: that read checks the element (in range, present) as this one would.
-	 */
-	public static function usedReadNearby(body:IrBody, row:Int, uses:Array<Int>):Bool {
-		return usedReadBeside(body, row, uses, true) || usedReadBeside(body, row, uses, false);
-	}
-
-	/** `usedReadNearby` on one side of `row`: the rows before it, or those after it. */
-	static function usedReadBeside(body:IrBody, row:Int, uses:Array<Int>, before:Bool):Bool {
-		var array = body.operand(row, 0),
-			index = body.operand(row, 1),
-			at = before ? body.previousRow(row) : body.nextRow(row);
-		while (at >= 0) {
-			switch body.opcode(at) {
-				case IrOpcode.ConstInt, IrOpcode.ConstBool:
-				case IrOpcode.Call if (StringTools.startsWith(body.symbol(at).name, VALUE_ARRAY_READ)
-					&& body.operandCount(at) >= 2 && (body.operand(at, 0):Int) == (array:Int)
-					&& (body.operand(at, 1):Int) == (index:Int)):
-					if (uses[body.output(at)] > 0)
-						return true;
-				default:
-					break;
-			}
-			at = before ? body.previousRow(at) : body.nextRow(at);
-		}
-		return false;
-	}
-
-	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
-	public static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
-
-	public static inline final VALUE_ARRAY_FORWARD_TYPE = "__value_array_forward_type";
-
-	/** Where a value array keeps its scalar stride in bits, and an array its size and data; `value_arrays.c` asserts them. */
-	public static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
-
-	public static inline final ARRAY_SIZE_OFFSET = 16;
-
-	/** Where a value array keeps its validity lane (`value_arrays.c` asserts it). */
-	public static inline final VALUE_ARRAY_VALIDITY_OFFSET = 104;
-	public static inline final ARRAY_DATA_OFFSET = 24;
-
-	/** The type word at the start of an array's storage. */
-	public static inline final LANE_HEADER_BYTES = 8;
-
-	/** How far back from a call its constant arguments are looked for; the IR emits them right before it. */
-	public static inline final CONSTANT_LOOKBACK = 8;
-
-	/** The Int or Bool constant (a Bool as 0 or 1) `value` is, when its definition is just before `index`; else -1. */
-	static function constantBefore(body:IrBody, row:Int, value:IrValueId):Int {
-		var position = body.previousRow(row), remaining = CONSTANT_LOOKBACK;
-		while (position >= 0 && remaining > 0) {
-			if ((body.output(position):Int) == (value:Int))
-				switch body.opcode(position) {
-					case IrOpcode.ConstInt:
-						return body.aux(position);
-					case IrOpcode.ConstBool:
-						return body.aux(position) == 1 ? 1 : 0;
-					default:
-				}
-			position = body.previousRow(position);
-			remaining--;
-		}
-		return -1;
-	}
-
-	/** Whether a value array of `array`'s type is read inline (`hasValidity` tells how). */
-	public static function readsInline(array:IrType):Bool
-		return switch array {
-			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))), Array(Obj(_)): true;
-			default: false;
-		};
-
-	/**
-	 * Whether a value array of `array`'s type keeps a presence bit per element (`IrValueArrayLayout`): arrays of non-null
-	 * structs do; enums (their null is tag zero) and nullable structs do not.
-	 */
-	public static function hasValidity(array:IrType):Bool
-		return switch array {
-			case Array(Obj(_)): true;
-			default: false;
-		};
-
-	/**
-	 * The slot `__value_array_read_i32` at `index` of `instructions` reads, as constants, when it is read inline
-	 * (`lowerValueArrayRead`); null otherwise.
-	 */
-	public static function inlineValueArraySlot(body:IrBody, row:Int):Null<InlineValueSlot> {
-		if (body.operandCount(row) != 5 || !readsInline(body.valueType(body.operand(row, 0))))
-			return null;
-		var offset = constantBefore(body, row, body.operand(row, 2)),
-			width = constantBefore(body, row, body.operand(row, 3)),
-			signed = constantBefore(body, row, body.operand(row, 4));
-		return offset >= 0 && offset % 8 == 0 && signed >= 0 && (width == 8 || width == 16 || width == 32)
-			? {offset: offset, width: width, signed: signed == 1} : null;
-	}
-
 	/**
 	 * A scalar read of a value array element, inline (`VALUE_ARRAY_ACCESS.md`): with the array's header resolved to its
 	 * value array (`valueArrayView`), an index in range, of an element present (for arrays with validity bits), loads the
@@ -939,21 +836,21 @@ class HlLower {
 		// A loop that runs the index up to the array's length, and resizes nothing, proved it in range.
 		if (!arrayBounds.provenByLoop(arrayValue, indexValue, block)) {
 			instructions.push(HlInstruction.GetMem(size, view.array,
-				constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
+				constantRegister(HlLoweringDecisions.ARRAY_SIZE_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
 		}
 		// An element of an array with validity bits is read only once it was written; else the native raises its error.
-		if (hasValidity(body.valueType(arrayValue))) {
+		if (HlLoweringDecisions.hasValidity(body.valueType(arrayValue))) {
 			var bits = temporaryRegister(IrType.Bytes, registerTypes),
 				byte = temporaryRegister(IrType.I32, registerTypes),
 				byteIndex = temporaryRegister(IrType.I32, registerTypes),
 				bit = temporaryRegister(IrType.I32, registerTypes);
 			instructions.push(HlInstruction.GetMem(bits, view.array,
-				constantRegister(VALUE_ARRAY_VALIDITY_OFFSET, instructions, registerTypes)));
+				constantRegister(HlLoweringDecisions.VALUE_ARRAY_VALIDITY_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.UnsignedShiftRight(byteIndex, index,
 				constantRegister(3, instructions, registerTypes)));
 			instructions.push(HlInstruction.Add(byteIndex, byteIndex,
-				constantRegister(LANE_HEADER_BYTES, instructions, registerTypes)));
+				constantRegister(HlLoweringDecisions.LANE_HEADER_BYTES, instructions, registerTypes)));
 			instructions.push(HlInstruction.GetI8(byte, bits, byteIndex));
 			instructions.push(HlInstruction.BitAnd(bit, index, constantRegister(7, instructions, registerTypes)));
 			instructions.push(HlInstruction.UnsignedShiftRight(byte, byte, bit));
@@ -961,11 +858,11 @@ class HlLower {
 			instructions.push(HlInstruction.JumpEqual(byte, constantRegister(0, instructions, registerTypes), slow));
 		}
 		instructions.push(HlInstruction.GetMem(data, view.array,
-			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.ARRAY_DATA_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.Mul(position, index, view.strideBytes));
 		// The lane starts with a type word; the payload follows it.
 		instructions.push(HlInstruction.Add(position, position,
-			constantRegister(LANE_HEADER_BYTES + (slot.offset >> 3), instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.LANE_HEADER_BYTES + (slot.offset >> 3), instructions, registerTypes)));
 		switch slot.width {
 			case 8: instructions.push(HlInstruction.GetI8(destination, data, position));
 			case 16: instructions.push(HlInstruction.GetI16(destination, data, position));
@@ -978,7 +875,7 @@ class HlLower {
 		}
 		instructions.push(HlInstruction.Jump(done));
 		instructions.push(HlInstruction.Label(slow));
-		instructions.push(HlInstruction.CallN(destination, requireFunction(VALUE_ARRAY_READ_I32),
+		instructions.push(HlInstruction.CallN(destination, requireFunction(HlLoweringDecisions.VALUE_ARRAY_READ_I32),
 			operandRegisters(row, 0, registers)));
 		instructions.push(HlInstruction.Label(done));
 	}
@@ -1032,17 +929,17 @@ class HlLower {
 		instructions.push(HlInstruction.GetType(actual, header));
 		instructions.push(HlInstruction.UnsafeCast(actualPointer, actual));
 		// As pointers: the VM compares type registers structurally, and every array header type is an array type.
-		runtimeTypePointer(expectedPointer, VALUE_ARRAY_HEADER_TYPE, instructions, registerTypes);
+		runtimeTypePointer(expectedPointer, HlLoweringDecisions.VALUE_ARRAY_HEADER_TYPE, instructions, registerTypes);
 		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, forwarded));
 		instructions.push(HlInstruction.UnsafeCast(view.array, header));
 		instructions.push(HlInstruction.Jump(resolved));
 		instructions.push(HlInstruction.Label(forwarded));
-		runtimeTypePointer(expectedPointer, VALUE_ARRAY_FORWARD_TYPE, instructions, registerTypes);
+		runtimeTypePointer(expectedPointer, HlLoweringDecisions.VALUE_ARRAY_FORWARD_TYPE, instructions, registerTypes);
 		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, absent));
 		var raw = temporaryRegister(IrType.Bytes, registerTypes);
 		instructions.push(HlInstruction.UnsafeCast(raw, header));
 		instructions.push(HlInstruction.GetMem(view.array, raw,
-			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.ARRAY_DATA_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.Jump(resolved));
 		instructions.push(HlInstruction.Label(absent));
 		instructions.push(HlInstruction.LoadNull(view.array));
@@ -1050,7 +947,7 @@ class HlLower {
 		instructions.push(HlInstruction.JumpNull(view.array, strided));
 		var strideBits = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.GetMem(strideBits, view.array,
-			constantRegister(VALUE_ARRAY_STRIDE_OFFSET, instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.VALUE_ARRAY_STRIDE_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.UnsignedShiftRight(view.strideBytes, strideBits,
 			constantRegister(3, instructions, registerTypes)));
 		instructions.push(HlInstruction.Label(strided));
@@ -1069,30 +966,6 @@ class HlLower {
 		instructions.push(HlInstruction.GlobalSet(global, type));
 		instructions.push(HlInstruction.Label(ready));
 		instructions.push(HlInstruction.UnsafeCast(destination, type));
-	}
-
-	/**
-	 * Whether the first instruction from `start` on that is not a constant reads a scalar of the element `validate` checks.
-	 * The HashLink runtime's scalar reads validate their element as `__value_array_validate` does, with the same errors, so
-	 * a validation right before one adds nothing: a payload-free enum element is read as exactly that pair.
-	 */
-	public static function scalarReadFollows(body:IrBody, row:Int):Bool {
-		if (body.operandCount(row) != 2)
-			return false;
-		var array = body.operand(row, 0), index = body.operand(row, 1), position = body.nextRow(row);
-		while (position >= 0) {
-			switch body.opcode(position) {
-				case IrOpcode.ConstInt, IrOpcode.ConstBool:
-				case IrOpcode.Call:
-					return StringTools.startsWith(body.symbol(position).name, "__value_array_read_")
-						&& body.operandCount(position) >= 2 && (body.operand(position, 0):Int) == (array:Int)
-						&& (body.operand(position, 1):Int) == (index:Int);
-				default:
-					return false;
-			}
-			position = body.nextRow(position);
-		}
-		return false;
 	}
 
 	static function rawArrayShift(array:IrType):Null<Int>
@@ -1115,14 +988,6 @@ class HlLower {
 			ensureNative(natives, rawArrayNativeName(array, operation), [array, IrType.I32], IrType.Void, "std",
 				operation == "check" ? "array_out_of_bounds" : 'array_$operation');
 	}
-
-	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
-	/** The native an iterator's `next` calls for elements of type `element`, and what it returns. */
-	public static function iteratorNextNative(element:IrType):{name:String, result:IrType} return switch element {
-		case F64: {name: "__iterator_next_f64", result: IrType.F64};
-		case I32: {name: "__iterator_next_i32", result: IrType.I32};
-		default: {name: "__iterator_next", result: IrType.Dyn};
-	};
 
 	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType,
 			?library:String, ?symbol:String):Void {
@@ -1287,12 +1152,12 @@ class HlLower {
 		definedViews.clear();
 		hasViewedArrays = false;
 		arrayBounds.startFunction(body, graph);
-		var valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
+		var valueArrayRead = compiler.ir.model.IrSymbol.of(HlLoweringDecisions.VALUE_ARRAY_READ_I32).id;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.Call && body.aux(row) == valueArrayRead
-					&& inlineValueArraySlot(body, row) != null) {
+					&& HlLoweringDecisions.inlineValueArraySlot(body, row) != null) {
 					viewedArrays.set(body.operand(row, 0), true);
 					hasViewedArrays = true;
 				}
@@ -1728,7 +1593,7 @@ class HlLower {
 					requireFunction("__iterator_has_next"), requireRegister(body.operand(row, 0), registers)));
 			case IrOpcode.IteratorNext:
 				var destination = defineRegister(output, registers, registerTypes),
-					nextNative = iteratorNextNative(body.valueType(output));
+					nextNative = HlLoweringDecisions.iteratorNextNative(body.valueType(output));
 				if ((switch (nextNative.result) {
 					case IrType.Dyn: true;
 					default: false;
@@ -1968,8 +1833,10 @@ class HlLower {
 			case ArrayPush, BytesGet, BytesSet:
 				lowerRuntimeFastPath(row, output, functionName, kind, instructions, registers, registerTypes);
 			case ValueArrayRead:
-				var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(body, row) : null;
-				if (uses[output] == 0 && firstBinding[output] < 0 && usedReadNearby(body, row, uses)) {
+				var inlineSlot = functionName == HlLoweringDecisions.VALUE_ARRAY_READ_I32
+					? HlLoweringDecisions.inlineValueArraySlot(body, row) : null;
+				if (uses[output] == 0 && firstBinding[output] < 0
+					&& HlLoweringDecisions.usedReadNearby(body, row, uses)) {
 					// A field of the element nothing reads; the read beside it checks the element the same way.
 				} else if (inlineSlot != null)
 					lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
@@ -1977,7 +1844,7 @@ class HlLower {
 					lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
 			case ValueArrayValidate:
 				// When a read follows, it checks the same element the same way (`realtime_value_array_check_read`).
-				if (!scalarReadFollows(body, row))
+				if (!HlLoweringDecisions.scalarReadFollows(body, row))
 					lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
 			case Plain:
 				lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
@@ -2034,7 +1901,7 @@ class HlLower {
 		var native = cNatives.get(functionName);
 		if (native == null)
 			throw new InternalError('Unknown ordinary C function "$functionName"');
-		var invocation = cNativeInvocation(native, argumentCount);
+		var invocation = HlLoweringDecisions.cNativeInvocation(native, argumentCount);
 		var callArguments = [for (_ in 0...3) temporaryRegister(IrType.RawPtr, registerTypes)];
 		for (index in 0...3)
 			instructions.push(HlInstruction.LoadString(callArguments[index], internString(invocation.strings[index])));
@@ -2071,59 +1938,6 @@ class HlLower {
 			instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
 		else
 			instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
-	}
-
-	/**
-	 * How a call of ordinary C function `native` with `argumentCount` arguments goes through the runtime's dispatch: the invoke
-	 * native, the strings (library, symbol, signature, then for a pointer result its ownership, release and length) and the
-	 * nullable flag, which go before the boxed arguments with the flag last, the type the invoker returns, and whether
-	 * that is cast to the result. Both HashLink backends call it so.
-	 */
-	public static function cNativeInvocation(native:IrCNative, argumentCount:Int):{
-		invoker:String,
-		strings:Array<String>,
-		nullable:Null<Bool>,
-		result:IrType,
-		castsResult:Bool,
-		isVoid:Bool
-	} {
-		var functionName = native.name;
-		for (type in native.arguments)
-			if (unsupportedCDispatchArgument(type))
-				throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
-		var isVoid = switch (native.result) {
-			case Void: true;
-			default: false;
-		};
-		if (!isVoid && unsupportedCDispatchResult(native.result))
-			throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
-		var strings = [native.library, native.symbol, native.signature];
-		var pointerResult = isNativePointer(native.result),
-			bytesResult = isManagedPointerBytes(native),
-			aggregateResult = isAggregateResult(native),
-			utf8Result = isUtf8Result(native);
-		var nullable:Null<Bool> = null;
-		if (pointerResult || bytesResult || utf8Result) {
-			strings.push(native.pointerOwnership);
-			strings.push(native.pointerRelease == null ? "" : native.pointerRelease);
-			// A bytes result is one with a length (`isManagedPointerBytes`).
-			var length = native.pointerLength;
-			if (bytesResult && length != null)
-				strings.push(length);
-			nullable = native.pointerNullable;
-		}
-		return {
-			invoker: pointerResult ? '__c_native_pointer_invoke_${argumentCount}' : bytesResult
-				? '__c_native_bytes_invoke_${argumentCount}' : aggregateResult
-				? '__c_native_aggregate_invoke_${argumentCount}' : utf8Result
-				? '__c_native_utf8_invoke_${argumentCount}' : '__c_native_invoke_${argumentCount}',
-			strings: strings,
-			nullable: nullable,
-			result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
-				? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
-			castsResult: !(pointerResult || bytesResult || aggregateResult || utf8Result),
-			isVoid: isVoid
-		};
 	}
 
 	function lowerFieldGet(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
@@ -2894,53 +2708,11 @@ class HlLower {
 		return index;
 	}
 
-	static function unsupportedCDispatchArgument(type:IrType):Bool
-		return switch type {
-			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
-				IrType.Abstract("realtime_bytes"),
-				IrType.Abstract("native_pointer"), IrType.Abstract("native_callback"): false;
-			default: true;
-		};
-
-	static function unsupportedCDispatchResult(type:IrType):Bool
-		return switch type {
-			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
-				IrType.Abstract("native_pointer"),
-				IrType.Abstract("realtime_bytes"): false;
-			default: true;
-		};
-
-	static function isNativePointer(type:IrType):Bool
-		return switch type {
-			case IrType.Abstract("native_pointer"): true;
-			case _: false;
-		};
-
-	static function isManagedPointerBytes(native:IrCNative):Bool
-		return native.pointerLength != null && switch native.result {
-			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
-			case _: false;
-		};
-
 	function requireRegister(value:IrValueId, registers:Array<Int>):Int {
 		var register = (value:Int) >= 0 && (value:Int) < registers.length ? registers[value] : -1;
 		if (register < 0)
 			throw new InternalError('IR value ${(value : Int)} is used before definition');
 		return register;
-	}
-
-	static function isAggregateResult(native:IrCNative):Bool
-		return native.pointerLength == null && switch (native.result) {
-			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
-			case _: false;
-		};
-
-	static function isUtf8Result(native:IrCNative):Bool {
-		var separator = native.signature.indexOf(">");
-		if (separator < 0)
-			return false;
-		var result = native.signature.substr(separator + 1);
-		return StringTools.startsWith(result, "13") || StringTools.startsWith(result, "14");
 	}
 
 	// Everything below that asks the symbol tables or the function layout for an index also notes the question and the answer, when
@@ -3349,13 +3121,6 @@ class HlLower {
 			record(FunctionRef(name, index));
 		return index;
 	}
-}
-
-/** A value array scalar slot read inline: its bit offset in the element, its width in bits and whether it is signed. */
-typedef InlineValueSlot = {
-	final offset:Int;
-	final width:Int;
-	final signed:Bool;
 }
 
 /** A value array as raw memory (null for a header that is no value array's) and its stride in bytes. */
