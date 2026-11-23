@@ -140,6 +140,7 @@ class WarmRebuildReuseMain {
 					StringTools.replace(reportSource, "final notes:Array<String>;", "final note:String;"));
 				files.set("Driver.hx", StringTools.replace(driverSource, "notes: []", "note: \"\""));
 			});
+		liveFieldInitializer(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -195,6 +196,32 @@ class WarmRebuildReuseMain {
 				throw "a reused build did not return the earlier module";
 		} catch (error:Dynamic) {
 			failures.push('$label: ${Std.string(error)}');
+		}
+	}
+
+	/**
+	 * A live build of a program without static initializers, after a class another module's field initializer constructs gains an
+	 * initialized field: its initializers are the field's migration alone, and the entry calls no `__init`, as there is none.
+	 */
+	static function liveFieldInitializer(failures:Array<String>):Void {
+		try {
+			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+			compiler.livePatching = true;
+			compiler.addSourceRoot("stdlib");
+			compiler.update("model/Value.hx",
+				"package model; class Value { public var kept:Int = 1; public function new() {} }");
+			compiler.update("Main.hx",
+				"class Holder { public var value = new model.Value(); public function new() {} }\n"
+				+ "function kept(holder:Holder):Int return holder.value.kept;\n"
+				+ "function holds(holder:Holder):Bool return holder.value != null;\n"
+				+ "function main():Int return kept(new Holder()) + (holds(new Holder()) ? 1 : 0);");
+			compiler.compile("Main");
+			compiler.update("model/Value.hx",
+				"package model; class Value { public var kept:Int = 1; public var changed:Int = 0; public function new() {} }");
+			compiler.addSourceRoot("stdlib");
+			compiler.compile("Main");
+		} catch (error:Dynamic) {
+			failures.push('a live build after a class gains an initialized field: ${Std.string(error)}');
 		}
 	}
 

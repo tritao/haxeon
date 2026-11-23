@@ -651,11 +651,9 @@ class IrProgramAssembler {
 		// What a plain build's prune keeps (docs/design/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
 		// exported functions.
 		var pruneRoots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
-		if (staticInitializers != null && staticInitializers.length > 0) {
-			pruneRoots.push("__init");
+		if (staticInitializers != null)
 			for (initializer in staticInitializers)
 				pruneRoots.push(initializer.name);
-		}
 		if (exportedFunctions != null)
 			for (name in exportedFunctions)
 				pruneRoots.push(name);
@@ -1088,7 +1086,8 @@ class IrProgramAssembler {
 		if (mainFunction == null)
 			throw new InternalError('IR program has no executable entry point "${entryPoint == null ? "main" : entryPoint}"');
 		var entry = new IrBuilder();
-		if (staticInitializers != null && staticInitializers.length > 0)
+		// The initializers can be a live build's field migrations alone, with no static initialization to run (`__init`).
+		if (staticInitializers != null && Lambda.exists(staticInitializers, fn -> fn.name == "__init"))
 			entry.call("__init", [], Void);
 		var result = entry.call(mainFunction.name, [], mainFunction.result);
 		if ((switch (mainFunction.result) {
