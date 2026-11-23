@@ -60,24 +60,107 @@ class GenericElaboration extends TypedTypeMap {
 
 	/** `type` with each type parameter of `owners` replaced by its representation in `substitutions`. */
 	static function substitute(type:CompilerType, owners:Array<String>,
-			substitutions:Map<String, CompilerType>):CompilerType {
+			substitutions:Map<String, CompilerType>):CompilerType
+		return new ParameterSubstitution(owners, substitutions).within(type);
+}
+
+/**
+ * One substitution of a body's own type parameters (`GenericElaboration`), through every type that can hold them: a structure's
+ * fields too (an `Iterator<T>` is `{hasNext, next():T}`), as the typer resolves the structure at the substituted types. A
+ * structure is rebuilt only when a field mentions a substituted parameter; one that contains itself is rebuilt once, its fields
+ * reaching the rebuilt structure.
+ */
+private class ParameterSubstitution {
+	final owners:Array<String>;
+	final substitutions:Map<String, CompilerType>;
+
+	/** The structures being rebuilt, by their fields, with what they are rebuilt as and whether their own fields reached them. */
+	final structures:Array<{from:Array<compiler.types.Type.AnonymousField>, to:CompilerType, reentered:Bool}> = [];
+
+	public function new(owners:Array<String>, substitutions:Map<String, CompilerType>) {
+		this.owners = owners;
+		this.substitutions = substitutions;
+	}
+
+	public function within(type:CompilerType):CompilerType {
 		function each(types:Array<CompilerType>):Array<CompilerType>
-			return [for (part in types) substitute(part, owners, substitutions)];
-		function one(part:CompilerType):CompilerType
-			return substitute(part, owners, substitutions);
+			return [for (part in types) within(part)];
 		return switch type {
 			case TTypeParameter(owner, name) if (owners.indexOf(owner) >= 0):
 				var replacement = substitutions.get(name);
 				replacement == null ? type : replacement;
-			case TNullable(element): TNullable(one(element));
-			case TArray(element): TArray(one(element));
-			case TIterator(element): TIterator(one(element));
-			case TMap(key, value): TMap(one(key), one(value));
-			case TKeyPath(root, value, writable): TKeyPath(one(root), one(value), writable);
-			case TFunction(arguments, result, optional): TFunction(each(arguments), one(result), optional);
+			case TNullable(element): TNullable(within(element));
+			case TArray(element): TArray(within(element));
+			case TIterator(element): TIterator(within(element));
+			case TMap(key, value): TMap(within(key), within(value));
+			case TKeyPath(root, value, writable): TKeyPath(within(root), within(value), writable);
+			case TFunction(arguments, result, optional): TFunction(each(arguments), within(result), optional);
 			case TInstance(kind, name, arguments): TInstance(kind, name, each(arguments));
-			case TAbstract(name, arguments, representation): TAbstract(name, each(arguments), one(representation));
+			case TAbstract(name, arguments, representation): TAbstract(name, each(arguments), within(representation));
+			case TAnonymous(name, fields): structure(type, name, fields);
 			default: type;
+		};
+	}
+
+	function structure(type:CompilerType, name:String, fields:Array<compiler.types.Type.AnonymousField>):CompilerType {
+		for (entry in structures)
+			if (entry.from == fields) {
+				entry.reentered = true;
+				return entry.to;
+			}
+		if (!mentions(type, []))
+			return type;
+		var made:Array<compiler.types.Type.AnonymousField> = [];
+		var result = TAnonymous(name, made), entry = {from: fields, to: result, reentered: false};
+		structures.push(entry);
+		for (field in fields)
+			made.push({
+				name: field.name,
+				type: within(field.type),
+				optional: field.optional,
+				isFinal: field.isFinal
+			});
+		structures.remove(entry);
+		// A structure named after its fields is named after the substituted ones, as the typer names it at those types; one its own
+		// fields reach keeps its name, which they hold.
+		return !entry.reentered && StringTools.startsWith(name, "$anon:")
+			? TAnonymous(compiler.semantic.SemanticSignature.anonymousTypeName(made), made) : result;
+	}
+
+	/** Whether `type` mentions a type parameter this substitution replaces; `visiting` holds the structures it is inside. */
+	function mentions(type:CompilerType, visiting:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
+		return switch type {
+			case TTypeParameter(owner, name): owners.indexOf(owner) >= 0 && substitutions.exists(name);
+			case TNullable(element), TArray(element), TIterator(element): mentions(element, visiting);
+			case TMap(key, value), TKeyPath(key, value, _): mentions(key, visiting) || mentions(value, visiting);
+			case TFunction(arguments, result, _):
+				for (argument in arguments)
+					if (mentions(argument, visiting))
+						return true;
+				mentions(result, visiting);
+			case TInstance(_, _, arguments):
+				for (argument in arguments)
+					if (mentions(argument, visiting))
+						return true;
+				false;
+			case TAbstract(_, arguments, representation):
+				for (argument in arguments)
+					if (mentions(argument, visiting))
+						return true;
+				mentions(representation, visiting);
+			case TAnonymous(_, fields):
+				if (visiting.indexOf(fields) >= 0)
+					return false;
+				visiting.push(fields);
+				var found = false;
+				for (field in fields)
+					if (mentions(field.type, visiting)) {
+						found = true;
+						break;
+					}
+				visiting.pop();
+				found;
+			default: false;
 		};
 	}
 }
