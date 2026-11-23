@@ -14,9 +14,11 @@ compiles a growing subset of it; the site says so on the About page, in the FAQ 
 headline. Haxeon is independent of the Haxe Foundation: the site uses "Haxe-compatible" and "built on Haxe", never the
 Haxe logo or wording that reads as official.
 
-Headline: *A language and runtime for software you change while it runs.* Subheading: *Build cross-platform apps,
-tools and games in one language: develop on a live VM, ship native executables or WebAssembly, call C and C++ directly.*
-The wording is to be settled with the homepage research; the order is fixed: what Haxeon is, then what it builds.
+Headline: *A language and runtime for cross-platform apps and tools.* Subheading: *Develop on a live VM that keeps your
+program's state as you edit, ship one codebase as native executables or WebAssembly, and call C and C++ directly.* The
+headline names what Haxeon is and stays true as it grows; live editing leads the subheading and is the first, largest
+proof on the page (the apps demo), because "change it while it runs" alone reads as the hot reload every competitor
+claims, and the difference (the whole program, state kept, a failed patch harmless) needs the demo to show.
 
 What sets it apart, each to be shown, not only claimed:
 
@@ -183,7 +185,5 @@ independence from the Haxe Foundation stated there.
 ## Open
 
 - Domain and hosting.
-- The hero headline. Candidates: *Edit code. Keep state.* (leads with what nobody else shows, with the demo right below);
-  *Haxeon is a programming language and runtime.* (the plainest).
 - A trademark check of the name "Haxeon" before launch: it contains "Haxe", the research found the Foundation's branding
   guidance but no naming policy, and did not establish availability.
