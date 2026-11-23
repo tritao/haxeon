@@ -10,6 +10,16 @@
   "dependencies": {
     "haxeon-platform": {
       "path": "../platform"
+    },
+    "haxeon-nativekit": {
+      "path": "../nativekit"
+    }
+  },
+  "native": {
+    "cmake": {
+      "source": "native",
+      "target": "nativekit_audio",
+      "library": "nativekit_audio"
     }
   },
   "ffi": {
@@ -24,8 +34,7 @@
     "exclude": [
       "tests",
       "tools",
-      "examples",
-      "native"
+      "examples"
     ]
   },
   "target": "host"

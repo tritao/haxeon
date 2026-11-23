@@ -5,11 +5,15 @@ project(UIKit VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
 include(CTest)
 
-# NativeKit comes from whoever builds UIKit: a graph that already has its targets (an app's runner adds the nativekit package
-# first) keeps them, and UIKit reads NativeKit's private headers from where they were added; otherwise UIKit adds NativeKit
-# itself, top level or not, from NATIVEKIT_DIR or the repository's submodule.
-if(TARGET nativekit)
-    get_target_property(NKUI_NATIVEKIT_DIR nativekit SOURCE_DIR)
+# NativeKit comes from the nativekit package when UIKit is built as a package: its targets in an app's graph (the runner adds
+# it first), its build in the shared native cache otherwise (find_package(NativeKitPackage), from the CMAKE_PREFIX_PATH Haxeon
+# gives), and UIKit reads NativeKit's private headers from the package's sources. Built on its own, for its tools and tests,
+# UIKit adds NativeKit itself, from NATIVEKIT_DIR or the repository's submodule.
+if(NOT TARGET NativeKit::nativekit)
+    find_package(NativeKitPackage CONFIG QUIET)
+endif()
+if(TARGET NativeKit::nativekit AND DEFINED NATIVEKIT_SOURCE_DIR)
+    set(NKUI_NATIVEKIT_DIR "${NATIVEKIT_SOURCE_DIR}")
 else()
     set(NKUI_NATIVEKIT_DIR "$ENV{NATIVEKIT_DIR}" CACHE PATH
         "Path to the NativeKit source checkout")

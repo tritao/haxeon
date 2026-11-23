@@ -77,7 +77,8 @@ The version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`
 `scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
 starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script; on Linux it also
 creates the app template, whose UI package comes from the release's registry, and builds it through its runner in development and
-release mode, running each for three frames with a capture (a C toolchain and GTK's development files are needed). It checks that no
+release mode, running each for three frames with a capture (a C toolchain and GTK's development files are needed), then builds and
+runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It checks that no
 compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler. With
 `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
 

@@ -5,7 +5,8 @@
 # the compiles ran the compiler the archive is meant to run. On Linux it then creates the app template, which takes its UI package
 # from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain and GTK's
 # development files are needed) and runs each for a few frames, under xvfb-run when there is one, then builds and runs a
-# program that uses the nativekit package from the same registry. Nothing may be written into the release's directory:
+# program that uses the nativekit package from the same registry and one that uses filesystem, a NativeKit module's package
+# built on the same NativeKit. Nothing may be written into the release's directory:
 #
 #   scripts/smoke-test-release.sh ARCHIVE --aot      the CLI and compiler built ahead of time (bin/haxeon-aot)
 #   scripts/smoke-test-release.sh ARCHIVE --no-aot   the compiler's bytecode on the VM (bin/haxeon-compiler.hl)
@@ -164,6 +165,20 @@ if [[ $(uname -s) == Linux ]]; then
 	output=$(cd "$native" && "$haxeon" run --quiet) || fail "haxeon run of a program with a native package"
 	[[ $(tail -n 1 <<<"$output") == "native program ok" ]] || fail "the program with a native package printed: $output"
 	[[ -d $HOME/.haxeon/cache/native ]] || fail "the native package was not built in the user's cache"
+
+	# A NativeKit module's package (filesystem), whose CMake project builds the module on the nativekit package's build
+	# that the program above left in the cache.
+	echo "== a program with a NativeKit module's package (filesystem) from the release's registry"
+	module=$work/projects/module-program
+	mkdir -p "$module"
+	(cd "$module" && "$haxeon" init >/dev/null && "$haxeon" add filesystem >/dev/null) || fail "haxeon add filesystem"
+	printf 'function main():Int {\n\tvar root = new haxeon.filesystem.FileSystemRoot(Sys.getCwd());\n\tSys.println("module program ok " + (root.stat("").get_kind() == nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntryKind.Directory));\n\troot.close();\n\treturn 0;\n}\n' \
+		>"$module/src/Main.hx"
+	(cd "$module" && "$haxeon" build) || fail "haxeon build of a program with a NativeKit module's package"
+	output=$(cd "$module" && "$haxeon" run --quiet) || fail "haxeon run of a program with a NativeKit module's package"
+	[[ $(tail -n 1 <<<"$output") == "module program ok true" ]] || fail "the program with filesystem printed: $output"
+	nativekit_trees=$(find "$HOME/.haxeon/cache/native" -maxdepth 2 -type d -name 'nativekit-*' | wc -l)
+	[[ $nativekit_trees == 1 ]] || fail "NativeKit was built in $nativekit_trees trees of the native cache, not one"
 fi
 written=$(find "$root" -newer "$root/haxeon-sdk.toml" -type f | head -3)
 [[ -z $written ]] || fail "the release wrote into its own directory: $written"

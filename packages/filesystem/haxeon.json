@@ -20,19 +20,21 @@
     "cmake": {
       "source": "native",
       "target": "nativekit_filesystem",
-      "library": "nativekit_filesystem",
-      "inputs": [
-        "../../cmake/nativekit-module.cmake",
-        "../../vendor/nativekit/CMakeLists.txt",
-        "../../vendor/nativekit/include",
-        "../../vendor/nativekit/modules/filesystem"
-      ]
+      "library": "nativekit_filesystem"
     }
   },
   "dependencies": {
     "haxeon-platform": {
       "path": "../platform"
+    },
+    "haxeon-nativekit": {
+      "path": "../nativekit"
     }
   },
-  "publish": false
+  "publish": {
+    "exclude": [
+      "tests",
+      "tools"
+    ]
+  }
 }

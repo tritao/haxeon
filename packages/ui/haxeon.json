@@ -26,11 +26,7 @@
     "cmake": {
       "source": ".",
       "target": "nativekit_ui",
-      "libraries": [
-        "nativekit",
-        "nativekit_gpu",
-        "nativekit_ui"
-      ]
+      "library": "nativekit_ui"
     }
   },
   "ffi": {

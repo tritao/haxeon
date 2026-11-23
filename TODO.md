@@ -4,10 +4,7 @@ Concrete gaps found while compiling Materia and while matching stock Haxe.
 Longer-term direction is in `ROADMAP.md`.
 
 - **App runners: what step 1 left** (`docs/design/PROJECT_BUILDS.md`).
-  `credentials` and `filesystem` are not published (their native builds
-  include the checkout's `cmake/nativekit-module.cmake`; it belongs in the
-  `nativekit` package), and outside an app's graph NativeKit builds twice for
-  the UI package. A package with native
+  A package with native
   sources and no `[native.cmake]` cannot join a runner's graph. Under
   `--watch`, an edit to native code needs a restart.
 - **Spike: bundle a C compiler with Haxeon** (after the app template). Apps

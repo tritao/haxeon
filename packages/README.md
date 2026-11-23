@@ -10,16 +10,17 @@
 | `ui` | `haxeon-ui` | `haxeon.ui.*` |
 | `agentkit` | `haxeon-agentkit` | `haxeon.agent.*` |
 | `agentkit-nativekit` | `haxeon-agentkit-nativekit` | `haxeon.agent.nativekit.*` |
-| `nativekit` | `haxeon-nativekit` | none: NativeKit's native core, which UI builds on in an app's graph |
+| `nativekit` | `haxeon-nativekit` | none: NativeKit's native core, which the other native packages build on |
 
 Each package here is in the `haxeon` registry under its folder's name, versioned with Haxeon (`ui = "^0.3"`), unless its
 manifest says `"publish": false`; its `publish` section says what a release leaves out of it
 ([MANIFEST.md](../docs/reference/MANIFEST.md)). A checkout resolves them from these folders as they are.
 
 Animation is renderer-independent; its optional `animation/native` provider builds glTF/ozz support.
-Audio and GPU depend on platform. Headless audio applications can add the
-optional `audio/native` provider (`haxeon-audio-native`). UI/audio applications
-can share a native provider, as shown in `packages/audio/examples/audio-lab`. UI depends on platform, GPU, and editor. The editor
+Audio and GPU depend on platform. NativeKit is built once, by the `nativekit` package; UI builds on it, and audio,
+credentials and filesystem each build their NativeKit module on it (`nativekit_add_module`, in
+`nativekit/cmake/NativeKitPackage.cmake`), so a program or app using several of them has one NativeKit core.
+UI depends on platform, GPU, editor and nativekit. The editor
 package is independent of UI and native services. SceneKit remains in Materia,
 including the orbit camera (`nativekit.scene.PerspectiveCamera`).
 

@@ -123,17 +123,23 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
    a checkout, unpacked in a release), the lockfile rule and `[patch.haxeon]`; the template uses `ui = "^0.3"`. Built as:
    - a package is published under its directory's name in `packages/` at Haxeon's version; its manifest's `publish` says what
      is left out (`exclude`), what outside directory is copied in (`vendor`, how `nativekit` carries NativeKit), or `false`
-     (`credentials` and `filesystem`, whose native builds still include `cmake/nativekit-module.cmake` from the checkout);
+     to keep it out;
    - CMake writes the checkout's index at configure time (`out/sdk/registry/index.json`, live `path` entries), and
      `haxeon dev package` publishes those packages into the release's `registry/`, then resolves each from it as a check;
    - a live package is resolved with the manifest publishing would write (`RegistryPublisher.publishedManifest`), so a
      project's graph and lockfile are the same in a checkout and a release;
    - `HaxeonSdk.registryRoot(home)` is the one lookup; the `haxeon` registry is the SDK's for the packages it has, the
      source cache's for others;
-   - the UI package depends on `nativekit` and takes NativeKit's headers from the graph's `nativekit` target. Programs that
-     are not apps build `nativekit` and the UI package's own NativeKit in the shared native cache, so NativeKit builds twice
-     there. A program using native packages from a release's registry builds them in the shared native cache under the
-     user's cache, with the SDK's `cmake/` scripts (step 3); `scripts/smoke-test-release.sh` builds one with `nativekit`.
+   - NativeKit is built once, by the `nativekit` package (core and GPU module); the packages built on it (`ui`, `audio`,
+     `credentials`, `filesystem`) depend on it and use what it gives (`packages/nativekit/cmake/NativeKitPackage.cmake`):
+     its targets, its sources (the UI package reads NativeKit's private headers) and `nativekit_add_module`, which builds
+     one NativeKit module as the binding package's library without configuring NativeKit again. In an app's graph that is
+     the `nativekit` package's directory, added first. Programs that are not apps build each package in its own tree of the
+     shared native cache: a tree's configure waits for the trees of the packages it builds on and finds them with
+     `find_package(NativeKitPackage)` through `CMAKE_PREFIX_PATH` (`NativeCMakeProvider`), a tree is named by those trees
+     too (`NativeCache`), and its published libraries find theirs in the sibling package directories. A program using
+     native packages from a release's registry builds them in the shared native cache under the user's cache, with the
+     SDK's `cmake/` scripts (step 3); `scripts/smoke-test-release.sh` builds one with `nativekit` and one with `filesystem`.
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template
    tests against the archive.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a
