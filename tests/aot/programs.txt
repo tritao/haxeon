@@ -650,3 +650,4 @@ wire-final-record
 wire-nested-value
 xml-edit-errors
 xml-urdf
+float-to-int-range

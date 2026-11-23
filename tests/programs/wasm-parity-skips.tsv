@@ -23,3 +23,4 @@ stdlib-process	skip	sys.io.Process starts host processes, which Wasm cannot
 gc-stats	skip	Wasm has no collector: hl.Gc.stats reports zeros
 nested-call-stack	skip	haxe.CallStack natives are not implemented on Wasm
 package-stack-trace	skip	haxe.CallStack natives are not implemented on Wasm
+float-to-int-range	skip	I32TruncF64S traps on a Float outside Int's range, where HashLink gives its conversion's result

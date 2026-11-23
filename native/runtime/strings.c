@@ -355,7 +355,7 @@ HL_PRIM double HL_NAME(__std_parse_float)( vstring *value ) {
 	return end == text ? NAN : result;
 }
 
-HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
+HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return float_to_int(value); }
 HL_PRIM int HL_NAME(__std_int_dynamic)( vdynamic *value ) {
 	return value == NULL ? 0 : hl_dyn_casti(&value, &hlt_dyn, &hlt_i32);
 }

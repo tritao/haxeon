@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdatomic.h>
 #include <ffi.h>
+#include "shared/float_to_int.h"
 
 /* Keep this as the stable build entry point. The implementation is organized
    by runtime domain below while remaining one translation unit, which lets the

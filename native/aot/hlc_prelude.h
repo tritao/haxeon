@@ -9,6 +9,7 @@
 #include <string.h>
 #include <stddef.h>
 #include <hl.h>
+#include <float_to_int.h>
 
 #if defined(__GNUC__)
 #pragma GCC diagnostic ignored "-Wunused-label"

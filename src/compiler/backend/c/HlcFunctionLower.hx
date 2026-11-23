@@ -457,8 +457,11 @@ class HlcFunctionLower {
 					line('${v(output)} = (vdynamic*)${v(value)};');
 				else
 					line('${v(output)} = hl_make_dyn(&${v(value)},${typeAddress(from)});');
-			case IrOpcode.IntToFloat, IrOpcode.FloatToFloat, IrOpcode.IntToInt64, IrOpcode.FloatToInt, IrOpcode.Upcast:
+			case IrOpcode.IntToFloat, IrOpcode.FloatToFloat, IrOpcode.IntToInt64, IrOpcode.Upcast:
 				line('${v(output)} = (${types.cType(typeOf(output))})${v(body.operand(row, 0))};');
+			// C leaves a float out of an Int's range undefined; `float_to_int` gives what the JIT's conversion gives.
+			case IrOpcode.FloatToInt:
+				line('${v(output)} = float_to_int(${v(body.operand(row, 0))});');
 			case IrOpcode.SafeCast:
 				lowerCast(row);
 			case IrOpcode.GlobalGet:

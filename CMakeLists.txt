@@ -279,7 +279,8 @@ endif()
 set(_sdk_headers
   vendor/hashlink/src/hl.h vendor/hashlink/src/hlc.h vendor/hashlink/src/hlmodule.h vendor/hashlink/src/hlsystem.h
   vendor/hashlink/src/opcodes.h vendor/hashlink/src/gc_write.h vendor/hashlink/src/hl_ffi.h
-  vendor/hashlink/include/zlib/zlib.h vendor/hashlink/include/zlib/zconf.h native/aot/hlc_prelude.h)
+  vendor/hashlink/include/zlib/zlib.h vendor/hashlink/include/zlib/zconf.h native/aot/hlc_prelude.h
+  native/shared/float_to_int.h)
 list(TRANSFORM _sdk_headers PREPEND "${CMAKE_SOURCE_DIR}/")
 
 # The SDK (docs/design/SDK_LAYOUT.md): what an app's runner and an ahead-of-time build consume, in the layout a release ships.
