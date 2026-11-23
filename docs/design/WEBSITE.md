@@ -109,6 +109,8 @@ here and on the site.
   8. **Start building:** the shortest install-and-run path on the page (install, create, run), then Get started again.
 
   No news feed on the home page: verified examples and the platform table show progress better than dated posts.
+- **UI** (`/ui/`): the built-in toolkit, a runnable counter and its native capture, linked capabilities,
+  the rendering layers, light and dark UI Showcase captures, and runner status by platform. The home Apps section links here.
 - **Get started** (`docs/guides/00-get-started.md`): install a C and C++ toolchain and CMake (the one command for each
   system, as `haxeon doctor` prints it), then Haxeon from a release archive (`docs/reference/RELEASES.md`; no
   checkout), then "Your first app".
@@ -132,7 +134,7 @@ here and on the site.
 - **About:** the project, its maintainers and support channels, and the licenses. The relation to Haxe is told only on the
   Coming from Haxe page; the footer and the rest of the site do not mention it. The name is written Haxeon.
 
-Top navigation: **Language**, **Build** (Apps first, then tools, games and 3D, scripts, embedding; Apps has its own
+Top navigation: **Language**, **UI**, **Build** (Apps first, then tools, games and 3D, scripts, embedding; Apps has its own
 landing page with the demo, the platform table, the UI package and the first-app guide), **Docs**, **Examples**, **About**,
 and a persistent **Get started**. Docs sections: Start here (install, first program, first app), Learn the language (a
 tour), Build guides, Runtime and targets (the JIT and live editing, what state survives which edit, executables built
@@ -167,7 +169,7 @@ compiler is the next step if the install proves the obstacle (TODO.md).
 [The site](../../site/README.md) uses Astro Starlight under `site/`. It builds static HTML directly from the guides
 and reference Markdown in `docs/`, and picks up the language tour and migration guides as those pages land. It
 generates command help from the CLI source during the build. CI builds the site, checks its internal links and
-runs the homepage's standalone programs.
+runs the homepage's standalone programs and the UI page’s counter.
 
 The landing pages use Starlight's full-width splash template. Landing pages, docs and the 404 share the same
 header, search, theme switch and site footer. Docs keep Starlight's sidebars and page navigation where applicable.

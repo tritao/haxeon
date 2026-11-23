@@ -23,7 +23,7 @@ Starlight reads Markdown directly from `../docs/guides/`, `../docs/reference/`, 
 relative to the source files. The site rewrites links between published pages and links to guide examples in the
 repository. The CLI page appends command help generated from `../src/tools/CliHelp.hx` on each build.
 
-The home, Language, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
+The home, Language, UI, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
 page metadata, search and the theme switch. Its component overrides provide the shared site header and footer,
 including page navigation and last-updated metadata where available. Splash pages provide their own visible heading
 and full-width section layout.
@@ -41,9 +41,13 @@ transcripts can use the Expressive Code `frame="code"` option. With Google Chrom
 `npm run check:commands` after building to verify the Get started guide's command text, prompts, wrapping,
 and clipboard contents.
 
-After bootstrapping and building the native toolchain, run `npm run check:examples` to verify the homepage's program
-outputs and generated geometry binding. Run `npm run check:grammars` to check the shared TextMate grammars against
+After bootstrapping and building the native toolchain, run `npm run check:examples` to verify the homepage program
+outputs, the generated geometry binding, and the UI page's rendered counter. The counter runs the first-app guide project
+and exercises its button. On headless Linux the check uses Xvfb.
+Run `npm run check:grammars` to check the shared TextMate grammars against
 the lexer and an imported C fixture. The repository's `docs-guides` suite verifies the guide projects.
+
+`public/ui/` holds the counter window and the light and dark Controls captures from the desktop UI Showcase.
 
 The default build displays `main`. When building from a release checkout, set `HAXEON_SITE_VERSION` to its Git tag.
 Set `HAXEON_SITE_MAIN_URL` to the published main docs URL to offer a link back to main from a release build.

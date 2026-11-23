@@ -1,0 +1,223 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Card from '../components/Card.astro';
+import CodeCard from '../components/CodeCard.astro';
+import Diagram from '../components/home/Diagram.astro';
+import Showcase from '../components/home/Showcase.astro';
+import counter from '../../../docs/guides/examples/01-first-app/my_app/src/Main.hx?raw';
+import { docsUrl, repositorySource } from '../../docs.mjs';
+
+const basics = docsUrl('guides/03-ui-basics.md');
+const firstApp = docsUrl('guides/01-first-app.md');
+const packageDocs = repositorySource('packages/ui/README.md');
+const showcase = repositorySource('packages/ui/examples/ui_showcase/README.md');
+const source = counter.match(/^\tfunction view\(\):View \{[\s\S]*?^\t\}/m)![0];
+const view = source.replace(/^\t/gm, '');
+
+const features = [
+  {
+    title: 'Views and layout',
+    entries: [
+      ['Compose keyed views into rows and columns and update them from state.', basics + '#layout-and-text'],
+      ['Route pointer and keyboard events and manage focus.', repositorySource('packages/ui/haxe/haxeon/ui/core')],
+      ['Recognize taps and drags and animate view properties.', showcase],
+    ],
+  },
+  {
+    title: 'Text',
+    entries: [
+      ['Shape multilingual text with bidirectional runs and line wrapping.', packageDocs],
+      ['Edit single- and multiline text with selection and IME composition.', showcase],
+    ],
+  },
+  {
+    title: 'Widgets',
+    entries: [
+      ['Build forms with buttons, toggles and text fields.', basics + '#forms'],
+      ['Window large collections with virtualized lists, trees and grids.', packageDocs],
+      ['Show dialogs, popups, menus and tooltips over your content.', repositorySource('packages/ui/haxe/haxeon/ui/widgets/overlays')],
+      ['Share keyboard navigation and a virtual result list between search pickers and the command palette.', packageDocs + '#search-pickers-and-tooltips'],
+    ],
+  },
+  {
+    title: 'Theme and accessibility',
+    entries: [
+      ['Switch between built-in light and dark themes or supply your own tokens.', basics + '#theming'],
+      ['Expose roles, labels, values and actions through the semantic tree on supported surfaces.', repositorySource('packages/ui/haxe/haxeon/ui/semantics')],
+    ],
+  },
+];
+
+const platformDocs = repositorySource('packages/platform/README.md');
+const platformBindings = repositorySource('packages/platform/bindings/nativekit.hxi');
+const platformSource = repositorySource('packages/platform/src/haxeon/platform');
+const platforms = [
+  ['Linux', 'Desktop runner with OpenGL and live editing.', firstApp + '#other-platforms'],
+  ['macOS', 'Desktop runner with Metal and live editing.', firstApp + '#other-platforms'],
+  ['Windows', 'Desktop runner with Direct3D 11 and live editing.', firstApp + '#other-platforms'],
+  ['Android', 'Apps get a Gradle runner from haxeon create: debug APKs, and live editing on a device (patches and reloads are checked on an emulator in CI). The UI toolkit is an opt-in library of the host, not yet in the app template.', docsUrl('reference/ANDROID.md')],
+  ['Web', 'Experimental. Apps get a page runner from haxeon create and build as WebAssembly; the toolkit runs in the WebGL2 Showcase host, not yet in the app template. No live editing in the browser yet.', showcase],
+];
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'UI',
+    template: 'splash',
+    prev: false,
+    next: false,
+    description: 'Build cross-platform apps with Haxeon’s retained, GPU-drawn UI toolkit.',
+  }}
+>
+  <div class="landing-content">
+    <section class="page-intro paper">
+      <div class="wrap">
+        <div class="head">
+          <h1 id="_top" tabindex="-1">A native UI toolkit, built in.</h1>
+          <p class="lede">
+            Haxeon draws retained views on the GPU using the same toolkit across platforms, and supported
+            live edits keep your running app’s state.
+          </p>
+          <div class="ctas">
+            <a class="btn primary" href={docsUrl('guides/00-get-started.md')}>Get started</a>
+            <a class="btn ghost" href={basics}>UI basics</a>
+          </div>
+        </div>
+        <h2 class="sample-heading">A counter with state</h2>
+        <div class="sample">
+          <CodeCard code={view} lang="haxe" title="src/Main.hx" example="ui-counter" />
+          <figure>
+            <img src="/ui/counter.png" width="480" height="320" alt="The native counter window after two clicks, with Click me and Reset buttons." />
+            <figcaption>
+              A <code>Signal</code> holds the count. The app redraws when its value changes.{' '}
+              <a href={firstApp + '#change-the-ui'}>Run the counter in Your first app.</a>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>Build the interface</h2></div>
+        <div class="grid">
+          {features.map(({ title, entries }) => (
+            <Card>
+              <h3>{title}</h3>
+              <ul>{entries.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul>
+            </Card>
+          ))}
+        </div>
+        <div class="services">
+          <h3>Native services</h3>
+          <p>Use the <code>platform</code> package to call OS services where the host provides them.</p>
+          <ul>
+            <li><a href={platformDocs}>Open file and message dialogs and read the clipboard.</a></li>
+            <li><a href={platformBindings}>Integrate native menus, tray icons and notifications through the service bindings.</a></li>
+            <li><a href={platformSource}>Embed a web view and watch for file changes.</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>How it is built</h2>
+          <p class="lede">Haxe views describe the interface. The UI layer resolves layout, prepares text and builds a render plan. The GPU layer submits it through the host graphics API.</p>
+        </div>
+        <div class="pipeline">
+          <Diagram spaced>
+            <svg class="drawing" viewBox="0 0 360 204" role="img" aria-labelledby="ui-pipeline-title">
+              <title id="ui-pipeline-title">Your views flow through UI layout, text and render planning, then the GPU layer and the platform graphics API.</title>
+              <rect class="box" x="55" y="2" width="250" height="32" rx="6" />
+              <rect class="box" x="55" y="52" width="250" height="48" rx="6" />
+              <rect class="box" x="55" y="118" width="250" height="32" rx="6" />
+              <rect class="box" x="55" y="168" width="250" height="32" rx="6" />
+              <path class="acc" d="M180 34v16m-4-5 4 5 4-5M180 100v16m-4-5 4 5 4-5M180 150v16m-4-5 4 5 4-5" />
+              <text class="ttl" x="180" y="23" text-anchor="middle">Your views</text>
+              <text class="ttl" x="180" y="72" text-anchor="middle">UI layer</text>
+              <text x="180" y="89" text-anchor="middle">Layout · Text · Render plan</text>
+              <text class="ttl" x="180" y="139" text-anchor="middle">GPU layer</text>
+              <text class="ttl" x="180" y="189" text-anchor="middle">Platform graphics API</text>
+            </svg>
+          </Diagram>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Widget gallery</h2>
+          <p class="lede">Explore the controls and their states in the <a href={showcase}>UI Showcase</a>.</p>
+        </div>
+        <div class="grid gallery">
+          {['light', 'dark'].map((theme) => (
+            <figure>
+              <a href={`/ui/showcase-${theme}.png`}>
+                <img src={`/ui/showcase-${theme}.png`} width="1280" height="900" loading="lazy" alt={`UI Showcase controls in the ${theme} theme, including buttons, switches and a slider.`} />
+              </a>
+              <figcaption>Controls in the {theme} theme</figcaption>
+            </figure>
+          ))}
+        </div>
+        <h3 class="apps-heading">Apps built with it</h3>
+        <Showcase />
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Platform status</h2>
+          <p class="lede">The toolkit is experimental. The native platform ABI is still evolving, and service availability depends on the host.</p>
+        </div>
+        <dl class="platforms">
+          {platforms.map(([name, status, href]) => (
+            <div><dt><a href={href}>{name}</a></dt><dd>{status}</dd></div>
+          ))}
+        </dl>
+        <p class="note">iOS app tooling is still in progress.</p>
+      </div>
+    </section>
+  </div>
+</StarlightPage>
+
+<style>
+  .page-intro .head .ctas { margin-top: 0; }
+  .landing-content .sample-heading { margin-bottom: var(--hx-space-4); }
+  .sample,
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--hx-space-5);
+  }
+  .sample { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
+  figure { margin: 0; }
+  img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
+  figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
+  ul { margin: 0; padding-inline-start: 1.25rem; }
+  li + li { margin-top: var(--hx-space-2); }
+  .services,
+  .landing-content .apps-heading { margin-top: var(--hx-space-6); }
+  .services p { margin-block: var(--hx-space-3); }
+  .pipeline { max-width: 32rem; }
+  .platforms { margin: 0; }
+  .platforms div {
+    display: grid;
+    grid-template-columns: minmax(6rem, 1fr) 4fr;
+    gap: var(--hx-space-3);
+    padding: var(--hx-space-3) 0;
+    border-top: 1px solid var(--sl-color-gray-5);
+  }
+  dt { font-weight: 600; }
+  dd { margin: 0; }
+  @media (max-width: 55rem) {
+    .sample,
+    .grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 30rem) {
+    .platforms div { grid-template-columns: minmax(0, 1fr); gap: var(--hx-space-1); }
+  }
+</style>

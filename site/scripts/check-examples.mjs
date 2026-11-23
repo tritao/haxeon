@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,9 +11,9 @@ const examples = $('[data-example]').toArray();
 if (!examples.length) throw new Error('The homepage has no runnable examples.');
 
 function sourceFor(block, language) {
-  const lines = block.find(`pre[data-language="${language}"] .ec-line > .code`);
+  const lines = block.find(`pre[data-language="${language}"] .ec-line > .code`).toArray();
   if (!lines.length) throw new Error(`Missing rendered ${language} example`);
-  return lines.map((_, line) => $(line).text().trimEnd()).get().join('\n') + '\n';
+  return lines.map((line) => $(line).text().trimEnd()).join('\n') + '\n';
 }
 
 function run(args, cwd) {
@@ -116,6 +116,40 @@ try {
     }
     console.log(`${name}: output verified`);
   }
+
+  const ui = load(await readFile(new URL('../dist/ui/index.html', import.meta.url), 'utf8'));
+  const view = sourceFor(ui('[data-example="ui-counter"]'), 'haxe').trimEnd();
+  const project = join(directory, 'my_app');
+  await cp(new URL('../../docs/guides/examples/01-first-app/my_app/', import.meta.url), project, {
+    recursive: true,
+  });
+  const host = await readFile(join(project, 'src/Main.hx'), 'utf8');
+  if (!host.replaceAll('\t', '  ').includes(view.replace(/^/gm, '  '))) {
+    throw new Error('ui-counter: rendered view differs from the first-app project');
+  }
+  run(['create', '.'], project);
+
+  const input = join(directory, 'counter-input.json');
+  await writeFile(input, JSON.stringify({
+    version: 1,
+    events: [
+      { at: 0.3, kind: 'down', x: 50, y: 110 },
+      { at: 0.4, kind: 'up', x: 50, y: 110 },
+      { at: 0.5, kind: 'down', x: 50, y: 110 },
+      { at: 0.6, kind: 'up', x: 50, y: 110 },
+    ],
+  }));
+  const capture = join(directory, 'counter-capture');
+  const args = ['run', '--quiet', '--jobs', '2', '--', '--capture-seconds=1',
+    `--capture=${capture}`, `--input-script=${input}`];
+  if (process.platform === 'linux' && !process.env.DISPLAY) {
+    execFileSync('xvfb-run', ['-a', haxeon, ...args], { cwd: project, stdio: 'inherit' });
+  } else {
+    run(args, project);
+  }
+  const { count } = JSON.parse(await readFile(join(capture, 'app-state.json'), 'utf8'));
+  if (count !== 2) throw new Error(`ui-counter: expected two clicks, got ${count}`);
+  console.log('ui-counter: native window and clicks verified');
 } finally {
   await rm(directory, { recursive: true, force: true });
 }
