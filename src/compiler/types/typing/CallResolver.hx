@@ -3070,6 +3070,14 @@ class CallResolver {
 			default: false;
 		};
 
+	public function stringifyMap(receiver:TypedExpression, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		// Implicit conversion sites are identified by typing, so use the already seeded Std module.
+		var call = typeLibraryMethod(RuntimeType.STD, "Map", receiver, "stringifyMap", [], span, scope);
+		if (call != null)
+			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STD);
+		return call;
+	}
+
 	public function typeMapMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope):TypedExpression {
 		var mapType = switch receiver.type {
@@ -3125,6 +3133,11 @@ class CallResolver {
 			if (arguments.length != 0)
 				fail("E1008", "Map.size expects no arguments", span);
 			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
+		}
+		if (name == "toString" && session.signatures.exists(RuntimeType.STD + ".stringifyMap")) {
+			if (arguments.length != 0)
+				fail("E1008", "Map.toString expects no arguments", span);
+			return stringifyMap(receiver, span, scope);
 		}
 		if (name != "exists" && name != "remove" && name != "get") {
 			var library = MapLibrary.provides(name) ? typeLibraryMethod(MapLibrary.CLASS_NAME, "Map", receiver, name,

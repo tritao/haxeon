@@ -337,12 +337,13 @@ The Haxe code Haxeon rejects or runs differently is listed in
   that is never called goes unreported; Haxe types the body at the declaration
   and reports it. Typing it once at the declaration too, and discarding the
   result, would report it.
-- **Maps print and convert differently.** `trace(map)` prints `~map_string_i32:...`
-  where Haxe prints `[a => 1]` (`Map.toString`); a Map or Array passed where a
-  `KeyValueIterable` is expected is rejected; `ObjectMap` has no `keys`,
-  `iterator`, `keyValueIterator` or `copy` (on HashLink they need the `hokeys`
-  native array); an explicit cast of a map of maps to `Map<String, Dynamic>`
-  crashes in the runtime cast, as the generic-owner case did before `bbcf8d261`.
+- **Maps.** A `Map` typed as `Dynamic` still prints its runtime handle
+  (`~map_string_i32:...`), since its key and value types are gone; a Map or Array
+  passed where a `KeyValueIterable` is expected is rejected; `ObjectMap` has no
+  `keys`, `iterator`, `keyValueIterator` or `copy` (on HashLink they need the
+  `hokeys` native array); an explicit cast of a map of maps to
+  `Map<String, Dynamic>` crashes in the runtime cast; and enum keys iterate in
+  insertion order where Haxe on HashLink prints them in declaration order.
 - **Dynamic methods Haxe accepts and Haxeon does not:** `dynamic` methods of an
   interface, static dynamic methods of an abstract, and dynamic methods with their
   own type parameters.

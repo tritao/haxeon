@@ -90,6 +90,14 @@ class StringConversion {
 	/** `value`, whose type mentions no type parameter, as a String. */
 	public static function convertValue(session:TypingSession, value:TypedExpression,
 			bodyTyper:BodyTyping):TypedExpression {
+		// A native map handle does not retain its source key and value types.
+		switch value.type {
+			case TMap(_, _) | TNullable(TMap(_, _)):
+				var mapString = bodyTyper.stringifyMap(value);
+				if (mapString != null)
+					return mapString;
+			default:
+		}
 		var named = name(session, value);
 		if (named != null)
 			return named;

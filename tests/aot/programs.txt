@@ -662,3 +662,4 @@ xml-urdf
 float-to-int-range
 loop-bounds-replaced-array
 generic-null-argument
+map-to-string

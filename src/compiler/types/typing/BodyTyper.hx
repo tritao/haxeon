@@ -405,6 +405,9 @@ class BodyTyper implements BodyTyping {
 	public function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression
 		return session.representation.boundaryCast(value, target);
 
+	public function stringifyMap(value:TypedExpression):Null<TypedExpression>
+		return callResolver.stringifyMap(value, value.span, new Scope());
+
 	/** `operation` on `arguments`, of substituted types, with the helper the types ask for (`GenericElaboration`). */
 	public function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation,
 			arguments:Array<TypedExpression>,

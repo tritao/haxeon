@@ -72,6 +72,7 @@ interface BodyTyping {
 			?elaboration:GenericElaboration):TypedFunction;
 	function argumentTypesOf(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
 	function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression;
+	function stringifyMap(value:TypedExpression):Null<TypedExpression>;
 	function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation, arguments:Array<TypedExpression>,
 			span:compiler.core.Source.SourceSpan):TypedExpression;
 	function typeDefaultExpression(argument:compiler.syntax.Ast.AstArgument, expected:CompilerType,

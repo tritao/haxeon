@@ -232,6 +232,7 @@ in_background run_case fibonacci
 in_background run_case control-flow
 in_background run_case nullable
 in_background run_case observable-output
+in_background run_case map-to-string 0
 in_background run_case bytes-access 0
 in_background run_case bytes-bounds 0
 in_background run_case bytes-encoding 0

@@ -32,6 +32,9 @@ class ObjectMap<K, V> {
 	public function exists(key:K):Bool
 		return indexOf(key) >= 0;
 
+	public function toString():String
+		return Std.formatMapEntries(keys.copy().iterator(), values.copy().iterator());
+
 	public function remove(key:K):Bool {
 		var index = indexOf(key);
 		if (index < 0)
@@ -57,6 +60,12 @@ extern function objectMapExists(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Bool
 @:hlNative("std", "horemove")
 extern function objectMapRemove(map:hl.Abstract<"hl_obj_map">, key:Dynamic):Bool;
 
+@:hlNative("std", "hokeys")
+extern function objectMapKeys(map:hl.Abstract<"hl_obj_map">):Array<Dynamic>;
+
+@:hlNative("std", "hovalues")
+extern function objectMapValues(map:hl.Abstract<"hl_obj_map">):Array<Dynamic>;
+
 /** HashLink identity-keyed map. Keys are compared by object identity. */
 class ObjectMap<K, V> {
 	final handle:hl.Abstract<"hl_obj_map">;
@@ -72,6 +81,9 @@ class ObjectMap<K, V> {
 
 	public function exists(key:K):Bool
 		return objectMapExists(handle, key);
+
+	public function toString():String
+		return Std.formatMapEntries(objectMapKeys(handle).iterator(), objectMapValues(handle).iterator());
 
 	public function remove(key:K):Bool
 		return objectMapRemove(handle, key);
