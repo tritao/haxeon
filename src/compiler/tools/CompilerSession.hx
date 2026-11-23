@@ -262,9 +262,11 @@ class CompilerSession {
 		var record = LiveRefusal.parse(text);
 		if (record == null || record.identity != marker.substring(0, marker.lastIndexOf(":")))
 			return;
-		if (active.retractPublication(record.running))
+		if (active.retractPublication(record.running)) {
+			// The published marker still names the refused revision, which the retracted history no longer describes.
+			unrecordedPublication = null;
 			report('live host refused revision ${record.refused}; patching from revision ${record.running}, which it runs');
-		else
+		} else
 			report('live host runs revision ${record.running}, which this compiler no longer holds; restart the live session to patch again');
 	}
 

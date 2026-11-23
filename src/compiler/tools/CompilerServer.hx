@@ -120,7 +120,8 @@ class CompilerServer {
 					if (!answered)
 						send(client, Status(0));
 				} catch (error:Dynamic) {
-					session.reset();
+					// A failed compile rolled back its own transaction (`CompilationTransaction`), so the session keeps the last good
+					// build and its live history: the edit that fixes the error patches the module the host runs.
 					if (answered)
 						Sys.println("background compile failed: " + Std.string(error));
 					else
@@ -255,26 +256,14 @@ class CompilerServer {
 					cancellation.cancel();
 				}
 		}
-		if (!disconnected && watched != null)
-			try {
-				if (Socket.select([watched], [], [], 0).read.length > 0) {
-					disconnected = true;
-					cancellation.cancel();
-				}
-			} catch (_:Dynamic) {
-				disconnected = true;
-				cancellation.cancel();
-			}
-		if (disconnected || failure != null) {
+		// A compile that finished committed its state, so its artifacts are published even when its requester left: the session's
+		// next build starts from them.
+		if (failure != null) {
 			for (output in outputs)
 				try
 					if (FileSystem.exists(output.temporary))
 						FileSystem.deleteFile(output.temporary)
 				catch (_:Dynamic) {}
-			if (disconnected) {
-				session.reset();
-				cancellation.check();
-			}
 			throw failure;
 		}
 		CompilerMemoryLog.record(request.output, session);

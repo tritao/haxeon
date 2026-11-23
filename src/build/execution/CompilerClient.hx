@@ -431,8 +431,8 @@ class CompilerClient {
 	 * Retires workers that can never be reused (another compiler version for this same project), then the
 	 * least recently used workers until at most `HAXEON_COMPILER_WORKERS` stay resident and, where resident
 	 * memory is observable, their total stays within `HAXEON_COMPILER_MEMORY_MB`. The current worker always
-	 * stays and counts against both limits. Workers are never probed with a bare connection: one that drops
-	 * without a request makes the worker reset its incremental state.
+	 * stays and counts against both limits. Workers are probed with a ping, never a bare connection, which the
+	 * worker reads as a broken request.
 	 */
 	static function retireWorkers(directory:String, version:String, currentKey:String):Void {
 		var projectSuffix = currentKey.substr(version.length),

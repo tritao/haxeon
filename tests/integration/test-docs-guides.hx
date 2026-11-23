@@ -220,8 +220,6 @@ function liveEditing(root:String, example:String, project:String):Void {
 	if (original != File.getContent(Path.join([root, "docs/guides/examples/01-first-app/my_app/src/Main.hx"])))
 		Script.fail("FAIL: the live editing example does not start from the app Your first app ends with");
 	var events = Path.join([project, "build", "host", "main.hl.watch-events.jsonl"]),
-		liveState = Path.join([project, "build", "host", "main.hl.live.state"]),
-		appliedAt = 0.0,
 		log = Path.join([project, "live.log"]),
 		headless = hasXvfb() ? ["xvfb-run", "-a"] : [];
 	// The watch's output goes to a file, so nothing has to drain its pipes; closing the process ends its process group.
@@ -237,13 +235,6 @@ function liveEditing(root:String, example:String, project:String):Void {
 				? '"kind":"build-failed"' : null;
 		if (expected == null)
 			stop(watch, 'FAIL: steps/$step must end in -patch, -reload or -error, which says what the edit does');
-		// A failed build ends the compile server's session, and the next build resumes the running module from the history the
-		// server records once a publication has had no request after it for a while (`CompilerServer.LIVE_STATE_DELAY_SECONDS`).
-		// A reader looks at the window between edits, so the typo comes after that; a fix saved sooner reloads.
-		if (StringTools.endsWith(step, "-error"))
-			waitFor(watch, log, () -> FileSystem.exists(liveState)
-				&& FileSystem.stat(liveState).mtime.getTime() / 1000 >= appliedAt - 1, 120,
-				"the compile server to record the live module's history");
 		var edit = File.getContent(Path.join([example, "steps", step, "Main.hx"])), applied = false, attempt = 0;
 		// An edit the host sees before it has loaded the app is no patch but the module it loads. The first edit goes back and
 		// forth until one patches: from then on the host runs the app.
@@ -273,7 +264,6 @@ function liveEditing(root:String, example:String, project:String):Void {
 				Sys.sleep(2);
 			}
 		}
-		appliedAt = Sys.time();
 		Sys.println('ok: steps/$step');
 	}
 	stop(watch, null);

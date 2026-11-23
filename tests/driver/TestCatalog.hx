@@ -331,6 +331,7 @@ class TestCatalog {
 		"LiveStringArrayMain",
 		"LivePatchFirstMain",
 		"LiveRestartMain",
+		"LiveCompileRecoveryMain",
 		"LiveHostPatchMain",
 		"LiveStrictRefusalMain",
 		"LiveClosureHostMain",
