@@ -1,9 +1,6 @@
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
-import compiler.ir.passes.inlining.IrInliner;
-import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
-import compiler.ir.pipeline.TargetProfile;
 
 /**
  * Functions in a call cycle are not inlined into each other, so their inlined form depends only on their own source and on callees
@@ -60,20 +57,20 @@ class InlinerCycleMain {
 	}
 
 	static function main():Void {
-		var cache = new IrInlineCache(), first = program();
-		IrInliner.run(first, cache, TargetProfile.wasm);
+		var session = new InlinerSession(), first = program();
+		session.run(first);
 		expect(callees(first, "ping").indexOf("pong") >= 0, "ping keeps its call to pong, which is in its cycle");
 		expect(callees(first, "pong").indexOf("ping") >= 0, "pong keeps its call to ping");
 		expect(callees(first, "outer").indexOf("leaf") < 0, "a function outside the cycle still inlines leaf");
 		for (name in ["ping", "pong", "outer"])
-			expect(cache.memo.get(name) != null, '$name has a memo');
-		var memos = [for (name in ["ping", "pong", "outer"]) cache.memo.get(name)];
+			expect(session.entry(name) != null, '$name has a memo');
+		var memos = [for (name in ["ping", "pong", "outer"]) session.entry(name)];
 		var second = program();
-		var changed = IrInliner.run(second, cache, TargetProfile.wasm);
+		var changed = session.run(second);
 		expect(changed.length == 0, "the same program changes nothing");
 		// A run that checks its reuse recomputes the memos and compares them; this one does not, so it keeps the objects.
 		for (i => name in ["ping", "pong", "outer"])
-			expect(cache.memo.get(name) == memos[i], '$name keeps its memo');
+			expect(session.entry(name) == memos[i], '$name keeps its memo');
 		Sys.println("PASS: call cycles are memoized and not inlined into each other");
 	}
 

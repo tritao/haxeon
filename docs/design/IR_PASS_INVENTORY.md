@@ -195,7 +195,7 @@ The "label" of a measured span can cover two passes where the code runs them bac
 
 | pass | class | summary (what it is a function of) | the rewrite may read | edit cost | share |
 |---|---|---|---|---|---|
-| IrInliner | (c), memoized | per callee: transitive dependency list (`InlineMemo.dependencies`) | callee bodies, object table | 31.2M | 25.4% |
+| IrInliner | (c), memoized | per callee: what the caller read of it (`FORM`, `CANDIDATE`, `COMPONENT` facts) | callee forms, object table | 31.2M | 25.4% |
 | IrScalarClosures | (b) | set of scalar closure function types, from all bodies and natives, minus excluded | existence of the `$scalar-arguments:` clone of a closure target | 11.2M | 9.1% |
 | IrEnumRuntimeSpecializations + IrInlineEnumLowering (+Eligibility, Escapes) | (b) | concrete enum specializations; `allowed` enums = union of per-function escape facts, closed over the type graph | method signatures | 11.2M | 9.1% |
 | IrScalarArguments | (c) | `candidates`: functions whose value arguments/results travel as scalars; greatest fixpoint over the call graph | callee candidacy, signatures | 9.2M | 7.5% |
@@ -284,7 +284,7 @@ By edit cost, with what must come first:
    `IrGenericOwnerErasure`, runtime-surface detection, `StaticNullChecks`: 2% to 3% each; their gain is that the helpers become derived from
    summaries. If the floor of step 0 is fixed, the remaining edit cost of these is small, and they can be ported by need (name
    families, M3) rather than by cost.
-9. **IrInliner** last: it moves onto the shared view and `IrInlineCache.memo/cleaned/instrumented` are deleted. Its 31.2M is the
+9. **IrInliner** last: done, its entries are stage memo entries keyed by source version, with the facts it read; `IrInlineCache.memo` and its identity checks are deleted. Its 31.2M is the
    largest single item, but it already memoizes, so the question is why 625 changed functions cost 31M; that should be profiled
    before the port (the span also holds the per-build setup: object table, fingerprints, cleanup of every function).
 

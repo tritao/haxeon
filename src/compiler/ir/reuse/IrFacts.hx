@@ -1,11 +1,11 @@
 package compiler.ir.reuse;
 
-import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
 
 /**
  * The session's table of facts the per-function stage memos read (`IrStageMemo`): a fact is what one stage knows about the
  * program besides the function it rewrites, named by the stage, a kind the stage defines and a key ("callee `f` returns the
- * constant true", "`T` is a value object"). Its value is a number the stage computes (`IrFunctionPass.fact`); its print is a
+ * constant true", "`T` is a value object"). Its value is a number the stage computes (`IrFactSource.fact`); its print is a
  * number that changes exactly when the value does, never given twice, so a memo entry that recorded a fact at a print still
  * holds while the fact has that print.
  *
@@ -106,7 +106,7 @@ class IrFacts {
 	}
 
 	/** The print of fact `id` in this run, computing its value with `pass`, the stage the fact belongs to, the first time. */
-	public function print(id:Int, pass:IrFunctionPass):Int {
+	public function print(id:Int, pass:IrFactSource):Int {
 		if (computed[id] != run) {
 			computed[id] = run;
 			var value = pass.fact(kinds[id], keys[id]);
@@ -123,7 +123,7 @@ class IrFacts {
 		return values[id];
 
 	/** Whether every fact of `facts`, pairs of a fact and the print it was read at, still has its print. */
-	public function hold(facts:Array<Int>, pass:IrFunctionPass):Bool {
+	public function hold(facts:Array<Int>, pass:IrFactSource):Bool {
 		var index = 0;
 		while (index < facts.length) {
 			if (print(facts[index], pass) != facts[index + 1])

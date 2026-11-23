@@ -82,14 +82,18 @@ targets. `IrProgramAssembler.assemble` already scans all functions and rewrites 
 snapshots, and their fields are `final`. The pass is a pure function from the pristine IR set to fresh `IrFunction`
 objects for the program handed to the backend (memoized by input versions).
 
-**What invalidates a memoized function.** `IrInlineCache.memo` keeps a function's inlined form together with everything the
-inlining looked at, and reuses it, as the same object, while all of it is unchanged: the function's own pristine body; the
-pristine bodies of the callees it consulted (transitively); the settings every function depends on (entry point, the
-packed-value-field, inlining and load/store switches); and the *objects* it consulted. Objects are looked up through
-`IrObjectTable`, which records each name asked for, so a memo entry stores those names with a print of each (its base, its
-methods, a value class's fields, its direct subclasses). Adding a class, or changing one object's methods, therefore redoes
-only the functions that looked at that object, and not the rest of the program. Any new read of an object by the inliner or
-its passes must go through the table, or a stale function would be reused.
+**What invalidates a memoized function.** The inliner's entries are stage memo entries (`IrStageMemos.stage("inliner")`), kept
+for the version of the function's source (`IrLineage`) with the facts its inlining read (`IrFacts`, through an `IrFactReader`);
+an entry is reused while its source has that version and every fact still has the print it read. The facts are: the settings
+every function depends on (entry point, profile, the inlining, load/store and strength-reduction switches); each callee's
+component; whether each callee may be spliced at all (by its name and source version); the form a spliced callee has (the
+version of the inliner's output for it, its form kept by that version in `IrStageMemos.inlinedForms`); the source of a callee
+copy elision read; and each *object* consulted. A caller depends on what it read of a callee, not on the callee's identity: a
+callee inlined again to a form nobody splices, or that is not spliced here, does not redo its callers. Objects are looked up
+through `IrObjectTable`, which records each name asked for, and each becomes a fact whose print is the object's description
+(its base, its methods, a value class's fields, its direct subclasses). Adding a class, or changing one object's methods,
+therefore redoes only the functions that looked at that object. Any new read of an object by the inliner or its passes must
+go through the table, or a stale function would be reused.
 
 ## Incremental and hot-patch safety (the main risk)
 

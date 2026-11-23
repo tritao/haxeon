@@ -9,7 +9,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * Copy-on-write rewriting of a function's instructions. A pass that does not know yet whether it will change a function gives this
  * helper its rule; the helper allocates nothing until the rule replaces an instruction, returns the very same `IrFunction` when it
  * never does, and otherwise copies only the blocks that changed and the function (unchanged blocks are shared with the original).
- * That is the "unchanged returns the same object" rule that a per-function cache and `IrInliner.stableSources` rely on.
+ * That is the "unchanged returns the same object" rule that the per-function caches rely on.
  */
 class IrFunctionRewrite {
 	/**

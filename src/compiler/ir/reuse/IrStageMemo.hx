@@ -149,6 +149,12 @@ class IrStageMemos {
 	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
 	public final enumMentions = new IrContributionMemo<Array<String>>();
 
+	/**
+	 * By the version of the inliner's output for a function, the function's inlined form, frozen (`IrInliner.inlinedVersion`): what
+	 * a caller that splices it reads of it is that version (the inliner's facts).
+	 */
+	public final inlinedForms = new IrContributionMemo<compiler.ir.passes.inlining.IrInliner.IrInlinedForm>();
+
 	/** The build the stages run for, counted by `startBuild`. */
 	public var build(default, null) = 0;
 
@@ -193,6 +199,7 @@ class IrStageMemos {
 		closureUses.begin(build);
 		arrayTypes.begin(build);
 		checkedValueArrays.begin(build);
+		inlinedForms.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */

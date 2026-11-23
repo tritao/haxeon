@@ -631,8 +631,8 @@ class IrPipeline {
 		if (cache == null)
 			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
-			context.instrumentScope);
-		// The lineage ends here: the inliner keeps its own memo, and no stage after it reads versions.
+			context.instrumentScope, context.lineage);
+		// The lineage ends here: no stage after the inliner reads versions.
 		context.lineage = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
 		if (context.options.checkReuse && context.options.keepSession) {

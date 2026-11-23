@@ -14,7 +14,7 @@ import compiler.ir.verify.IrVerifier;
  * asking for helpers through it (`IrFactReader.request`, made by `request`); `finish` the program from the rewritten functions.
  * A transform must read nothing about the program but through the reader, and have no side effect but its requests.
  */
-interface IrFunctionPass {
+interface IrFunctionPass extends IrFactSource {
 	/** What the whole-program step needs of `fn`, as a number: it may depend on `fn` alone. */
 	function summarize(fn:IrFunction):Int;
 
@@ -23,9 +23,6 @@ interface IrFunctionPass {
 	 * the program's shared index (`IrLineage.named`).
 	 */
 	function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void;
-
-	/** The value of this stage's fact of `kind` and `key`, as the program stands after `prepare`. */
-	function fact(kind:Int, key:String):Int;
 
 	/** `fn` rewritten: `fn` itself when the stage leaves it alone. */
 	function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction;
@@ -38,6 +35,16 @@ interface IrFunctionPass {
 
 	/** The program's functions from the rewritten ones, in program order: the helpers the stage made added. */
 	function finish(functions:Array<IrFunction>):Array<IrFunction>;
+}
+
+/**
+
+ * What a stage's facts are computed from (`IrFacts`): a per-function stage (`IrFunctionPass`), or a stage that drives its own run
+ * and reads its facts through an `IrFactReader` all the same (`IrInliner`).
+ */
+interface IrFactSource {
+	/** The value of the stage's fact of `kind` and `key`, as the program stands in this run (after `prepare`, for a pass). */
+	function fact(kind:Int, key:String):Int;
 }
 
 /**

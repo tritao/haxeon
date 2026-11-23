@@ -35,54 +35,32 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageMemo.IrContributionMemo;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrStageMemo.IrStageEntry;
+import compiler.ir.reuse.IrStageMemo;
 
-/** An inlined function together with everything its result depended on. */
+/** A function's inlined form as the stage memo keeps it (`IrStageMemos.inlinedForms`): null when no caller may splice it. */
 @:nullSafety(Strict)
-class InlineMemo {
-	public final source:IrFunction;
+class IrInlinedForm {
+	@:processWide("the form of every function no caller may splice, only ever read")
+	public static final NONE = new IrInlinedForm(null);
 
-	/** Which fingerprint of the program-wide settings (see `IrInlineCache.fingerprintId`) the result was inlined under. */
-	public final fingerprint:Int;
+	public final body:Null<IrBody>;
 
-	/** The pristine callee functions consulted, transitively; the result is valid only while all are unchanged. */
-	public final dependencies:Array<IrFunction>;
-
-	/**
-	 * The objects consulted, transitively, each with the print (see `IrInlineCache.objectPrintId`) it had; the result is valid
-	 * only while every one of them still has it.
-	 */
-	public final objects:Map<String, Int>;
-
-	/**
-	 * The inlined form, frozen, when a caller may splice it (`IrInliner.calleeOf`: the source looks inlinable and the form fits),
-	 * else null: no caller reads the form of a larger function, and its cleanup edits it in place.
-	 */
-	public final inlined:Null<IrBody>;
-
-	/**
-	 * The inlined form cleaned up (`IrInliner.cleanUp`), as the compile that made or reused this entry published it: it depends on
-	 * the inlined form alone, so a compile that reuses the entry reuses it too. Null until that compile's cleanup.
-	 */
-	public var cleaned:Null<IrFunction> = null;
-
-	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, objects:Map<String, Int>,
-			inlined:Null<IrBody>) {
-		this.source = source;
-		this.fingerprint = fingerprint;
-		this.dependencies = dependencies;
-		this.objects = objects;
-		this.inlined = inlined;
-	}
+	public function new(body:Null<IrBody>)
+		this.body = body;
 }
 
 /**
- * Per-session inliner state. `memo` keeps a function's inlined form while it and every callee it looked at are
- * unchanged, so unchanged functions keep their identity between compiles; `published` is the inlined form each
- * function had after the last successful compile, which is what a patch has to be computed against.
+ * Per-session inliner state besides the stage memo (`IrStageMemos.stage`, the inliner's entries): `published` is the inlined form
+ * each function had after the last successful compile, which is what a patch has to be computed against.
  */
 @:nullSafety(Strict)
 class IrInlineCache {
-	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
 
 	/** The type ids every body the inliner keeps is made with, for the session. */
@@ -126,76 +104,10 @@ class IrInlineCache {
 		nextPositionalPrints = [];
 	}
 
-	var lastFingerprint:Null<String> = null;
-	var lastFingerprintId = 0;
-	var objectTexts:Map<String, Null<String>> = [];
-	var objectIds:Map<String, Int> = [];
-	var lastObjectId = 0;
-
 	/** A cache whose bodies are made with `types`: the program's table, when its functions already have bodies. */
 	public function new(?types:IrTypeIds) {
 		if (types != null)
 			this.types = types;
-	}
-
-	/**
-	 * A number that names a program-wide fingerprint: the same while the fingerprint text is unchanged, a new one when it
-	 * changes. A memo entry is checked against it for every function of the program on every compile, which as a
-	 * comparison of the (large, freshly built) text cost a third of an incremental compile.
-	 */
-	public function fingerprintId(text:String):Int {
-		if (lastFingerprint == null || lastFingerprint != text) {
-			lastFingerprint = text;
-			lastFingerprintId++;
-		}
-		return lastFingerprintId;
-	}
-
-	/**
-	 * A number that names what an object's description said: the same while the description is unchanged, a new one when
-	 * it changes. An object that does not exist is described by null. A memo entry records the number of each object its
-	 * result depended on, so a new class or a changed method table invalidates only the functions that looked at it.
-	 */
-	public function objectPrintId(name:String, text:Null<String>):Int {
-		var known = objectTexts.exists(name);
-		if (!known || objectTexts.get(name) != text) {
-			objectTexts.set(name, text);
-			objectIds.set(name, ++lastObjectId);
-		}
-		var id = objectIds.get(name);
-		return id == null ? 0 : id;
-	}
-
-	/** Representation passes can rebuild identical immutable inputs. Compare their complete state without
-	 * materializing serialized graphs; hashes and debug placement still participate, and unknown data never matches.
-	 * Each run replaces the map, so transaction copies share only immutable entries and removed names are pruned.
-	 */
-	var sources:Map<String, IrFunction> = [];
-
-	public function stableSources(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
-		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next, builder);
-		sources = next;
-		return result;
-	}
-
-	/**
-	 * `functions`, each replaced by `previous`'s function of its name when that is the same; every function kept in `next` has its
-	 * body frozen (encoded first with the session's table when it has none), as a cache holds it, so a stage given it edits a copy.
-	 */
-	function stable(functions:Array<IrFunction>, previous:Map<String, IrFunction>, next:Map<String, IrFunction>,
-			?builder:IrBodyBuilder):Array<IrFunction> {
-		var result:Array<IrFunction> = [];
-		for (fn in functions) {
-			var known = previous.get(fn.name);
-			if (known == null || !IrFunctionStateEquality.same(known, fn))
-				known = fn;
-			if (known.body == null)
-				known.bodyIn(types, builder);
-			known.freezeBody(builder);
-			next.set(fn.name, known);
-			result.push(known);
-		}
-		return result;
 	}
 
 	/** Where the cache keeps a function or body that is not frozen, or null when everything it keeps is (`--check-reuse`). */
@@ -212,18 +124,9 @@ class IrInlineCache {
 		inline function note(result:Null<String>):Void
 			if (found == null)
 				found = result;
-		for (f in sources)
-			note(fn("source", f));
 		for (entry in originals) {
 			note(fn("original's source", entry.source));
 			note(body("original", entry.body));
-		}
-		for (entry in memo) {
-			note(fn("memo's source", entry.source));
-			note(body("inlined form", entry.inlined));
-			note(fn("cleaned form", entry.cleaned));
-			for (dependency in entry.dependencies)
-				note(fn("memo's dependency", dependency));
 		}
 		for (f in published)
 			note(fn("published", f));
@@ -234,19 +137,11 @@ class IrInlineCache {
 		return found;
 	}
 
-	/** Lets the sources go, for a compile no next one reuses: they are the objects the stage's bodies were made from. */
-	public function forgetSources():Void {
-		sources = [];
-	}
-
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
-		result.sources = sources;
 		result.types = types;
 		for (name => entry in originals)
 			result.originals.set(name, entry);
-		for (name => entry in memo)
-			result.memo.set(name, entry);
 		for (name => fn in published)
 			result.published.set(name, fn);
 		for (name => entry in instrumented)
@@ -254,13 +149,6 @@ class IrInlineCache {
 		for (name => entry in positionalPrints)
 			result.positionalPrints.set(name, entry);
 		result.positionalNatives = positionalNatives;
-		result.lastFingerprint = lastFingerprint;
-		result.lastFingerprintId = lastFingerprintId;
-		for (name => text in objectTexts)
-			result.objectTexts.set(name, text);
-		for (name => id in objectIds)
-			result.objectIds.set(name, id);
-		result.lastObjectId = lastObjectId;
 		return result;
 	}
 }
@@ -273,7 +161,7 @@ class IrInlineCache {
  * on IR content and on the (sorted) order of `program.functions`, so an incremental build matches a clean one.
  */
 @:nullSafety(Strict)
-class IrInliner {
+class IrInliner implements IrFactSource {
 	/** Instruction budget for a callee without an `inline` hint. */
 	public static inline var SmallBudget = 24;
 
@@ -284,6 +172,30 @@ class IrInliner {
 	static inline var MaxInlinesPerFunction = 48;
 	static inline var MaxFunctionInstructions = 3000;
 	static inline var MaxChainDepth = 24;
+
+	/** The stage's name in the session's memos and facts. */
+	static inline final STAGE = "inliner";
+
+	// The kinds of the stage's facts (`fact`), each keyed by a name. What a function's inlining reads of the program is these, so
+	// its entry is reused while its source is the same version and every one of them has the print it read.
+
+	/** The settings every function's inlining depends on (the key is empty). */
+	static inline final SETTINGS = 0;
+
+	/** An object's description and direct subclasses (`objectText`), by the object's name. */
+	static inline final OBJECT = 1;
+
+	/** A function's source, which copy elision reads (`pristineBody`), as its version. */
+	static inline final SOURCE = 2;
+
+	/** The component of a function (`componentLabels`). */
+	static inline final COMPONENT = 3;
+
+	/** Whether a function may be spliced at all, before its form is made (`isCandidate`): 0, or its source's version. */
+	static inline final CANDIDATE = 4;
+
+	/** The form of a function a caller splices: 0 when none may be (`spliceable`), else the version of the stage's output for it. */
+	static inline final FORM = 5;
 
 	final profile:TargetProfile;
 
@@ -300,14 +212,32 @@ class IrInliner {
 
 	final functions:Array<IrFunction> = [];
 
-	/** By function id, its inlined form once inlined, null for one no caller may splice (`InlineMemo.inlined`); see `finished`. */
+	/** By function id, its inlined form once inlined, null for one no caller may splice (`IrInlinedForm`); see `finished`. */
 	final done:Array<Null<IrBody>> = [];
 
 	/** By function id, whether it was inlined or its memo reused in this compile. */
 	final finished:Array<Bool> = [];
 
-	/** By function id, its memo when this compile's inlined form is the memo's, so its cleaned form is the memo's too. */
-	final reused:Array<Null<InlineMemo>> = [];
+	/** By function id, the stage memo's entry when this compile reuses it: its inlined and its cleaned form are the entry's. */
+	final reused:Array<Null<IrStageEntry>> = [];
+
+	/** By function id, the version of its source (`IrLineage.versionOf`), which the memo's entries are kept for; 0 for none. */
+	final inputVersions:Array<Int> = [];
+
+	/**
+	 * By function id, the version of what the stage makes of it in this compile: the one a caller that splices its form reads
+	 * (`FORM`), and its entry's output version.
+	 */
+	final outputVersions:Array<Int> = [];
+
+	/** By function id, the facts its inlining read in this compile, pairs of a fact and its print (`IrFacts`). */
+	final readsOf:Array<Null<Array<Int>>> = [];
+
+	/**
+	 * By function id, last compile's entry for the same source when its inlining left the source as it was, then and now: its
+	 * cleaned form, made from the source alone, is this compile's.
+	 */
+	final sameAsLast:Array<Null<IrStageEntry>> = [];
 
 	/** The type ids of every body of this run: the cache's. */
 	final types:IrTypeIds;
@@ -350,8 +280,6 @@ class IrInliner {
 	final resolve:IrType->String->Null<String>;
 	final consult:String->Void;
 	};
-	final dependenciesOf:Array<Null<Array<IrFunction>>> = [];
-	final dependencyIdsOf:Array<Null<Array<Int>>> = [];
 	final impure:Array<Bool> = [];
 	final visiting:Array<Bool> = [];
 	final entryPoint:String;
@@ -368,31 +296,36 @@ class IrInliner {
 	/** Which function each class and method resolve to, shared with the other passes that resolve calls. */
 	final resolution:IrMethodResolution;
 
-	/** The print of every object of the program, by name. */
-	final objectPrints:Map<String, Int> = [];
+	/** The program's objects by name, and the direct subclasses of each: what an object fact describes (`OBJECT`). */
+	final objects:Map<String, IrObject> = [];
+
+	final subclasses:Map<String, Array<String>> = [];
 
 	final cache:IrInlineCache;
 	final allowInline:Bool;
-	final fingerprint:Int;
-	final nextMemo:Map<String, InlineMemo> = [];
 
-	/** One entry per function being inlined: the callee functions it has consulted so far. */
-	final frames:Array<Array<Int>> = [];
+	/** What every function's inlining depends on, whatever it looks at (`SETTINGS`). */
+	final settings:String;
 
-	/** The serial of each frame, and the serial of the frame that last recorded a function together with its dependencies. */
-	final frameSerials:Array<Int> = [];
+	/**
+	 * The session's memo of the stage (`IrStageMemos`): by function name, what the stage made of the function of an input version,
+	 * the facts that rested on (`IrFacts`), and by output version the inlined form (`IrStageMemos.inlinedForms`). Null in a
+	 * compile without a lineage, which reuses nothing.
+	 */
+	final memo:Null<IrStageMemo>;
 
-	final expandedBy:Array<Int> = [];
-	var serials = 0;
+	final facts:Null<IrFacts>;
+	final forms:Null<IrContributionMemo<IrInlinedForm>>;
+	final versions:Null<compiler.ir.reuse.IrFunctionVersions>;
 
+	/** The function being inlined, innermost last, with the reader that records what its inlining reads (with a memo). */
 	final frameIds:Array<Int> = [];
+
+	final frameReaders:Array<IrFactReader> = [];
 	final frameImpure:Array<Bool> = [];
 
-	/** Parallel to `frames`: the objects each function being inlined has consulted so far. */
+	/** Parallel to `frameIds`: the objects each function being inlined has consulted so far. */
 	final objectFrames:Array<Map<String, Bool>> = [];
-
-	/** The objects consulted, with their prints, by each function inlined or reused so far. */
-	final objectsOf:Array<Null<Map<String, Int>>> = [];
 
 	var depth = 0;
 
@@ -406,8 +339,14 @@ class IrInliner {
 	final components:Array<Int> = [];
 
 	/**
-	 * Inlined forms are memoized for the next compile (`IrInlineCache.memo`), which needs what each one consulted: the functions,
-	 * the objects and their prints. A compile that keeps no session has no next compile, so it records none of it.
+	 * By function id, a number for its component that stays the same between compiles while the component has the same first
+	 * member by name: what a caller reads of the component (`COMPONENT`). Only with a memo.
+	 */
+	final componentLabels:Array<Int> = [];
+
+	/**
+	 * The compile keeps a session: what the stage keeps is frozen, and with a lineage it is memoized for the next compile, with
+	 * what each function's inlining read (its facts). A compile that keeps no session has no next compile, so it records none of it.
 	 */
 	final memoizes:Bool;
 
@@ -419,12 +358,20 @@ class IrInliner {
 
 	final strengthReduction:Bool;
 
-	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, options:compiler.CompileOptions) {
+	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, options:compiler.CompileOptions,
+			lineage:Null<IrLineage>) {
 		this.allowInline = options.inlining;
 		this.loadStoreForwarding = options.loadStoreForwarding;
 		this.strengthReduction = options.strengthReduction;
 		this.checkingMemo = options.checkReuse;
 		this.memoizes = options.keepSession;
+		var memos = memoizes && lineage != null ? lineage.memos : null;
+		memo = memos == null ? null : memos.stage(STAGE);
+		facts = memos == null ? null : memos.facts;
+		forms = memos == null ? null : memos.inlinedForms;
+		versions = memos == null ? null : memos.versions;
+		if (memos != null)
+			memos.facts.begin();
 		this.profile = profile;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
@@ -445,28 +392,26 @@ class IrInliner {
 			done.push(null);
 			finished.push(false);
 			reused.push(null);
+			inputVersions.push(lineage != null && memos != null ? lineage.versionOf(fn) : 0);
+			outputVersions.push(0);
+			readsOf.push(null);
+			sameAsLast.push(null);
 			pristine.push(null);
 			cleanedForms.push(null);
 			sourceBodies.push(null);
-			dependenciesOf.push(null);
-			dependencyIdsOf.push(null);
 			impure.push(false);
 			visiting.push(false);
-			objectsOf.push(null);
 			components.push(-1);
-			expandedBy.push(-1);
 		}
-		// What every function's inlining depends on whatever it looks at. Each object's own description is not here: a memo
-		// entry records the objects it consulted, so a change to one object does not invalidate the rest.
-		fingerprint = cache.fingerprintId([
+		// What every function's inlining depends on whatever it looks at. Each object's own description is not here: an entry
+		// records the objects it consulted (`OBJECT`), so a change to one object does not invalidate the rest.
+		settings = [
 			entryPoint,
 			"profile=" + profile.key(),
 			"inline=" + allowInline,
 			"loadstore=" + loadStoreForwarding,
 			"strength=" + strengthReduction
-		].join(";"));
-		var objects:Map<String, IrObject> = [],
-			subclasses:Map<String, Array<String>> = [];
+		].join(";");
 		for (object in program.objects) {
 			objects.set(object.name, object);
 			if (object.base != null) {
@@ -476,20 +421,26 @@ class IrInliner {
 				children.push(object.name);
 			}
 		}
-		if (memoizes)
-			for (name => object in objects) {
-				var children = subclasses.get(name), text = describe(object);
-				if (children != null) {
-					var sorted = children.copy();
-					sorted.sort(Reflect.compare);
-					text += ">" + sorted.join(",");
-				}
-				objectPrints.set(name, cache.objectPrintId(name, text));
-			}
 		table = new IrObjectTable(objects, subclasses);
 		resolution = IrMethodResolution.of(program);
 		copyElisionCallbacks = {bodyOf: pristineBody, resolve: resolveMethod, consult: consultName};
 		computeComponents();
+		if (memo != null)
+			labelComponents();
+	}
+
+	/** Labels each component by its first member by name, the member with the lowest number (`componentLabels`). */
+	function labelComponents():Void {
+		var first:Array<Int> = [];
+		for (id in 0...functions.length) {
+			var component = components[id];
+			while (first.length <= component)
+				first.push(-1);
+			if (first[component] < 0)
+				first[component] = id;
+		}
+		for (id in 0...functions.length)
+			componentLabels.push(IrSymbol.of(functions[first[components[id]]].name).id);
 	}
 
 	/** Tarjan's algorithm over the call edges of the original bodies, visiting functions in name order so the numbering is deterministic. */
@@ -604,17 +555,18 @@ class IrInliner {
 		return object.name + "<" + Std.string(object.base) + ":" + object.isValue + ":" + methods + ":" + fields;
 	}
 
-	/** The print an object has now; one that is not in the program has its own, which a class of that name would change. */
-	function printOf(name:String):Int {
-		var print = objectPrints.get(name);
-		return print != null ? print : cache.objectPrintId(name, null);
-	}
-
-	function objectsCurrent(consulted:Map<String, Int>):Bool {
-		for (name => print in consulted)
-			if (printOf(name) != print)
-				return false;
-		return true;
+	/** What an object fact says of `name`: its description and its direct subclasses; an object not in the program has its own. */
+	function objectText(name:String):String {
+		var object = objects.get(name);
+		if (object == null)
+			return "absent " + name;
+		var text = describe(object), children = subclasses.get(name);
+		if (children != null) {
+			var sorted = children.copy();
+			sorted.sort(Reflect.compare);
+			text += ">" + sorted.join(",");
+		}
+		return text;
 	}
 
 	/**
@@ -627,14 +579,16 @@ class IrInliner {
 	 * (`IrFunction.ofBody`), which the HashLink lowering reads, decoded only for what still reads objects.
 	 */
 	/** Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). */
+	/**
+	 * Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). With `lineage`,
+	 * in a compile that keeps a session, a function whose source has the version its entry in the stage memo was made from, and
+	 * whose facts still have the prints it read, is not inlined again: its forms are the entry's.
+	 */
 	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile,
 			?options:compiler.CompileOptions,
-			?instrument:IrInstrumentationScope):Array<String> {
+			?instrument:IrInstrumentationScope, ?lineage:IrLineage):Array<String> {
 		var settings = options == null ? new compiler.CompileOptions() : options;
-		// A compile that keeps no session has no next compile to reuse a source in, and edits the sources in place.
-		if (settings.keepSession)
-			program.functions = cache.stableSources(program.functions);
-		var inliner = new IrInliner(program, cache, profile, settings),
+		var inliner = new IrInliner(program, cache, profile, settings, lineage),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
@@ -649,14 +603,9 @@ class IrInliner {
 				result:IrFunction;
 			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
-			// The cleaned form is the memo's while the inlined form is: reused, or made again as the same body.
-			var memo = inliner.reused[id];
-			if (memo == null && inliner.memoizes) {
-				var last = cache.memo.get(fn.name);
-				if (last != null && inlined != null && last.inlined == inlined)
-					memo = last;
-			}
-			var known = memo == null ? null : memo.cleaned;
+			// The cleaned form is the entry's while the inlined form is: reused, or the same source left as it was.
+			var entry = inliner.reused[id], last = inliner.sameAsLast[id];
+			var known = entry != null ? entry.output : last != null ? last.output : null;
 			if (known != null)
 				result = known;
 			else {
@@ -668,10 +617,7 @@ class IrInliner {
 				else
 					throw new InternalError('The inline memo of ${fn.name} keeps neither its inlined form nor its cleaned one');
 			}
-			// A compile that keeps no session has no memo, nor a next compile to reuse the cleaned form in.
-			var entry = inliner.nextMemo.get(fn.name);
-			if (entry != null)
-				entry.cleaned = result;
+			var cleaned = result;
 			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
 			// without them.
 			if (instrument != null) {
@@ -688,8 +634,8 @@ class IrInliner {
 				if (IrFunctionStateEquality.same(previous, result)) {
 					result = previous;
 					// The next compile then finds the published form itself and compares nothing.
-					if (instrument == null && entry != null)
-						entry.cleaned = previous;
+					if (instrument == null)
+						cleaned = previous;
 				} else if (IrFunctionStateEquality.sameCode(previous, result)) {
 					// The same code on the same lines, only moved within its file: it keeps its new positions, so its debug
 					// information names the snapshot this build carries; it is lowered again but needs no patch.
@@ -698,6 +644,7 @@ class IrInliner {
 					changed.push(fn.name);
 			} else if (previous == null)
 				changed.push(fn.name);
+			inliner.keep(id, inlined, cleaned);
 			functions.push(result);
 			published.set(fn.name, result);
 			var instrumentedEntry = instrument == null ? null : instrumented.get(fn.name);
@@ -707,15 +654,12 @@ class IrInliner {
 		program.functions = functions;
 		// A compile that keeps no session reads the stage's output as bodies only (a session compares and caches the objects), so
 		// once no callee is looked at any more an unchanged source keeps only its body.
-		if (!inliner.memoizes) {
+		if (!inliner.memoizes)
 			for (fn in functions)
 				if (fn.body != null)
 					fn.releaseDecoded();
-			cache.forgetSources();
-		}
 		IrOpportunityCensus.report(program, inliner.allowInline);
 		IrAllocationReport.report(program);
-		cache.memo = inliner.nextMemo;
 		cache.published = published;
 		cache.instrumented = instrumented;
 		cache.relocated = relocated;
@@ -836,54 +780,157 @@ class IrInliner {
 		return known;
 	}
 
-	/** Records a function copy elision consulted in the function being inlined. */
+	/** Records a function copy elision consulted in the function being inlined: its source (`SOURCE`). */
 	function consultName(name:String):Void {
-		var consultedId = ids.get(name);
-		if (consultedId != null && frames.length > 0)
-			frames[frames.length - 1].push(consultedId);
+		var reader = frameReader();
+		if (reader != null && ids.exists(name))
+			reader.read(SOURCE, name);
 	}
 
-	/** Function `id`'s inlined form, null when it was reused from a memo that keeps none (`InlineMemo.inlined`). */
-	function inlinedVersion(id:Int):Null<IrBody> {
-		if (finished[id]) {
-			consultResult(id);
-			return done[id];
-		}
-		var original = functions[id], name = original.name;
-		var memo = memoizes ? cache.memo.get(name) : null,
-			usable = memo != null
-				&& memo.source == original
-				&& memo.fingerprint == fingerprint
-				&& dependenciesCurrent(memo.dependencies)
-				&& objectsCurrent(memo.objects);
-		if (usable && !checkingMemo && memo != null) {
-			var inlined = memo.inlined;
-			done[id] = inlined;
-			finished[id] = true;
-			reused[id] = memo;
-			dependenciesOf[id] = memo.dependencies;
-			var memoDependencyIds:Array<Int> = [];
-			for (dependency in memo.dependencies) {
-				var dependencyId = ids.get(dependency.name);
-				if (dependencyId == null)
-					throw new InternalError('Inline memo of "$name" depends on unknown function "${dependency.name}"');
-				memoDependencyIds.push(dependencyId);
+	/** The reader of the function being inlined, when its reads are recorded. */
+	inline function frameReader():Null<IrFactReader>
+		return frameReaders.length > 0 ? frameReaders[frameReaders.length - 1] : null;
+
+	/** The value of the stage's fact of `kind` about `key`, as the program stands in this compile (`IrFacts`). */
+	public function fact(kind:Int, key:String):Int {
+		var table = facts;
+		if (table == null)
+			throw new InternalError('The inliner read its fact $kind of $key without a memo');
+		if (kind == SETTINGS)
+			return table.intern(settings);
+		if (kind == OBJECT)
+			return table.intern(objectText(key));
+		var id = ids.get(key);
+		if (id == null)
+			throw new InternalError('The inliner read its fact $kind of "$key", which is not a function of the program');
+		if (kind == SOURCE)
+			return knownVersion(id);
+		if (kind == COMPONENT)
+			return componentLabels[id];
+		if (kind == CANDIDATE)
+			return isCandidate(id) ? knownVersion(id) : 0;
+		if (kind == FORM)
+			return spliceable(id);
+		throw new InternalError('The inliner has no fact of kind $kind');
+	}
+
+	/** The version of function `id`'s source, or a value no print keeps when it has none. */
+	inline function knownVersion(id:Int):Int {
+		var version = inputVersions[id];
+		return version != 0 ? version : IrFacts.UNKNOWN;
+	}
+
+	/**
+	 * What a caller splicing function `id` reads of it (`FORM`): 0 when no caller may splice its form, else the version of the
+	 * stage's output for it, which names the form. A function whose form depends on where the walk made it, or that is being
+	 * inlined or checked now (a cycle the last compile's facts lead through), has a value no print keeps.
+	 */
+	function spliceable(id:Int):Int {
+		if (visiting[id])
+			return IrFacts.UNKNOWN;
+		var form = inlinedVersion(id);
+		if (form == null || !fits(form) || !isStraightLine(form) && !form.inlineHint)
+			return 0;
+		return impure[id] ? IrFacts.UNKNOWN : outputVersions[id];
+	}
+
+	/** Whether function `id` may be spliced at all, by its name and its source alone. */
+	function isCandidate(id:Int):Bool {
+		var name = functions[id].name;
+		return !IrTypedInterfaceDispatch.isDispatchEntry(name) && !IrTypedInterfaceDispatch.isAdapterEntry(name)
+			&& looksInlinable(id);
+	}
+
+	/**
+	 * The stage memo's entry for function `id` when this compile can reuse it: made from the same version of its source, its facts
+	 * still with the prints it read, and its inlined form kept.
+	 */
+	function usableEntry(id:Int):Null<IrStageEntry> {
+		var memo = this.memo, table = facts, forms = this.forms, input = inputVersions[id];
+		if (memo == null || table == null || forms == null || input == 0)
+			return null;
+		var entry = memo.last(functions[id].name);
+		if (entry == null || entry.input != input)
+			return null;
+		// Checking the facts can inline the callees they name; one that leads back here is not reused (`spliceable`).
+		visiting[id] = true;
+		var holds = table.hold(entry.facts, this);
+		visiting[id] = false;
+		return holds && forms.get(entry.outputVersion) != null ? entry : null;
+	}
+
+	/** Takes `entry`'s forms as function `id`'s in this compile. */
+	function reuse(id:Int, entry:IrStageEntry):Void {
+		var forms = this.forms, kept = forms == null ? null : forms.get(entry.outputVersion);
+		var form = kept == null ? null : kept.body;
+		done[id] = form;
+		finished[id] = true;
+		reused[id] = entry;
+		outputVersions[id] = entry.outputVersion;
+		sourceBodies[id] = form != null && form == cachedOriginal(id) ? form : null;
+	}
+
+	/**
+	 * The version of the stage's output for function `id`, inlined in this compile: last compile's when the inlining left the same
+	 * source as it was then and now (`sameAsLast`), else a new one.
+	 */
+	function outputVersion(id:Int, unchanged:Bool):Int {
+		var memo = this.memo, forms = this.forms, versions = this.versions, input = inputVersions[id];
+		if (memo == null || forms == null || versions == null)
+			return 0;
+		var last = unchanged && input != 0 ? memo.last(functions[id].name) : null;
+		if (last != null && last.input == input) {
+			var kept = forms.get(last.outputVersion);
+			if (kept != null && kept.body != null && kept.body == cachedOriginal(id)) {
+				sameAsLast[id] = last;
+				return last.outputVersion;
 			}
-			dependencyIdsOf[id] = memoDependencyIds;
-			objectsOf[id] = memo.objects;
-			sourceBodies[id] = inlined != null && inlined == cachedOriginal(id) ? inlined : null;
-			nextMemo.set(name, memo);
-			consultResult(id);
-			return inlined;
+		}
+		return versions.next();
+	}
+
+	/**
+	 * Keeps what the stage made of function `id` in its memo for the next compile: its entry, with `cleaned`, its cleaned form, and
+	 * its inlined form `inlined`. A function whose form depends on where the walk made it has none.
+	 */
+	function keep(id:Int, inlined:Null<IrBody>, cleaned:IrFunction):Void {
+		var memo = this.memo, forms = this.forms;
+		if (memo == null || forms == null || impure[id])
+			return;
+		var entry = reused[id];
+		if (entry == null) {
+			var reads = readsOf[id];
+			if (reads == null)
+				return;
+			entry = new IrStageEntry(inputVersions[id], reads, cleaned, outputVersions[id], 0, null);
+			forms.keep(outputVersions[id], inlined == null ? IrInlinedForm.NONE : new IrInlinedForm(inlined));
+		}
+		memo.keep(functions[id].name, entry);
+	}
+
+	/** Function `id`'s inlined form, null when no caller may splice it (`IrInlinedForm`). */
+	function inlinedVersion(id:Int):Null<IrBody> {
+		if (finished[id])
+			return done[id];
+		var original = functions[id], name = original.name;
+		var entry = usableEntry(id);
+		if (entry != null && !checkingMemo) {
+			reuse(id, entry);
+			return done[id];
 		}
 		visiting[id] = true;
 		depth++;
 		frameIds.push(id);
 		frameImpure.push(false);
 		var consultedObjects:Map<String, Bool> = [];
+		var known = facts, reader:Null<IrFactReader> = null;
+		if (known != null) {
+			reader = new IrFactReader(STAGE, null, known, this);
+			reader.begin(false);
+			reader.read(SETTINGS, "");
+			frameReaders.push(reader);
+		}
 		if (memoizes) {
-			frames.push([]);
-			frameSerials.push(++serials);
 			objectFrames.push(consultedObjects);
 			table.consulted = consultedObjects;
 		}
@@ -921,29 +968,18 @@ class IrInliner {
 		}
 		objectFrames.pop();
 		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
-		var consulted = frames.pop();
-		if (consulted == null)
-			throw new InternalError('The consulted functions of $name were never framed');
-		frameSerials.pop();
-		// The functions consulted, once each and in name order (numbers are in name order).
-		consulted.sort((left, right) -> left - right);
-		var dependencies:Array<IrFunction> = [], dependencyIds:Array<Int> = [], last = -1;
-		for (consultedId in consulted)
-			if (consultedId != last) {
-				last = consultedId;
-				dependencies.push(functions[consultedId]);
-				dependencyIds.push(consultedId);
-			}
-		var objectPrintsOf:Map<String, Int> =
-			[for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
-		if (usable && checkingMemo && memo != null) {
-			var kept = memo.inlined;
-			if (kept != null && result != null) {
-				if (!IrFunctionStateEquality.same(kept.toFunction(), result.toFunction()))
-					throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
-				result = kept;
-				reused[id] = memo;
-			}
+		if (reader != null) {
+			frameReaders.pop();
+			for (objectName in consultedObjects.keys())
+				reader.read(OBJECT, objectName);
+		}
+		if (entry != null && checkingMemo) {
+			var forms = this.forms, form = forms == null ? null : forms.get(entry.outputVersion);
+			var kept = form == null ? null : form.body;
+			if (kept != null && result != null && !IrFunctionStateEquality.same(kept.toFunction(), result.toFunction()))
+				throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
+			reuse(id, entry);
+			return done[id];
 		}
 		done[id] = result;
 		finished[id] = true;
@@ -951,48 +987,21 @@ class IrInliner {
 		// A form no caller splices is cleaned up now, in place: the memo keeps no copy of it.
 		if (!unchanged)
 			cleanedForms[id] = result != null ? cleanUp(original, result, body) : cleanUp(original, body);
-		dependenciesOf[id] = dependencies;
-		dependencyIdsOf[id] = dependencyIds;
-		objectsOf[id] = objectPrintsOf;
 		if (isImpure)
 			impure[id] = true;
-		else
-			nextMemo.set(name, usable
-				&& checkingMemo
-				&& memo != null ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
-		consultResult(id);
+		if (reader != null) {
+			readsOf[id] = reader.recorded();
+			outputVersions[id] = outputVersion(id, unchanged && !isImpure);
+		}
 		return result;
 	}
 
-	function dependenciesCurrent(dependencies:Array<IrFunction>):Bool {
-		for (dependency in dependencies)
-			if (byName.get(dependency.name) != dependency)
-				return false;
-		return true;
-	}
-
-	/** Records `name`'s pristine body and everything its inlined form depended on in the function being inlined. */
-	function consultResult(id:Int):Void {
-		if (frames.length == 0)
-			return;
-		var top = frames.length - 1, frame = frames[top];
-		frame.push(id);
-		// A function recorded with its dependencies in this frame needs no second expansion.
-		if (expandedBy[id] == frameSerials[top])
-			return;
-		expandedBy[id] = frameSerials[top];
-		var dependencyIds = dependencyIdsOf[id];
-		if (dependencyIds != null)
-			for (dependency in dependencyIds)
-				frame.push(dependency);
-		var consultedObjects = objectsOf[id];
-		if (consultedObjects != null && objectFrames.length > 0) {
-			var objectFrame = objectFrames[objectFrames.length - 1];
-			for (objectName in consultedObjects.keys())
-				objectFrame.set(objectName, true);
-		}
-		if (impure[id])
-			frameImpure[frameImpure.length - 1] = true;
+	/** Whether the functions `caller` and `callee` are in one component, as the caller's inlining reads it (`COMPONENT`). */
+	function sameComponent(caller:Int, callee:Int):Bool {
+		var reader = frameReader();
+		if (reader == null)
+			return components[caller] == components[callee];
+		return reader.read(COMPONENT, functions[caller].name) == reader.read(COMPONENT, functions[callee].name);
 	}
 
 	/** The inlined form of the function the call at `row` resolves to, when it can be inlined there, else null. */
@@ -1012,10 +1021,8 @@ class IrInliner {
 		if (id < 0)
 			return null;
 		var original = functions[id];
-		if (frames.length > 0)
-			frames[frames.length - 1].push(id);
 		// A call into the caller's own cycle is never inlined (see `components`); this covers recursion and every ancestor of the walk.
-		if (frameIds.length > 0 && components[id] == components[frameIds[frameIds.length - 1]])
+		if (frameIds.length > 0 && sameComponent(frameIds[frameIds.length - 1], id))
 			return null;
 		if (visiting[id]) {
 			// Unreachable now (an ancestor is always in the caller's component); kept as the guard it was.
@@ -1027,15 +1034,16 @@ class IrInliner {
 				frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
-		var count = body.operandCount(row);
-		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name)
-			|| IrTypedInterfaceDispatch.isAdapterEntry(original.name)
-			|| original.arguments.length != count
-			|| !looksInlinable(id))
+		// What the caller reads of the callee: whether it may be spliced (its source, while it may), then the form it splices.
+		var reader = frameReader(), count = body.operandCount(row);
+		if (!(reader != null ? reader.read(CANDIDATE, original.name) != 0 : isCandidate(id))
+			|| original.arguments.length != count)
 			return null;
 		for (index in 0...count)
 			if (!bindable(body.valueType(body.operand(row, index)), original.arguments[index].type))
 				return null;
+		if (reader != null)
+			return reader.read(FORM, original.name) != 0 ? done[id] : null;
 		var candidate = inlinedVersion(id);
 		if (candidate == null || !fits(candidate))
 			return null;
