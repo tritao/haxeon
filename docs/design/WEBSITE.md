@@ -92,17 +92,19 @@ here and on the site.
      behaviour: retained state visible on both sides, which is the claim no competitor shows. A continuous recording at
      launch, with the reproducible example linked. Then the batteries grid and the showcase (Materia, Exosuit). Actions:
      **Build your first app**, **Get the demo source**.
-  3. **C and C++ interop:** a real header, the generated binding and the Haxeon call side by side, the result visible.
-  4. **One codebase, three outputs:** one sample run on the JIT VM, built as a native executable and as WebAssembly, with
+  3. **The language:** a short tabbed tour, each tab a few lines of code that compile and run, with its output: types
+     that infer, enums and pattern matching, null safety, zero-cost abstract types.
+  4. **C and C++ interop:** a real header, the generated binding and the Haxeon call side by side, the result visible.
+  5. **One codebase, three outputs:** one sample run on the JIT VM, built as a native executable and as WebAssembly, with
      the real commands and what each produces; the platform table here.
-  5. **The whole toolchain, one command:** what ships with Haxeon, each with its command: the language server (`haxeon
+  6. **The whole toolchain, one command:** what ships with Haxeon, each with its command: the language server (`haxeon
      lsp`, used by the VS Code extension), the debugger (Debug Adapter Protocol: breakpoints, stepping, watchpoints,
      logpoints, exception breaks, across a live edit), the formatter and linter (`fmt`, `lint`), the profiler (`run
      --profile`, Perfetto or VS Code), build, check and test, packages (`add`, `publish`, the registry and lockfile), C and
      C++ bindings (`ffi import`), and `doctor`.
-  6. **What else you can build:** tiles for tools, games and 3D, scripts and embedding, each with a runnable example and
+  7. **What else you can build:** tiles for tools, games and 3D, scripts and embedding, each with a runnable example and
      its guide.
-  7. **Start building:** the shortest install-and-run path on the page (install, create, run), then Get started again.
+  8. **Start building:** the shortest install-and-run path on the page (install, create, run), then Get started again.
 
   No news feed on the home page: verified examples and the platform table show progress better than dated posts.
 - **Get started** (`docs/guides/00-get-started.md`): install a C and C++ toolchain and CMake (the one command for each
