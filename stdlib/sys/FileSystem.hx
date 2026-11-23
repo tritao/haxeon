@@ -113,8 +113,12 @@ class FileSystem {
 	public static inline function fullPath(path:String):String
 		return fileSystemFullPath(path);
 
-	public static inline function absolutePath(path:String):String
-		return fileSystemFullPath(path);
+	/** As Haxe's: a relative path joined onto the working directory, whether it exists or not; an absolute one as it is. */
+	public static function absolutePath(relPath:String):String {
+		if (haxe.io.Path.isAbsolute(relPath))
+			return relPath;
+		return haxe.io.Path.join([Sys.getCwd(), relPath]);
+	}
 
 	public static function readDirectory(path:String):Array<String> {
 		if (!haxeon.build.InputFiles.isRecording())
