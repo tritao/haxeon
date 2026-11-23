@@ -1185,6 +1185,10 @@ class TestMain {
 			[{name: "get", signature: "():String"}])
 			.compatibility != MethodSignatureChanged)
 			throw "Method signature change was not classified as reload-incompatible";
+		if (types.declareClass("demo.Box", null, [{name: "value", type: "Int"}],
+			[{name: "get", signature: "():String"}, {name: "set", signature: "(Int):Void"}])
+			.compatibility != MethodsChanged)
+			throw "An added method was not classified as a change of the class's methods";
 		if (types.declareClass("demo.Box", null, [{name: "value", type: "String"}],
 			[{name: "get", signature: "():Int"}]).compatibility != LayoutChanged)
 			throw "Field layout change was not classified as reload-incompatible";

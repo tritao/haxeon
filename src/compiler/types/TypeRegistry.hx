@@ -77,7 +77,10 @@ class TypeDescriptor {
 enum TypeCompatibility {
 	NewType;
 	Compatible;
+	/** The same methods, in the same order, some with another signature. */
 	MethodSignatureChanged;
+	/** A method added, removed, renamed or moved. */
+	MethodsChanged;
 	LayoutChanged;
 	BaseChanged;
 }
@@ -206,13 +209,16 @@ class TypeRegistry {
 				return LayoutChanged;
 		}
 		if (previous.methods.length != current.methods.length)
-			return MethodSignatureChanged;
+			return MethodsChanged;
+		var signatureChanged = false;
 		for (i in 0...current.methods.length) {
 			var oldMethod = previous.methods[i],
 				newMethod = current.methods[i];
-			if (oldMethod.name != newMethod.name || oldMethod.signature != newMethod.signature)
-				return MethodSignatureChanged;
+			if (oldMethod.name != newMethod.name)
+				return MethodsChanged;
+			if (oldMethod.signature != newMethod.signature)
+				signatureChanged = true;
 		}
-		return Compatible;
+		return signatureChanged ? MethodSignatureChanged : Compatible;
 	}
 }
