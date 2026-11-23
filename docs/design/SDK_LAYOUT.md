@@ -1,8 +1,9 @@
 # One SDK layout for releases and checkouts
 
-Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup, releases ship `sdk/`) and 2 (runners use
-`find_package(Haxeon)` and a data-only fragment) are built; 3 to 6 are open. Reviewed independently before adoption; the
-five changes from that review are folded in below.
+Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup), 2 (runners use `find_package(Haxeon)` and a data-only
+fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK) are
+built, with release builds through the runner; 4 to 6 are open. Reviewed independently before adoption; the five changes from
+that review are folded in below.
 
 ## Problem
 
@@ -29,8 +30,8 @@ archive of it. Haxeon's home is always an SDK root, found from the executable (`
 ```
 <sdk>/
   haxeon-sdk.toml          the manifest: version, target, and where the roots below are
-  bin/                     haxeon, hl, haxeon-aot
-  lib/<target>/            libhl (JIT), libhl-aot, libhaxeon-app, libffi; compiler and CLI bytecode
+  bin/                     haxeon, hl, haxeon-aot, and the CLI and compiler bytecode they run
+  lib/<target>/            libhl (JIT), libhl-aot, libhaxeon-app, libffi
   include/                 the runtime headers
   cmake/                   HaxeonConfig.cmake and HaxeonConfigVersion.cmake: find_package(Haxeon)
   src/                     haxeon_app.c, hlc_main.c, hlc_stack.c
@@ -107,8 +108,11 @@ About ten files hard-code `out/cmake/release`; nearly everything else goes throu
    release copies the staged SDK; `scripts/smoke-test-release.sh` creates, builds and runs the app template from the archive.
 2. **Runner:** `find_package(Haxeon)`, the data-only fragment, the version check, reconfigure on an SDK change.
 3. **Launcher and home:** the launcher finds its SDK from its own path and reads the manifest with its `source` field; the
-   path table moves to `out/sdk/bin`, `hashlink-runtime` and `HaxeonRelease.isRelease` go. Announced to the other sessions:
-   each worktree rebuilds once.
+   path table moves to `out/sdk/bin`, `hashlink-runtime` goes, and a release's root is its SDK, whose manifest replaces
+   `haxeon-release.txt` (a release is an SDK without `source`). Announced to the other sessions: each worktree rebuilds
+   once. Built with two limits: `HAXEON_HOME` stays the checkout when there is one (the source root), so the code and tests
+   that read checkout files keep reading them there, and the VM's static archives (`libhl.a`, the profiler hooks) stay in
+   `bin` beside it, where C test programs link them, until they move to `lib/<target>`.
 4. **Packages:** versions, the `nativekit` package, publishing with rewritten dependencies, the SDK registry (generated in
    a checkout, unpacked in a release), the lockfile rule and `[patch.haxeon]`; the template uses `ui = "^0.3"`.
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template

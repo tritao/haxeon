@@ -568,7 +568,7 @@ what the last collection kept plus a gigabyte since. The peak is that, at the co
 phases after it could not reuse. `scripts/peak-timeline.py` shows which collection it is and what the heap holds there:
 
 ```sh
-H=out/cmake/release/hashlink-runtime/hl
+H=out/sdk/bin/hl
 ARGS="compiler.hl --entry=compiler.tools.HaxeonCompiler --root=src --root=lib/haxeon-io --root=stdlib --sources-file=srcs.txt --output=/tmp/out.hl"
 scripts/peak-timeline.py -- $H $ARGS                          # resident memory at each phase mark and collection, and the peak
 scripts/peak-timeline.py HL_GC_CENSUS_AT=0 -- $H $ARGS        # census inside every collection: what each one keeps

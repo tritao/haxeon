@@ -13,16 +13,18 @@ import sys.io.File;
 /**
  * `haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]`: stages this checkout's release for the platform it runs
  * on, `DIR/haxeon-VERSION-PLATFORM/` (`DIR` is `out/release` by default), and archives it beside, as `.tar.gz` or, on Windows,
- * `.zip` (docs/reference/RELEASES.md). The layout is defined here and nowhere else:
+ * `.zip` (docs/reference/RELEASES.md). The release is Haxeon's SDK (docs/design/SDK_LAYOUT.md): the native build's out/sdk, with
+ * the standard library and templates copied in and its own manifest:
  *
- *   haxeon-release.txt              the marker that makes the directory a release (`build.HaxeonRelease`)
+ *   haxeon-sdk.toml                 the manifest: version, commit, platform, the compiler sources' digest and the roots below,
+ *                                   and no `source`, which makes the directory a release (`build.HaxeonRelease`)
  *   bin/                            the VM's directory: hl, haxeon, the CLI's bytecode (haxeon-cli.hl), the CLI and compiler built
  *                                   ahead of time with its stamp (and its .pdb with MSVC) when it is built and current, the
  *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
  *   stdlib/                         the standard library
  *   templates/                      the project templates of `haxeon create` (templates/README.md)
- *   sdk/                            Haxeon's SDK (docs/design/SDK_LAYOUT.md), as the native build staged it in out/sdk, with a
- *                                   manifest whose roots are the release's own stdlib/ and templates/
+ *   lib/<target>/, include/, src/, cmake/
+ *                                   the SDK's libraries, headers, entry points and CMake package (`find_package(Haxeon)`)
  *   LICENSE, NOTICE, README.md
  *
  * It builds what a checkout's native build does not, the compiler's bytecode: `tools.CompilerExecutable` with the pinned Haxe, as the
@@ -84,13 +86,9 @@ class ReleasePackage {
 		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(home))]), digest + "\n");
 		cmake(home, ["-E", "copy_directory", Path.join([home, "stdlib"]), Path.join([root, "stdlib"])]);
 		cmake(home, ["-E", "copy_directory", Path.join([home, "templates"]), Path.join([root, "templates"])]);
-		// The SDK as the native build staged it, but for its manifest: a release has no checkout, and its roots are its own.
-		var sdk = Path.join([root, "sdk"]);
+		// The rest of the SDK as the native build staged it; the manifest is the release's own, written last.
 		for (part in ["lib", "include", "src", "cmake"])
-			cmake(home, ["-E", "copy_directory", Path.join([HaxeonSdk.root(home), part]), Path.join([sdk, part])]);
-		File.saveContent(Path.join([sdk, HaxeonSdk.MANIFEST]),
-			'# Haxeon\'s SDK manifest (docs/design/SDK_LAYOUT.md).\nversion = "${project.PackageCompatibility.CURRENT_HAXEON}"\n\n'
-			+ '[roots]\nstdlib = "../stdlib"\ntemplates = "../templates"\n');
+			cmake(home, ["-E", "copy_directory", Path.join([HaxeonSdk.root(home), part]), Path.join([root, part])]);
 		// The stamps hold the digest of what the release holds: no source changed while it was made.
 		if (AotCompiler.sourcesDigest(home, compilerSource) != digest)
 			throw new InternalError("The compiler sources changed while the release was made; run it again");
@@ -98,8 +96,8 @@ class ReleasePackage {
 			if (FileSystem.exists(Path.join([home, file])))
 				cmake(home, ["-E", "copy", Path.join([home, file]), root]);
 		var commit = ProcessRunner.capture("git", ["-C", home, "rev-parse", "--short=12", "HEAD"]);
-		File.saveContent(Path.join([root, HaxeonRelease.MARKER]),
-			HaxeonRelease.marker(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
+		File.saveContent(Path.join([root, HaxeonSdk.MANIFEST]),
+			HaxeonRelease.manifest(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
 			platform(), digest));
 		Sys.println('Staged $root' + (FileSystem.exists(native)
 			? "" : ' (without $native: run "haxeon dev aot" first to include it)'));

@@ -17,7 +17,7 @@ if (-not $HashLinkDir) {
     Write-Error "Missing the windows-msvc entry in cmake/hashlink-output-paths.txt"
     exit 1
 }
-$BuildDir = Split-Path $HashLinkDir -Parent
+$BuildDir = Join-Path $RootDir "out/cmake/windows-msvc"
 $Haxeon = Join-Path $HashLinkDir "haxeon.exe"
 
 if ($env:HAXEON_NATIVE_READY -ne "1") {

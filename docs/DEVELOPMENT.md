@@ -240,9 +240,10 @@ Haxeon uses CMake for its cross-platform native build and Ninja as the default
 backend. The VM is one file, `hl`: HashLink from the pinned `vendor/hashlink`
 submodule with libhl and the Haxeon runtime (`native/runtime.c`) compiled in. It
 needs no library path, and it exports the VM's API to the libraries it loads, so
-those link nothing of HashLink's. It is placed in
-`out/cmake/<preset>/hashlink-runtime` (`scripts/hashlink-path.sh` prints the
-directory), with `haxeon` and the CLI's bytecode `haxeon-cli.hl`, `hlprof-live`,
+those link nothing of HashLink's. It is placed in the `bin` of the checkout's
+SDK, `out/sdk/bin` ([SDK_LAYOUT.md](design/SDK_LAYOUT.md); another preset's
+build stages its own in `out/cmake/<preset>/sdk/bin`, and
+`scripts/hashlink-path.sh` prints the directory), with `haxeon` and the CLI's bytecode `haxeon-cli.hl`, `hlprof-live`,
 and `libhl.a` (`libhl.lib` with MSVC): the same VM without `main.c`, which
 `haxeon` and C test programs that host the VM themselves link.
 

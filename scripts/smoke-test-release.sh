@@ -50,14 +50,15 @@ unpack() {
 		*) fail "unknown archive type: $archive" ;;
 	esac
 	local entries=("$1"/*)
-	[[ ${#entries[@]} == 1 && -f ${entries[0]}/haxeon-release.txt ]] || fail "the archive does not hold one release directory"
+	[[ ${#entries[@]} == 1 && -f ${entries[0]}/haxeon-sdk.toml ]] || fail "the archive does not hold one release directory"
+	! grep -q '^source' "${entries[0]}/haxeon-sdk.toml" || fail "the release's manifest names a checkout"
 	# Symbolic links resolved, as the launcher resolves its own path (macOS's temporary directory is one).
 	(cd "${entries[0]}" && pwd -P)
 }
 
 # A user's environment: no checkout's variables, and a home of its own so caches and compiler sessions start empty.
 isolate() {
-	unset HAXEON_HOME HAXEON_HASHLINK_DIR HAXEON_COMPILER_SOURCE HAXEON_COMPILER_SESSION_DIR \
+	unset HAXEON_HOME HAXEON_SDK HAXEON_HASHLINK_DIR HAXEON_COMPILER_SOURCE HAXEON_COMPILER_SESSION_DIR \
 		HAXEON_ARTIFACT_CACHE HAXEON_SCRIPT_CACHE HAXEON_NATIVE_READY HAXEON_COMPILER_SERVER LD_LIBRARY_PATH DYLD_LIBRARY_PATH
 	export HOME=$1 USERPROFILE=$1 LOCALAPPDATA=$1/AppData/Local XDG_CACHE_HOME=$1/.cache
 	mkdir -p "$HOME" "$LOCALAPPDATA"
@@ -103,7 +104,7 @@ isolate "$work/home"
 echo "== haxeon --version"
 version=$("$haxeon" --version) || fail "haxeon --version"
 echo "$version"
-commit=$(sed -n 's/^commit=//p' "$root/haxeon-release.txt" | tr -d '\r')
+commit=$(sed -n 's/^commit = "\(.*\)"/\1/p' "$root/haxeon-sdk.toml" | tr -d '\r')
 [[ $version == *"compiler $commit"* ]] || fail "--version does not name the release's commit $commit"
 
 echo "== haxeon doctor"

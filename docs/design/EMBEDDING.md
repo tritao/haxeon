@@ -36,7 +36,7 @@ marked *published* or *estimate*. The load average was about 7 throughout, so ti
 
 | Piece | Where | State |
 |---|---|---|
-| HashLink VM with JIT | `vendor/hashlink`, `out/cmake/release/hashlink-runtime/hl` | 1.85 MB of text with the JIT, statically linked: 1.9 MB stripped. |
+| HashLink VM with JIT | `vendor/hashlink`, `out/sdk/bin/hl` | 1.85 MB of text with the JIT, statically linked: 1.9 MB stripped. |
 | HashLink without JIT | `libhl-aot.a` (2.6 MB archive) | Used by `--target=hlc`. A hello-world AOT executable is 1.65 MB stripped (AOT_BACKEND.md, milestone 4). |
 | Runtime module load | `hl_runtime_module_load`, `hl_runtime_module_apply_hlp`, `hl_runtime_module_call_*` (`hlmodule.h`) | Loads several HLB modules into one VM, patches them atomically, unloads them (`runtime.RuntimeDomain`, `LoadedPlugin`). |
 | Live patching | `--live`, HLP ([LIVE_PATCHING.md](../reference/LIVE_PATCHING.md)) | Function-level patches with stable IDs, added types, signature adapters and guards for stored closures. |

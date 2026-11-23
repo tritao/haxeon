@@ -3,7 +3,7 @@
 
     scripts/peak-timeline.py [--log FILE] [NAME=VALUE...] -- COMMAND...
 
-Runs COMMAND (a compiler run on HashLink, e.g. `out/cmake/release/hashlink-runtime/hl compiler.hl --entry=...`) with
+Runs COMMAND (a compiler run on HashLink, e.g. `out/sdk/bin/hl compiler.hl --entry=...`) with
 HAXEON_PEAK_MARKS and HL_GC_TIMELINE set, samples its resident memory every 10 ms, and prints each compiler phase mark
 and collection with the resident memory at that moment, then the peak. NAME=VALUE pairs are added to its environment:
 

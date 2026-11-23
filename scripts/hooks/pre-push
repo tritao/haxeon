@@ -20,7 +20,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 		base=$remote_sha
 	fi
 	[ -n "$(git diff --name-only --diff-filter=d "$base..$local_sha" -- '*.hx')" ] || continue
-	if [ ! -f "$(dirname "$("$root/scripts/hashlink-path.sh")")/CMakeCache.txt" ]; then
+	if [ ! -f "$("$root/scripts/hashlink-path.sh" --build-dir)/CMakeCache.txt" ]; then
 		echo "pre-push: no native build in this tree, so the pushed Haxe files are not checked" >&2
 		continue
 	fi

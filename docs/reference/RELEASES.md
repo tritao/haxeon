@@ -7,11 +7,12 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 
 ## What an archive holds
 
-`haxeon-VERSION-PLATFORM.tar.gz` (`.zip` on Windows) holds one directory, `haxeon-VERSION-PLATFORM/`:
+`haxeon-VERSION-PLATFORM.tar.gz` (`.zip` on Windows) holds one directory, `haxeon-VERSION-PLATFORM/`, which is Haxeon's SDK
+([SDK_LAYOUT.md](../design/SDK_LAYOUT.md)), laid out as a checkout's `out/sdk`:
 
 | Path | What it is |
 | --- | --- |
-| `haxeon-release.txt` | The marker that makes the directory a release: `version`, `commit`, `platform` and `compiler-sources` (the digest of the compiler's sources and standard library the release was made from), one `NAME=VALUE` per line. |
+| `haxeon-sdk.toml` | The SDK's manifest: `version`, `commit`, `platform` and `compiler-sources` (the digest of the compiler's sources and standard library the release was made from), and `[roots]` naming `stdlib` and `templates`. It has no `source`, which a checkout's names: that makes the directory a release. |
 | `bin/hl`, `bin/haxeon` | The VM, and the VM with the CLI as its entry point (`native/haxeon_main.c`). |
 | `bin/haxeon-cli.hl` | The CLI's bytecode, which `bin/haxeon` runs when there is no executable built ahead of time. |
 | `bin/haxeon-aot`, `bin/haxeon-aot.sources` | The CLI and the compiler built ahead of time, one executable for the CLI (which `bin/haxeon` runs), a compile, the compile server and the language server, with its stamp (docs/design/AOT_BACKEND.md), and with MSVC its `haxeon-aot.pdb`, which its stack traces read. Present where the release job builds it. |
@@ -19,7 +20,7 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
 | `stdlib/` | The standard library. |
 | `templates/` | The project templates of `haxeon create` ([templates/README.md](../../templates/README.md)). |
-| `sdk/` | Haxeon's SDK ([SDK_LAYOUT.md](../design/SDK_LAYOUT.md)): the VM libraries under `lib/<target>/`, `include/`, `src/` and the CMake package an app's runner finds with `find_package(Haxeon)`; an ahead-of-time build's `--c-sdk`. |
+| `lib/<target>/`, `include/`, `src/`, `cmake/` | The VM libraries, runtime headers, entry points and the CMake package an app's runner finds with `find_package(Haxeon)`; the release is an ahead-of-time build's `--c-sdk`. |
 | `LICENSE`, `NOTICE`, `README.md` | |
 
 Platforms:
@@ -34,15 +35,16 @@ Platforms:
 
 ## How an unpacked release finds itself
 
-`bin/haxeon` finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or `GetModuleFileNameW`, symbolic links resolved). When
-the directory above `bin` holds `haxeon-release.txt`, that directory is `HAXEON_HOME`, `bin` is the VM's directory
-(`HAXEON_HASHLINK_DIR`, `build.HashLinkPath`) and `bin/haxeon-cli.hl` is the CLI. Otherwise the executable belongs to the
-checkout that built it, whose paths were compiled in. A symbolic link to `bin/haxeon` from a directory on `PATH` works.
+`bin/haxeon` finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or `GetModuleFileNameW`, symbolic links resolved). The
+directory above `bin` is its SDK, which must hold `haxeon-sdk.toml`: that directory is `HAXEON_SDK` and, in a release,
+`HAXEON_HOME`; `bin` is the VM's directory (`HAXEON_HASHLINK_DIR`, `build.HashLinkPath`) and `bin/haxeon-cli.hl` is the CLI. A
+checkout's `out/sdk/bin/haxeon` is found the same way; its manifest's `source` names the checkout, which is then `HAXEON_HOME`. A
+symbolic link to `bin/haxeon` from a directory on `PATH` works, and so does a checkout's `out/sdk/bin` on `PATH`.
 
 The CLI runs the compiler as `build.AotCompiler.program` says: the executable when its stamp matches, else the bytecode on the
 VM when its stamp matches, else (in a checkout) bytecode it builds from the sources with the pinned Haxe. A checkout matches the
 stamps against the digest of its `src/`, `lib/haxeon-io/` and `stdlib/`. A release ships no compiler sources, as its compiler
-cannot change: it matches them against the digest its marker records, so the pinned Haxe is never needed, and `haxeon doctor` does
+cannot change: it matches them against the digest its manifest records, so the pinned Haxe is never needed, and `haxeon doctor` does
 not ask for it.
 
 What a release does not do yet, as it needs a checkout's tools or sources: `haxeon dev`, `haxeon lint`, `haxeon ffi`,

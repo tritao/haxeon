@@ -1,2 +1,2 @@
-release=out/cmake/release/hashlink-runtime
-windows-msvc=out/cmake/windows-msvc/hashlink-runtime
+release=out/sdk/bin
+windows-msvc=out/sdk/bin

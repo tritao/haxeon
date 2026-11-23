@@ -1,10 +1,10 @@
 /* The haxeon command: the HashLink VM running the Haxeon CLI (tools.HaxeonCli), with the command line after it.
  *
- * `hl module.hl` runs any module; `haxeon ...` runs the CLI's bytecode, which the native build compiles and publishes beside
- * this executable (HAXEON_CLI_BYTECODE). An executable built in a checkout belongs to it, as the shell launchers did:
- * HAXEON_HOME and HAXEON_HASHLINK_DIR name that checkout. The same executable in a release (`haxeon dev package`) is
- * bin/haxeon below a root that holds haxeon-release.txt, wherever it was unpacked: found from the executable's own path, that
- * root is HAXEON_HOME and bin the VM's directory, with the CLI's bytecode in it.
+ * `hl module.hl` runs any module; `haxeon ...` runs the CLI's bytecode, haxeon-cli.hl beside this executable. The executable
+ * is bin/haxeon in Haxeon's SDK (docs/design/SDK_LAYOUT.md), a checkout's out/sdk or an unpacked release, which it finds from
+ * its own path: the SDK is bin/.., whose manifest haxeon-sdk.toml it must hold. It sets HAXEON_SDK to the SDK,
+ * HAXEON_HASHLINK_DIR to bin, and HAXEON_HOME to the manifest's `source`, the checkout the SDK was built from, or to the SDK
+ * when it has none (a release).
  *
  * When Haxeon is built ahead of time (AOT_EXECUTABLE in the VM's directory, build.AotCompiler), the launcher runs the CLI in it
  * instead, `haxeon-aot cli ARGUMENTS`, which starts without the JIT. Whether that executable is current, built from these
@@ -15,13 +15,30 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef HAXEON_SOURCE_DIR
-#	error "HAXEON_SOURCE_DIR, HAXEON_HASHLINK_DIR and HAXEON_CLI_BYTECODE come from CMakeLists.txt"
-#endif
-
-#define RELEASE_MARKER "haxeon-release.txt"
-#define RELEASE_CLI "haxeon-cli.hl"
+#define SDK_MANIFEST "haxeon-sdk.toml"
+#define CLI_BYTECODE "haxeon-cli.hl"
 #define AOT_EXECUTABLE "haxeon-aot"
+
+/* The manifest's top-level `source = "PATH"`, or NULL when it has none. The manifest is the SDK's own, which CMake or the release
+ * packaging writes: one key per line, values quoted without escapes. */
+static char *manifest_source( FILE *manifest ) {
+	char line[4096], *start, *end;
+	if( manifest == NULL ) return NULL;
+	while( fgets(line,sizeof(line),manifest) != NULL ) {
+		if( line[0] == '[' ) break;
+		if( strncmp(line,"source",6) != 0 ) continue;
+		start = line + 6;
+		while( *start == ' ' || *start == '\t' ) start++;
+		if( *start++ != '=' ) continue;
+		while( *start == ' ' || *start == '\t' ) start++;
+		if( *start++ != '"' || (end = strchr(start,'"')) == NULL ) continue;
+		*end = 0;
+		fclose(manifest);
+		return strdup(start);
+	}
+	fclose(manifest);
+	return NULL;
+}
 
 #ifdef _WIN32
 #	include <windows.h>
@@ -29,14 +46,6 @@
 #	include <wchar.h>
 
 int hl_vm_main( int argc, wchar_t *argv[] );
-
-static wchar_t *widen( const char *text ) {
-	int length = MultiByteToWideChar(CP_UTF8,0,text,-1,NULL,0);
-	wchar_t *wide = (wchar_t*)malloc(sizeof(wchar_t) * (size_t)length);
-	if( wide == NULL ) return NULL;
-	MultiByteToWideChar(CP_UTF8,0,text,-1,wide,length);
-	return wide;
-}
 
 /* `directory` + "/" + `name`, or NULL. */
 static wchar_t *join( const wchar_t *directory, const wchar_t *name ) {
@@ -46,9 +55,9 @@ static wchar_t *join( const wchar_t *directory, const wchar_t *name ) {
 	return path;
 }
 
-/* The release root this executable is in (the parent of its directory, which holds the marker), with '/' separators as a
- * checkout's paths have; NULL when this is not a release's haxeon. `bin` gets the executable's directory. */
-static wchar_t *release_root( wchar_t **bin ) {
+/* The SDK this executable is in (the parent of its directory, which holds the manifest), with '/' separators as the SDK's
+ * other paths have; NULL when it is in none. `bin` gets the executable's directory. */
+static wchar_t *sdk_root( wchar_t **bin ) {
 	DWORD capacity = 32768, length;
 	wchar_t *path = (wchar_t*)malloc(sizeof(wchar_t) * capacity), *slash, *marker;
 	if( path == NULL ) return NULL;
@@ -59,7 +68,7 @@ static wchar_t *release_root( wchar_t **bin ) {
 	*slash = 0;
 	if( (*bin = _wcsdup(path)) == NULL || (slash = wcsrchr(path,L'/')) == NULL ) { free(path); return NULL; }
 	*slash = 0;
-	marker = join(path,L"" RELEASE_MARKER);
+	marker = join(path,L"" SDK_MANIFEST);
 	if( marker == NULL || _waccess(marker,0) != 0 ) { free(marker); free(path); return NULL; }
 	free(marker);
 	return path;
@@ -108,17 +117,20 @@ static int run_ahead_of_time( void ) {
 }
 
 int wmain( int argc, wchar_t *argv[] ) {
-	wchar_t *bin = NULL, *root = release_root(&bin), *cli;
+	wchar_t *bin = NULL, *sdk = sdk_root(&bin), *cli, *manifest;
 	wchar_t **arguments = (wchar_t**)malloc(sizeof(wchar_t*) * (size_t)(argc + 2));
-	if( root != NULL ) {
-		_wputenv_s(L"HAXEON_HOME",root);
-		_wputenv_s(L"HAXEON_HASHLINK_DIR",bin);
-		cli = join(bin,L"" RELEASE_CLI);
-	} else {
-		_putenv_s("HAXEON_HOME",HAXEON_SOURCE_DIR);
-		_putenv_s("HAXEON_HASHLINK_DIR",HAXEON_HASHLINK_DIR);
-		cli = widen(HAXEON_CLI_BYTECODE);
+	char *source;
+	if( sdk == NULL ) {
+		fwprintf(stderr,L"This haxeon is not in a Haxeon SDK: no " L"" SDK_MANIFEST L" beside its directory\n");
+		return 1;
 	}
+	manifest = join(sdk,L"" SDK_MANIFEST);
+	source = manifest == NULL ? NULL : manifest_source(_wfopen(manifest,L"r"));
+	_wputenv_s(L"HAXEON_SDK",sdk);
+	_wputenv_s(L"HAXEON_HASHLINK_DIR",bin);
+	if( source != NULL ) _putenv_s("HAXEON_HOME",source);
+	else _wputenv_s(L"HAXEON_HOME",sdk);
+	cli = join(bin,L"" CLI_BYTECODE);
 	if( cli == NULL || arguments == NULL ) return 1;
 	{
 		/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about; a console also needs ANSI turned on. */
@@ -159,9 +171,9 @@ static char *join( const char *directory, const char *name ) {
 	return path;
 }
 
-/* The release root this executable is in (the parent of its directory, which holds the marker), with symbolic links resolved;
- * NULL when this is not a release's haxeon. `bin` gets the executable's directory. */
-static char *release_root( char **bin ) {
+/* The SDK this executable is in (the parent of its directory, which holds the manifest), with symbolic links resolved; NULL
+ * when it is in none. `bin` gets the executable's directory. */
+static char *sdk_root( char **bin ) {
 	char *path = NULL, *slash, *marker;
 #	if defined(__APPLE__)
 	uint32_t size = 0;
@@ -177,7 +189,7 @@ static char *release_root( char **bin ) {
 	*slash = 0;
 	if( (*bin = strdup(path)) == NULL || (slash = strrchr(path,'/')) == NULL ) { free(path); return NULL; }
 	*slash = 0;
-	marker = join(path,RELEASE_MARKER);
+	marker = join(path,SDK_MANIFEST);
 	if( marker == NULL || access(marker,R_OK) != 0 ) { free(marker); free(path); return NULL; }
 	free(marker);
 	return path;
@@ -205,18 +217,19 @@ static void run_ahead_of_time( int argc, char *argv[] ) {
 }
 
 int main( int argc, char *argv[] ) {
-	char *bin = NULL, *root = release_root(&bin);
+	char *bin = NULL, *sdk = sdk_root(&bin), *manifest, *source;
 	const char *cli;
 	char **arguments = (char**)malloc(sizeof(char*) * (size_t)(argc + 2));
-	if( root != NULL ) {
-		setenv("HAXEON_HOME",root,1);
-		setenv("HAXEON_HASHLINK_DIR",bin,1);
-		cli = join(bin,RELEASE_CLI);
-	} else {
-		setenv("HAXEON_HOME",HAXEON_SOURCE_DIR,1);
-		setenv("HAXEON_HASHLINK_DIR",HAXEON_HASHLINK_DIR,1);
-		cli = HAXEON_CLI_BYTECODE;
+	if( sdk == NULL ) {
+		fprintf(stderr,"This haxeon is not in a Haxeon SDK: no " SDK_MANIFEST " beside its directory\n");
+		return 1;
 	}
+	manifest = join(sdk,SDK_MANIFEST);
+	source = manifest == NULL ? NULL : manifest_source(fopen(manifest,"r"));
+	setenv("HAXEON_SDK",sdk,1);
+	setenv("HAXEON_HASHLINK_DIR",bin,1);
+	setenv("HAXEON_HOME",source != NULL ? source : sdk,1);
+	cli = join(bin,CLI_BYTECODE);
 	if( cli == NULL || arguments == NULL ) return 1;
 	/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about. */
 	setenv("HAXEON_STDERR_TERMINAL",isatty(STDERR_FILENO) ? "1" : "0",1);

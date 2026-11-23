@@ -5,10 +5,10 @@ import haxe.io.Path;
 import sys.FileSystem;
 
 /**
- * Where Haxeon's SDK is (docs/design/SDK_LAYOUT.md): what an app's runner and an ahead-of-time build consume, its libraries
- * under `lib/<target>`, `include/`, `src/` and the CMake package `cmake/HaxeonConfig.cmake`. A checkout's native build stages
- * it in `out/sdk`; a release ships it as `sdk/`. Until Haxeon's home is itself the SDK (step 3 of the note's migration), this
- * is the one place that knows the difference.
+ * Where Haxeon's SDK is (docs/design/SDK_LAYOUT.md): what an app's runner and an ahead-of-time build consume, its VM and
+ * programs in `bin/`, libraries under `lib/<target>`, `include/`, `src/` and the CMake package `cmake/HaxeonConfig.cmake`. A
+ * release's root is its SDK; a checkout's native build stages one in `out/sdk`, whose manifest names the checkout as `source`.
+ * `home` (`HAXEON_HOME`) is the checkout when there is one and the SDK otherwise.
  */
 class HaxeonSdk {
 	/** The manifest at an SDK's root. */
@@ -16,11 +16,9 @@ class HaxeonSdk {
 
 	/** The SDK of the Haxeon at `home`; a usage error naming how to make it when there is none. */
 	public static function root(home:String):String {
-		var sdk = HaxeonRelease.isRelease(home) ? Path.join([home, "sdk"]) : Path.join([home, "out", "sdk"]);
+		var sdk = HaxeonRelease.isRelease(home) ? home : Path.join([home, "out", "sdk"]);
 		if (!FileSystem.exists(Path.join([sdk, MANIFEST])))
-			throw new UsageError(HaxeonRelease.isRelease(home)
-				? 'This Haxeon release has no SDK ($sdk)'
-				: 'This Haxeon checkout has no SDK at $sdk: build it with scripts/build-native.sh');
+			throw new UsageError('This Haxeon checkout has no SDK at $sdk: build it with scripts/build-native.sh');
 		return sdk;
 	}
 
