@@ -1,0 +1,33 @@
+---
+import Program from './Program.astro';
+import { docsUrl } from '../../../docs.mjs';
+const code = `function main() {
+	final tasks = ["Buy milk", "Write the report", "Call the plumber"];
+	for (task in tasks)
+		Sys.println('- $task');
+}`;
+const output = `- Buy milk
+- Write the report
+- Call the plumber`;
+---
+
+<section class="hero paper">
+  <div class="wrap">
+    <div>
+      <h1>A language and runtime for cross-platform apps and tools.</h1>
+      <p class="sub">
+        Develop on a live VM that keeps your program's state as you edit, ship one codebase as native
+        executables or WebAssembly, and call C and C++ directly.
+      </p>
+      <div class="ctas">
+        <a class="btn primary" href={docsUrl('guides/00-get-started.md')}>Get started</a><a
+          class="btn ghost"
+          href={docsUrl('guides/02-live-editing.md')}
+        >
+          See live editing
+        </a>
+      </div>
+    </div>
+    <Program name="tasks" code={code} output={output} command="haxeon tasks.hx" />
+  </div>
+</section>

@@ -1,0 +1,128 @@
+---
+import { docsUrl } from '../../../docs.mjs';
+---
+
+<section id="interop">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">C and C++</span>
+      <h2>Call C and C++ without a bridge.</h2>
+      <p class="lede">
+        Point Haxeon at a header. Structs keep their C layout, strings cross as UTF-8, and handles the
+        library owns close exactly once.
+      </p>
+    </div>
+    <div class="trio">
+      <div>
+        <h3>geometry.h</h3><div class="term">
+          <pre><code><span class="cl" style="--hang:4"><span class="k">typedef struct</span> geo_point &#123;</span>
+<span class="cl" style="--hang:6">	<span class="k">double</span> x;</span>
+<span class="cl" style="--hang:6">	<span class="k">double</span> y;</span>
+<span class="cl" style="--hang:4">&#125; geo_point;</span>
+<span class="cl" style="--hang:4"> </span>
+<span class="cl" style="--hang:4"><span class="c">/* The distance between two points. */</span></span>
+<span class="cl" style="--hang:4"><span class="k">double</span> geo_distance(<span class="k">const</span> geo_point *a,</span>
+<span class="cl" style="--hang:4">                    <span class="k">const</span> geo_point *b);</span>
+<span class="cl" style="--hang:4"> </span>
+<span class="cl" style="--hang:4"><span class="c">/* Moves point by (dx, dy) in place. */</span></span>
+<span class="cl" style="--hang:4"><span class="k">void</span> geo_translate(geo_point *point,</span>
+<span class="cl" style="--hang:4">                   <span class="k">double</span> dx, <span class="k">double</span> dy);</span></code></pre>
+        </div>
+      </div>
+      <div>
+        <h3>Generated geometry.hxi</h3><div class="term">
+          <pre><code><span class="k">interface</span> Geometry @target(<span class="s">"x86_64-linux-gnu"</span>) @library(<span class="s">"geometry"</span>) &#123;
+  <span class="k">extern fn</span> geo_distance(a: ptr&lt;const&lt;geo_point&gt;&gt;,
+                         b: ptr&lt;const&lt;geo_point&gt;&gt;) -> f64;
+  <span class="k">struct</span> geo_point @layout(16, 8) &#123;
+    x: f64 @offset(0);
+    y: f64 @offset(8);
+  &#125;
+&#125;</code></pre>
+        </div>
+      </div>
+      <div>
+        <h3>Main.hx</h3><div class="term">
+          <pre><code><span class="cl" style="--hang:4"><span class="k">import</span> Geometry;</span>
+<span class="cl" style="--hang:4"> </span>
+<span class="cl" style="--hang:4"><span class="k">function</span> main() &#123;</span>
+<span class="cl" style="--hang:6">	<span class="k">var</span> origin = <span class="k">new</span> Point();</span>
+<span class="cl" style="--hang:6">	<span class="k">var</span> corner = <span class="k">new</span> Point();</span>
+<span class="cl" style="--hang:6">	corner.x = 3.0;</span>
+<span class="cl" style="--hang:6">	corner.y = 4.0;</span>
+<span class="cl" style="--hang:6">	<span class="k">var</span> d = Geometry.distance(origin, corner);</span>
+<span class="cl" style="--hang:6">	Sys.println(<span class="s">'distance: $d'</span>);</span>
+<span class="cl" style="--hang:4"> </span>
+<span class="cl" style="--hang:6">	Geometry.translate(corner, 1.0, 1.0);</span>
+<span class="cl" style="--hang:6">	Sys.println(<span class="s">'moved to: $&#123;corner.x&#125;, $&#123;corner.y&#125;'</span>);</span>
+<span class="cl" style="--hang:4">&#125;</span></code></pre><pre
+            class="out"
+            aria-label="Output"><span class="p">$ haxeon run</span>
+distance: 5
+moved to: 4, 5</pre>
+        </div>
+      </div>
+    </div>
+    <div class="figure paper">
+      <svg
+        class="drawing"
+        viewBox="0 0 1000 200"
+        role="img"
+        aria-label="C and Haxeon point at the same 16 bytes of geo_point"
+      >
+        <defs>
+          <marker
+            id="ah2"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 0L10 5L0 10z" class="accf"></path>
+          </marker>
+        </defs>
+        <text x="300" y="30" class="ttl">geo_point · 16 bytes</text>
+        <path d="M302 56H582M302 56v8M582 56v8" class="ln"></path><text x="442" y="50" text-anchor="middle">
+          double x
+        </text>
+        <path d="M590 56H870M590 56v8M870 56v8" class="ln"></path><text x="730" y="50" text-anchor="middle">
+          double y
+        </text>
+        {
+          Array.from({ length: 16 }, (_, byte) => (
+            <rect x={300 + byte * 36} y="72" width="36" height="40" class="box" />
+          ))
+        }
+        <text x="300" y="134" text-anchor="middle">0</text><text x="588" y="134" text-anchor="middle">
+          8
+        </text><text x="876" y="134" text-anchor="middle">16</text>
+        <rect x="20" y="40" width="210" height="36" rx="6" class="codebox"></rect><text
+          x="125"
+          y="63"
+          text-anchor="middle"
+          class="codet"
+        >
+          C geo_point *a
+        </text>
+        <rect x="20" y="124" width="210" height="36" rx="6" class="codebox"></rect><text
+          x="125"
+          y="147"
+          text-anchor="middle"
+          class="codet"
+        >
+          Haxeon Point corner
+        </text>
+        <path d="M230 58C265 58 268 84 296 86" class="acc" marker-end="url(#ah2)"></path>
+        <path d="M230 142C265 142 268 100 296 98" class="acc" marker-end="url(#ah2)"></path>
+        <text x="300" y="178">
+          Both sides read and write the same bytes: no copying, no conversion layer.
+        </text>
+      </svg>
+    </div>
+    <div class="ctas">
+      <a class="btn ghost" href={docsUrl('guides/04-calling-c-and-cpp.md')}>Read the C and C++ guide</a>
+    </div>
+  </div>
+</section>

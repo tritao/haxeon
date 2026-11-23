@@ -1,0 +1,72 @@
+---
+const platforms = [
+  {
+    platform: 'Linux (x86-64, arm64)',
+    icon: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M7 9l3 2-3 2M12 13h4M9 20h6"/>',
+    state: 'ok',
+    status: 'Supported',
+    live: 'Yes',
+  },
+  {
+    platform: 'macOS (Intel, Apple Silicon)',
+    icon: '<path d="M5 6h14v10H5z"/><path d="M2 19h20"/>',
+    state: 'ok',
+    status: 'Supported',
+    live: 'Yes',
+  },
+  {
+    platform: 'Windows (x86-64)',
+    icon: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M3 8h18M9 20h6"/>',
+    state: 'ok',
+    status: 'Supported',
+    live: 'Yes',
+  },
+  {
+    platform: 'Android (arm64-v8a, x86_64)',
+    icon: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    state: 'ok',
+    status: 'Supported',
+    live: 'Yes',
+  },
+  {
+    platform: 'Web (WebAssembly)',
+    icon: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/>',
+    state: 'exp',
+    status: 'Experimental',
+    live: 'Not yet',
+  },
+  {
+    platform: 'iOS',
+    icon: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    state: 'plan',
+    status: 'In progress',
+    live: 'Not yet',
+  },
+];
+---
+
+<div class="plat">
+  <table aria-label="Platforms">
+    <thead>
+      <tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Live editing</th></tr>
+    </thead>
+    <tbody>
+      {
+        platforms.map(({ platform, icon, state, status, live }) => (
+          <tr>
+            <td>
+              <span class="pn">
+                <svg class="pico" viewBox="0 0 24 24" aria-hidden="true" set:html={icon} />
+                {platform}
+              </span>
+            </td>
+            <td>
+              <span class:list={['st', state]}>{status}</span>
+            </td>
+            <td>{live}</td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>

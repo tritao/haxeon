@@ -1,0 +1,153 @@
+---
+import CodeLines from './CodeLines.astro';
+
+const tasks = [
+  { title: 'Buy milk', done: true },
+  { title: 'Write the report', done: false },
+  { title: 'Call the plumber', done: false },
+];
+const diff = [
+  ['', 'function view():View'],
+  ['', '\treturn column(['],
+  ['del', '\t\ttext("Tasks", Title),'],
+  ['add', "\t\ttext('Tasks · ${remaining()} left', Title),"],
+  ['', '\t\tfor (task in tasks) taskRow(task),'],
+  ['', '\t\taddRow(draft)'],
+  ['', '\t]);'],
+  ['', ''],
+  ['', 'function taskRow(task:Task):View'],
+  ['del', '\treturn row([checkbox(task.done), text(task.title)]);'],
+  ['add', '\treturn row([checkbox(task.done),'],
+  ['add', '\t\ttext(task.title, task.done ? Done : Body)]);'],
+];
+---
+
+<live-edit-demo class="demo">
+  <div class="code">
+    <div class="bar"><span>src/App.hx</span><span data-version>version 1</span></div>
+    {
+      [1, 2].map((version) => (
+        <pre data-code={version} hidden={version !== 1}>
+          <code>
+            <CodeLines
+              lines={diff
+                .filter(([change]) => version === 2 || change !== 'add')
+                .map(([change, text]) => ({ text, change: version === 2 ? change : undefined }))}
+            />
+          </code>
+        </pre>
+      ))
+    }
+  </div>
+  <div class="app">
+    <div class="window">
+      <div class="tb">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Task List</span>
+      </div>
+      <div class="body">
+        <h3 data-title>Tasks</h3>
+        <div class="tasks">
+          {
+            tasks.map(({ title, done }) => (
+              <div class:list={['task', { done }]}>
+                <label>
+                  <>
+                    <input type="checkbox" checked={done} />
+                    <span>{title}</span>
+                  </>
+                </label>
+              </div>
+            ))
+          }
+        </div>
+        <form class="addrow">
+          <input name="draft" type="text" placeholder="New task" aria-label="New task" />
+          <button type="submit">Add</button>
+        </form>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn primary" data-apply type="button">Apply the edit</button>
+      <button class="reject" data-reject type="button">Try a broken edit</button>
+    </div>
+    <span class="status" role="status">Running version 1</span>
+    <p class="demo-note">Interactive preview of a Haxeon live edit.</p>
+  </div>
+</live-edit-demo>
+
+<script>
+  class LiveEditDemo extends HTMLElement {
+    connectedCallback() {
+      const windowPanel = this.querySelector('.window')!;
+      const form = this.querySelector('form')!;
+      const draft = form.querySelector('input')!;
+      const title = this.querySelector('[data-title]')!;
+      const versionLabel = this.querySelector('[data-version]')!;
+      const list = this.querySelector('.tasks')!;
+      const status = this.querySelector('[role="status"]')!;
+      const apply = this.querySelector<HTMLButtonElement>('[data-apply]')!;
+      const code = [...this.querySelectorAll<HTMLElement>('[data-code]')];
+      let version = 1;
+
+      const countDone = () => list.querySelectorAll('input:checked').length;
+      const updateTitle = () => {
+        title.textContent = version === 1 ? 'Tasks' : `Tasks · ${list.children.length - countDone()} left`;
+      };
+
+      list.addEventListener('change', (event) => {
+        const checkbox = event.target;
+        if (!(checkbox instanceof HTMLInputElement)) return;
+        checkbox.closest('.task')?.classList.toggle('done', checkbox.checked);
+        updateTitle();
+      });
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const task = draft.value.trim();
+        if (!task) return;
+        const row = document.createElement('div');
+        row.className = 'task';
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        const text = document.createElement('span');
+        text.textContent = task;
+        label.append(checkbox, text);
+        row.append(label);
+        list.append(row);
+        draft.value = '';
+        draft.focus();
+        updateTitle();
+      });
+
+      const announce = (message: string) => {
+        const kept = document.createElement('span');
+        kept.className = 'kept';
+        kept.textContent =
+          `kept: ${list.children.length} tasks, ${countDone()} done` +
+          (draft.value.trim() ? `, draft "${draft.value}"` : '');
+        status.replaceChildren(message + ' ', kept);
+      };
+
+      apply.addEventListener('click', () => {
+        version = version === 1 ? 2 : 1;
+        code.forEach((panel) => {
+          panel.hidden = Number(panel.dataset.code) !== version;
+        });
+        list.classList.toggle('v2', version === 2);
+        updateTitle();
+        versionLabel.textContent = `version ${version}`;
+        apply.textContent = version === 1 ? 'Apply the edit' : 'Undo the edit';
+        windowPanel.classList.remove('flash');
+        requestAnimationFrame(() => requestAnimationFrame(() => windowPanel.classList.add('flash')));
+        announce(`Patched to version ${version}.`);
+      });
+
+      this.querySelector('[data-reject]')!.addEventListener('click', () => {
+        announce(`Patch rejected. Still running version ${version}.`);
+      });
+    }
+  }
+
+  customElements.define('live-edit-demo', LiveEditDemo);
+</script>

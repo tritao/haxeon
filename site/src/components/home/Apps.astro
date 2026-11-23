@@ -1,0 +1,94 @@
+---
+import LiveDemo from './LiveDemo.astro';
+import Showcase from './Showcase.astro';
+import { docsUrl, repositorySource } from '../../../docs.mjs';
+---
+
+<section id="apps">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Apps</span>
+      <h2>Cross-platform UI</h2>
+      <p class="kicker">Change the code. The app keeps going.</p>
+      <p class="lede">
+        Run your app with <code>haxeon run --watch --live</code> and save a change: the running app takes the
+        new code and keeps what it was doing. Try it here: tick a task, type a draft, then apply the edit.
+      </p>
+    </div>
+
+    <LiveDemo />
+    <div class="steps">
+      <span><b>Patched in place:</b> logic, data, native calls and UI.</span><span>
+        <b>Kept:</b> every object the app made.
+      </span><span><b>A broken edit:</b> the app keeps running the last good code.</span>
+    </div>
+
+    <div class="batt">
+      <div>
+        <div class="th">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 9h18M9 9v10"></path>
+          </svg><h3>UI that looks the same everywhere</h3>
+        </div><p class="lede" style="font-size:0.95rem">
+          The <a href={docsUrl('guides/03-ui-basics.md')}><code>ui</code> package</a> draws on the GPU, with
+          real text handling built in.
+        </p><div class="chips">
+          <span>Layout</span><span>Text shaping</span><span>Right-to-left text</span><span>
+            CJK line breaking
+          </span><span>Vector drawing</span><span>Themes</span>
+        </div>
+      </div>
+      <div>
+        <div class="th">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"></path><path d="M10 20.5a2 2 0 0 0 4 0"></path>
+          </svg><h3>Native services from the OS</h3>
+        </div><p class="lede" style="font-size:0.95rem">
+          Each platform's own services, through one <a href={repositorySource('packages/nativekit')}>
+            NativeKit API
+          </a>.
+        </p><div class="chips">
+          <span>Windows</span><span>Menus</span><span>Tray</span><span>Dialogs</span><span>
+            Notifications
+          </span><span>Clipboard</span><span>WebView</span><span>Accessibility</span><span>
+            Gamepad
+          </span><span>Sensors</span><span>File watching</span><span>Networking</span>
+        </div>
+      </div>
+      <div>
+        <div class="th">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"></path><path d="M4 7.5l8 4.5 8-4.5M12 12v9"></path>
+          </svg><h3>Packages</h3>
+        </div><p class="lede" style="font-size:0.95rem">
+          From the <a href={docsUrl('reference/MANIFEST.md') + '#the-haxeon-registry'}>haxeon registry</a>,
+          versioned with the toolchain.
+        </p><div class="chips">
+          {
+            [
+              'gpu',
+              'audio',
+              'animation',
+              'editor',
+              'filesystem',
+              'credentials',
+              'platform',
+              'agentkit',
+            ].map((name) => <a href={repositorySource('packages/' + name)}>{name}</a>)
+          }
+        </div>
+      </div>
+    </div>
+    <p class="note">NativeKit is experimental and pre-1.0. Its ABI is still evolving.</p>
+
+    <Showcase />
+    <div class="ctas">
+      <a class="btn primary" href={docsUrl('guides/01-first-app.md')}>Build your first app</a><a
+        class="btn ghost"
+        href={repositorySource('docs/guides/examples/03-ui-basics/tasks/')}
+      >
+        Get the demo source
+      </a>
+    </div>
+  </div>
+</section>

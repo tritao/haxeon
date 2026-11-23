@@ -1,0 +1,22 @@
+---
+import Marketing from '../layouts/Marketing.astro';
+import Apps from '../components/home/Apps.astro';
+import Outputs from '../components/home/Outputs.astro';
+import OtherUses from '../components/home/OtherUses.astro';
+import { docsUrl } from '../../docs.mjs';
+---
+
+<Marketing title="Build">
+  <section class="marketing-page paper">
+    <div class="wrap head">
+      <h1>Build apps with Haxeon</h1>
+      <p class="lede">
+        Develop a cross-platform UI on the live VM, then ship it for the platforms you support.
+      </p>
+      <p><a href={docsUrl('guides/01-first-app.md')}>Build your first app</a></p>
+    </div>
+  </section>
+  <Apps />
+  <Outputs />
+  <OtherUses />
+</Marketing>

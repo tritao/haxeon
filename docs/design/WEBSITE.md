@@ -1,7 +1,7 @@
 # Website and user documentation
 
-Status: agreed direction (2026-11-22); nothing built yet. The brief for the public site and the user documentation it
-publishes: who it is for, what it says, what pages it has, and what has to exist before it launches.
+Status: agreed direction (2026-11-22); the site builds locally and has a CI workflow. This brief describes the public
+site and its user documentation, who it is for, what it says, and what has to exist before it launches.
 
 ## Position
 
@@ -164,10 +164,14 @@ compiler is the next step if the install proves the obstacle (TODO.md).
 
 ## Site
 
-The documentation pages are static HTML from an existing docs generator (Astro Starlight unless a reason against it
-turns up), so they load fast, are indexed, and work without WebAssembly. The site source lives in this repository under
-`site/` and reads `docs/`, so a change and its documentation land in one commit. Haxeon-built WebAssembly runs where it
-shows something: the UI Showcase on the home page and, later, a playground.
+[The site](../../site/README.md) uses Astro Starlight under `site/`. It builds static HTML directly from the guides
+and reference Markdown in `docs/`, and picks up the language tour and migration guides as those pages land. It
+generates command help from the CLI source during the build. CI builds the site, checks its internal links and
+runs the homepage's standalone programs.
+
+The homepage includes an interactive live-edit preview, the language tour, platform and tooling details, and
+placeholder areas for Materia and Exosuit captures. The real live-edit recording and the UI Showcase's web runner
+are launch items. Domain, hosting and publication of release versions are open.
 
 ## Before launch
 

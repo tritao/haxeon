@@ -1,0 +1,26 @@
+---
+interface Props {
+  lines: { text: string; change?: string }[];
+}
+
+const { lines } = Astro.props;
+const token =
+  /("[^"\n]*"|'[^'\n]*'|\/\/[^\n]*|@:\w+|\b(?:abstract|case|defer|enum|false|final|for|from|function|if|implements|import|in|inline|new|null|public|return|struct|switch|this|true|typedef|var)\b)/;
+---
+
+{
+  lines.map(({ text, change }) => {
+    const indent = (text.match(/^\t*/)?.[0].length ?? 0) * 2;
+    return (
+      <span class:list={['cl', change]} style={`--hang:${indent + 4}`}>
+        {text
+          ? text.split(token).map((part, i) => {
+              if (i % 2 === 0) return part;
+              const kind = part.startsWith('//') ? 'c' : /^["']/.test(part) ? 's' : 'k';
+              return <span class={kind}>{part}</span>;
+            })
+          : ' '}
+      </span>
+    );
+  })
+}

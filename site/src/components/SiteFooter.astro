@@ -1,0 +1,41 @@
+---
+import { getCollection } from 'astro:content';
+import { docsUrl, projectRepo } from '../../docs.mjs';
+
+const comingFrom = await getCollection(
+  'docs',
+  ({ id, data }) => (id === 'coming-from' || id.startsWith('coming-from/')) && !data.draft,
+);
+---
+
+<footer>
+  <div class="wrap">
+    <div>
+      <a class="mark" href="/">Haxeon</a><p>
+        A language and runtime for cross-platform apps and tools, developed in the open.
+      </p>
+    </div>
+    <div>
+      <h2>Learn</h2>
+      <a href={docsUrl('guides/00-get-started.md')}>Get started</a>
+      <a href={docsUrl('guides/README.md')}>Guides</a>
+      <a href={docsUrl('reference/CLI.md')}>Reference</a>
+    </div>
+    {
+      comingFrom.length > 0 && (
+        <div>
+          <h2>Coming from</h2>
+          {comingFrom.map(({ id, data }) => (
+            <a href={`/${id}/`}>{data.sidebar?.label || data.title}</a>
+          ))}
+        </div>
+      )
+    }
+    <div>
+      <h2>Project</h2>
+      <a href={projectRepo}>GitHub</a>
+      <a href="/about/">About</a>
+      <a href="/about/#licenses">Licenses</a>
+    </div>
+  </div>
+</footer>
