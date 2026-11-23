@@ -577,7 +577,7 @@ class IrPipeline {
 
 	/** The last value phi scalarization before scalar replacement. */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return IrValuePhiScalarization.pass(program, bodyTypes(context), context.passScratch);
+		return IrValuePhiScalarization.pass(program, bodyTypes(context), context.passScratch, context.lineage);
 
 	/** Wasm's scalar argument ABI, with value lanes. */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrFunctionPass
@@ -602,7 +602,8 @@ class IrPipeline {
 			types = bodyTypes(context),
 			scratch = context.passScratch;
 		return new IrValueObjectRows(IrOpcode.ValueInit, scalarObjects, types, scratch.bodyBuilder,
-			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, types, scratch, hashLink));
+			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, types, scratch, hashLink),
+			compiler.ir.passes.values.IrInlineValueLayout.declarationsFact(program.objects, context.lineage));
 	}
 
 	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrFunctionPass

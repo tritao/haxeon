@@ -10,14 +10,13 @@ import compiler.ir.model.IrTypeIds;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
 
 /**
  * A rewrite of the functions that have a row of one opcode whose output is a value object (`IrObject.isValue`), per function
  * (`IrFunctionPass`): scalar replacement's value allocations, value phi scalarization's value phis. A function's summary says
  * whether it has such a row with an object output at all; its rewrite reads, for each such object, whether it is a value class
- * (`VALUE`), so a function with none keeps its form unread while those facts hold. One with a value row is rewritten each run
- * (`REWRITE`, never stated), as what the rewrite reads of the declarations is not recorded.
+ * (`VALUE`), so a function with none keeps its form unread while those facts hold. One with a value row also reads what the
+ * rewrite reads of the declarations, the value objects' layouts, as one fact (`REWRITE`, `IrInlineValueLayout.declarationsFact`).
  */
 @:nullSafety(Strict)
 class IrValueObjectRows implements IrFunctionPass {
@@ -32,9 +31,11 @@ class IrValueObjectRows implements IrFunctionPass {
 	final types:IrTypeIds;
 	final builder:IrBodyBuilder;
 	final rewrite:IrFunction->IrFunction;
+	final declarations:() -> Int;
 
 	public function new(opcode:IrOpcode, objects:IrObjectTable, types:IrTypeIds, builder:IrBodyBuilder,
-			rewrite:IrFunction->IrFunction) {
+			rewrite:IrFunction->IrFunction, declarations:() -> Int) {
+		this.declarations = declarations;
 		this.opcode = opcode;
 		this.objects = objects;
 		this.types = types;
@@ -68,7 +69,7 @@ class IrValueObjectRows implements IrFunctionPass {
 			case VALUE:
 				var object = objects.get(key);
 				object != null && object.isValue ? 1 : 0;
-			default: IrFacts.UNKNOWN;
+			default: declarations();
 		};
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {

@@ -34,7 +34,8 @@ class IrValuePhiScalarization {
 			program.functions);
 
 	/** `rewriteBodies` per function (`IrValueObjectRows`): a function with a value phi is rewritten. */
-	public static function pass(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch):IrValueObjectRows {
+	public static function pass(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrValueObjectRows {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects),
 			layouts = new IrInlineValueLayout(table),
@@ -42,8 +43,16 @@ class IrValuePhiScalarization {
 				for (declaration in program.enums)
 					if (declaration.inlineStorage != null) declaration.inlineStorage => true
 			];
-		return new IrValueObjectRows(IrOpcode.Phi, table, types, scratch.bodyBuilder,
-			fn -> rewriteBody(fn, objects, table, layouts, packets, types, scratch));
+		return new IrValueObjectRows(
+			IrOpcode.Phi,
+			table,
+			types,
+			scratch.bodyBuilder,
+			fn -> rewriteBody(fn, objects, table, layouts, packets, types, scratch),
+			// What a rewrite reads of the declarations: the value objects, and which of them are enum packets.
+			IrInlineValueLayout.declarationsFact(program.objects, lineage,
+				"\npackets " + [for (declaration in program.enums) declaration.inlineStorage].join(","))
+		);
 	}
 
 	/** `runBody` on `fn`'s body: `fn` itself when nothing changes. */
