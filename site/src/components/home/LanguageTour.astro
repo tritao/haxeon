@@ -96,22 +96,29 @@ Sys.println(json);`,
     id: 'rpc',
     title: 'Typed RPC',
     description:
-      'Typed RPC over the same codecs: a method is a permanent id with a request and response type, the server registers it, the client calls it. Handshake, capabilities, cancellation and reconnect are built in; any transport carries it.',
+      'Declare a service as an interface: the compiler writes the server dispatch, a typed client stub and the codecs. Methods are named on the wire, and numbered once with <code>haxeon lint --fix --pin-wire</code> when a protocol must stay stable. Handshake, cancellation and reconnect are built in; any transport carries it.',
     code: `import haxeon.rpc.MemoryTransport;
 import haxeon.rpc.RpcConnection;
-import haxeon.rpc.RpcMethod;
 
 typedef Query = {name:String};
 typedef Answer = {text:String};
 
-final pair = MemoryTransport.pair();
-final client = new RpcConnection(pair.client, () -> 0.0);
-final server = new RpcConnection(pair.server, () -> 0.0);
-final greet:RpcMethod<Query, Answer> = RpcMethod.wire(100);
+interface Greeter {
+	function greet(request:Query):Answer;
+}
 
-server.register(greet, (request, context) ->
-	context.respond({text: 'Hello, \${request.name}'}));
-client.call(greet, {name: "Ada"}, 1000,
+class Hello implements Greeter {
+	public function new() {}
+	public function greet(request:Query):Answer
+		return {text: 'Hello, \${request.name}'};
+}
+
+final pair = MemoryTransport.pair();
+final server = new RpcConnection(pair.server, () -> 0.0);
+final client = new RpcConnection(pair.client, () -> 0.0);
+server.serve(Greeter, new Hello());
+
+client.of(Greeter).greet({name: "Ada"},
 	answer -> Sys.println(answer.text),
 	error -> Sys.println(error.code));
 
