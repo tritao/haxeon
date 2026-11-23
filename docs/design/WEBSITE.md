@@ -38,6 +38,15 @@ What you can build, each linking to a guide, and only what works today:
 
 Servers and services are not shown until there is a networking story worth showing.
 
+Showcase, as proof rather than claims (real, named apps a visitor can inspect beat adjectives):
+
+- **Materia** (github.com/tritao/materia): a reference editor and native UI application.
+- **Exosuit** (github.com/tritao/exosuit): an AI agent and code editor built on Haxeon.
+- **The UI Showcase**, running in the browser once the web runner lands; Audio Lab for the audio package.
+- **Samples to build:** small original games for the games tile (a maze-chase game first, whose enemies' behaviour is tuned
+  live while it is played, which doubles as a live-editing clip), later a platformer and a 3D viewer. Original names,
+  levels and characters, never recreations of existing games.
+
 Compared with, for apps: Flutter, .NET (MAUI, Avalonia), React Native, Kotlin Multiplatform, Electron and Tauri; as a
 language and runtime: Kotlin, Swift, Go, Rust and Dart. The showcase apps
 prove range rather than define the audience: an ordinary forms-and-lists app, an editor, a 3D viewer and a small game.
