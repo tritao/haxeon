@@ -119,7 +119,7 @@ class IrPipeline {
 		IrFunctionStages.programStage("value-constructors", valueConstructors).when(hashLink),
 		IrFunctionStages.programStage("scalar-argument-joins", valuePhiScalarizationBodies).when(hashLink),
 		IrFunctionStages.programStage("scalar-arguments", scalarArguments).when(hashLink),
-		new IrStage("scalar-closures", scalarClosures).when(hashLink),
+		IrFunctionStages.programStage("scalar-closures", scalarClosures).when(hashLink),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
 		IrFunctionStages.programStage("scalar-replacement", scalarReplacement),
@@ -606,10 +606,8 @@ class IrPipeline {
 	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrFunctionPass
 		return new IrScalarArguments(program, false, bodyTypes(context), context.passScratch, context.lineage);
 
-	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrScalarClosures(program, bodyTypes(context), context.passScratch, context.lineage);
 
 	static function scalarReplacementObjects(program:IrProgram, context:IrPipelineContext):IrProgram {
 		context.scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => object]);

@@ -19,7 +19,10 @@ import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 
 /** HashLink's scalar argument/result convention applied to typed, non-erased closures. */
-class IrScalarClosures {
+class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
+	/** The fact of a function type, by its key: never stated for a candidate, 0 for any other. */
+	static inline final CANDIDATE = 0;
+
 	final program:IrProgram;
 	final objects:Map<String, IrObject>;
 	final inlineEnums:Map<String, String> = [];
@@ -34,11 +37,15 @@ class IrScalarClosures {
 	final generatedMakers:Array<IrFunction> = [];
 	final generatedObjects:Array<IrObject> = [];
 
-	/** How many operands read each value id of the function `discover` is reading, its storage kept from one to the next. */
+	/** How many operands read each value id of the function `IrClosureUses.read` is reading, its storage kept from one to the next. */
 	final useCounts:Array<Int> = [];
 
 	final types:IrTypeIds;
 	final scratch:IrPassScratch;
+	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+
+	/** By type id, the keys of the function types the type names where `changesType` looks, or null when not known yet. */
+	final functionKeys:Array<Null<Array<String>>> = [];
 
 	/** By value id, the type a `TypeValue` row of the function being rewritten names, before the rewrite. */
 	final typeValues:Map<Int, IrType> = [];
@@ -48,17 +55,22 @@ class IrScalarClosures {
 	 * program's bodies when not given, `IrTypeIds.ofFunctions`). A function that changes becomes its edited body: owned by the
 	 * next stage: edited in place, or a copy when a cache holds the body.
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
-		var pass = new IrScalarClosures(program, types == null ? IrTypeIds.ofFunctions(program.functions) : types,
-			scratch == null ? new IrPassScratch() : scratch);
-		var bodies = [for (fn in program.functions) pass.bodyOf(fn)];
-		pass.discover(bodies);
-		if (pass.candidates.keys().hasNext())
-			pass.apply(bodies);
-	}
+	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void
+		program.functions = compiler.ir.pipeline.IrFunctionStages.apply("scalar-closures",
+			new IrScalarClosures(program, types == null ? IrTypeIds.ofFunctions(program.functions) : types,
+			scratch == null ? new IrPassScratch() : scratch),
+			program.functions);
 
-	function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch) {
+	/**
+	 * The scalar closure ABI per function (`IrFunctionPass`). The candidate closure types are chosen over the whole program from
+	 * what each function's rows do with closures (`IrClosureUses`, one record per version in a session); the rewrite of a function
+	 * reads, for each function type its types name, whether it is a candidate (`CANDIDATE`): one that names none keeps its form
+	 * unread while those facts hold, and one that names a candidate is rewritten each run, with the adapters it makes.
+	 */
+	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.program = program;
+		this.lineage = lineage;
 		this.types = types;
 		this.scratch = scratch;
 		objects = [for (object in program.objects) object.name => object];
@@ -75,7 +87,12 @@ class IrScalarClosures {
 		return body;
 	}
 
-	function discover(bodies:Array<IrBody>):Void {
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	/** The candidate closure types: what each function does with closures, decided against the program. */
+	public function prepare(inputs:Array<IrFunction>, summaries:Array<Int>,
+			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		for (native in program.natives) {
 			for (type in native.arguments)
 				excludeNested(type);
@@ -86,78 +103,90 @@ class IrScalarClosures {
 				excludeNested(type);
 			excludeNested(native.result);
 		}
-		for (index in 0...bodies.length) {
-			var fn = program.functions[index], body = bodies[index];
-			// Most functions make no signature query, and need no map of them.
-			var signatureQueries:Null<Map<Int, Bool>> = null,
-				uses = IrPassScratch.filledInts(useCounts, body.valueLimit(), 0);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					for (input in 0...body.operandCount(row))
-						uses[body.operand(row, input)]++;
-					if (body.opcode(row) == IrOpcode.Call && body.operandCount(row) == 2
-						&& body.symbol(row).name == "__closure_is_of_type") {
-						if (signatureQueries == null)
-							signatureQueries = [];
-						signatureQueries.set(body.operand(row, 1), true);
-					}
-					row = body.nextRow(row);
-				}
-			}
+		for (fn in inputs) {
 			if (fn.name == program.entryPoint || fn.retention != Reachable) {
-				for (argument in 0...body.argumentCount())
-					excludeNested(body.valueType(body.argument(argument)));
-				excludeNested(body.types.type(body.result));
+				for (argument in fn.arguments)
+					excludeNested(argument.type);
+				excludeNested(fn.result);
 			}
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					switch body.opcode(row) {
-						case IrOpcode.StaticClosure:
-							var type = body.valueType(body.output(row));
-							if (note(type) && !functions.exists(IrScalarArguments.PREFIX + body.symbol(row).name))
-								excluded.set(key(type), true);
-						case IrOpcode.InstanceClosure:
-							var type = body.valueType(body.output(row));
-							if (note(type)
-								&& (isValue(body.valueType(body.operand(row, 0)))
-								|| !functions.exists(IrScalarArguments.PREFIX + body.symbol(row).name)))
-								excluded.set(key(type), true);
-						case IrOpcode.CallClosure:
-							note(body.valueType(body.operand(row, 0)));
-						case IrOpcode.ToDyn:
-							var input = body.valueType(body.operand(row, 0)), callable = functionType(input);
-							if (callable != null)
-								note(callable);
-							else
-								excludeNested(input);
-						case IrOpcode.SafeCast:
-							var output = body.valueType(body.output(row)),
-								input = body.valueType(body.operand(row, 0)),
-								callable = functionType(output);
-							if (callable != null && (switch (input) {
-								case Dyn: true;
-								default: false;
-							}))
-								note(callable);
-							else
-								excludeNested(output);
-							excludeNested(input);
-						case IrOpcode.TypeValue:
-							var out:Int = body.output(row);
-							if (signatureQueries == null || !signatureQueries.exists(out) || out >= uses.length
-								|| uses[out] != 1)
-								excludeNested(body.typeOperand(row));
-						default:
-					}
-					row = body.nextRow(row);
+			var uses = IrClosureUses.of(fn, types, scratch, useCounts, lineage), events = uses.events, index = 0;
+			while (index < events.length) {
+				var type = types.type(events[index + 1]);
+				switch events[index] {
+					case IrClosureUses.NOTE:
+						note(type);
+					case IrClosureUses.EXCLUDE:
+						excludeNested(type);
+					case IrClosureUses.STATIC:
+						if (note(type) && !functions.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]]))
+							excluded.set(key(type), true);
+					default:
+						if (note(type)
+							&& (isValue(types.type(events[index + 3]))
+							|| !functions.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]])))
+							excluded.set(key(type), true);
 				}
+				index += events[index] == IrClosureUses.INSTANCE ? 4 : events[index] == IrClosureUses.STATIC ? 3 : 2;
 			}
 		}
 		for (name in excluded.keys())
 			candidates.remove(name);
 	}
+
+	public function fact(kind:Int, key:String):Int
+		return candidates.exists(key) ? compiler.ir.reuse.IrFacts.UNKNOWN : 0;
+
+	static function addFunctionKeys(type:IrType, keys:Array<String>):Void
+		switch type {
+			case Abstract(_) if (IrHlScalarRef.element(type) != null):
+				addFunctionKeys(IrHlScalarRef.element(type), keys);
+			case Function(arguments, result):
+				var name = key(type);
+				if (keys.indexOf(name) < 0)
+					keys.push(name);
+				for (argument in arguments)
+					addFunctionKeys(argument, keys);
+				addFunctionKeys(result, keys);
+			case Array(element), Iterator(element), Nullable(element):
+				addFunctionKeys(element, keys);
+			default:
+		}
+
+	function readTypeFacts(id:Int, reader:compiler.ir.reuse.IrFactReader):Void {
+		if (id < 0)
+			return;
+		var keys = id < functionKeys.length ? functionKeys[id] : null;
+		if (keys == null) {
+			keys = [];
+			addFunctionKeys(types.type(id), keys);
+			while (functionKeys.length <= id)
+				functionKeys.push(null);
+			functionKeys[id] = keys;
+		}
+		for (name in keys)
+			reader.read(CANDIDATE, name);
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+		var body = bodyOf(fn);
+		if (reader.records()) {
+			readTypeFacts(body.result, reader);
+			for (value in 0...body.valueLimit())
+				readTypeFacts(body.valueTypeId(IrValueId.of(value)), reader);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.TypeValue)
+						readTypeFacts(body.aux(row), reader);
+					row = body.nextRow(row);
+				}
+			}
+		}
+		return candidates.keys().hasNext() ? rewriteFunction(fn, body) : fn;
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		throw new InternalError("The scalar closure ABI asks for no helper");
 
 	function note(type:IrType):Bool {
 		return switch type {
@@ -204,9 +233,11 @@ class IrScalarClosures {
 		return true;
 	}
 
-	function apply(bodies:Array<IrBody>):Void {
-		var rewritten = [for (index in 0...bodies.length) rewriteFunction(program.functions[index], bodies[index])],
-			generated:Array<IrFunction> = [],
+	/** The program with the candidates' types mapped, the adapters made and the rewritten functions. */
+	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
+		if (!candidates.keys().hasNext())
+			return rewritten;
+		var generated:Array<IrFunction> = [],
 			generatedIndex = 0;
 		while (generatedIndex < generatedFunctions.length) {
 			var fn = generatedFunctions[generatedIndex++];
@@ -260,7 +291,8 @@ class IrScalarClosures {
 		generated = IrValueInterfaceBoxes.rewrite(generated.concat(generatedMakers), program.objects,
 			program.interfaces, rewritten);
 		generated = IrCheckedDynamicCasts.rewrite(generated, program.objects, false, rewritten);
-		program.functions = rewritten.concat(generated);
+		var result = rewritten.concat(generated);
+		program.functions = result;
 		var hasTypeTest = false;
 		for (native in program.natives)
 			if (native.name == "__std_is_of_type")
@@ -273,6 +305,7 @@ class IrScalarClosures {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
+		return result;
 	}
 
 	/** An ordinary function can still need a boundary bridge for scalar callback arguments/results. */
@@ -859,7 +892,7 @@ class IrScalarClosures {
 		throw new InternalError('Missing scalar closure field $objectName.$name');
 	}
 
-	static function functionType(type:IrType):Null<IrType>
+	public static function functionType(type:IrType):Null<IrType>
 		return switch type {
 			case Function(_, _): type;
 			case Nullable(inner): switch inner {
@@ -871,4 +904,120 @@ class IrScalarClosures {
 
 	static function key(type:IrType):String
 		return IrTypeIdentity.text(type);
+}
+
+/**
+ * What one function's rows do with closures, for the scalar closure ABI's choice (`IrScalarClosures.prepare`), by type ids of the
+ * body's table: the types it notes as candidates (`NOTE`: closures it calls, turns `Dyn` or takes back from `Dyn`), the types it
+ * excludes with what they nest (`EXCLUDE`), and the closures it makes of functions by name (`STATIC`, `INSTANCE` with the
+ * receiver's type), whose candidacy depends on the program. It depends on the body alone, so a session keeps it by the function's
+ * version (`IrStageMemos.closureUses`).
+ */
+class IrClosureUses {
+	public static inline final NOTE = 0;
+	public static inline final EXCLUDE = 1;
+	public static inline final STATIC = 2;
+	public static inline final INSTANCE = 3;
+
+	/** Entries: kind, type id, then for `STATIC` a name's index in `names`, for `INSTANCE` that and the receiver's type id. */
+	public final events:Array<Int> = [];
+
+	public final names:Array<String> = [];
+
+	function new() {}
+
+	public static function of(fn:IrFunction, types:IrTypeIds, scratch:IrPassScratch, useCounts:Array<Int>,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrClosureUses {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
+		var memo = lineage.memos.closureUses, known = memo.get(version);
+		if (known == null) {
+			known = read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
+			memo.keep(version, known);
+		} else if (lineage.checks) {
+			var now = read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
+			if (now.events.join(",") != known.events.join(",") || now.names.join(",") != known.names.join(","))
+				throw new InternalError('--check-reuse: the closure uses reused for ${fn.name} differ from its body');
+		}
+		return known;
+	}
+
+	function event(kind:Int, type:Int):Void {
+		events.push(kind);
+		events.push(type);
+	}
+
+	function named(name:String):Int {
+		var index = names.indexOf(name);
+		if (index < 0) {
+			index = names.length;
+			names.push(name);
+		}
+		return index;
+	}
+
+	static function read(body:IrBody, useCounts:Array<Int>):IrClosureUses {
+		var uses = new IrClosureUses(), types = body.types;
+		// Most functions make no signature query, and need no map of them.
+		var signatureQueries:Null<Map<Int, Bool>> = null,
+			counts = IrPassScratch.filledInts(useCounts, body.valueLimit(), 0);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				for (input in 0...body.operandCount(row))
+					counts[body.operand(row, input)]++;
+				if (body.opcode(row) == IrOpcode.Call && body.operandCount(row) == 2
+					&& body.symbol(row).name == "__closure_is_of_type") {
+					if (signatureQueries == null)
+						signatureQueries = [];
+					signatureQueries.set(body.operand(row, 1), true);
+				}
+				row = body.nextRow(row);
+			}
+		}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.StaticClosure:
+						uses.event(STATIC, body.valueTypeId(body.output(row)));
+						uses.events.push(uses.named(body.symbol(row).name));
+					case IrOpcode.InstanceClosure:
+						uses.event(INSTANCE, body.valueTypeId(body.output(row)));
+						uses.events.push(uses.named(body.symbol(row).name));
+						uses.events.push(body.valueTypeId(body.operand(row, 0)));
+					case IrOpcode.CallClosure:
+						uses.event(NOTE, body.valueTypeId(body.operand(row, 0)));
+					case IrOpcode.ToDyn:
+						var input = body.valueType(body.operand(row, 0)),
+							callable = IrScalarClosures.functionType(input);
+						if (callable != null)
+							uses.event(NOTE, types.id(callable));
+						else
+							uses.event(EXCLUDE, body.valueTypeId(body.operand(row, 0)));
+					case IrOpcode.SafeCast:
+						var output = body.valueType(body.output(row)),
+							input = body.valueType(body.operand(row, 0)),
+							callable = IrScalarClosures.functionType(output);
+						if (callable != null && (switch (input) {
+							case Dyn: true;
+							default: false;
+						}))
+							uses.event(NOTE, types.id(callable));
+						else
+							uses.event(EXCLUDE, body.valueTypeId(body.output(row)));
+						uses.event(EXCLUDE, body.valueTypeId(body.operand(row, 0)));
+					case IrOpcode.TypeValue:
+						var out:Int = body.output(row);
+						if (signatureQueries == null || !signatureQueries.exists(out) || out >= counts.length
+							|| counts[out] != 1)
+							uses.event(EXCLUDE, body.aux(row));
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return uses;
+	}
 }

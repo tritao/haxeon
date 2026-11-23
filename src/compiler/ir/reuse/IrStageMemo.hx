@@ -128,6 +128,9 @@ class IrStageMemos {
 	/** The functions each function takes as closures (`IrScalarArguments`). */
 	public final closureNames = new IrContributionMemo<Array<String>>();
 
+	/** What each function's rows do with closures (`IrClosureUses`). */
+	public final closureUses = new IrContributionMemo<compiler.ir.passes.scalars.IrScalarClosures.IrClosureUses>();
+
 	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
 	public final enumMentions = new IrContributionMemo<Array<String>>();
 
@@ -170,6 +173,7 @@ class IrStageMemos {
 		tagEscapes.begin(build);
 		inlineEnumUses.begin(build);
 		closureNames.begin(build);
+		closureUses.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */
