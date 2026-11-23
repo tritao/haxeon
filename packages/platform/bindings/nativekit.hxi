@@ -3067,7 +3067,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * the NUL terminator. For actions without a value, the pointer is NULL and
 	 * the length is zero.
 	 */
-	extern fn nk_accessibility_action_event_value(event: ptr<const<nk_event>>, out_value: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_accessibility_action_event_value(
+		event: ptr<const<nk_event>>,
+		out_value: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Returns the ABI version implemented by the loaded NativeKit library.
 	 */
@@ -3079,7 +3083,12 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returned UTF-8 views remain owned by the event until nk_event_release().
 	 */
-	extern fn nk_clipboard_event_file(event: ptr<const<nk_event>>, index: u32, out_path: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_clipboard_event_file(
+		event: ptr<const<nk_event>>,
+		index: u32,
+		out_path: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Starts an asynchronous read of local clipboard files.
 	 */
@@ -3101,7 +3110,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Copies URI resources into the system clipboard.
 	 */
-	extern fn nk_clipboard_set_resources(resources: ptr<const<nk_resource>> @in_array("resource_count"), resource_count: u32) -> nk_result;
+	extern fn nk_clipboard_set_resources(
+		resources: ptr<const<nk_resource>> @in_array("resource_count"),
+		resource_count: u32
+	) -> nk_result;
 	/**
 	 * Copies UTF-8 text into the system clipboard. UI thread only.
 	 */
@@ -3109,7 +3121,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Starts clipboard observation without emitting an initial event.
 	 */
-	extern fn nk_clipboard_watch_start(options: ptr<const<nk_clipboard_watch_options>>, out_watch: ptr<nk_clipboard_watch> @out @owned) -> nk_result;
+	extern fn nk_clipboard_watch_start(
+		options: ptr<const<nk_clipboard_watch_options>>,
+		out_watch: ptr<nk_clipboard_watch> @out @owned
+	) -> nk_result;
 	/**
 	 * Stops clipboard observation and unregisters native listeners.
 	 */
@@ -3117,7 +3132,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Creates a cursor from copied RGBA8 pixels, with the first row at the top.
 	 */
-	extern fn nk_cursor_create_custom(image: ptr<const<nk_cursor_image>>, out_cursor: ptr<nk_cursor> @out @owned) -> nk_result;
+	extern fn nk_cursor_create_custom(
+		image: ptr<const<nk_cursor_image>>,
+		out_cursor: ptr<nk_cursor> @out @owned
+	) -> nk_result;
 	/**
 	 * Creates a standard platform cursor and returns its NativeKit handle.
 	 */
@@ -3139,22 +3157,38 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * NK_EVENT_DIALOG_MESSAGE_COMPLETE. The operation is in event.flags and the
 	 * returned request ID is in event.request_id.
 	 */
-	extern fn nk_dialog_message(parent: nk_handle, options: ptr<const<nk_message_dialog_options>>, out_request: ptr<nk_request_id> @out) -> nk_result;
+	extern fn nk_dialog_message(
+		parent: nk_handle,
+		options: ptr<const<nk_message_dialog_options>>,
+		out_request: ptr<nk_request_id> @out
+	) -> nk_result;
 	/**
 	 * Resource dialogs return NK_EVENT_DIALOG_RESOURCES_COMPLETE with
 	 * nk_resource_list data. `parent` is a desktop nk_window or an Android
 	 * nk_mobile_host; zero requests an unparented dialog where the backend supports
 	 * it.
 	 */
-	extern fn nk_dialog_open_resource(parent: nk_handle, options: ptr<const<nk_file_dialog_options>>, out_request: ptr<nk_request_id> @out) -> nk_result;
+	extern fn nk_dialog_open_resource(
+		parent: nk_handle,
+		options: ptr<const<nk_file_dialog_options>>,
+		out_request: ptr<nk_request_id> @out
+	) -> nk_result;
 	/**
 	 * Starts an asynchronous native URI-resource save dialog.
 	 */
-	extern fn nk_dialog_save_resource(parent: nk_handle, options: ptr<const<nk_file_dialog_options>>, out_request: ptr<nk_request_id> @out) -> nk_result;
+	extern fn nk_dialog_save_resource(
+		parent: nk_handle,
+		options: ptr<const<nk_file_dialog_options>>,
+		out_request: ptr<nk_request_id> @out
+	) -> nk_result;
 	/**
 	 * Starts an asynchronous native URI-resource directory dialog.
 	 */
-	extern fn nk_dialog_select_resource_directory(parent: nk_handle, options: ptr<const<nk_file_dialog_options>>, out_request: ptr<nk_request_id> @out) -> nk_result;
+	extern fn nk_dialog_select_resource_directory(
+		parent: nk_handle,
+		options: ptr<const<nk_file_dialog_options>>,
+		out_request: ptr<nk_request_id> @out
+	) -> nk_result;
 	/**
 	 * Queues native work onto the application executor.
 	 *
@@ -3180,7 +3214,12 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns one borrowed UTF-8 item from a drop event by zero-based index.
 	 */
-	extern fn nk_drop_event_item(event: ptr<const<nk_event>>, index: u32, out_item: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_drop_event_item(
+		event: ptr<const<nk_event>>,
+		index: u32,
+		out_item: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Releases payload storage returned by nk_poll_event and clears the event.
 	 * Safe to call with NULL or an empty event; struct_size is preserved for reuse.
@@ -3217,7 +3256,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Creates a watcher. The returned handle is generation checked.
 	 */
-	extern fn nk_file_watch_create(options: ptr<const<nk_file_watch_options>>, out_watch: ptr<nk_file_watch> @out @owned) -> nk_result;
+	extern fn nk_file_watch_create(
+		options: ptr<const<nk_file_watch_options>>,
+		out_watch: ptr<nk_file_watch> @out @owned
+	) -> nk_result;
 	/**
 	 * Stops the backend and destroys a watcher.
 	 */
@@ -3248,7 +3290,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Reports whether the active mapping is built-in or application-supplied.
 	 */
-	extern fn nk_gamepad_get_mapping_source(joystick: nk_joystick, out_source: ptr<nk_gamepad_mapping_source>) -> nk_result;
+	extern fn nk_gamepad_get_mapping_source(
+		joystick: nk_joystick,
+		out_source: ptr<nk_gamepad_mapping_source>
+	) -> nk_result;
 	/**
 	 * Copies the mapped gamepad name into a caller-owned UTF-8 buffer.
 	 */
@@ -3292,7 +3337,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Queries backend, owning context/share group, and dimensions for a sampled image.
 	 */
-	extern fn nk_graphics_image_get_info(image: nk_graphics_image, out_info: ptr<nk_graphics_image_info> @out) -> nk_result;
+	extern fn nk_graphics_image_get_info(
+		image: nk_graphics_image,
+		out_info: ptr<nk_graphics_image_info> @out
+	) -> nk_result;
 	/**
 	 * Releases a sampled image reference; the handle becomes invalid after its final release.
 	 */
@@ -3369,7 +3417,12 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Adds an item to the root when parent is zero, or to a submenu item.
 	 */
-	extern fn nk_menu_add_item(menu: nk_menu, parent: nk_menu_item, options: ptr<const<nk_menu_item_options>>, out_item: ptr<nk_menu_item> @out @owned) -> nk_result;
+	extern fn nk_menu_add_item(
+		menu: nk_menu,
+		parent: nk_menu_item,
+		options: ptr<const<nk_menu_item_options>>,
+		out_item: ptr<nk_menu_item> @out @owned
+	) -> nk_result;
 	/**
 	 * Creates an empty application menu tree.
 	 */
@@ -3398,7 +3451,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * global jobject referring to an android.view.ViewGroup. Both values are used
 	 * only during this call; NativeKit retains its own global reference.
 	 */
-	extern fn nk_mobile_host_attach(options: ptr<const<nk_mobile_host_options>>, out_host: ptr<nk_mobile_host> @out @owned) -> nk_result;
+	extern fn nk_mobile_host_attach(
+		options: ptr<const<nk_mobile_host_options>>,
+		out_host: ptr<nk_mobile_host> @out @owned
+	) -> nk_result;
 	/**
 	 * Destroys all child WebViews, releases native references, and detaches.
 	 */
@@ -3433,7 +3489,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Copies the monitor name into a caller-owned UTF-8 buffer.
 	 */
-	extern fn nk_monitor_get_name(monitor: nk_monitor, buffer: nullable<ptr<c_char>> @out_buffer("inout_size"), inout_size: ptr<u32> @inout) -> nk_result;
+	extern fn nk_monitor_get_name(
+		monitor: nk_monitor,
+		buffer: nullable<ptr<c_char>> @out_buffer("inout_size"),
+		inout_size: ptr<u32> @inout
+	) -> nk_result;
 	/**
 	 * Returns the current orientation used by this display.
 	 */
@@ -3458,11 +3518,18 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * failure is reported with the same request ID through the event queue.
 	 * `icon` is an optional platform-resolved icon name or absolute file path.
 	 */
-	extern fn nk_notification_show(options: ptr<const<nk_notification_options>>, out_request: ptr<nk_request_id>) -> nk_result;
+	extern fn nk_notification_show(
+		options: ptr<const<nk_notification_options>>,
+		out_request: ptr<nk_request_id>
+	) -> nk_result;
 	/**
 	 * On NK_OK, returns the current action state of one pointer button.
 	 */
-	extern fn nk_pointer_button_get_state(window: nk_window, button: nk_pointer_button, out_action: ptr<nk_input_action> @out) -> nk_result;
+	extern fn nk_pointer_button_get_state(
+		window: nk_window,
+		button: nk_pointer_button,
+		out_action: ptr<nk_input_action> @out
+	) -> nk_result;
 	/**
 	 * On NK_OK, returns the current pointer position in surface-local logical pixels.
 	 */
@@ -3498,7 +3565,17 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * array inherits the parent environment, while an empty array clears it.
 	 * cwd may be null. Dimensions are character cells and must be nonzero.
 	 */
-	extern fn nk_pty_spawn(program: utf8, argv: ptr<utf8> @in_array("argc"), argc: u32, cwd: nullable<utf8>, env: ptr<utf8> @in_array("envc"), envc: u32, columns: u16, rows: u16, out_pty: ptr<nk_pty> @out @owned) -> nk_result;
+	extern fn nk_pty_spawn(
+		program: utf8,
+		argv: ptr<utf8> @in_array("argc"),
+		argc: u32,
+		cwd: nullable<utf8>,
+		env: ptr<utf8> @in_array("envc"),
+		envc: u32,
+		columns: u16,
+		rows: u16,
+		out_pty: ptr<nk_pty> @out @owned
+	) -> nk_result;
 	/**
 	 * Write at most 64 KiB from caller memory. NK_PENDING means the PTY is full.
 	 */
@@ -3512,7 +3589,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * is returned through inout_size, including when the buffer is too small.
 	 * Safe from worker threads.
 	 */
-	extern fn nk_resource_asset_copy_data(asset: nk_resource_asset, buffer: ptr<void>, inout_size: ptr<u64> @inout) -> nk_result;
+	extern fn nk_resource_asset_copy_data(
+		asset: nk_resource_asset,
+		buffer: ptr<void>,
+		inout_size: ptr<u64> @inout
+	) -> nk_result;
 	/**
 	 * Releases one caller-owned cached resource asset view; UI-thread-only.
 	 */
@@ -3520,7 +3601,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns the loading state of a cached resource asset; safe from worker threads.
 	 */
-	extern fn nk_resource_asset_get_load_state(asset: nk_resource_asset, out_state: ptr<nk_resource_asset_load_state> @out) -> nk_result;
+	extern fn nk_resource_asset_get_load_state(
+		asset: nk_resource_asset,
+		out_state: ptr<nk_resource_asset_load_state> @out
+	) -> nk_result;
 	/**
 	 * Returns the load result, or NK_OK while the asset is ready or loading; safe from worker threads.
 	 */
@@ -3532,7 +3616,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Copies the cached asset URI into a caller-owned UTF-8 buffer; safe from worker threads.
 	 */
-	extern fn nk_resource_asset_get_uri(asset: nk_resource_asset, buffer: nullable<ptr<c_char>> @out_buffer("inout_size"), inout_size: ptr<u32> @inout) -> nk_result;
+	extern fn nk_resource_asset_get_uri(
+		asset: nk_resource_asset,
+		buffer: nullable<ptr<c_char>> @out_buffer("inout_size"),
+		inout_size: ptr<u32> @inout
+	) -> nk_result;
 	/**
 	 * Cancels pending loads and removes every cache entry.
 	 */
@@ -3548,7 +3636,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns an owned asset view for a URI already present in the cache.
 	 */
-	extern fn nk_resource_cache_find(cache: nk_resource_cache, uri: utf8, out_asset: ptr<nk_resource_asset> @out @owned) -> nk_result;
+	extern fn nk_resource_cache_find(
+		cache: nk_resource_cache,
+		uri: utf8,
+		out_asset: ptr<nk_resource_asset> @out @owned
+	) -> nk_result;
 	/**
 	 * Returns the number of URI entries currently retained by the cache.
 	 */
@@ -3558,12 +3650,21 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * cached entry. The returned asset is an independent owned view; destroying it
 	 * does not remove the cache entry.
 	 */
-	extern fn nk_resource_cache_load(cache: nk_resource_cache, resource: ptr<const<nk_resource>>, out_asset: ptr<nk_resource_asset> @out @owned) -> nk_result;
+	extern fn nk_resource_cache_load(
+		cache: nk_resource_cache,
+		resource: ptr<const<nk_resource>>,
+		out_asset: ptr<nk_resource_asset> @out @owned
+	) -> nk_result;
 	/**
 	 * Starts loading complete readable resource bytes, or joins an existing cache
 	 * load. A ready or failed entry returns NK_INVALID_REQUEST_ID.
 	 */
-	extern fn nk_resource_cache_load_async(cache: nk_resource_cache, resource: ptr<const<nk_resource>>, out_asset: ptr<nk_resource_asset> @out @owned, out_request: ptr<nk_request_id> @out) -> nk_result;
+	extern fn nk_resource_cache_load_async(
+		cache: nk_resource_cache,
+		resource: ptr<const<nk_resource>>,
+		out_asset: ptr<nk_resource_asset> @out @owned,
+		out_request: ptr<nk_request_id> @out
+	) -> nk_result;
 	/**
 	 * Removes one URI entry; existing asset views retain their data.
 	 */
@@ -3584,22 +3685,36 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns optional UTF-8 text from a resource-drop event.
 	 */
-	extern fn nk_resource_drop_event_text(event: ptr<const<nk_event>>, out_text: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_resource_drop_event_text(
+		event: ptr<const<nk_event>>,
+		out_text: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Returned views remain owned by the event until nk_event_release().
 	 */
-	extern fn nk_resource_event_item(event: ptr<const<nk_event>>, index: u32, out_resource: ptr<nk_resource_view>) -> nk_result;
+	extern fn nk_resource_event_item(
+		event: ptr<const<nk_event>>,
+		index: u32,
+		out_resource: ptr<nk_resource_view>
+	) -> nk_result;
 	/**
 	 * Queries the readable/writable access retained for a URI resource.
 	 */
-	extern fn nk_resource_get_persisted_access(resource: ptr<const<nk_resource>>, out_flags: ptr<nk_resource_flags> @out) -> nk_result;
+	extern fn nk_resource_get_persisted_access(
+		resource: ptr<const<nk_resource>>,
+		out_flags: ptr<nk_resource_flags> @out
+	) -> nk_result;
 	/**
 	 * Starts an asynchronous read of the complete URI resource. Completion is
 	 * delivered through NK_EVENT_RESOURCE_DATA_COMPLETE; its event data contains
 	 * the loaded bytes and its result reports the fetch outcome. Use
 	 * nk_resource_load_cancel() to abort a pending load.
 	 */
-	extern fn nk_resource_load_async(resource: ptr<const<nk_resource>>, out_request: ptr<nk_request_id> @out) -> nk_result;
+	extern fn nk_resource_load_async(
+		resource: ptr<const<nk_resource>>,
+		out_request: ptr<nk_request_id> @out
+	) -> nk_result;
 	/**
 	 * Cancels a pending asynchronous resource load. No completion event is
 	 * delivered for a successfully cancelled request; a backend completion that
@@ -3612,30 +3727,56 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * synchronously and may be called from worker threads. A successful read may
 	 * return fewer bytes than requested; zero bytes means end of stream.
 	 */
-	extern fn nk_resource_open(resource: ptr<const<nk_resource>>, flags: nk_resource_open_flags, out_stream: ptr<nk_resource_stream> @out @owned) -> nk_result;
+	extern fn nk_resource_open(
+		resource: ptr<const<nk_resource>>,
+		flags: nk_resource_open_flags,
+		out_stream: ptr<nk_resource_stream> @out @owned
+	) -> nk_result;
 	/**
 	 * Reads up to `size` bytes; a successful read may return fewer bytes.
 	 */
-	extern fn nk_resource_read(stream: nk_resource_stream, buffer: ptr<void>, size: u64, out_read: ptr<u64>) -> nk_result;
+	extern fn nk_resource_read(
+		stream: nk_resource_stream,
+		buffer: ptr<void>,
+		size: u64,
+		out_read: ptr<u64>
+	) -> nk_result;
 	/**
 	 * Moves the stream position and returns the resulting absolute byte offset.
 	 */
-	extern fn nk_resource_seek(stream: nk_resource_stream, offset: i64, origin: nk_seek_origin, out_position: ptr<u64>) -> nk_result;
+	extern fn nk_resource_seek(
+		stream: nk_resource_stream,
+		offset: i64,
+		origin: nk_seek_origin,
+		out_position: ptr<u64>
+	) -> nk_result;
 	/**
 	 * Controls durable URI access on platforms that support it. access_flags is a
 	 * combination of NK_RESOURCE_READABLE and NK_RESOURCE_WRITABLE; zero releases
 	 * all persisted access. out_flags receives the actual resource flags retained.
 	 * These functions are UI-thread-only.
 	 */
-	extern fn nk_resource_set_persisted_access(resource: ptr<const<nk_resource>>, access_flags: nk_resource_flags, out_flags: ptr<nk_resource_flags> @out) -> nk_result;
+	extern fn nk_resource_set_persisted_access(
+		resource: ptr<const<nk_resource>>,
+		access_flags: nk_resource_flags,
+		out_flags: ptr<nk_resource_flags> @out
+	) -> nk_result;
 	/**
 	 * Returns capabilities and size information for a resource stream.
 	 */
-	extern fn nk_resource_stream_info_get(stream: nk_resource_stream, out_info: ptr<nk_resource_stream_info>) -> nk_result;
+	extern fn nk_resource_stream_info_get(
+		stream: nk_resource_stream,
+		out_info: ptr<nk_resource_stream_info>
+	) -> nk_result;
 	/**
 	 * Writes up to `size` bytes; a successful write may transfer fewer bytes.
 	 */
-	extern fn nk_resource_write(stream: nk_resource_stream, buffer: ptr<const<void>> @in_array("size"), size: u64, out_written: ptr<u64> @out) -> nk_result;
+	extern fn nk_resource_write(
+		stream: nk_resource_stream,
+		buffer: ptr<const<void>> @in_array("size"),
+		size: u64,
+		out_written: ptr<u64> @out
+	) -> nk_result;
 	/**
 	 * Returns the generation identifier of the active runtime, or zero when no
 	 * runtime is active. Every succeeded nk_init() produces a new, non-zero
@@ -3674,11 +3815,19 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns optional UTF-8 subject text from a received-share event.
 	 */
-	extern fn nk_share_event_subject(event: ptr<const<nk_event>>, out_subject: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_share_event_subject(
+		event: ptr<const<nk_event>>,
+		out_subject: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Returns optional UTF-8 text from a received-share event.
 	 */
-	extern fn nk_share_event_text(event: ptr<const<nk_event>>, out_text: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_share_event_text(
+		event: ptr<const<nk_event>>,
+		out_text: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Opens a local file with the platform's default application.
 	 */
@@ -3728,7 +3877,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * must describe the supplied value window. Requires the UI thread and
 	 * NK_CAP_ACCESSIBILITY.
 	 */
-	extern fn nk_surface_accessibility_set_node(surface: nk_surface, node: ptr<const<nk_accessibility_node>>) -> nk_result;
+	extern fn nk_surface_accessibility_set_node(
+		surface: nk_surface,
+		node: ptr<const<nk_accessibility_node>>
+	) -> nk_result;
 	/**
 	 * Supplies screen-reader geometry for text ranges in a node's value.
 	 *
@@ -3736,7 +3888,12 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * ordered, non-overlapping, non-empty, and use document code-point offsets.
 	 * Pass a zero count to clear the node's current range geometry.
 	 */
-	extern fn nk_surface_accessibility_set_text_ranges(surface: nk_surface, node: nk_accessibility_node_id, ranges: ptr<const<nk_accessibility_text_range>> @in_array("range_count"), range_count: u32) -> nk_result;
+	extern fn nk_surface_accessibility_set_text_ranges(
+		surface: nk_surface,
+		node: nk_accessibility_node_id,
+		ranges: ptr<const<nk_accessibility_text_range>> @in_array("range_count"),
+		range_count: u32
+	) -> nk_result;
 	/**
 	 * Applies node replacements, recursive removals, and optional focus atomically.
 	 *
@@ -3746,7 +3903,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * NK_ACCESSIBILITY_UPDATE_FOCUS to apply `focus`, where ROOT clears focus.
 	 * Invalid input leaves the previous tree unchanged.
 	 */
-	extern fn nk_surface_accessibility_update(surface: nk_surface, update: ptr<const<nk_accessibility_update>>) -> nk_result;
+	extern fn nk_surface_accessibility_update(
+		surface: nk_surface,
+		update: ptr<const<nk_accessibility_update>>
+	) -> nk_result;
 	/**
 	 * Applies an atomic accessibility update whose removed-node list is supplied
 	 * as a packed little-endian byte array of 32-bit node IDs. This helper exists
@@ -3755,7 +3915,12 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * The update's `removed_nodes` and `removed_node_count` fields are replaced by
 	 * the supplied array; all other fields are applied unchanged.
 	 */
-	extern fn nk_surface_accessibility_update_with_removed_ids(surface: nk_surface, update: ptr<const<nk_accessibility_update>>, removed_node_ids: ptr<const<u8>> @in_array("removed_node_id_byte_count"), removed_node_id_byte_count: u32) -> nk_result;
+	extern fn nk_surface_accessibility_update_with_removed_ids(
+		surface: nk_surface,
+		update: ptr<const<nk_accessibility_update>>,
+		removed_node_ids: ptr<const<u8>> @in_array("removed_node_id_byte_count"),
+		removed_node_id_byte_count: u32
+	) -> nk_result;
 	/**
 	 * Opens one frame and returns its immutable render target.
 	 *
@@ -3777,7 +3942,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * when a frame is already open or no drawable frame exists, or
 	 * NK_ERROR_WRONG_THREAD off the platform executor.
 	 */
-	extern fn nk_surface_acquire_frame(surface: nk_surface, out_frame: ptr<nk_surface_frame> @out, out_target: ptr<nk_surface_frame_target> @inout) -> nk_result;
+	extern fn nk_surface_acquire_frame(
+		surface: nk_surface,
+		out_frame: ptr<nk_surface_frame> @out,
+		out_target: ptr<nk_surface_frame_target> @inout
+	) -> nk_result;
 	/**
 	 * Closes the frame without presenting it.
 	 *
@@ -3799,7 +3968,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * The requested API determines which platform backends are available.
 	 * On NK_OK, writes the new surface handle to `out_surface`.
 	 */
-	extern fn nk_surface_create(parent: nk_handle, options: ptr<const<nk_surface_options>>, out_surface: ptr<nk_surface> @out @owned) -> nk_result;
+	extern fn nk_surface_create(
+		parent: nk_handle,
+		options: ptr<const<nk_surface_options>>,
+		out_surface: ptr<nk_surface> @out @owned
+	) -> nk_result;
 	/**
 	 * Destroys a graphics surface; its handle becomes invalid.
 	 */
@@ -3807,13 +3980,20 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns the current backend-native render target for a surface frame.
 	 */
-	extern fn nk_surface_get_frame_target(surface: nk_surface, out_target: ptr<nk_surface_frame_target> @out) -> nk_result;
+	extern fn nk_surface_get_frame_target(
+		surface: nk_surface,
+		out_target: ptr<nk_surface_frame_target> @out
+	) -> nk_result;
 	/**
 	 * Returns the current framebuffer size in device pixels. Returns zero
 	 * dimensions while the surface has no drawable frame, such as while hidden,
 	 * minimized or fully occluded.
 	 */
-	extern fn nk_surface_get_framebuffer_size(surface: nk_surface, out_width: ptr<i32> @out, out_height: ptr<i32> @out) -> nk_result;
+	extern fn nk_surface_get_framebuffer_size(
+		surface: nk_surface,
+		out_width: ptr<i32> @out,
+		out_height: ptr<i32> @out
+	) -> nk_result;
 	/**
 	 * Resolves a graphics function for the current OpenGL surface context.
 	 *
@@ -3822,7 +4002,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * associated graphics context and loader remain valid. Explicit backends such
 	 * as D3D11 and Metal return NK_ERROR_UNSUPPORTED.
 	 */
-	extern fn nk_surface_get_proc_address(surface: nk_surface, name: utf8, out_proc: ptr<nk_graphics_proc>) -> nk_result;
+	extern fn nk_surface_get_proc_address(
+		surface: nk_surface,
+		name: utf8,
+		out_proc: ptr<nk_graphics_proc>
+	) -> nk_result;
 	/**
 	 * Prepares the surface for rendering on the UI thread. OpenGL backends make
 	 * their context and framebuffer current. Explicit backends acquire or prepare
@@ -3890,7 +4074,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * Call nk_surface_set_frame_mode() with NK_SURFACE_FRAME_ON_DEMAND to render
 	 * only when the application asks for a frame instead of every vsync.
 	 */
-	extern fn nk_surface_set_frame_callback(surface: nk_surface, callback: nk_nullable_surface_frame_callback @retained, user_data: nullable<ptr<void>>) -> nk_result;
+	extern fn nk_surface_set_frame_callback(
+		surface: nk_surface,
+		callback: nk_nullable_surface_frame_callback @retained,
+		user_data: nullable<ptr<void>>
+	) -> nk_result;
 	/**
 	 * Selects how the backend schedules an installed frame callback.
 	 *
@@ -3923,7 +4111,17 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * NK_TEXT_POSITION_NONE and an empty composition buffer when there is no active
 	 * composition.
 	 */
-	extern fn nk_surface_set_text_input_geometry(target: nk_handle, selection_start: nk_text_position, selection_end: nk_text_position, composition_start: nk_text_position, composition_end: nk_text_position, selection_rects: ptr<const<u8>> @in_array("selection_rect_bytes"), selection_rect_bytes: u32, composition_rects: ptr<const<u8>> @in_array("composition_rect_bytes"), composition_rect_bytes: u32) -> nk_result;
+	extern fn nk_surface_set_text_input_geometry(
+		target: nk_handle,
+		selection_start: nk_text_position,
+		selection_end: nk_text_position,
+		composition_start: nk_text_position,
+		composition_end: nk_text_position,
+		selection_rects: ptr<const<u8>> @in_array("selection_rect_bytes"),
+		selection_rect_bytes: u32,
+		composition_rects: ptr<const<u8>> @in_array("composition_rect_bytes"),
+		composition_rect_bytes: u32
+	) -> nk_result;
 	/**
 	 * Synchronizes a custom editor with the platform IME using absolute code-point positions.
 	 * Linux, Android, and Web use a graphics-surface handle. Windows accepts a surface or its
@@ -3942,7 +4140,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * NULL as `buffer` to query the size. An absent or small buffer returns
 	 * NK_ERROR_BUFFER_TOO_SMALL without truncating the value.
 	 */
-	extern fn nk_system_directory(kind: nk_system_directory_kind, buffer: ptr<c_char>, inout_size: ptr<u32>) -> nk_result;
+	extern fn nk_system_directory(
+		kind: nk_system_directory_kind,
+		buffer: ptr<c_char>,
+		inout_size: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Returns the current platform appearance. UI thread only.
 	 */
@@ -3962,7 +4164,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Acquires an independent keep-awake lease.
 	 */
-	extern fn nk_system_keep_awake_acquire(options: ptr<const<nk_keep_awake_options>>, out_lock: ptr<nk_keep_awake> @out) -> nk_result;
+	extern fn nk_system_keep_awake_acquire(
+		options: ptr<const<nk_keep_awake_options>>,
+		out_lock: ptr<nk_keep_awake> @out
+	) -> nk_result;
 	/**
 	 * Releases a previously acquired keep-awake lease.
 	 */
@@ -3992,11 +4197,20 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Starts a resumable native task. Completion is delivered as a NativeKit event.
 	 */
-	extern fn nk_task_start(options: ptr<const<nk_task_options>>, step: nk_task_step_fn, user_data: nullable<ptr<void>>, out_task: ptr<nk_task> @out) -> nk_result;
+	extern fn nk_task_start(
+		options: ptr<const<nk_task_options>>,
+		step: nk_task_step_fn,
+		user_data: nullable<ptr<void>>,
+		out_task: ptr<nk_task> @out
+	) -> nk_result;
 	/**
 	 * Returns a borrowed UTF-8 view valid until nk_event_release().
 	 */
-	extern fn nk_text_edit_event_text(event: ptr<const<nk_event>>, out_text: ptr<ptr<const<c_char>>>, out_length: ptr<u32>) -> nk_result;
+	extern fn nk_text_edit_event_text(
+		event: ptr<const<nk_event>>,
+		out_text: ptr<ptr<const<c_char>>>,
+		out_length: ptr<u32>
+	) -> nk_result;
 	/**
 	 * Monotonic time since an unspecified epoch. These calls do not require init.
 	 */
@@ -4025,15 +4239,24 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * produces CLOSED with NK_TRANSPORT_ERROR_CANCELED and no FAILED event. No event is
 	 * emitted for a handle after its CLOSED event.
 	 */
-	extern fn nk_transport_connect(options: ptr<const<nk_transport_options>>, out_transport: ptr<nk_transport> @out @owned) -> nk_result;
+	extern fn nk_transport_connect(
+		options: ptr<const<nk_transport_options>>,
+		out_transport: ptr<nk_transport> @out @owned
+	) -> nk_result;
 	/**
 	 * Decodes the payload of NK_EVENT_TRANSPORT_ACCEPTED.
 	 */
-	extern fn nk_transport_event_accepted(event: ptr<const<nk_event>>, out_accepted: ptr<nk_transport_accepted_event> @out) -> nk_result;
+	extern fn nk_transport_event_accepted(
+		event: ptr<const<nk_event>>,
+		out_accepted: ptr<nk_transport_accepted_event> @out
+	) -> nk_result;
 	/**
 	 * Decodes the payload of NK_EVENT_TRANSPORT_DATA.
 	 */
-	extern fn nk_transport_event_data(event: ptr<const<nk_event>>, out_data: ptr<nk_transport_data_event> @out) -> nk_result;
+	extern fn nk_transport_event_data(
+		event: ptr<const<nk_event>>,
+		out_data: ptr<nk_transport_data_event> @out
+	) -> nk_result;
 	/**
 	 * The process id at the other end of a connected local transport: the client for an
 	 * accepted transport, the server for a connected one. It comes from the OS (named-pipe
@@ -4047,16 +4270,26 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * Returns queued application send bytes and the configured send capacity. Thread-safe.
 	 */
-	extern fn nk_transport_get_send_queue(transport: nk_transport, out_queued_bytes: ptr<u64> @out, out_capacity: ptr<u64> @out) -> nk_result;
+	extern fn nk_transport_get_send_queue(
+		transport: nk_transport,
+		out_queued_bytes: ptr<u64> @out,
+		out_capacity: ptr<u64> @out
+	) -> nk_result;
 	/**
 	 * Binds an endpoint and reports accepted transports through the event queue.
 	 */
-	extern fn nk_transport_listen(options: ptr<const<nk_transport_options>>, out_listener: ptr<nk_listener> @out @owned) -> nk_result;
+	extern fn nk_transport_listen(
+		options: ptr<const<nk_transport_options>>,
+		out_listener: ptr<nk_listener> @out @owned
+	) -> nk_result;
 	/**
 	 * Reports support for one transport kind without starting an operation.
 	 * Unknown kinds return NK_ERROR_INVALID_ARGUMENT and clear out_capabilities.
 	 */
-	extern fn nk_transport_query_capabilities(kind: nk_transport_kind, out_capabilities: ptr<nk_transport_capabilities> @out) -> nk_result;
+	extern fn nk_transport_query_capabilities(
+		kind: nk_transport_kind,
+		out_capabilities: ptr<nk_transport_capabilities> @out
+	) -> nk_result;
 	/**
 	 * Reads currently buffered application bytes without blocking. This call is thread-safe.
 	 * DATA reports a snapshot of available bytes and may be coalesced. Call receive until it
@@ -4070,7 +4303,12 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * The mutable counted buffer annotation borrows its capacity for the call and
 	 * copies received bytes back when managed and native memory differ (GC Wasm).
 	 */
-	extern fn nk_transport_receive(transport: nk_transport, data: ptr<void> @in_array("size"), size: u64, out_received: ptr<u64> @out) -> nk_result;
+	extern fn nk_transport_receive(
+		transport: nk_transport,
+		data: ptr<void> @in_array("size"),
+		size: u64,
+		out_received: ptr<u64> @out
+	) -> nk_result;
 	/**
 	 * Copies bytes into the bounded asynchronous send queue. This call is thread-safe.
 	 * TCP, local, and WebSocket transports expose one reliable ordered byte stream; a send
@@ -4081,7 +4319,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * non-empty queue drains. In browsers the limit includes bytes reported by
 	 * WebSocket.bufferedAmount, but cannot bound buffering held internally by the user agent.
 	 */
-	extern fn nk_transport_send(transport: nk_transport, data: ptr<const<void>> @in_array("size"), size: u64) -> nk_result;
+	extern fn nk_transport_send(
+		transport: nk_transport,
+		data: ptr<const<void>> @in_array("size"),
+		size: u64
+	) -> nk_result;
 	/**
 	 * Adds a tray icon. Must be called on the UI thread.
 	 */
@@ -4133,7 +4375,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * set. On success, `out_view` receives a non-zero generation-checked handle
 	 * owned by NativeKit and destroyed with its parent.
 	 */
-	extern fn nk_view_create(parent: nk_handle, options: ptr<const<nk_view_options>>, out_view: ptr<nk_view> @out @owned) -> nk_result;
+	extern fn nk_view_create(
+		parent: nk_handle,
+		options: ptr<const<nk_view_options>>,
+		out_view: ptr<nk_view> @out @owned
+	) -> nk_result;
 	/**
 	 * Destroys a native child view and detaches it from its parent.
 	 *
@@ -4209,7 +4455,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * controller can display content. Operations issued before readiness are
 	 * retained in call order by asynchronous backends.
 	 */
-	extern fn nk_webview_create(parent: nk_handle, options: ptr<const<nk_webview_options>>, out_webview: ptr<nk_webview> @out @owned) -> nk_result;
+	extern fn nk_webview_create(
+		parent: nk_handle,
+		options: ptr<const<nk_webview_options>>,
+		out_webview: ptr<nk_webview> @out @owned
+	) -> nk_result;
 	/**
 	 * Destroys a WebView and cancels its pending evaluations and navigation decisions.
 	 */
@@ -4277,7 +4527,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * their owner. Modal windows require an owner. Window ownership is deliberately
 	 * shallow and does not introduce a general-purpose widget hierarchy.
 	 */
-	extern fn nk_window_create(options: ptr<const<nk_window_options>>, out_window: ptr<nk_window> @out @owned) -> nk_result;
+	extern fn nk_window_create(
+		options: ptr<const<nk_window_options>>,
+		out_window: ptr<nk_window> @out @owned
+	) -> nk_result;
 	/**
 	 * Destroys a NativeKit-owned window and recursively destroys its owned windows.
 	 * The handle and any child WebView handles become invalid after this call.
@@ -4297,11 +4550,18 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	/**
 	 * On NK_OK, fills in the non-client frame extents in logical screen pixels.
 	 */
-	extern fn nk_window_get_frame_extents(window: nk_window, out_extents: ptr<nk_window_frame_extents> @out) -> nk_result;
+	extern fn nk_window_get_frame_extents(
+		window: nk_window,
+		out_extents: ptr<nk_window_frame_extents> @out
+	) -> nk_result;
 	/**
 	 * On NK_OK, fills in the framebuffer width and height in device pixels.
 	 */
-	extern fn nk_window_get_framebuffer_size(window: nk_window, out_width: ptr<i32> @out, out_height: ptr<i32> @out) -> nk_result;
+	extern fn nk_window_get_framebuffer_size(
+		window: nk_window,
+		out_width: ptr<i32> @out,
+		out_height: ptr<i32> @out
+	) -> nk_result;
 	/**
 	 * Sets `*out_hovered` to 1 when the pointer is over the window, and 0 otherwise.
 	 */
@@ -4380,7 +4640,11 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * This operation applies to borderless NativeKit-owned desktop windows; pass
 	 * NULL with a zero count to clear all regions.
 	 */
-	extern fn nk_window_set_decoration_regions(window: nk_window, regions: ptr<const<nk_window_decoration_region>> @in_array("region_count"), region_count: u32) -> nk_result;
+	extern fn nk_window_set_decoration_regions(
+		window: nk_window,
+		regions: ptr<const<nk_window_decoration_region>> @in_array("region_count"),
+		region_count: u32
+	) -> nk_result;
 	/**
 	 * Enables or disables the text and/or local-file drop formats supported by the backend.
 	 */
@@ -4403,7 +4667,13 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * window chrome and taskbar; macOS applies them to the application icon too.
 	 * All image bytes are copied before return. UI thread only.
 	 */
-	extern fn nk_window_set_icons(window: nk_window, pixels: ptr<const<u8>> @in_array("byte_count"), byte_count: u32, images: ptr<const<nk_icon_image>> @in_array("image_count"), image_count: u32) -> nk_result;
+	extern fn nk_window_set_icons(
+		window: nk_window,
+		pixels: ptr<const<u8>> @in_array("byte_count"),
+		byte_count: u32,
+		images: ptr<const<nk_icon_image>> @in_array("image_count"),
+		image_count: u32
+	) -> nk_result;
 	/**
 	 * Enables or disables passing pointer input through the window.
 	 */
@@ -4435,7 +4705,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * other descriptor kinds may return NK_ERROR_UNSUPPORTED. The host retains
 	 * ownership of native event dispatch and delegates/procedures.
 	 */
-	extern fn nk_window_wrap_native(native: ptr<const<nk_native_window>>, out_window: ptr<nk_window> @out @owned) -> nk_result;
+	extern fn nk_window_wrap_native(
+		native: ptr<const<nk_native_window>>,
+		out_window: ptr<nk_window> @out @owned
+	) -> nk_result;
 	/**
 	 * Payload of NK_EVENT_ACCESSIBILITY_ACTION.
 	 *
@@ -6950,7 +7223,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * not call UI-only APIs. It may retain no pointer to the context or output
 	 * structures after returning. Managed runtime callbacks are not safe here.
 	 */
-	callback nk_task_step_fn = fn(arg0: ptr<const<nk_task_step_context>>, arg1: ptr<nk_task_step_output>) -> nk_task_step_result;
+	callback nk_task_step_fn = fn(
+		arg0: ptr<const<nk_task_step_context>>,
+		arg1: ptr<nk_task_step_output>
+	) -> nk_task_step_result;
 	/**
 	 * Absolute Unicode code-point position used by the text-input API.
 	 */

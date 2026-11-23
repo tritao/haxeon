@@ -584,7 +584,14 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Applies a framebuffer-pixel scissor rectangle, or disables scissoring.
 	 */
-	extern fn nkgpu_apply_scissor(renderer: nkgpu_renderer, enabled: u32, x: i32, y: i32, width: i32, height: i32) -> nkgpu_result;
+	extern fn nkgpu_apply_scissor(
+		renderer: nkgpu_renderer,
+		enabled: u32,
+		x: i32,
+		y: i32,
+		width: i32,
+		height: i32
+	) -> nkgpu_result;
 	/**
 	 * Binds a storage buffer view in the currently active render or compute pass.
 	 */
@@ -596,7 +603,12 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Applies caller-owned uniform bytes to a block in the active pass.
 	 */
-	extern fn nkgpu_apply_uniform_data(renderer: nkgpu_renderer, slot: u32, data: ptr<const<u8>>, size: u32) -> nkgpu_result;
+	extern fn nkgpu_apply_uniform_data(
+		renderer: nkgpu_renderer,
+		slot: u32,
+		data: ptr<const<u8>>,
+		size: u32
+	) -> nkgpu_result;
 	/**
 	 * Applies a uniform builder to a block slot in the active frame.
 	 *
@@ -611,7 +623,12 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * `offset` is a byte offset into the buffer. The slot must match the buffer
 	 * index configured with nkgpu_pipeline_attribute().
 	 */
-	extern fn nkgpu_apply_vertex_buffer(renderer: nkgpu_renderer, slot: u32, buffer: nkgpu_buffer, offset: u32) -> nkgpu_result;
+	extern fn nkgpu_apply_vertex_buffer(
+		renderer: nkgpu_renderer,
+		slot: u32,
+		buffer: nkgpu_buffer,
+		offset: u32
+	) -> nkgpu_result;
 	/**
 	 * Applies a framebuffer-pixel viewport to the active render pass.
 	 */
@@ -628,7 +645,10 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Appends a command stream after checking its explicit ABI version.
 	 */
-	extern fn nkgpu_batch_append_command_stream(batch: nkgpu_batch, desc: ptr<const<nkgpu_command_stream_desc>>) -> nkgpu_result;
+	extern fn nkgpu_batch_append_command_stream(
+		batch: nkgpu_batch,
+		desc: ptr<const<nkgpu_command_stream_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Appends one pass to a batch.
 	 *
@@ -645,7 +665,10 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * descriptor is copied immediately and no pointer-bearing batch-pass record
 	 * needs to be constructed by the caller.
 	 */
-	extern fn nkgpu_batch_append_render_pass(batch: nkgpu_batch, desc: ptr<const<nkgpu_render_pass_desc>>) -> nkgpu_result;
+	extern fn nkgpu_batch_append_render_pass(
+		batch: nkgpu_batch,
+		desc: ptr<const<nkgpu_render_pass_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Starts recording a sealed submission batch.
 	 *
@@ -688,7 +711,11 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * handles, and a batch that fails validation is rejected before any GPU state
 	 * changes. A sealed batch may be submitted more than once.
 	 */
-	extern fn nkgpu_batch_submit(renderer: nkgpu_renderer, batch: nkgpu_batch, frame_target: ptr<const<nk_surface_frame_target>>) -> nkgpu_result;
+	extern fn nkgpu_batch_submit(
+		renderer: nkgpu_renderer,
+		batch: nkgpu_batch,
+		frame_target: ptr<const<nk_surface_frame_target>>
+	) -> nkgpu_result;
 	/**
 	 * Begins a compute pass inside an active frame.
 	 */
@@ -713,7 +740,10 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * usage flags. Up to NKGPU_MAX_COLOR_ATTACHMENTS color images are supported;
 	 * each may name a single-sample resolve image for MSAA.
 	 */
-	extern fn nkgpu_begin_render_pass(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_render_pass_desc>>) -> nkgpu_result;
+	extern fn nkgpu_begin_render_pass(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_render_pass_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Begins a window-surface pass inside a frame.
 	 */
@@ -731,7 +761,13 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * Appends bytes and returns their byte offset. A capacity failure returns
 	 * NKGPU_ERROR_BUFFER_OVERFLOW before touching the backend or out_offset.
 	 */
-	extern fn nkgpu_buffer_append(renderer: nkgpu_renderer, buffer: nkgpu_buffer, data: ptr<const<u8>>, size: u32, out_offset: ptr<u32> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_append(
+		renderer: nkgpu_renderer,
+		buffer: nkgpu_buffer,
+		data: ptr<const<u8>>,
+		size: u32,
+		out_offset: ptr<u32> @out
+	) -> nkgpu_result;
 	/**
 	 * Starts building a zero-initialized vertex buffer of `size` bytes.
 	 *
@@ -739,7 +775,11 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * the builder with nkgpu_buffer_write_f32() or nkgpu_buffer_write_u16(), then call
 	 * nkgpu_buffer_end(), which consumes the builder and creates the GPU buffer.
 	 */
-	extern fn nkgpu_buffer_begin(renderer: nkgpu_renderer, size: u32, out_builder: ptr<nkgpu_buffer_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_begin(
+		renderer: nkgpu_renderer,
+		size: u32,
+		out_builder: ptr<nkgpu_buffer_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Starts building a zero-initialized vertex or index buffer.
 	 *
@@ -747,7 +787,12 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * owns a temporary `size`-byte array until nkgpu_buffer_end() or renderer
 	 * destruction. On NKGPU_OK, writes the builder handle to `out_builder`.
 	 */
-	extern fn nkgpu_buffer_begin_kind(renderer: nkgpu_renderer, size: u32, usage: nkgpu_buffer_usage, out_builder: ptr<nkgpu_buffer_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_begin_kind(
+		renderer: nkgpu_renderer,
+		size: u32,
+		usage: nkgpu_buffer_usage,
+		out_builder: ptr<nkgpu_buffer_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Copies an arbitrary byte range between buffers.
 	 */
@@ -760,15 +805,29 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * marked as a vertex or index buffer. On NKGPU_OK, writes the new handle to
 	 * `out_buffer`.
 	 */
-	extern fn nkgpu_buffer_create(renderer: nkgpu_renderer, data: ptr<const<u8>>, size: u32, out_buffer: ptr<nkgpu_buffer> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_create(
+		renderer: nkgpu_renderer,
+		data: ptr<const<u8>>,
+		size: u32,
+		out_buffer: ptr<nkgpu_buffer> @out
+	) -> nkgpu_result;
 	/**
 	 * Creates a buffer from a general descriptor.
 	 */
-	extern fn nkgpu_buffer_create_desc(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_buffer_desc>>, out_buffer: ptr<nkgpu_buffer> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_create_desc(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_buffer_desc>>,
+		out_buffer: ptr<nkgpu_buffer> @out
+	) -> nkgpu_result;
 	/**
 	 * Creates a stream buffer between frames or in a pass owned by this renderer.
 	 */
-	extern fn nkgpu_buffer_create_stream(renderer: nkgpu_renderer, capacity: u32, usage: nkgpu_buffer_usage, out_buffer: ptr<nkgpu_buffer> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_create_stream(
+		renderer: nkgpu_renderer,
+		capacity: u32,
+		usage: nkgpu_buffer_usage,
+		out_buffer: ptr<nkgpu_buffer> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a buffer owned by `renderer`; the handle becomes invalid.
 	 */
@@ -783,15 +842,28 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Queries a stream without advancing its cursor or changing its overflow state.
 	 */
-	extern fn nkgpu_buffer_get_stream_info(renderer: nkgpu_renderer, buffer: nkgpu_buffer, out_info: ptr<nkgpu_stream_buffer_info> @out) -> nkgpu_result;
+	extern fn nkgpu_buffer_get_stream_info(
+		renderer: nkgpu_renderer,
+		buffer: nkgpu_buffer,
+		out_info: ptr<nkgpu_stream_buffer_info> @out
+	) -> nkgpu_result;
 	/**
 	 * Uploads a buffer region into a 2D or array image. Cube images return UNSUPPORTED.
 	 */
-	extern fn nkgpu_buffer_to_image(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_buffer_image_copy_desc>>) -> nkgpu_result;
+	extern fn nkgpu_buffer_to_image(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_buffer_image_copy_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Updates an arbitrary byte range of a dynamic buffer.
 	 */
-	extern fn nkgpu_buffer_update(renderer: nkgpu_renderer, buffer: nkgpu_buffer, offset: u32, data: ptr<const<u8>>, size: u32) -> nkgpu_result;
+	extern fn nkgpu_buffer_update(
+		renderer: nkgpu_renderer,
+		buffer: nkgpu_buffer,
+		offset: u32,
+		data: ptr<const<u8>>,
+		size: u32
+	) -> nkgpu_result;
 	/**
 	 * Writes one 32-bit floating-point value at a byte offset in a buffer builder.
 	 *
@@ -823,7 +895,12 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * active frame. `base_element` is the first vertex or index to draw. The
 	 * binding state is submitted when this function is called.
 	 */
-	extern fn nkgpu_draw(renderer: nkgpu_renderer, base_element: u32, element_count: u32, instance_count: u32) -> nkgpu_result;
+	extern fn nkgpu_draw(
+		renderer: nkgpu_renderer,
+		base_element: u32,
+		element_count: u32,
+		instance_count: u32
+	) -> nkgpu_result;
 	/**
 	 * Ends the active frame, commits its GPU commands, and presents the surface.
 	 *
@@ -848,15 +925,26 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Reports the renderer's frame timing (see nkgpu_set_frame_timing).
 	 */
-	extern fn nkgpu_get_frame_timing(renderer: nkgpu_renderer, out_timing: ptr<nkgpu_frame_timing> @out) -> nkgpu_result;
+	extern fn nkgpu_get_frame_timing(
+		renderer: nkgpu_renderer,
+		out_timing: ptr<nkgpu_frame_timing> @out
+	) -> nkgpu_result;
 	/**
 	 * Returns borrowed opaque native device/context tokens for advanced backend integration.
 	 */
-	extern fn nkgpu_get_native_context(renderer: nkgpu_renderer, out_context: ptr<nkgpu_native_context> @out) -> nkgpu_result;
+	extern fn nkgpu_get_native_context(
+		renderer: nkgpu_renderer,
+		out_context: ptr<nkgpu_native_context> @out
+	) -> nkgpu_result;
 	/**
 	 * Starts building a zero-initialized RGBA8 image of the requested size.
 	 */
-	extern fn nkgpu_image_begin(renderer: nkgpu_renderer, width: u32, height: u32, out_builder: ptr<nkgpu_image_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_image_begin(
+		renderer: nkgpu_renderer,
+		width: u32,
+		height: u32,
+		out_builder: ptr<nkgpu_image_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Copies a 2D region between compatible 2D or array images. Cube images return UNSUPPORTED.
 	 */
@@ -864,11 +952,24 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Creates an image from tightly packed pixels as a convenience wrapper.
 	 */
-	extern fn nkgpu_image_create(renderer: nkgpu_renderer, width: u32, height: u32, format: nkgpu_image_format, pixels: ptr<const<u8>>, size: u32, dynamic_update: u32, out_image: ptr<nkgpu_image> @out) -> nkgpu_result;
+	extern fn nkgpu_image_create(
+		renderer: nkgpu_renderer,
+		width: u32,
+		height: u32,
+		format: nkgpu_image_format,
+		pixels: ptr<const<u8>>,
+		size: u32,
+		dynamic_update: u32,
+		out_image: ptr<nkgpu_image> @out
+	) -> nkgpu_result;
 	/**
 	 * Creates an image from a general descriptor.
 	 */
-	extern fn nkgpu_image_create_desc(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_image_desc>>, out_image: ptr<nkgpu_image> @out) -> nkgpu_result;
+	extern fn nkgpu_image_create_desc(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_image_desc>>,
+		out_image: ptr<nkgpu_image> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys an image and its texture view; the handle becomes invalid.
 	 */
@@ -887,22 +988,46 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * Dynamic images cannot be published because updates may replace their native
 	 * storage.
 	 */
-	extern fn nkgpu_image_get_graphics_image(renderer: nkgpu_renderer, image: nkgpu_image, out_image: ptr<nk_graphics_image> @out) -> nkgpu_result;
+	extern fn nkgpu_image_get_graphics_image(
+		renderer: nkgpu_renderer,
+		image: nkgpu_image,
+		out_image: ptr<nk_graphics_image> @out
+	) -> nkgpu_result;
 	/**
 	 * Downloads a 2D or array image region into a buffer in top-to-bottom row order.
 	 */
-	extern fn nkgpu_image_to_buffer(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_buffer_image_copy_desc>>) -> nkgpu_result;
+	extern fn nkgpu_image_to_buffer(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_buffer_image_copy_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Updates an image rectangle from rows with the supplied byte pitch.
 	 */
-	extern fn nkgpu_image_update(renderer: nkgpu_renderer, image: nkgpu_image, x: u32, y: u32, width: u32, height: u32, pixels: ptr<const<u8>>, row_pitch: u32) -> nkgpu_result;
+	extern fn nkgpu_image_update(
+		renderer: nkgpu_renderer,
+		image: nkgpu_image,
+		x: u32,
+		y: u32,
+		width: u32,
+		height: u32,
+		pixels: ptr<const<u8>>,
+		row_pitch: u32
+	) -> nkgpu_result;
 	/**
 	 * Writes one RGBA8 pixel into an image builder.
 	 *
 	 * `x` and `y` are zero-based pixel coordinates. Each color component must be
 	 * in the inclusive range 0..255.
 	 */
-	extern fn nkgpu_image_write_rgba8(builder: nkgpu_image_builder, x: u32, y: u32, red: u32, green: u32, blue: u32, alpha: u32) -> nkgpu_result;
+	extern fn nkgpu_image_write_rgba8(
+		builder: nkgpu_image_builder,
+		x: u32,
+		y: u32,
+		red: u32,
+		green: u32,
+		blue: u32,
+		alpha: u32
+	) -> nkgpu_result;
 	/**
 	 * Returns the most recent adapter diagnostic.
 	 *
@@ -918,7 +1043,13 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * vertex buffer slot, and `offset` is the attribute's byte offset within one
 	 * vertex. Call this once for each attribute consumed by the shader.
 	 */
-	extern fn nkgpu_pipeline_attribute(builder: nkgpu_pipeline_builder, location: u32, buffer_index: u32, offset: u32, format: nkgpu_vertex_format) -> nkgpu_result;
+	extern fn nkgpu_pipeline_attribute(
+		builder: nkgpu_pipeline_builder,
+		location: u32,
+		buffer_index: u32,
+		offset: u32,
+		format: nkgpu_vertex_format
+	) -> nkgpu_result;
 	/**
 	 * Starts building a pipeline for a shader.
 	 *
@@ -926,25 +1057,46 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * The shader must belong to `renderer`. Add vertex attributes and, when
 	 * needed, an index type before calling nkgpu_pipeline_end().
 	 */
-	extern fn nkgpu_pipeline_begin(renderer: nkgpu_renderer, shader: nkgpu_shader, stride: u32, out_builder: ptr<nkgpu_pipeline_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_pipeline_begin(
+		renderer: nkgpu_renderer,
+		shader: nkgpu_shader,
+		stride: u32,
+		out_builder: ptr<nkgpu_pipeline_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Starts building a compute pipeline for a compute shader.
 	 */
-	extern fn nkgpu_pipeline_begin_compute(renderer: nkgpu_renderer, shader: nkgpu_shader, out_builder: ptr<nkgpu_pipeline_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_pipeline_begin_compute(
+		renderer: nkgpu_renderer,
+		shader: nkgpu_shader,
+		out_builder: ptr<nkgpu_pipeline_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Sets independent RGB and alpha blend operations for a pipeline.
 	 */
-	extern fn nkgpu_pipeline_blend(builder: nkgpu_pipeline_builder, state: ptr<const<nkgpu_blend_state>>) -> nkgpu_result;
+	extern fn nkgpu_pipeline_blend(
+		builder: nkgpu_pipeline_builder,
+		state: ptr<const<nkgpu_blend_state>>
+	) -> nkgpu_result;
 	/**
 	 * Sets the color format and write state for one MRT pipeline slot.
 	 */
-	extern fn nkgpu_pipeline_color_target(builder: nkgpu_pipeline_builder, color_index: u32, format: nkgpu_image_format, write_mask: nkgpu_color_write_mask, blend: ptr<const<nkgpu_blend_state>>) -> nkgpu_result;
+	extern fn nkgpu_pipeline_color_target(
+		builder: nkgpu_pipeline_builder,
+		color_index: u32,
+		format: nkgpu_image_format,
+		write_mask: nkgpu_color_write_mask,
+		blend: ptr<const<nkgpu_blend_state>>
+	) -> nkgpu_result;
 	/**
 	 * Selects the color channels written by a pipeline, for every color target; a later
 	 * nkgpu_pipeline_color_target call sets its own target's mask. NKGPU_COLORMASK_NONE writes
 	 * nothing.
 	 */
-	extern fn nkgpu_pipeline_color_write_mask(builder: nkgpu_pipeline_builder, mask: nkgpu_color_write_mask) -> nkgpu_result;
+	extern fn nkgpu_pipeline_color_write_mask(
+		builder: nkgpu_pipeline_builder,
+		mask: nkgpu_color_write_mask
+	) -> nkgpu_result;
 	/**
 	 * Converts a pipeline builder into a compute pipeline descriptor.
 	 */
@@ -952,8 +1104,15 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Selects the front-face culling mode and winding for a pipeline.
 	 */
-	extern fn nkgpu_pipeline_cull_mode(builder: nkgpu_pipeline_builder, mode: nkgpu_cull_mode, winding: nkgpu_face_winding) -> nkgpu_result;
-	extern fn nkgpu_pipeline_depth(builder: nkgpu_pipeline_builder, state: ptr<const<nkgpu_depth_state>>) -> nkgpu_result;
+	extern fn nkgpu_pipeline_cull_mode(
+		builder: nkgpu_pipeline_builder,
+		mode: nkgpu_cull_mode,
+		winding: nkgpu_face_winding
+	) -> nkgpu_result;
+	extern fn nkgpu_pipeline_depth(
+		builder: nkgpu_pipeline_builder,
+		state: ptr<const<nkgpu_depth_state>>
+	) -> nkgpu_result;
 	/**
 	 * Enables depth testing and writing for a pipeline. Pipelines target the window
 	 * pass depth/stencil format by default, with depth testing and writing disabled.
@@ -970,7 +1129,10 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * On NKGPU_OK, writes the pipeline handle to `out_pipeline`. The builder is no
 	 * longer valid after this call, including when pipeline creation fails.
 	 */
-	extern fn nkgpu_pipeline_end(builder: nkgpu_pipeline_builder, out_pipeline: ptr<nkgpu_pipeline> @out) -> nkgpu_result;
+	extern fn nkgpu_pipeline_end(
+		builder: nkgpu_pipeline_builder,
+		out_pipeline: ptr<nkgpu_pipeline> @out
+	) -> nkgpu_result;
 	/**
 	 * Selects how the pipeline interprets an applied index buffer.
 	 *
@@ -981,19 +1143,35 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Sets the multisample count and optional alpha-to-coverage state.
 	 */
-	extern fn nkgpu_pipeline_multisample(builder: nkgpu_pipeline_builder, sample_count: u32, alpha_to_coverage: u32) -> nkgpu_result;
+	extern fn nkgpu_pipeline_multisample(
+		builder: nkgpu_pipeline_builder,
+		sample_count: u32,
+		alpha_to_coverage: u32
+	) -> nkgpu_result;
 	/**
 	 * Selects the primitive topology of a graphics pipeline.
 	 */
-	extern fn nkgpu_pipeline_primitive_type(builder: nkgpu_pipeline_builder, primitive_type: nkgpu_primitive_type) -> nkgpu_result;
+	extern fn nkgpu_pipeline_primitive_type(
+		builder: nkgpu_pipeline_builder,
+		primitive_type: nkgpu_primitive_type
+	) -> nkgpu_result;
 	/**
 	 * Sets per-face stencil testing and operations for a pipeline.
 	 */
-	extern fn nkgpu_pipeline_stencil(builder: nkgpu_pipeline_builder, state: ptr<const<nkgpu_stencil_state>>) -> nkgpu_result;
+	extern fn nkgpu_pipeline_stencil(
+		builder: nkgpu_pipeline_builder,
+		state: ptr<const<nkgpu_stencil_state>>
+	) -> nkgpu_result;
 	/**
 	 * Configures the stride and step rate of a vertex-buffer slot.
 	 */
-	extern fn nkgpu_pipeline_vertex_buffer(builder: nkgpu_pipeline_builder, buffer_index: u32, stride: u32, step: nkgpu_vertex_step, step_rate: u32) -> nkgpu_result;
+	extern fn nkgpu_pipeline_vertex_buffer(
+		builder: nkgpu_pipeline_builder,
+		buffer_index: u32,
+		stride: u32,
+		step: nkgpu_vertex_step,
+		step_rate: u32
+	) -> nkgpu_result;
 	/**
 	 * Returns the backend selected for this renderer's NativeKit surface.
 	 */
@@ -1006,16 +1184,28 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Queries backend support for one NativeKit image format.
 	 */
-	extern fn nkgpu_query_image_format_support(renderer: nkgpu_renderer, format: nkgpu_image_format, out_support: ptr<nkgpu_image_format_support> @out) -> nkgpu_result;
+	extern fn nkgpu_query_image_format_support(
+		renderer: nkgpu_renderer,
+		format: nkgpu_image_format,
+		out_support: ptr<nkgpu_image_format_support> @out
+	) -> nkgpu_result;
 	extern fn nkgpu_query_limits(renderer: nkgpu_renderer, out_limits: ptr<nkgpu_limits> @out) -> nkgpu_result;
 	/**
 	 * Begins an asynchronous readback of an arbitrary buffer range.
 	 */
-	extern fn nkgpu_readback_begin_buffer(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_buffer_readback_desc>>, out_readback: ptr<nkgpu_readback> @out) -> nkgpu_result;
+	extern fn nkgpu_readback_begin_buffer(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_buffer_readback_desc>>,
+		out_readback: ptr<nkgpu_readback> @out
+	) -> nkgpu_result;
 	/**
 	 * Begins an asynchronous readback of a 2D or array image rectangle.
 	 */
-	extern fn nkgpu_readback_begin_image(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_image_readback_desc>>, out_readback: ptr<nkgpu_readback> @out) -> nkgpu_result;
+	extern fn nkgpu_readback_begin_image(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_image_readback_desc>>,
+		out_readback: ptr<nkgpu_readback> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a readback object, whether pending or ready.
 	 */
@@ -1023,11 +1213,21 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Polls a readback without exposing backend synchronization objects.
 	 */
-	extern fn nkgpu_readback_query(renderer: nkgpu_renderer, readback: nkgpu_readback, out_info: ptr<nkgpu_readback_info> @out) -> nkgpu_result;
+	extern fn nkgpu_readback_query(
+		renderer: nkgpu_renderer,
+		readback: nkgpu_readback,
+		out_info: ptr<nkgpu_readback_info> @out
+	) -> nkgpu_result;
 	/**
 	 * Copies ready readback bytes into caller-owned memory.
 	 */
-	extern fn nkgpu_readback_read(renderer: nkgpu_renderer, readback: nkgpu_readback, data: ptr<u8>, size: u32, out_size: ptr<u32> @out) -> nkgpu_result;
+	extern fn nkgpu_readback_read(
+		renderer: nkgpu_renderer,
+		readback: nkgpu_readback,
+		data: ptr<u8>,
+		size: u32,
+		out_size: ptr<u32> @out
+	) -> nkgpu_result;
 	/**
 	 * Creates the GPU renderer for a ready NativeKit surface.
 	 *
@@ -1037,7 +1237,10 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * `out_renderer`; all buffers, shaders, pipelines, images, samplers, and
 	 * builders created through it belong to that renderer.
 	 */
-	extern fn nkgpu_renderer_create(nativekit_surface: nk_surface, out_renderer: ptr<nkgpu_renderer> @out) -> nkgpu_result;
+	extern fn nkgpu_renderer_create(
+		nativekit_surface: nk_surface,
+		out_renderer: ptr<nkgpu_renderer> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a renderer and all resources still owned by it.
 	 *
@@ -1048,11 +1251,17 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Returns the explicit lifecycle state of a renderer.
 	 */
-	extern fn nkgpu_renderer_get_state(renderer: nkgpu_renderer, out_state: ptr<nkgpu_renderer_state> @out) -> nkgpu_result;
+	extern fn nkgpu_renderer_get_state(
+		renderer: nkgpu_renderer,
+		out_state: ptr<nkgpu_renderer_state> @out
+	) -> nkgpu_result;
 	/**
 	 * Returns resource and submission counters for a renderer.
 	 */
-	extern fn nkgpu_renderer_get_stats(renderer: nkgpu_renderer, out_stats: ptr<nkgpu_renderer_stats> @out) -> nkgpu_result;
+	extern fn nkgpu_renderer_get_stats(
+		renderer: nkgpu_renderer,
+		out_stats: ptr<nkgpu_renderer_stats> @out
+	) -> nkgpu_result;
 	/**
 	 * Creates a texture sampler with independent minification and magnification
 	 * filters and U/V wrap modes.
@@ -1060,7 +1269,14 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * On NKGPU_OK, writes the sampler handle to `out_sampler`; bind it with
 	 * nkgpu_apply_sampler().
 	 */
-	extern fn nkgpu_sampler_create(renderer: nkgpu_renderer, min_filter: nkgpu_filter, mag_filter: nkgpu_filter, wrap_u: nkgpu_wrap, wrap_v: nkgpu_wrap, out_sampler: ptr<nkgpu_sampler> @out) -> nkgpu_result;
+	extern fn nkgpu_sampler_create(
+		renderer: nkgpu_renderer,
+		min_filter: nkgpu_filter,
+		mag_filter: nkgpu_filter,
+		wrap_u: nkgpu_wrap,
+		wrap_v: nkgpu_wrap,
+		out_sampler: ptr<nkgpu_sampler> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a sampler owned by `renderer`; the handle becomes invalid.
 	 */
@@ -1078,7 +1294,13 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * name is used by GL backends; the HLSL semantic and index are used by D3D11.
 	 * Metal source declares its own `[[attribute(location)]]` mapping.
 	 */
-	extern fn nkgpu_shader_attribute(builder: nkgpu_shader_builder, location: u32, glsl_name: utf8, hlsl_semantic: utf8, hlsl_semantic_index: u32) -> nkgpu_result;
+	extern fn nkgpu_shader_attribute(
+		builder: nkgpu_shader_builder,
+		location: u32,
+		glsl_name: utf8,
+		hlsl_semantic: utf8,
+		hlsl_semantic_index: u32
+	) -> nkgpu_result;
 	/**
 	 * Starts building a shader with UTF-8 vertex and fragment source strings.
 	 *
@@ -1089,15 +1311,29 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * nkgpu_shader_end() creates the shader. The source strings are copied, so
 	 * they may be released after this call succeeds.
 	 */
-	extern fn nkgpu_shader_begin(renderer: nkgpu_renderer, language: nkgpu_shader_language, vertex_source: utf8, fragment_source: utf8, out_builder: ptr<nkgpu_shader_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_shader_begin(
+		renderer: nkgpu_renderer,
+		language: nkgpu_shader_language,
+		vertex_source: utf8,
+		fragment_source: utf8,
+		out_builder: ptr<nkgpu_shader_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Starts building a compute-only shader with one UTF-8 source string.
 	 */
-	extern fn nkgpu_shader_begin_compute(renderer: nkgpu_renderer, language: nkgpu_shader_language, compute_source: utf8, out_builder: ptr<nkgpu_shader_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_shader_begin_compute(
+		renderer: nkgpu_renderer,
+		language: nkgpu_shader_language,
+		compute_source: utf8,
+		out_builder: ptr<nkgpu_shader_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Adds generalized resource metadata to a shader builder.
 	 */
-	extern fn nkgpu_shader_binding(builder: nkgpu_shader_builder, desc: ptr<const<nkgpu_shader_binding_desc>>) -> nkgpu_result;
+	extern fn nkgpu_shader_binding(
+		builder: nkgpu_shader_builder,
+		desc: ptr<const<nkgpu_shader_binding_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Sets the compute threadgroup dimensions used by Metal.
 	 *
@@ -1116,7 +1352,13 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * binding metadata needed for uniforms, textures, and vertex inputs.
 	 * On NKGPU_OK, writes the shader handle to `out_shader`.
 	 */
-	extern fn nkgpu_shader_create(renderer: nkgpu_renderer, language: nkgpu_shader_language, vertex_source: utf8, fragment_source: utf8, out_shader: ptr<nkgpu_shader> @out) -> nkgpu_result;
+	extern fn nkgpu_shader_create(
+		renderer: nkgpu_renderer,
+		language: nkgpu_shader_language,
+		vertex_source: utf8,
+		fragment_source: utf8,
+		out_shader: ptr<nkgpu_shader> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a shader owned by `renderer`; the handle becomes invalid.
 	 */
@@ -1133,11 +1375,21 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * Metal shader sources bind view slot `n` at `[[buffer(8 + n)]]`; the other
 	 * source languages use the view slot directly in their storage-buffer binding.
 	 */
-	extern fn nkgpu_shader_storage_buffer(builder: nkgpu_shader_builder, view_slot: u32, stage: nkgpu_shader_stage, readonly: u32) -> nkgpu_result;
+	extern fn nkgpu_shader_storage_buffer(
+		builder: nkgpu_shader_builder,
+		view_slot: u32,
+		stage: nkgpu_shader_stage,
+		readonly: u32
+	) -> nkgpu_result;
 	/**
 	 * Describes a compute storage-image binding and its access format.
 	 */
-	extern fn nkgpu_shader_storage_image(builder: nkgpu_shader_builder, view_slot: u32, format: nkgpu_image_format, writeonly: u32) -> nkgpu_result;
+	extern fn nkgpu_shader_storage_image(
+		builder: nkgpu_shader_builder,
+		view_slot: u32,
+		format: nkgpu_image_format,
+		writeonly: u32
+	) -> nkgpu_result;
 	/**
 	 * Describes a 2D filtering texture binding in a shader builder.
 	 *
@@ -1146,12 +1398,25 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * name; HLSL5 and MSL use the view and sampler slots directly. `stage` selects
 	 * the vertex or fragment shader.
 	 */
-	extern fn nkgpu_shader_texture(builder: nkgpu_shader_builder, view_slot: u32, sampler_slot: u32, stage: nkgpu_shader_stage, name: utf8) -> nkgpu_result;
+	extern fn nkgpu_shader_texture(
+		builder: nkgpu_shader_builder,
+		view_slot: u32,
+		sampler_slot: u32,
+		stage: nkgpu_shader_stage,
+		name: utf8
+	) -> nkgpu_result;
 	/**
 	 * Describes a filtering texture binding with an explicit image shape.
 	 * Cube arrays use array sampling.
 	 */
-	extern fn nkgpu_shader_texture_type(builder: nkgpu_shader_builder, view_slot: u32, sampler_slot: u32, stage: nkgpu_shader_stage, image_type: nkgpu_image_type, name: utf8) -> nkgpu_result;
+	extern fn nkgpu_shader_texture_type(
+		builder: nkgpu_shader_builder,
+		view_slot: u32,
+		sampler_slot: u32,
+		stage: nkgpu_shader_stage,
+		image_type: nkgpu_image_type,
+		name: utf8
+	) -> nkgpu_result;
 	/**
 	 * Describes one member of a shader uniform block.
 	 *
@@ -1159,7 +1424,14 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * size and caller-provided bytes directly. `array_count` describes an array
 	 * and zero is treated as one element. Cross-backend blocks use std140 layout.
 	 */
-	extern fn nkgpu_shader_uniform(builder: nkgpu_shader_builder, block_slot: u32, member_index: u32, name: utf8, type: nkgpu_uniform_type, array_count: u32) -> nkgpu_result;
+	extern fn nkgpu_shader_uniform(
+		builder: nkgpu_shader_builder,
+		block_slot: u32,
+		member_index: u32,
+		name: utf8,
+		type: nkgpu_uniform_type,
+		array_count: u32
+	) -> nkgpu_result;
 	/**
 	 * Describes one shader uniform block in a shader builder.
 	 *
@@ -1167,11 +1439,19 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * compute shader, and `size` is the block's byte size. The uniform data later supplied
 	 * to nkgpu_apply_uniforms() must use the same layout and size.
 	 */
-	extern fn nkgpu_shader_uniform_block(builder: nkgpu_shader_builder, slot: u32, stage: nkgpu_shader_stage, size: u32) -> nkgpu_result;
+	extern fn nkgpu_shader_uniform_block(
+		builder: nkgpu_shader_builder,
+		slot: u32,
+		stage: nkgpu_shader_stage,
+		size: u32
+	) -> nkgpu_result;
 	/**
 	 * Submits a command stream after checking its explicit ABI version.
 	 */
-	extern fn nkgpu_submit_command_stream(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_command_stream_desc>>) -> nkgpu_result;
+	extern fn nkgpu_submit_command_stream(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_command_stream_desc>>
+	) -> nkgpu_result;
 	/**
 	 * Submits a packed little-endian command stream in the active frame.
 	 *
@@ -1192,13 +1472,24 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * `out_surface`; destroy it with nkgpu_surface_destroy() after destroying its
 	 * renderer. This convenience call requests the build's default API.
 	 */
-	extern fn nkgpu_surface_create(nativekit_window: nk_window, width: i32, height: i32, out_surface: ptr<nk_surface> @out) -> nkgpu_result;
+	extern fn nkgpu_surface_create(
+		nativekit_window: nk_window,
+		width: i32,
+		height: i32,
+		out_surface: ptr<nk_surface> @out
+	) -> nkgpu_result;
 	/**
 	 * Creates a child surface with an explicit graphics API. The matching runtime
 	 * must be included in this build; with the backend matrix enabled, GLCore and
 	 * GLES3 surfaces can coexist.
 	 */
-	extern fn nkgpu_surface_create_for_api(nativekit_window: nk_window, api: nk_graphics_api, width: i32, height: i32, out_surface: ptr<nk_surface> @out) -> nkgpu_result;
+	extern fn nkgpu_surface_create_for_api(
+		nativekit_window: nk_window,
+		api: nk_graphics_api,
+		width: i32,
+		height: i32,
+		out_surface: ptr<nk_surface> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a GPU surface.
 	 *
@@ -1221,11 +1512,20 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Begins a named GPU timestamp interval inside the active frame (including pass resolves).
 	 */
-	extern fn nkgpu_timestamp_begin_desc(renderer: nkgpu_renderer, desc: ptr<const<nkgpu_timestamp_desc>>, out_timestamp: ptr<nkgpu_timestamp> @out) -> nkgpu_result;
+	extern fn nkgpu_timestamp_begin_desc(
+		renderer: nkgpu_renderer,
+		desc: ptr<const<nkgpu_timestamp_desc>>,
+		out_timestamp: ptr<nkgpu_timestamp> @out
+	) -> nkgpu_result;
 	/**
 	 * Queries multiple timestamp intervals in one backend access operation.
 	 */
-	extern fn nkgpu_timestamp_collect(renderer: nkgpu_renderer, timestamps: ptr<const<nkgpu_timestamp>>, count: u32, out_results: ptr<nkgpu_timestamp_result> @out) -> nkgpu_result;
+	extern fn nkgpu_timestamp_collect(
+		renderer: nkgpu_renderer,
+		timestamps: ptr<const<nkgpu_timestamp>>,
+		count: u32,
+		out_results: ptr<nkgpu_timestamp_result> @out
+	) -> nkgpu_result;
 	/**
 	 * Destroys a timestamp query.
 	 */
@@ -1241,7 +1541,11 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Polls a timestamp without exposing backend query objects.
 	 */
-	extern fn nkgpu_timestamp_query(renderer: nkgpu_renderer, timestamp: nkgpu_timestamp, out_info: ptr<nkgpu_timestamp_info> @out) -> nkgpu_result;
+	extern fn nkgpu_timestamp_query(
+		renderer: nkgpu_renderer,
+		timestamp: nkgpu_timestamp,
+		out_info: ptr<nkgpu_timestamp_info> @out
+	) -> nkgpu_result;
 	/**
 	 * Starts a zero-initialized uniform byte block of `size` bytes.
 	 *
@@ -1249,7 +1553,11 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * nkgpu_apply_uniforms(), which consumes the builder. The bytes must match the
 	 * uniform block layout declared for the shader.
 	 */
-	extern fn nkgpu_uniforms_begin(renderer: nkgpu_renderer, size: u32, out_builder: ptr<nkgpu_uniform_builder> @out) -> nkgpu_result;
+	extern fn nkgpu_uniforms_begin(
+		renderer: nkgpu_renderer,
+		size: u32,
+		out_builder: ptr<nkgpu_uniform_builder> @out
+	) -> nkgpu_result;
 	/**
 	 * Writes one 32-bit floating-point uniform value at a byte offset.
 	 */
