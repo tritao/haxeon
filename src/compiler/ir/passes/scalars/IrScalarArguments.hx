@@ -38,10 +38,11 @@ private typedef ScalarCallPlan = {
 class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	public static inline final PREFIX = "$scalar-arguments:";
 
-	/** The fact of a function a call, a closure or a method call names: never stated for a candidate, 0 for any other. */
-	static inline final CALLEE = 0;
+	/** The fact of the candidates as a whole: their names and what kind each is, interned (`IrFacts.intern`). */
+	static inline final CANDIDATES = 0;
 
-	static inline final METHOD = 1;
+	/** Never stated: a function whose calls go to a candidate, or may, is rewritten each run. */
+	static inline final REWRITE = 1;
 
 	/** Raw result slots and traced leaf carriers may cross only the verified private callable ABI. */
 	public static function isPrivateClosureType(type:IrType):Bool
@@ -72,6 +73,9 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	var clones:Map<String, IrBody> = [];
 	var pinnedClones:Map<String, IrBody> = [];
 	var originals:Array<IrFunction> = [];
+
+	/** The candidates' fact (`CANDIDATES`), set once they are chosen. */
+	var candidatesPrint = 0;
 	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
 
 	/**
@@ -94,10 +98,9 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 
 	/**
 	 * The scalar ABI per function (`IrFunctionPass`) for the pipeline, after its value joins are split. The candidates are chosen
-	 * over the whole program each run; the rewrite of a function reads, for each function its calls and closures name and each method
-	 * it calls, whether it is a candidate or a candidate's method (`CALLEE`, `METHOD`): a function that names none keeps its form
-	 * unread while those facts hold, and one that names a candidate is rewritten each run, as its calls depend on the candidates'
-	 * layouts. The clones are added in `finish`.
+	 * over the whole program each run; the rewrite of a function reads them as one fact (`CANDIDATES`): a function that calls none
+	 * of them keeps its form unread while they stay the same, and one that calls a candidate, or a method one implements, is
+	 * rewritten each run, as its calls depend on the candidates' layouts and the classes. The clones are added in `finish`.
 	 */
 	public function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
@@ -246,36 +249,56 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 				}
 			}
 		}
+		candidatesPrint = printCandidates();
 	}
 
 	public function summarize(fn:IrFunction):Int
 		return 0;
 
 	public function fact(kind:Int, key:String):Int
-		return switch kind {
-			case CALLEE: candidates.exists(key) || pinnedCandidates.exists(key) ? compiler.ir.reuse.IrFacts.UNKNOWN : 0;
-			default: methodNames.exists(key) ? compiler.ir.reuse.IrFacts.UNKNOWN : 0;
-		};
+		return kind == CANDIDATES ? candidatesPrint : compiler.ir.reuse.IrFacts.UNKNOWN;
+
+	/** The number of the candidates' text in the session's facts (`CANDIDATES`), or 0 without a session. */
+	function printCandidates():Int {
+		var known = lineage;
+		if (known == null)
+			return 0;
+		function sorted(keys:Iterator<String>):String {
+			var names = [for (name in keys) name];
+			names.sort(Reflect.compare);
+			return names.join(",");
+		}
+		return known.memos.facts.intern([
+			sorted(candidates.keys()), sorted(pinnedCandidates.keys()), sorted(freshOnly.keys()),
+			sorted(terminalOnly.keys()),
+			sorted(methodNames.keys())
+		].join(";"));
+	}
 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = fn.bodyIn(types, scratch.bodyBuilder);
-		if (reader.records())
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					switch body.opcode(row) {
-						case IrOpcode.Call, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
-							reader.read(CALLEE, body.symbol(row).name);
-						case IrOpcode.MethodCall:
-							reader.read(METHOD, body.symbol(row).name);
-						default:
-					}
-					row = body.nextRow(row);
-				}
-			}
+		// The calls a function makes go to a candidate or not by the candidates alone, but a method call's target and a rewrite's
+		// slots depend on the classes: a function with either is not reused.
+		reader.read(CANDIDATES, "");
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
 			return fn;
-		return rewriteFunction(fn, body);
+		var result = rewriteFunction(fn, body);
+		if (result != fn || callsCandidateMethod(body))
+			reader.read(REWRITE, "");
+		return result;
+	}
+
+	/** Whether `body` calls a method a candidate implements (`methodNames`), whose target depends on the classes. */
+	function callsCandidateMethod(body:IrBody):Bool {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.MethodCall && methodNames.exists(body.symbol(row).name))
+					return true;
+				row = body.nextRow(row);
+			}
+		}
+		return false;
 	}
 
 	public function request(kind:Int, type:IrType):Void

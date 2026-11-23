@@ -35,7 +35,25 @@ class IrFacts {
 	var lastPrint = 0;
 	var lastReader = 0;
 
+	/** By text, the number `intern` gave it. */
+	final interned:Map<String, Int> = [];
+
+	var lastInterned = 0;
+
 	public function new() {}
+
+	/**
+	 * A number for `text`, the same every time it is asked for in the session and different for another text: a fact whose value is
+	 * a whole-program choice the stage spells out (`IrScalarArguments`'s candidates) takes it.
+	 */
+	public function intern(text:String):Int {
+		var known = interned.get(text);
+		if (known != null)
+			return known;
+		var made = ++lastInterned;
+		interned.set(text, made);
+		return made;
+	}
 
 	/** Starts a stage run: every fact is computed again when next asked for. */
 	public function begin():Void
