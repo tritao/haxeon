@@ -199,7 +199,7 @@ The "label" of a measured span can cover two passes where the code runs them bac
 | IrScalarClosures | (b) | set of scalar closure function types, from all bodies and natives, minus excluded | existence of the `$scalar-arguments:` clone of a closure target | 11.2M | 9.1% |
 | IrEnumRuntimeSpecializations + IrInlineEnumLowering (+Eligibility, Escapes) | (b) | concrete enum specializations; `allowed` enums = union of per-function escape facts, closed over the type graph | method signatures | 11.2M | 9.1% |
 | IrScalarArguments | (c) | `candidates`: functions whose value arguments/results travel as scalars; greatest fixpoint over the call graph | callee candidacy, signatures | 9.2M | 7.5% |
-| IrValueArrayProgramRewrite | (b) | concrete value-array element types (objects, enums, interfaces, statics, natives, all bodies) | place-method bodies (cloned), helper bodies inlined by `ScalarLowering` | 8.7M | 7.1% |
+| IrValueArrayProgramRewrite | (b), per-function memos, done | concrete value-array element types (objects, enums, interfaces, statics, natives, all bodies); per element, the print of its layout | place-method bodies (cloned), helper bodies inlined by `ScalarLowering` (by their versions) | 8.7M | 7.1% |
 | IrScalarReplacement | (a) | none | none | 7.6M | 6.1% |
 | IrNullableScalarFlow | (c) | `candidates`, pruned by trial rewrite until stable | callee candidacy | 5.7M | 4.7% |
 | IrVerifier (verification, not a rewrite) | per-function memo, done | reads recorded through `IrVerifyTable`s | tables | 4.2M | 3.5% |

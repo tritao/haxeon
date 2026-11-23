@@ -2,6 +2,7 @@ package compiler.ir.passes.arrays;
 
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
+import compiler.ir.passes.arrays.IrValueArrayProgramRewrite.IrValueArrayRequests;
 import compiler.ir.passes.values.IrValueLaneReference;
 import compiler.ir.verify.IrVerifier;
 
@@ -33,6 +34,9 @@ class IrValueArraySlotHelpers {
 	final optionalWrites:Array<{name:String, path:Array<String>, type:IrType}> = [];
 	final scalarChecks:Array<{name:String, type:IrType}> = [];
 	var built = false;
+
+	/** Told each check a rewrite asks for (`IrValueArrayRequests`), while a memoized rewrite runs. */
+	public var observer:Null<IrValueArrayRequests> = null;
 
 	/** What every helper's name ends with: the element, as the element helpers name it (`IrValueArrayElements`). */
 	final suffix:String;
@@ -67,6 +71,9 @@ class IrValueArraySlotHelpers {
 
 	/** Request a check before evaluating the rest of a place operation. */
 	public function checker(path:Array<String>, includeSelf:Bool):String {
+		var observe = observer;
+		if (observe != null)
+			observe.check(path, includeSelf);
 		for (index in 0...checks.length)
 			if (checks[index].includeSelf == includeSelf
 				&& samePath(checks[index].path, path)) return checks[index].name;

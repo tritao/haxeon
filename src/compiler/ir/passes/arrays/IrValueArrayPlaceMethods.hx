@@ -12,6 +12,7 @@ import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.model.TypeKey;
+import compiler.ir.passes.arrays.IrValueArrayProgramRewrite.IrValueArrayRequests;
 import compiler.ir.verify.IrVerifier;
 
 typedef IrValueArrayMethodRequest = {
@@ -50,10 +51,16 @@ class IrValueArrayPlaceMethods {
 
 	public final requests:Array<IrValueArrayMethodRequest> = [];
 
+	/** By the name of each place method `generate` made, the function it specialized. */
+	public final origins:Map<String, String> = [];
+
 	final requested:Map<String, Bool> = [];
 	final valueWrites:Map<String, ArrayPlaceAccessor> = [];
 	final scalarReads:Map<String, ArrayPlaceAccessor> = [];
 	var finished = false;
+
+	/** Told each method and accessor a rewrite asks for (`IrValueArrayRequests`), while a memoized rewrite runs. */
+	public var observer:Null<IrValueArrayRequests> = null;
 
 	public function new(objects:IrObjectTable, element:IrType, helpers:IrValueArraySlotHelpers) {
 		this.objects = objects;
@@ -65,6 +72,9 @@ class IrValueArrayPlaceMethods {
 	public function method(receiverType:IrType, method:String, path:Array<String>):String {
 		if (finished)
 			throw new InternalError("Array place methods have already been generated");
+		var observe = observer;
+		if (observe != null)
+			observe.method(receiverType, method, path);
 		return request(receiverType, method, path);
 	}
 
@@ -72,6 +82,9 @@ class IrValueArrayPlaceMethods {
 	public function valueSetter(type:IrType, path:Array<String>):String {
 		if (finished || (!isValue(type) && !isNullableScalar(type)))
 			throw new InternalError("Invalid array place value setter");
+		var observe = observer;
+		if (observe != null)
+			observe.valueSetter(type, path);
 		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([
 			haxe.crypto.Base64.encode(IrTypeCodec.encode(type)),
 			path
@@ -87,6 +100,9 @@ class IrValueArrayPlaceMethods {
 	public function scalarGetter(type:IrType, path:Array<String>):String {
 		if (finished || !isNullableScalar(type))
 			throw new InternalError("Invalid array place nullable scalar getter");
+		var observe = observer;
+		if (observe != null)
+			observe.scalarGetter(type, path);
 		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([
 			haxe.crypto.Base64.encode(IrTypeCodec.encode(type)),
 			path
@@ -108,6 +124,7 @@ class IrValueArrayPlaceMethods {
 				original = originals.get(originalName);
 			if (original == null)
 				throw new InternalError('Missing array place method "$originalName"');
+			origins.set(entry.name, originalName);
 			result.push(specialize(Provider(TypeKey.of(element),
 				ProviderOperations.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name,
 				original, entry.path));

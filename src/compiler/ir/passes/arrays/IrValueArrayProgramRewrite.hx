@@ -250,9 +250,18 @@ class IrValueArrayProgramRewrite {
 		}];
 		keyed.sort((a, b) -> Reflect.compare(a.key, b.key));
 		var index = new ValueArrayFunctionIndex([for (entry in keyed) entry.element], types, builder),
-			slotNamespace = nextSlotNamespace(program);
+			slotNamespace = nextSlotNamespace(program),
+			declarations:Null<String> = null;
+		// What every element's rewrite reads of the value objects, printed once.
+		function valueDeclarations():String {
+			var known = declarations;
+			if (known == null)
+				declarations = known = compiler.ir.passes.values.IrInlineValueLayout.valueDeclarations(program.objects);
+			return known;
+		}
 		for (entry in keyed)
-			rewriteIndexed(program, entry.element, pointerBits, target, index, slotNamespace++, scratch, lineage);
+			rewriteIndexed(program, entry.element, pointerBits, target, index, slotNamespace++, scratch, lineage,
+				valueDeclarations);
 		IrArrayFactory.lower(program, types, scratch, lineage);
 		IrVerifier.verifyValueArraysLowered(program, types, lineage);
 		encodeAll(program, index);
@@ -332,9 +341,17 @@ class IrValueArrayProgramRewrite {
 		return next;
 	}
 
+	/** A fact's value naming `print()` in `lineage`'s session, computed when asked; 0 without a session. */
+	static function elementFact(lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, print:() -> String):() -> Int {
+		if (lineage == null)
+			return () -> 0;
+		var facts = lineage.memos.facts;
+		return () -> facts.intern(print());
+	}
+
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
 			index:ValueArrayFunctionIndex, slotNamespace:Int, scratch:IrPassScratch,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage, ?valueDeclarations:() -> String):Void {
 		switch element {
 			case EnumTag(name):
 				IrEnumTagStorage.request(program, name);
@@ -349,8 +366,7 @@ class IrValueArrayProgramRewrite {
 			originals = index.originalFunctions(program.functions),
 			builder = scratch.bodyBuilder,
 			uses = scratch.firstInts,
-			rewritten:Null<Array<IrFunction>> = null,
-			made:Map<String, Bool> = [];
+			rewritten:Null<Array<IrFunction>> = null;
 		switch element {
 			case EnumTag(_):
 				for (fn in program.functions)
@@ -397,14 +413,42 @@ class IrValueArrayProgramRewrite {
 					current = IrFunction.ofOwnedBody(body);
 			}
 			index.finish(current);
-			if (current != fn)
-				made.set(current.name, true);
 			return current;
 		}
+		// What a rewrite and the helpers read of the program besides the function: the element's layout, from the value objects,
+		// the enums and the target, and the names it calls by (`IrValueArrayElementPass.ELEMENT`).
+		var declarations:() -> String = valueDeclarations
+			?? () -> compiler.ir.passes.values.IrInlineValueLayout.valueDeclarations(program.objects);
+		function print():String {
+			var parts = [
+				IrTypeIdentity.text(element),
+				'$pointerBits $target $slotNamespace optional ${optional != null}',
+				declarations()
+			];
+			switch element {
+				case Enum(name):
+					parts.push('storage ${IrTypeIdentity.text(factory.layout.storage)}');
+				default:
+			}
+			var adapters = [for (name in tagUnboxes.keys()) name];
+			adapters.sort(Reflect.compare);
+			for (name in adapters) {
+				var type = tagUnboxes.get(name);
+				parts.push('unbox $name ${type == null ? "" : IrTypeIdentity.text(type)}');
+			}
+			return parts.join("\n");
+		}
 		var stage = "value-array-rewrite:" + IrTypeIdentity.text(element),
-			pass = new ValueArrayElementPass(fn -> index.has(fn, element) || index.needsDynamic(fn), rewriteOne),
-			output = compiler.ir.pipeline.IrFunctionStages.run(stage, pass, program.functions, lineage,
-				lineage != null && lineage.checks, builder);
+			requests = new IrValueArrayRequests(factory.helpers, methods, elements),
+			pass = new ValueArrayElementPass(fn -> index.has(fn, element) || index.needsDynamic(fn), rewriteOne,
+				requests,
+				elementFact(lineage, print)),
+			checks = lineage != null && lineage.checks,
+			// The versions of the functions a place method may be specialized from, before the rewrite changes them.
+			originalVersions:Map<String, Int> = lineage == null
+				? [] : [for (name in originals.keys()) name => lineage.version(name)],
+			output = compiler.ir.pipeline.IrFunctionStages.run(stage, pass, program.functions, lineage, checks,
+				builder);
 		for (position in 0...output.length)
 			if (output[position] != program.functions[position]) {
 				rewritten = output;
@@ -429,18 +473,29 @@ class IrValueArrayProgramRewrite {
 			for (fn in generated) {
 				program.functions.push(fn);
 				generatedFunctions.push(fn);
-				made.set(fn.name, true);
 			}
 		// Resolve only these late producers. Place methods can clone an existing body containing typed requests.
 		IrEnumTagLowering.resolveGenerated(program, generatedFunctions);
 		IrVerifier.verifyResolvedEnumOperations(program.functions.slice(generatedStart));
+		// In a session each helper is derived: last build's while what the element's rewrite reads holds, and for a place method
+		// while the function it specializes has the same version.
+		if (lineage != null)
+			for (position in generatedStart...program.functions.length) {
+				var fn = program.functions[position], origin = methods.origins.get(fn.name);
+				program.functions[position] = compiler.ir.pipeline.IrFunctionStages.derived(stage, fn.name, pass,
+					origin == null
+					? compiler.ir.pipeline.IrFunctionStages.FROM_NAME : originalVersions.get(origin) ?? 0,
+					lineage, checks, index.types, builder, reader -> {
+						reader.read(ValueArrayElementPass.ELEMENT, "");
+						fn;
+					});
+			}
 		var nullableScalars = false;
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)
 				nullableScalars = true;
-		// Only what this element's rewrite made can call the element helpers it made.
-		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars,
-			index.types, scratch, made);
+		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars, index.types,
+			scratch, lineage);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
 		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives()))
 			if (!nativeNames.exists(native.name)) {
@@ -651,19 +706,25 @@ class IrValueArrayProgramRewrite {
 
 /**
  * One element's rewrite of the value arrays per function (`IrFunctionPass`): a function the rewrite selects (`gate`: it names an
- * array of the element, or has a dynamic view left) is rewritten each run (never stated), as what it becomes depends on the
- * element's layout and the helpers the rewrite makes for it; any other is left as it is, and reused unread at the same version.
+ * array of the element, or has a dynamic view left) reads what the rewrite reads of the program as one fact (`ELEMENT`: the
+ * element's layout, from the value objects, the enums and the target), and asks for the helpers it calls through the element's
+ * registries (`IrValueArrayRequests`); any other is left as it is, and reused unread at the same version.
  */
 @:nullSafety(Strict)
 private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPass {
-	static inline final REWRITE = 0;
+	public static inline final ELEMENT = 0;
 
 	final gate:IrFunction->Bool;
 	final rewrite:IrFunction->IrFunction;
+	final requests:IrValueArrayRequests;
+	final element:() -> Int;
 
-	public function new(gate:IrFunction->Bool, rewrite:IrFunction->IrFunction) {
+	public function new(gate:IrFunction->Bool, rewrite:IrFunction->IrFunction, requests:IrValueArrayRequests,
+			element:() -> Int) {
 		this.gate = gate;
 		this.rewrite = rewrite;
+		this.requests = requests;
+		this.element = element;
 	}
 
 	public function summarize(fn:IrFunction):Int
@@ -673,18 +734,101 @@ private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPa
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
 
 	public function fact(kind:Int, key:String):Int
-		return compiler.ir.reuse.IrFacts.UNKNOWN;
+		return element();
 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (!gate(fn))
 			return fn;
-		reader.read(REWRITE, "");
-		return rewrite(fn);
+		reader.read(ELEMENT, "");
+		requests.reader = reader;
+		var result = rewrite(fn);
+		requests.reader = null;
+		return result;
 	}
 
 	public function request(kind:Int, type:IrType, name:Null<String>):Void
-		throw new compiler.core.InternalError("A value array element's rewrite asks for no helper");
+		requests.replay(kind, type, name ?? "");
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
+}
+
+/**
+ * The helpers a value array rewrite asks the element's registries for (the place checks, the place methods and accessors, the
+ * iterator), recorded as requests while a memoized rewrite runs, so a function reused unread asks for them again (`replay`).
+ */
+@:nullSafety(Strict)
+class IrValueArrayRequests {
+	static inline final CHECK = 0;
+	static inline final CHECK_SELF = 1;
+	static inline final METHOD = 2;
+	static inline final VALUE_SETTER = 3;
+	static inline final SCALAR_GETTER = 4;
+	static inline final ITERATOR = 5;
+
+	final helpers:IrValueArraySlotHelpers;
+	final methods:IrValueArrayPlaceMethods;
+	final elements:IrValueArrayElements;
+
+	/** The reader of the rewrite running, or null. */
+	public var reader:Null<compiler.ir.reuse.IrFactReader> = null;
+
+	var replaying = false;
+
+	public function new(helpers:IrValueArraySlotHelpers, methods:IrValueArrayPlaceMethods,
+			elements:IrValueArrayElements) {
+		this.helpers = helpers;
+		this.methods = methods;
+		this.elements = elements;
+		helpers.observer = this;
+		methods.observer = this;
+		elements.observer = this;
+	}
+
+	function note(kind:Int, type:IrType, name:String):Void {
+		var current = reader;
+		if (current != null && !replaying)
+			current.request(kind, type, name);
+	}
+
+	public function check(path:Array<String>, includeSelf:Bool):Void
+		note(includeSelf ? CHECK_SELF : CHECK, Void, text(path));
+
+	public function method(receiverType:IrType, method:String, path:Array<String>):Void
+		note(METHOD, receiverType, method + "\u0002" + text(path));
+
+	public function valueSetter(type:IrType, path:Array<String>):Void
+		note(VALUE_SETTER, type, text(path));
+
+	public function scalarGetter(type:IrType, path:Array<String>):Void
+		note(SCALAR_GETTER, type, text(path));
+
+	public function iterator():Void
+		note(ITERATOR, Void, "");
+
+	/** Asks the registries for what a request recorded (`note`). */
+	public function replay(kind:Int, type:IrType, name:String):Void {
+		replaying = true;
+		switch kind {
+			case CHECK, CHECK_SELF:
+				helpers.checker(path(name), kind == CHECK_SELF);
+			case METHOD:
+				var split = name.indexOf("\u0002");
+				methods.method(type, name.substr(0, split), path(name.substr(split + 1)));
+			case VALUE_SETTER:
+				methods.valueSetter(type, path(name));
+			case SCALAR_GETTER:
+				methods.scalarGetter(type, path(name));
+			case _:
+				elements.useIterator();
+		}
+		replaying = false;
+	}
+
+	/** A field path as a request's name spells it: field names never hold a control character. */
+	static function text(path:Array<String>):String
+		return path.join("\u0001");
+
+	static function path(text:String):Array<String>
+		return text == "" ? [] : text.split("\u0001");
 }
