@@ -38,6 +38,21 @@ What you can build, each linking to a guide, and only what works today:
 
 Servers and services are not shown until there is a networking story worth showing.
 
+Batteries included for apps, a compact capability grid in the Apps section, each item linking to its package page or
+guide and, where one exists, a real capture:
+
+- **UI that draws itself the same way everywhere** (the `ui` package on the sokol GPU layer): layout (Clay), text shaping
+  (HarfBuzz, SkriBidi), bidirectional text (SheenBidi), line breaking (libunibreak, BudouX for CJK), vector drawing
+  (NanoVG).
+- **Native services from the OS, not reimplemented** (NativeKit, one C API): windows, menus, tray, dialogs,
+  notifications, clipboard, WebView, accessibility, input, gamepad and joystick, haptics, sensors, monitors, file watching,
+  networking, tasks, GPU surfaces and the mobile hosts.
+- **Packages:** `gpu`, `audio`, `animation` (glTF, skeletal), `editor`, `filesystem`, `credentials` (the OS keychain),
+  `platform`, `agentkit`.
+
+The grid states maturity as the platform table does: NativeKit is experimental and pre-1.0, with its ABI still evolving,
+and the site says so beside it.
+
 Showcase, as proof rather than claims (real, named apps a visitor can inspect beat adjectives):
 
 - **Materia** (github.com/tritao/materia): a reference editor and native UI application.
