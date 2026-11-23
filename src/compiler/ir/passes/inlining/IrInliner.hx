@@ -30,7 +30,6 @@ import compiler.ir.pipeline.TargetProfile;
 
 import compiler.core.InternalError;
 import compiler.ir.codec.IrFunctionStateEquality;
-import compiler.ir.passes.nullability.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.SourceProvenance;
@@ -91,9 +90,6 @@ class IrInlineCache {
 
 	/** Each function's source as a frozen body, kept while the source is the same object, so it is encoded once. */
 	public var originals:Map<String, {source:IrFunction, body:IrBody}> = [];
-
-	/** The static-null-check copies of the program's functions, so they keep their identity between compiles. */
-	public final staticChecks:IrStaticCheckCache = new IrStaticCheckCache();
 
 	/** Each function's instrumented form, kept while its inlined form and the scope are unchanged. */
 	public var instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
@@ -176,23 +172,9 @@ class IrInlineCache {
 	 */
 	var sources:Map<String, IrFunction> = [];
 
-	/**
-	 * The same for the functions a stage past the conversion point generates as objects, by stage: each build makes them anew,
-	 * so one generated the same as last time is then last time's object, with its body.
-	 */
-	var generatedSources:Map<String, Map<String, IrFunction>> = [];
-
 	public function stableSources(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
 		var next:Map<String, IrFunction> = [], result = stable(functions, sources, next, builder);
 		sources = next;
-		return result;
-	}
-
-	public function stableGenerated(stage:String, functions:Array<IrFunction>,
-			?builder:IrBodyBuilder):Array<IrFunction> {
-		var previous = generatedSources.get(stage), next:Map<String, IrFunction> = [];
-		var result = stable(functions, previous == null ? [] : previous, next, builder);
-		generatedSources.set(stage, next);
 		return result;
 	}
 
@@ -232,9 +214,6 @@ class IrInlineCache {
 				found = result;
 		for (f in sources)
 			note(fn("source", f));
-		for (stage => made in generatedSources)
-			for (f in made)
-				note(fn('generated ($stage)', f));
 		for (entry in originals) {
 			note(fn("original's source", entry.source));
 			note(body("original", entry.body));
@@ -248,12 +227,6 @@ class IrInlineCache {
 		}
 		for (f in published)
 			note(fn("published", f));
-		for (entry in staticChecks.copies) {
-			note(fn("static check source", entry.source));
-			note(fn("static check copy", entry.result));
-		}
-		for (f in staticChecks.helpers)
-			note(fn("static check", f));
 		for (entry in instrumented) {
 			note(fn("instrumented source", entry.source));
 			note(fn("instrumented", entry.result));
@@ -264,15 +237,11 @@ class IrInlineCache {
 	/** Lets the sources go, for a compile no next one reuses: they are the objects the stage's bodies were made from. */
 	public function forgetSources():Void {
 		sources = [];
-		generatedSources = [];
-		staticChecks.copies = [];
-		staticChecks.helpers = [];
 	}
 
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
-		result.generatedSources = generatedSources.copy();
 		result.types = types;
 		for (name => entry in originals)
 			result.originals.set(name, entry);
@@ -282,9 +251,6 @@ class IrInlineCache {
 			result.published.set(name, fn);
 		for (name => entry in instrumented)
 			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
-		result.staticChecks.copies = staticChecks.copies;
-		result.staticChecks.helpers = staticChecks.helpers;
-		result.staticChecks.valueShape = staticChecks.valueShape;
 		for (name => entry in positionalPrints)
 			result.positionalPrints.set(name, entry);
 		result.positionalNatives = positionalNatives;

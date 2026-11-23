@@ -114,6 +114,12 @@ class IrStageMemos {
 	/** The typed interface dispatchers each function calls (`IrTypedInterfaceDispatch.generate`). */
 	public final interfaceRequests = new IrContributionMemo<Array<IrTypedInterfaceRequest>>();
 
+	/** What each function stores for the walk of what initialization calls (`IrInitCalls.stores`), for the static null checks. */
+	public final initStores = new IrContributionMemo<compiler.ir.analysis.IrInitializationCalls.IrInitCalls>();
+
+	/** What each function the walk of what initialization calls reads calls (`IrInitCalls.calls`). */
+	public final initCalls = new IrContributionMemo<compiler.ir.analysis.IrInitializationCalls.IrInitCalls>();
+
 	/** What each function needs of the runtime surface (`IrRuntimeNeeds`). */
 	public final runtimeNeeds = new IrContributionMemo<compiler.ir.pipeline.IrProgramAssembler.IrRuntimeNeeds>();
 
@@ -178,6 +184,8 @@ class IrStageMemos {
 		interfaceRequests.begin(build);
 		erasureRequests.begin(build);
 		runtimeNeeds.begin(build);
+		initStores.begin(build);
+		initCalls.begin(build);
 		enumMentions.begin(build);
 		tagEscapes.begin(build);
 		inlineEnumUses.begin(build);
@@ -227,9 +235,6 @@ class IrLineage {
 	@:processWide("a shared empty list of facts, only ever read")
 	public static final NO_FACTS:Array<Int> = [];
 
-	/** What the memo of the frozen functions a stage without a memo hands on is named after the stage (`handedOn`). */
-	public static inline final SETTLED = ":settled";
-
 	/** What a stage's memo of the functions it derives (`IrFunctionStages.derived`) is named after the stage. */
 	public static inline final DERIVED = ":derived";
 
@@ -243,9 +248,8 @@ class IrLineage {
 
 	/**
 	 * Past the encode point: the stages read and edit bodies, and what a memo keeps is frozen. A function a stage without a memo
-	 * hands on is then not compared with last build's (no cache compares after it computes): one whose body is not frozen (made
-	 * this build) takes a new version, and a frozen one that is not the function its name stood for keeps the version it had when
-	 * the stage handed on the same object last build (`handedOn`), else takes a new one.
+	 * hands on in place of the one its name stood for is then not compared with last build's (no cache compares after it
+	 * computes): it takes a new version.
 	 */
 	public var bodies(default, null) = false;
 
@@ -355,9 +359,8 @@ class IrLineage {
 		for (index in 0...functions.length) {
 			var fn = functions[index], cell = cells.get(fn.name);
 			if (bodies) {
-				var body = fn.body, frozen = body != null && body.frozen;
-				if (cell == null || cell.fn != fn || cell.build != memos.build || !frozen) {
-					set(fn, frozen ? handedOn(stage, fn) : memos.versions.next());
+				if (cell == null || cell.fn != fn || cell.build != memos.build) {
+					set(fn, memos.versions.next());
 					cell = cells.get(fn.name);
 				}
 			} else if (cell == null || cell.fn != fn || cell.build != memos.build) {
@@ -376,19 +379,6 @@ class IrLineage {
 					cell.build = 0;
 			live = functions.length;
 		}
-	}
-
-	/**
-	 * The version of `fn`, frozen, which `stage` hands on in place of the function its name stood for: the version it had when the
-	 * stage handed on the same object last build (a stage that keeps what it made, as the value array rewrite's factory lowerings
-	 * do), else a new one. An object is never changed once frozen, so the same object is the same function; nothing is compared.
-	 */
-	function handedOn(stage:String, fn:IrFunction):Int {
-		var memo = memos.stage(stage + SETTLED), entry = memo.last(fn.name);
-		if (entry == null || entry.output != fn)
-			entry = new IrStageEntry(0, NO_FACTS, fn, memos.versions.next(), 0, null);
-		memo.keep(fn.name, entry);
-		return entry.outputVersion;
 	}
 
 	/** `fn`, made from the function of version `input` (0 for none), settled with `memo` and recorded. */

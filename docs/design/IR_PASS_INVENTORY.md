@@ -212,9 +212,9 @@ The "label" of a measured span can cover two passes where the code runs them bac
 | IrOptionalFieldStorage + IrNullableScalarFields | (b) / (a) | `plans` from the object table only | value-method bodies (cloned per owner/field/path) | 3.0M | 2.4% |
 | IrValuePhiScalarization (twice) | (a) | none | none | 2.4M + 0.9M | 2.6% |
 | runtime-surface detection and the rest of `assemble` | (b) | which runtime helpers any call needs (a union of per-function facts) | none | 2.2M | 1.8% |
-| IrObjectReflection.generate | (b) generator | helper set = f(declared natives, reflectable objects) | signatures | 1.9M | 1.5% |
+| IrObjectReflection.generate | (b) generator, helpers derived, done | helper set = f(declared natives, reflectable objects); each helper reads the prints of its native and layouts | signatures | 1.9M | 1.5% |
 | IrOptionalScalarFlow + IrOptionalValueFlow.addHelpers | (c) fixpoint + (a) generator | `candidates` = greatest set such that each `eligible(fn)` holds given the others | callee bodies (`snapshotOnlyReceiver`), method resolution | 1.0M | 0.8% |
-| IrStaticNullChecks | (b) | functions reachable from `__init` (call graph) | bodies of the reachable functions | 0.4M | 0.3% |
+| IrStaticNullChecks | (b), per-function memo, done | functions reachable from `__init` (call graph of per-function summaries) | none | 0.4M | 0.3% |
 | IrGenericOwnerErasure.generate | (b) generator | helper set = f(call names, objects) | callee signatures | 0.01M | 0.0% |
 
 Counting the table's rows, about 7 passes are (a), 12 are (b) and 4 are (c) (`IrInliner`, `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`; the
@@ -292,8 +292,8 @@ By edit cost, with what must come first:
 
 - Is the 3.4M floor one shared helper? (Step 0 answers it.)
 - The inliner span: how much of its 31.2M is per-build setup that scales with the program, not with the edit?
-- `IrStaticNullChecks` keeps its own `__init` reachability fixpoint (`IrInitializationCalls`); is that a (c) pass or a (b) pass over a
-  call-graph summary? Its cost (0.4M) does not decide the order, but the interface does.
+- `IrStaticNullChecks` is a (b) pass over a call-graph summary: each function gives what it calls and where its closures and
+  arguments flow (`IrInitCalls`, kept by version), and the `__init` reachability is solved from those each build.
 
 ## Enum escape reach and array factories
 

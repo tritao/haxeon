@@ -90,9 +90,9 @@ class IrPipeline {
 		new IrAssemblyStage("encode-bodies", encodeBodies).encodes(),
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
 		IrFunctionStages.stage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
-		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
+		IrFunctionStages.stage(IrStaticNullChecks.STAGE, staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
-		new IrAssemblyStage("object-reflection", objectReflection),
+		new IrAssemblyStage(IrObjectReflection.STAGE, objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
 		IrFunctionStages.stage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
@@ -435,13 +435,10 @@ class IrPipeline {
 	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrOptionalScalarFlow(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder);
 
-	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		// The checked copies are kept, frozen, only in a session.
-		var cache = context.options.keepSession ? context.inlineCache : null;
-		assembly.functions = IrStaticNullChecks.run(assembly.functions, assembly.objects,
-			cache == null ? null : cache.staticChecks, bodyTypes(context), context.passScratch.bodyBuilder);
-		return assembly;
-	}
+	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrStaticNullChecks(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.lineage,
+			context.options.checkReuse);
 
 	/** Value objects, interface boxes and anonymous records are reflectable too, besides the classes the typed program lists. */
 	static function reflectableObjects(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -465,29 +462,13 @@ class IrPipeline {
 		var generator = assembly.generator;
 		assembly.natives = IrObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
-			assembly.reachedNatives, context.options.checkReuse);
-		assembly.functions = encodeMade("object-reflection", assembly.functions, context);
+			assembly.reachedNatives, context.options.checkReuse,
+			new IrDerivedHelpers(IrObjectReflection.STAGE, context.lineage, context.options.checkReuse,
+			bodyTypes(context),
+			context.passScratch.bodyBuilder));
+		// A one-shot compile lets every function's objects go, the ones the stage decoded to read included.
+		encodeAll(assembly.functions, context);
 		return assembly;
-	}
-
-	/**
-	 * `functions` with those a stage past the conversion point made as objects (those without a body) encoded: in a session, one
-	 * made the same as last build is last build's object, which has its body. A one-shot compile lets every function's objects go,
-	 * the ones the stage decoded to read included.
-	 */
-	static function encodeMade(stage:String, functions:Array<IrFunction>, context:IrPipelineContext):Array<IrFunction> {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		var made = [for (fn in functions) if (fn.body == null) fn];
-		if (retained && cache != null && made.length > 0) {
-			// The stable functions are encoded as the cache takes them, so the ones to replace are told apart before.
-			var isMade = [for (fn in functions) fn.body == null];
-			var stable = cache.stableGenerated(stage, made, context.passScratch.bodyBuilder), index = 0;
-			functions = [for (position in 0...functions.length) isMade[position]
-				? stable[index++] : functions[position]];
-		} else if (retained && cache != null)
-			cache.stableGenerated(stage, made, context.passScratch.bodyBuilder);
-		encodeAll(functions, context);
-		return functions;
 	}
 
 	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
@@ -650,6 +631,8 @@ class IrPipeline {
 			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
 			context.instrumentScope);
+		// The lineage ends here: the inliner keeps its own memo, and no stage after it reads versions.
+		context.lineage = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
 		if (context.options.checkReuse && context.options.keepSession) {
 			var unfrozen = cache.unfrozen();

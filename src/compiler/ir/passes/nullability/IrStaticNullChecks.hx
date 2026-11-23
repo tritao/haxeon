@@ -11,7 +11,12 @@ import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
+import compiler.ir.analysis.IrInitializationCalls.IrInitCalls;
 import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
@@ -19,148 +24,160 @@ import compiler.ir.model.Ir;
 
 /**
  * Diagnose dereferencing a null static instead of letting native code read null + a field offset. On IR bodies
- * (docs/design/IR_CORE_COLUMNS.md, migration): a dereference of a static is preceded in place by a call of the static's check.
+ * (docs/design/IR_CORE_COLUMNS.md, migration), per function (`IrFunctionPass`): in a function that initialization can call
+ * (`IrInitializationCalls`, from `__init`), a dereference of a static is preceded in place by a call of the static's check. The
+ * rewrite reads whether the function is reached (`REACHED`) and whether each receiver's object is a value (`VALUE`), and asks for
+ * the check of each static by its name and the receiver's type; the checks come last, by name.
  */
 @:nullSafety(Strict)
-class IrStaticNullChecks {
-	/**
-	 * `functions` read as their bodies made with `types` (those of the functions' bodies when not given): a function that gets
-	 * a check becomes its edited body, owned by the next stage; the checks come last, encoded.
-	 *
-	 * `cache` keeps each instrumented copy and helper alive between compiles, so a function that did not change comes out
-	 * as the same object; the inliner memoizes on function identity and would otherwise redo everything reachable from
-	 * initialization on every compile.
-	 */
-	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache,
-			?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
-		// The closure below reads both, so each is one value from the start.
-		var typeIds = types ?? IrTypeIds.ofFunctions(functions);
-		var helpers:Map<String, IrFunction> = [];
-		var nextCopies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
-		var store = cache ?? new IrStaticCheckCache();
-		var valueTypes:Map<String, Bool> = [], valueNames:Array<String> = [];
+class IrStaticNullChecks implements IrFunctionPass {
+	public static inline final STAGE = "static-null-checks";
+
+	/** Fact: whether initialization can call the function named by the key. */
+	static inline final REACHED = 0;
+
+	/** Fact: whether the object named by the key is a value. */
+	static inline final VALUE = 1;
+
+	/** Request kinds: the check of a static for any receiver, and for a value object's. */
+	static inline final ANY = 0;
+
+	static inline final OF_VALUE = 1;
+
+	/** A function's summary: it reads a static. */
+	static inline final READS_STATIC = 1;
+
+	final objects:Null<Array<IrObject>>;
+	final valueTypes:Map<String, Bool> = [];
+	final types:IrTypeIds;
+	final builder:Null<IrBodyBuilder>;
+	final lineage:Null<IrLineage>;
+	final checks:Bool;
+
+	/** By name, the checks asked for: the static and the receiver's value type, or null for any other receiver. */
+	final helpers:Map<String, {name:String, valueType:Null<IrType>}> = [];
+
+	var reached:Map<String, Bool> = [];
+
+	/** A run over functions whose bodies are made with `types`, with `objects`; in a session with `lineage`. */
+	public function new(objects:Null<Array<IrObject>>, types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:IrLineage,
+			checks = false) {
+		this.objects = objects;
 		if (objects != null)
 			for (object in objects)
-				if (object.isValue) {
+				if (object.isValue)
 					valueTypes.set(object.name, true);
-					valueNames.push(object.name);
-				}
-		valueNames.sort(Reflect.compare);
-		var valueShape = haxe.Json.stringify(valueNames);
-		if (store.valueShape != valueShape) {
-			store.copies = [];
-			store.helpers = [];
-			store.valueShape = valueShape;
-		}
-		var result:Array<IrFunction> = [];
-		var byName = new IrFunctionIndex("static-null-checks", functions),
-			reachable:Map<String, Bool> = [],
-			pending = ["__init"];
-		var execution = new IrInitializationCalls(functions, typeIds, objects, builder);
-		while (pending.length > 0) {
-			var name = pending.pop();
-			if (name == null)
-				break;
-			if (reachable.exists(name) || !byName.exists(name))
-				continue;
-			reachable.set(name, true);
-			for (callee in execution.calls(name))
-				pending.push(callee);
-		}
-		// The check of `name`, for a receiver of `valueType` (a value object) or any other (null).
-		function helperFor(name:String, valueType:Null<IrType>):String {
-			var helperName = valueType == null ? "__static$nonnull$" + name : "$static$nonnull$value$"
-				+ haxe.Json.stringify([name, Std.string(valueType)]);
-			if (!helpers.exists(helperName)) {
-				var knownHelper = store.helpers.get(helperName);
-				if (knownHelper != null)
-					helpers.set(helperName, knownHelper);
-				else {
-					var created = check(helperName, name, valueType);
-					created.bodyIn(typeIds, builder);
-					// A session's cache keeps it.
-					if (cache != null)
-						created.freezeBody(builder);
-					helpers.set(helperName, created);
-					store.helpers.set(helperName, created);
-				}
+		this.types = types;
+		this.builder = builder;
+		this.lineage = lineage;
+		this.checks = checks;
+	}
+
+	/** `functions` with the checks, without a memo: read as their bodies made with `types` (those of the functions' bodies when not given). */
+	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?types:IrTypeIds,
+			?builder:IrBodyBuilder):Array<IrFunction>
+		return IrFunctionStages.apply(STAGE,
+			new IrStaticNullChecks(objects, types ?? IrTypeIds.ofFunctions(functions), builder),
+			functions);
+
+	public function summarize(fn:IrFunction):Int {
+		var body = fn.bodyIn(types, builder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.GlobalGet)
+					return READS_STATIC;
+				row = body.nextRow(row);
 			}
-			return helperName;
 		}
-		for (fn in functions) {
-			if (!reachable.exists(fn.name)) {
-				result.push(fn);
-				continue;
-			}
-			var known = store.copies.get(fn.name);
-			if (known != null && known.source == fn) {
-				nextCopies.set(fn.name, known);
-				for (name in known.statics) {
-					var helper = store.helpers.get(name);
-					if (helper == null)
-						throw new InternalError('A kept copy of ${fn.name} calls the missing static check $name');
-					helpers.set(name, helper);
-				}
-				result.push(known.result);
-				continue;
-			}
-			var body = fn.bodyIn(typeIds, builder);
-			// A session's cache keeps `fn` as its copy's source, so the copy is made on a copy.
-			if (cache != null)
-				body = fn.freezeBody(builder);
-			var origins = staticOrigins(body);
-			var used:Map<String, Bool> = [], edited:Null<IrBody> = null;
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					var nextRow = body.nextRow(row);
-					for (index in 0...receiverCount(body, row)) {
-						var receiver = receiverAt(body, row, index), name = origins.get(receiver);
-						if (name == null)
-							continue;
-						var receiverType = body.valueType(receiver),
-							valueType = switch receiverType {
-								case Obj(typeName) if (valueTypes.exists(typeName)): receiverType;
-								default: null;
-							};
-						var helperName = helperFor(name, valueType);
-						used.set(helperName, true);
-						// Cached functions belong to the frontend; never instrument them in place.
-						if (edited == null)
-							edited = body.forEditing(builder);
-						var actual = receiver;
-						if (valueType == null) {
-							actual = edited.newValue("staticReceiver", edited.typeId(Dyn));
-							edited.beginRow();
-							edited.pushOperand(receiver);
-							edited.linkBefore(block, row,
-								edited.endRow(IrOpcode.ToDyn, actual, 0, edited.provenance(row)));
-						}
-						var unused = edited.newValue("staticCheck", edited.typeId(Void));
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+		var calls = new IrInitializationCalls(functions,
+			[for (fn in functions) IrInitCalls.stores(fn, types, builder, lineage)],
+			fn -> IrInitCalls.calls(fn, types, builder, lineage), objects);
+		reached = calls.reachable("__init", names.exists);
+	}
+
+	public function fact(kind:Int, key:String):Int
+		return switch kind {
+			case REACHED: reached.exists(key) ? 1 : 0;
+			case _: valueTypes.exists(key) ? 1 : 0;
+		};
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		if (summary != READS_STATIC || reader.read(REACHED, fn.name) == 0)
+			return fn;
+		var body = fn.bodyIn(types, builder);
+		var origins = staticOrigins(body);
+		var edited:Null<IrBody> = null;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var nextRow = body.nextRow(row);
+				for (index in 0...receiverCount(body, row)) {
+					var receiver = receiverAt(body, row, index), name = origins.get(receiver);
+					if (name == null)
+						continue;
+					var receiverType = body.valueType(receiver),
+						valueType = switch receiverType {
+							case Obj(typeName) if (reader.read(VALUE, typeName) == 1): receiverType;
+							default: null;
+						};
+					reader.request(valueType == null ? ANY : OF_VALUE, valueType ?? Dyn, name);
+					// A function given to the stage belongs to the stage before; it is never instrumented in place.
+					if (edited == null)
+						edited = body.forEditing(builder);
+					var actual = receiver;
+					if (valueType == null) {
+						actual = edited.newValue("staticReceiver", edited.typeId(Dyn));
 						edited.beginRow();
-						edited.pushOperand(actual);
-						edited.linkBefore(block, row,
-							edited.endRow(IrOpcode.Call, unused, IrSymbol.of(helperName).id, edited.provenance(row)));
+						edited.pushOperand(receiver);
+						edited.linkBefore(block, row, edited.endRow(IrOpcode.ToDyn, actual, 0, edited.provenance(row)));
 					}
-					row = nextRow;
+					var unused = edited.newValue("staticCheck", edited.typeId(Void));
+					edited.beginRow();
+					edited.pushOperand(actual);
+					edited.linkBefore(block, row,
+						edited.endRow(IrOpcode.Call, unused, IrSymbol.of(helperName(name, valueType)).id,
+						edited.provenance(row)));
 				}
+				row = nextRow;
 			}
-			// A function with no static receiver gets no check, and stays the frontend's own object.
-			var copied = edited == null ? fn : IrFunction.ofOwnedBody(edited);
-			if (cache != null && copied != fn)
-				copied.freezeBody(builder);
-			nextCopies.set(fn.name, {source: fn, result: copied, statics: [for (name in used.keys()) name]});
-			result.push(copied);
 		}
-		store.copies = nextCopies;
-		var made = [for (name => helper in helpers) {
-			name:name, helper:helper
-		}];
-		made.sort((a, b) -> Reflect.compare(a.name, b.name));
-		for (entry in made)
-			result.push(entry.helper);
+		// A function with no static receiver gets no check, and stays the object it was given.
+		return edited == null ? fn : IrFunction.ofOwnedBody(edited);
+	}
+
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+		if (name == null)
+			throw new InternalError("A static null check is asked for by the static's name");
+		var valueType = kind == OF_VALUE ? type : null;
+		helpers.set(helperName(name, valueType), {name: name, valueType: valueType});
+	}
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		var result = functions.copy(), names = [for (name in helpers.keys()) name];
+		names.sort(Reflect.compare);
+		for (helperName in names) {
+			var helper = helpers.get(helperName);
+			if (helper != null)
+				result.push(IrFunctionStages.derived(STAGE, helperName, this, IrFunctionStages.FROM_NAME, lineage,
+					checks,
+					types, builder, _ -> {
+						var made = check(helperName, helper.name, helper.valueType);
+						made.bodyIn(types, builder);
+						made;
+					}));
+		}
 		return result;
 	}
+
+	/** The name of the check of the static `name`, for a receiver of `valueType` (a value object) or any other (null). */
+	static function helperName(name:String, valueType:Null<IrType>):String
+		return valueType == null ? "__static$nonnull$" + name : "$static$nonnull$value$"
+			+ haxe.Json.stringify([name, Std.string(valueType)]);
 
 	/** By value id, the static each value of `body` holds: what a static's read gives, through SSA casts and joins. */
 	static function staticOrigins(body:IrBody):Map<Int, String> {
@@ -243,14 +260,4 @@ class IrStaticNullChecks {
 			Provider(TypeKey.of(valueType == null ? Dyn : valueType),
 			ProviderOperations.detailed(ProviderOperation.ReceiverCheck, helperName)));
 	}
-}
-
-/** What `IrStaticNullChecks` produced last time: each reachable function's instrumented copy, and the shared helpers. */
-@:nullSafety(Strict)
-class IrStaticCheckCache {
-	public var copies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
-	public var helpers:Map<String, IrFunction> = [];
-	public var valueShape:String = "";
-
-	public function new() {}
 }

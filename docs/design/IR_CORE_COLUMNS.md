@@ -113,10 +113,10 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    are still cloned from their decoding, as the place methods are. The early prune's check reads bodies past the encode point.
    *The reflection helpers' checked casts read bodies* (`IrCheckedDynamicCasts.rewriteBodies`; the earlier checked-dynamic-casts
    stage and the Wasm module builders keep the object version).
-   The reflection helpers (`object-reflection`) are built as functions and encoded where they are made, which also takes,
-   in a session, last build's helper for one generated the same (`IrInlineCache.stableGenerated`). *The static null checks
-   read bodies*, as does the walk of what initialization calls (`IrInitializationCalls`); a check is linked in place before a
-   dereference of a static, on a copy in a session. *Optional scalar flow* finds the functions with an optional value on
+   The reflection helpers (`object-reflection`) are built as functions and encoded where they are made; in a session each is
+   derived (`IrDerivedHelpers`), last build's while the prints of the native and layouts it reads are unchanged. *The static
+   null checks read bodies*, per function (`IrStaticNullChecks`), as does each function's summary for the walk of what
+   initialization calls (`IrInitCalls`); a check is linked in place before a dereference of a static, on a copy of a frozen body. *Optional scalar flow* finds the functions with an optional value on
    their bodies; it still rewrites those few from their decoding into new functions, encoded at the end of the stage with
    the optional value helpers, which it now adds itself (the `optional-value-helpers` stage is merged into it).
    *Inline enum lowering reads bodies*: its eligibility scans rows, a function that mentions a selected enum is lowered in
@@ -150,11 +150,9 @@ function names; reuse is by object identity of the `IrFunction` an entry was mad
 - **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
   has its objects (the stages before still read them) and its frozen encoding. A rebuilt function equal to it
   (`IrFunctionStateEquality.same`) is replaced by it, so the stages after see the same object and reuse by identity.
-- **Generated functions past the encode point** (`IrInlineCache.generatedSources`, stage → name → `IrFunction`): a stage that
-  builds functions as objects each build (the reflection helpers, optional scalar flow's functions and helpers), or edits a copy of a body each build (inline enum lowering), takes last build's for one made the same, as the
-  encode point does, so it is encoded once.
-- **Static null checks** (`IrInlineCache.staticChecks`): name → {source function, its checked copy}, reused while the source
-  is the same object, and the checks by name, made once.
+- **Stages past the encode point with a memo** (`IrStageMemos`, docs/design/WARM_REBUILD_REUSE.md): the per-function stages
+  (`IrFunctionStages.run`, the static null checks among them) and the helpers they derive from a name or from declarations
+  (`IrFunctionStages.derived`, the reflection helpers among them) keep what they made, frozen, by input version and facts.
 - **Stages between the encode point and the inliner**: no cache of their own, but for the array factory's lowering in the
   value-array rewrite (`IrInlineCache.arrayFactories`, name → {source function, lowered function}): it edits every function
   that allocates an array, and reads only the function, so a function given as the same object is last build's result. A
