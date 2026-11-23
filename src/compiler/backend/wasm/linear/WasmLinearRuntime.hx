@@ -135,10 +135,10 @@ class WasmLinearRuntime {
 						case "__string_last_index_of_from":
 							functions.set(native.name, addStringLastIndexOf(module, native.name, true));
 						case "__string_substring":
-							if (!functions.exists(native.name))
-								functions.set(native.name, addStringSubstring(module, native.name, allocator));
+							stringSubstring(module, functions, allocator);
 						case "__string_char_at":
-							functions.set(native.name, addStringCharAt(module, native.name, allocator));
+							functions.set(native.name, addStringCharAt(module, native.name,
+								stringSubstring(module, functions, allocator)));
 						case "__string_from_char_code":
 							functions.set(native.name, addStringFromCharCode(module, native.name, allocator));
 						case "__string_equal":
@@ -2823,6 +2823,16 @@ class WasmLinearRuntime {
 		return module.addFunction(b.finish());
 	}
 
+	/** The one `__string_substring`, which `charAt` calls too. */
+	static function stringSubstring(module:WasmModule, functions:Map<String, Int>, allocator:Int):Int {
+		var existing = functions.get("__string_substring");
+		if (existing != null)
+			return existing;
+		var index = addStringSubstring(module, "__string_substring", allocator);
+		functions.set("__string_substring", index);
+		return index;
+	}
+
 	static function addStringSubstring(module:WasmModule, name:String, allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]});
 		var result = builder.local("result", I32);
@@ -3158,8 +3168,7 @@ class WasmLinearRuntime {
 		builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
 	}
 
-	static function addStringCharAt(module:WasmModule, name:String, allocator:Int):Int {
-		var substring = addStringSubstring(module, "$char-at-substring", allocator);
+	static function addStringCharAt(module:WasmModule, name:String, substring:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]});
 		var size = builder.local("size", I32),
 			start = builder.local("start", I32),
