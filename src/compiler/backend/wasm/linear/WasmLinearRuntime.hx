@@ -132,10 +132,12 @@ class WasmLinearRuntime {
 			case "__string_concat": addStringConcat(module, name, allocator, requiredStringOffset(strings, "null"));
 			case "__string_to_lower_case": addStringCase(module, name, allocator, true);
 			case "__string_to_upper_case": addStringCase(module, name, allocator, false);
-			case "__string_index_of": addStringIndexOf(module, name);
-			case "__string_index_of_from": addStringIndexOf(module, name, true);
-			case "__string_last_index_of": addStringLastIndexOf(module, name);
-			case "__string_last_index_of_from": addStringLastIndexOf(module, name, true);
+			case "__string_index_of":
+				addStringSearchWithoutStart(module, name, context.runtimeFunction("__string_index_of_from"), false);
+			case "__string_index_of_from": addStringSearch(module, name, false);
+			case "__string_last_index_of":
+				addStringSearchWithoutStart(module, name, context.runtimeFunction("__string_last_index_of_from"), true);
+			case "__string_last_index_of_from": addStringSearch(module, name, true);
 			case "__string_substring": addStringSubstring(module, name, allocator);
 			case "__string_char_at": addStringCharAt(module, name, context.runtimeFunction("__string_substring"));
 			case "__string_from_char_code": addStringFromCharCode(module, name, allocator);
@@ -2702,15 +2704,23 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	/** String.indexOf, optionally from a start index: a negative start searches from 0, one past the end finds nothing. */
-	static function addStringIndexOf(module:WasmModule, name:String, fromStart = false):Int
-		return addStringSearch(module, name, fromStart, false);
+	/** `indexOf` and `lastIndexOf` without a start index: the search that takes one, from the first unit or the end. */
+	static function addStringSearchWithoutStart(module:WasmModule, name:String, search:Int, reverse:Bool):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [], [
+			LocalGet(0),
+			LocalGet(1),
+			// A start past the end searches from the end.
+			I32Const(reverse ? 0x7fffffff : 0),
+			Call(search),
+			Return
+		]));
 
-	static function addStringLastIndexOf(module:WasmModule, name:String, fromStart = false):Int
-		return addStringSearch(module, name, fromStart, true);
-
-	static function addStringSearch(module:WasmModule, name:String, fromStart:Bool, reverse:Bool):Int {
-		var b = new WasmFunctionBuilder(name, {parameters: fromStart ? [I32, I32, I32] : [I32, I32], results: [I32]}),
+	/**
+	 * String.indexOf or, with `reverse`, lastIndexOf from a start index: forward, a negative start searches from 0 and a start
+	 * past the end finds nothing; in reverse, a negative start finds nothing and a start past the end searches from the end.
+	 */
+	static function addStringSearch(module:WasmModule, name:String, reverse:Bool):Int {
+		var b = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
 			result = b.local("result", I32);
 		b.emitAll([
 			LocalGet(0),
@@ -2729,7 +2739,7 @@ class WasmLinearRuntime {
 				LocalGet(1),
 				I32Load(WasmLayout.STRING_LENGTH_OFFSET)
 			], i -> stringByteAt(1, i), () -> b.local("search-" + b.locals.length, I32),
-			fromStart ? 2 : null, reverse, result));
+			2, reverse, result));
 		b.emitAll([LocalGet(result), Return]);
 		return module.addFunction(b.finish());
 	}
