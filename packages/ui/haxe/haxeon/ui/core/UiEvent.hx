@@ -26,6 +26,7 @@ class UiEvent {
 	public var currentTarget:Null<WidgetId>;
 	public var phase:UiEventPhase;
 	public var defaultPrevented(default, null):Bool;
+	public var handled(default, null):Bool = false;
 	public var propagationStopped(default, null):Bool;
 	public var immediatePropagationStopped(default, null):Bool;
 	public var pointerCaptureTarget(default, null):Null<WidgetId>;
@@ -101,6 +102,9 @@ class UiEvent {
 	}
 
 	public function preventDefault():Void defaultPrevented = true;
+
+	/** Lets the host know the UI used this key while preserving UI default actions. */
+	public function markHandled():Void handled = true;
 
 	/** Routes this pointer sequence to the current handler; native capture is optional. */
 	public function capturePointer(requestNativeCapture:Bool = true):Void {

@@ -8,11 +8,13 @@ import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.internal.event.NativeEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Event;
+import nativekit.ffi.NativeKitTypes.Handle;
 
 /** The managed owner of NativeKit's native event queue. */
 class EventPump {
 	public final requests:Requests;
 	final listeners:Array<PlatformEvent->Void> = [];
+	final sourceListeners:Map<Int, Array<SourceRoute>> = [];
 	var disposed:Bool = false;
 
 	@:allow(haxeon.platform.Runtime)
@@ -52,17 +54,36 @@ class EventPump {
 		if (listener == null)
 			throw BindingError.invalidArgument("EventPump.listen", "NativeKit event listeners cannot be null");
 		listeners.push(listener);
-		return new EventSubscription(this, listener);
+		return new EventSubscription(this, function() listeners.remove(listener));
+	}
+
+	/**
+	 * Routes key, window close, surface ready, surface resize, and frame completion events by source.
+	 * Returning true from a key handler stops subsequent handlers for that source.
+	 */
+	public function listenSource(source:Handle, listener:PlatformEvent->Bool):EventSubscription {
+		ensureLive();
+		if (!source.isValid() || listener == null)
+			throw BindingError.invalidArgument("EventPump.listenSource", "A live source and listener are required");
+		var id = source.rawValue();
+		var routes = sourceListeners.get(id);
+		if (routes == null) {
+			routes = [];
+			sourceListeners.set(id, routes);
+		}
+		var route = new SourceRoute(listener);
+		routes.push(route);
+		return new EventSubscription(this, function() {
+			route.active = false;
+			routes.remove(route);
+			if (routes.length == 0)
+				sourceListeners.remove(id);
+		});
 	}
 
 	/** Reports whether this runtime's event pump has been shut down. */
 	public function isDisposed():Bool
 		return disposed;
-
-	/** Removes one listener when its subscription is disposed. */
-	@:allow(haxeon.platform.event.EventSubscription)
-	private function removeListener(listener:PlatformEvent->Void):Bool
-		return listeners.remove(listener);
 
 	/** Stops the pump after its owning runtime shuts down. */
 	@:allow(haxeon.platform.Runtime)
@@ -73,6 +94,7 @@ class EventPump {
 	private function runtimeShutdown():Void {
 		disposed = true;
 		listeners.resize(0);
+		sourceListeners.clear();
 		requests.runtimeShutdown();
 	}
 
@@ -94,6 +116,31 @@ class EventPump {
 		} catch (error:Dynamic) {
 			failure = error;
 		}
+		var source = switch value {
+			case Key(source, _, _, _, _) | WindowClose(source) | SurfaceReady(source)
+				| SurfaceResize(source, _, _, _, _) | SurfaceFrameComplete(source, _, _): source;
+			case _: null;
+		};
+		var keyEvent = switch value {
+			case Key(_, _, _, _, _): true;
+			case _: false;
+		};
+		if (source != null) {
+			var routes = sourceListeners.get(source.rawValue());
+			if (routes != null) {
+				for (route in routes.copy()) {
+					if (!route.active || disposed)
+						continue;
+					try {
+						if (route.listener(value) && keyEvent)
+							break;
+					} catch (error:Dynamic) {
+						if (failure == null)
+							failure = error;
+					}
+				}
+			}
+		}
 		for (listener in snapshot) {
 			try {
 				listener(value);
@@ -111,4 +158,12 @@ class EventPump {
 			throw BindingError.disposed("EventPump.ensureLive",
 				"NativeKit event pump has been disposed with its runtime");
 	}
+}
+
+
+private class SourceRoute {
+	public final listener:PlatformEvent->Bool;
+	public var active = true;
+
+	public function new(listener:PlatformEvent->Bool) this.listener = listener;
 }

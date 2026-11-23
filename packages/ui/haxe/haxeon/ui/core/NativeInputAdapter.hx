@@ -16,6 +16,7 @@ class NativeInputAdapter {
 	final window:WindowHandle;
 	var attachedEvents:Null<EventPump>;
 	var eventSubscription:Null<EventSubscription>;
+	var keySubscription:Null<EventSubscription>;
 	var redrawOnInput = false;
 	final eventListener:PlatformEvent->Void;
 	/**
@@ -42,6 +43,10 @@ class NativeInputAdapter {
 		attachedEvents = null;
 		eventSubscription = null;
 		eventListener = function(event) {
+			switch event {
+				case Key(_, _, _, _, _): return;
+				case _:
+			}
 			if (consume(event) && redrawOnInput)
 				context.requestFrameIfDirty();
 		};
@@ -62,6 +67,13 @@ class NativeInputAdapter {
 		detach();
 		this.redrawOnInput = redrawOnInput;
 		eventSubscription = events.listen(eventListener);
+		keySubscription = events.listenSource(source, function(event) return switch event {
+			case Key(_, key, scancode, action, modifiers):
+				var handled = dispatchKey(key, scancode, action, modifiers);
+				if (this.redrawOnInput) context.requestFrameIfDirty();
+				handled;
+			case _: false;
+		});
 		attachedEvents = events;
 		context.setPointerCaptureHandler(function(captured) {
 			try {
@@ -83,6 +95,9 @@ class NativeInputAdapter {
 		pointerModifiers = UiModifier.empty();
 		heldModifierKeys = 0;
 		if (attachedEvents != null) {
+			if (keySubscription != null)
+				keySubscription.dispose();
+			keySubscription = null;
 			if (eventSubscription != null)
 				eventSubscription.dispose();
 			eventSubscription = null;
@@ -168,15 +183,8 @@ class NativeInputAdapter {
 				true;
 			case PlatformEvent.Key(eventSource, key, scancode, action, modifiers)
 				if (matches(eventSource)):
-				var kind = keyKind(action);
-				if (kind == null)
-					false;
-				else {
-					var keyCode = key.rawValue();
-					updateKeyModifiers(keyCode, action, UiModifier.fromRaw(modifiers.rawValue()));
-					context.key(kind, keyCode, UiModifier.fromRaw(modifiers.rawValue()), scancode);
-					true;
-				}
+				dispatchKey(key, scancode, action, modifiers);
+				keyKind(action) != null;
 			case TextInput(eventSource, codepoint) if (matchesText(eventSource)):
 				context.text(UiEventKind.TextInput, fromCodepoint(codepoint), codepoint);
 				true;
@@ -219,6 +227,17 @@ class NativeInputAdapter {
 		for (index in 0...4)
 			if ((modifiers.rawValue() & (1 << index)) == 0)
 				heldModifierKeys &= ~((1 << index) | (1 << (index + 4)));
+	}
+
+	function dispatchKey(key:nativekit.ffi.NativeKitTypes.Key, scancode:Int, action:InputAction,
+			modifiers:Modifiers):Bool {
+		var kind = keyKind(action);
+		if (kind == null)
+			return false;
+		var keyCode = key.rawValue();
+		var uiModifiers = UiModifier.fromRaw(modifiers.rawValue());
+		updateKeyModifiers(keyCode, action, uiModifiers);
+		return context.key(kind, keyCode, uiModifiers, scancode);
 	}
 
 	function updateKeyModifiers(key:Int, action:InputAction, modifiers:UiModifier):Void {

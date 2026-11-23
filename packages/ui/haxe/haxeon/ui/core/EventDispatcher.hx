@@ -334,23 +334,21 @@ class EventDispatcher {
 			new UiEvent(UiEventKind.Scroll, path[path.length - 1].id, x, y, deltaX, deltaY, 0, 0, modifiers));
 	}
 
-	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Void {
+	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
 		var node = focus.focusedNode();
 		if (node == null) {
 			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) {
 				var handled = routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
-				if (!handled && key == UiKey.Tab
-					&& modifiers.remove(UiModifier.Shift).isEmpty()) moveFocus(modifiers.contains(UiModifier.Shift));
+				if (handled) return true;
+				if (key == UiKey.Tab && modifiers.remove(UiModifier.Shift).isEmpty())
+					return moveFocus(modifiers.contains(UiModifier.Shift));
 			}
-			return;
+			return false;
 		}
 		var path = HitTest.pathTo(node);
 		if (path.length == 0) {
-			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) routeCommand(key,
-				modifiers,
-				[],
-				kind == UiEventKind.KeyRepeat);
-			return;
+			return (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)
+				&& routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
 		}
 		var event = new UiEvent(kind, node.id, 0.0, 0.0, 0.0, 0.0, 0, key, modifiers, null, null, scancode);
 		var inModal = false;
@@ -360,15 +358,14 @@ class EventDispatcher {
 		if (!inModal && (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)
 			&& commandShortcutFilter != null) {
 			commandTried = true;
-			if (routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat, commandShortcutFilter)) return;
+			if (routeCommand(key, modifiers, path, kind == UiEventKind.KeyRepeat, commandShortcutFilter)) return true;
 		}
 		dispatchPath(path, event);
 		if (event.pointerCancelRequested) cancelCapturedPointerFor(node.id);
-		if (event.defaultPrevented) return;
+		if (event.defaultPrevented) return true;
 		if (tabMovesFocus && key == UiKey.Tab && modifiers.remove(UiModifier.Shift).isEmpty()
 			&& (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)) {
-			moveFocus(modifiers.contains(UiModifier.Shift));
-			return;
+			return moveFocus(modifiers.contains(UiModifier.Shift)) || event.handled || inModal;
 		}
 		// A modal focus trap owns keyboard input, including keys its focused child
 		// does not handle. Do not let those keys invoke commands behind the modal.
@@ -378,12 +375,19 @@ class EventDispatcher {
 			path,
 			kind == UiEventKind.KeyRepeat)) {
 			event.preventDefault();
-			return;
+			return true;
 		}
 		if (key == UiKey.Tab && (kind == UiEventKind.KeyDown
-			|| kind == UiEventKind.KeyRepeat)) moveFocus(modifiers.contains(UiModifier.Shift));
-		else if (kind == UiEventKind.KeyDown && (key == UiKey.Enter || key == UiKey.Space)) dispatchPath(path,
-			new UiEvent(UiEventKind.Activate, node.id, 0.0, 0.0, 0.0, 0.0, 0, key, modifiers, null, null, scancode));
+			|| kind == UiEventKind.KeyRepeat))
+			return moveFocus(modifiers.contains(UiModifier.Shift)) || event.handled || inModal;
+		if (kind == UiEventKind.KeyDown && (key == UiKey.Enter || key == UiKey.Space)) {
+			var handled = pathHasHandler(path, path.length - 1, UiEventKind.Activate);
+			var activation = new UiEvent(UiEventKind.Activate, node.id, 0.0, 0.0, 0.0, 0.0, 0, key,
+				modifiers, null, null, scancode);
+			dispatchPath(path, activation);
+			return handled || activation.defaultPrevented || activation.handled || event.handled || inModal;
+		}
+		return event.handled || inModal;
 	}
 
 	/** Cancels a pointer drag when the focused widget explicitly requests it. */
@@ -666,10 +670,11 @@ class EventDispatcher {
 		return true;
 	}
 
-	function moveFocus(reverse:Bool):Void {
+	function moveFocus(reverse:Bool):Bool {
 		var previous = focus.focusedId;
 		var next = reverse ? focus.focusPrevious() : focus.focusNext();
 		notifyFocusChange(previous, next);
+		return next != null;
 	}
 
 	function notifyFocusChange(previous:Null<WidgetId>, next:Null<WidgetId>):Void {

@@ -8,6 +8,11 @@ import haxeon.platform.WebView;
 import haxeon.platform.WebViewOptions;
 import haxeon.platform.WindowDecorationRegion;
 import haxeon.platform.internal.DisposalRegistry;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import nativekit.ffi.NativeKitTypes.InputAction;
+import nativekit.ffi.NativeKitTypes.Key;
+import nativekit.ffi.NativeKitTypes.Modifiers;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.OwnedWindowHandle;
@@ -19,6 +24,7 @@ import nativekit.ffi.NativeKitTypes.WindowHandle;
 /** Owns one NativeKit top-level window and resources created inside it. */
 class Window implements Disposable {
 	final value:WindowHandle;
+	final events:EventPump;
 	final children = new DisposalRegistry();
 	var owner:Null<DisposalRegistration>;
 	var disposed:Bool = false;
@@ -26,13 +32,39 @@ class Window implements Disposable {
 
 	/** Transfers the fresh native handle into this retryable managed owner. */
 	@:allow(haxeon.platform.Runtime)
-	private function new(owned:OwnedWindowHandle) {
+	private function new(owned:OwnedWindowHandle, events:EventPump) {
 		this.value = owned.borrow();
+		this.events = events;
 	}
 
 	public function nativeHandle():WindowHandle {
 		ensureLive();
 		return value;
+	}
+
+	/** Receives keys for this window in registration order. Return true to handle a key. */
+	public function onKey(handler:Key->Int->InputAction->Modifiers->Bool):EventSubscription {
+		ensureCanCreate();
+		if (handler == null)
+			throw BindingError.invalidArgument("Window.onKey", "Key handler is required");
+		return events.listenSource(new Handle(value.rawValue()), function(event) return switch event {
+			case Key(_, key, scancode, action, modifiers): handler(key, scancode, action, modifiers);
+			case _: false;
+		}).ownedBy(children);
+	}
+
+	/** Observes a close request from this window. */
+	public function onClose(handler:Void->Void):EventSubscription {
+		ensureCanCreate();
+		if (handler == null)
+			throw BindingError.invalidArgument("Window.onClose", "Close handler is required");
+		return events.listenSource(new Handle(value.rawValue()), function(event) {
+			switch event {
+				case WindowClose(_): handler();
+				case _:
+			}
+			return false;
+		}).ownedBy(children);
 	}
 
 	/** Replaces the logical hit-test regions used by custom native window chrome. */
@@ -50,7 +82,7 @@ class Window implements Disposable {
 
 	public function createSurfaceNative(options:NativeSurfaceOptions):Surface {
 		ensureCanCreate();
-		var surface = Surface.adopt(NativeKit.nk_surface_create_checked(new Handle(value.rawValue()), options));
+		var surface = Surface.adopt(NativeKit.nk_surface_create_checked(new Handle(value.rawValue()), options), events);
 		surface.attachOwner(children.register(surface.dispose));
 		return surface;
 	}

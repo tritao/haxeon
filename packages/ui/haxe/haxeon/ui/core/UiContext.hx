@@ -1311,12 +1311,12 @@ class UiContext implements Disposable {
 		events.scroll(x, y, deltaX, deltaY, modifiers);
 	}
 
-	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Void {
+	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Bool {
 		ensureLive();
 		updateModifiers(modifiers);
 		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
 		if (key == 335) key = UiKey.Enter;
-		events.key(kind, key, modifiers, scancode);
+		return events.key(kind, key, modifiers, scancode);
 	}
 
 	public function text(kind:String, value:Null<String>, data:Dynamic = null):Void {

@@ -111,6 +111,18 @@ Managed argument, lifecycle, and event-data validation failures use `BindingErro
 uses the same error objects, preserving domain, code, operation, and diagnostic.
 Native result codes are retained for backend failures, including transport errors.
 
+## Window and surface events
+
+Use `window.onKey` and `window.onClose` for window events, and `surface.onReady`,
+`surface.onResize`, and `surface.onFrameComplete` for surface events. The owning
+window or surface disposes its subscriptions. Dispose a subscription directly
+to stop listening sooner.
+
+Key handlers run in registration order. A handler that returns `true` consumes
+the key for subsequent handlers on that source. Attach UI input before registering
+application shortcuts so focused widgets can consume keys first.
+`runtime.events.listen` still observes every event, including consumed keys.
+
 ## Source layout and naming
 
 Managed runtime and window-system types live directly in `haxeon.platform`:

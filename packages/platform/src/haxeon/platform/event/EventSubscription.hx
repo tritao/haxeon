@@ -1,25 +1,34 @@
 package haxeon.platform.event;
 
-import haxeon.platform.event.EventPump;
-import haxeon.platform.event.PlatformEvent;
+import haxeon.platform.DisposalRegistration;
+import haxeon.platform.internal.DisposalRegistry;
 
-/** One listener registration owned by a NativeKit event pump. */
+/** One registration in the runtime event pump. */
 class EventSubscription implements Disposable {
 	final events:EventPump;
-	final listener:PlatformEvent->Void;
-	var disposed:Bool = false;
+	final remove:Void->Void;
+	var owner:Null<DisposalRegistration>;
+	var disposed = false;
 
 	@:allow(haxeon.platform.event.EventPump)
-	private function new(events:EventPump, listener:PlatformEvent->Void) {
+	private function new(events:EventPump, remove:Void->Void) {
 		this.events = events;
-		this.listener = listener;
+		this.remove = remove;
+	}
+
+	@:allow(haxeon.platform.Window, haxeon.platform.Surface)
+	function ownedBy(registry:DisposalRegistry):EventSubscription {
+		owner = registry.register(dispose);
+		return this;
 	}
 
 	public function dispose():Void {
 		if (disposed)
 			return;
 		disposed = true;
-		events.removeListener(listener);
+		remove();
+		if (owner != null) owner.detach();
+		owner = null;
 	}
 
 	public function isDisposed():Bool

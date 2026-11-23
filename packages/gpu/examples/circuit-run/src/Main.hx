@@ -2,7 +2,6 @@ import haxeon.gpu.Batch;
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrameSubscription;
-import haxeon.platform.event.EventSubscription;
 import haxeon.ui.FontCollection;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
@@ -10,7 +9,6 @@ import haxeon.ui.Renderer;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.host.UiSurfaceBinding;
 import haxeon.platform.Runtime;
-import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.WindowOptions;
 import nativekit.ffi.NativeKitTypes;
 import Circuit.CircuitEvent;
@@ -38,7 +36,6 @@ class Main {
 	var submittedFrame = false;
 	var lastWidth = 0;
 	var lastHeight = 0;
-	var eventSubscription:EventSubscription;
 	var frameSubscription:SurfaceFrameSubscription;
 	final runtime:Runtime;
 
@@ -129,7 +126,14 @@ class Main {
 		hudBinding = UiSurfaceBinding.attach(hudContext, window, surface, runtime.events);
 		hudContext.onAnimationFrameRequested = function() hudDirty = true;
 		hud = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
-		eventSubscription = runtime.events.listen(onPlatformEvent);
+		surface.onReady(prepareRenderer);
+		surface.onResize(function(width, _, _, _) {
+			if (width > 0)
+				hudBinding.setCoordinateScale(width / CircuitRenderer.width);
+		});
+		surface.onFrameComplete(finishFrame);
+		window.onClose(function() running = false);
+		window.onKey(handleKey);
 		snapshotPositions();
 	}
 
@@ -154,43 +158,45 @@ class Main {
 		defer if (hudRenderer != null) hudRenderer.dispose();
 		defer if (hudContext != null) hudContext.dispose();
 		defer if (hudBinding != null) hudBinding.dispose();
-		defer if (eventSubscription != null) eventSubscription.dispose();
 		if (frameSubscription != null)
 			frameSubscription.dispose();
 	}
 
-	function onPlatformEvent(event:PlatformEvent):Void {
-		switch event {
-			case SurfaceReady(source) if (surface.ownsEventSource(source) && renderer == null):
-				try {
-					renderer = new CircuitRenderer(surface);
-					frameSubscription = surface.onFrame(onFrame);
-				} catch (error:Dynamic) failFrame(error);
-			case SurfaceResize(source, width, _, _, _) if (surface.ownsEventSource(source) && width > 0):
-				hudBinding.setCoordinateScale(width / CircuitRenderer.width);
-			case SurfaceFrameComplete(source, token, result)
-				if (surface.ownsEventSource(source) && inFlight != null && token == frameToken):
-				var batch = inFlight;
-				inFlight = null;
-				batch.dispose();
-				if (result == Result.Ok)
-					submittedFrame = true;
-				else
-					failFrame("NativeKit frame result " + Std.string(result));
-			case WindowClose(_): running = false;
-			case Key(_, key, _, action, _) if (action == InputAction.Press):
-				switch key {
-					case Key.Right: game.steer(East);
-					case Key.Down: game.steer(South);
-					case Key.Left: game.steer(West);
-					case Key.Up: game.steer(North);
-					case Key.R: restart();
-					case Key.M: toggleSound();
-					case Key.Escape: running = false;
-					case _:
-				}
-			case _:
+	function prepareRenderer():Void {
+		if (renderer != null)
+			return;
+		try {
+			renderer = new CircuitRenderer(surface);
+			frameSubscription = surface.onFrame(onFrame);
+		} catch (error:Dynamic) failFrame(error);
+	}
+
+	function finishFrame(token:haxe.Int64, result:Result):Void {
+		var batch = inFlight;
+		if (batch == null || token != frameToken)
+			return;
+		inFlight = null;
+		batch.dispose();
+		if (result == Result.Ok)
+			submittedFrame = true;
+		else
+			failFrame("NativeKit frame result " + Std.string(result));
+	}
+
+	function handleKey(key:Key, scancode:Int, action:InputAction, modifiers:Modifiers):Bool {
+		if (action != InputAction.Press)
+			return false;
+		switch key {
+			case Key.Right: game.steer(East);
+			case Key.Down: game.steer(South);
+			case Key.Left: game.steer(West);
+			case Key.Up: game.steer(North);
+			case Key.R: restart();
+			case Key.M: toggleSound();
+			case Key.Escape: running = false;
+			case _: return false;
 		}
+		return true;
 	}
 
 	function restart():Void {

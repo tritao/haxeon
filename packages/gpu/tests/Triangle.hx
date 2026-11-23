@@ -341,17 +341,11 @@ class Triangle {
 		var surfaceReady = false;
 		var queuedFrame:Null<haxe.Int64> = null;
 		var queuedResult:Null<Result> = null;
-		var eventSubscription = runtime.events.listen(function(value) switch value {
-			case WindowClose(source)
-				if (source.rawValue() == window.nativeHandle().rawValue()):
-				running = false;
-			case SurfaceReady(source)
-				if (source.rawValue() == surface.nativeHandle().rawValue()):
-				surfaceReady = true;
-			case SurfaceFrameComplete(source, token, result)
-				if (surface.ownsEventSource(source) && queuedFrame != null && token == queuedFrame):
+		var closeSubscription = window.onClose(function() running = false);
+		var readySubscription = surface.onReady(function() surfaceReady = true);
+		var completeSubscription = surface.onFrameComplete(function(token, result) {
+			if (queuedFrame != null && token == queuedFrame)
 				queuedResult = result;
-			case _:
 		});
 
 		while (running) {
@@ -525,10 +519,28 @@ class Triangle {
 		if (!blockedRuntimeShutdown || runtime.isDisposed())
 			throw "runtime shut down with a retained graphics image";
 		retainedImage.dispose();
+		var resizeCalls = 0;
+		var resizeSubscription = surface.onResize(function(_, _, _, _) resizeCalls++);
+		var resize = PlatformEvent.SurfaceResize(new Handle(surface.nativeHandle().rawValue()), 800, 600, 800, 600);
+		runtime.events.dispatch(resize);
 		surface.dispose();
-		if (!frameSubscription.isDisposed())
-			throw "Surface disposal did not detach its frame callback";
-		eventSubscription.dispose();
+		runtime.events.dispatch(resize);
+		if (!frameSubscription.isDisposed() || !readySubscription.isDisposed() || !completeSubscription.isDisposed()
+			|| !resizeSubscription.isDisposed() || resizeCalls != 1)
+			throw "Surface disposal did not detach its subscriptions";
+		var keyCalls = 0;
+		var keySubscription = window.onKey(function(_, _, _, _) {
+			keyCalls++;
+			return true;
+		});
+		var windowKey = PlatformEvent.Key(new Handle(window.nativeHandle().rawValue()), Key.R, 0,
+			InputAction.Press, Modifiers.empty());
+		runtime.events.dispatch(PlatformEvent.Key(new Handle(0), Key.R, 0, InputAction.Press, Modifiers.empty()));
+		runtime.events.dispatch(windowKey);
+		window.dispose();
+		runtime.events.dispatch(windowKey);
+		if (!keySubscription.isDisposed() || !closeSubscription.isDisposed() || keyCalls != 1)
+			throw "Window key routing persisted after disposal";
 		runtime.dispose();
 
 		Sys.println("draws_per_frame=400");

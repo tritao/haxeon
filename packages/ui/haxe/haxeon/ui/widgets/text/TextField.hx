@@ -795,6 +795,9 @@ class TextField implements View {
 			if (handled) {
 				editor.resetCaretBlink(Sys.time());
 				event.preventDefault();
+			} else if (!readOnly && !command && event.key >= 32 && event.key <= 96) {
+				// The character itself arrives through the separate text-input event.
+				event.markHandled();
 			}
 		};
 		node.on(UiEventKind.KeyDown, handleKey);

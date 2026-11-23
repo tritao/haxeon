@@ -1,6 +1,9 @@
 package haxeon.platform;
 
 import haxe.Int64;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.DisposalRegistration;
 import haxeon.platform.NativeKitError;
 import haxeon.platform.SurfaceFrameTiming;
@@ -18,6 +21,7 @@ import nativekit.ffi.NativeKitTypes.SurfaceFrameTarget;
 /** Owns one graphics surface attached to a NativeKit window. */
 class Surface implements Disposable {
 	final value:SurfaceHandle;
+	final events:Null<EventPump>;
 	final ownsHandle:Bool;
 	var disposed:Bool = false;
 	var owner:Null<DisposalRegistration>;
@@ -25,22 +29,23 @@ class Surface implements Disposable {
 	var frameSubscription:Null<SurfaceFrameSubscription>;
 
 	@:allow(haxeon.platform.Window)
-	private function new(value:SurfaceHandle, ownsHandle:Bool) {
+	private function new(value:SurfaceHandle, ownsHandle:Bool, events:Null<EventPump>) {
 		this.value = value;
 		this.ownsHandle = ownsHandle;
+		this.events = events;
 	}
 
 	/** Creates a non-owning view of a surface managed by a raw NativeKit host. */
-	public static function borrowNativeHandle(value:SurfaceHandle):Surface {
+	public static function borrowNativeHandle(value:SurfaceHandle, ?events:EventPump):Surface {
 		if (!value.isValid())
 			throw BindingError.invalidArgument("Surface.borrowNativeHandle",
 				"Cannot borrow a null NativeKit surface handle");
-		return new Surface(value, false);
+		return new Surface(value, false, events);
 	}
 
 	@:allow(haxeon.platform.Window)
-	private static function adopt(owned:OwnedSurfaceHandle):Surface
-		return new Surface(owned.borrow(), true);
+	private static function adopt(owned:OwnedSurfaceHandle, events:EventPump):Surface
+		return new Surface(owned.borrow(), true, events);
 
 	/** Whether a platform event came from this surface. */
 	public function ownsEventSource(source:Handle):Bool
@@ -49,6 +54,47 @@ class Surface implements Disposable {
 	public function nativeHandle():SurfaceHandle {
 		ensureLive();
 		return value;
+	}
+
+	/** Observes readiness for this surface. */
+	public function onReady(handler:Void->Void):EventSubscription {
+		if (handler == null)
+			throw BindingError.invalidArgument("Surface.onReady", "Ready handler is required");
+		return listen(function(event) switch event {
+			case SurfaceReady(_): handler();
+			case _:
+		});
+	}
+
+	/** Observes logical and framebuffer resize dimensions for this surface. */
+	public function onResize(handler:Int->Int->Int->Int->Void):EventSubscription {
+		if (handler == null)
+			throw BindingError.invalidArgument("Surface.onResize", "Resize handler is required");
+		return listen(function(event) switch event {
+			case SurfaceResize(_, width, height, framebufferWidth, framebufferHeight):
+				handler(width, height, framebufferWidth, framebufferHeight);
+			case _:
+		});
+	}
+
+	/** Observes completion of submitted frames for this surface. */
+	public function onFrameComplete(handler:Int64->Result->Void):EventSubscription {
+		if (handler == null)
+			throw BindingError.invalidArgument("Surface.onFrameComplete", "Completion handler is required");
+		return listen(function(event) switch event {
+			case SurfaceFrameComplete(_, token, result): handler(token, result);
+			case _:
+		});
+	}
+
+	function listen(handler:PlatformEvent->Void):EventSubscription {
+		ensureLive();
+		if (events == null)
+			throw BindingError.invalidState("Surface.listen", "Borrow the surface with its event pump to subscribe");
+		return events.listenSource(new Handle(value.rawValue()), function(event) {
+			handler(event);
+			return false;
+		}).ownedBy(dependents);
 	}
 
 	/** Replaces the current frame handler and roots it until dispose/detach succeeds. */

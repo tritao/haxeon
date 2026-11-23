@@ -39,7 +39,7 @@ class Runtime implements Disposable {
 	public function createWindowNative(options:NativeWindowOptions):Window {
 		ensureLive();
 		var owned = NativeKit.nk_window_create_checked(options);
-		var window = new Window(owned);
+		var window = new Window(owned, events);
 		window.attachOwner(windows.register(window.dispose));
 		return window;
 	}

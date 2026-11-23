@@ -799,6 +799,29 @@ class FrameworkSmoke {
 		return result;
 	}
 
+	static function checkKeyboardRouting(context:UiContext):Void {
+		var keyboardPump = new EventPump();
+		var keyboardSource = new Handle(17);
+		var keyboardInput = new NativeInputAdapter(context, keyboardSource);
+		var appKeys = 0;
+		var observedKeys = 0;
+		keyboardInput.attach(keyboardPump);
+		var shortcutListener = keyboardPump.listenSource(keyboardSource, function(_) {
+			appKeys++;
+			return true;
+		});
+		var keyObserver = keyboardPump.listen(function(_) observedKeys++);
+		var letter = PlatformEvent.Key(keyboardSource, nativekit.ffi.NativeKitTypes.Key.R, 0,
+			InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty());
+		keyboardPump.dispatch(letter);
+		if (appKeys != 0 || observedKeys != 1) throw "Focused text did not stop the application shortcut";
+		keyboardInput.detach();
+		keyboardPump.dispatch(letter);
+		if (appKeys != 1 || observedKeys != 2) throw "Unhandled key did not reach the application shortcut";
+		shortcutListener.dispose();
+		keyObserver.dispose();
+	}
+
 	static function run():Int {
 		var originalTypography = new haxeon.ui.core.ResolvedTextStyle(new TextStyle(16.0),
 			new ParagraphStyle(TextWrap.WordCharacter),
@@ -1128,6 +1151,7 @@ class FrameworkSmoke {
 		var fieldState:State<TextEditorState> = context.buildContext.existingState(fieldRoot.id);
 		var fieldEditor:TextEditorState = cast fieldState.value;
 		if (!context.focusWidget(fieldRoot.id)) return 41;
+		checkKeyboardRouting(context);
 		if (fieldDiagnostics == null
 			|| !fieldDiagnostics.focused || fieldDiagnostics.selectionStart != 5 || fieldDiagnostics.selectionEnd != 5
 			|| fieldDiagnostics.caretOffset != 5 || fieldDiagnostics.caretRect == null) return 209;
