@@ -393,7 +393,7 @@ class WatchRun {
 	static function record(path:String, result:Map<String, String>):Void {
 		var stat = statOrNull(path);
 		if (stat != null && !isDirectory(stat))
-			result.set(path, signature(stat));
+			result.set(path, signature(path, stat));
 	}
 
 	static function collect(root:String, result:Map<String, String>):Void {
@@ -402,7 +402,7 @@ class WatchRun {
 			return;
 		if (!isDirectory(stat)) {
 			if (Path.extension(root) == "hx")
-				result.set(root, signature(stat));
+				result.set(root, signature(root, stat));
 			return;
 		}
 		for (name in FileSystem.readDirectory(root)) {
@@ -412,7 +412,7 @@ class WatchRun {
 			if (isDirectory(entry))
 				collect(path, result);
 			else if (Path.extension(path) == "hx")
-				result.set(path, signature(entry));
+				result.set(path, signature(path, entry));
 		}
 	}
 
@@ -428,12 +428,50 @@ class WatchRun {
 	static inline function isDirectory(stat:sys.FileStat):Bool
 		return (stat.mode & 0xF000) == 0x4000;
 
-	static inline function signature(stat:sys.FileStat):String
-		return '${stat.mtime.getTime()}:${stat.size}';
+	/**
+		A file's modification time and size, and for a file modified in the last `RACY_SECONDS` its content's digest too (`sameFile`).
+		The time has a resolution of one second, so a save of the same size within the second of the one before it (one digit for
+		another) would otherwise look unchanged and never be built.
+	**/
+	static function signature(path:String, stat:sys.FileStat):String {
+		var modified = stat.mtime.getTime(), text = '$modified:${stat.size}';
+		if (Date.now().getTime() - modified >= RACY_SECONDS * 1000.0)
+			return text;
+		var digest = digestOrNull(path);
+		return digest == null ? text : text + ":" + digest;
+	}
+
+	static inline final RACY_SECONDS = 2.0;
+
+	static function digestOrNull(path:String):Null<String> {
+		try {
+			return build.execution.ContentDigest.makeHex(File.getBytes(path));
+		} catch (_:Dynamic) {
+			return null;
+		}
+	}
+
+	/**
+		Whether the file at `path` is unchanged from its signature in an earlier snapshot (`before`) to a later one (`after`). With
+		the same time and size, an earlier signature without a digest was taken once no write could share that time any more, so the
+		file is unchanged; one with a digest is compared with the later digest, or with the file's when the later has none.
+	**/
+	static function sameFile(path:String, before:Null<String>, after:Null<String>):Bool {
+		if (before == after)
+			return true;
+		if (before == null || after == null)
+			return false;
+		var earlier = before.split(":"), later = after.split(":");
+		if (earlier[0] != later[0] || earlier[1] != later[1])
+			return false;
+		if (earlier.length < 3)
+			return true;
+		return earlier[2] == (later.length < 3 ? digestOrNull(path) : later[2]);
+	}
 
 	public static function same(a:Map<String, String>, b:Map<String, String>):Bool {
 		for (path in a.keys())
-			if (a.get(path) != b.get(path))
+			if (!sameFile(path, a.get(path), b.get(path)))
 				return false;
 		for (path in b.keys())
 			if (!a.exists(path))
@@ -457,7 +495,7 @@ class WatchRun {
 
 	static function haxeOnly(before:Map<String, String>, after:Map<String, String>):Bool {
 		for (path in before.keys())
-			if (before.get(path) != after.get(path) && Path.extension(path) != "hx")
+			if (!sameFile(path, before.get(path), after.get(path)) && Path.extension(path) != "hx")
 				return false;
 		for (path in after.keys())
 			if (!before.exists(path) && Path.extension(path) != "hx")
@@ -483,7 +521,7 @@ class WatchRun {
 	static function changedPaths(before:Map<String, String>, after:Map<String, String>):Array<String> {
 		var result:Array<String> = [];
 		for (path in after.keys())
-			if (before.get(path) != after.get(path))
+			if (!sameFile(path, before.get(path), after.get(path)))
 				result.push(path);
 		for (path in before.keys())
 			if (!after.exists(path))

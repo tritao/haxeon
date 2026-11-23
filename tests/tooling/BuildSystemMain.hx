@@ -958,9 +958,15 @@ class BuildSystemMain {
 			"the snapshot holds the manifest and the Haxe files, not directories or other files: " + names.join(","));
 		for (path => stamp in files) {
 			var stat = FileSystem.stat(path);
-			expect(stamp == '${stat.mtime.getTime()}:${stat.size}',
+			expect(StringTools.startsWith(stamp, '${stat.mtime.getTime()}:${stat.size}'),
 				"a snapshot entry is the file's modification time and size");
 		}
+		expect(WatchRun.same(files, WatchRun.snapshot(project)), "files nobody wrote keep their snapshot");
+		// The time has a resolution of a second: a same-size save just after the snapshot differs only in its content.
+		var main = Path.join([root, "src", "Main.hx"]), text = File.getContent(main);
+		File.saveContent(main, text.substr(0, text.length - 1) + (text.charAt(text.length - 1) == "x" ? "y" : "x"));
+		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "a same-size save right after a snapshot changes it");
+		File.saveContent(main, text);
 		File.saveContent(Path.join([root, "src", "Main.hx"]), "class Main { static function main() {} }
 ");
 		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "an edit changes the snapshot");
