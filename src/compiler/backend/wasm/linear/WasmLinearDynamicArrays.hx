@@ -619,8 +619,7 @@ class WasmLinearDynamicArrays {
 					from([I64], builder -> builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET)));
 					from([F64], function(builder) {
 						builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
-						builder.emit(I32TruncF64S);
-						builder.emit(I64ExtendI32S);
+						builder.emit(I64FromF64);
 					});
 				default:
 					// Bool storage keeps HashLink's normalized truth value.
@@ -636,7 +635,7 @@ class WasmLinearDynamicArrays {
 					});
 					from([F64], function(builder) {
 						builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
-						builder.emit(I32TruncF64S);
+						builder.emit(I32FromF64);
 					});
 					from([I64], function(builder) {
 						builder.emit(I64Load(WasmLayout.DYN_PAYLOAD_OFFSET));

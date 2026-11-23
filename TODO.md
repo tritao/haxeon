@@ -353,8 +353,6 @@ The Haxe code Haxeon rejects or runs differently is listed in
   member holds its parameter inside a structure is specialized (`3c1041b09`),
   but only when the member's type is written; one inferred from the body is not
   checked.
-- **Float to Int out of range on Wasm traps** (`I32TruncF64S`); HashLink and
-  the C backend give the JIT's result (`native/shared/float_to_int.h`).
 - **A failed bounds check reports the wrong line on HashLink:** an uncaught
   out-of-range read is reported at the function's `return`, where the C
   backend reports the access.

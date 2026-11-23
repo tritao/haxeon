@@ -493,10 +493,10 @@ class WasmGcDynamicArrays {
 					default: false;
 				}) ? [I32Eqz, I32Eqz] : [];
 			case [I64, I32]: [I32WrapI64];
-			case [F64, I32]: [I32TruncF64S];
+			case [F64, I32]: [I32FromF64];
 			case [I32, I64]: [I64ExtendI32S];
 			case [I64, I64]: [];
-			case [F64, I64]: [I32TruncF64S, I64ExtendI32S];
+			case [F64, I64]: [I64FromF64];
 			case [I32, F64]: [F64ConvertI32S];
 			case [I64, F64]: [F64ConvertI64S];
 			case [F64, F64]: [];

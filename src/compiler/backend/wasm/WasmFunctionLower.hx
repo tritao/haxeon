@@ -1588,7 +1588,7 @@ class WasmFunctionLower {
 				emit(body,
 					[
 						LocalGet(requiredLocal(values, value.id)),
-						I32TruncF64S,
+						I32FromF64,
 						LocalSet(requiredLocal(values, output.id))
 					]);
 			case FloatToFloat(output, value):
@@ -2220,9 +2220,8 @@ class WasmFunctionLower {
 				default:
 					true;
 			})) throw new InternalError("Invalid haxe.Int64.fromFloat Wasm native signature");
-			// HashLink's C cast is undefined outside the Int64 range; Wasm saturates instead of trapping.
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
-			body.push(I64TruncSatF64S);
+			body.push(I64FromF64);
 			body.push(LocalSet(requiredLocal(values, output.id)));
 			return true;
 		}
@@ -2549,7 +2548,7 @@ class WasmFunctionLower {
 			case [I32, F64]:
 				[LocalGet(source), F64ConvertI32S];
 			case [F64, I32]:
-				[LocalGet(source), I32TruncF64S];
+				[LocalGet(source), I32FromF64];
 			default:
 				[LocalGet(source)];
 		};
@@ -2898,7 +2897,7 @@ class WasmFunctionLower {
 				case [I64, F64]:
 					[F64ConvertI64S];
 				case [F64, I32]:
-					[I32TruncF64S];
+					[I32FromF64];
 				case [I64, I32]:
 					[I32WrapI64];
 				default:

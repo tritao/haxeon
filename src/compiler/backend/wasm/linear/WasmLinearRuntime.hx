@@ -152,7 +152,7 @@ class WasmLinearRuntime {
 					results: [I32]
 				}, [], [
 					LocalGet(0),
-					I32TruncF64S,
+					I32FromF64,
 					Return
 				]));
 			case "__std_int_dynamic": addDynamicInt(module, name);
@@ -2296,7 +2296,7 @@ class WasmLinearRuntime {
 		builder.if_(function(builder) {
 			builder.localGet(value);
 			builder.emit(F64Load(WasmLayout.DYN_PAYLOAD_OFFSET));
-			builder.emit(I32TruncF64S);
+			builder.emit(I32FromF64);
 			builder.return_();
 		});
 		builder.localGet(value);
@@ -4136,7 +4136,7 @@ class WasmLinearRuntime {
 		};
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
 			[LocalGet(0)].concat(rounding).concat([
-				I32TruncF64S,
+				I32FromF64,
 				Return
 			])));
 	}

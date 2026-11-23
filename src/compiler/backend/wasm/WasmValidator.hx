@@ -539,11 +539,11 @@ class WasmValidator {
 					pop(stack, I64, fn);
 					if (reachable)
 						stack.push(I32);
-				case I32TruncF64S:
+				case I32FromF64:
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(I32);
-				case I64TruncSatF64S:
+				case I64FromF64:
 					pop(stack, F64, fn);
 					if (reachable)
 						stack.push(I64);
