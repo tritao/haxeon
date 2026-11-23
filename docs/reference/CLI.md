@@ -75,7 +75,7 @@ bug in Haxeon. The compiler run directly takes each valued option as `--name=val
 
 `haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`: `--template app` (the default) is a window with a counter and an
 `[app]` section ([MANIFEST.md](MANIFEST.md)) that uses the UI package from the `haxeon` registry (`ui = "^0.3"`, with
-`compatibility.haxeon`), in a checkout and in a release alike; `--template console` a console program (no `[app]`). `--platforms` lists an app's
+`compatibility.haxeon`), in a checkout and in a release alike; `--template console` (or `-t console`) a console program (no `[app]`). `--platforms` lists an app's
 platforms (by default every platform the template has a runner for: linux, macos and windows) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
 template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
 before; `create . --template console` replaces it.

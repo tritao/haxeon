@@ -38,10 +38,10 @@ class CliHelp {
 					name: "create",
 					summary: "Create a project from a template, or add what one lacks",
 					details: [
-						"Usage: haxeon create DIRECTORY [--template app|console] [--platforms LIST] [--org PREFIX]",
+						"Usage: haxeon create DIRECTORY [-t|--template app|console] [--platforms LIST] [--org PREFIX]",
 						"",
 						"  DIRECTORY                    A new directory, or . to add the template's missing files here",
-						"  --template NAME              app (default: a window, with an [app] section) or console (a console program)",
+						"  -t, --template NAME          app (default: a window, with an [app] section) or console (a console program)",
 						"  --platforms LIST             An app's platforms, comma-separated (default: every platform the template has a runner for)",
 						"  --org PREFIX                 The app identifier's prefix (default com.example)",
 						"",

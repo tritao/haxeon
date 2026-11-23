@@ -24,7 +24,7 @@ function main() {
 
 	// console: a console program that prints and exits 0.
 	var log = Path.join([work, "create-console.log"]);
-	expectStatus(haxeon(["create", "tool", "--template", "console"], work, log), 0, log, "create a console program");
+	expectStatus(haxeon(["create", "tool", "-t", "console"], work, log), 0, log, "create a console program");
 	var tool = Path.join([work, "tool"]);
 	log = Path.join([work, "run-console.log"]);
 	expectStatus(haxeon(["run"], tool, log), 0, log, "running the console program");

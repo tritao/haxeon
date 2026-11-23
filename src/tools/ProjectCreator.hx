@@ -82,6 +82,9 @@ class ProjectCreator {
 				name = argument.substr(0, separator);
 				value = argument.substr(separator + 1);
 			}
+			// -t is --template's short spelling, as dart create -t spells it.
+			if (name == "-t")
+				name = "--template";
 			switch name {
 				case "--template" | "--platforms" | "--org":
 					if (value == null) {
