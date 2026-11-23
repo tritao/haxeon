@@ -888,7 +888,7 @@ function exercise(connection:RpcConnection, implementation:Echo):Void {
 	var method:RpcMethod<Int, Int> = RpcMethod.wire(1);
 	connection.serve(Echo, implementation);
 	var stub = connection.of(Echo, 200);
-	stub.echo(decoded, response -> {}, error -> {});
+	stub.echo(decoded);
 }
 ',
 			service = new LanguageService();

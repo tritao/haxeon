@@ -21,12 +21,12 @@ function main():Int {
 		context.respond({text: "Hello " + request.name, length: request.name.length});
 	});
 	var result = 1;
-	var id = client.call(method, {name: "workspace"}, 25, function(answer:Answer) {
-		result = answer.text == "Hello workspace" && answer.length == 9 ? 42 : 2;
-	}, function(_) {
-		result = 3;
+	var future = client.call(method, {name: "workspace"}, 25);
+	future.onComplete(outcome -> switch outcome {
+		case Success(answer): result = answer.text == "Hello workspace" && answer.length == 9 ? 42 : 2;
+		case _: result = 3;
 	});
-	if (id == 0)
+	if (!future.canCancel())
 		return 4;
 	server.poll();
 	client.poll();

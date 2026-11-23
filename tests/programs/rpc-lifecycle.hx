@@ -55,9 +55,10 @@ function main():Int {
 		context.respond(value + "!");
 	});
 	var answer = "";
-	active.call(method, "hello", 25, function(value) {
-		answer = value;
-	}, function(_) {});
+	active.call(method, "hello", 25).onComplete(outcome -> switch outcome {
+		case Success(value): answer = value;
+		case _:
+	});
 	service.poll();
 	client.poll();
 	if (answer != "hello!")

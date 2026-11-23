@@ -77,7 +77,7 @@ class RpcClient {
 		if (state != Disconnected) {
 			if (!redial)
 				return;
-			failed({code: "network_changed", message: "network_changed", ambiguous: false}, true);
+			failed(new RpcError("network_changed", "network_changed", false), true);
 			if (state == Closed)
 				return;
 		}
@@ -157,7 +157,7 @@ class RpcClient {
 
 	function start():Void {
 		if (generation == 0x7fffffff) {
-			failed({code: "generation_exhausted", message: "generation_exhausted", ambiguous: false}, false);
+			failed(new RpcError("generation_exhausted", "generation_exhausted", false), false);
 			return;
 		}
 		generation++;
@@ -180,7 +180,7 @@ class RpcClient {
 				switch result {
 					case Opened(transport):
 						if (!transport.isOpen()) {
-							failed({code: "disconnected", message: "disconnected", ambiguous: false}, true);
+							failed(new RpcError("disconnected", "disconnected", false), true);
 							return;
 						}
 						activeTransport = transport;
@@ -193,7 +193,7 @@ class RpcClient {
 				catch (error:Dynamic) {
 			if (generation != token || state != Connecting)
 				throw error;
-			failed({code: "connect_failed", message: "connect_failed", ambiguous: false}, true);
+			failed(new RpcError("connect_failed", "connect_failed", false), true);
 			return;
 		}
 		if (generation == token && state == Connecting)
@@ -220,7 +220,7 @@ class RpcClient {
 					start();
 			case Connecting:
 				if (clock() >= connectDeadline)
-					failed({code: "connect_timeout", message: "connect_timeout", ambiguous: false}, true);
+					failed(new RpcError("connect_timeout", "connect_timeout", false), true);
 			case Handshaking:
 				var negotiating = handshake;
 				if (negotiating == null)
@@ -230,10 +230,7 @@ class RpcClient {
 					var established = negotiating.connection;
 					if (established == null) {
 						var failure = negotiating.failure;
-						failed(failure == null ? {
-							code: "handshake_failed", message: "handshake_failed",
-							ambiguous: false
-						} : failure,
+						failed(failure == null ? new RpcError("handshake_failed", "handshake_failed", false) : failure,
 							failure == null || failure.code == "disconnected" || failure.code == "handshake_timeout");
 					} else {
 						handshake = null;
@@ -258,11 +255,8 @@ class RpcClient {
 					if (clock() - connectedAt >= maxBackoffMs)
 						retryStep = baseBackoffMs;
 					var reason = established.closeReason;
-					failed({
-						code: reason == null ? "disconnected" : reason,
-						message: reason == null ? "disconnected" : reason,
-						ambiguous: false
-					}, true);
+					failed(new RpcError(reason == null ? "disconnected" : reason,
+						reason == null ? "disconnected" : reason, false), true);
 				}
 			case Closed:
 		}

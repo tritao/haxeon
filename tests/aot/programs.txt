@@ -468,6 +468,7 @@ reflect-delete-typed-field
 reflect-object-dispatch
 reflect-string-fields
 reflect-typed-objects
+async-Future
 rpc-lifecycle
 rpc-service
 rpc-service-pinned

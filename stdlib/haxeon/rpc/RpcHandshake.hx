@@ -70,13 +70,13 @@ class RpcHandshake {
 	}
 
 	function fail(code:String):Void {
-		failure = {code: code, message: code, ambiguous: false};
+		failure = new RpcError(code, code, false);
 		close();
 	}
 
 	function reject(error:RpcError):Void {
 		failure = error;
-		outgoing = RpcProtocol.encode(Refused(error), options.maxMessageBytes);
+		outgoing = RpcProtocol.encode(Refused(@:privateAccess error.toWire()), options.maxMessageBytes);
 	}
 
 	function negotiate(protocol:Int, codec:Int, application:String, capabilities:Array<String>):Bool {
@@ -87,7 +87,7 @@ class RpcHandshake {
 			if (initiator)
 				fail(code);
 			else
-				reject({code: code, message: code, ambiguous: false});
+				reject(new RpcError(code, code, false));
 			return false;
 		}
 		remoteApplication = application;
@@ -108,7 +108,7 @@ class RpcHandshake {
 				if (initiator)
 					fail("missing_capability");
 				else
-					reject({code: "missing_capability", message: "missing_capability", ambiguous: false});
+					reject(new RpcError("missing_capability", "missing_capability", false));
 				return false;
 			}
 		return true;
@@ -125,13 +125,13 @@ class RpcHandshake {
 			return;
 		if (!transport.isOpen()) {
 			if (failure == null)
-				failure = {code: "disconnected", message: "disconnected", ambiguous: false};
+				failure = new RpcError("disconnected", "disconnected", false);
 			close();
 			return;
 		}
 		if (clock() >= deadline) {
 			if (failure == null)
-				failure = {code: "handshake_timeout", message: "handshake_timeout", ambiguous: false};
+				failure = new RpcError("handshake_timeout", "handshake_timeout", false);
 			close();
 			return;
 		}
@@ -167,7 +167,7 @@ class RpcHandshake {
 				if (negotiate(protocol, codec, application, capabilities))
 					establish();
 			case Refused(error) if (initiator && helloSent):
-				failure = error;
+				failure = @:privateAccess RpcError.fromWire(error);
 				close();
 			case Hello(protocol, codec, application, capabilities) if (!initiator):
 				if (!negotiate(protocol, codec, application, capabilities))
@@ -178,7 +178,7 @@ class RpcHandshake {
 					try
 						refusal = policy(application, negotiated.copy())
 					catch (_:Dynamic) {
-						reject({code: "authorization_failed", message: "authorization_failed", ambiguous: false});
+						reject(new RpcError("authorization_failed", "authorization_failed", false));
 						return;
 					}
 					if (refusal != null) {

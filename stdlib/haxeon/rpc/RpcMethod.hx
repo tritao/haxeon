@@ -49,7 +49,7 @@ class RpcMethod<Request, Response> {
 				request = decodeRequest(payload)
 			catch (_:Dynamic) {
 				var code = "invalid_request";
-				finish(state, Bytes.alloc(0), {code: code, message: code, ambiguous: false});
+				finish(state, Bytes.alloc(0), new RpcError(code, code, false));
 				return;
 			}
 			var context = new RpcContext(state, encodeResponse,

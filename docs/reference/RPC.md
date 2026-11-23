@@ -21,22 +21,31 @@ class MyGreeter implements Greeter {
 // server and client are the two established connections.
 server.serve(Greeter, new MyGreeter());
 var greeter = client.of(Greeter, 1000);
-var requestId = greeter.greet({name: "Ada"},
-    answer -> Sys.println(answer.text),
-    error -> Sys.println(error.code));
+var greeting = greeter.greet({name: "Ada"});
+greeting.onComplete(outcome -> switch outcome {
+    case Success(answer): Sys.println(answer.text);
+    case Failure(error): Sys.println(error.message);
+    case Cancelled | Stopped:
+});
 ```
 
 A service declares its own instance methods on a nonempty, non-generic
-interface. Each method takes one required request parameter and returns a
-response value. Both types use the compiler's [MessagePack wire profile](MESSAGEPACK.md).
-The compiler generates typed dispatch and a stub whose methods take the
-request, an answer callback and an error callback. The stub captures its
-connection and timeout, which defaults to 1000 milliseconds. Calls return
-the request ID, which can be passed to `connection.cancel(requestId)`.
-Poll both connections to dispatch requests and deliver replies. Service
-implementations return their response synchronously and should avoid blocking
-the poll loop. The interface API currently supports request/response methods.
-Streaming and subscriptions can add new method forms in the future.
+interface. Each method takes one required request parameter and declares
+either a response type or `Future<Response>`. The request and response values
+use the compiler's [MessagePack wire profile](MESSAGEPACK.md). The compiler
+generates typed dispatch and a client stub whose methods take the request and
+return a [Future](ASYNC.md) in both cases. The stub captures its connection and
+timeout, which defaults to 1000 milliseconds.
+
+Poll both connections to dispatch requests and deliver replies. A synchronous
+implementation returns the response during the server poll. An asynchronous
+implementation returns a future and settles it on the server's event loop when
+the response is ready. For example, a method declared as
+`function greet(request:Query):Future<Answer>` can start work and return its
+promise's future. The server sends the response when that future succeeds.
+A failed future sends an RPC error. A client cancellation requests cancellation
+on the server future when the server processes the cancellation message.
+Streaming can use a separate type in the future.
 
 The default wire identity is the qualified interface name followed by the
 method name, such as `Greeter.greet` or `example.Greeter.greet`. RPC protocol
@@ -122,9 +131,11 @@ server.register(method, function(request, context) {
     // Retaining context for later asynchronous completion is supported.
     context.respond({text: request.name});
 });
-client.call(method, {name: "workspace"}, 1000,
-    function(answer) { Sys.println(answer.text); },
-    function(error) { Sys.println(error.code); });
+client.call(method, {name: "workspace"}, 1000).onComplete(outcome -> switch outcome {
+    case Success(answer): Sys.println(answer.text);
+    case Failure(error): Sys.println(error.message);
+    case Cancelled | Stopped:
+});
 ```
 
 Request and response schemas are inferred recursively. Fields and enum constructors
@@ -155,19 +166,23 @@ Method IDs are independent of request and response member IDs.
 
 ## Failure semantics
 
-A positive `call` id means transport accepted the request. A returned zero means
-it was definitely not dispatched (disconnected, busy or expired during encoding).
-Invalid local arguments or failing local encoders throw before dispatch.
+A call can return an already settled `Failure` if the connection is closed,
+busy, or the timeout expires during encoding. Invalid local arguments or failing
+local encoders throw before dispatch.
 
-Timeout and cancellation end the caller's wait. They do not guarantee server
-rollback; `RpcError.ambiguous` records whether execution may have occurred.
-Disconnect fails accepted calls with ambiguity, and late replies are ignored.
-The runtime never replays requests. Mutations need application-owned operation
-ids and reconciliation when their replies are lost.
+Timeouts, transport loss and remote errors settle the caller's future with
+`Failure(RpcError)`. Its `code` identifies the failure and `ambiguous` indicates
+whether the request may have executed. Cancel the future to send a cancellation
+message and settle locally as `Cancelled`. Cancellation provides no rollback
+guarantee. Call `stopObserving()` to settle locally as `Stopped` and drop late
+replies while allowing the server to continue. The runtime never replays
+requests. Mutations need application-owned operation IDs and reconciliation when
+their replies are lost.
 
 Unknown methods, overload and malformed request payloads fail without invoking
-the handler. A handler exception becomes a generic `handler_failed` error without
-serializing its private exception. Malformed envelopes or notifications close
+the handler. A handler exception or an asynchronous failure with an ordinary
+exception becomes a generic `handler_failed` error. To return public error details,
+fail the server promise with an `RpcError`. Malformed envelopes or notifications close
 the connection; `closeReason` identifies the local cause. Application callback
 exceptions remain visible to the polling caller. Closing retires all pending
 waiters even when a failure callback throws.

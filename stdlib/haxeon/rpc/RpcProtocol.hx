@@ -69,7 +69,7 @@ class RpcProtocol {
 		}
 	}
 
-	static function validateError(error:RpcError):Void {
+	static function validateError(error:RpcErrorData):Void {
 		if (error == null || error.code == null || error.code.length == 0 || error.code.length > 128
 			|| error.message == null || error.message.length > 4096)
 			throw "Invalid RPC error";

@@ -1,9 +1,9 @@
+import haxeon.async.Outcome;
+import haxeon.async.Promise;
 import haxeon.platform.RuntimeOptions;
 import haxeon.platform.SurfaceOptions;
 import haxeon.platform.WebViewOptions;
 import haxeon.platform.WindowOptions;
-import haxeon.platform.async.Outcome;
-import haxeon.platform.async.Promise;
 import haxeon.platform.async.Requests;
 import haxeon.platform.async.Task;
 import haxeon.platform.dialog.FileDialogFilter;
@@ -40,11 +40,10 @@ class NativeKitLifetimeTests {
 
 		var decodingFailed = false;
 		var bad = requests.trackTask(task, function(bytes):Int {
-			throw "bad payload";
+			throw new haxe.Exception("bad payload");
 		});
 		bad.onComplete(function(outcome) switch outcome {
-			case Failure(error): decodingFailed = error.domain == "haxeon-bindings"
-				&& error.code == haxeon.platform.BindingErrorKind.InvalidData && error.diagnostic == "bad payload";
+			case Failure(error): decodingFailed = error.message == "bad payload";
 			case _:
 		});
 		requests.handle(TaskComplete(source, Result.Ok, haxe.io.Bytes.alloc(0)));
@@ -126,8 +125,8 @@ class NativeKitLifetimeTests {
 		if (!errorPreserved || !malformed.isComplete() || requests.pending() != 0) return false;
 
 		// Reusing a native ID while decoding must not let the old future detach its replacement.
-		var previous:haxeon.platform.async.Future<Int> = null;
-		var replacement:haxeon.platform.async.Future<Int> = null;
+		var previous:haxeon.async.Future<Int> = null;
+		var replacement:haxeon.async.Future<Int> = null;
 		previous = requests.trackNative(id, function(_):Outcome<Int> {
 			replacement = requests.trackNative(id, function(_):Outcome<Int> return Success(2));
 			previous.stopObserving();

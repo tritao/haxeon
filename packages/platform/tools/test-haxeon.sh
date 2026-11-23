@@ -105,9 +105,6 @@ fi
         "$platform_dir/src/haxeon/platform/interop/VulkanExtensions.hx" \
         "$platform_dir/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
         "$platform_dir/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
-        "$platform_dir/src/haxeon/platform/async/Outcome.hx" \
-        "$platform_dir/src/haxeon/platform/async/Future.hx" \
-        "$platform_dir/src/haxeon/platform/async/Promise.hx" \
         "$platform_dir/src/haxeon/platform/async/Task.hx" \
         "$platform_dir/src/haxeon/platform/async/Requests.hx" \
         "$platform_dir/src/haxeon/platform/event/EventPump.hx"

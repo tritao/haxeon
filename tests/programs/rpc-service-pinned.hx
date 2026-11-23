@@ -40,8 +40,14 @@ function main():Int {
 
 	var total = 0;
 	var failures = 0;
+	var observe = function(outcome:haxeon.async.Outcome<Int>):Void {
+		switch outcome {
+			case Success(answer): total += answer;
+			case _: failures++;
+		}
+	};
 	var pinned = client.of(Pinned);
-	pinned.length("Ada", answer -> total += answer, error -> failures++);
+	pinned.length("Ada").onComplete(observe);
 	// Inspect the selector before returning the message to the server's queue.
 	var first = pair.server.receive();
 	if (first == null)
@@ -52,13 +58,13 @@ function main():Int {
 	}
 	if (!pair.client.send(first))
 		return 3;
-	pinned.next(6, answer -> total += answer, error -> failures++);
-	client.of(OtherService).next(6, answer -> total += answer, error -> failures++);
+	pinned.next(6).onComplete(observe);
+	client.of(OtherService).next(6).onComplete(observe);
 
 	var legacyName = new RpcMethod<String, Int>(0, value -> MessagePack.encode(value),
 		bytes -> MessagePack.decode(bytes), value -> MessagePack.encode(value), bytes -> MessagePack.decode(bytes),
 		"Pinned.length");
-	client.call(legacyName, "Grace", 25, answer -> total += answer, error -> failures++);
+	client.call(legacyName, "Grace", 25).onComplete(observe);
 
 	server.poll();
 	client.poll();

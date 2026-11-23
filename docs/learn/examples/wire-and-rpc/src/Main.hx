@@ -26,8 +26,10 @@ function main():Void {
 	server.register(echo, (request, context) -> {
 		context.respond({text: request.text.toUpperCase()});
 	});
-	client.call(echo, restored, 1000, answer -> Sys.println(answer.text), error -> {
-		throw error.code;
+	client.call(echo, restored, 1000).onComplete(outcome -> switch outcome {
+		case Success(answer): Sys.println(answer.text);
+		case Failure(error): throw error;
+		case Cancelled | Stopped:
 	});
 	server.poll();
 	client.poll();

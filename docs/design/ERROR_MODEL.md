@@ -27,6 +27,7 @@ program's own code would; the policy does not apply to them.
 
 ## Not decided here
 
-- Where a shared `Result` type lives. No library in the tree has one yet; `haxeon.platform.async.Outcome` and
-  `haxeon.rpc.RpcConnectResult` are local enums.
+- Where a shared synchronous `Result` type lives. One-shot asynchronous operations use
+  [`haxeon.async.Outcome<T>`](../reference/ASYNC.md), including RPC calls. The connector's
+  `RpcConnectResult` carries retry policy for connection attempts.
 - Moving existing APIs to `Result`. An API changes when it is next worked on, not in a sweep.

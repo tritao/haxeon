@@ -1,6 +1,8 @@
 package haxeon.rpc;
 
 import haxe.io.Bytes;
+import haxeon.async.Future;
+import haxeon.async.Promise;
 import haxeon.rpc.RpcMethod.RpcRoute;
 
 private typedef PendingCall = {
@@ -122,31 +124,31 @@ class RpcConnection {
 		return enqueue(Notification(id, encode(value)));
 	}
 
-	/** Zero means definitely not dispatched. Positive ids may already have executed. */
-	public function call<Request, Response>(method:RpcMethod<Request, Response>, request:Request, timeoutMs:Int,
-			response:Response->Void,
-			failure:RpcError->Void):Int {
+	/** Sends one request and observes its terminal outcome. */
+	public function call<Request, Response>(method:RpcMethod<Request, Response>, request:Request,
+			timeoutMs:Int):Future<Response> {
+		var promise = new Promise<Response>();
 		if (!isOpen()) {
-			failure(error("disconnected", false));
-			return 0;
+			promise.fail(error("disconnected", false));
+			return promise.future;
 		}
 		if (timeoutMs <= 0)
-			throw "RPC timeout must be positive";
+			throw new haxe.Exception("RPC timeout must be positive");
 		if (pendingCount >= maxCalls || nextId == 0x7fffffff || outgoing.length > 0) {
-			failure(error("busy", false));
-			return 0;
+			promise.fail(error("busy", false));
+			return promise.future;
 		}
 		var id = nextId++;
 		var deadline = clock() + timeoutMs;
 		var bytes = RpcProtocol.encode(Request(id, method.key, timeoutMs, method.encodeRequest(request)),
 			maxMessageBytes);
 		if (clock() >= deadline) {
-			failure(error("timeout", false));
-			return 0;
+			promise.fail(error("timeout", false));
+			return promise.future;
 		}
 		if (!trySend(bytes)) {
-			failure(error(isOpen() ? "busy" : "disconnected", false));
-			return 0;
+			promise.fail(error(isOpen() ? "busy" : "disconnected", false));
+			return promise.future;
 		}
 		pending.set(id, {deadline: deadline,
 			response: function(bytes) {
@@ -154,40 +156,29 @@ class RpcConnection {
 				try
 					value = method.decodeResponse(bytes)
 				catch (_:Dynamic) {
-					failure(error("invalid_response", true));
+					promise.fail(error("invalid_response", true));
 					return;
 				}
-				response(value);
+				promise.complete(value);
 			},
-				failure: failure});
+				failure: promise.fail});
 		pendingCount++;
-		return id;
+		promise.setControls(function() {
+			takePending(id);
+			sendCancellation(id, promise.cancel);
+		}, function() takePending(id));
+		return promise.future;
 	}
 
-	public function cancel(id:Int):Bool {
-		var call = takePending(id);
-		if (call == null)
-			return false;
-		#if !haxe_ver
-		defer call.failure(error("cancelled", true));
-		enqueue(Cancel(id));
-		#else
-		cancelPending(id, call, "cancelled");
-		#end
-		return true;
-	}
-
-	#if haxe_ver
-	function cancelPending(id:Int, call:PendingCall, reason:String):Void {
+	function sendCancellation(id:Int, settle:Void->Void):Void {
 		try
 			enqueue(Cancel(id))
 		catch (failure:Dynamic) {
-			call.failure(error(reason, true));
+			settle();
 			throw failure;
 		}
-		call.failure(error(reason, true));
+		settle();
 	}
-	#end
 
 	function takePending(id:Int):Null<PendingCall> {
 		var call = pending.get(id);
@@ -201,7 +192,8 @@ class RpcConnection {
 	function finish(state:RpcRequestState, bytes:Bytes, failure:Null<RpcError>):Bool {
 		if (!open || !state.isActive() || active.get(state.id) != state)
 			return false;
-		var encoded = RpcProtocol.encode(failure == null ? Response(state.id, bytes) : Failed(state.id, failure),
+		var encoded = RpcProtocol.encode(failure == null ? Response(state.id, bytes) : Failed(state.id,
+			@:privateAccess failure.toWire()),
 			maxMessageBytes);
 		active.remove(state.id);
 		activeCount--;
@@ -254,13 +246,20 @@ class RpcConnection {
 		var calls = pending;
 		pending = [];
 		pendingCount = 0;
-		for (state in active)
-			state.finish(true);
+		var requests = active;
 		active = [];
 		activeCount = 0;
 		// One failing application callback must not strand the remaining waiters.
 		var callbackError:Dynamic = null;
 		var callbackFailed = false;
+		for (state in requests)
+			try
+				state.finish(true)
+			catch (failure:Dynamic) {
+				if (!callbackFailed)
+					callbackError = failure;
+				callbackFailed = true;
+			}
 		for (call in calls)
 			try
 				call.failure(error(reason, true))
@@ -321,14 +320,8 @@ class RpcConnection {
 				expired.push(id);
 		for (id in expired) {
 			var call = takePending(id);
-			if (call != null) {
-				#if !haxe_ver
-				defer call.failure(error("timeout", true));
-				enqueue(Cancel(id));
-				#else
-				cancelPending(id, call, "timeout");
-				#end
-			}
+			if (call != null)
+				sendCancellation(id, () -> call.failure(error("timeout", true)));
 		}
 		var expiredRequests:Array<Int> = [];
 		for (id => state in active)
@@ -340,7 +333,7 @@ class RpcConnection {
 				active.remove(id);
 				activeCount--;
 				state.finish(true);
-				enqueue(Failed(id, error("timeout", true)));
+				enqueue(Failed(id, @:privateAccess error("timeout", true).toWire()));
 			}
 		}
 		var count = 0, used = 0;
@@ -386,7 +379,8 @@ class RpcConnection {
 			case Failed(id, failure):
 				var call = takePending(id);
 				if (call != null)
-					call.failure(clock() >= call.deadline ? error("timeout", true) : failure);
+					call.failure(clock() >= call.deadline ? error("timeout",
+						true) : @:privateAccess RpcError.fromWire(failure));
 			case Cancel(id):
 				var state = active.get(id);
 				if (state != null) {
@@ -403,11 +397,11 @@ class RpcConnection {
 				lastRequestId = id;
 				var handler = handlers.get(methodKey(method));
 				if (handler == null) {
-					enqueue(Failed(id, error("unknown_method", false)));
+					enqueue(Failed(id, @:privateAccess error("unknown_method", false).toWire()));
 					return;
 				}
 				if (activeCount >= maxCalls) {
-					enqueue(Failed(id, error("busy", false)));
+					enqueue(Failed(id, @:privateAccess error("busy", false).toWire()));
 					return;
 				}
 				var state = new RpcRequestState(id, clock() + timeoutMs, clock);
@@ -428,7 +422,7 @@ class RpcConnection {
 	}
 
 	static function error(code:String, ambiguous:Bool):RpcError
-		return {code: code, message: code, ambiguous: ambiguous};
+		return new RpcError(code, code, ambiguous);
 
 	/** Registers a service implementation. Haxeon generates dispatch and codecs for the supplied interface. */
 	public function serve<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
@@ -436,8 +430,8 @@ class RpcConnection {
 		throw new haxe.Exception("RpcConnection.serve must be lowered by the compiler");
 
 	/**
-		Returns a client stub whose methods take a request, a response callback and an error callback,
-		and return a call ID. Haxeon generates the stub and codecs for the supplied interface.
+		Returns a client stub whose methods take one request and return a Future of the response.
+		Haxeon generates the stub and codecs for the supplied interface.
 		The default timeout is 1000 milliseconds.
 	 */
 	public function of<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end, ?timeoutMs:Int):Dynamic
