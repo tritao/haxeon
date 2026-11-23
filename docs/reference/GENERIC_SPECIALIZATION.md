@@ -166,6 +166,12 @@ runtime descriptor at that boundary. Generic enum constructors without a context
 arguments from payloads; that existing compiler gap requires a separate fix. A concrete typed binding preserves the
 specialization before an erased boundary.
 
+A generic owner whose instance fields or annotated method signatures hold a parameter inside a structure
+(`iterator():Iterator<T>`, `get():{value:T}`, a field `{key:T}`) is specialized for that parameter too. A structure is a
+class per field set, so the record a shared body makes (`{value:Dynamic}`) is not the one a caller at `T = String` reads
+(`{value:String}`), and no cast turns one into the other. The rule goes once a structure is a view of its record
+([STRUCTURE_VALUES.md](../design/STRUCTURE_VALUES.md)). A member whose type is inferred from its body is not looked at.
+
 Concrete non-recursive enum descriptors retain every constructor's resolved payload types before erasure, including
 constructors such as `Code(Int)` or `Empty` which do not mention the type parameter. IR completion requires those
 descriptors rather than reconstructing them by copying an erased template. Incremental metadata retains the source

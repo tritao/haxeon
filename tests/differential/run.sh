@@ -482,6 +482,8 @@ in_background run_case type-class-names 0 hl main
 in_background run_case key-value-custom-iteration 0 hl main
 in_background run_error_case key-value-for-in-missing
 in_background run_error_case key-value-entry-fields
+# A generic class whose members hold its parameter in a structure, read at a type argument (TypeRepresentation).
+in_background run_case generic-structure-iterator 0 hl main
 status=0
 for index in "${!pids[@]}"; do
 	wait "${pids[$index]}" || status=1

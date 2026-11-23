@@ -51,10 +51,10 @@ class GenericScalarMapOwnerMain {
 		rejects('class NullableView<V> { final values:Null<Map<String,V>>; public function new(values:Null<Map<String,V>>) this.values=values; } '
 			+ 'function main():Int { var map:Map<String,Bool>=[]; var view=new NullableView<Bool>(map); return 0; }',
 			'NullableView<Bool>');
-		rejects('typedef Row<V> = {values:Map<String,V>}; typedef Rows<V> = {stable:Row<Bool>, changing:Row<V>}; '
+		// An owner holding its parameter in a structure is specialized for it, so its map keeps the scalar storage.
+		Frontend.compile('typedef Row<V> = {values:Map<String,V>}; typedef Rows<V> = {stable:Row<Bool>, changing:Row<V>}; '
 			+ 'class Multi<V> { final rows:Rows<V>; public function new(rows:Rows<V>) this.rows=rows; } '
-			+ 'function main():Int { var map:Map<String,Bool>=[]; var row:Row<Bool>={values:map}; var view=new Multi<Bool>({stable:row,changing:row}); return 0; }',
-			'Multi<Bool>');
+			+ 'function main():Int { var map:Map<String,Bool>=[]; var row:Row<Bool>={values:map}; var view=new Multi<Bool>({stable:row,changing:row}); return 0; }');
 		Frontend.compile('class Reference { public function new() {} } ' + declaration
 			+ 'function main():Int { var map:Map<String,Reference>=[]; var view=new ReadView<Reference>(map); return 0; }');
 		Frontend.compile(declaration
