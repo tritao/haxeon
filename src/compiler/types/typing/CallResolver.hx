@@ -829,13 +829,13 @@ class CallResolver {
 				// A parameter only the callback's result fixes is the type variable its body filled (or left empty, which
 				// `settleTypeArguments` settles where only this callback carries it).
 				for (parameter => variable in opened)
-					if (!substitutions.exists(parameter))
+					if (isUninferredParameter(parameter, substitutions))
 						substitutions.set(parameter, variable);
 				typed[offset + index] = argument;
 				lambdas.remove(index);
 				progressed = true;
 			}
-			if (!progressed && !settleFallbacks()) {
+			if (!progressed && !settleFallbacks() && !genericInstantiation.settleNullArguments(substitutions)) {
 				// No callback supplies the missing parameter context. Preserve the
 				// ordinary inference diagnostic rather than assuming Dynamic.
 				var index = lambdas[0];
@@ -914,7 +914,7 @@ class CallResolver {
 			fallbacks:Array<String>):CompilerType {
 		var open = copyMap(substitutions), made:Map<String, CompilerType> = [];
 		for (parameter in parameters)
-			if (!open.exists(parameter)) {
+			if (isUninferredParameter(parameter, open)) {
 				var variable = session.monomorphs.create('the type parameter "$parameter" of a callback\'s result',
 					argumentSpan);
 				if (variable == null)
@@ -978,7 +978,7 @@ class CallResolver {
 	static function mentionsUnbound(type:AstType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>):Bool
 		return switch type {
-			case NamedType(name): parameters.indexOf(name) >= 0 && !substitutions.exists(name);
+			case NamedType(name): parameters.indexOf(name) >= 0 && isUninferredParameter(name, substitutions);
 			case AppliedType(_, arguments): anyMentionsUnbound(arguments, parameters, substitutions);
 			case ArrayType(element), NullableType(element): mentionsUnbound(element, parameters, substitutions);
 			case MapType(key, value): mentionsUnbound(key, parameters, substitutions)
@@ -3159,6 +3159,7 @@ class CallResolver {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span);
+		genericInstantiation.settleNullArguments(substitutions);
 		validateTypeParameterConstraints(typeName, declaration.typeConstraints, substitutions, span);
 
 		if (constructor != null) {
@@ -3319,7 +3320,7 @@ class CallResolver {
 				for (index in 0...parameters.length)
 					if (index < values.length) {
 						var inferred = substitutions.get(parameters[index]);
-						if (inferred == null)
+						if (isUninferredParameter(parameters[index], substitutions))
 							substitutions.set(parameters[index], values[index]);
 						else if (Monomorphs.follow(inferred).match(TMonomorph(_))) {
 							// An argument that left it open (`[]`) takes it, as a type variable unifies.
@@ -3332,6 +3333,7 @@ class CallResolver {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "${decl.name}"', span);
+		genericInstantiation.settleNullArguments(substitutions);
 		validateTypeParameterConstraints(decl.name, decl.typeConstraints, substitutions, span);
 		return {
 			type: TAbstract(decl.name, [for (parameter in parameters) requiredMapValue(substitutions, parameter)],
@@ -3340,9 +3342,15 @@ class CallResolver {
 		};
 	}
 
+	static function isUninferredParameter(parameter:String, substitutions:Map<String, CompilerType>):Bool
+		return switch substitutions.get(parameter) {
+			case null | TNull: true;
+			default: false;
+		};
+
 	static function allTypeParametersBound(parameters:Array<String>, substitutions:Map<String, CompilerType>):Bool {
 		for (parameter in parameters)
-			if (!substitutions.exists(parameter))
+			if (isUninferredParameter(parameter, substitutions))
 				return false;
 		return true;
 	}

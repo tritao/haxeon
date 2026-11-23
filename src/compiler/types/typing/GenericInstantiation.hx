@@ -50,6 +50,7 @@ class GenericInstantiation {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+		settleNullArguments(substitutions);
 		settleTypeArguments(baseName, fn, arguments, substitutions, span);
 		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
 		for (parameter in [for (parameter in substitutions.keys()) parameter])
@@ -410,10 +411,27 @@ class GenericInstantiation {
 		}
 	}
 
+	public function settleNullArguments(substitutions:Map<String, CompilerType>):Bool {
+		var settled = false;
+		for (name => type in substitutions)
+			if (type.match(TNull)) {
+				substitutions.set(name, TDynamic);
+				settled = true;
+			}
+		return settled;
+	}
+
 	function bindTypeParameter(name:String, actual:CompilerType, substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
 		if (substitutions.exists(name)) {
 			var previous = requiredMapValue(substitutions, name);
+			// Like monomorph unification, null leaves other evidence intact. A null-only binding stays provisional.
+			if (Monomorphs.follow(actual).match(TNull))
+				return;
+			if (previous.match(TNull)) {
+				substitutions.set(name, actual);
+				return;
+			}
 			// A type variable meets the type inferred before, as Haxe unifies them: `Lambda.concat([1], [])` fills the element of `[]`
 			// with Int, and `Lambda.concat([], [2])` the first one's.
 			if (Monomorphs.containsUnbound(previous) || Monomorphs.containsUnbound(actual)) {

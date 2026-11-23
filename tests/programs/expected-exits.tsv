@@ -680,3 +680,4 @@ key-value-iteration	42
 generic-structure-member	42
 imported-constructor-shadows-type	42
 generic-owner-map-handles	42
+generic-null-argument	42
