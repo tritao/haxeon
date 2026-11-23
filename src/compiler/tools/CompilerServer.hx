@@ -64,7 +64,7 @@ class CompilerServer {
 			var running = true;
 			var idleDeadline = Sys.time() + idleSeconds;
 			while (running) {
-				// A live publication's history is recorded once no request has followed it for a moment, off the edit's path.
+				// A live publication's history is recorded once no request has followed it for a while, off the edit's path.
 				var wait = Math.max(0, idleDeadline - Sys.time());
 				if (session.hasUnrecordedLiveState())
 					wait = Math.min(wait, LIVE_STATE_DELAY_SECONDS);
@@ -299,8 +299,12 @@ class CompilerServer {
 		return retyped;
 	}
 
-	/** How long a live publication waits for a following request before its history is recorded. */
-	static inline final LIVE_STATE_DELAY_SECONDS = 1.0;
+	/**
+		How long a live publication waits for a following request before its history is recorded. Encoding an app's history takes
+		seconds and holds the server, so it waits out a pause in editing, not the gap between two saves; a server that exits
+		(idle, shut down) records it first, so only a crash loses what has not been recorded, and the next session reloads.
+	**/
+	static inline final LIVE_STATE_DELAY_SECONDS = 10.0;
 
 	static function recordLiveState(session:CompilerSession):Void {
 		if (!session.hasUnrecordedLiveState())
