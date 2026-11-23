@@ -42,6 +42,7 @@ class WindowEventDecoder {
 				SurfaceResize(c.source, v.get_width(), v.get_height(), v.get_framebuffer_width(),
 					v.get_framebuffer_height());
 			case EventKind.SurfaceLost: SurfaceLost(c.source);
+			case EventKind.SurfaceFrameComplete: SurfaceFrameComplete(c.source, c.request, c.result);
 			default: null;
 		}
 	}

@@ -53,6 +53,7 @@
 		"nk_graphics_image": "NativeKitTypes.GraphicsImage",
 		"nk_handle": "NativeKitTypes.Handle",
 		"nk_surface_frame_target": "NativeKitTypes.SurfaceFrameTarget",
+		"nk_surface_frame_step": "NativeKitTypes.SurfaceFrameStepHandle",
 		"nk_window": "NativeKitTypes.WindowHandle",
 		"nk_surface": "NativeKitTypes.SurfaceHandle"
 	}

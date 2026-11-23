@@ -338,6 +338,8 @@ class Triangle {
 		var batchedMs = 0.0;
 		var commandBuffer:Null<CommandBuffer> = null;
 		var surfaceReady = false;
+		var queuedFrame:Null<haxe.Int64> = null;
+		var queuedResult:Null<Result> = null;
 		var eventSubscription = runtime.events.listen(function(value) switch value {
 			case WindowClose(source)
 				if (source.rawValue() == window.nativeHandle().rawValue()):
@@ -345,6 +347,9 @@ class Triangle {
 			case SurfaceReady(source)
 				if (source.rawValue() == surface.nativeHandle().rawValue()):
 				surfaceReady = true;
+			case SurfaceFrameComplete(source, token, result)
+				if (surface.ownsEventSource(source) && queuedFrame != null && token == queuedFrame):
+				queuedResult = result;
 			case _:
 		});
 
@@ -447,8 +452,20 @@ class Triangle {
 				var windowFrame = surface.acquireFrame();
 				sealedBatch.submit(windowFrame);
 				windowFrame.present();
-				sealedBatch.dispose();
 				exerciseOptionalFeatures(renderer);
+				var queuedWindowFrame = surface.acquireFrame();
+				queuedFrame = queuedWindowFrame.token();
+				var windowStep = sealedBatch.frameStep();
+				defer windowStep.dispose();
+				queuedWindowFrame.submit([windowStep]);
+				var deadline = Sys.monotonicTime() + 5.0;
+				while (queuedResult == null && Sys.monotonicTime() < deadline) {
+					if (!runtime.events.poll())
+						runtime.events.wait(0.01);
+				}
+				if (queuedResult != Result.Ok)
+					throw "Queued GPU window frame failed: " + Std.string(queuedResult);
+				sealedBatch.dispose();
 				targetColor.dispose();
 				targetDepth.dispose();
 				ready = true;

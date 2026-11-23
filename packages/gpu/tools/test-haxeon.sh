@@ -56,7 +56,8 @@ fi
     "$gpu_dir/src/haxeon/gpu/Sampler.hx" \
     "$gpu_dir/src/haxeon/gpu/Shader.hx" \
     "$gpu_dir/src/haxeon/gpu/Surface.hx" \
-    "$gpu_dir/src/haxeon/gpu/SurfaceFrame.hx" \
+    "$platform_dir/src/haxeon/platform/SurfaceFrame.hx" \
+    "$platform_dir/src/haxeon/platform/SurfaceFrameStep.hx" \
     "$gpu_dir/src/haxeon/gpu/Timestamp.hx" \
     "$gpu_dir/src/haxeon/gpu/Uniforms.hx" \
     "$gpu_dir/src/haxeon/gpu/GpuResult.hx" \

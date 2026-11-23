@@ -431,6 +431,21 @@ if(NK_BUILD_TESTS)
             TIMEOUT 45
             ENVIRONMENT "LIBGL_ALWAYS_SOFTWARE=1")
     endif()
+    if(TARGET nativekit_ui_session_render_smoke_test)
+        if(WIN32 AND NOT CMAKE_CROSSCOMPILING)
+            add_test(NAME nativekit_ui_composite_frame
+                COMMAND nativekit_ui_session_render_smoke_test --composite-only)
+        elseif(UNIX AND NOT APPLE AND NKUI_BACKEND_XVFB_RUN)
+            add_test(NAME nativekit_ui_composite_frame
+                COMMAND ${NKUI_BACKEND_XVFB_RUN} -a
+                    $<TARGET_FILE:nativekit_ui_session_render_smoke_test> --composite-only)
+            set_tests_properties(nativekit_ui_composite_frame PROPERTIES
+                ENVIRONMENT "LIBGL_ALWAYS_SOFTWARE=1")
+        endif()
+        if(TEST nativekit_ui_composite_frame)
+            set_tests_properties(nativekit_ui_composite_frame PROPERTIES LABELS "graphics;ui" TIMEOUT 45)
+        endif()
+    endif()
     foreach(target IN ITEMS
         nativekit_ui_backend_smoke_test
         nativekit_ui_display_list_test

@@ -4,6 +4,7 @@ import haxeon.ui.debug.RenderCost;
 
 import NativeKitUI;
 import haxeon.platform.SurfaceFrame;
+import haxeon.platform.SurfaceFrameStep;
 import NativeKitUI.nkui_layout_measure_callbackCallback;
 import haxe.io.Bytes;
 import nativekit.ffi.NativeKit;
@@ -310,6 +311,17 @@ class LayoutSession implements Disposable {
 		UiResult.check(NativeKitUI.nkui_layout_session_render_into_frame(renderer.nativeHandle(), value, frame.nativeHandle(),
 			info.nativeValue()), "layoutSession.renderIntoFrame");
 		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
+	}
+
+	/** Seals the submitted layout for ordered rendering into the acquired frame. */
+	public function frameStep(renderer:Renderer, frame:SurfaceFrame, info:FrameInfo,
+			loadExisting:Bool = true):SurfaceFrameStep {
+		ensureLive();
+		updateRenderablePaints();
+		var made = NativeKitUI.nkui_frame_step_layout(renderer.nativeHandle(), value, frame.nativeHandle(),
+			info.nativeValue(), loadExisting);
+		UiResult.check(made.status, "layoutSession.frameStep");
+		return new SurfaceFrameStep(made.out_step);
 	}
 
 	public function dispose():Void {

@@ -858,6 +858,12 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 */
 	extern fn nkgpu_frame_end_on(renderer: nkgpu_renderer) -> nkgpu_result;
 	/**
+	 * Prepares a sealed batch as a surface-frame submission step on the platform executor.
+	 * The batch and renderer stay live until the step is destroyed or the frame completes.
+	 * Destroying either while retained returns NKGPU_ERROR_WRONG_STATE.
+	 */
+	extern fn nkgpu_frame_step_batch(renderer: nkgpu_renderer, batch: nkgpu_batch, out_step: ptr<nk_surface_frame_step> @out) -> nkgpu_result;
+	/**
 	 * Reports the renderer's frame timing (see nkgpu_set_frame_timing).
 	 */
 	extern fn nkgpu_get_frame_timing(renderer: nkgpu_renderer, out_timing: ptr<nkgpu_frame_timing> @out) -> nkgpu_result;

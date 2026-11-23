@@ -764,15 +764,24 @@ struct WebShowcase {
         target.struct_size = sizeof(target);
         nkui_layout_session session{};
         nkgpu_renderer gpu{};
+        nkgpu_batch batch{};
+        nk_surface_frame_step steps[2]{};
         const bool passed = [&] {
             if (nkgpu_renderer_create(surface, &gpu) != NKGPU_OK ||
                 nkui_layout_session_create(&session) != NKUI_OK ||
                 nk_surface_acquire_frame(surface, &frame, &target) != NK_OK)
                 return false;
 
-            if (nkgpu_frame_begin_on(gpu, &target, 1) != NKGPU_OK ||
-                nkgpu_end_frame(gpu) != NKGPU_ERROR_WRONG_STATE ||
-                nkgpu_frame_end_on(gpu) != NKGPU_OK)
+            nkgpu_batch_pass pass{};
+            pass.struct_size = sizeof(pass);
+            pass.kind = NKGPU_BATCH_PASS_WINDOW;
+            pass.clear = 1;
+            pass.width = target.width;
+            pass.height = target.height;
+            if (nkgpu_batch_begin(gpu, &batch) != NKGPU_OK ||
+                nkgpu_batch_append_pass(batch, &pass) != NKGPU_OK ||
+                nkgpu_batch_seal(batch) != NKGPU_OK ||
+                nkgpu_frame_step_batch(gpu, batch, &steps[0]) != NKGPU_OK)
                 return false;
 
             constexpr uint32_t count = 2;
@@ -827,17 +836,29 @@ struct WebShowcase {
                 glReadPixels(x, target.height - 1 - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, color.data());
                 return color;
             };
-            const auto background = pixel(32, 32);
-            auto wrong_size = info;
-            --wrong_size.framebuffer_width;
-            if (nkui_layout_session_render_into_frame(showcase.renderer, session, frame, &wrong_size) !=
-                NKUI_ERROR_INVALID_ARGUMENT)
+            if (nkui_frame_step_layout(showcase.renderer, session, frame, &info, 1, &steps[1]) != NKUI_OK ||
+                nkui_layout_session_destroy(session) != NKUI_OK)
                 return false;
-            const auto result =
-                nkui_layout_session_render_into_frame(showcase.renderer, session, frame, &info);
-            if (result == NKUI_OK &&
-                (nkgpu_frame_begin_on(gpu, &target, 0) != NKGPU_OK ||
-                 nkgpu_frame_end_on(gpu) != NKGPU_OK))
+            session = {};
+
+            const nk_surface_frame_step duplicate[] = {steps[0], steps[0]};
+            if (nk_surface_frame_submit(frame, duplicate, 2) != NK_ERROR_INVALID_ARGUMENT)
+                return false;
+            const auto result = nk_surface_frame_submit(frame, steps, 2);
+            if (result != NK_OK)
+                return false;
+            const auto submitted_frame = frame;
+            frame = NK_INVALID_HANDLE;
+            steps[0] = steps[1] = NK_INVALID_HANDLE;
+            if (nk_surface_present_frame(submitted_frame) != NK_ERROR_INVALID_HANDLE ||
+                nkgpu_batch_destroy(batch) != NKGPU_ERROR_WRONG_STATE)
+                return false;
+            nk_event completion{};
+            completion.struct_size = sizeof(completion);
+            if (nk_poll_event(&completion) != NK_OK ||
+                completion.kind != NK_EVENT_SURFACE_FRAME_COMPLETE ||
+                completion.source != surface || completion.request_id != submitted_frame ||
+                completion.result != NK_OK)
                 return false;
             const auto overlay = pixel(32, 32);
             const auto outside = pixel(90, 32);
@@ -845,34 +866,23 @@ struct WebShowcase {
             GLint stencil_bits = 0;
             glGetIntegerv(GL_STENCIL_BITS, &stencil_bits);
             const auto gl_error = glGetError();
-            if (result != NKUI_OK || stencil_bits < 8 || background[2] < 10 || background[0] > 20 ||
-                overlay[0] < 240 || overlay[1] > 10 || outside != background ||
-                corner != background || gl_error != GL_NO_ERROR) {
+            if (result != NKUI_OK || stencil_bits < 8 || outside[2] < 10 || outside[0] > 20 ||
+                overlay[0] < 240 || overlay[1] > 10 || corner != outside || gl_error != GL_NO_ERROR) {
                 EM_ASM({ console.error("Shared frame pixels", $0, $1, $2, $3, $4, $5, $6); },
-                       result, background[0], overlay[0], outside[0], corner[0], stencil_bits, gl_error);
-                return false;
-            }
-            const nk_surface_frame presented = frame;
-            frame = NK_INVALID_HANDLE;
-            const auto status = nk_surface_present_frame(presented);
-            const auto stale_render =
-                nkui_layout_session_render_into_frame(showcase.renderer, session, presented, &info);
-            const auto stale_present = nk_surface_present_frame(presented);
-            if (status != NK_OK || stale_render != NKUI_ERROR_INVALID_HANDLE ||
-                stale_present != NK_ERROR_INVALID_HANDLE ||
-                nkgpu_frame_begin_on(gpu, &target, 1) != NKGPU_ERROR_INVALID_HANDLE) {
-                EM_ASM({ console.error("Shared frame presentation", $0, $1, $2); },
-                       status, stale_render, stale_present);
+                       result, outside[2], overlay[0], outside[0], corner[0], stencil_bits, gl_error);
                 return false;
             }
             return true;
         }();
-        if (!passed && gpu.id)
-            nkgpu_frame_abort(gpu);
+        for (auto step : steps)
+            if (step != NK_INVALID_HANDLE)
+                nk_surface_frame_step_destroy(step);
         if (frame != NK_INVALID_HANDLE)
             nk_surface_cancel_frame(frame);
         if (session.id)
             nkui_layout_session_destroy(session);
+        if (batch.id)
+            nkgpu_batch_destroy(batch);
         if (gpu.id)
             nkgpu_renderer_destroy(gpu);
         return passed;

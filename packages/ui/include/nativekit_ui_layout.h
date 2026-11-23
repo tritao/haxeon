@@ -507,6 +507,12 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_render_into_frame(
     nkui_renderer renderer, nkui_layout_session session, nk_surface_frame frame,
     const nkui_frame_info *frame_info);
 
+/** Seals the submitted layout as a step for this acquired frame on the platform executor. */
+NKUI_API nkui_result NK_CALL nkui_frame_step_layout(
+    nkui_renderer renderer, nkui_layout_session session, nk_surface_frame frame,
+    const nkui_frame_info *frame_info, nk_bool load_existing,
+    nk_surface_frame_step *out_step NKUI_OUT);
+
 #ifdef __cplusplus
 }
 #endif

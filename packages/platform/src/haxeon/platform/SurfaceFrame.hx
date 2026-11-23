@@ -47,6 +47,27 @@ class SurfaceFrame {
 	public function isFinished():Bool
 		return finished;
 
+	/** Identifies this transaction in SurfaceFrameComplete events, including after submission. */
+	public function token():haxe.Int64
+		return haxe.Int64.make(0, value.rawValue());
+
+	/** Transfers the frame and ordered steps. Listen for SurfaceFrameComplete to get the result. */
+	public function submit(steps:Array<SurfaceFrameStep>):Void {
+		ensureOpen();
+		if (steps == null || steps.length == 0 || steps.length > 16)
+			throw BindingError.invalidArgument("SurfaceFrame.submit", "Expected 1 to 16 frame steps");
+		var handles = [];
+		for (step in steps) {
+			if (step == null)
+				throw BindingError.invalidArgument("SurfaceFrame.submit", "Frame step must not be null");
+			handles.push(step.nativeHandle().rawValue());
+		}
+		NativeKit.nk_surface_frame_submit_checked(value, handles);
+		finished = true;
+		for (step in steps)
+			step.submitted();
+	}
+
 	@:allow(haxeon.gpu.Batch)
 	function nativeTarget():SurfaceFrameTarget {
 		ensureOpen();

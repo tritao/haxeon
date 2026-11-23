@@ -71,6 +71,7 @@ enum PlatformEvent {
 	SurfaceReady(source:Handle);
 	SurfaceResize(source:Handle, width:Int, height:Int, framebufferWidth:Int, framebufferHeight:Int);
 	SurfaceLost(source:Handle);
+	SurfaceFrameComplete(source:Handle, frameToken:haxe.Int64, result:Result);
 	Resources(kind:EventKind, request:haxe.Int64, result:Result, accepted:Bool, items:Array<Resource>);
 	ShareReceived(text:Null<String>, subject:Null<String>, items:Array<Resource>);
 	ResourceDrop(source:Handle, x:Float, y:Float, text:Null<String>, items:Array<Resource>);

@@ -6,6 +6,7 @@ import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.RenderPassDesc;
 import haxeon.platform.SurfaceFrame;
+import haxeon.platform.SurfaceFrameStep;
 
 import haxeon.gpu.Renderer;
 
@@ -97,6 +98,14 @@ class Batch implements Disposable {
 			GpuResult.check(NativeKitGpu.nkgpu_batch_submit(renderer.nativeHandle(), value,
 				frame.nativeTarget()), "batch.submit");
 		}
+	}
+
+	/** Prepares this sealed batch for platform-frame submission. */
+	public function frameStep():SurfaceFrameStep {
+		ensureLive();
+		var made = NativeKitGpu.nkgpu_frame_step_batch(renderer.nativeHandle(), value);
+		GpuResult.check(made.status, "batch.frameStep");
+		return new SurfaceFrameStep(made.out_step);
 	}
 
 	public function dispose():Void {

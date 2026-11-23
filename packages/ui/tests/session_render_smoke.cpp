@@ -1029,7 +1029,106 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
     return result;
 }
 
-int main() {
+static int run_composite_test(nk_window window, nk_surface surface, int width, int height,
+                              bool fail_ui_step) {
+    nkgpu_renderer gpu{};
+    nkgpu_batch batch{};
+    nkui_renderer ui{};
+    nkui_layout_session session{};
+    nk_surface_frame frame = NK_INVALID_HANDLE;
+    nk_surface_frame_step steps[2]{};
+    const int queued = with_surface_frame(window, surface, width, height,
+        [&](int framebuffer_width, int framebuffer_height) {
+            if (nkgpu_renderer_create(surface, &gpu) != NKGPU_OK ||
+                nkgpu_batch_begin(gpu, &batch) != NKGPU_OK ||
+                nkui_renderer_create(&ui) != NKUI_OK ||
+                nkui_layout_session_create(&session) != NKUI_OK)
+                return 110;
+            nkgpu_batch_pass pass{};
+            pass.struct_size = sizeof(pass);
+            pass.kind = NKGPU_BATCH_PASS_WINDOW;
+            pass.clear = 1;
+            pass.width = framebuffer_width;
+            pass.height = framebuffer_height;
+            if (nkgpu_batch_append_pass(batch, &pass) != NKGPU_OK ||
+                nkgpu_batch_seal(batch) != NKGPU_OK ||
+                nkgpu_frame_step_batch(gpu, batch, &steps[0]) != NKGPU_OK)
+                return 111;
+            nk_surface_frame_target target{};
+            target.struct_size = sizeof(target);
+            if (nk_surface_acquire_frame(surface, &frame, &target) != NK_OK)
+                return 112;
+            const float scale = float(framebuffer_width) / width;
+            const nkui_layout_frame_input layout{sizeof(layout), float(width), float(height), 0.0f};
+            const nkui_frame_info info{sizeof(info), layout.width, layout.height,
+                                       framebuffer_width, framebuffer_height, scale};
+            auto tree = transaction(layout.width, layout.height);
+            // The composite test needs only boxes and can run without loading fonts.
+            tree.resize(NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + 2 * NKUI_LAYOUT_NODE_RECORD_BYTES);
+            write_u32(tree, 4, 2);
+            write_u32(tree, 12, tree.size());
+            for (uint32_t node = 0; node < 2; ++node)
+                write_u32(tree, NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
+                    node * NKUI_LAYOUT_NODE_RECORD_BYTES + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, tree.size());
+            if (nkui_layout_session_submit(session, tree.data(), tree.size(), &layout) != NKUI_OK ||
+                nkui_frame_step_layout(ui, session, frame, &info, 1, &steps[1]) != NKUI_OK)
+                return 113;
+            if (fail_ui_step) {
+                if (nk_surface_cancel_frame(frame) != NK_OK)
+                    return 117;
+                frame = NK_INVALID_HANDLE;
+                if (nk_surface_acquire_frame(surface, &frame, &target) != NK_OK)
+                    return 117;
+            }
+            if (nk_surface_frame_submit(frame, steps, 2) != NK_OK)
+                return 114;
+            return 0;
+        });
+    if (queued) {
+        for (auto step : steps)
+            if (step != NK_INVALID_HANDLE)
+                nk_surface_frame_step_destroy(step);
+        if (frame != NK_INVALID_HANDLE)
+            nk_surface_cancel_frame(frame);
+    }
+    int result = queued;
+    if (!result) {
+        result = 115;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+        while (std::chrono::steady_clock::now() < deadline) {
+            nk_event event{};
+            event.struct_size = sizeof(event);
+            if (nk_poll_event(&event) != NK_OK)
+                break;
+            if (event.kind == NK_EVENT_SURFACE_FRAME_COMPLETE && event.request_id == frame) {
+                const auto expected = fail_ui_step ? NK_ERROR_INVALID_ARGUMENT : NK_OK;
+                result = event.source == surface && event.result == expected ? 0 : 116;
+                if (result)
+                    std::fprintf(stderr, "Composite frame failed with NativeKit result %d\n", event.result);
+                nk_event_release(&event);
+                break;
+            }
+            const bool idle = event.kind == NK_EVENT_NONE;
+            nk_event_release(&event);
+            if (idle)
+                nk_wait_events_timeout(.01);
+        }
+    }
+    if (session.id)
+        nkui_layout_session_destroy(session);
+    if (ui.id)
+        nkui_renderer_destroy(ui);
+    if (batch.id)
+        nkgpu_batch_destroy(batch);
+    if (gpu.id)
+        nkgpu_renderer_destroy(gpu);
+    if (!result)
+        std::puts(fail_ui_step ? "PASS: a failed render step cancelled its frame"
+                              : "PASS: sealed GPU and UI work completed in one surface frame");
+    return result;
+}
+
+int main(int argc, char **argv) {
     nk_init_options init{};
     init.struct_size = sizeof(init);
     init.api_version = NK_API_VERSION;
@@ -1068,10 +1167,14 @@ int main() {
         return 3;
     }
 
-    const int result = with_surface_frame(window, surface, width, height,
+    const bool composite = argc == 2 && std::strcmp(argv[1], "--composite-only") == 0;
+    int result = composite ? run_composite_test(window, surface, width, height, false) :
+        with_surface_frame(window, surface, width, height,
         [&](int framebuffer_width, int framebuffer_height) {
             return run_session_tests(surface, framebuffer_width, framebuffer_height);
         });
+    if (composite && !result)
+        result = run_composite_test(window, surface, width, height, true);
     nk_surface_destroy(surface);
     nk_window_destroy(window);
     nk_shutdown();

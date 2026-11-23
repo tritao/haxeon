@@ -34,6 +34,7 @@
     "nk_handle": "nativekit.ffi.NativeKitTypes.Handle",
     "nk_surface": "nativekit.ffi.NativeKitTypes.SurfaceHandle",
     "nk_surface_frame": "nativekit.ffi.NativeKitTypes.SurfaceFrameHandle",
+    "nk_surface_frame_step": "nativekit.ffi.NativeKitTypes.SurfaceFrameStepHandle",
     "nk_graphics_image": "nativekit.ffi.NativeKitTypes.GraphicsImage"
   }
 }

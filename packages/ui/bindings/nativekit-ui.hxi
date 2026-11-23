@@ -642,6 +642,10 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_font_collection_create(out_fonts: ptr<nkui_resource> @out) -> nkui_result;
 	/**
+	 * Seals the submitted layout as a step for this acquired frame on the platform executor.
+	 */
+	extern fn nkui_frame_step_layout(renderer: nkui_renderer, session: nkui_layout_session, frame: nk_surface_frame, frame_info: ptr<const<nkui_frame_info>>, load_existing: nk_bool, out_step: ptr<nk_surface_frame_step> @out) -> nkui_result;
+	/**
 	 * Imports a sampled NativeKit graphics image as a compositable Canvas surface.
 	 */
 	extern fn nkui_graphics_surface_create(image: nk_graphics_image, out_surface: ptr<nkui_resource> @out) -> nkui_result;
