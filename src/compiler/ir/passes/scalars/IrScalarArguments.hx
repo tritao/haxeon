@@ -10,6 +10,7 @@ import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrProviders;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.model.IrSymbol;
+import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeTools;
 import compiler.ir.model.IrValueId;
@@ -39,11 +40,14 @@ private typedef ScalarCallPlan = {
 class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	public static inline final PREFIX = "$scalar-arguments:";
 
-	/** The fact of the candidates as a whole: their names and what kind each is, interned (`IrFacts.intern`). */
+	/** The fact of the candidates as a whole: their names, what kind each is and their signatures, interned (`IrFacts.intern`). */
 	static inline final CANDIDATES = 0;
 
-	/** Never stated: a function whose calls go to a candidate, or may, is rewritten each run. */
+	/** The fact of what a rewrite reads of the declarations, the value objects' layouts (`IrInlineValueLayout.declarationsFact`). */
 	static inline final REWRITE = 1;
+
+	/** The fact of the function a method call on an object of the key's class goes to, `class\u0001method`, interned. */
+	static inline final METHOD = 2;
 
 	/** Raw result slots and traced leaf carriers may cross only the verified private callable ABI. */
 	public static function isPrivateClosureType(type:IrType):Bool
@@ -78,6 +82,10 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	/** The candidates' fact (`CANDIDATES`), set once they are chosen. */
 	var candidatesPrint = 0;
 	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final declarations:() -> Int;
+
+	/** The version each candidate's clone is made from: its input's (`IrLineage.version`) as the stage starts. */
+	final inputs:Map<String, Int> = [];
 
 	/**
 	 * Splits value joins and rewrites `program`'s functions and calls for the scalar ABI, on bodies made with `types` (those of
@@ -100,8 +108,9 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	/**
 	 * The scalar ABI per function (`IrFunctionPass`) for the pipeline, after its value joins are split. The candidates are chosen
 	 * over the whole program each run; the rewrite of a function reads them as one fact (`CANDIDATES`): a function that calls none
-	 * of them keeps its form unread while they stay the same, and one that calls a candidate, or a method one implements, is
-	 * rewritten each run, as its calls depend on the candidates' layouts and the classes. The clones are added in `finish`.
+	 * of them keeps its form unread while they stay the same, and one that calls a candidate, or a method one implements, also
+	 * reads the value layouts (`REWRITE`) and the target of each such method call (`METHOD`). The clones are added in `finish`,
+	 * derived from their candidates' versions with the same reads.
 	 */
 	public function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
@@ -115,6 +124,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		layouts = new IrInlineValueLayout(table);
 		resolution = IrMethodResolution.of(program);
 		byName = [for (fn in program.functions) fn.name => fn];
+		declarations = IrInlineValueLayout.declarationsFact(program.objects, lineage);
 	}
 
 	/** The candidates, chosen over the whole program; only functions with a value in their signature are read. */
@@ -251,13 +261,30 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			}
 		}
 		candidatesPrint = printCandidates();
+		var known = lineage;
+		if (known != null) {
+			for (name in clones.keys())
+				inputs.set(name, known.version(name));
+			for (name in pinnedClones.keys())
+				inputs.set(name, known.version(name));
+		}
 	}
 
 	public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function fact(kind:Int, key:String):Int
-		return kind == CANDIDATES ? candidatesPrint : compiler.ir.reuse.IrFacts.UNKNOWN;
+	public function fact(kind:Int, key:String):Int {
+		switch kind {
+			case CANDIDATES:
+				return candidatesPrint;
+			case REWRITE:
+				return declarations();
+			case _:
+				var known = lineage, split = key.indexOf("\u0001");
+				return known == null ? 0 : known.memos.facts.intern(resolveMethod(Obj(key.substr(0, split)),
+					key.substr(split + 1)) ?? "");
+		}
+	}
 
 	/** The number of the candidates' text in the session's facts (`CANDIDATES`), or 0 without a session. */
 	function printCandidates():Int {
@@ -269,37 +296,64 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			names.sort(Reflect.compare);
 			return names.join(",");
 		}
+		// A rewrite reads a candidate's arguments: their types and whether the first is the receiver.
+		function signatures(bodies:Map<String, IrBody>):String {
+			var names = [for (name in bodies.keys()) name];
+			names.sort(Reflect.compare);
+			return [for (name in names) {
+				var body = bodies.get(name);
+				body == null ? "" : [
+					for (index in 0...body.argumentCount())
+						body.valueName(body.argument(index)) + ":" + IrTypeIdentity.text(argumentType(body, index))
+				].join(",");
+			}].join(";");
+		}
 		return known.memos.facts.intern([
 			sorted(candidates.keys()), sorted(pinnedCandidates.keys()), sorted(freshOnly.keys()),
 			sorted(terminalOnly.keys()),
-			sorted(methodNames.keys())
+			sorted(methodNames.keys()), signatures(candidates), signatures(pinnedCandidates)
 		].join(";"));
 	}
 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = fn.bodyIn(types, scratch.bodyBuilder);
-		// The calls a function makes go to a candidate or not by the candidates alone, but a method call's target and a rewrite's
-		// slots depend on the classes: a function with either is not reused.
+		// The calls a function makes go to a candidate or not by the candidates; a method call's target by the classes
+		// (`METHOD`), and a rewrite's slots by the value layouts (`REWRITE`).
 		reader.read(CANDIDATES, "");
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
 			return fn;
-		var result = rewriteFunction(fn, body);
-		if (result != fn || callsCandidateMethod(body))
+		if (reader.records() && readCandidateCalls(body, reader))
 			reader.read(REWRITE, "");
-		return result;
+		return rewriteFunction(fn, body);
 	}
 
-	/** Whether `body` calls a method a candidate implements (`methodNames`), whose target depends on the classes. */
-	function callsCandidateMethod(body:IrBody):Bool {
+	/**
+	 * Reads, through `reader`, the target of each call of `body` to a method a candidate implements (`methodNames`); returns whether
+	 * `body` calls a candidate or such a method at all, directly or through a closure, which only then may a rewrite change.
+	 */
+	function readCandidateCalls(body:IrBody, reader:compiler.ir.reuse.IrFactReader):Bool {
+		var calls = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
-				if (body.opcode(row) == IrOpcode.MethodCall && methodNames.exists(body.symbol(row).name))
-					return true;
+				switch body.opcode(row) {
+					case IrOpcode.MethodCall if (methodNames.exists(body.symbol(row).name)):
+						switch body.valueType(body.operand(row, 0)) {
+							case Obj(name):
+								reader.read(METHOD, name + "\u0001" + body.symbol(row).name);
+							default:
+						}
+						calls = true;
+					case IrOpcode.Call, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+						var name = body.symbol(row).name;
+						if (candidates.exists(name) || pinnedCandidates.exists(name))
+							calls = true;
+					default:
+				}
 				row = body.nextRow(row);
 			}
 		}
-		return false;
+		return calls;
 	}
 
 	public function request(kind:Int, type:IrType, name:Null<String>):Void
@@ -314,7 +368,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		for (fn in originals) {
 			var clone = clones.get(fn.name);
 			if (clone != null)
-				rewritten.push(publish(clone));
+				rewritten.push(publish(fn.name, clone));
 		}
 		if (!pinnedClones.keys().hasNext())
 			return rewritten;
@@ -360,7 +414,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 				if (clone == null)
 					throw new InternalError('Missing receiver-preserving clone for "${fn.name}"');
 				if (needed.exists(clone.name))
-					rewritten.push(publish(clone));
+					rewritten.push(publish(fn.name, clone));
 			}
 		return rewritten;
 	}
@@ -452,8 +506,24 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	}
 
 	/** The function a clone this stage made is: frozen when a session keeps it. */
-	function publish(body:IrBody):IrFunction
-		return IrFunction.ofOwnedBody(body);
+	/**
+	 * The clone `body` of the candidate `name`, derived (`IrFunctionStages.derived`): in a session last build's while the
+	 * candidate's version and what the clone read hold.
+	 */
+	function publish(name:String, body:IrBody):IrFunction {
+		var known = lineage, candidate = byName.get(name);
+		if (candidate == null)
+			throw new InternalError('Missing scalar ABI candidate "$name"');
+		var source = candidate.bodyIn(types, scratch.bodyBuilder);
+		return compiler.ir.pipeline.IrFunctionStages.derived("scalar-arguments", body.name, this, inputs.get(name) ?? 0,
+			known,
+			known != null && known.checks, types, scratch.bodyBuilder, reader -> {
+				reader.read(CANDIDATES, "");
+				readCandidateCalls(source, reader);
+				reader.read(REWRITE, "");
+				IrFunction.ofOwnedBody(body);
+			});
+	}
 
 	/** `fn`, whose body is `body`, with its direct calls to candidates redirected: `fn` itself when it has none. */
 	function rewriteFunction(fn:IrFunction, body:IrBody):IrFunction {
