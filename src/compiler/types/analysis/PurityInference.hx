@@ -472,6 +472,13 @@ class PurityInference {
 		return null;
 	}
 
+	/** Whether the direct call declares a numeric result, recording the signature it resolved to. */
+	public function callReturnsNumber(name:String, functionName:String):Bool {
+		var key = resolveCall(name, functionName);
+		var fn = key == null ? null : signatures.get(key);
+		return fn != null && PurityWalker.isNumericType(fn.result);
+	}
+
 	/** A method on the enclosing class, called through `this`. */
 	public function resolveOwnMethod(name:String, functionName:String):Null<String> {
 		var key = sibling(functionName, name);
@@ -681,7 +688,7 @@ private class PurityWalker {
 		return fact != null && fact.iterable;
 	}
 
-	/** Syntactically numeric: numeric literals and locals, and arithmetic over them. */
+	/** Syntactically numeric: numeric literals, locals, declared call results, and arithmetic over them. */
 	function isNumeric(value:AstExpression):Bool
 		return switch value {
 			case IntegerLiteral(_, _), FloatLiteral(_, _): true;
@@ -694,7 +701,9 @@ private class PurityWalker {
 			case MethodCall(object, name, _,
 				_) if (name == "indexOf" || name == "lastIndexOf"): isStringReceiver(object);
 			case Call(name, _, _): var parts = name.split(".");
-				parts.length == 2 && (parts[1] == "indexOf" || parts[1] == "lastIndexOf") && isStringName(parts[0]);
+				(parts.length == 2 && (parts[1] == "indexOf" || parts[1] == "lastIndexOf") && isStringName(parts[0]))
+					|| (!isLocal(name) && !inference.isConstructor(name)
+					&& inference.callReturnsNumber(name, functionName));
 			default: false;
 		};
 
