@@ -2,6 +2,7 @@ package haxeon.ui;
 
 import NativeKitUI;
 import haxeon.platform.SurfaceFrame;
+import haxeon.platform.SurfaceFrameStep;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
@@ -43,12 +44,14 @@ class Renderer implements Disposable {
 			frame.nativeValue()), "renderer.renderFrame");
 	}
 
-	/** Draws a display list on the render executor into an acquired frame owned by the caller. */
-	public function renderIntoFrame(list:DisplayList, frame:SurfaceFrame, info:FrameInfo,
-			loadExisting:Bool = true):Void {
+	/** Seals the display list for ordered rendering into the acquired frame. */
+	public function frameStep(list:DisplayList, frame:SurfaceFrame, info:FrameInfo,
+			loadExisting:Bool = true):SurfaceFrameStep {
 		ensureLive();
-		UiResult.check(NativeKitUI.nkui_renderer_render_into_frame(value, list.nativeHandle(), frame.nativeHandle(),
-			info.nativeValue(), loadExisting), "renderer.renderIntoFrame");
+		var made = NativeKitUI.nkui_frame_step_display_list(value, list.nativeHandle(), frame.nativeHandle(),
+			info.nativeValue(), loadExisting);
+		UiResult.check(made.status, "renderer.frameStep");
+		return new SurfaceFrameStep(made.out_step);
 	}
 
 	/** Registers a native-owned shader implementation for a custom effect. */

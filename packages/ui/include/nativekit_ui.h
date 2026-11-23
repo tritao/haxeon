@@ -1214,16 +1214,11 @@ NKUI_API nkui_result nkui_renderer_render_frame(nkui_renderer renderer, nkui_dis
                                                 nk_surface surface,
                                                 const nkui_frame_info *frame_info);
 
-/**
- * Draws a display list into an acquired frame on the render executor.
- * Use load_existing to preserve the frame's color contents. The caller owns
- * scheduling, presentation, and cancellation. Framebuffer dimensions in
- * frame_info must match the target.
- */
-NKUI_API nkui_result nkui_renderer_render_into_frame(nkui_renderer renderer,
-                                                    nkui_display_list list, nk_surface_frame frame,
-                                                    const nkui_frame_info *frame_info,
-                                                    nk_bool load_existing);
+/** Seals the display list as a step for this acquired frame on the platform executor. */
+NKUI_API nkui_result nkui_frame_step_display_list(
+    nkui_renderer renderer, nkui_display_list list, nk_surface_frame frame,
+    const nkui_frame_info *frame_info, nk_bool load_existing,
+    nk_surface_frame_step *out_step NKUI_OUT);
 
 /**
  * Releases the caller's ownership of a UI resource.

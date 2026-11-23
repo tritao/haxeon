@@ -846,18 +846,6 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 */
 	extern fn nkgpu_frame_begin(renderer: nkgpu_renderer) -> nkgpu_result;
 	/**
-	 * Begins an immediate window pass on an open, caller-acquired frame target.
-	 * Call on the render executor. A clear value of one clears color, and zero
-	 * preserves the previous color contents. Depth and stencil are reset.
-	 * Finish with nkgpu_frame_end_on(). The caller presents or
-	 * cancels the surface frame on the platform executor.
-	 */
-	extern fn nkgpu_frame_begin_on(renderer: nkgpu_renderer, target: ptr<const<nk_surface_frame_target>>, clear: u32) -> nkgpu_result;
-	/**
-	 * Finishes the GPU pass on an acquired frame. The caller owns presentation.
-	 */
-	extern fn nkgpu_frame_end_on(renderer: nkgpu_renderer) -> nkgpu_result;
-	/**
 	 * Prepares a sealed batch as a surface-frame submission step on the platform executor.
 	 * The batch and renderer stay live until the step is destroyed or the frame completes.
 	 * Destroying either while retained returns NKGPU_ERROR_WRONG_STATE.

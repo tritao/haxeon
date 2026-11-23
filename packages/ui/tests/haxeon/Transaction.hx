@@ -145,15 +145,23 @@ class Transaction {
 		var renderer = Renderer.create();
 		var ready = false;
 		var rendered = 0;
+		var submitted:Null<haxe.Int64> = null;
+		var failure:Null<Result> = null;
 		var attempts = 0;
 		var events = runtime.events;
 		var eventSubscription = events.listen(function(value) switch value {
 			case SurfaceReady(source) if (source.rawValue() == surface.rawValue()): ready = true;
+			case SurfaceFrameComplete(source, token, result)
+				if (source.rawValue() == surface.rawValue() && submitted != null && submitted == token):
+				submitted = null;
+				if (result == Result.Ok) rendered++ else failure = result;
 			case _:
 		});
 		while (rendered < 3 && attempts < 120) {
 			events.poll();
-			if (ready) {
+			if (failure != null)
+				return 16;
+			if (ready && rendered < 3 && submitted == null) {
 				var size = NativeKit.nk_surface_get_framebuffer_size(surface);
 				if (size.status != Result.Ok || size.out_width <= 0 || size.out_height <= 0)
 					return 14;
@@ -164,12 +172,13 @@ class Transaction {
 				try {
 					var acquired = managedSurface.acquireFrame();
 					defer if (!acquired.isFinished()) acquired.cancel();
-					renderer.renderIntoFrame(list, acquired, frame, false);
-					acquired.present();
+					var step = renderer.frameStep(list, acquired, frame, false);
+					defer step.dispose();
+					acquired.submit([step]);
+					submitted = acquired.token();
 				} catch (_:Dynamic) {
 					return 16;
 				}
-				rendered++;
 			}
 			attempts++;
 		}

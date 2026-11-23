@@ -301,18 +301,6 @@ class LayoutSession implements Disposable {
 		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
 	}
 
-	/** Draws on the render executor into a caller-owned frame, preserving its color contents. */
-	public function renderIntoFrame(renderer:Renderer, frame:SurfaceFrame, info:FrameInfo):Void {
-		ensureLive();
-		var started = RenderCost.time();
-		updateRenderablePaints();
-		if (RenderCost.enabled) RenderCost.renderable += Sys.time() - started;
-		var nativeStarted = RenderCost.time();
-		UiResult.check(NativeKitUI.nkui_layout_session_render_into_frame(renderer.nativeHandle(), value, frame.nativeHandle(),
-			info.nativeValue()), "layoutSession.renderIntoFrame");
-		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
-	}
-
 	/** Seals the submitted layout for ordered rendering into the acquired frame. */
 	public function frameStep(renderer:Renderer, frame:SurfaceFrame, info:FrameInfo,
 			loadExisting:Bool = true):SurfaceFrameStep {

@@ -8,7 +8,7 @@ class SurfaceFrameStep implements Disposable {
 	final handle:SurfaceFrameStepHandle;
 	var consumed = false;
 
-	@:allow(haxeon.gpu.Batch, haxeon.ui.LayoutSession)
+	@:allow(haxeon.gpu.Batch, haxeon.ui.LayoutSession, haxeon.ui.Renderer)
 	function new(handle:SurfaceFrameStepHandle) this.handle = handle;
 
 	@:allow(haxeon.platform.SurfaceFrame)
