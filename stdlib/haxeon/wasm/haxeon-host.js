@@ -113,6 +113,7 @@ var HaxeonWasmHost = (() => {
         sys_exit: code => { throw new HaxeonExit(code); }
       },
       haxeon_runtime: {
+        __sys_monotonic_time: () => performance.now() / 1000,
         native_alloc: size => {
           if (size <= 0) return fail("Native memory allocation size must be positive");
           if (typeof allocate !== "function") return fail("The host does not provide native memory allocation");

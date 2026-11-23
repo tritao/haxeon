@@ -613,6 +613,7 @@ DEFINE_PRIM(_ARR,__sys_metadata,_STRING);
 DEFINE_PRIM(_BOOL,__sys_file_version,_BYTES _BYTES);
 DEFINE_PRIM(_STRING,__sys_get_env,_STRING);
 DEFINE_PRIM(_ARR,__sys_environment,_NO_ARG);
+DEFINE_PRIM(_F64,__sys_monotonic_time,_NO_ARG);
 DEFINE_PRIM(_STRING,__sys_system_name,_NO_ARG);
 DEFINE_PRIM(_VOID,__sys_binary_stdio,_NO_ARG);
 DEFINE_PRIM(_BOOL,__sys_put_env,_STRING _STRING);

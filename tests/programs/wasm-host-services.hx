@@ -8,5 +8,7 @@ function main():Int {
 	Sys.stdout().flush();
 	Sys.stderr().writeString("stderr 雪");
 	Sys.stderr().flush();
-	return 42;
+	var start = Sys.monotonicTime();
+	var end = Sys.monotonicTime();
+	return Math.isFinite(start) && Math.isFinite(end) && end >= start ? 42 : 1;
 }

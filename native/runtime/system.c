@@ -3,6 +3,20 @@ extern bool hl_sys_put_env( vbyte *name, vbyte *value );
 extern int hl_sys_command( vbyte *command );
 extern void hl_sys_print( vbyte *value );
 
+HL_PRIM double HL_NAME(__sys_monotonic_time)( void ) {
+#if defined(_WIN32)
+	LARGE_INTEGER counter, frequency;
+	if( !QueryPerformanceFrequency(&frequency) || !QueryPerformanceCounter(&counter) )
+		hl_error("Could not read the monotonic clock");
+	return (double)counter.QuadPart / (double)frequency.QuadPart;
+#else
+	struct timespec time;
+	if( clock_gettime(CLOCK_MONOTONIC, &time) != 0 )
+		hl_error("Could not read the monotonic clock");
+	return (double)time.tv_sec + (double)time.tv_nsec / 1000000000.0;
+#endif
+}
+
 HL_PRIM vstring *HL_NAME(__sys_system_name)( void ) {
 #if defined(_WIN32)
 	return realtime_string_from_utf8("Windows");

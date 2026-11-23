@@ -356,12 +356,14 @@ const cases = [
         return length === expected.length && expected.every((value, index) => actual[index] === value) ? 42 : 0;
       }};
     }
-    // HaxeonHost receives C strings and returns scalars on both backends; nothing else is imported.
+    // The host provides text, date, and monotonic clock services on both backends.
     if (relative.includes("wasm-cli-host-services-")) {
-      const unexpected = WebAssembly.Module.imports(new WebAssembly.Module(bytes)).filter(entry => entry.module !== "haxeon_host");
+      const unexpected = WebAssembly.Module.imports(new WebAssembly.Module(bytes)).filter(entry => entry.module !== "haxeon_host"
+        && !(entry.module === "haxeon_runtime" && entry.name === "__sys_monotonic_time"));
       if (unexpected.length !== 0)
         throw new Error(`${relative}: unexpected imports ${unexpected.map(entry => entry.module + "." + entry.name).join(", ")}`);
       let printed = "", errors = "", flushes = [];
+      imports.haxeon_runtime = {__sys_monotonic_time: () => performance.now() / 1000};
       imports.haxeon_host = {
         print: pointer => {
           const bytes = new Uint8Array(moduleInstance.exports.memory.buffer);

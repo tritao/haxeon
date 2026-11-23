@@ -22,6 +22,9 @@
 @:hlNative("std", "sys_time")
 extern function sysTime():Float;
 
+@:hlNative("haxeon_runtime", "__sys_monotonic_time")
+extern function sysMonotonicTime():Float;
+
 @:hlNative("std", "sys_cpu_time")
 extern function sysCpuTime():Float;
 
@@ -192,6 +195,10 @@ extern function sysStdinHandle():hl.Abstract<"realtime_file_input">;
 class Sys {
 	public static inline function time():Float
 		return sysTime();
+
+	/** Monotonic seconds from an unspecified epoch, for elapsed time and deadlines. */
+	public static inline function monotonicTime():Float
+		return sysMonotonicTime();
 
 	public static inline function cpuTime():Float
 		return sysCpuTime();

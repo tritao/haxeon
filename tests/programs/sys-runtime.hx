@@ -1,6 +1,11 @@
 function main():Int {
 	var cwd = Sys.getCwd();
 	var now = Sys.time();
+	var start = Sys.monotonicTime();
+	Sys.sleep(0.002);
+	var elapsed = Sys.monotonicTime() - start;
+	if (!Math.isFinite(start) || !Math.isFinite(elapsed) || elapsed <= 0.0)
+		return 15;
 	var systemName = Sys.systemName();
 	if (cwd.length == 0
 		|| ["Windows", "Mac", "Linux", "BSD", "Unknown"].indexOf(systemName) < 0

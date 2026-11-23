@@ -25,7 +25,7 @@ class WasmLinearRuntime {
 				switch native.symbol {
 					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
 						"__math_exp", "__math_log",
-						"__sys_args", "sys_time", "sys_cpu_time",
+						"__sys_args", "sys_time", "__sys_monotonic_time", "sys_cpu_time",
 						"sys_thread_cpu_time", "sys_process_memory",
 						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free":
 						runtimeImport(module, native);
@@ -577,7 +577,7 @@ class WasmLinearRuntime {
 				results: [F64]
 			}, WasmFmod.locals(),
 				WasmFmod.body()));
-			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep",
+			case "sys_time", "__sys_monotonic_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep",
 				"sys_get_char", "sys_exit",
 				"native_alloc", "native_free":
 				runtimeImportIndex(module, native);
