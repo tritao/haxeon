@@ -200,13 +200,13 @@ function main() {
 	// Numbers and records: a Point is the C struct geo_point, laid out as C lays it out.
 	var origin = new Point();
 	var corner = new Point();
-	corner.set_x(3.0);
-	corner.set_y(4.0);
+	corner.x = 3.0;
+	corner.y = 4.0;
 	Sys.println('distance: ${Geometry.distance(origin, corner)}');
 
 	// A pointer parameter lets C change the record in place.
 	Geometry.translate(corner, 1.0, 1.0);
-	Sys.println('moved to: ${corner.get_x()}, ${corner.get_y()}');
+	Sys.println('moved to: ${corner.x}, ${corner.y}');
 
 	// Strings cross as UTF-8.
 	Sys.println('bytes in "héllo": ${Geometry.textLength("héllo")}');
@@ -219,8 +219,8 @@ function main() {
 	path.close();
 ```
 
-- `new Point()` makes a zeroed `geo_point` in memory Haxe manages; `get_x` and `set_x` read and write its fields at the
-  offsets C uses. Passed where C takes `geo_point *`, it is passed by address, so `geo_translate` changes it.
+- `new Point()` makes a zeroed `geo_point` in memory Haxe manages. The `x` and `y` properties read and write its
+  fields at the offsets C uses. Passed where C takes `geo_point *`, it is passed by address, so `geo_translate` changes it.
 - A `String` argument is converted to UTF-8 for the length of the call.
 - `pathCreate` returns an owner of the handle. `borrow()` gives the plain handle that the other functions take, and
   `close()` destroys it. Closing twice is harmless.

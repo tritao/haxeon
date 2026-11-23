@@ -235,11 +235,13 @@ class CxxHeaderImporterMain {
 		expect(trivialDiagnostics.indexOf("CXX002") >= 0,
 			"class values should be disabled unless trivial-value lowering is explicitly enabled");
 		var trivial = CxxHeaderImporter.importHeader("tests/ffi/cxx_trivial_fixture.hpp", "x86_64-linux-gnu",
-			["tests/ffi"], "clang++", null, null, null,
+			["tests/ffi"], "clang++", "cxx_trivial", null, null,
 			null, "c++20", null, null, true),
-			trivialText = HxiWriter.write(trivial.hxi, "// test");
+			trivialText = HxiWriter.write(trivial.hxi, "// test"),
+			trivialSource = compiler.ffi.HxiProjection.source(trivial.hxi);
 		expect(trivialText.indexOf("struct __cxx_Point @layout(8, 4)") >= 0
-			&& trivialText.indexOf("extern fn __cxx_make_point() -> __cxx_Point") >= 0,
+			&& trivialText.indexOf("extern fn __cxx_make_point() -> __cxx_Point") >= 0
+			&& trivialSource.indexOf("var x(get, set):Int") >= 0,
 			"validated standard-layout records should lower by value only under the explicit trivial-value policy");
 		var hosted = CxxHeaderImporter.importHeader("tests/ffi/cxx_hosted_fixture.hpp", ClangInvocation.hostTarget(),
 			["tests/ffi"]);

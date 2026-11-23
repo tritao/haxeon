@@ -512,11 +512,19 @@ behind a one-argument macro naming the count function.
 
 HXI structures with explicit `@layout(size, align)` and field `@offset(...)`
 metadata project to typed Haxe abstracts backed by managed bytes. Constructing
-the abstract zero-initializes exactly the declared size. Generated `get_field`
-and `set_field` methods support native-endian integer and floating-point scalar
-fields. Nested fixed-layout structures use typed copy getters and setters, and
-`ptr<struct>` parameters pass the managed backing storage to C. Validation
-rejects misaligned, overlapping, and out-of-bounds fields before projection.
+the abstract zero-initializes exactly the declared size. Use Haxe properties
+such as `point.x = 3.0` and `point.x` to write and read scalar fields.
+A scalar field name that conflicts with a Haxe keyword or generated record helper
+gets the `__hxi_field_` prefix. Const-qualified scalar fields are read-only.
+The same properties are generated for C++ records lowered as fixed-layout
+values. C++ opaque object wrappers expose their methods.
+
+Fixed arrays use indexed methods, and byte views and packed setters use named
+methods to make the representation explicit. Nested fixed-layout structures
+keep their typed copy methods, and counted arrays keep methods that pack or
+unpack storage and manage the paired count. `ptr<struct>` parameters pass the
+managed backing storage to C. Validation rejects misaligned, overlapping, and
+out-of-bounds fields before projection.
 
 Records proven pointer-free, including nested records, aliases, and fixed arrays,
 use the managed byte storage directly without an extra reference-retention array.
@@ -546,7 +554,7 @@ independent retained snapshots require separate buffers. Buffers are limited to
 256 MiB, and pointer-bearing records keep the existing array packing API.
 
 Borrowed pointers to opaque types can be marked with field-level `@borrowed`;
-their generated accessors read and write `NativePointer` handles and preserve
+their generated properties read and write `NativePointer` handles and preserve
 `nullable<...>` behavior. The source handle must remain live for as long as C
 may read the structure field. Owned pointer fields are rejected because a
 managed-byte structure cannot retain their destructor safely. A borrowed
