@@ -624,12 +624,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					|| kept != null && kept.exists(unit);
 			if (!exists)
 				continue;
-			var uses:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
-			for (entry in types) {
-				uses.set(entry.name, entry.fields);
-				registry.register(TAnonymous(entry.name, entry.fields));
-			}
-			session.programOutput.records.keepAnonymousUnit(unit, uses);
+			// Outside any body, registering a type only discovers it for the program (`AnonymousTypeRegistry.register`).
+			for (entry in types)
+				registry.discover(TAnonymous(entry.name, entry.fields));
+			session.programOutput.records.keepAnonymousUnit(unit, types);
 		}
 	}
 

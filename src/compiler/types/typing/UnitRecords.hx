@@ -39,6 +39,12 @@ class UnitRecords {
 	 */
 	final anonymousUnits:Map<String, UnitAnonymousUses> = [];
 
+	/**
+	 * The anonymous types of the units this build did not type again, as the program an earlier build listed them
+	 * (`keepAnonymousUnit`): the program lists them as they are.
+	 */
+	final keptAnonymousUnits:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> = [];
+
 	/** The units whose bodies this session typed. */
 	public final typedUnits:Map<String, Bool> = [];
 
@@ -60,20 +66,33 @@ class UnitRecords {
 	public function keyPathUsesByUnit():Map<String, Map<String, Bool>>
 		return answersByUnit(keyPathUses);
 
-	/** The anonymous types each unit registered, by name. */
-	public function anonymousUnitsByUnit():Map<String, Map<String, Array<AnonymousField>>>
-		return [for (unit => uses in anonymousUnits) unit => uses.types];
+	/** The anonymous types each unit registered, by unit, each unit's ordered by name. */
+	public function orderedAnonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> {
+		var result = keptAnonymousUnits.copy();
+		for (unit => uses in anonymousUnits) {
+			// A kept unit may record a type again (its signature's, `TypedProgramAssembler.registerProgramTypes`).
+			var types = uses.types, kept = result.get(unit);
+			if (kept != null) {
+				types = types.copy();
+				for (entry in kept)
+					if (!types.exists(entry.name))
+						types.set(entry.name, entry.fields);
+			}
+			var names = [for (name in types.keys()) name];
+			names.sort(Reflect.compare);
+			result.set(unit, [for (name in names) {
+				name:name, fields:types.get(name)
+			}]);
+		}
+		return result;
+	}
 
 	public function hasAnonymousUnit(unit:String):Bool
-		return anonymousUnits.exists(unit);
+		return anonymousUnits.exists(unit) || keptAnonymousUnits.exists(unit);
 
-	/** Keeps the anonymous types an earlier build recorded for `unit`, which this one does not type again. */
-	public function keepAnonymousUnit(unit:String, types:Map<String, Array<AnonymousField>>):Void {
-		var uses = new UnitAnonymousUses();
-		for (name => fields in types)
-			uses.types.set(name, fields);
-		anonymousUnits.set(unit, uses);
-	}
+	/** Keeps the anonymous types an earlier build listed for `unit`, which this one does not type again. */
+	public function keepAnonymousUnit(unit:String, types:Array<compiler.types.TypedAst.TypedAnonymous>):Void
+		keptAnonymousUnits.set(unit, types);
 
 	static function answersByUnit(records:Map<String, UnitAnswers>):Map<String, Map<String, Bool>>
 		return [for (unit => record in records) unit => record.answers];

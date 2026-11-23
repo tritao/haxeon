@@ -102,17 +102,8 @@ class TypedProgramAssembler {
 	}>
 		return session.runtimeDependencyTracker.ordered();
 
-	function anonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> {
-		var result:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> = [];
-		for (unit => uses in session.programOutput.records.anonymousUnitsByUnit()) {
-			var names = [for (name in uses.keys()) name];
-			names.sort(Reflect.compare);
-			result.set(unit, [for (name in names) {
-				name:name, fields:uses.get(name)
-			}]);
-		}
-		return result;
-	}
+	function anonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>>
+		return session.programOutput.records.orderedAnonymousUnits();
 
 	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {
 		var names = [for (name in session.anonymousTypes.keys()) name];
