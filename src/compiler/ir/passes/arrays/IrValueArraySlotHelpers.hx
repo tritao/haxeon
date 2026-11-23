@@ -29,36 +29,40 @@ class IrValueArraySlotHelpers {
 	final element:IrType;
 	final shape:IrValueLaneShape;
 	final access:IrValueArrayAccess;
-	final reads:Array<Null<String>>;
-	final writes:Array<Null<String>>;
 	final checks:Array<{name:String, path:Array<String>, includeSelf:Bool}> = [];
 	final optionalWrites:Array<{name:String, path:Array<String>, type:IrType}> = [];
 	final scalarChecks:Array<{name:String, type:IrType}> = [];
-	var nextSymbol = 0;
 	var built = false;
+
+	/** What every helper's name ends with: the element, as the element helpers name it (`IrValueArrayElements`). */
+	final suffix:String;
 
 	public function new(namespace:Int, element:IrType, shape:IrValueLaneShape) {
 		this.namespace = namespace;
 		this.element = element;
 		this.shape = shape;
 		this.access = new IrValueArrayAccess(shape.scalarWordBits);
-		this.reads = [for (_ in shape.slots) null];
-		this.writes = [for (_ in shape.slots) null];
+		suffix = ":" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element));
 	}
 
-	function nextName():String return '$' + 'haxeon_value_array_slot_${namespace}_${nextSymbol++}';
+	/** The prefix of the helpers' names, which name what each does, so a rewrite's calls name the same helper whatever else asks. */
+	public static inline final PREFIX = "$value-array-slot:";
+
+	/** The helper's name: its namespace, which keeps two rewrites of one element apart, what it does, and the element. */
+	function nameOf(what:String):String
+		return PREFIX + namespace + ":" + what + suffix;
+
+	static function pathText(path:Array<String>):String
+		return path.join("/");
 
 	public function getter(slot:Int):String {
 		checkSlot(slot);
-		var name = reads[slot];
-		if (name == null) reads[slot] = name = nextName();
-		return name;
+		return nameOf('get:$slot');
 	}
+
 	public function setter(slot:Int):String {
 		checkSlot(slot);
-		var name = writes[slot];
-		if (name == null) writes[slot] = name = nextName();
-		return name;
+		return nameOf('set:$slot');
 	}
 
 	/** Request a check before evaluating the rest of a place operation. */
@@ -67,7 +71,7 @@ class IrValueArraySlotHelpers {
 			if (checks[index].includeSelf == includeSelf
 				&& samePath(checks[index].path, path)) return checks[index].name;
 		if (built) throw new InternalError("Value lane place checks must be requested before generating helpers");
-		var symbol = nextName();
+		var symbol = nameOf((includeSelf ? "check-self:" : "check:") + pathText(path));
 		checks.push({name: symbol, path: path.copy(), includeSelf: includeSelf});
 		return symbol;
 	}
@@ -81,7 +85,7 @@ class IrValueArraySlotHelpers {
 			if (samePath(optionalWrites[index].path, path) && IrVerifier.sameType(optionalWrites[index].type, type))
 				return optionalWrites[index].name;
 		if (built) throw new InternalError("Optional lane writes must be requested before generating helpers");
-		var symbol = nextName();
+		var symbol = nameOf('optional-set:${pathText(path)}:${compiler.ir.model.IrTypeIdentity.text(type)}');
 		optionalWrites.push({name: symbol, path: path.copy(), type: type});
 		return symbol;
 	}
@@ -95,7 +99,7 @@ class IrValueArraySlotHelpers {
 		for (index in 0...scalarChecks.length)
 			if (IrVerifier.sameType(scalarChecks[index].type, type)) return scalarChecks[index].name;
 		if (built) throw new InternalError("Optional scalar checks must be requested before generating helpers");
-		var symbol = nextName();
+		var symbol = nameOf('require:${compiler.ir.model.IrTypeIdentity.text(type)}');
 		scalarChecks.push({name: symbol, type: type});
 		return symbol;
 	}
