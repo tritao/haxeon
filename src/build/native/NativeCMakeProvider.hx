@@ -26,31 +26,23 @@ class NativeCMakeProvider {
 		var native = resolvedPackage.manifest.native;
 		if (native == null || native.cmake == null)
 			throw new InternalError('Package "${resolvedPackage.name}" has no native.cmake provider');
-		// A shared tree is named and configured with real paths, so every route to a directory gives the same arguments.
 		var cached = !context.sharedNative && context.nativeCache != null,
 			home = cached ? NativeCache.canonical(context.compilerHome) : context.compilerHome,
 			scripts = build.HaxeonSdk.cmakeDirectory(home),
-			sourcePath = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
-			source = cached ? NativeCache.canonical(sourcePath) : sourcePath,
 			layout = context.layout,
-			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
 			ninja = ninjaAvailable(context.environment.target, context.compilerHome),
-			ninjaProgram = ninjaExecutable(home), // CMake rejects a cache created by another generator, so Ninja trees get their own directory.
-			buildTree = ninja ? "cmake-ninja" : "cmake", // Workspace builds identify a CMake tree by what it builds, so packages that request the same
-			// (source, target) pair share one configure, one build and one set of runtime libraries.
+			ninjaProgram = ninjaExecutable(home),
+			ownTree = tree(resolvedPackage, context),
+			source = ownTree.source,
+			cmakeInputs = [Path.join([source, "CMakeLists.txt"])].concat(resolvedPackage.nativeCMakeInputs),
 			shared = context.sharedNative,
-			identity = shared ? sharedName(source, native.cmake.target,
-				context.environment.projectRoot) : resolvedPackage.name,
-			// Project builds share one tree per package with every other project that uses it (NativeCache) and publish
-			// the libraries into this project's native directory.
-			cacheRoot = cached ? context.nativeCache : null,
-			cacheTree = cached ? NativeCache.treeRoot(cacheRoot, layout, context.environment, resolvedPackage, source,
-				native.cmake.target) : null,
-			sharedRoot = shared ? layout.sharedCMakeRoot(identity) : cacheTree,
-			buildDirectory = shared || cached ? Path.join([sharedRoot, buildTree]) : Path.join([
-				layout.packageRoot(resolvedPackage.name),
-				buildTree
-			]),
+			identity = ownTree.identity,
+			sharedRoot = ownTree.root,
+			buildDirectory = ownTree.buildDirectory,
+			// The packages whose CMake projects this one builds on (the UI package on nativekit's): each is built in its own
+			// tree first, and this one finds it there with find_package, as an app's graph has its targets.
+			dependencies = cmakeDependencies(resolvedPackage, context),
+			dependencyTrees = [for (dependency in dependencies) tree(dependency, context)],
 			libraryPrefix = context.environment.target.os == TargetOs.Windows ? "" : "lib",
 			legacyOutput = shared
 				? (native.cmake.library == null ? Path.join([sharedRoot, "out", native.cmake.target]) : Path.join([
@@ -91,22 +83,18 @@ class NativeCMakeProvider {
 				"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
 				"-DHAXEON_TARGET=" + context.environment.target.toString(),
 				"-DCMAKE_BUILD_TYPE="
-					+ configuration // Published copies must resolve sibling libraries beside themselves. An absolute build-tree RPATH would load
-					// another copy from the cache, splitting native handle registries between the two libraries.
-			].concat(cached && context.environment.target.os == TargetOs.Linux ? [
-				"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=$ORIGIN",
-				"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
-			] : cached && context.environment.target.os == TargetOs.MacOS ? [
-				"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=@loader_path",
-				"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
-			] : [])
+					+ configuration
+			].concat(cached ? publishedRunPath(context, dependencies) : [])
+				.concat(dependencyTrees.length == 0 ? [] : [
+					"-DCMAKE_PREFIX_PATH=" + [for (dependency in dependencyTrees) dependency.buildDirectory].join(";")
+				])
 				.concat(ninja ? [
 					"-G",
 					"Ninja"
 				].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
 			windowsNinja = ninja && context.environment.target.os == TargetOs.Windows,
 			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
-			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
+			buildId = buildAction(identity, context),
 			toolchain = new NativeToolchain(context.environment),
 			// On a Windows host ccache is used for MSVC builds with Ninja only: the Visual Studio generator ignores compiler
 			// launchers, and other targets built there are not measured.
@@ -147,7 +135,7 @@ class NativeCMakeProvider {
 			cmakeInputs.push(Path.join([scripts, "haxeon-instrument.cmake"]));
 		// Builds in other worktrees and editors use the same shared trees. Each step holds the tree's lock only while it
 		// runs (an OS file lock, released when the process ends), so the Haxe compiles of different builds still overlap.
-		var lockFile = cached ? cacheTree + ".lock" : null,
+		var lockFile = cached ? sharedRoot + ".lock" : null,
 			locked = (command:String, arguments:Array<String>, ?extra:Array<String>) -> {
 				if (!cached)
 					return Process(command, arguments, runDirectory, compilerCache);
@@ -161,12 +149,18 @@ class NativeCMakeProvider {
 				]).concat(arguments), runDirectory, compilerCache);
 			};
 		var actions:Array<ExecutionAction> = [
-			new ExecutionAction(configureId, [], cmakeInputs, [Path.join([buildDirectory, "CMakeCache.txt"])],
+			new ExecutionAction(configureId, [
+				for (dependency in dependencyTrees)
+					buildAction(dependency.identity, context)
+			], cmakeInputs, [Path.join([
+				buildDirectory,
+				"CMakeCache.txt"
+			])],
 				'Configure CMake package $identity',
 				locked("cmake", configureArguments, [
 					"-DCACHE_FILE=" + Path.join([buildDirectory, "CMakeCache.txt"]),
 					"-DSOURCE=" + source
-				])),
+				]), false),
 			new ExecutionAction(buildId, [configureId], [source], outputs,
 				'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}',
 				locked("cmake", [
@@ -279,11 +273,110 @@ class NativeCMakeProvider {
 		var native = resolvedPackage.manifest.native;
 		if (native == null || native.cmake == null)
 			return null;
-		var source = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source]));
-		return Path.join([
-			context.layout.sharedCMakeRoot(sharedName(source, native.cmake.target, context.environment.projectRoot)),
-			"out"
+		return Path.join([tree(resolvedPackage, context).root, "out"]);
+	}
+
+	/**
+	 * Where a package's CMake project is configured and built. Workspace builds identify a tree by what it builds, so packages
+	 * that request the same (source, target) pair share one configure, one build and one set of runtime libraries. Project
+	 * builds share one tree per package with every other project that uses it (NativeCache), named also by the trees of the
+	 * packages it builds on, and publish the libraries into the project's native directory. Otherwise a project builds its
+	 * own tree beside its libraries. A shared tree is named and configured with real paths, so every route to a directory
+	 * gives the same arguments.
+	 */
+	static function tree(resolvedPackage:ResolvedPackage, context:LoweringContext):{
+		identity:String,
+		source:String,
+		root:Null<String>,
+		buildDirectory:String
+	} {
+		var native = resolvedPackage.manifest.native,
+			cmake = native == null ? null : native.cmake;
+		if (cmake == null)
+			throw new InternalError('Package "${resolvedPackage.name}" has no native.cmake provider');
+		var cached = !context.sharedNative && context.nativeCache != null,
+			sourcePath = Path.normalize(Path.join([resolvedPackage.root, cmake.source])),
+			source = cached ? NativeCache.canonical(sourcePath) : sourcePath,
+			// CMake rejects a cache created by another generator, so Ninja trees get their own directory.
+			buildTree = ninjaAvailable(context.environment.target, context.compilerHome) ? "cmake-ninja" : "cmake";
+		if (context.sharedNative) {
+			var identity = sharedName(source, cmake.target, context.environment.projectRoot),
+				root = context.layout.sharedCMakeRoot(identity);
+			return {identity: identity, source: source, root: root, buildDirectory: Path.join([root, buildTree])};
+		}
+		if (cached) {
+			var dependencies = [
+				for (dependency in cmakeDependencies(resolvedPackage, context))
+					tree(dependency, context).root
+			],
+				root = NativeCache.treeRoot(context.nativeCache, context.layout, context.environment, resolvedPackage,
+					source,
+					cmake.target, dependencies);
+			return {
+				identity: resolvedPackage.name,
+				source: source,
+				root: root,
+				buildDirectory: Path.join([root, buildTree])
+			};
+		}
+		return {
+			identity: resolvedPackage.name,
+			source: source,
+			root: null,
+			buildDirectory: Path.join([context.layout.packageRoot(resolvedPackage.name), buildTree])
+		};
+	}
+
+	/** The packages with a CMake project that `resolvedPackage` depends on, directly or not, by name. */
+	static function cmakeDependencies(resolvedPackage:ResolvedPackage, context:LoweringContext):Array<ResolvedPackage> {
+		var project = context.project;
+		if (project == null)
+			throw new InternalError('Package "${resolvedPackage.name}" is lowered without its project');
+		var found:Map<String, ResolvedPackage> = [], seen:Map<String, Bool> = [];
+		function visit(names:Array<String>) {
+			for (name in names) {
+				var dependency = project.packages.get(name);
+				if (dependency == null || seen.exists(name))
+					continue;
+				seen.set(name, true);
+				var native = dependency.manifest.native;
+				if (native != null && native.cmake != null)
+					found.set(name, dependency);
+				visit(dependency.dependencies);
+			}
+		}
+		visit(resolvedPackage.dependencies);
+		var names = [for (name in found.keys()) name];
+		names.sort(Reflect.compare);
+		return [for (name in names) found.get(name)];
+	}
+
+	static function buildAction(identity:String, context:LoweringContext):ActionId
+		return new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}');
+
+	/**
+	 * Run paths for a cached tree's libraries: published copies resolve their own siblings beside themselves, and the
+	 * libraries of the packages they build on in those packages' published directories beside theirs. An absolute
+	 * build-tree run path would load another copy from the cache, splitting native handle registries between the two.
+	 */
+	static function publishedRunPath(context:LoweringContext, dependencies:Array<ResolvedPackage>):Array<String> {
+		var origin = switch context.environment.target.os {
+			case TargetOs.Linux: "$ORIGIN";
+			case TargetOs.MacOS: "@loader_path";
+			case _: null;
+		}
+		if (origin == null)
+			return [];
+		// A project's packages publish into sibling directories.
+		var paths = [origin].concat([
+			for (dependency in dependencies)
+				origin + "/../" + Path.withoutDirectory(context.layout.packageRoot(dependency.name))
 		]);
+		return [
+			"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON",
+			"-DCMAKE_INSTALL_RPATH=" + paths.join(";"),
+			"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+		];
 	}
 
 	/**

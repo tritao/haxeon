@@ -72,14 +72,17 @@ class NativeCache {
 		return real;
 	}
 
-	/** The tree of a package's CMake project: `cmake*` holds the build and `out` the libraries it produces. */
+	/**
+	 * The tree of a package's CMake project: `cmake*` holds the build and `out` the libraries it produces. `dependencies` are
+	 * the trees of the packages it builds on, which its configure finds (`CMAKE_PREFIX_PATH`).
+	 */
 	public static function treeRoot(root:String, layout:TargetLayout, environment:BuildEnvironment,
 			resolvedPackage:ResolvedPackage, source:String,
-			target:String):String {
+			target:String, dependencies:Array<String>):String {
 		// What decides a tree's configuration: the source, the target and profile, the SDK (CMAKE_PROJECT_INCLUDE and the pinned
-		// tools come from it) and the compilers. The configure arguments are the same for every project that
-		// reaches a package (NativeKit modules are chosen by the packages' own CMakeLists, not by arguments), so nothing else
-		// of a project belongs here.
+		// tools come from it), the compilers and the trees it builds on. The configure arguments are the same for every project
+		// that reaches a package (NativeKit modules are chosen by the packages' own CMakeLists, not by arguments), so nothing
+		// else of a project belongs here.
 		var fullSource = canonical(source),
 			home = scriptHome == null ? "" : canonical(scriptHome),
 			compilers = [for (name in ["CC", "CXX", "VCToolsVersion", "VisualStudioVersion"]) name + "="
@@ -91,7 +94,7 @@ class NativeCache {
 			Std.string(environment.profile),
 			home,
 			compilers
-		].join("\n");
+		].concat(dependencies).join("\n");
 		// Case-insensitive file systems (Windows, macOS) reach one directory by several spellings.
 		if (Sys.systemName() == "Windows" || Sys.systemName() == "Mac")
 			identity = identity.toLowerCase();

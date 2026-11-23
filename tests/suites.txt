@@ -112,6 +112,7 @@ formatter-integration            ci          -- tests/integration/test-haxeon-fo
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh
 native-cmake-library             ci          -- bash tests/integration/test-native-cmake-library.sh
 native-cmake-libraries           ci          -- bash tests/integration/test-native-cmake-libraries.sh
+native-cmake-dependency          ci          -- bash tests/integration/test-native-cmake-dependency.sh
 native-call-integration          ci          -- tests/integration/test-native-call.sh
 hxi-call-integration             ci          -- tests/integration/test-hxi-call.sh
 world-native-record-layout-integration ci    -- tests/integration/test-world-native-record-layout.sh

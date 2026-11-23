@@ -104,7 +104,7 @@ Paths are relative to the manifest's directory.
 | `outputDir` | string | `"build"` | Where builds go. |
 | `dependencies.NAME` | string or table | | One dependency. A version range alone (`ui = "^0.3"`) is a release of the `haxeon` registry, the same as `{ registry = "haxeon", version = "^0.3" }`. A table names its source: `path`, `workspace`, `git` + `rev`, `registry` + `version`, or `haxelib` + `version`. |
 | `patch.REGISTRY.NAME` | table | | `{ path = "DIR" }`: resolve the registry package `NAME` from a local directory instead, without changing the dependencies that name it, as Cargo's `[patch]` (`[patch.haxeon]` below). Only the root project's patches apply. |
-| `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). |
+| `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). A CMake project finds those of the packages it depends on: in an app's graph their targets, otherwise their build directories in `CMAKE_PREFIX_PATH`, for `find_package` of a config each leaves there. |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
 | `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program ([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)). |
 | `android` | table | | `applicationId` and `label` of the Android app ([ANDROID.md](ANDROID.md)). |
