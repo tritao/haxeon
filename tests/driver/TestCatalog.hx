@@ -246,6 +246,7 @@ class TestCatalog {
 		"FieldAssignmentContextMain",
 		"NullArrayContextMain",
 		"DiagnosticLocationMain",
+		"MissingImportMain",
 		"BindingAnalysisMain",
 		"ImplicitConstructorMain",
 		"ClosureEffectsMain",
@@ -310,6 +311,7 @@ class TestCatalog {
 	];
 
 	static final toolingMains = [
+		"CliHelpMain",
 		"FormatterMain",
 		"FormatterGoldenMain",
 		"UnusedImportsMain",

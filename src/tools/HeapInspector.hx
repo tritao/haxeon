@@ -11,7 +11,7 @@ import sys.io.Process;
 class HeapInspector {
 	public static function run(arguments:Array<String>):Int {
 		if (arguments.length == 0 || arguments.shift() != "inspect")
-			throw new InternalError("Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR");
+			throw new InternalError(tools.CliHelp.HEAP_INSPECT_USAGE);
 		var paths:Array<String> = [],
 			report:Null<String> = null,
 			capture:Null<String> = null;
@@ -49,7 +49,7 @@ class HeapInspector {
 			];
 		}
 		if (paths.length != 2)
-			throw new InternalError("Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR");
+			throw new InternalError(tools.CliHelp.HEAP_INSPECT_USAGE);
 		var bytecode = FileSystem.fullPath(paths[0]),
 			dump = FileSystem.fullPath(paths[1]);
 		var home = build.HaxeonSdk.current();

@@ -118,6 +118,52 @@ class ModuleSourceLoader {
 		return state;
 	}
 
+	/** Uses a private loader so diagnostic searches cannot populate the build’s lookup caches. */
+	public function visitSources(matches:String->Bool, visit:ModuleState->Void):Void {
+		var seen:Map<String, ModuleState> = [];
+		var loader = copy();
+		for (root in loader.roots)
+			loader.visitDirectory(root.path, "", root.packagePrefix, matches, seen, visit, []);
+	}
+
+	function visitDirectory(directory:String, packageName:String, packageRoot:Null<String>, matches:String->Bool,
+			seen:Map<String, ModuleState>, visit:ModuleState->Void, ancestors:Array<String>):Void {
+		var real = FileSystem.fullPath(directory);
+		if (ancestors.indexOf(real) >= 0)
+			return;
+		var entries = listing(directory);
+		if (entries == null)
+			return;
+		ancestors.push(real);
+		var packageSegment = ~/^[a-z_][a-zA-Z0-9_]*$/,
+			moduleFile = ~/^([a-zA-Z_][a-zA-Z0-9_]*)\.hx$/,
+			prefix = packageName.length == 0 ? "" : packageName + ".";
+		for (entry in entries.order) {
+			var path = directory + "/" + entry;
+			if (packageSegment.match(entry) && FileSystem.isDirectory(path)) {
+				visitDirectory(path, prefix + entry, packageRoot, matches, seen, visit, ancestors);
+			} else if (entry != "import.hx" && moduleFile.match(entry) && !FileSystem.isDirectory(path)) {
+				var relative = prefix + moduleFile.matched(1);
+				var names = packageRoot == null ? [relative] : [packageRoot + "." + relative];
+				if (packageRoot != null && StringTools.startsWith(relative, packageRoot + "."))
+					names.push(relative);
+				try {
+					if (!matches(sys.io.File.getContent(path)))
+						continue;
+					for (name in names)
+						if (!seen.exists(name)) {
+							var state = load(name, seen);
+							if (state != null)
+								visit(state);
+						}
+				} catch (_:haxe.Exception) {
+					// An inaccessible, changing or shadowed file cannot provide a reliable suggestion.
+				}
+			}
+		}
+		ancestors.pop();
+	}
+
 	/** Whether a standard library root holds module `name`, whether or not this build loads it. */
 	public function isStandardModule(name:String):Bool {
 		var relative = name.split(".").join("/") + ".hx";

@@ -1,6 +1,8 @@
 package compiler.types.typing;
 
 import compiler.core.AllocationMeter;
+import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
@@ -918,7 +920,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				classSemanticSubstitutions),
 				interfaceName = BodyTyper.inheritanceName(interfaceType);
 			if (!session.interfaceDecls.exists(interfaceName) && !StructProperties.isConstraintType(interfaceInstance))
-				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
+				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedInterface, interfaceName,
+					classDecl.span));
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
 		var declaredType = TInstance(NominalKind.Class, classDecl.name, [
@@ -1055,7 +1058,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		};
 		var contract = session.interfaceDecls.get(interfaceName);
 		if (contract == null)
-			BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', declaration.span);
+			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedInterface, interfaceName,
+				declaration.span));
 		var interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceType);
 		for (base in contract.bases)
 			validateEnumInterface(declaration, session.declarations.resolve(base, contract.span,
@@ -2119,7 +2123,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
 				base = BodyTyper.inheritanceName(baseType);
 			if (!session.interfaceDecls.exists(base) && !StructProperties.isConstraintType(baseInstance))
-				BodyTyper.fail("E1007", 'Unknown interface "$base"', span);
+				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedInterface, base, span));
 			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
 		}
 		InterfaceProperties.validateImplementation(session, bodyTyper, classDecl, interfaceDecl,

@@ -175,8 +175,9 @@ class HaxeonCli {
 		}
 
 		var command = arguments.shift();
-		if (helpRequested(command, arguments)) {
-			Sys.println(CliHelp.command(command));
+		var help = requestedHelp(command, arguments);
+		if (help != null) {
+			Sys.println(help);
 			Sys.exit(0);
 		}
 		try {
@@ -212,7 +213,7 @@ class HaxeonCli {
 				case "ffi": ffi(arguments);
 				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
 				case "version", "--version": version();
-				case "help" if (arguments.length > 0): commandHelp(arguments[0]);
+				case "help" if (arguments.length > 0): commandHelp(arguments.join(" "));
 				case "help", "--help", "-h": usage();
 				case _ if (ScriptRun.isScript(command)): runScript(command, arguments);
 				case _ if (HaxeArguments.isHaxeArgument(command)): haxeCommandLine([command].concat(arguments));
@@ -2112,22 +2113,25 @@ class HaxeonCli {
 	static function executableSuffix():String
 		return Sys.systemName() == "Windows" ? ".exe" : "";
 
-	/**
-	 * Whether `haxeon COMMAND ARGUMENTS` asks for the command's help: `-h` or `--help` among its options. A command that hands its
-	 * arguments to another program (a script, the language server, the FFI tools) is asked only by its first argument.
-	 */
-	static function helpRequested(command:String, arguments:Array<String>):Bool {
-		if (CliHelp.command(command) == null || command == "help")
-			return false;
-		var forwards = ["lsp", "ffi", "dev", "heap", "lint"].indexOf(command) >= 0
+	/** Resolves help before dispatch, without consuming options forwarded to a script or tool. */
+	static function requestedHelp(command:String, arguments:Array<String>):Null<String> {
+		if (arguments.length > 1 && (arguments[1] == "--help" || arguments[1] == "-h")) {
+			var subcommand = CliHelp.command(command + " " + arguments[0]);
+			if (subcommand != null)
+				return subcommand;
+		}
+		var help = CliHelp.command(command);
+		if (help == null)
+			return null;
+		var forwards = ["lsp", "ffi", "dev", "heap", "lint", "help"].indexOf(command) >= 0
 			|| (command == "run" && arguments.length > 0 && ScriptRun.isScript(arguments[0]));
 		for (argument in (forwards ? arguments.slice(0, 1) : arguments)) {
 			if (argument == "--")
 				break;
 			if (argument == "--help" || argument == "-h")
-				return true;
+				return help;
 		}
-		return false;
+		return null;
 	}
 
 	/** One line for a mistyped command, with the closest command when there is one. */

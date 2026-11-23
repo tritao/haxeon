@@ -40,6 +40,7 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedSwitchArrayElement;
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.types.typing.NullSafety.NullSafetyUse;
@@ -2027,10 +2028,12 @@ class BodyTyper implements BodyTyping {
 								return EnumAbstractValues.typed(this, unqualifiedAbstract, value, span);
 					var thisType = scope.receiverType();
 					if (thisType == null)
-						fail("E1005", 'Unknown variable "$name"', span);
+						throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+							span));
 					var field = findFieldType(thisType, name);
 					if (field == null)
-						fail("E1005", 'Unknown variable "$name"', span);
+						throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+							span));
 					typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 				} else {
 					var parts = splitPath(name),

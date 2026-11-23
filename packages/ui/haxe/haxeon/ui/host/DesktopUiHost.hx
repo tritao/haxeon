@@ -571,9 +571,9 @@ class DesktopUiHost {
 										record.gcSeconds = record.gcSecondsTotal - gcMicrosBefore / 1000000.0;
 									}
 									if (session.state == UiHostLifecycle.Failed) active = false;
-									if (options.captureDirectory != null && options.frameLimit > 0
-										&& captureState.readyFrames >= options.frameLimit) {
-										writeDiagnostics(options, cast liveRuntime.app(),
+									if (options.frameLimit > 0 && captureState.readyFrames >= options.frameLimit) {
+										if (options.captureDirectory != null) writeDiagnostics(options, window,
+											cast liveRuntime.app(),
 											cast liveRuntime.frameRenderer(), liveRuntime,
 											eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
 										session.stop();
@@ -583,9 +583,9 @@ class DesktopUiHost {
 									var wantsContinuousFrames = !needsAnimationFrame && continueFrames != null
 										&& continueFrames();
 									if (active && session.state == UiHostLifecycle.Running
-										&& (options.captureDirectory != null && options.frameLimit > 0
+										&& (options.frameLimit > 0
 										|| needsAnimationFrame || wantsContinuousFrames)) {
-										if (options.captureDirectory != null && options.frameLimit > 0)
+										if (options.frameLimit > 0)
 											scheduleFrameWithReason("capture");
 										else if (needsAnimationFrame)
 											scheduleFrameWithReason("animation");
@@ -684,7 +684,8 @@ class DesktopUiHost {
 					if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0
 						&& Sys.time() - captureState.startedAt >= options.captureSeconds
 						&& (script == null || script.complete && scriptedCount == 0)) {
-						writeDiagnostics(options, cast liveRuntime.app(), cast liveRuntime.frameRenderer(), liveRuntime,
+						writeDiagnostics(options, window, cast liveRuntime.app(), cast liveRuntime.frameRenderer(),
+							liveRuntime,
 							eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
 						session.stop();
 					}
@@ -824,7 +825,7 @@ class DesktopUiHost {
 	static function noFunctions(_:Dynamic, value:Dynamic):Dynamic
 		return Reflect.isFunction(value) ? "<function>" : value;
 
-	static function writeDiagnostics(options:DesktopUiHostOptions,
+	static function writeDiagnostics(options:DesktopUiHostOptions, window:WindowHandle,
 			application:DesktopUiApplication, renderer:Renderer, state:UiHostRuntime,
 			events:Array<String>, frames:Array<Dynamic>, eventCounts:Map<String, Int>,
 			frameRequestCounts:Map<String, Int>, loopTiming:Dynamic):Void {
@@ -875,11 +876,18 @@ class DesktopUiHost {
 			[for (event in events) Json.stringify({event: event})].join("\n") + "\n");
 		File.saveContent(directory + "/frame-timeline.jsonl",
 			[for (frame in frames) Json.stringify(frame)].join("\n") + "\n");
-		var screenshot = directory + "/frame.png";
-		var screenshotResult = Sys.command("import", ["-window", options.title, screenshot]);
-		if (screenshotResult != 0)
-			File.saveContent(directory + "/screenshot-error.txt",
-				"ImageMagick import could not capture the application window (exit " + screenshotResult + ").\n");
+		if (Sys.systemName() == "Linux") {
+			var nativeWindow = NativeKit.nk_window_get_native(window);
+			if (nativeWindow.status != Result.Ok) {
+				File.saveContent(directory + "/screenshot-error.txt", NativeKit.nk_last_error() + "\n");
+			} else if (nativeWindow.out_native.get_kind() == NativeWindowKind.X11) {
+				var xid = nativeWindow.out_native.get_window();
+				var status = Sys.command("import", ["-window", Std.string(xid), directory + "/frame.png"]);
+				if (status != 0)
+					File.saveContent(directory + "/screenshot-error.txt",
+						'ImageMagick import could not capture the application window (exit $status).\n');
+			}
+		}
 		Sys.println("diagnostics captured in " + directory);
 	}
 

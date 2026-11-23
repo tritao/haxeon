@@ -387,7 +387,10 @@ class FrontendCompilation {
 					reachableState = parseReached(build, reachableState.name);
 				reachability.includeDependencies(reachableState);
 			}
-			names = reachability.finish(token);
+			try names = reachability.finish(token) catch (error:CompileError) {
+				context.moduleAnalyzer.suggestImports(error.diagnostics);
+				throw error;
+			}
 			var initializationStartedAt = now();
 			graph.rebuild(modules);
 			// Haxe's type order: modules by path, each module's classes as it declares them (`StaticInitializationOrder`).
@@ -491,6 +494,7 @@ class FrontendCompilation {
 			context.state.semanticProgram = semantic;
 			semantic.declarations.bindReads(null);
 		} catch (error:CompileError) {
+			context.moduleAnalyzer.suggestImports(error.diagnostics);
 			// Typing recovers from a failed body and goes on, so the error can carry one diagnostic per failed body: each goes to
 			// the module of its file.
 			for (diagnostic in error.diagnostics)

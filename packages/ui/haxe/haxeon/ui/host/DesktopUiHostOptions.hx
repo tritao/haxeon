@@ -39,8 +39,9 @@ class DesktopUiHostOptions extends UiHostOptions {
 
 	/**
 	 * Applies the host's standard command-line flags, so any app can be run for a number of frames, captured or driven by a
-	 * script without code of its own, and returns the options: `--frames=N` (stop after N frames), `--capture=DIR` (write
-	 * the last frame and diagnostics to DIR), `--capture-seconds=S` (capture after S seconds instead) and
+	 * script without code of its own, and returns the options: `--frames=N` (stop after N rendered frames, requesting
+	 * redraws while idle), `--capture=DIR` (write diagnostics and, on X11, a window image to DIR),
+	 * `--capture-seconds=S` (capture after S seconds instead) and
 	 * `--input-script=PATH` (timed input, `ScriptedInput`). Other arguments are the app's and are left alone.
 	 */
 	public function withArguments(arguments:Array<String>):DesktopUiHostOptions {

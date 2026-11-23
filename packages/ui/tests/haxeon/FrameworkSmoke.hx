@@ -162,6 +162,9 @@ import haxeon.ui.widgets.text.TextEditorState;
 import haxeon.ui.widgets.text.TextEditorHistoryKind;
 import haxeon.ui.widgets.text.TextEditorDiagnostics;
 import haxeon.ui.widgets.text.TextArea;
+import haxeon.ui.widgets.navigation.BottomBar;
+import haxeon.ui.widgets.navigation.NavigationController;
+import haxeon.ui.widgets.navigation.NavigationStack;
 import haxeon.ui.widgets.text.TextField;
 import haxeon.ui.widgets.text.TextSelection;
 import haxeon.ui.widgets.text.EditTransaction;
@@ -950,6 +953,7 @@ class FrameworkSmoke {
 		}
 		MenuInteractionTests.run(context);
 		if (!retainedStateUsageValid()) return 305;
+		checkNavigationThemeSwap(fonts);
 		if (!themeSwapChangesStyleRevision()) return 306;
 		if (!signalsTrackOnlyReaders()) return 307;
 		if (ReactivePruneSmoke.run() != 42) throw "Pruned reactive updater ownership failed";
@@ -4578,6 +4582,25 @@ class FrameworkSmoke {
 		var next = store.changes();
 		return next == first && next.length == 1
 			&& next[0].id == id.value && next[0].before == StyleState.Hovered && next[0].after == StyleState.Pressed;
+	}
+
+	static function checkNavigationThemeSwap(fonts:FontCollection):Void {
+		var light = Theme.light();
+		var dark = Theme.dark();
+		var context = new UiContext(LayoutSession.create(), fonts, light);
+		var bar = new BottomBar("tabs", [], "", _ -> {});
+		var stack = new NavigationStack("screens", new NavigationController({id: "home", build: () -> bar}));
+		for (theme in [light, dark, light]) {
+			context.setTheme(theme);
+			var root = context.submitCached(() -> stack, new LayoutFrame(256, 192), "navigation");
+			var entry = root.children[0], barNode = entry.children[0];
+			if (root.layout.style.background != theme.tokens.surface
+				|| entry.layout.style.background != theme.tokens.surface
+				|| barNode.layout.style.background != theme.tokens.navigationBackground
+				|| barNode.children[0].layout.style.background != theme.tokens.border)
+				throw "Navigation surfaces did not follow the active theme";
+		}
+		context.dispose();
 	}
 
 	/** Retained views compare this fingerprint, so a light-to-dark swap must never reuse one. */

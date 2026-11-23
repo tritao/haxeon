@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.QualifiedName;
+import compiler.core.UnresolvedNameKind;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleSourceLoader;
 import compiler.modules.ModuleState;
@@ -51,6 +52,77 @@ class ModuleAnalyzer {
 			for (name => state in modules)
 				if (state.ast != null)
 					indexDeclarations(name, state.parsedAst());
+	}
+
+	/** Suggests import paths for unresolved bare names, including declarations in modules the build never opened. */
+	public function suggestImports(diagnostics:Array<compiler.core.Diagnostic>):Void {
+		var pending = [];
+		for (diagnostic in diagnostics) {
+			var unresolved = diagnostic.unresolvedName;
+			if (unresolved == null)
+				continue;
+			var kind = unresolved.kind, name = unresolved.name;
+			var namespace = ModulePath.packageName(name);
+			if (namespace != null) {
+				// The dependency graph prefixes an unresolved bare name with the source module's package.
+				if (kind != UnresolvedNameKind.WantedModule
+					|| !Lambda.exists(modules, state -> state.source.path == diagnostic.span.file.path
+					&& ModulePath.packageName(state.name) == namespace))
+					continue;
+				name = QualifiedName.last(name);
+			}
+			pending.push({diagnostic: diagnostic, kind: kind, name: name, paths: []});
+		}
+		if (pending.length == 0)
+			return;
+
+		function inspect(state:ModuleState):Void {
+			var ast = state.ast == null ? parseText(state).ast : state.parsedAst();
+			for (item in pending) {
+				if (state.source.path == item.diagnostic.span.file.path)
+					continue;
+				var name = item.name;
+				var isClass = Lambda.exists(ast.classes, decl -> decl.name == name && !decl.isPrivate);
+				var isInterface = Lambda.exists(ast.interfaces, decl -> decl.name == name);
+				var isAbstract = Lambda.exists(ast.abstracts, decl -> decl.name == name);
+				var type = switch item.kind {
+					case WantedFunction: false;
+					case WantedClass: isClass || isAbstract;
+					case WantedInterface: isInterface;
+					case WantedBaseClass: isClass;
+					case WantedType, WantedVariable, WantedModule: isClass || isInterface || isAbstract
+						|| Lambda.exists(ast.aliases, decl -> decl.name == name && !decl.isPrivate)
+						|| Lambda.exists(ast.enums, decl -> decl.name == name);
+				};
+				if (type || ((item.kind == UnresolvedNameKind.WantedVariable
+					|| item.kind == UnresolvedNameKind.WantedFunction)
+					&& Lambda.exists(ast.functions, decl -> decl.name == name && decl.isPublic != false))) {
+					var path = ModuleCanonicalizer.sourceDeclarationPath(state.name, name);
+					if (path != name && item.paths.indexOf(path) < 0)
+						item.paths.push(path);
+				}
+			}
+		}
+
+		function matches(text:String):Bool {
+			for (item in pending)
+				if (text.indexOf(item.name) >= 0)
+					return true;
+			return false;
+		}
+
+		for (state in modules)
+			if (matches(state.source.text))
+				try inspect(state) catch (_:CompileError) {}
+		sourceLoader.visitSources(matches, state -> {
+			if (!modules.exists(state.name))
+				inspect(state);
+		});
+		for (item in pending) {
+			item.paths.sort(Reflect.compare);
+			for (path in item.paths)
+				item.diagnostic.notes.push('import $path;');
+		}
 	}
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>,

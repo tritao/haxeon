@@ -300,8 +300,9 @@ haxeon run
 Click a task to select it, tick Done, type a title and press Enter, then switch to Settings and turn on the dark theme.
 
 An app's window also takes a few options after `--` that let a script run it without a person: `--frames=N` stops after N
-drawn frames, `--capture=DIR` writes the last frame and diagnostics to DIR (on Linux the picture too, `frame.png`, taken
-with ImageMagick's `import`), and `--input-script=PATH` plays timed clicks and typing from a JSON file. Under Linux without a
+rendered frames, requesting redraws as needed even when the app is idle. `--capture=DIR` writes diagnostics to DIR
+and on X11 saves a picture of the app window as `frame.png`, taken
+with ImageMagick's `import`, and `--input-script=PATH` plays timed clicks and typing from a JSON file. Under Linux without a
 display, run it with `xvfb-run`:
 
 ```sh

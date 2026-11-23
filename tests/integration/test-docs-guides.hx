@@ -142,6 +142,29 @@ function firstApp(root:String, project:String):Void {
 	])))
 		Script.fail("FAIL: docs/guides/examples/01-first-app/my_app/haxeon.toml is not the manifest haxeon create my_app writes; "
 			+ "update the example and the guide");
+	if (hasXvfb()) {
+		var executable = appFiles(Path.join([project, "build", PLATFORM, "app"])).executable;
+		log = Path.join([project, "idle-frames.log"]);
+		expectStatus(Script.run("xvfb-run", ["-a", "timeout", "20", executable, "--frames=10"],
+			{cwd: project, log: log}), 0, log, "running an idle window for ten frames without capture");
+
+		if (Script.run("sh", ["-c", "command -v xmessage && command -v xwininfo"], {log: log}) == 0) {
+			log = Path.join([project, "capture-window.log"]);
+			var capture = Path.join([project, "capture-window"]);
+			var decoy = "xmessage -title 'My App' -geometry 173x129+850+320 decoy & pid=$!\n"
+				+ "trap 'kill $pid' EXIT\n"
+				+ "for i in {1..50}; do xwininfo -name 'My App' >/dev/null 2>&1 && break; sleep 0.1; done\n"
+				+ "xwininfo -name 'My App' >/dev/null || exit 1\n"
+				+ 'timeout 20 "$1" --frames=10 "$2"';
+			expectStatus(Script.run("xvfb-run", ["-a", "bash", "-c", decoy, "_", executable, '--capture=$capture'],
+				{cwd: project, log: log}), 0, log, "capturing the app with a same-title window already open");
+			var reference = File.getBytes(Path.join([project, "capture-run", "frame.png"]));
+			var actual = File.getBytes(Path.join([capture, "frame.png"]));
+			// A PNG's IHDR stores its width and height immediately after the chunk type.
+			if (actual.sub(16, 8).compare(reference.sub(16, 8)) != 0)
+				Script.fail("FAIL: capture dimensions changed when a same-title window was open");
+		}
+	}
 	log = Path.join([project, "release.log"]);
 	expectStatus(haxeon(["build", "--build-mode=release"], project, log), 0, log, "haxeon build --build-mode=release");
 	var built = appFiles(Path.join([project, "build", PLATFORM, "app"]));

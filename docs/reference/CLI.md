@@ -90,7 +90,8 @@ platform the app does not list, or without its
 runner, is a usage error that names `haxeon create .`.
 
 An app's window takes the host's standard flags after `--`, so a test or a script can run any app without code of its
-own: `--frames=N` stops after N frames, `--capture=DIR` writes the last frame and diagnostics to DIR,
+own: `--frames=N` stops after N rendered frames, requesting redraws while idle. `--capture=DIR` writes diagnostics to DIR
+and on X11 saves an image of the app window as `frame.png`.
 `--capture-seconds=S` captures after S seconds instead, and `--input-script=PATH` plays timed input
 (`haxeon.ui.host.DesktopUiHostOptions.withArguments`):
 

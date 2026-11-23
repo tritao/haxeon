@@ -20,6 +20,11 @@ enum DiagnosticSeverity {
 	Warning;
 }
 
+typedef UnresolvedName = {
+	final kind:UnresolvedNameKind;
+	final name:String;
+}
+
 /** Structured compiler feedback tied to an exact source span. */
 class Diagnostic {
 	public final code:String;
@@ -27,16 +32,25 @@ class Diagnostic {
 	public final severity:DiagnosticSeverity;
 	public final span:SourceSpan;
 	public final fixes:Array<DiagnosticFix>;
+	public final unresolvedName:Null<UnresolvedName>;
+	public final notes:Array<String> = [];
 
-	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>) {
+	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>,
+			?unresolvedName:UnresolvedName) {
 		// A name an import made ambiguous resolves to a marker that matches nothing, so whichever check rejects it first
 		// reports the ambiguity instead, at its own span; the marker never reaches a message.
 		var ambiguity = AmbiguousName.describe(message);
 		this.code = ambiguity == null ? code : AmbiguousName.CODE;
 		this.message = ambiguity == null ? message : ambiguity;
 		this.span = span;
+		this.unresolvedName = ambiguity == null ? unresolvedName : null;
 		this.severity = severity;
 		this.fixes = fixes == null ? [] : fixes;
+	}
+
+	public static function unresolved(code:String, kind:UnresolvedNameKind, name:String, span:SourceSpan):Diagnostic {
+		var prefix = kind == UnresolvedNameKind.WantedModule ? "Missing" : "Unknown";
+		return new Diagnostic(code, '$prefix $kind "$name"', span, null, null, {kind: kind, name: name});
 	}
 
 	/** Human-readable location with one-based line and column, not a byte offset. */
@@ -44,6 +58,8 @@ class Diagnostic {
 		var location = span.file.lineColumnAt(span.start);
 		return '${span.file.path}:${location.line}:${location.column}: $code: $message';
 	}
+	public function formatNotes():String
+		return [for (note in notes) '\n  help: $note'].join("");
 }
 
 /**
@@ -68,5 +84,5 @@ class CompileError extends haxe.Exception {
 
 	/** Every diagnostic, one per line. */
 	public function formatAll():String
-		return [for (item in diagnostics) item.format()].join("\n");
+		return [for (item in diagnostics) item.format() + item.formatNotes()].join("\n");
 }

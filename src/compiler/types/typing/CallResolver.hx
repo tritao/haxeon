@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
@@ -1624,7 +1625,7 @@ class CallResolver {
 			var dot = name.lastIndexOf(".");
 			if (dot > 0 && isStaticOwner(name.substr(0, dot)))
 				throw MissingMember.field(staticOwner(name.substr(0, dot)), name.substr(dot + 1), span);
-			fail("E1007", 'Unknown function "$name"', span);
+			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedFunction, name, span));
 		}
 		// trace takes any value and any further values, as Haxe's `trace(v:Dynamic, ...rest)` does (the rest become the position's
 		// customParams), and prints a line in haxe.Log's form: "path/File.hx:12: v, p1, p2", each value as Std.string gives it and
@@ -2364,7 +2365,8 @@ class CallResolver {
 					if (!session.classDecls.exists(targetName)
 						&& !session.interfaceDecls.exists(targetName)
 						&& !session.enumDecls.exists(targetName))
-						fail("E1007", 'Unknown type "$targetName"', span);
+						throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedType, targetName,
+							span));
 					// Runtime type tests name a declaration, not an instantiation; generic arguments are erased here.
 					if (session.classDecls.exists(targetName)) TInstance(NominalKind.Class, targetName,
 						[
@@ -3264,7 +3266,7 @@ class CallResolver {
 			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope, expectedType);
 		if (hasExplicitTypeArguments) {
 			if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
-				fail("E1007", 'Unknown class "$typeName"', span);
+				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedClass, typeName, span));
 			var classDecl = session.classDecls.required(typeName),
 				valueType = session.representation.semanticType(AppliedType(typeName, typeArguments), span,
 					session.currentContext.typeSubstitutions),
@@ -3285,7 +3287,7 @@ class CallResolver {
 		}
 		if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName))
 			|| session.interfaceDecls.exists(typeName))
-			fail("E1007", 'Unknown class "$typeName"', span);
+			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedClass, typeName, span));
 		var classDecl = session.classDecls.exists(typeName) ? session.classDecls.required(typeName) : null;
 		if (classDecl != null && classDecl.typeParameters.length > 0)
 			return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);

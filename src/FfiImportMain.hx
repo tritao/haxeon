@@ -136,7 +136,7 @@ class FfiImportMain {
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw new InternalError("Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>");
+			throw new InternalError(tools.CliHelp.FFI_IMPORT_USAGE);
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library,
 			interfaceName, dependencies,
 			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual,

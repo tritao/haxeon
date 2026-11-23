@@ -4,6 +4,7 @@ import compiler.types.NominalInheritance;
 import compiler.types.analysis.BindingWalker;
 
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
@@ -556,7 +557,8 @@ class StatementTyper {
 				if (owner != null)
 					staticField = bodyTyper.findStaticFieldNullable(owner, name);
 				if (staticField == null)
-					fail("E1005", 'Unknown variable "$name"', span);
+					throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+						span));
 				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, name, span);
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, name, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),

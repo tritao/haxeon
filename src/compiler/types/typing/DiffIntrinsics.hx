@@ -1,5 +1,8 @@
 package compiler.types.typing;
 
+import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
+import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstClass;
@@ -166,8 +169,7 @@ class DiffIntrinsics {
 				}
 				return BlockExpression(statements, TemporaryVariable(mask, span), span);
 			default:
-				fail("E1007", 'Unknown function "$name"', span);
-				return null;
+				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedFunction, name, span));
 		}
 	}
 
@@ -291,7 +293,7 @@ class DiffIntrinsics {
 	static function classNamed(session:TypingSession, name:String, span:SourceSpan):AstClass {
 		var declaration = session.classDecls.get(name);
 		if (declaration == null)
-			fail("E1007", 'Unknown class "$name"', span);
+			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedClass, name, span));
 		return declaration;
 	}
 

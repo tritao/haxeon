@@ -7,7 +7,7 @@ import sys.FileSystem;
 
 /** How a compile prints its diagnostics (`--diagnostic-format=`). */
 enum abstract DiagnosticFormat(String) to String {
-	/** One line each, `Main.hx:2:14: E1002: message`, the path under its source root: what tools and tests read. The default. */
+	/** Each diagnostic starts with `Main.hx:2:14: E1002: message` relative to its source root. Help lines follow when available. */
 	var Short = "short";
 
 	/** For people: `src/Main.hx:2:14: error[E1002]: message`, the path from `--diagnostic-directory`, the line with a caret, and a count. */
@@ -41,7 +41,7 @@ class DiagnosticPrinter {
 	/** Diagnostics that failed the compile; the full format ends them with how many errors there were. */
 	public function errors(diagnostics:Array<Diagnostic>):String {
 		if (request.diagnosticFormat == DiagnosticFormat.Short)
-			return [for (item in diagnostics) item.format()].join("\n");
+			return [for (item in diagnostics) item.format() + item.formatNotes()].join("\n");
 		var count = 0;
 		for (item in diagnostics)
 			if (item.severity == DiagnosticSeverity.Error)
@@ -61,10 +61,10 @@ class DiagnosticPrinter {
 				+ paint(BOLD, diagnostic.message),
 			span = diagnostic.span;
 		if (span == null || span.file.text.length == 0)
-			return label;
+			return label + diagnostic.formatNotes();
 		var location = span.file.lineColumnAt(span.start);
 		return paint(BOLD, '${displayPath(span.file.path)}:${location.line}:${location.column}:') + " " + label + "\n"
-			+ snippet(span, location.line, location.column, accent);
+			+ snippet(span, location.line, location.column, accent) + diagnostic.formatNotes();
 	}
 
 	/** The span's first line, its tabs expanded, with carets under the span (to the line's end when it goes on). */

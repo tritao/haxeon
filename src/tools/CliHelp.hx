@@ -30,6 +30,21 @@ class CliHelp {
 		"  --self-hosted                Compile with bootstrap/compiler.hl",
 	];
 
+	public static final FFI_IMPORT_USAGE =
+		"Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+	public static final FFI_AUDIT_USAGE =
+		"Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+	public static final HEAP_INSPECT_USAGE = "Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR";
+
+	static final WORKSPACE_COMMANDS = ["plan", "build", "test"];
+
+	static final SUBCOMMAND_HELP = [
+		"package check" => "Usage: haxeon package check [--project PATH]",
+		"heap inspect" => HEAP_INSPECT_USAGE,
+		"ffi import" => FFI_IMPORT_USAGE,
+		"ffi audit" => FFI_AUDIT_USAGE
+	];
+
 	static final GROUPS:Array<CommandGroup> = [
 		{
 			title: "Project",
@@ -124,6 +139,9 @@ class CliHelp {
 					details: [
 						"Usage: haxeon run [options] [-- PROGRAM ARGUMENTS]",
 						"       haxeon run SCRIPT.hx [ARGUMENTS]",
+						"",
+						"  Desktop UI app arguments after --: --frames=N (stop after N rendered frames, even while idle),",
+						"  --capture=DIR (write diagnostics and, on X11, an image of the app window).",
 						""
 					].concat(BUILD_OPTIONS).concat([
 						"  --quiet                      Print the build only if it fails",
@@ -160,7 +178,7 @@ class CliHelp {
 					name: "workspace",
 					summary: "Build or test many projects as one build graph",
 					details: [
-						"Usage: haxeon workspace plan|build|test [options]",
+						"Usage: haxeon workspace " + WORKSPACE_COMMANDS.join("|") + " [options]",
 						"",
 						"  --workspace PATH             The workspace file (default materia.workspace.json)",
 						"  --skip-tag TAG, --only NAME  Choose the projects",
@@ -254,7 +272,7 @@ class CliHelp {
 				{
 					name: "package",
 					summary: "Validate the resolved package graph",
-					details: ["Usage: haxeon package check [--project PATH]"]
+					details: [SUBCOMMAND_HELP.get("package check")]
 				}
 			]
 		},
@@ -271,13 +289,13 @@ class CliHelp {
 					summary: "Import C or C++ headers as HXI, or audit their ABI across targets",
 					details: [
 						"Usage: haxeon ffi import ...   (docs/reference/C_HEADER_FFI.md)",
-						"       haxeon ffi audit ... [--capture DIR] [--report PATH]"
+						"       haxeon ffi audit ..."
 					]
 				},
 				{
 					name: "heap",
 					summary: "Inspect a HashLink heap snapshot",
-					details: ["Usage: haxeon heap inspect BYTECODE DUMP"]
+					details: [HEAP_INSPECT_USAGE]
 				},
 				{
 					name: "identity-path",
@@ -327,6 +345,14 @@ class CliHelp {
 
 	/** A command's own help, or null when there is no such command. */
 	public static function command(name:String):Null<String> {
+		var words = name.split(" ");
+		if (words[0] == "dev")
+			return words.length <= 2 ? tools.dev.DevCommand.help(words[1]) : null;
+		if (words.length == 2) {
+			if (words[0] == "workspace" && WORKSPACE_COMMANDS.indexOf(words[1]) >= 0)
+				return StringTools.replace(command("workspace"), WORKSPACE_COMMANDS.join("|"), words[1]);
+			return SUBCOMMAND_HELP.get(name);
+		}
 		for (group in GROUPS)
 			for (command in group.commands)
 				if (command.name == name)

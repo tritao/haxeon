@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
 import compiler.syntax.Ast;
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.core.Source.SourceFile;
@@ -741,11 +742,9 @@ class DeclarationIndex {
 		if (classDecl != null)
 			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class,
 				classDecl.typeParameters.length, span);
-		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name);
-		else {
-			fail('Unknown type "$name"', span);
-			TVoid;
-		};
+		if (PlatformAbi.isType(name))
+			return PlatformAbi.valueType(name);
+		throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedType, name, span));
 	}
 
 	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int,
@@ -1079,7 +1078,8 @@ class DeclarationIndex {
 				var interfaceName = nominalName(resolve(interfaceType, decl.span, substitutions));
 				if (interfaceName == null
 					|| (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
-					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
+					throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedInterface,
+						ModuleCanonicalizer.astTypeName(interfaceType), decl.span));
 			}
 		}
 		for (name in interfaces.withoutReads().keys())
@@ -1359,7 +1359,8 @@ class DeclarationIndex {
 		if (!classes.exists(name)) {
 			if (PlatformAbi.isType(name))
 				return;
-			fail('Unknown base class "$name"', fallbackSpan);
+			throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedBaseClass, name,
+				fallbackSpan));
 		}
 		var decl = classes.get(name);
 		if (visiting.exists(name))
@@ -1377,7 +1378,8 @@ class DeclarationIndex {
 		if (StructProperties.isConstraintName(name))
 			return;
 		if (!interfaces.exists(name))
-			fail('Unknown interface "$name"', fallbackSpan);
+			throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedInterface, name,
+				fallbackSpan));
 		var decl = interfaces.get(name);
 		if (visiting.exists(name))
 			fail('Cyclic interface inheritance involving "$name"', decl.span);
