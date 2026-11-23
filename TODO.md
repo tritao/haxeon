@@ -344,7 +344,7 @@ machine; re-measure on a quiet one before acting on a ratio.
   casts back for nested patterns). Erase only non-regular recursion
   (`E<T>` → `E<Array<T>>`, which never stops specializing); type a regular
   slot with the specialized enum. Classify beside `EnumRecursion`, update
-  `docs/reference/GENERIC_SPECIALIZATION.md`, drop the nested-pattern cast,
+  `docs/internals/GENERIC_SPECIALIZATION.md`, drop the nested-pattern cast,
   add differential tests against Haxe (deep trees, nested patterns,
   `Null<Tree>`, generic functions over `Tree<T>`, a non-regular case still
   erased) and an enum binary-trees benchmark on HashLink and both Wasm

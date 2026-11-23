@@ -308,7 +308,7 @@ distribution need). Deduplicating the section's strings first (a path table, nam
 compression, so the section keeps its format. HashLink's per-instruction line table is part of the bytecode format, not a
 section, and stays as it is.
 
-As built: flag bit 0, the payload being the decoded size then one LZ4 block (docs/reference/HLB_DEBUG_SECTIONS.md); the VM
+As built: flag bit 0, the payload being the decoded size then one LZ4 block (docs/internals/HLB_DEBUG_SECTIONS.md); the VM
 decodes every compressed section at load, which is cheap next to the JIT. The function identities use LZ4 HC level 9 (level 12
 gains 0.5% at five times the time); the opcode spans and source snapshots use LZ4's fast mode, because a development build
 writes them on every rebuild and HC would cost it about 0.6 s on the compiler's own sources. The compiler's own module: release

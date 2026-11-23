@@ -5,10 +5,14 @@ Where a document lives says what kind it is:
 | Folder | Holds | Rule |
 |---|---|---|
 | top level | [ARCHITECTURE.md](ARCHITECTURE.md), [DEVELOPMENT.md](DEVELOPMENT.md) | Describe the tree as it is. |
-| [reference/](reference/) | How to use something, or a contract the code implements | Kept in step with the code. |
+| [reference/](reference/) | How to use Haxeon: commands, the manifest, the language, the libraries | Kept in step with the code. |
+| [internals/](internals/) | Contracts the compiler and runtime implement: formats, protocols, ownership rules | Kept in step with the code. Not published on the site. |
 | [design/](design/) | Design notes, proposals and plans | Starts with a `Status:` line. |
 | [adr/](adr/) | Architecture decision records | Decisions and their status only. |
 | [reports/](reports/) | Dated measurements, experiments and reviews, named `YYYY-MM-topic.md` | Not edited after acceptance. Describes the tree at that date. |
+
+Reference pages are what the site publishes ([design/WEBSITE.md](design/WEBSITE.md)), so they must not link into
+`design/`, `reports/` or `internals/`. A page for people working on Haxeon itself goes in `internals/`.
 
 A plan that is superseded or finished, a log of finished work, and a report on an experiment that was dropped are
 deleted: git keeps them. What still matters moves first into the code's comments, a reference page or a design note.
@@ -38,8 +42,6 @@ Language:
 - [SCOPED_CLEANUP.md](reference/SCOPED_CLEANUP.md): `scoped` variables.
 - [NATIVE_MEMORY.md](reference/NATIVE_MEMORY.md): native values and memory.
 - [C_HEADER_FFI.md](reference/C_HEADER_FFI.md): importing C and C++ headers.
-- [GENERIC_SPECIALIZATION.md](reference/GENERIC_SPECIALIZATION.md): how generic bodies are shared or specialized.
-- [SEMANTIC_TYPE_CONTRACT.md](reference/SEMANTIC_TYPE_CONTRACT.md): nominal types, aliases and implicit conversions.
 
 Libraries:
 
@@ -51,12 +53,22 @@ Libraries:
 Formats and runtime contracts:
 
 - [PATCH_TRANSACTIONS.md](reference/PATCH_TRANSACTIONS.md): the HashLink patch transaction.
-- [HLB_DEBUG_SECTIONS.md](reference/HLB_DEBUG_SECTIONS.md): debug sections in HLB modules.
-- [HLD3_DEBUG_PROTOCOL.md](reference/HLD3_DEBUG_PROTOCOL.md): the debugger handshake extension for patches.
-- [METADATA_OWNERSHIP.md](reference/METADATA_OWNERSHIP.md): who owns runtime metadata across reloads.
-- [HASHLINK_MODULE_RECLAMATION.md](reference/HASHLINK_MODULE_RECLAMATION.md): unloading a whole module.
-- [JIT_NATIVE_PROPERTIES.md](reference/JIT_NATIVE_PROPERTIES.md): no-return natives and JIT intrinsics.
-- [IR_ALLOCATION_REPORT.md](reference/IR_ALLOCATION_REPORT.md): listing what a function can allocate.
+
+## Internals
+
+The compiler:
+
+- [GENERIC_SPECIALIZATION.md](internals/GENERIC_SPECIALIZATION.md): how generic bodies are shared or specialized.
+- [SEMANTIC_TYPE_CONTRACT.md](internals/SEMANTIC_TYPE_CONTRACT.md): nominal types, aliases and implicit conversions.
+- [IR_ALLOCATION_REPORT.md](internals/IR_ALLOCATION_REPORT.md): listing what a function can allocate.
+
+HashLink formats and runtime contracts:
+
+- [HLB_DEBUG_SECTIONS.md](internals/HLB_DEBUG_SECTIONS.md): debug sections in HLB modules.
+- [HLD3_DEBUG_PROTOCOL.md](internals/HLD3_DEBUG_PROTOCOL.md): the debugger handshake extension for patches.
+- [METADATA_OWNERSHIP.md](internals/METADATA_OWNERSHIP.md): who owns runtime metadata across reloads.
+- [HASHLINK_MODULE_RECLAMATION.md](internals/HASHLINK_MODULE_RECLAMATION.md): unloading a whole module.
+- [JIT_NATIVE_PROPERTIES.md](internals/JIT_NATIVE_PROPERTIES.md): no-return natives and JIT intrinsics.
 
 ## Design
 

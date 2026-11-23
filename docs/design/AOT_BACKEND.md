@@ -225,7 +225,7 @@ from. Whether it inlines generated functions into each other follows the build m
   is named. Reading all of `.debug_info` at the first throw cost the AOT-built compiler half a second at start-up, as it
   throws early and catches.
 
-**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/reference/HLB_DEBUG_SECTIONS.md`) are written on
+**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/internals/HLB_DEBUG_SECTIONS.md`) are written on
 every development rebuild and decoded at every load, where speed matters. Platform formats use the platform's standard codec, so
 standard tools keep working: an ELF executable's DWARF is compressed with zlib (`SHF_COMPRESSED`, `ELFCOMPRESS_ZLIB`), which
 gdb, perf and addr2line read; a PDB stays as the linker writes it, uncompressed (DbgHelp and debuggers read no other form; a

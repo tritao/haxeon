@@ -118,7 +118,7 @@ from fused array reads, since string intrinsics were not added. The full four-la
 nine-run measurement, starting at load 3.96; it also verifies every benchmark's output.
 
 Validation passed with the inliner both on and off. Details, mutation evidence and the native audit are in
-[`docs/reference/JIT_NATIVE_PROPERTIES.md`](../../docs/reference/JIT_NATIVE_PROPERTIES.md).
+[`docs/internals/JIT_NATIVE_PROPERTIES.md`](../../docs/internals/JIT_NATIVE_PROPERTIES.md).
 
 Haxeon's IR inliner is on by default (`--no-inline` turns it off). It matters mostly for nbody (0.34s without it)
 and spectral-norm (0.295s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a

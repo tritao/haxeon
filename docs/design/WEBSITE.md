@@ -62,9 +62,9 @@ The table follows README.md; when a platform's status changes there, it changes 
   shown and `main` selectable. Nothing is written twice.
 - **Pages by kind:** tutorials and how-tos (new, under `docs/guides/`), reference (`docs/reference/`), explanation. A
   user page never links into `docs/design/` or `docs/reports/`.
-- **User and internal reference apart.** `docs/reference/` pages about the compiler's internals (`HLB_DEBUG_SECTIONS`,
-  `HLD3_DEBUG_PROTOCOL`, `METADATA_OWNERSHIP`, `SEMANTIC_TYPE_CONTRACT`, `IR_ALLOCATION_REPORT`, `JIT_NATIVE_PROPERTIES`,
-  `HASHLINK_MODULE_RECLAMATION`, `GENERIC_SPECIALIZATION`) move out of what the site publishes.
+- **User and internal reference apart.** Pages about the compiler's and the runtime's internals live in `docs/internals/`
+  (`HLB_DEBUG_SECTIONS`, `HLD3_DEBUG_PROTOCOL`, `METADATA_OWNERSHIP`, `SEMANTIC_TYPE_CONTRACT`, `IR_ALLOCATION_REPORT`,
+  `JIT_NATIVE_PROPERTIES`, `HASHLINK_MODULE_RECLAMATION`, `GENERIC_SPECIALIZATION`), which the site does not publish.
 - **Generated where code is the source:** the CLI reference from `CliHelp`, one page per error code (`E1xxx`) with an
   example, the package and standard library API from doc comments, the compatibility table from the differential tests.
 - **Every code block is compiled in CI**, and run where the page shows its output.
@@ -94,7 +94,7 @@ shows something: the UI Showcase on the home page and, later, a playground.
 - Guides 1 to 5 written and their code compiled in CI.
 - The home page recording, and the UI Showcase on the web.
 - A VS Code extension over the existing language server.
-- The internal reference pages moved out of the published set.
+- The internal reference pages moved out of the published set (done: `docs/internals/`).
 
 ## After launch
 

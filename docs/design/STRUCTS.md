@@ -359,7 +359,7 @@ specialization a canonical runtime type descriptor, sharing its physical layout 
 conformance and survives ordinary array reads and native/reflection escapes. It is per type, not an allocation or side
 table entry per element. Inline enum values keep their statically known type and materialize the same descriptor only at
 a genuine erased boundary. Generic code that constructs or erases such an enum must retain the concrete specialization,
-as described in `../reference/GENERIC_SPECIALIZATION.md`. This descriptor is implemented for boxed enum values; inline enum
+as described in `../internals/GENERIC_SPECIALIZATION.md`. This descriptor is implemented for boxed enum values; inline enum
 representation remains pending.
 
 Concrete enum payload schemas are now retained before erasure, including unused constructors and
@@ -1070,7 +1070,7 @@ Generic owners and functions specialize for struct type arguments, providing unb
 interface-typed value remains a boxed dynamic boundary. Equality and hashing are compiler-known capabilities declared
 through `Equatable` and `Hashable`, so bounds such as `Map<K:Hashable, V>` are checked at compile time. This remains
 separate from the stage 0 UI migration. The specialization policies and escape boundaries are documented in
-[GENERIC_SPECIALIZATION.md](../reference/GENERIC_SPECIALIZATION.md).
+[GENERIC_SPECIALIZATION.md](../internals/GENERIC_SPECIALIZATION.md).
 
 ## Representation on Wasm GC
 

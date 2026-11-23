@@ -6,7 +6,7 @@ this note is its design.
 Follows 2.3 (type variables) and runs beside 2.5 ([LAZY_DECLARATION_TYPING.md](LAZY_DECLARATION_TYPING.md)), with
 which it shares `BodyTyper`. Its representation half applies the model of [INTERFACE_VALUES.md](INTERFACE_VALUES.md)
 to structures, and the dispatchers of erased generic owners
-([GENERIC_SPECIALIZATION.md](../reference/GENERIC_SPECIALIZATION.md)) become one case of it. haxeon-e4, who owns HL
+([GENERIC_SPECIALIZATION.md](../internals/GENERIC_SPECIALIZATION.md)) become one case of it. haxeon-e4, who owns HL
 lowering, reviews the note before it is sliced.
 
 ## Problem
