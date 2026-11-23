@@ -106,7 +106,7 @@ Paths are relative to the manifest's directory.
 | `patch.REGISTRY.NAME` | table | | `{ path = "DIR" }`: resolve the registry package `NAME` from a local directory instead, without changing the dependencies that name it, as Cargo's `[patch]` (`[patch.haxeon]` below). Only the root project's patches apply. |
 | `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). A CMake project finds those of the packages it depends on: in an app's graph their targets, otherwise their build directories in `CMAKE_PREFIX_PATH`, for `find_package` of a config each leaves there. |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
-| `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program ([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)). |
+| `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program, which builds to a module the VM runs; an app builds through its runner projects ([CLI.md](CLI.md)). |
 | `android` | table | | `applicationId` and `label` of the Android app ([ANDROID.md](ANDROID.md)). |
 | `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([CLI.md](CLI.md)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |
@@ -116,7 +116,7 @@ Paths are relative to the manifest's directory.
 ### The `haxeon` registry
 
 A dependency written as a version range alone (`ui = "^0.3"`) comes from the `haxeon` registry, which is part of Haxeon's SDK
-([SDK_LAYOUT.md](../design/SDK_LAYOUT.md)): the first-party packages (`ui`, `platform`, `gpu`, `editor`, `audio`, `animation`,
+(the `registry/` directory of a release, [RELEASES.md](RELEASES.md)): the first-party packages (`ui`, `platform`, `gpu`, `editor`, `audio`, `animation`,
 `nativekit`, `agentkit`, ...), versioned with Haxeon. A release holds them unpacked; a checkout resolves each from its directory
 in `packages/`, so an edit shows on the next build. Packages the SDK's registry lacks come from the source cache's `haxeon` index.
 `haxeon.lock` is the same with either: a release writes and checks each package's checksum; a checkout keeps a lockfile entry

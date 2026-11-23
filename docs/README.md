@@ -13,7 +13,7 @@ Where a document lives says what kind it is:
 | [reports/](reports/) | Dated measurements, experiments and reviews, named `YYYY-MM-topic.md` | Not edited after acceptance. Describes the tree at that date. |
 
 Guides and reference pages are what the site publishes ([design/WEBSITE.md](design/WEBSITE.md)), so they must not link into
-`design/`, `reports/` or `internals/` (the guides' check enforces it for guides). A page for people working on Haxeon
+`design/`, `reports/` or `internals/` (the `docs-guides` suite checks it). A page for people working on Haxeon
 itself goes in `internals/`.
 
 A plan that is superseded or finished, a log of finished work, and a report on an experiment that was dropped are
@@ -24,7 +24,8 @@ The project roadmap is [../ROADMAP.md](../ROADMAP.md). The UI package keeps its 
 
 ## Guides
 
-Tutorials, in order ([guides/README.md](guides/README.md)):
+Tutorials, in order ([guides/README.md](guides/README.md)), after [Get started](guides/00-get-started.md), which installs
+Haxeon and the C and C++ toolchain:
 
 1. [Your first app](guides/01-first-app.md): create, run and change an app, then build it for shipping.
 2. [Live editing](guides/02-live-editing.md): what an edit to a running app can change, and how its state carries across.
@@ -35,13 +36,12 @@ Using Haxeon:
 
 - [CLI.md](reference/CLI.md): project CLI, manifests, dependencies, builds.
 - [MANIFEST.md](reference/MANIFEST.md): the project manifest, `haxeon.toml` or `haxeon.json`.
-- [RELEASES.md](reference/RELEASES.md): the release archives, how one is made and the release workflow.
+- [RELEASES.md](reference/RELEASES.md): the release archives: what one holds and how to install it.
 - [LANGUAGE_SUPPORT.md](reference/LANGUAGE_SUPPORT.md): the supported Haxe subset and what is not yet supported.
 - [LIVE_PATCHING.md](reference/LIVE_PATCHING.md): how patching works and the reload rules.
 - [WASM_BACKEND.md](reference/WASM_BACKEND.md): the Wasm32 and Wasm GC targets, host ABI and runtime-neutral profile.
 - [ANDROID.md](reference/ANDROID.md): the Android host.
-- [PROFILING.md](reference/PROFILING.md): profiling workflows.
-- [BENCHMARKS.md](reference/BENCHMARKS.md): the edit-to-runtime benchmark.
+- [PROFILING.md](reference/PROFILING.md): profiling a program or an app.
 
 Language:
 
@@ -70,6 +70,8 @@ The compiler:
 - [GENERIC_SPECIALIZATION.md](internals/GENERIC_SPECIALIZATION.md): how generic bodies are shared or specialized.
 - [SEMANTIC_TYPE_CONTRACT.md](internals/SEMANTIC_TYPE_CONTRACT.md): nominal types, aliases and implicit conversions.
 - [IR_ALLOCATION_REPORT.md](internals/IR_ALLOCATION_REPORT.md): listing what a function can allocate.
+- [BENCHMARKS.md](internals/BENCHMARKS.md): the edit-to-runtime benchmark, the experiments it rejected, and profiling the
+  compiler.
 
 HashLink formats and runtime contracts:
 
@@ -148,7 +150,7 @@ Reviews and investigations:
   [2026-11-bytecode-opportunities.md](reports/2026-11-bytecode-opportunities.md): UI and editor module size (unfinished).
 
 Runtime performance, October 2026. The experiments that failed their gates are listed in
-[BENCHMARKS.md](reference/BENCHMARKS.md#tried-and-rejected):
+[BENCHMARKS.md](internals/BENCHMARKS.md#tried-and-rejected):
 
 | Report | Outcome |
 |---|---|

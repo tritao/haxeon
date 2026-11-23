@@ -41,8 +41,9 @@ The table follows README.md; when a platform's status changes there, it changes 
 
 - **Home:** the headline, a 30-second recording of an app edited while it runs, the three differences, the platform
   table, and the UI Showcase running in the browser.
-- **Get started:** install a C and C++ toolchain and CMake (the one command for each system, as `haxeon doctor` prints
-  it), then Haxeon from a release archive (`docs/reference/RELEASES.md`; no checkout), then "Your first app".
+- **Get started** (`docs/guides/00-get-started.md`): install a C and C++ toolchain and CMake (the one command for each
+  system, as `haxeon doctor` prints it), then Haxeon from a release archive (`docs/reference/RELEASES.md`; no
+  checkout), then "Your first app".
 - **Guides** (tutorials and how-tos), in the order they are written:
   1. Your first app: one project built for desktop, Android and the web.
   2. Live editing: what a patch can change, what needs a reload, and how state carries across.
@@ -64,7 +65,9 @@ The table follows README.md; when a platform's status changes there, it changes 
   user page never links into `docs/design/` or `docs/reports/`.
 - **User and internal reference apart.** Pages about the compiler's and the runtime's internals live in `docs/internals/`
   (`HLB_DEBUG_SECTIONS`, `HLD3_DEBUG_PROTOCOL`, `METADATA_OWNERSHIP`, `SEMANTIC_TYPE_CONTRACT`, `IR_ALLOCATION_REPORT`,
-  `JIT_NATIVE_PROPERTIES`, `HASHLINK_MODULE_RECLAMATION`, `GENERIC_SPECIALIZATION`), which the site does not publish.
+  `JIT_NATIVE_PROPERTIES`, `HASHLINK_MODULE_RECLAMATION`, `GENERIC_SPECIALIZATION`, `BENCHMARKS`), which the site does
+  not publish. Making a release is in `docs/DEVELOPMENT.md`; `docs/reference/RELEASES.md` is what a release holds and
+  how to install it. The `docs-guides` suite checks that no guide or reference page links outside guides and reference.
 - **Generated where code is the source:** the CLI reference from `CliHelp`, one page per error code (`E1xxx`) with an
   example, the package and standard library API from doc comments, the compatibility table from the differential tests.
 - **Every code block is compiled in CI**, and run where the page shows its output. A guide's code is an example project under

@@ -174,7 +174,8 @@ of a language that targets many platforms.
 | WebAssembly backend | [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) |
 | Android host | [`docs/reference/ANDROID.md`](docs/reference/ANDROID.md) |
 | Building, testing, bootstrapping, formatting | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| Benchmarks and profiling | [`docs/reference/BENCHMARKS.md`](docs/reference/BENCHMARKS.md), [`docs/reference/PROFILING.md`](docs/reference/PROFILING.md) |
+| Profiling a program or an app | [`docs/reference/PROFILING.md`](docs/reference/PROFILING.md) |
+| Benchmarks and profiling the compiler | [`docs/internals/BENCHMARKS.md`](docs/internals/BENCHMARKS.md) |
 | Everything else: design notes, decisions, reports | [`docs/README.md`](docs/README.md) |
 
 ## 🗺️ Project direction

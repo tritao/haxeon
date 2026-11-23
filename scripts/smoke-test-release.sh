@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke test of a release archive (`haxeon dev package`, docs/reference/RELEASES.md), as a user meets it: unpacked into a
+# Smoke test of a release archive (`haxeon dev package`, docs/DEVELOPMENT.md, Releases), as a user meets it: unpacked into a
 # directory of its own outside any checkout, with a home directory of its own so every cache starts cold, and nothing but the
 # archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, checks that
 # the compiles ran the compiler the archive is meant to run, and runs a program under `run --watch --live`, edits it and sees

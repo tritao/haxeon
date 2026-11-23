@@ -312,9 +312,94 @@ launchers for that shared bootstrap rather than separate installers.
 
 `scripts/haxeon dev aot` builds the CLI and the compiler ahead of time beside the VM,
 which the CLI runs while it is built from the current sources; after a compiler
-edit, builds say once that it is stale and `haxeon doctor` reports it. A release
-archive for this platform is `scripts/haxeon dev package`, checked with
-`scripts/smoke-test-release.sh`: see [RELEASES.md](reference/RELEASES.md).
+edit, builds say once that it is stale and `haxeon doctor` reports it (below).
+
+## Releases
+
+What a release archive holds and how a user installs it is in [RELEASES.md](reference/RELEASES.md). This section is how
+one is made, and how the CLI finds what it runs.
+
+### How the CLI finds its SDK and its compiler
+
+`bin/haxeon` (`native/haxeon_main.c`) finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or
+`GetModuleFileNameW`, symbolic links resolved). The directory above `bin` is its SDK (docs/design/SDK_LAYOUT.md), which
+must hold `haxeon-sdk.toml`: the launcher names it in `HAXEON_SDK`, and the CLI finds everything else from it and its
+manifest (`build.HaxeonSdk`): `bin` is the VM's directory (`build.HashLinkPath`), `bin/haxeon-cli.hl` is the CLI, and the
+manifest's `[roots]` name the standard library, the templates and the registry. A checkout's `out/sdk/bin/haxeon` is found
+the same way; its manifest's `source` names the checkout, whose tools and sources the commands that need them read there
+(`HaxeonSdk.requireSource`). A release's manifest has no `source`: that is what makes the directory a release. A
+release's archive directory is laid out as a checkout's `out/sdk`.
+
+The CLI runs the compiler as `build.AotCompiler.program` says: the executable (docs/design/AOT_BACKEND.md) when its stamp
+matches, else the bytecode on the VM when its stamp matches, else (in a checkout) bytecode it builds from the sources with
+the pinned Haxe. A checkout matches the stamps against the digest of its `src/`, `lib/haxeon-io/` and `stdlib/`. A release
+ships no compiler sources, as its compiler cannot change: it matches them against the digest its manifest records
+(`compiler-sources`), so the pinned Haxe is never needed, and `haxeon doctor` does not ask for it.
+
+Every program a checkout builds from the compiler's sources when a command needs it is prebuilt in a release, beside the
+VM with its stamp (`AotCompiler.shipped`): the compiler and the tools that carry it (`haxeon lsp`, the typed rules of
+`haxeon lint`, `haxeon ffi`), and the live development hosts (`tools.LiveHost`). A release keeps the shared trees of
+native packages' CMake builds, which a checkout keeps in `out/native-cache`, under the user's cache
+(`~/.haxeon/cache/native`). Android builds need the checkout's `android/` host and its SDK under `.tools` until their
+runner lands in the SDK (`platforms/android`, docs/design/SDK_LAYOUT.md).
+
+### Making one
+
+From a checkout with the native build done (`scripts/build-native.sh`, or `scripts/setup.ps1` on Windows):
+
+```sh
+scripts/haxeon dev aot                         # optional: the CLI and compiler built ahead of time, included when current
+scripts/haxeon dev package [--version=V] [--output=DIR] [--no-archive]
+scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot for an archive without it
+```
+
+`haxeon dev package` (`tools.dev.ReleasePackage`) stages the directory in `out/release` in three steps. It installs the
+checkout's `out/sdk` as the native build staged it (the `haxeon-sdk` target and the VM's directory in CMakeLists.txt, the one
+definition of the layout), without its manifest and live registry; it materializes the roots that manifest names (the standard
+library, the templates, and the registry with each package published, its path dependencies on the others as version
+ranges, its submodules' files in it and its `publish.exclude` left out); and it adds what only a release has: the programs
+built from the compiler's sources (the compiler's bytecode with the pinned Haxe, `tools.CompilerExecutable` through the
+tool cache, and both live hosts with Haxeon, `tools.LiveHostBuild`), each stamped with the sources' digest, LICENSE,
+NOTICE and README.md, and the manifest recording that digest. It checks that the sources still have that digest, and
+archives the directory with `cmake -E tar`. The compiler's sources are not shipped. It changes nothing in the checkout's
+VM directory. A stale `haxeon-aot` is an error, since the release would never run it: rebuild it or remove it. The
+version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
+
+`scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
+starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script, a typed lint
+rule, `haxeon ffi audit` (with clang), `haxeon dev`'s refusal, and a program under `run --watch --live` that it edits while it
+runs, checking that the running program prints the new value and that the edit applied as a patch. Where the app template has a
+runner for the platform it also creates the app, whose UI package comes from the release's registry, builds it through its runner
+in development and release mode, running each for three frames with a capture (a C toolchain, and on Linux GTK's development
+files, are needed), patches the app running under `run --watch --live` (headless under `xvfb-run` on Linux; not on Windows), and
+builds and runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It
+checks that no compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler.
+With `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
+
+### The release workflow
+
+`.github/workflows/release.yml` runs on `v*` tags and by hand (workflow_dispatch). One job per platform (Linux, Windows,
+macOS) builds the VM and the CLI in release mode and the compiler ahead of time where supported, packages, smoke-tests the
+archive and uploads it. It runs no test suites; the macOS job may fail without failing the run. A final job downloads the
+archives and writes `SHA256SUMS`. For a tag it then checks that the tagged commit is on `main` and has a successful
+`ci.yml` run, and creates the GitHub release with the archives and checksums, or uploads them to the release if it exists.
+Run by hand, it stops before that: the archives are the run's artifacts. A tag's version must be the CLI's version,
+optionally with a suffix (`v0.3.0`, `v0.3.0-rc.1`).
+
+The Windows job builds with MSVC, as `ci.yml` does, and does not build the compiler ahead of time until the MSVC AOT build
+has passed on CI. Turning it on is `aot: true` for the job in `release.yml`: `haxeon dev package` takes the executable,
+and its `haxeon-aot.pdb`, whenever they are built.
+
+### A checkout's stale compiler
+
+In a checkout the executable is current only until the sources change. A build with a stale one prints one line,
+
+```
+note: haxeon-aot is older than the sources, so the CLI and the compiler run on the VM (a slower start); rebuild it with "haxeon dev aot"
+```
+
+unless it prints no progress (`--quiet`, `--verbosity quiet`, a script), and `haxeon doctor` reports it as stale with the
+same remedy. Nothing rebuilds it automatically.
 
 ## API documentation
 

@@ -73,15 +73,15 @@ command or option, a missing or invalid value) and 70 for an internal error, whi
 bug in Haxeon. The compiler run directly takes each valued option as `--name=value` or
 `--name value`, and exits with 2 for a usage error too.
 
-`haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`
-([templates/README.md](../../templates/README.md)): `--template app` (the default) is a window with a counter and an
+`haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`: `--template app` (the default) is a window with a counter and an
 `[app]` section ([MANIFEST.md](MANIFEST.md)) that uses the UI package from the `haxeon` registry (`ui = "^0.3"`, with
 `compatibility.haxeon`), in a checkout and in a release alike; `--template program` a console program. `--platforms` lists an app's
 platforms (by default this machine's) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
 template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
 before; `create . --template program` replaces it.
 
-An app builds through its runner project ([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)): on Linux, `haxeon build`
+An app builds through its runner project, the CMake project for each platform that `haxeon create` writes beside the
+sources (`linux/`), which is the app's to change (the executable's name, the desktop entry, packaging): on Linux, `haxeon build`
 compiles the module, writes `build/generated/linux/haxeon.cmake` and builds `linux/` with CMake into `build/linux/app/`,
 where the executable (named after the package), its module and its native packages' libraries sit together; `haxeon run`
 runs that executable, and `--watch`/`--live` run the module they rebuild in it. `cmake -S linux -B DIR && cmake --build DIR`
@@ -557,8 +557,16 @@ under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
 rebuilt and repackaged when its C sources change; Haxe-only edits continue to
 use the Android HLB asset path.
 
-The `doctor` command checks the local compiler, HashLink runtime, and Android
-SDK tools. `platforms` lists the targets with the backend each builds, and `devices` reports connected
+The `doctor` command checks Haxeon's own installation (the compiler, the HashLink runtime), the C and C++ toolchain
+that an app, a package with C or C++ code and a build ahead of time need, and in a checkout the Android SDK tools. It
+prints one `ok:` or `missing:` line for each. The toolchain is looked up as the builds find it: on Linux and macOS the
+C and C++ compilers (`CC` and `CXX`, else `cc` and `c++`, `gcc` and `g++` or `clang` and `clang++`), on macOS the Xcode
+command line tools first, on Windows MSVC through `vswhere` (Visual Studio or its Build Tools with the C++ tools); then
+CMake 3.24 or later, Ninja or Make (not on Windows), and on Linux `pkg-config` with the development files of GTK 3,
+OpenGL and Fontconfig, which the UI package's window needs. When a tool is missing it prints the command that installs
+the toolchain on this system (`apt-get` on Debian and Ubuntu, `dnf` on Fedora, `xcode-select --install` and Homebrew on
+macOS, `winget` on Windows). It exits with 1 only when Haxeon's own installation is incomplete: a program builds without
+the toolchain. `platforms` lists the targets with the backend each builds, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the
 current machine.
 
@@ -658,13 +666,16 @@ Two names describe a build, and Haxeon keeps them apart:
   `arm64`; `aarch64`, `amd64` and `x64` are read too, and `wasm32-wasi` is `wasm32`. `haxeon platforms` lists them with this
   machine's name.
 - The **backend** says what the compiler generates: `hl` (HashLink bytecode, run by the VM's JIT), `hlc` (C on the HashLink
-  runtime, compiled ahead of time; [AOT_BACKEND.md](../design/AOT_BACKEND.md)), `wasm32` (WebAssembly
+  runtime, compiled ahead of time by the C compiler), `wasm32` (WebAssembly
   with linear memory) or `wasm-gc` (WebAssembly GC). The compiler takes it as `--target=NAME`, which is Haxe's sense of
   "target"; the project build passes it.
 
 The target chooses the backend: `host`, `android` and the other native targets build `hl`, and `wasm32` builds `wasm32`.
-An app's release build (`--build-mode=release`) builds `hlc`, which its runner compiles into the executable
-([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)). Otherwise `hlc` and `wasm-gc` are reached by calling the compiler directly; `--target=hlc` writes the C to `OUTPUT.c/`, which CMake builds with the SDK's `haxeon_add_c_executable` ([AOT_BACKEND.md](../design/AOT_BACKEND.md), Building the C). Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
+An app's release build (`--build-mode=release`) builds `hlc`, which its runner compiles into the executable. Otherwise
+`hlc` and `wasm-gc` are reached by calling the compiler directly; `--target=hlc` writes the C to `OUTPUT.c/` and does
+not compile it. A CMake project builds it with the SDK's CMake package: after `find_package(Haxeon)`,
+`haxeon_add_c_executable(TARGET SOURCES_DIR OUTPUT.c [DEVELOPMENT])` makes the executable, with the C compiler CMake
+chooses (`CC`, `-DCMAKE_C_COMPILER`). Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
 and a Haxe target name given to `--target` is refused with Haxeon's (`--target hl` says to use `host`).
 
 ## Language server and FFI tools

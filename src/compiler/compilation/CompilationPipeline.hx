@@ -16,7 +16,7 @@ class CompilationPipeline {
 	 * Writes why an incremental compile redid its work to the compiler's standard error (the worker's log): how many artifacts
 	 * each kind of invalidation selected, a sample of them, and how many functions were retyped and regenerated. An edit that
 	 * retypes far more than it should shows up here as one kind of invalidation with a large count. Enabled by
-	 * `HAXEON_EXPLAIN_INVALIDATION`; see docs/reference/PROFILING.md.
+	 * `HAXEON_EXPLAIN_INVALIDATION`; see docs/internals/BENCHMARKS.md.
 	 */
 	static function explainInvalidation(invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>,
 			retyped:Array<String>,

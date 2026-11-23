@@ -209,8 +209,8 @@ The current subset includes:
   the value does not fix (`[1, 2].map`) is `E1003` (`using-extension-value-open`). Last come Haxe's global extensions of an
   enum value, `haxe.EnumTools.EnumValueTools` (below), which apply without a `using`. Not yet: a class named as a value
   (`Main.twice()` with a `Dynamic` first argument, which Haxe passes `Class<Main>`) and Haxe's `haxe.EnumTools` on an enum
-  itself (`Color.getName()`, `Color.createAll()`): both need the `Type` API's class and enum values
-  (`docs/design/TYPE_VALUES.md`).
+  itself (`Color.getName()`, `Color.createAll()`): both need class and enum values (`Class<T>`,
+  `Enum<T>`), which Haxeon does not have yet.
 - The enum part of Haxe's `Type` API, on a value of a known enum type: `Type.enumIndex`, `Type.enumEq`,
   `Type.enumConstructor` (the constructor's name) and `Type.enumParameters` (a new `Array<Dynamic>` of its arguments in
   declaration order, `null` for an optional one left out; writing to it does not change the value, as on HashLink). Haxe's
@@ -219,7 +219,7 @@ The current subset includes:
   puts them at its place in the module's list), and callable as `EnumValueTools.getName(value)`. A `Null<E>` value is
   checked, as a call of a method on it is: null throws "Null access", as Haxe's does. `Type.enumEq` also compares
   `Dynamic` values; the others need the enum's type where they are typed. `Dynamic` and Haxe's `EnumValue` type wait for
-  enums as runtime values (`docs/design/TYPE_VALUES.md`).
+  enums as runtime values.
 - On a class or enum named where they are called: `Type.getClassName(C)` (an interface and `String` too),
   `Type.getEnumName(E)`, `Type.getEnumConstructs(E)`, `Type.getInstanceFields(C)` (the class's methods, then its variables,
   each in declaration order, then its base's, an override listed with the base that declares it, as HashLink lists them,
@@ -334,18 +334,18 @@ HashLink):
 - An arrow lambda's rest parameter (`(...values:Int) -> values.length`), which Haxe also rejects.
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
-  lowered as views of one object, so the narrower value is the same object (`docs/design/STRUCTURE_VALUES.md`, step 4);
+  lowered as views of one object, so the narrower value is the same object;
   the differential case `anonymous-width-subtyping` records it. The same holds for an object literal once it has met one
   structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
   after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
   as in Haxe (`structure-open-literal`).
 - A class or interface instance where a structure is expected (`var shape:{function area():Int;} = new Rectangle();`)
-  is a type mismatch. It waits for the same views (`docs/design/STRUCTURE_VALUES.md`, step 4); the differential case
+  is a type mismatch. It waits for the same views; the differential case
   `structure-from-class` records it.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API on a class or enum held as a value (`typeof`, `getClass`,
   `getSuperClass`, `resolveClass`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
-  does not have yet (`docs/design/TYPE_VALUES.md`).
+  does not have yet.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
 - A generic call whose type argument is a type variable something after the call still fixes (`var values = [];
@@ -392,7 +392,7 @@ An unannotated field's type is its initializer's, and an unannotated function's 
 gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must
 match it, `return null` first makes it nullable, and no value return makes it `Void`. Where Haxe would let a later use in
 another function fix such a type, Haxe's result depends on the order it types functions in, so Haxeon asks for an
-annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's decisions):
+annotation instead (`E1002`):
 
 - A type the initializer leaves open: `static var e = [];`, `static var m = new Map();`, `static var n = null;`
   (`Cannot infer the type of field "C.e": nothing in its initializer fixes ...; annotate the field's type`).
@@ -404,8 +404,8 @@ annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's 
   (`function c() return d() + 1; function d() return c();`), or a field and a function. Haxe types them as `Dynamic` or,
   when one of them fixes the type, as that type. The error is on the first of them in declaration order and names the
   others; annotating one of them is enough. A function that calls itself is typed as in Haxe.
-- An object literal's structure gains optional fields only while the function or initializer that wrote it is typed
-  (docs/design/STRUCTURE_VALUES.md, decision 3). A literal held by an unannotated field and used elsewhere as a structure
+- An object literal's structure gains optional fields only while the function or initializer that wrote it is typed.
+  A literal held by an unannotated field and used elsewhere as a structure
   with more optional fields, `static var config = {name: "x"};` read as `{name:String, ?debug:Bool}`, is an error:
   `{name : String} has no field debug; the structure comes from a literal in "Main.config", which closed its type;
   annotate the type of field "Main.config"`. Haxe keeps the field's structure open, so which use adds a field depends on

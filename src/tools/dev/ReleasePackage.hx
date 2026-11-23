@@ -19,7 +19,7 @@ import tools.LiveHostBuild;
 /**
  * `haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]`: stages this checkout's release for the platform it runs
  * on, `DIR/haxeon-VERSION-PLATFORM/` (`DIR` is `out/release` by default), and archives it beside, as `.tar.gz` or, on Windows,
- * `.zip` (docs/reference/RELEASES.md). The release is Haxeon's SDK (docs/design/SDK_LAYOUT.md), made in three steps:
+ * `.zip` (docs/DEVELOPMENT.md, Releases). The release is Haxeon's SDK (docs/design/SDK_LAYOUT.md), made in three steps:
  *
  * - the install: a copy of the checkout's out/sdk as its native build staged it (CMakeLists.txt, `haxeon-sdk`), which is the one
  *   definition of the layout, without what a release has of its own (its manifest and registry) and without the leftovers of

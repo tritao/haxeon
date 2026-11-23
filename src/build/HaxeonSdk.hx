@@ -10,7 +10,7 @@ import sys.io.File;
  * `include/`, `src/`, the CMake package and the scripts native builds include in `cmake/`, and the manifest `haxeon-sdk.toml`,
  * which names the roots the SDK does not hold itself. A checkout's native build stages one in `out/sdk`, whose manifest names the
  * checkout as `source` and the checkout's own stdlib and templates as roots; a release (`haxeon dev package`,
- * docs/reference/RELEASES.md) is one, without `source`. A release's manifest also records `commit` (the checkout's, which names
+ * docs/DEVELOPMENT.md, Releases) is one, without `source`. A release's manifest also records `commit` (the checkout's, which names
  * the compiler), `platform` and `compiler-sources`, the digest of the compiler's sources it was made from
  * (`AotCompiler.sourcesDigest`), which the shipped compiler's stamps must hold: a release ships no sources.
  *

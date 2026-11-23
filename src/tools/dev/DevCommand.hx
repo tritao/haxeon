@@ -41,7 +41,7 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       command and the CLI run it while it is current (build.AotCompiler, AotBuild): what a release ships prebuilt.
  *
  *   haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]
- *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/reference/RELEASES.md).
+ *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/DEVELOPMENT.md, Releases).
  *
  *   haxeon dev check-tests
  *       Fail on a test file under tests/ that no suite, test driver case or workflow runs (TestRegistration).

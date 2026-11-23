@@ -2,7 +2,8 @@
 /**
  * The guides in docs/guides, as docs/guides/README.md lays them out: every ```haxe and ```toml block of `NN-slug.md` appears,
  * line for line after its common indentation, in a file of `examples/NN-slug/` (a `// ...` or `# ...` line skips lines), a
- * ```text title="Output" block in an `expected-output.txt` there, and a page links only to guides, reference pages and URLs.
+ * ```text title="Output" block in an `expected-output.txt` there, and a guide or a reference page (docs/reference) links only to
+ * guides, reference pages and URLs.
  * Then each example project, copied out of the tree, builds with this checkout's haxeon: a program with an
  * `expected-output.txt` runs and prints it, and an app (Linux only, where the app template has its runner) gets its runner from
  * `haxeon create .`, builds and opens its window for a few frames, under xvfb-run when there is one. "Your first app" also
@@ -28,7 +29,7 @@ private typedef Example = {
 	final relative:String;
 }
 
-/** Where a guide may link: other guides (and their examples) and reference pages, which the site publishes. */
+/** Where a guide or a reference page may link: guides (and their examples) and reference pages, which the site publishes. */
 final PUBLISHED = ["docs/guides/", "docs/reference/"];
 
 function main() {
@@ -73,11 +74,19 @@ function main() {
 					+ '${Path.withoutExtension(name)}/:\n${block.lines.join("\n")}');
 		}
 	}
+	var reference = Path.join([root, "docs", "reference"]),
+		referencePages =
+			[for (name in FileSystem.readDirectory(reference)) if (StringTools.endsWith(name, ".md")) name];
+	referencePages.sort(Reflect.compare);
+	for (name in referencePages) {
+		var page = Path.join([reference, name]);
+		checkLinks(root, page, 'docs/reference/$name', normalize(File.getContent(page)), failures);
+	}
 	if (failures.length > 0)
-		Script.fail("FAIL: the guides do not match their examples or link outside what the site publishes:\n\n"
+		Script.fail("FAIL: the guides do not match their examples, or the pages link outside what the site publishes:\n\n"
 			+ failures.join("\n\n"));
 	if (Sys.args().indexOf("--no-build") >= 0) {
-		Sys.println('PASS: $checked code blocks of ${pages.length - 1} guides are in their examples, and the links stay in what the site publishes');
+		Sys.println('PASS: $checked code blocks of ${pages.length - 1} guides are in their examples, and the links of the guides and ${referencePages.length} reference pages stay in what the site publishes');
 		return;
 	}
 
@@ -119,7 +128,7 @@ function main() {
 		}
 		built++;
 	}
-	Sys.println('PASS: $checked code blocks of ${pages.length - 1} guides are in their examples, the links stay in what the site publishes, and $built example projects build and run');
+	Sys.println('PASS: $checked code blocks of ${pages.length - 1} guides are in their examples, the links of the guides and ${referencePages.length} reference pages stay in what the site publishes, and $built example projects build and run');
 }
 
 /** "Your first app": the manifest is the one `haxeon create my_app` writes, and the release build runs on its own. */

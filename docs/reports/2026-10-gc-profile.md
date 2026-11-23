@@ -1,7 +1,7 @@
 # Experimental incremental GC marking
 
 The tree-benchmark locality experiments this report began with (mark prefetch, address-ordered runs, sweep order) failed
-their gate and are listed in [BENCHMARKS.md](../reference/BENCHMARKS.md#tried-and-rejected); the cost they were after was
+their gate and are listed in [BENCHMARKS.md](../internals/BENCHMARKS.md#tried-and-rejected); the cost they were after was
 empty-page release and refaulting, fixed by [bounded empty-page retention](2026-10-gc-empty-page-retention.md).
 
 ## Experimental incremental marking (Linux)

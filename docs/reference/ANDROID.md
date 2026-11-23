@@ -11,8 +11,7 @@ edits are compiled against), and the project's native libraries under
 for `arm64-v8a` and `x86_64`, and the CLI copies the APK to
 `build/android/app-debug.apk`. `--plan`, `--explain`, `--timings` and
 `--self-hosted` work as for the host; `--plan` and `--compiler-only` stop
-before Gradle. [ANDROID_BUILD.md](../design/ANDROID_BUILD.md) describes the
-split.
+before Gradle.
 
 ```sh
 ./scripts/haxeon init --target android

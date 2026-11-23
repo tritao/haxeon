@@ -1,6 +1,6 @@
 name: release
 
-# Release archives (docs/reference/RELEASES.md): each platform's job builds the VM and the CLI in release mode, the compiler ahead
+# Release archives (docs/DEVELOPMENT.md, Releases): each platform's job builds the VM and the CLI in release mode, the compiler ahead
 # of time where the AOT backend supports the platform's toolchain, packages them with `haxeon dev package` and smoke-tests the
 # unpacked archive (scripts/smoke-test-release.sh). No test suites run here: the commit is tested by ci.yml, and a tag is
 # published only once ci.yml passed on that commit on main. The final job writes SHA256SUMS and, for a tag, creates the GitHub

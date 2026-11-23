@@ -181,7 +181,8 @@ versioning and lifecycle semantics when they need a different contract.
 ## Descriptor sidecars
 
 `haxeon.wire.MessagePackSchema` reads the `.descriptors.json` artifact the
-compiler emits for `typeInfo<T>()` roots ([STRUCTS.md](../design/STRUCTS.md#reflection)).
+compiler emits for `typeInfo<T>()` roots: a descriptor for each struct, with its name, each field's name, type and
+typed annotations (and for a flat struct its size, alignment and field offsets), and a content hash over all of them.
 `fromJson` validates every descriptor, including its content hash, before
 anything is read from it. Each query takes the hash and the semantic type of
 the same `typeInfo<T>()` identity:

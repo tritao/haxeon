@@ -54,8 +54,9 @@ project-verbs                    ci          -- scripts/haxeon tests/integration
 # haxeon.toml and haxeon.json: init writes TOML, migrate converts JSON, both in one directory are refused, add keeps comments.
 project-manifests                ci          -- scripts/haxeon tests/integration/test-project-manifests.hx
 project-templates                ci          -- scripts/haxeon tests/integration/test-project-templates.hx
-# The guides (docs/guides/README.md): each code block is in the guide's example project, no page links outside what the site
-# publishes, and each example builds and runs, the app of "Live editing" taking the guide's edits under run --watch --live.
+# The guides (docs/guides/README.md): each code block is in the guide's example project, no guide or reference page links
+# outside what the site publishes, and each example builds and runs, the app of "Live editing" taking the guide's edits
+# under run --watch --live.
 docs-guides                      ci          -- scripts/haxeon tests/integration/test-docs-guides.hx
 # nullSafety in haxeon.toml (init writes strict; strict fails, warn warns, off and absent stay quiet) and --macro nullSafety(...).
 null-safety-setting              ci          -- scripts/haxeon tests/integration/test-null-safety-setting.hx

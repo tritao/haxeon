@@ -1,8 +1,6 @@
 # Profiling
 
-Profiling workflows for compiler and host applications. `../design/PROFILER_DESIGN.md` covers the
-design: the record format, the buffers, the protocol and the capture format.
-This document covers how to use the profiler.
+How to profile a program or an app: what the profiler records, how to start it, and how to read what it wrote.
 
 ## Sources
 
@@ -221,8 +219,7 @@ so ordinary builds and their compiler worker are untouched. It probes:
   the module's symbol table, so a stripped module shows offsets. A CMake
   project's static libraries must be position independent. Code we do not
   compile, such as system libraries, appears only through the calls into it.
-  macOS does not instrument native code yet; `../design/PROFILER_DESIGN_POSIX.md` is the
-  design.
+  macOS does not instrument native code yet.
 
 The manifest's `instrument` section (`haxeon.toml`, or `"instrument"` in a `haxeon.json`) narrows what is probed:
 
@@ -447,42 +444,6 @@ calls, counters and instants but no frame tracks or `Startup` layout. The
 exporter checks every size it reads, so a damaged capture fails with an error
 instead of crashing it, and it caps a record at 256 MiB.
 
-## Raw two-terminal workflow
-
-For short-lived compiler profiling runs, start the HashLink process with
-`--diagnostics-wait`. It opens the diagnostics socket, holds the program before
-its entrypoint, and resumes after `hlprof-live` starts a session. Run the
-first command in one terminal and the second in another:
-
-```sh
-LD_LIBRARY_PATH="$PWD/out:$PWD/.tools/hashlink" \
-  .tools/hashlink/hl --diagnostics 24020 --diagnostics-wait out/compiler.hl
-.tools/hashlink/hlprof-live --connect-timeout 10 --sources sampling,alloc \
-  --rate 500 --output out/compiler.hlpc 24020
-```
-
-Then turn the capture into a trace:
-
-```sh
-.tools/hashlink/hlprof-live export --format pftrace --output out/compiler.pftrace \
-  out/compiler.hlpc
-```
-
-## Recorder cost
-
-`hlprof-bench` measures what the recorder costs a program: an enter/exit pair
-and a span with recording off and on, on one and four threads, and the rate at
-which a consumer drains the records. Run it after changing `vendor/hashlink/src/prof.c`.
-It takes an optional iteration count (default 20000000):
-
-```sh
-out/cmake/windows-msvc/hashlink/bin/hlprof-bench.exe [ITERATIONS]
-```
-
-The program has libhl compiled in. Results
-are nanoseconds per operation; `../design/PROFILER_DESIGN.md` lists the reference figures. The
-last line reports the consumer's drain rate and any stalls.
-
 ## Known issues
 
 - **Export memory grows with the call rate.** The exporter holds about two
@@ -496,8 +457,7 @@ last line reports the consumer's drain rate and any stalls.
   Linux has no Vulkan boundary hooks, no `syscall(SYS_futex)` hook and no
   libstdc++ wait hooks yet, and a GCC build probes inlined functions (see
   Instrumentation). Mixed-mode samples also work on Linux x86-64 (see "What a
-  trace contains"). See `../design/PROFILER_DESIGN_POSIX.md` for the macOS design and the rest of
-  the Linux plan.
+  trace contains"). macOS has neither yet.
 - **`hlprof-spans.py`** stops with a "mismatched span" error on these captures
   (see [Spans and counters](#spans-and-counters)).
 
@@ -512,72 +472,3 @@ directory that holds a different capture is refused. A HashLink heap dump captur
 the same directory and added as the `heap` artifact in the manifest. Inspect
 it with `haxeon heap inspect --capture DIR`, or pass the bytecode and dump paths
 directly with `haxeon heap inspect BYTECODE DUMP`.
-
-## Bytecode size
-
-`haxeon dev hl-stat MODULE` reads a HashLink module (with `compiler.hl.HlModuleReader`, which follows the VM's loader and
-reads stock Haxe's modules too) and reports what it is made of: the bytes of each part (strings, types, globals and natives,
-function instructions, debug lines, debug sections), function, instruction and register counts, and on request the most
-frequent opcodes (`--ops`), the largest functions (`--top N`), one function's instructions (`--dump NAME`), the opcodes
-around one (`--around OSwitch`) and the debug sections (`--sections`). HashLink compiles every instruction of a module when
-it loads it, so instruction counts are start-up time; `HL_JIT_REGSTATS=1 hl MODULE` reports what the JIT made of them.
-Comparing a module the stock-Haxe-built compiler wrote with one the Haxeon-built compiler wrote shows where ours is bigger:
-
-```sh
-scripts/haxeon dev hl-stat out/server-stock.hl --ops 20 --top 10
-scripts/haxeon dev hl-stat out/server-haxeon.hl --ops 20 --top 10
-```
-
-## Compiler profiling
-
-To profile incremental compiler edits, pass `--profile-output` to the project
-benchmark. It starts a dedicated worker with a diagnostics port, warms that
-worker before attaching, and captures the edit loop. The normal worker launch
-is unchanged. Sampling adds overhead, so use an unprofiled run for latency
-comparisons. For where the compiler allocates, record with
-`--sources alloc` and read it with `report --alloc`; the compiler's per-phase
-allocation counters (`HL_GC_PROFILE=1`) give exact totals.
-
-```sh
-python3 benchmarks/incremental-project.py \
-  --project /path/to/haxeon.toml --source /path/to/Main.hx \
-  --token-a 'before' --token-b 'after' --output /tmp/edit.hl \
-  --profile-output /tmp/compiler-edits.hlpc
-.tools/hashlink/hlprof-live export --format perfetto \
-  --output /tmp/compiler-edits.json /tmp/compiler-edits.hlpc
-```
-
-Incremental benchmark output also reports `alloc-<phase>-bytes`, `-count`,
-`-gcs`, and `-gc-ms` from HashLink's cumulative GC counters. These are
-phase deltas; `gc-ms` measures stop-the-world marking. The `driver-alloc-*`
-values cover request preparation, compilation, artifact encoding, and writing.
-Use the unprofiled benchmark for latency comparisons, since live sampling adds
-CPU overhead.
-
-To see why an incremental edit recompiled what it did, run the build with `HAXEON_EXPLAIN_INVALIDATION=1`. The compiler worker
-then writes, for each compile, how many artifacts each kind of invalidation selected (`source-revision`, `body-changed`,
-`signature-changed`, `dependency-signature`, `purity-dependency`, ...), a sample of the artifacts with their causes, and how many
-functions were retyped and regenerated, to its log under the session directory (`HAXEON_COMPILER_SESSION_DIR`, default
-`~/.cache/haxeon/compiler`). A comment-only edit should retype nothing; if it reports a long list, the kind with the large count
-names the dependency that is invalidating too much.
-
-### What sets the compiler's peak memory
-
-A one-shot compile collects after every gigabyte allocated (`ProcessMemory`), so just before a collection the heap holds
-what the last collection kept plus a gigabyte since. The peak is that, at the collection where it is largest, plus pages the
-phases after it could not reuse. `scripts/peak-timeline.py` shows which collection it is and what the heap holds there:
-
-```sh
-H=out/sdk/bin/hl
-ARGS="compiler.hl --entry=compiler.tools.HaxeonCompiler --root=src --root=lib/haxeon-io --root=stdlib --sources-file=srcs.txt --output=/tmp/out.hl"
-scripts/peak-timeline.py -- $H $ARGS                          # resident memory at each phase mark and collection, and the peak
-scripts/peak-timeline.py HL_GC_CENSUS_AT=0 -- $H $ARGS        # census inside every collection: what each one keeps
-scripts/peak-timeline.py HAXEON_PEAK_CENSUS=ir-done -- $H $ARGS   # census at a phase mark (collects first)
-scripts/peak-timeline.py HAXEON_PEAK_CENSUS=all HL_GC_CENSUS_NOGC=1 -- $H $ARGS   # pages per size class at every mark
-```
-
-The phase marks (`compiler.core.PeakProbe`) and the census (`hl_gc_census` in the fork's `gc_census.c`) cost nothing unless
-those variables are set. A census prints, as `census` lines in the log, live bytes by type, by nearest owner (arrays,
-maps and strings are charged to the object holding them) and by path from the roots with field names, and per size class
-the pages mapped, resident and live. Live data at a collection raises every later peak by its size; data that dies between
-two collections still counts at the second one, so releasing it earlier only helps if a collection runs in between.

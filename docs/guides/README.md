@@ -2,7 +2,8 @@
 
 Step-by-step guides to building apps with Haxeon. Read them in order: each one builds on what the one before it showed.
 
-1. [Your first app](01-first-app.md): install Haxeon, create an app, run it, change it and build it for shipping.
+0. [Get started](00-get-started.md): install a C and C++ toolchain, CMake and Haxeon, and check them with `haxeon doctor`.
+1. [Your first app](01-first-app.md): create an app, run it, change it and build it for shipping.
 2. [Live editing](02-live-editing.md): change an app while it runs, and what an edit can change without a restart.
 3. UI basics: layout, text, lists, forms, navigation, theming. (Not written yet.)
 4. Calling a C or C++ library. (Not written yet.)
@@ -25,10 +26,11 @@ compile.
   around it must appear in the same file, in that order.
 - A ` ```text title="Output" ` block is what a program prints: it must appear in that project's `expected-output.txt`,
   and the check runs the program and compares what it prints with that file.
-- Commands go in ` ```sh ` blocks and other output in ` ```text ` blocks; neither is checked against the examples, so
-  keep them to what the reader types and sees.
+- Commands go in ` ```sh ` blocks (` ```powershell ` for Windows only) and other output in ` ```text ` blocks; neither
+  is checked against the examples, so keep them to what the reader types and sees.
 - A guide links only to other guides, to reference pages (`../reference/`) and to full URLs. It never links into
-  `docs/design/`, `docs/reports/`, `docs/internals/` or `docs/adr/`: those are not published.
+  `docs/design/`, `docs/reports/`, `docs/internals/` or `docs/adr/`: those are not published. Reference pages follow the
+  same rule, and the check below checks theirs too.
 - An app is kept without its runner directories (`linux/` and the others): the check adds them with `haxeon create .`, so
   an example always has the runner the current template writes.
 

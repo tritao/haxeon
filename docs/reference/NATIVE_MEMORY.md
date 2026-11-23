@@ -120,7 +120,7 @@ positive, and the current implementation supports alignments up to 16 bytes.
 There is no individual `free` operation, and nothing checks what still points
 into a block: a `RawPtr` kept past `reset()` or `dispose()` dangles, which is the
 caller's bug. (The compiler's managed `Arena`, any object with a checked release,
-is the other kind; see `docs/design/ARENAS.md`.)
+is the other kind.)
 
 Haxeon performs layout-based alignment, bump advancement, block growth, and
 reset. The only new native runtime operations acquire and release raw backing

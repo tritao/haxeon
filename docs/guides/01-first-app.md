@@ -1,30 +1,17 @@
 # Your first app
 
-In this guide you install Haxeon, create an app, run it, change it, and build an executable you can give to someone
+In this guide you create an app, run it, change it, and build an executable you can give to someone
 else. You need a computer running Linux: today `haxeon create` makes apps for Linux only. [Other
 platforms](#other-platforms) says where Windows, macOS, Android and the web stand.
 
-## Install Haxeon
+## Before you start
 
-An app uses Haxeon's UI package, which is partly written in C and C++. Haxeon builds that code on your machine, once,
-with your C and C++ compiler and CMake. On Debian and Ubuntu, install them and the libraries the window needs with:
-
-```sh
-sudo apt install build-essential cmake ninja-build libgtk-3-dev libfontconfig1-dev libgl1-mesa-dev libgles2-mesa-dev
-```
-
-Then download the Haxeon release archive for your system, `haxeon-VERSION-linux-x86_64.tar.gz`, unpack it anywhere,
-and put its `bin` directory on your `PATH`:
+[Get started](00-get-started.md) installs the C and C++ toolchain an app needs and Haxeon from a release archive. When
+`haxeon doctor` reports nothing missing, you are ready:
 
 ```sh
-tar -xzf haxeon-VERSION-linux-x86_64.tar.gz
-export PATH="$PWD/haxeon-VERSION-linux-x86_64/bin:$PATH"
-haxeon --version
 haxeon doctor
 ```
-
-`haxeon doctor` checks that the release is complete. The archive holds everything else Haxeon needs: the compiler, the
-runtime, the standard library and the first-party packages. [Releases](../reference/RELEASES.md) lists what is in it.
 
 ## Create an app
 
