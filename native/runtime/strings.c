@@ -141,7 +141,10 @@ HL_PRIM int HL_NAME(__string_length)( vstring *value ) {
 }
 
 HL_PRIM bool HL_NAME(__string_equal)( vstring *left, vstring *right ) {
-	if( left == NULL || right == NULL ) return left == right;
+	// The same text, held by one String or by two that share their code units (map keys), is equal without being read.
+	if( left == right ) return true;
+	if( left == NULL || right == NULL ) return false;
+	if( left->bytes == right->bytes ) return left->length == right->length;
 	return left->length == right->length
 		&& (left->length == 0 || memcmp(left->bytes, right->bytes, left->length * sizeof(uchar)) == 0);
 }
