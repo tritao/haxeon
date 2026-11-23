@@ -15,7 +15,7 @@ import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.Text;
 
-/** The window's content. Change `view` while `haxeon run --watch --live` runs: the window updates and keeps the count. */
+/** The window's content. Change `view` while `haxeon run --watch` runs: the window updates and keeps the count. */
 class App implements DesktopUiApplication {
 	final ui:UiContext;
 	final host:DesktopUiHostContext;
@@ -95,7 +95,7 @@ class Main {
 	static function main():Int
 		return DesktopUiHost.run(options(), create);
 
-	// `haxeon run --watch --live` keeps one process and calls these instead of `main`, so edits apply to the running app.
+	// `haxeon run --watch` sees these, keeps one process and calls them instead of `main`, so edits apply to the running app.
 
 	public static function start(arguments:String):Void
 		session = DesktopUiHost.open(options(), create);

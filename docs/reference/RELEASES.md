@@ -17,7 +17,7 @@ them. [Get started](../guides/00-get-started.md) walks through installing one.
 | `bin/hl` | The VM, which runs a program's module. |
 | `bin/haxeon-aot` | The CLI and the compiler built ahead of time, with its stamp (`.sources`) and, with MSVC, its `haxeon-aot.pdb`, which its stack traces read. Present where the release job builds it (below). |
 | `bin/haxeon-cli.hl`, `bin/haxeon-compiler.hl` | The CLI and the compiler as bytecode, each with its stamp: what runs when there is no `haxeon-aot`. The compiler's bytecode also carries the language server, the typed lint rules and `haxeon ffi`. |
-| `bin/haxeon-live-host.hl`, `bin/haxeon-live-host-instrument.hl` | The program `run --watch --live` runs a program in, and its instrumented flavor for `--profile`. |
+| `bin/haxeon-live-host.hl`, `bin/haxeon-live-host-instrument.hl` | The program `run --watch` runs a program in, and its instrumented flavor for `--profile`. |
 | `bin/hlprof-live` | The profiler's recorder, which `run --profile` runs. |
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib`, `*.lib` | Shared libraries beside the VM, if any (Linux has none), and on Windows the VM's import library, which native packages link against. |
 | `stdlib/` | The standard library. |
@@ -47,7 +47,7 @@ that every project shares, goes under the user's cache, `~/.haxeon/cache/native`
 
 The compiler of a release cannot change, so it never builds a compiler or a tool from sources: everything a command runs
 is in the archive, including the language server, `haxeon ffi`, the typed lint rules and the live development host. Live
-patching (`run --watch --live`) works from a release, and an app's runner builds against the SDK's `include/` and
+patching (`run --watch`) works from a release, and an app's runner builds against the SDK's `include/` and
 `cmake/`.
 
 ## What a release does not do

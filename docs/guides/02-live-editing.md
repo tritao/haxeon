@@ -1,6 +1,6 @@
 # Live editing
 
-With `haxeon run --watch --live`, your app keeps running while you change its code. Each time you save, Haxeon compiles
+With `haxeon run --watch`, your app keeps running while you change its code. Each time you save, Haxeon compiles
 what changed and applies it to the running app as a **patch**: the next frame runs the new code, and every object and
 value the app holds stays as it was. This guide makes a series of edits to the app from [Your first app](01-first-app.md)
 and shows what each one does: which edits patch, which reload, and what happens to an edit that is wrong.
@@ -10,10 +10,11 @@ and shows what each one does: which edits patch, which reload, and what happens 
 In the app's directory, run:
 
 ```sh
-haxeon run --watch --live
+haxeon run --watch
 ```
 
-The app builds and its window opens, as with `haxeon run`. Click the button a few times so the count is not zero, and
+The terminal says `haxeon: edits patch the running app`: the app's `Main` has the functions a live app needs (see
+[How an app takes part](#how-an-app-takes-part)). The app builds and its window opens, as with `haxeon run`. Click the button a few times so the count is not zero, and
 keep the window where you can see it. Leave the command running: it watches your source files until you close the
 window or press Ctrl+C.
 
@@ -168,9 +169,9 @@ again from the new code. Keep them when you change `Main`.
 
 ## How an app takes part
 
-`haxeon run` calls `main`, which runs until the window closes. `haxeon run --watch --live` does not: it keeps the
-process, calls `start` once, then `tick` for each step of the app until it returns 0, and `close` at the end. The
-template's `Main` has all of them:
+`haxeon run` calls `main`, which runs until the window closes. `haxeon run --watch` does not when `Main` has the static
+functions `start`, `tick`, `close`, `saveState` and `restoreState`: it keeps the process, calls `start` once, then `tick`
+for each step of the app until it returns 0, and `close` at the end. The template's `Main` has all of them:
 
 ```haxe
 public static function start(arguments:String):Void
@@ -184,6 +185,9 @@ public static function close():Int
 ```
 
 Patches are applied between two calls to `tick`, so no code is half-way through when it changes.
+
+A program whose `Main` lacks any of them is rebuilt and restarted on each save instead, and the watch says so when it
+starts. To restart an app that has them all, run `haxeon run --watch --restart`.
 
 Live editing works on development builds only. A release build (`haxeon build --build-mode=release`) is compiled ahead of
 time and cannot be watched or patched.

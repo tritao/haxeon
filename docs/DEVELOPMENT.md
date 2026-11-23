@@ -87,7 +87,7 @@ few minutes, and is the check for a change to the IR, the backends or the typer 
 The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
 no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
 instructions of every process the command starts and the bytes the server allocated for the request; the CLI's wall is printed.
-The live part runs `haxeon run --watch --live` as a user does, on `tests/perf/live-project` (three files) and on the app template
+The live part runs `haxeon run --watch` as a user does, on `tests/perf/live-project` (three files) and on the app template
 (`haxeon create`, a window on haxeon-ui, run under `xvfb-run`; skipped without it), with the server and CLI a user's edits run on:
 `haxeon-aot` (built when it is not current), which names the metrics (`aot_`). Each edit is timed from its save to the
 running app's `patch-applied` event (the watch-events file), and split into the watch's settle, the CLI's work before the request,
@@ -367,11 +367,11 @@ version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
 
 `scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
 starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script, a typed lint
-rule, `haxeon ffi audit` (with clang), `haxeon dev`'s refusal, and a program under `run --watch --live` that it edits while it
+rule, `haxeon ffi audit` (with clang), `haxeon dev`'s refusal, and a program under `run --watch` that it edits while it
 runs, checking that the running program prints the new value and that the edit applied as a patch. Where the app template has a
 runner for the platform it also creates the app, whose UI package comes from the release's registry, builds it through its runner
 in development and release mode, running each for three frames with a capture (a C toolchain, and on Linux GTK's development
-files, are needed), patches the app running under `run --watch --live` (headless under `xvfb-run` on Linux; not on Windows), and
+files, are needed), patches the app running under `run --watch` (headless under `xvfb-run` on Linux; not on Windows), and
 builds and runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It
 checks that no compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler.
 With `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.

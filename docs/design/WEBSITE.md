@@ -179,7 +179,7 @@ are launch items. Domain, hosting and publication of release versions are open.
 - The first-party packages (`ui`, `platform`, `gpu`, `audio`, `animation`, `editor`) are releases of the `haxeon`
   registry that a release archive ships, so a new project depends on them as `ui = "^0.3"`.
 - `haxeon create my_app` makes a windowed app with its runner projects ([PROJECT_BUILDS.md](PROJECT_BUILDS.md)), which
-  `haxeon run` opens and `haxeon run --watch --live` edits.
+  `haxeon run` opens and `haxeon run --watch` edits.
 - Guides 1 to 5 written and their code compiled in CI.
 - The home page recording, and the UI Showcase on the web.
 - A VS Code extension over the existing language server, with the debugger in it: today debugging goes through the

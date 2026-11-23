@@ -111,6 +111,8 @@ class CliHelp {
 						"  --explain                    With --plan, say why each artifact is there",
 						"  --timings                    Print where the build's time went, and the compiler's reports",
 						"  --compiler-only              Run only the Haxe compile",
+						"  --patchable                  With --compiler-only, build a module the next builds publish patches",
+						"                               of (.hlp and .live.* beside it), for a host that applies them itself",
 						"  --gradle-inputs FILE         Android: build what Gradle packages and describe it in FILE"
 					])
 				},
@@ -136,9 +138,11 @@ class CliHelp {
 					].concat(BUILD_OPTIONS).concat([
 						"  --quiet                      Print the build only if it fails",
 						"  --device SERIAL              The Android device to run on",
-						"  --watch                      Rebuild and relaunch on source edits",
-						"  --watch --live               Patch the running host module instead of relaunching",
-						"  --strict-live                With --live, report an edit that cannot patch instead of reloading",
+						"  --watch                      On source edits, patch the running app when its entry class has the",
+						"                               live entry points (start, tick, saveState, restoreState, close),",
+						"                               else rebuild and relaunch it",
+						"  --restart                    With --watch, rebuild and relaunch even an app that can be patched",
+						"  --strict-live                With --watch, report an edit that cannot patch instead of reloading",
 						"  --profile[=SOURCES]          Record a profile: instrument (default), sampling, alloc",
 						"  --profile-output PATH        Where the capture goes (implies --profile)",
 						"  --profile-start=launch|manual, --profile-duration=SEC, --profile-max-size=MIB,",

@@ -253,7 +253,7 @@ A head-to-head run is phase 0 of the plan.
 | Dev and mod | Any | Mixed | **A for the game's scripts, B for mods**, against one HXI API | The same `.hxi` compiles for both routes (measured above), so the API is written once. |
 
 If only one route is to be built, build B. It covers every scenario at some cost in speed on desktop and in module
-size, and A's advantages matter mainly to the game's own developers on desktop, who have them already through `--live`.
+size, and A's advantages matter mainly to the game's own developers on desktop, who have them already through `haxeon run --watch`.
 
 ## Separate compilation against a fixed host API
 
@@ -418,7 +418,7 @@ Route A cannot promise determinism across platforms without the work in its gap 
 
 **Route A** has the full machinery today:
 
-- `--live` HLP patches apply atomically and keep state;
+- live HLP patches apply atomically and keep state;
 - old closures are guarded;
 - a body edit takes milliseconds through a warm session.
 

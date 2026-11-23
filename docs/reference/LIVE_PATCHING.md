@@ -205,7 +205,7 @@ patch applies when no stored closure still holds it (see "Stored closures").
 
 ### Strict mode
 
-`haxeon run --watch --live --strict-live` refuses an edit that cannot patch
+`haxeon run --watch --strict-live` refuses an edit that cannot patch
 instead of reloading. The host records the refusal in `<module>.live.refused`
 (`<identity>:<running revision>:<refused revision>`), and before the next build
 the compiler takes the refused publications back (a live session keeps the last
@@ -357,7 +357,10 @@ function of the source alone: a warm session that compiled other revisions first
 cold one, with no dead functions or constants. Frontend caches (parsing, typing, IR) stay incremental either
 way, and HL assembly is about a tenth of a compile, so nothing meaningful is lost.
 
-- `haxeon run --watch --live` builds with `--live` for you.
+- `haxeon run --watch` builds with `--live` for you when it patches the app, which it does when the entry class
+  declares the live host's entry points ([CLI.md](CLI.md)); `--restart` makes it relaunch the app instead, with
+  artifact builds. `haxeon build --compiler-only --patchable` builds with `--live` for a host that applies the patches
+  itself.
 - **A watch session keeps its compiler.** The worker whose session holds the patch history is chosen once, at
   the first build (`haxeon: compiler worker version <hash> (kept for this watch session)`), and every rebuild
   uses it. Edits to Haxeon's own compiler sources do not reach a running session, and nothing warns about

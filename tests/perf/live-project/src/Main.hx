@@ -1,7 +1,7 @@
 import model.Counter;
 import model.Report;
 
-/** A live host app (`haxeon run --watch --live`): the host calls `start`, then `tick` until it returns 0. */
+/** A live host app (`haxeon run --watch` patches it): the host calls `start`, then `tick` until it returns 0. */
 class Main {
 	static var counter = new Counter();
 	static var ticks = 0;

@@ -33,7 +33,7 @@ location, and runtime arguments after `--`:
 haxeon run --profile=sampling --profile-output build/host/profile/editor.hlpc
 ```
 
-`--profile` also works with `--watch` and `--watch --live`. Each launch of the
+`--profile` also works with `--watch`, patching or restarting. Each launch of the
 watched app gets its own capture directory under the profile root (or under
 `--profile-output`, which is then a directory), finished when that launch exits
 or is relaunched after an edit. Live patches stay inside one capture: the trace

@@ -82,8 +82,20 @@ private typedef BuildOptions = {
 	 */
 	final gradleInputs:Null<String>;
 
+	/**
+	 * `--watch` (`haxeon run`): rebuild on each edit and patch the running app in the live host when its entry class declares
+	 * the host's entry points (`LiveHostBuild.missingEntryPoints`), else relaunch it.
+	 */
 	final watch:Bool;
-	final live:Bool;
+
+	/** `--restart`, with `--watch`: relaunch the app on each edit even when the live host could patch it. */
+	final restart:Bool;
+
+	/**
+	 * `--patchable`, with `build --compiler-only`: the compiler keeps the module's history, so each later build publishes a patch
+	 * of it (`.hlp`, `.live.*`) for a host that applies patches itself, a phone's say.
+	 */
+	final patchable:Bool;
 
 	/** `--strict-live`: report an edit that cannot patch instead of reloading the module, so unexpected reloads show. */
 	final strictLive:Bool;
@@ -942,18 +954,20 @@ class HaxeonCli {
 			throw new UsageError('Option "--compiler-only" is only valid with "haxeon build"');
 		if (options.watch && !launch)
 			throw new UsageError('Option "--watch" is only valid with "haxeon run"');
-		// `build --compiler-only --live` publishes the live artifacts (module, .hlp patch, .live.* descriptions) for a host that is not
-		// the desktop's (a phone applies the patch itself); `run --watch --live` is the desktop's loop.
-		if (options.live && !options.watch && !(options.compilerOnly && !launch))
-			throw new UsageError('Option "--live" requires "haxeon run --watch" (or "haxeon build --compiler-only")');
-		if (options.strictLive && !options.live)
-			throw new UsageError('Option "--strict-live" requires "haxeon run --watch --live"');
+		if (options.restart && !options.watch)
+			throw new UsageError('Option "--restart" requires "haxeon run --watch"');
+		if (options.patchable && !(options.compilerOnly && !launch))
+			throw new UsageError('Option "--patchable" is only valid with "haxeon build --compiler-only"');
+		if (options.strictLive && (!options.watch || options.restart))
+			throw new UsageError('Option "--strict-live" requires "haxeon run --watch" without "--restart"');
 		// Every target goes through the structured build (HaxeonProjectBuild); an Android build then has Gradle package it.
 		var hostBuild = targetInfo.equals(Target.detectHost())
 			&& Target.parse(project.manifest.target).equals(Target.detectHost()),
 			structuredBuild = hostBuild || targetInfo.isWasm() || targetInfo.isAndroid();
 		if (options.watch && !targetInfo.isAndroid() && !hostBuild)
 			throw new UsageError('Option "--watch" currently requires a host or Android project');
+		if ((options.restart || options.strictLive) && targetInfo.isAndroid())
+			throw new UsageError('The Android debug host patches every edit; "--restart" and "--strict-live" are for host projects');
 		if (command == Test && !hostBuild)
 			throw new UsageError('"haxeon test" runs a host project\'s tests; "$target" is not the host');
 		if (!launch && options.device != null)
@@ -990,11 +1004,13 @@ class HaxeonCli {
 				AppRunner.runnerDirectory(project, app, AppRunner.hostPlatform());
 			var appScope = app != null && !options.compilerOnly ? BuildScope.Module : scope(options);
 			// An app's release build is compiled ahead of time: its program is C, which the runner compiles into the executable
-			// (docs/design/PROJECT_BUILDS.md). A development build keeps the JIT, which --watch and --live patch.
+			// (docs/design/PROJECT_BUILDS.md). A development build keeps the JIT, which --watch patches.
 			var aheadOfTime = app != null && options.buildMode == "release";
-			if (aheadOfTime && (options.live || options.watch))
+			if (aheadOfTime && options.watch)
 				throw new UsageError("An app's release build is compiled ahead of time and cannot be watched or patched live; "
 					+ "use the development build mode");
+			// A watch patches the app in the live host when its entry class has the host's entry points, unless told to restart.
+			var live = options.patchable || options.watch && !options.restart && watchesLive(project, options);
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
 			// A program compiled ahead of time is C, written at `main.c/`.
 			var output = options.output == null
@@ -1002,7 +1018,7 @@ class HaxeonCli {
 				project.root);
 			// A stamp left by an earlier compiler would pin the live host to that revision if this compiler (a bootstrap
 			// one, say) writes none; without a stamp the host reads the description every tick.
-			if (options.live && FileSystem.exists(output + ".live.stamp"))
+			if (live && FileSystem.exists(output + ".live.stamp"))
 				FileSystem.deleteFile(output + ".live.stamp");
 			// A watching process keeps file hashes and its compiler worker choice between builds, starting with this one so the first
 			// edit is already warm.
@@ -1012,7 +1028,7 @@ class HaxeonCli {
 			var started = announceBuild(options, project, "host", options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, appScope, options.live, instrument, session,
+				resolutionMs, options.selfHosted, appScope, live, instrument, session,
 				options.buildMode == "development", null, null, options.style,
 				aheadOfTime, program == null ? null : program.scriptModule) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
@@ -1031,7 +1047,7 @@ class HaxeonCli {
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
-			if (options.live && session != null)
+			if (live && session != null)
 				session.warmLiveCompiler();
 			// An app runs as its runner's executable, which finds its native libraries beside itself.
 			var runner = app == null ? null : AppRunner.executable(project, AppRunner.hostPlatform());
@@ -1061,7 +1077,7 @@ class HaxeonCli {
 				// The live host inherits it and refuses unpatchable edits instead of reloading.
 				if (options.strictLive)
 					Sys.putEnv("HAXEON_LIVE_STRICT", "1");
-				if (options.live) {
+				if (live) {
 					// Under the build PATH, like the rebuilds below, so the host build reaches the same compiler worker.
 					var swapPath = buildPath != null && runPath != null;
 					if (swapPath)
@@ -1109,7 +1125,7 @@ class HaxeonCli {
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines,
 								options.jobs, false, false, false, 0.0,
 								options.selfHosted, change.compilerOnly ? Edit : app != null
-								? BuildScope.Module : Full, options.live,
+								? BuildScope.Module : Full, live,
 								instrument, session,
 								options.buildMode == "development", null, null, options.style);
 							if (windows)
@@ -1217,6 +1233,26 @@ class HaxeonCli {
 			session, adb, device);
 	}
 
+	/**
+	 * Whether `haxeon run --watch` patches the app in the live host: its entry class declares every entry point the host calls.
+	 * It says which way it chose, and why not live; `--strict-live` requires the live host.
+	 */
+	static function watchesLive(project:ResolvedProject, options:BuildOptions):Bool {
+		var entry = project.manifest.entry, missing = LiveHostBuild.missingEntryPoints(project);
+		if (missing.length > 0 && options.strictLive)
+			throw new UsageError('Option "--strict-live" requires the live host, which calls static '
+				+ '${LiveEntryPoints.REQUIRED.join(", ")} of the entry class; $entry does not declare ${missing.join(", ")}');
+		// Live patching needs the development build's metadata.
+		if (missing.length == 0 && options.buildModeExplicit && options.buildMode != "development")
+			throw new UsageError('$entry can be patched live, which needs the development build mode; pass "--restart" to rebuild '
+				+ 'and relaunch a release build on each edit');
+		if (!options.quiet && options.verbosity.atLeast(Verbosity.Minimal))
+			Sys.println(missing.length == 0
+				? 'haxeon: edits patch the running app ($entry has the live entry points; --restart relaunches it instead)'
+				: 'haxeon: edits relaunch the app ($entry does not declare ${missing.join(", ")} for live patching)');
+		return missing.length == 0;
+	}
+
 	static function scope(options:BuildOptions):BuildScope
 		return options.compilerOnly ? CompilerOnly : Full;
 
@@ -1226,8 +1262,8 @@ class HaxeonCli {
 	 * build, or a build after a check, reuses what the other typed.
 	 */
 	static function check(options:BuildOptions, project:ResolvedProject, target:Target, resolutionMs:Float):Int {
-		if (options.plan || options.explain || options.compilerOnly || options.watch || options.live
-			|| options.strictLive
+		if (options.plan || options.explain || options.compilerOnly || options.watch || options.restart
+			|| options.patchable || options.strictLive
 			|| options.profile || options.quiet || options.output != null || options.device != null
 			|| options.gradleInputs != null || options.runtimeArguments.length > 0)
 			throw new UsageError("haxeon check takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color and --diagnostic-format. See 'haxeon check --help'.");
@@ -1629,7 +1665,8 @@ class HaxeonCli {
 			compilerOnly = false,
 			gradleInputs:Null<String> = null,
 			watch = false,
-			live = false,
+			restart = false,
+			patchable = false,
 			strictLive = false,
 			jobs = 4,
 			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1",
@@ -1660,8 +1697,14 @@ class HaxeonCli {
 				compilerOnly = true;
 			else if (argument == "--watch")
 				watch = true;
+			else if (argument == "--restart")
+				restart = true;
+			else if (argument == "--patchable")
+				patchable = true;
 			else if (argument == "--live")
-				live = true;
+				throw new UsageError('Option "--live" was removed: "haxeon run --watch" patches the running app by itself when its '
+					+ 'entry class has the live entry points ("--restart" relaunches it instead), and '
+					+ '"haxeon build --compiler-only --patchable" builds a module later builds publish patches of');
 			else if (argument == "--strict-live")
 				strictLive = true;
 			else if (argument == "--self-hosted")
@@ -1767,8 +1810,8 @@ class HaxeonCli {
 			throw new UsageError('Option "--project" requires a value');
 		if (buildMode != "release" && buildMode != "development")
 			throw new UsageError('Unknown build mode "$buildMode". Valid: development, release');
-		if (live && buildModeExplicit && buildMode != "development")
-			throw new UsageError("--live requires development build mode");
+		if (patchable && buildModeExplicit && buildMode != "development")
+			throw new UsageError("--patchable requires development build mode");
 		return {
 			projectPath: projectPath,
 			target: target,
@@ -1787,7 +1830,8 @@ class HaxeonCli {
 			compilerOnly: compilerOnly,
 			gradleInputs: gradleInputs,
 			watch: watch,
-			live: live,
+			restart: restart,
+			patchable: patchable,
 			strictLive: strictLive,
 			jobs: jobs,
 			selfHosted: selfHosted,
@@ -1828,7 +1872,8 @@ class HaxeonCli {
 			compilerOnly: false,
 			gradleInputs: null,
 			watch: false,
-			live: false,
+			restart: false,
+			patchable: false,
 			strictLive: false,
 			jobs: 4,
 			selfHosted: Sys.getEnv("HAXEON_SELF_HOSTED") == "1",

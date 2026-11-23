@@ -56,8 +56,8 @@ static function main():Int
 	return DesktopUiHost.run(options(), create);
 ```
 
-The rest of `src/Main.hx` (`start`, `tick`, `close`, `saveState`, `restoreState`) is for `haxeon run --watch --live`
-and stays as the template wrote it, apart from the state it saves. Copy the whole file from the example project.
+The rest of `src/Main.hx` (`start`, `tick`, `close`, `saveState`, `restoreState`) lets `haxeon run --watch`
+patch the running app, and stays as the template wrote it, apart from the state it saves. Copy the whole file from the example project.
 
 ## How a window gets its content
 
@@ -313,7 +313,7 @@ the selection, the tab and the theme.
 
 ## Next
 
-- Change the code while the app runs: `haxeon run --watch --live` keeps the window open and applies your edits.
+- Change the code while the app runs: `haxeon run --watch` keeps the window open and applies your edits.
 - [Calling a C or C++ library](04-calling-c-and-cpp.md) from your app.
 - [Shipping](05-shipping.md) the app as an executable.
 - The UI package's own documentation: [packages/ui/README.md](https://github.com/tritao/haxeon/blob/main/packages/ui/README.md).

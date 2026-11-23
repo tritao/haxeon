@@ -1,5 +1,5 @@
 {
-	"about": "scripts/perf-guard.py, live part: haxeon run --watch --live on tests/perf/live-project (small) and on the app template over haxeon-ui (ui), from the save of an edit to the running app's patch-applied event, with the CLI and server built ahead of time (haxeon-aot, aot_). Measured on Linux x86-64. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
+	"about": "scripts/perf-guard.py, live part: haxeon run --watch, patching, on tests/perf/live-project (small) and on the app template over haxeon-ui (ui), from the save of an edit to the running app's patch-applied event, with the CLI and server built ahead of time (haxeon-aot, aot_). Measured on Linux x86-64. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"aot_small_body_edit_ms": {
 			"value": 113,

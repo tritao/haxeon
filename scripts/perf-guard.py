@@ -772,7 +772,7 @@ def measure_small_project_mode(out, mode, expected_server):
     return metrics
 
 
-# The live part (tests/perf/live-baseline.json): `haxeon run --watch --live` as a user runs it, on two apps, timed from the save
+# The live part (tests/perf/live-baseline.json): `haxeon run --watch` as a user runs it, on two apps that it patches, timed from the save
 # of each edit to the running app's patch-applied event, from the watch-events file (tools.WatchEvents) and the reports the build
 # prints at the diagnostic verbosity. Each app takes LIVE_WARM_EDITS unmeasured body edits (the first edits of a session pay for
 # what it has not compiled yet), then LIVE_BODY_EDITS body edits, whose median is kept, and one signature edit, which recompiles
@@ -857,15 +857,15 @@ def replace_once(path, old, new):
 
 
 class LiveWatch:
-    """`haxeon run --watch --live` on a project, read through its watch-events file and the live host's log."""
+    """`haxeon run --watch` on a project it patches, read through its watch-events file and the live host's log."""
 
     def __init__(self, app, project, work, env):
         self.project, self.env = project, env
         self.events = os.path.join(project, "build", "host", "main.hl.watch-events.jsonl")
         self.host_log = os.path.join(project, "build", "host", "main.hl.watch.log")
         self.log = open(os.path.join(work, f"{app.name}-watch.log"), "w")
-        self.process = subprocess.Popen(list(app.prefix) + [os.path.join(ROOT, "scripts", "haxeon"), "run", "--watch", "--live",
-                                                            "-v", "diagnostic"],
+        self.process = subprocess.Popen(list(app.prefix) + [os.path.join(ROOT, "scripts", "haxeon"), "run", "--watch", "-v",
+                                                            "diagnostic"],
                                         cwd=project, env=env, stdin=subprocess.DEVNULL, stdout=self.log,
                                         stderr=subprocess.STDOUT, start_new_session=True)
         self.read = 0

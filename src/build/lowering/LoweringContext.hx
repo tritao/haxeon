@@ -27,7 +27,10 @@ class LoweringContext {
 	/** Directory of the CMake trees that project builds share (NativeCache), or null when each project builds its own. */
 	public final nativeCache:Null<String>;
 
-	/** Build for `haxeon run --watch --live`: the compiler keeps the history patches address the running module by. */
+	/**
+	 * Build for a live session (`haxeon run --watch` of an app the live host runs, `build --compiler-only --patchable`): the
+	 * compiler keeps the history patches address the running module by.
+	 */
 	public final live:Bool;
 
 	/**

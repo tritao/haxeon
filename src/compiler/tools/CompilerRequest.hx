@@ -58,7 +58,7 @@ typedef CompilerRequest = {
 
 	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be
-	 * patched (`haxeon run --watch --live`). Without it every compile assembles from scratch and its bytes are a
+	 * patched (`haxeon run --watch` of an app it patches). Without it every compile assembles from scratch and its bytes are a
 	 * function of the source alone, whatever the session compiled before.
 	 */
 	final live:Bool;

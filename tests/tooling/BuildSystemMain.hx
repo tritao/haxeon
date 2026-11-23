@@ -57,6 +57,7 @@ import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
 import tools.DirectoryWatcher;
+import tools.LiveHostBuild;
 import tools.WatchEventLines;
 import tools.WatchEvents;
 import tools.WatchRun;
@@ -100,6 +101,7 @@ class BuildSystemMain {
 		testIdleWork();
 		testWatchChangeClassification();
 		testWatchSnapshot();
+		testLiveEntryPoints();
 		testWatchEventsFile();
 		testDirectoryWatcher();
 		#if (target.threaded && !eval)
@@ -932,6 +934,46 @@ class BuildSystemMain {
 			"without a session the version follows the sources");
 		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one,
 			"a profile port selects a different worker");
+		FileTree.remove(root);
+	}
+
+	/**
+	 * `haxeon run --watch` patches an app live when its entry class declares the live host's entry points as static functions,
+	 * read from the entry module's source: in a class named like the module or at module level, under conditional compilation.
+	 */
+	static function testLiveEntryPoints():Void {
+		var root = temporaryDirectory("live-entry-points");
+		writePackage(root, '{"version":1,"package":{"name":"entry"},"entry":"app.Main","sourceRoots":["src"]}', []);
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])),
+			main = Path.join([root, "src", "app", "Main.hx"]);
+		function missing(source:Null<String>):String {
+			if (source != null) {
+				ensureDirectory(Path.directory(main));
+				File.saveContent(main, source);
+			}
+			return LiveHostBuild.missingEntryPoints(project).join(",");
+		}
+		var all = "start,tick,saveState,restoreState,close";
+		expect(missing(null) == all, "an entry module the source roots do not hold has none of the entry points");
+		var points = "static function start(arguments:String):Void {}\n\tstatic function tick():Int return 0;\n"
+			+ "\tstatic function saveState():String return \"\";\n\tstatic function restoreState(state:String):Void {}\n"
+			+ "\tstatic function close():Int return 0;\n";
+		expect(missing('package app;\nclass Main {\n\tstatic function main() {}\n\t$points}\n') == "",
+			"an entry class with every entry point can be patched live");
+		expect(missing('package app;\nclass Main {\n\tstatic function main() {}\n\t${StringTools.replace(points, "tick", "step")}}\n')
+			== "tick", "an entry class without tick is relaunched, and tick is named");
+		expect(missing('package app;\nclass Main {\n\tfunction new() {}\n\tstatic function main() {}\n\t'
+			+ StringTools.replace(points, "static function close", "function close") + '}\n') == "close",
+			"an instance close is not the entry point");
+		expect(missing('package app;\nclass Other {\n\t$points}\nclass Main {\n\tstatic function main() {}\n}\n')
+			== all,
+			"another class's entry points are not the entry class's");
+		expect(missing('package app;\nfunction main() {}\n' + StringTools.replace(points, "static ", "") + '\n') == "",
+			"module-level functions are the entry class's static functions");
+		expect(missing('package app;\nclass Main {\n\tstatic function main() {}\n#if never\n\t$points#end\n}\n') == all,
+			"entry points left out by conditional compilation are missing");
+		expect(missing("package app;\nclass Main {") == all,
+			"an entry module that does not parse has none of the entry points");
 		FileTree.remove(root);
 	}
 

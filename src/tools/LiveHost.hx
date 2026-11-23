@@ -22,7 +22,7 @@ private typedef FullModule = {
 /** Stable process that calls one application pump step at a time. */
 class LiveHost {
 	/**
-	 * `haxeon run --watch --live --strict-live`: an edit that cannot patch is reported and left out instead of reloading the
+	 * `haxeon run --watch --strict-live`: an edit that cannot patch is reported and left out instead of reloading the
 	 * module, so a reload the edit should not have needed cannot pass unnoticed. That includes the builds of a compiler that
 	 * lost the running module's history (a new compiler session, after a worker crash say, or one that numbers the module
 	 * from scratch): none of them can patch, so each is refused, and starting the app afresh loads the latest.
@@ -57,10 +57,10 @@ class LiveHost {
 		// A reload whose full module is not published yet waits here while the current module keeps running.
 		var pendingReload:Null<LiveDescription> = null, pendingSince = 0.0;
 		try {
-			Runtime.callStringArg(module, functionId(description, entry + ".start"), arguments);
+			Runtime.callStringArg(module, functionId(description, entry + "." + LiveEntryPoints.START), arguments);
 			var running = true;
 			while (running) {
-				running = Runtime.callInt(module, functionId(description, entry + ".tick")) != 0;
+				running = Runtime.callInt(module, functionId(description, entry + "." + LiveEntryPoints.TICK)) != 0;
 				var published = readStamp(path);
 				var seenAt = Sys.time();
 				var candidate = published == null || published != stamp ? tryDescription(path) : null;
@@ -98,10 +98,10 @@ class LiveHost {
 							// An app that rebuilds its UI from its code lets go of it around the patch (`Runtime.patchSetRebuilding`).
 							Runtime.patchSetRebuilding(module,
 								new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions),
-								optionalFunctionId(description, entry + "." + LIVE_RELEASE),
-								optionalFunctionId(description, entry + "." + LIVE_REBUILD),
+								optionalFunctionId(description, entry + "." + LiveEntryPoints.RELEASE),
+								optionalFunctionId(description, entry + "." + LiveEntryPoints.REBUILD),
 								(rebuilding,
-								error) -> hookErrors.push('$entry.${rebuilding ? LIVE_REBUILD : LIVE_RELEASE}() threw: $error'));
+								error) -> hookErrors.push('$entry.${rebuilding ? LiveEntryPoints.REBUILD : LiveEntryPoints.RELEASE}() threw: $error'));
 							applied = true;
 						} catch (error:RuntimeError) {
 							failure = error.message;
@@ -187,12 +187,12 @@ class LiveHost {
 					}
 				}
 			}
-			var status = Runtime.callInt(module, functionId(description, entry + ".close"));
+			var status = Runtime.callInt(module, functionId(description, entry + "." + LiveEntryPoints.CLOSE));
 			if (status != 0)
 				Sys.exit(status);
 		} catch (error:haxe.Exception) {
 			try
-				Runtime.callInt(module, functionId(description, entry + ".close"))
+				Runtime.callInt(module, functionId(description, entry + "." + LiveEntryPoints.CLOSE))
 			catch (_:Dynamic) {}
 			Runtime.dispose(module);
 			throw error;
@@ -218,7 +218,7 @@ class LiveHost {
 			arguments:String):Null<LoadedModule> {
 		var state:String;
 		try
-			state = Runtime.callString(current, functionId(previous, entry + ".saveState"))
+			state = Runtime.callString(current, functionId(previous, entry + "." + LiveEntryPoints.SAVE_STATE))
 		catch (error:Dynamic) {
 			report('haxeon: could not save live state; keeping revision ${previous.revision}: ${Std.string(error)}');
 			return null;
@@ -233,9 +233,9 @@ class LiveHost {
 		var oldClosed = false;
 		try {
 			oldClosed = true;
-			Runtime.callInt(current, functionId(previous, entry + ".close"));
-			Runtime.callStringArg(replacement, functionId(next, entry + ".start"), arguments);
-			Runtime.callStringArg(replacement, functionId(next, entry + ".restoreState"), state);
+			Runtime.callInt(current, functionId(previous, entry + "." + LiveEntryPoints.CLOSE));
+			Runtime.callStringArg(replacement, functionId(next, entry + "." + LiveEntryPoints.START), arguments);
+			Runtime.callStringArg(replacement, functionId(next, entry + "." + LiveEntryPoints.RESTORE_STATE), state);
 			try
 				Runtime.dispose(current)
 			catch (error:Dynamic)
@@ -244,14 +244,15 @@ class LiveHost {
 			return replacement;
 		} catch (error:Dynamic) {
 			try
-				Runtime.callInt(replacement, functionId(next, entry + ".close"))
+				Runtime.callInt(replacement, functionId(next, entry + "." + LiveEntryPoints.CLOSE))
 			catch (_:Dynamic) {}
 			try
 				Runtime.dispose(replacement)
 			catch (_:Dynamic) {}
 			if (oldClosed) {
-				Runtime.callStringArg(current, functionId(previous, entry + ".start"), arguments);
-				Runtime.callStringArg(current, functionId(previous, entry + ".restoreState"), state);
+				Runtime.callStringArg(current, functionId(previous, entry + "." + LiveEntryPoints.START), arguments);
+				Runtime.callStringArg(current, functionId(previous, entry + "." + LiveEntryPoints.RESTORE_STATE),
+					state);
 			}
 			report('haxeon: reload failed; restored revision ${previous.revision}: ${Std.string(error)}');
 			return null;
@@ -404,16 +405,6 @@ class LiveHost {
 		var full = try readDescription(path) catch (_:Dynamic) null;
 		return full != null && publicationKey(full) == publicationKey(summary) ? full : null;
 	}
-
-	/**
-	 * Optional functions of the app's entry class a host calls around a patch (`Runtime.patchSetRebuilding`):
-	 * `liveRelease()`, only before a patch that drops functions (one with guards), lets go of what the app rebuilds from its
-	 * code, its UI and the callbacks it holds; `liveRebuild()`, after every patch, builds it again, from the patched code
-	 * when the patch applied.
-	 */
-	public static inline final LIVE_RELEASE:String = "liveRelease";
-
-	public static inline final LIVE_REBUILD:String = "liveRebuild";
 
 	static function optionalFunctionId(description:LiveDescription, name:String):Null<Int> {
 		for (item in description.identities)

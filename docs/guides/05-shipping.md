@@ -38,7 +38,7 @@ platforms = ["linux", "macos", "windows"]
 
 A plain `haxeon build` makes a development build: the app's runner (`linux/` on Linux, a CMake project) links the HashLink VM
 into an executable, and the compiled program sits beside it as `my_app.hl`, which the VM compiles to machine code as it
-loads it. That is what `haxeon run --watch --live` patches while the app runs.
+loads it. That is what `haxeon run --watch` patches while the app runs.
 
 To ship, build in release mode:
 
@@ -71,7 +71,7 @@ haxeon run --build-mode=release
 ```
 
 A release build cannot be watched or patched live; `haxeon run --build-mode=release --watch` says so and stops. Go back
-to `haxeon run --watch --live` for development.
+to `haxeon run --watch` for development.
 
 On macOS the release build is the bundle `build/macos/app/my_app.app`: the executable in `Contents/MacOS`, the
 libraries in `Contents/Frameworks`, and the `Info.plist` made from `[app]`. On Windows `build/windows/app/` holds

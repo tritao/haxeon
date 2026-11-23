@@ -50,7 +50,7 @@ but an app targets other platforms too. `HaxeonConfig.cmake` selects by `CMAKE_S
 is a source root, one capability check instead of layout branches.
 
 **Built files are installed; source trees are named, not copied.** Copies of `stdlib/`, `templates/` and packages in
-`out/sdk` would go stale after an edit, send go-to-definition to the copies and make `run --watch --live` watch the wrong
+`out/sdk` would go stale after an edit, send go-to-definition to the copies and make `run --watch` watch the wrong
 files. The manifest names those roots: relative to the SDK in a release, the checkout's own directories in a checkout. The
 code path is the same; only the manifest differs.
 
@@ -152,7 +152,7 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
      development host in both flavors. So a release does everything a user does, live patching included; `haxeon dev`,
      `--self-hosted` and `haxeon heap inspect` stay with a checkout, and Android waits for `platforms/android` (step 6);
    - the release workflow smoke-tests each platform's archive (`scripts/smoke-test-release.sh`), the app template where it
-     has a runner for the platform, and a program and the app patched under `run --watch --live`.
+     has a runner for the platform, and a program and the app patched under `run --watch`.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a
    network registry after that.
 

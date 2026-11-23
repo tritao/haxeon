@@ -15,7 +15,7 @@ The Wasm program target needs a host. [C and C++ interop](../guides/04-calling-c
 |---|---|
 | `Widget` and `build()` | Describe the view with the `ui` package's controls and layouts. |
 | State fields and `setState` | Store reactive values in `Signal<T>` and assign to their `value` property. |
-| `flutter run` and hot reload | Use `haxeon run --watch --live` for compatible desktop app patches. |
+| `flutter run` and hot reload | Use `haxeon run --watch` for compatible desktop app patches. |
 | `pubspec.yaml` and pub dependencies | Declare dependencies in `haxeon.toml` and resolve them with `haxeon install`. |
 | `String?` and `??` | Use `Null<String>`, a null check or `??`, and turn on package checks with `nullSafety = "strict"`. |
 | Platform channels or `dart:ffi` | Bind a supported C or C++ interface with the header importer. Flutter plugin APIs need a port. |

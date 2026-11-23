@@ -104,7 +104,7 @@ which when it draws the window again. The count is a `Signal` in the `Main` clas
 again with the new count.
 
 Run the app again with `haxeon run` to see the change. To see changes without restarting the app, and without losing
-the count, run it with `haxeon run --watch --live` instead: [Live editing](02-live-editing.md) shows how.
+the count, run it with `haxeon run --watch` instead: [Live editing](02-live-editing.md) shows how.
 
 ## Build it for shipping
 

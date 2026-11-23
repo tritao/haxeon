@@ -46,13 +46,14 @@ cmake --build --preset release   # HashLink VM and Haxeon runtime
 
 ./scripts/haxeon init            # creates haxeon.toml and src/Main.hx
 ./scripts/haxeon run             # build and launch
-./scripts/haxeon run --watch     # rebuild and relaunch on edits
+./scripts/haxeon run --watch     # rebuild on edits: patch the running app, or relaunch it
 ./scripts/haxeon --help          # every command; haxeon help build for one
 ```
 
-`run --watch --live` keeps one process alive and applies patches between
-application ticks. It requires an entry class with `start`, `tick`, `saveState`,
-`close`, and `restoreState`; see [Project CLI](docs/reference/CLI.md).
+`run --watch` keeps one process alive and applies patches between application
+ticks when the entry class has static `start`, `tick`, `saveState`, `close`, and
+`restoreState` (the app template's does), and relaunches the program otherwise
+or with `--restart`; see [Project CLI](docs/reference/CLI.md).
 
 | Platform | Status |
 |---|---|

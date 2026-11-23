@@ -1,8 +1,8 @@
 # Project builds: runner projects and one native graph per app
 
 Status: steps 1 to 3 are built: `haxeon create` writes `linux/`, `macos/` or `windows/`, `haxeon build` generates the fragment
-and builds the runner with every native package in one graph, in development or release mode, and `haxeon run` (with `--watch`
-and `--live`) runs the app's executable; CI creates, builds and runs the app on Linux, macOS and Windows. The SDK the
+and builds the runner with every native package in one graph, in development or release mode, and `haxeon run` (with `--watch`,
+patching or restarting) runs the app's executable; CI creates, builds and runs the app on Linux, macOS and Windows. The SDK the
 runner links is Haxeon's SDK ([SDK_LAYOUT.md](SDK_LAYOUT.md)), found with `find_package(Haxeon)`, and the app's packages come
 from the SDK's `haxeon` registry, so a created app builds from a release as from a checkout. Steps 4 to 6 are open. How an app is built for each platform: by platform projects the
 app owns, which `haxeon` generates once and then drives, as Flutter does, instead of builds Haxeon runs out of sight. How apps consume Haxeon (the SDK, `find_package(Haxeon)`, the `haxeon` registry) is
@@ -65,7 +65,7 @@ haxeon create .                                       # restore what is missing;
   is, as Flutter's create does; Android and the web join the default when their runners land).
 - In an existing project `create` adds the files and the `platforms` entries that are missing and leaves every existing
   file as it is; a runner that differs from its template is reported, not replaced.
-- It prints the next commands (`cd my_app`, `haxeon run`, `haxeon run --watch --live`).
+- It prints the next commands (`cd my_app`, `haxeon run`, `haxeon run --watch`).
 - Every template is created, built and run in CI, on each platform CI has.
 
 ## Runner projects
@@ -109,7 +109,7 @@ which `haxeon_add_app` picks from the fragment. Android's JNI start and the web 
 calling the same function, so a runner never carries start-up code an SDK update would have to reach.
 
 - **Development builds** link the VM and load the module (`main.hl`) beside the executable. The live host is the same
-  executable, so `haxeon run --watch --live` patches the running app as today.
+  executable, so `haxeon run --watch` patches the running app as today.
 - **Release builds** (`haxeon build --build-mode=release`) compile the program ahead of time: the compiler writes its C at
   `build/host/main.c/` (the build's `CModule` artifact), the fragment names that directory as `HAXEON_MODULE_C` instead of
   `HAXEON_MODULE`, and `haxeon_add_app` compiles it with the SDK's `haxeon_add_c_executable`, which adds the SDK's

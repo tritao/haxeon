@@ -68,7 +68,7 @@ class ProjectCreator {
 			Sys.println('  cd ${options.directory}');
 		Sys.println("  haxeon run");
 		if (options.template == "app")
-			Sys.println("  haxeon run --watch --live      (edit src/Main.hx while it runs)");
+			Sys.println("  haxeon run --watch             (edit src/Main.hx while it runs)");
 		return 0;
 	}
 

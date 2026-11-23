@@ -2,8 +2,8 @@
 
 Status: in the tree for Windows and Linux; macOS polls. NativeKit's watcher is to be ported onto it (below).
 
-`haxeon run --watch` and `--live` wake on a save instead of a polling interval through `native/watch/haxeon_watch.h`: a
-plain C component with no dependency on HashLink or the Haxeon runtime. Its API is create, add a directory (recursive or
+`haxeon run --watch`, patching or restarting, wakes on a save instead of a polling interval through
+`native/watch/haxeon_watch.h`: a plain C component with no dependency on HashLink or the Haxeon runtime. Its API is create, add a directory (recursive or
 not), exclude a subtree, count the watched directories, wait with a timeout, and destroy. A wait answers *none*,
 *changed* or *rescan*: it says that something under a watched directory changed, not what, since the watch loop compares
 its own snapshot of the tree; *rescan* says changes may have been lost and the loop should take a full snapshot.

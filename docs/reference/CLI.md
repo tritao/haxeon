@@ -8,8 +8,9 @@ is available on Unix-like systems and Windows:
 
 Desktop and Wasm builds default to `development`, retaining metadata for
 debuggers and other development tools. Use `--build-mode release` when building
-artifacts for packaging or distribution; `run --watch --live` always selects development. An
-explicit release mode cannot be combined with `--live`. The Android debug host
+artifacts for packaging or distribution; `run --watch` of an app it patches live always selects development. An
+explicit release mode cannot be patched live: `run --watch --build-mode=release` of such an app asks for `--restart`. The
+Android debug host
 uses development metadata for live patching. Release HashLink
 modules retain function names and line tables for profiler output and stack
 traces, and omit opcode spans and embedded source snapshots. The compiler CLI
@@ -86,7 +87,7 @@ version resources, packaging): `haxeon build` compiles the module,
 writes `build/generated/PLATFORM/haxeon.cmake` and builds this machine's runner with CMake into `build/PLATFORM/app/`,
 where the executable (named after the package), its module and its native packages' libraries sit together, or on macOS
 make the bundle `NAME.app`; on Windows it builds with MSVC, as a Windows program (no console window from Explorer).
-`haxeon run` runs that executable, and `--watch`/`--live` run the module they rebuild in it. `cmake -S linux -B DIR &&
+`haxeon run` runs that executable, and `--watch` runs the module it rebuilds in it. `cmake -S linux -B DIR &&
 cmake --build DIR` (or `macos`, `windows`) builds the same app once a build has written the fragment. Building for a
 platform the app does not list, or without its
 runner, is a usage error that names `haxeon create .`.
@@ -301,32 +302,40 @@ them.
 ```
 
 On Linux, macOS and Windows, `run --watch` rebuilds after edits to resolved package
-sources and relaunches the host app after a successful build. Haxe source edits
-use the compiler-only build path; FFI, manifest, and native source edits use the
-full project build. A failed build leaves the running app open. Runtime output
-is forwarded from `<output>.watch.log`. This mode restarts the process.
+sources. Haxe source edits use the compiler-only build path; FFI, manifest, and
+native source edits use the full project build. A failed build leaves the
+running app open. Runtime output is forwarded from `<output>.watch.log`. What a
+successful build does depends on the project's entry class, which the watch reads
+from its source before the first build and names in one line as it starts:
+
+- **Patch.** When the entry class declares the static functions the live host
+  calls, `start(arguments:String):Void`, `tick():Int` (nonzero while running),
+  `close():Int`, `saveState():String` and `restoreState(state:String):Void`
+  (`tools.LiveEntryPoints`), the app runs in a stable host process that applies
+  compatible HLP patches between application pump steps. The host calls `start`
+  once, then `tick` repeatedly; it never calls `main`, which the entry class
+  still has. A structural change reloads the module through the state methods.
+  Non-Haxe changes restart the process. The app templates' `Main` has them all.
+- **Restart.** Otherwise, or with `--restart`, the watch relaunches the app
+  after each successful build.
+
+`--strict-live` makes a patching watch refuse an edit that cannot patch instead
+of reloading ([LIVE_PATCHING.md](LIVE_PATCHING.md#strict-mode)); it is an error
+with `--restart` or for an app the watch would restart.
 
 ```sh
 ./scripts/haxeon run --watch --project path/to/haxeon.toml -- --verbose
+./scripts/haxeon run --watch --restart --project path/to/haxeon.toml
 ```
 
-`run --watch --live` keeps a stable host process and applies compatible HLP
-patches between application pump steps. The project entry class must expose
-static `start(arguments:String):Void`, `tick():Int` (nonzero while running),
-`saveState():String`, `close():Int`, and `restoreState(state:String):Void`, and,
-like any entry class, a `main` (the live host never calls it).
-The host calls `start` once, then `tick` repeatedly. A structural change reloads
-the module through those state methods. Non-Haxe changes restart the process.
-The output path must be separate from any ordinary app build output.
-
-```sh
-./scripts/haxeon run --watch --live --project path/to/live.json \
-  --output build/host/live.hl -- --verbose
-```
+`build --compiler-only --patchable` builds the module as a patching watch does,
+for a host that applies the patches itself (a phone's, say): the compiler worker
+keeps the module's history, so each later `build --compiler-only --patchable`
+publishes an `.hlp` patch and its `.live.*` descriptions beside the module.
 
 Besides the console, `run --watch` appends what it does with each edit to `<output>.watch-events.jsonl`, one JSON
 object per line, and passes that path to the app in `HAXEON_WATCH_EVENTS`: `rebuild-started` (with `changedFiles`),
-one `output-line` per line the build printed, `build-failed` or `build-ok`, and in live mode `patch-published`
+one `output-line` per line the build printed, `build-failed` or `build-ok`, and when it patches `patch-published`
 (`revision`, `reloadReasons`). The live host adds `patch-applied`, `patch-rejected` (a refused patch or a failed
 reload, with `message`) and `reload`. The file starts empty with each watch and moves to `<file>.1` past 4 MiB.
 `src/tools/WatchEvents.hx` lists the fields.

@@ -2,11 +2,11 @@
 # Smoke test of a release archive (`haxeon dev package`, docs/DEVELOPMENT.md, Releases), as a user meets it: unpacked into a
 # directory of its own outside any checkout, with a home directory of its own so every cache starts cold, and nothing but the
 # archive's bin/haxeon. It runs --version, doctor, create (console) + build + run + check of a new project and a script, checks that
-# the compiles ran the compiler the archive is meant to run, and runs a program under `run --watch --live`, edits it and sees
+# the compiles ran the compiler the archive is meant to run, and runs a program under `run --watch`, edits it and sees
 # the running program patched. Where the app template has a runner for this platform it then creates the app, which takes its
 # UI package from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain,
 # and on Linux GTK's development files, are needed) and runs each for a few frames, under xvfb-run when there is one, patches
-# the app running under `run --watch --live` (not on Windows), then builds and runs a program that uses the nativekit package
+# the app running under `run --watch` (not on Windows), then builds and runs a program that uses the nativekit package
 # from the same registry and one that uses filesystem, a NativeKit module's package built on the same NativeKit. Nothing may be
 # written into the release's directory:
 #
@@ -108,7 +108,7 @@ stop_tree() {
 	kill "$1" 2>/dev/null || true
 }
 
-# A program for `run --watch --live`, which runs it in the live host: its entry class's start, tick and close, and the state
+# A program `run --watch` patches, as its entry class declares what the live host calls: start, tick and close, and the state
 # methods a reload calls. Each tick prints the value $1; the program ends when its directory $2 holds a file `stop`.
 live_source() {
 	printf '%s\n' 'class Main {' \
@@ -189,12 +189,12 @@ fi
 [[ $output == *"is a release"* ]] || fail "haxeon dev's refusal does not say why: $output"
 
 # The live host the release ships, the compile server's patches, and the edit seen in the running program.
-echo "== haxeon run --watch --live: an edit patches the running program"
+echo "== haxeon run --watch: an edit patches the running program"
 live=$work/projects/live
 mkdir -p "$live"
 (cd "$live" && "$haxeon" create . --template console >/dev/null) || fail "haxeon create of the live program"
 live_source one "$live"
-(cd "$live" && exec "$haxeon" run --watch --live) >"$work/live.log" 2>&1 &
+(cd "$live" && exec "$haxeon" run --watch) >"$work/live.log" 2>&1 &
 watch=$!
 wait_for "$watch" "$work/live.log" '^live value one' 300
 live_source two "$live"
@@ -202,7 +202,7 @@ wait_for "$watch" "$work/live.log" '^live value two' 120
 grep -q '"kind":"patch-applied"' "$live/build/host/main.hl.watch-events.jsonl" ||
 	{ cat "$work/live.log" >&2; fail "the edit reached the program, but not as a patch"; }
 touch "$live/stop"
-wait "$watch" || { cat "$work/live.log" >&2; fail "haxeon run --watch --live exited with status $?"; }
+wait "$watch" || { cat "$work/live.log" >&2; fail "haxeon run --watch exited with status $?"; }
 
 headless=()
 if command -v xvfb-run >/dev/null; then
@@ -239,8 +239,8 @@ if [[ -d $root/templates/app/$platform ]]; then
 	# edit made before the watch took its first snapshot goes unseen, and one the host sees before it loaded the first module is
 	# no patch but the module it loads, so it edits until one applies.
 	if [[ $windows == 0 ]]; then
-		echo "== haxeon run --watch --live of the app: an edit patches the running app"
-		(cd "$app" && exec "${headless[@]}" "$haxeon" run --watch --live) >"$work/live.log" 2>&1 &
+		echo "== haxeon run --watch of the app: an edit patches the running app"
+		(cd "$app" && exec "${headless[@]}" "$haxeon" run --watch) >"$work/live.log" 2>&1 &
 		watch=$!
 		events=$app/build/host/main.hl.watch-events.jsonl
 		wait_for "$watch" "$events" '' 300

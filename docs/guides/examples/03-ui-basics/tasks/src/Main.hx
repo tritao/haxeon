@@ -25,7 +25,7 @@ class Main {
 	static function main():Int
 		return DesktopUiHost.run(options(), create);
 
-	// `haxeon run --watch --live` keeps one process and calls these instead of `main`, so edits apply to the running app.
+	// `haxeon run --watch` sees these, keeps one process and calls them instead of `main`, so edits apply to the running app.
 
 	public static function start(arguments:String):Void
 		session = DesktopUiHost.open(options(), create);

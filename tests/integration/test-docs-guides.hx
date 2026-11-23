@@ -210,7 +210,8 @@ function shipping(project:String):Void {
 }
 
 /**
- * "Live editing": the app starts as "Your first app" left it, runs under `haxeon run --watch --live`, and takes the guide's
+ * "Live editing": the app starts as "Your first app" left it, runs under `haxeon run --watch` (its entry class has the
+ * live entry points, so the watch patches it), and takes the guide's
  * edits in order, each a version of src/Main.hx in the example's steps/ whose name says what it does: `-patch` patches the
  * running app, `-reload` reloads its module, `-error` fails the build while the app runs on.
  */
@@ -223,7 +224,7 @@ function liveEditing(root:String, example:String, project:String):Void {
 		headless = hasXvfb() ? ["xvfb-run", "-a"] : [];
 	// The watch's output goes to a file, so nothing has to drain its pipes; closing the process ends its process group.
 	var watch = ChildProcess.spawn("sh", ["-c", 'exec "$$@" > "$log" 2>&1', "sh"].concat(headless)
-		.concat([Script.haxeon(), "run", "--watch", "--live"]), project);
+		.concat([Script.haxeon(), "run", "--watch"]), project);
 	var steps = [for (name in FileSystem.readDirectory(Path.join([example, "steps"]))) name];
 	steps.sort(Reflect.compare);
 	waitFor(watch, log, () -> content(log).indexOf("haxeon: running") >= 0, 900, "the app to start");

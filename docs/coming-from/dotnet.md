@@ -12,7 +12,7 @@ views. [C and C++ interop](../guides/04-calling-c-and-cpp.md) · [UI basics](../
 
 | In .NET or C# | In Haxeon |
 |---|---|
-| `dotnet run` | `haxeon run` builds and runs a project. `haxeon run --watch --live` can patch a running app. |
+| `dotnet run` | `haxeon run` builds and runs a project. `haxeon run --watch` patches a running app. |
 | `dotnet publish` with Native AOT | For desktop apps, `haxeon build --build-mode=release` with a platform runner and a C toolchain. |
 | `.csproj` and `PackageReference` | `haxeon.toml` describes the project, entry point and dependencies. |
 | `string?`, `int?` and `??` | `Null<String>`, `Null<Int>` and `??`. Strict package checks report invalid nullable uses as errors. |

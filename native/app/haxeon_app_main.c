@@ -2,8 +2,8 @@
  * call, starts the HashLink VM on the app's module, which sits
  * beside the executable under its name (`hello-app` runs `hello-app.hl`), or in a macOS bundle among its resources
  * (`hello-app.app/Contents/MacOS/hello-app` runs `hello-app.app/Contents/Resources/hello-app.hl`). `--haxeon-module=PATH` as
- * the first argument runs PATH instead: `haxeon run --watch` runs the module it rebuilds so, and `--live` the live host, which
- * takes the app's module as an argument, in the app's own executable. Every other argument is the program's (Sys.args()).
+ * the first argument runs PATH instead: `haxeon run --watch` runs the module it rebuilds so, or, patching, the live host,
+ * which takes the app's module as an argument, in the app's own executable. Every other argument is the program's (Sys.args()).
  *
  * An app's executable compiles only the entry points, nothing of HashLink's: the VM, its entry point and this file are
  * libhaxeon-app, built by Haxeon's native build with HashLink's flags. */
