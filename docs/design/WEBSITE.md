@@ -117,8 +117,8 @@ The table follows README.md; when a platform's status changes there, it changes 
   say what is the same and what differs), and a walkthrough moving a small real project.
 - **Reference:** the language, the CLI, the manifest, the packages (`ui`, `platform`, `gpu`, `audio`, `animation`,
   `editor`), the error codes, the standard library API.
-- **About:** the project, its maintainers and support channels, the licenses, and one line on its origin: *Haxeon is an
-  independent language and runtime built on Haxe; it compiles a growing subset of Haxe.*
+- **About:** the project, its maintainers and support channels, and the licenses. The relation to Haxe is told only on the
+  Coming from Haxe page; the footer and the rest of the site do not mention it. The name is written Haxeon.
 
 Top navigation: **Language**, **Build** (Apps first, then tools, games and 3D, scripts, embedding; Apps has its own
 landing page with the demo, the platform table, the UI package and the first-app guide), **Docs**, **Examples**, **About**,
