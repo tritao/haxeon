@@ -109,6 +109,8 @@ class CompilerMemoryCensus {
 					state.canonicalInterfaces = [];
 					state.canonicalAbstracts = [];
 					state.canonicalAliases = [];
+					// Nothing canonical is left to reuse: a later canonicalization starts over.
+					state.canonicalRevision = -1;
 				}
 			},
 				{name: "semantic models of modules",

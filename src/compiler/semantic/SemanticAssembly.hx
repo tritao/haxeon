@@ -16,6 +16,7 @@ import compiler.core.CancellationToken;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
 import compiler.semantic.Invalidation.InvalidationReason;
+import compiler.semantic.ProgramFacts.InferredProgramFacts;
 
 typedef SemanticAssemblyResult = {
 	final canonicalProgram:AstProgram;
@@ -48,6 +49,19 @@ typedef SemanticAssemblyResult = {
 }
 
 /** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
+/** The dependency edges of a program walked backwards (`SemanticAssembly.reverseIndexesOf`), each by its target. */
+private typedef ReverseIndexes = {
+	/** The callers of each function, as the contributions' calls and implicit constructors name them. */
+	final calls:Map<String, Array<String>>;
+
+	final bodyDependencies:Map<String, Array<String>>;
+	final declarationTypeReads:Map<String, Array<String>>;
+	final initializerCalls:Map<String, Array<String>>;
+
+	/** The callers typing recorded for each callee. */
+	final typedCalls:Map<String, Array<String>>;
+}
+
 class SemanticAssembly {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
 			rollbackModules:Map<String, ModuleState>,
@@ -71,7 +85,6 @@ class SemanticAssembly {
 			classes:Array<compiler.syntax.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
 			generatedByModule:Map<String, Map<String, Bool>> = [],
-			reverseCalls:Map<String, Array<String>> = [],
 			genericOrigins:Map<String, Bool> = [];
 		var sourceTypeAliases:Map<String, String> = [],
 			aliasesByModule:Map<String, Array<{sourceName:String, declarationName:String}>> = [],
@@ -200,8 +213,7 @@ class SemanticAssembly {
 			if (reuseModuleContributions
 				&& state.canonicalRevision == state.revision
 				&& state.canonicalEntry == entryModule
-				&& state.canonicalAliasKey == aliasKey
-				&& state.canonicalAllFunctions.length > 0) {
+				&& state.canonicalAliasKey == aliasKey) {
 				for (value in state.canonicalAliases)
 					typeAliases.push(value);
 				for (value in state.canonicalEnums)
@@ -217,11 +229,6 @@ class SemanticAssembly {
 				for (fn in state.canonicalAllFunctions) {
 					functions.push(fn);
 					owners.set(fn.name, name);
-					var fallbackCalls = state.canonicalCalls.get(fn.name);
-					if (fallbackCalls == null)
-						fallbackCalls = [];
-					for (callee in dependencyCalls(state, rollbackModules, fn.name, fallbackCalls))
-						addReverseCall(reverseCalls, callee, fn.name);
 				}
 				for (fn in state.canonicalProgramFunctions)
 					programFunctions.push(fn);
@@ -390,17 +397,6 @@ class SemanticAssembly {
 				if (canonical.typeParameters != null && canonical.typeParameters.length > 0)
 					genericOrigins.set(canonical.name, true);
 				LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-				for (callee in dependencyCalls(state, rollbackModules, canonical.name,
-					state.canonicalCalls.get(canonical.name))) {
-					var callers:Array<String>;
-					if (reverseCalls.exists(callee))
-						callers = reverseCalls.get(callee);
-					else {
-						callers = [];
-						reverseCalls.set(callee, callers);
-					}
-					callers.push(canonical.name);
-				}
 			}
 			for (classDecl in ast.classes) {
 				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
@@ -438,18 +434,7 @@ class SemanticAssembly {
 					for (statement in canonical.statements)
 						SemanticDependencyCollector.scanCalls(statement, calls, aliases);
 					LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-					var fallbackCalls = [for (name in calls.keys()) name];
-					state.canonicalCalls.set(canonical.name, fallbackCalls);
-					for (callee in dependencyCalls(state, rollbackModules, canonical.name, fallbackCalls)) {
-						var callers:Array<String>;
-						if (reverseCalls.exists(callee))
-							callers = reverseCalls.get(callee);
-						else {
-							callers = [];
-							reverseCalls.set(callee, callers);
-						}
-						callers.push(canonical.name);
-					}
+					state.canonicalCalls.set(canonical.name, [for (name in calls.keys()) name]);
 				}
 				var canonicalFields:Array<compiler.syntax.Ast.AstField> = [];
 				for (field in classDecl.fields) {
@@ -524,21 +509,15 @@ class SemanticAssembly {
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
 		// A class without a constructor has its base class's: give it one, so it is typed, tracked and invalidated like any other.
-		var changedSignatures:Map<String, Bool> = [for (name in signatureChanged.keys()) name => true];
+		var changedSignatures:Map<String, Bool> = [for (name in signatureChanged.keys()) name => true],
+			genericClasses:Map<String, Bool> =
+				[for (declaration in classes) if (declaration.typeParameters.length > 0) declaration.name => true];
 		var implicitConstructors = ImplicitConstructors.add(classes);
 		for (constructor in implicitConstructors) {
-			var qualified = constructor.owner + ".new",
-				baseConstructor = constructor.base + ".new";
+			var qualified = constructor.owner + ".new";
 			functions.push(AstFunctions.withName(constructor.method, qualified));
-			var callers = reverseCalls.get(baseConstructor);
-			if (callers == null) {
-				callers = [];
-				reverseCalls.set(baseConstructor, callers);
-			}
-			callers.push(qualified);
-			for (declaration in classes)
-				if (declaration.name == constructor.owner && declaration.typeParameters.length > 0)
-					genericOrigins.set(qualified, true);
+			if (genericClasses.exists(constructor.owner))
+				genericOrigins.set(qualified, true);
 		}
 		// A class that implements an interface with variables has their hidden accessors (`InterfaceFieldAccessors`): typed, tracked
 		// and invalidated as its own methods, through its layout dependency on the interface.
@@ -546,9 +525,8 @@ class SemanticAssembly {
 			var qualified = accessor.owner + "." + accessor.method.name;
 			functions.push(AstFunctions.withName(accessor.method, qualified));
 			owners.set(qualified, owners.get(accessor.owner + ".new"));
-			for (declaration in classes)
-				if (declaration.name == accessor.owner && declaration.typeParameters.length > 0)
-					genericOrigins.set(qualified, true);
+			if (genericClasses.exists(accessor.owner))
+				genericOrigins.set(qualified, true);
 		}
 
 		// Purity and no-return are whole-program facts, but typed bodies are cached between
@@ -557,28 +535,18 @@ class SemanticAssembly {
 		// body's own typing last recorded asking about. A caller whose depended-upon answer
 		// flipped elsewhere is retyped below through the ordinary invalidation propagation, even
 		// though neither its own source nor its signature changed.
-		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
-		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
-			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
-		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
-			[for (enumDecl in enums) enumDecl.name => enumDecl];
-		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
-			[for (decl in abstracts) decl.name => decl];
-		// The typer's own signature table: purity inferred over any other scope can disagree with what typing relied on, and
-		// every cached body then looks drifted on every edit.
-		var purityScopeSignatures:Map<String, AstFunction> = [];
-		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
-		var isAnnotatedPure =
-			function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
-			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures,
-			purityScopeClasses);
-		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
-			.isTypeName(candidate, purityScopeClasses,
-			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
-		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
-			purityScopeAbstracts,
-			purityScopeEnums, isAnnotatedPure, isTypeName);
-		var freshNoReturn = compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures);
+		var contributions = [
+			for (moduleName in names)
+				if (modules.exists(moduleName)) modules.get(moduleName).canonicalAllFunctions
+		];
+		var inferred = context.state.programFacts;
+		if (inferred == null || !sameContributions(inferred.contributions, contributions)) {
+			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions);
+			context.state.programFacts = inferred;
+		}
+		var freshInferredPure = inferred.facts.pure,
+			freshNoReturn = inferred.facts.noReturn,
+			isAnnotatedPure = inferred.isAnnotatedPure;
 		var purityDrifted:Map<String, Bool> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
@@ -730,56 +698,25 @@ class SemanticAssembly {
 		}
 		for (name in bodyChanged.keys())
 			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
-		var reverseBodyDependencies:Map<String, Array<String>> = [],
-			reverseDeclarationTypeReads:Map<String, Array<String>> = [],
-			reverseInitializerCalls:Map<String, Array<String>> = [];
-		for (moduleName in names) {
-			if (!modules.exists(moduleName))
-				continue;
-			for (owner => dependencies in modules.get(moduleName).semanticDependencies)
-				for (dependency in dependencies)
-					if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
-						&& dependency.targetId != null) {
-						var dependents = reverseBodyDependencies.get(dependency.targetId);
-						if (dependents == null) {
-							dependents = [];
-							reverseBodyDependencies.set(dependency.targetId, dependents);
-						}
-						dependents.push(owner);
-					} else if (dependency.kind == SemanticDependencyKind.DeclarationType)
-						addReverseCall(reverseDeclarationTypeReads, dependency.target, owner);
-					else if (dependency.kind == SemanticDependencyKind.Initializer
-						&& inferredDeclarations.exists(owner))
-						addReverseCall(reverseInitializerCalls,
-							dependency.targetId == null ? dependency.target : dependency.targetId, owner);
+		// What the invalidation below walks backwards, made only when something is invalid: a build that changed nothing makes none.
+		var reverseIndexes:Null<ReverseIndexes> = null;
+		function reverse():ReverseIndexes {
+			var made = reverseIndexes;
+			if (made == null) {
+				made = reverseIndexesOf(modules, names, rollbackModules, inferredDeclarations, implicitConstructors);
+				reverseIndexes = made;
+			}
+			return made;
 		}
-		// Before typing, `gate.worst()` only names the local `gate`, so the syntactic dependencies above cannot tell that a
-		// function calls `Gate.worst`. Typing can: it records the callee of every call against the function being typed (see
-		// `TypingSession.purityQueries`, kept for the purity drift check and used here for the callee alone). Walked backwards,
-		// that finds the functions to retype when a callee's signature changes, such as a method gaining an optional parameter,
-		// which every caller still type-checks against but must be lowered to again.
-		var reverseTypedCalls:Map<String, Array<String>> = [];
-		for (moduleName in names) {
-			if (!modules.exists(moduleName))
-				continue;
-			for (caller => record in modules.get(moduleName).purityQueries)
-				for (callee in record.keys()) {
-					var callers = reverseTypedCalls.get(callee);
-					if (callers == null) {
-						callers = [];
-						reverseTypedCalls.set(callee, callers);
-					}
-					callers.push(purityDependencyOwner(caller));
-				}
+		var helperOriginIndex:Null<Map<String, String>> = null;
+		function helperOrigins():Map<String, String> {
+			var made = helperOriginIndex;
+			if (made == null) {
+				made = helperOriginsOf(modules, names);
+				helperOriginIndex = made;
+			}
+			return made;
 		}
-		// A generated helper can depend on a type that its source function does not mention in its signature.
-		// When that helper is invalidated, retype its origin so the helper and its dependencies are requested again.
-		var helperOrigins:Map<String, String> = [];
-		for (moduleName in names)
-			if (modules.exists(moduleName))
-				for (name => fn in modules.get(moduleName).typedFunctions)
-					if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
-						helperOrigins.set(name, fn.origin);
 		// A call may resolve to a static extension without its body naming it (`text.trim()` after `using StringTools`). When the
 		// extensions a module's code sees change, every body of the module is typed again, and propagates as any retyped body does.
 		for (moduleName in names) {
@@ -797,7 +734,7 @@ class SemanticAssembly {
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in invalid.keys())
-			if (helperOrigins.exists(name) || inferredDeclarations.exists(name))
+			if (helperOrigins().exists(name) || inferredDeclarations.exists(name))
 				work.push(name);
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
@@ -842,7 +779,7 @@ class SemanticAssembly {
 				invalidate(invalid, invalidationReasons, initialized, DependencySignature, changed, changedId,
 					Std.string(SemanticDependencyKind.DeclarationType));
 			}
-			var helperOrigin = helperOrigins.get(changed);
+			var helperOrigin = helperOrigins().get(changed);
 			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
 				work.push(helperOrigin);
 				invalidate(invalid, invalidationReasons, helperOrigin, DependencySignature, changed, changedId,
@@ -853,8 +790,8 @@ class SemanticAssembly {
 			// changed) keeps its signature and leaves its callers alone; one whose signature is inferred counts as changed above.
 			// A generic origin's callers are retyped however it was invalidated: they request its dropped specializations again.
 			var callersRetyped = changedSignatures.exists(changed) || genericOrigins.exists(changed);
-			if (callersRetyped && changedId != null && reverseBodyDependencies.exists(changedId))
-				for (ownerName in reverseBodyDependencies.get(changedId)) {
+			if (callersRetyped && changedId != null && reverse().bodyDependencies.exists(changedId))
+				for (ownerName in reverse().bodyDependencies.get(changedId)) {
 					var owner = enclosingFunction(ownerName);
 					if (!invalid.exists(owner)) {
 						work.push(owner);
@@ -863,7 +800,7 @@ class SemanticAssembly {
 					}
 				}
 			if (changedSignatures.exists(changed)) {
-				var readers = reverseDeclarationTypeReads.get(changed);
+				var readers = reverse().declarationTypeReads.get(changed);
 				if (readers != null)
 					for (reader in readers) {
 						var owner = enclosingFunction(reader);
@@ -875,7 +812,7 @@ class SemanticAssembly {
 					}
 				// A field initializer is typed with its class in every build, but its field's type is inferred from what it calls.
 				for (key in (changedId == null ? [changed] : [changed, changedId])) {
-					var fields = reverseInitializerCalls.get(key);
+					var fields = reverse().initializerCalls.get(key);
 					if (fields != null)
 						for (field in fields)
 							if (!invalid.exists(field)) {
@@ -885,8 +822,8 @@ class SemanticAssembly {
 							}
 				}
 			}
-			if (changedSignatures.exists(changed) && reverseTypedCalls.exists(changed))
-				for (caller in reverseTypedCalls.get(changed))
+			if (changedSignatures.exists(changed) && reverse().typedCalls.exists(changed))
+				for (caller in reverse().typedCalls.get(changed))
 					if (!invalid.exists(caller)) {
 						work.push(caller);
 						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
@@ -906,8 +843,8 @@ class SemanticAssembly {
 								"specialization-request");
 						}
 			}
-			if (callersRetyped && reverseCalls.exists(changed)) {
-				var callers = reverseCalls.get(changed);
+			if (callersRetyped && reverse().calls.exists(changed)) {
+				var callers = reverse().calls.get(changed);
 				for (callerName in callers) {
 					var caller = enclosingFunction(callerName);
 					if (!invalid.exists(caller)) {
@@ -984,6 +921,140 @@ class SemanticAssembly {
 			allocatedBytes: #if haxeon hl.Gc.totalAllocated() - allocatedAtStart #elseif hl hl.Gc.stats().totalAllocated
 				- allocatedAtStart #else 0.0 #end
 		};
+	}
+
+	/**
+	 * Purity and no-return over the canonical program, made of `contributions` (see `InferredProgramFacts`), over the typer's own
+	 * signature table: purity inferred over any other scope can disagree with what typing relied on, and every cached body then
+	 * looks drifted on every edit.
+	 */
+	static function inferProgramFacts(contributions:Array<Array<AstFunction>>, classes:Array<AstClass>,
+			interfaces:Array<compiler.syntax.Ast.AstInterface>, enums:Array<compiler.syntax.Ast.AstEnum>,
+			abstracts:Array<compiler.syntax.Ast.AstAbstract>,
+			programFunctions:Array<AstFunction>):InferredProgramFacts {
+		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
+		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
+			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
+		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
+			[for (enumDecl in enums) enumDecl.name => enumDecl];
+		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
+			[for (decl in abstracts) decl.name => decl];
+		var purityScopeSignatures:Map<String, AstFunction> = [];
+		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
+		var isAnnotatedPure =
+			function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
+			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures,
+			purityScopeClasses);
+		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
+			.isTypeName(candidate, purityScopeClasses,
+			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
+		return {
+			contributions: contributions,
+			facts: {
+				pure: compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
+					purityScopeAbstracts, purityScopeEnums, isAnnotatedPure, isTypeName),
+				noReturn: compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures)
+			},
+			isAnnotatedPure: isAnnotatedPure
+		};
+	}
+
+	/** Whether two programs are made of the same module contributions, in the same order. */
+	static function sameContributions(previous:Array<Array<AstFunction>>, current:Array<Array<AstFunction>>):Bool {
+		if (previous.length != current.length)
+			return false;
+		for (index in 0...current.length)
+			if (previous[index] != current[index])
+				return false;
+		return true;
+	}
+
+	/**
+	 * The program's dependency edges walked backwards, from the modules' records: the syntactic calls of each contribution function
+	 * (`dependencyCalls`) and each implicit constructor's call of its base, the body, declaration-type and initializer dependencies,
+	 * and the calls typing recorded.
+	 */
+	static function reverseIndexesOf(modules:Map<String, ModuleState>, names:Array<String>,
+			rollbackModules:Map<String, ModuleState>, inferredDeclarations:Map<String, Bool>,
+			implicitConstructors:Array<{owner:String, base:String, method:AstFunction}>):ReverseIndexes {
+		var reverseCalls:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			var state = modules.get(moduleName);
+			if (state == null)
+				continue;
+			for (fn in state.canonicalAllFunctions) {
+				var fallbackCalls = state.canonicalCalls.get(fn.name);
+				for (callee in dependencyCalls(state, rollbackModules, fn.name,
+					fallbackCalls == null ? [] : fallbackCalls))
+					addReverseCall(reverseCalls, callee, fn.name);
+			}
+		}
+		for (implicit in implicitConstructors)
+			addReverseCall(reverseCalls, implicit.base + ".new", implicit.owner + ".new");
+		var reverseBodyDependencies:Map<String, Array<String>> = [],
+			reverseDeclarationTypeReads:Map<String, Array<String>> = [],
+			reverseInitializerCalls:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
+			for (owner => dependencies in modules.get(moduleName).semanticDependencies)
+				for (dependency in dependencies)
+					if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
+						&& dependency.targetId != null) {
+						var dependents = reverseBodyDependencies.get(dependency.targetId);
+						if (dependents == null) {
+							dependents = [];
+							reverseBodyDependencies.set(dependency.targetId, dependents);
+						}
+						dependents.push(owner);
+					} else if (dependency.kind == SemanticDependencyKind.DeclarationType)
+						addReverseCall(reverseDeclarationTypeReads, dependency.target, owner);
+					else if (dependency.kind == SemanticDependencyKind.Initializer
+						&& inferredDeclarations.exists(owner))
+						addReverseCall(reverseInitializerCalls,
+							dependency.targetId == null ? dependency.target : dependency.targetId, owner);
+		}
+		// Before typing, `gate.worst()` only names the local `gate`, so the syntactic dependencies above cannot tell that a
+		// function calls `Gate.worst`. Typing can: it records the callee of every call against the function being typed (see
+		// `TypingSession.purityQueries`, kept for the purity drift check and used here for the callee alone). Walked backwards,
+		// that finds the functions to retype when a callee's signature changes, such as a method gaining an optional parameter,
+		// which every caller still type-checks against but must be lowered to again.
+		var reverseTypedCalls:Map<String, Array<String>> = [];
+		for (moduleName in names) {
+			if (!modules.exists(moduleName))
+				continue;
+			for (caller => record in modules.get(moduleName).purityQueries)
+				for (callee in record.keys()) {
+					var callers = reverseTypedCalls.get(callee);
+					if (callers == null) {
+						callers = [];
+						reverseTypedCalls.set(callee, callers);
+					}
+					callers.push(purityDependencyOwner(caller));
+				}
+		}
+		return {
+			calls: reverseCalls,
+			bodyDependencies: reverseBodyDependencies,
+			declarationTypeReads: reverseDeclarationTypeReads,
+			initializerCalls: reverseInitializerCalls,
+			typedCalls: reverseTypedCalls
+		};
+	}
+
+	/**
+	 * The origin of each generated helper the modules hold. A generated helper can depend on a type that its source function does
+	 * not mention in its signature. When that helper is invalidated, its origin is retyped so the helper and its dependencies are
+	 * requested again.
+	 */
+	static function helperOriginsOf(modules:Map<String, ModuleState>, names:Array<String>):Map<String, String> {
+		var helperOrigins:Map<String, String> = [];
+		for (moduleName in names)
+			if (modules.exists(moduleName))
+				for (name => fn in modules.get(moduleName).typedFunctions)
+					if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
+						helperOrigins.set(name, fn.origin);
+		return helperOrigins;
 	}
 
 	static function addSourceAlias(target:Map<String, String>, moduleAliases:Array<{

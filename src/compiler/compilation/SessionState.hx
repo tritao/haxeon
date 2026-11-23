@@ -50,6 +50,9 @@ class SessionState {
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
 	public var semanticProgram:Null<SemanticProgram> = null;
+
+	/** The purity and no-return facts of the last canonical program (`SemanticAssembly`), while it is made of the same modules. */
+	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
 	public var publishedAbi:Null<RuntimeAbiDescriptor> = null;
 	public var compiledOnce = false;
 
@@ -119,6 +122,7 @@ class SessionState {
 		anonymousStrings = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
+		programFacts = null;
 		inlineCache = new IrInlineCache();
 		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
 		pipelineSnapshot = null;
@@ -214,6 +218,7 @@ class SessionState {
 		result.anonymousStrings = [for (name => fn in anonymousStrings) name => fn];
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
+		result.programFacts = programFacts;
 		result.publishedAbi = publishedAbi;
 		result.compiledOnce = compiledOnce;
 		result.rehydrationBaseline = rehydrationBaseline;
