@@ -170,7 +170,7 @@ class IrValueArrayProgramRewrite {
 	 * `cache` keeps the allocation lowering of the functions given as the same objects as last compile (`IrArrayFactory.lower`).
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget, ?types:IrTypeIds,
-			?scratch:IrPassScratch, ?cache:IrInlineCache):Void {
+			?scratch:IrPassScratch, ?cache:IrInlineCache, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
@@ -231,33 +231,17 @@ class IrValueArrayProgramRewrite {
 				visit(argument);
 			visit(native.result);
 		}
-		// SSA arguments and definitions cover every operand type, including phi edge uses; each type is visited once.
+		// SSA arguments and definitions cover every operand type, including phi edge uses; each type is visited once. What each
+		// function names of them is read once per version in a session (`arrayTypesOf`).
 		var visited:Array<Bool> = [];
-		function visitId(id:Int):Void {
-			if (id < visited.length && visited[id])
-				return;
-			while (visited.length <= id)
-				visited.push(false);
-			visited[id] = true;
-			visit(types.type(id));
-		}
-		for (fn in program.functions) {
-			var body = fn.bodyIn(types, builder);
-			for (index in 0...body.argumentCount())
-				visitId(body.valueTypeId(body.argument(index)));
-			visitId(body.result);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					var output = body.output(row);
-					if (output.exists())
-						visitId(body.valueTypeId(output));
-					if (body.opcode(row) == IrOpcode.TypeValue)
-						visitId(body.aux(row));
-					row = body.nextRow(row);
+		for (fn in program.functions)
+			for (id in arrayTypesOf(fn, types, builder, lineage))
+				if (id >= visited.length || !visited[id]) {
+					while (visited.length <= id)
+						visited.push(false);
+					visited[id] = true;
+					visit(types.type(id));
 				}
-			}
-		}
 		var keys = [for (key in elements.keys()) key];
 		keys.sort(Reflect.compare);
 		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)], types, builder),
@@ -267,6 +251,51 @@ class IrValueArrayProgramRewrite {
 		IrArrayFactory.lower(program, types, scratch, cache);
 		IrVerifier.verifyValueArraysLowered(program, types);
 		encodeAll(program, index);
+	}
+
+	/** The ids of the types `fn`'s arguments, result, rows and descriptors have that name an array or an iterator. */
+	static function arrayTypesOf(fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Array<Int> {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return readArrayTypes(fn.bodyIn(types, builder));
+		var memo = lineage.memos.arrayTypes, known = memo.get(version);
+		if (known == null) {
+			known = readArrayTypes(fn.bodyIn(types, builder));
+			memo.keep(version, known);
+		} else if (lineage.checks && known.join(",") != readArrayTypes(fn.bodyIn(types, builder)).join(","))
+			throw new InternalError('--check-reuse: the array types reused for ${fn.name} differ from its body');
+		return known;
+	}
+
+	static function namesArray(type:IrType):Bool
+		return switch type {
+			case Array(_), Iterator(_): true;
+			case Nullable(element): namesArray(element);
+			case Function(arguments, result): Lambda.exists(arguments, namesArray) || namesArray(result);
+			default: false;
+		};
+
+	static function readArrayTypes(body:IrBody):Array<Int> {
+		var found:Array<Int> = [];
+		function add(id:Int):Void
+			if (id >= 0 && found.indexOf(id) < 0 && namesArray(body.types.type(id)))
+				found.push(id);
+		for (index in 0...body.argumentCount())
+			add(body.valueTypeId(body.argument(index)));
+		add(body.result);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var output = body.output(row);
+				if (output.exists())
+					add(body.valueTypeId(output));
+				if (body.opcode(row) == IrOpcode.TypeValue)
+					add(body.aux(row));
+				row = body.nextRow(row);
+			}
+		}
+		return found;
 	}
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
@@ -310,7 +339,8 @@ class IrValueArrayProgramRewrite {
 			originals = index.originalFunctions(program.functions),
 			builder = scratch.bodyBuilder,
 			uses = scratch.firstInts,
-			rewritten:Null<Array<IrFunction>> = null;
+			rewritten:Null<Array<IrFunction>> = null,
+			made:Map<String, Bool> = [];
 		switch element {
 			case EnumTag(_):
 				for (fn in program.functions)
@@ -355,6 +385,8 @@ class IrValueArrayProgramRewrite {
 					current = IrFunction.ofOwnedBody(body);
 			}
 			index.finish(current);
+			if (current != fn)
+				made.set(current.name, true);
 			if (rewritten != null)
 				rewritten.push(current);
 			else if (current != fn) {
@@ -381,6 +413,7 @@ class IrValueArrayProgramRewrite {
 			for (fn in generated) {
 				program.functions.push(fn);
 				generatedFunctions.push(fn);
+				made.set(fn.name, true);
 			}
 		// Resolve only these late producers. Place methods can clone an existing body containing typed requests.
 		IrEnumTagLowering.resolveGenerated(program, generatedFunctions);
@@ -389,8 +422,9 @@ class IrValueArrayProgramRewrite {
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)
 				nullableScalars = true;
+		// Only what this element's rewrite made can call the element helpers it made.
 		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars,
-			index.types, scratch);
+			index.types, scratch, made);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
 		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives()))
 			if (!nativeNames.exists(native.name)) {

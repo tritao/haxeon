@@ -14,11 +14,12 @@ import compiler.ir.model.IrTypeIds;
  */
 class IrValueArrayScalarLowering {
 	/**
-	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s. A function that
-	 * changes becomes its edited body, edited in place when the stage owns it, else on a copy.
+	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s: only in those `scope`
+	 * names when given, the only ones that can call them. A function that changes becomes its edited body, edited in place when the
+	 * stage owns it, else on a copy.
 	 */
 	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool, types:IrTypeIds,
-			scratch:IrPassScratch):Void {
+			scratch:IrPassScratch, ?scope:Map<String, Bool>):Void {
 		var builder = scratch.bodyBuilder;
 		// The helpers as they are before any expansion: a helper's own body may be expanded in place below.
 		var helpers:Map<String, IrBody> = [];
@@ -36,8 +37,10 @@ class IrValueArrayScalarLowering {
 			return;
 		var functions = program.functions;
 		for (index in 0...functions.length) {
-			var fn = functions[index],
-				body = fn.bodyIn(types, builder),
+			var fn = functions[index];
+			if (scope != null && !scope.exists(fn.name))
+				continue;
+			var body = fn.bodyIn(types, builder),
 				edited = rewriteBody(body, helpers, scratch);
 			if (edited != body)
 				functions[index] = IrFunction.ofOwnedBody(edited);

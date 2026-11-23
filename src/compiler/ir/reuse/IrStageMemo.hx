@@ -131,6 +131,9 @@ class IrStageMemos {
 	/** What each function's rows do with closures (`IrClosureUses`). */
 	public final closureUses = new IrContributionMemo<compiler.ir.passes.scalars.IrScalarClosures.IrClosureUses>();
 
+	/** The types naming an array or an iterator each function has (`IrValueArrayProgramRewrite`). */
+	public final arrayTypes = new IrContributionMemo<Array<Int>>();
+
 	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
 	public final enumMentions = new IrContributionMemo<Array<String>>();
 
@@ -174,6 +177,7 @@ class IrStageMemos {
 		inlineEnumUses.begin(build);
 		closureNames.begin(build);
 		closureUses.begin(build);
+		arrayTypes.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */
