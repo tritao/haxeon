@@ -47,6 +47,15 @@ class InvalidationMain {
 		var layout = structural.compile("Main");
 		expectReason(layout.invalidations, "Holder", StructuralDependency, "model.Value");
 
+		// An argument renamed with its uses is a signature change: a build that kept the validated signature would type the new
+		// body against the old name.
+		var renamed = new Compiler();
+		renamed.update("Lib.hx", "function twice(value:Int):Int return value * 2;");
+		renamed.update("Main.hx", "function main():Int return Lib.twice(21);");
+		renamed.compile("Main");
+		renamed.update("Lib.hx", "function twice(input:Int):Int return input * 2;");
+		renamed.compile("Main");
+
 		compiler.update("Leaf.hx", "function value(:Int return 0;");
 		try {
 			compiler.compile("Main");

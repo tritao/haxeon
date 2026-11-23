@@ -147,8 +147,11 @@ class SemanticSignature {
 	public static function parsedFunction(fn:AstFunction, aliases:Array<AstTypeAlias>):String {
 		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type],
 			typeParameters = fn.typeParameters;
+		// The argument names and `inline` are part of it too: a body is typed against its signature's arguments, and a build that
+		// keeps the validated signature (`SemanticProgram.replaceBodies`) keeps their names and the flag.
 		return fn.name
 			+ (fn.isOverride == true ? " override" : "")
+			+ (fn.isInline == true ? " inline" : "")
 			+ (fn.isPublic == null ? "" : fn.isPublic ? " public" : " private")
 			+ (typeParameters == null
 			|| typeParameters.length == 0 ? ""
@@ -164,7 +167,7 @@ class SemanticSignature {
 	 * although each still type-checks; the default's source text stands for its value.
 	 */
 	static function parsedArgument(argument:AstArgument, definitions:Map<String, AstType>):String {
-		var type = parsedType(argument.type, definitions, []);
+		var type = argument.name + ":" + parsedType(argument.type, definitions, []);
 		if (argument.defaultValue == null)
 			return (argument.optional == true ? "?" : "") + type;
 		var span = argument.span;
