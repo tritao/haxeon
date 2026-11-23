@@ -488,14 +488,25 @@ class HlModuleAssembler {
 	static function describeDropped(name:String, fn:Null<IrFunction>):String {
 		if (!LambdaName.is(name))
 			return '$name was deleted';
-		if (fn != null)
-			for (block in fn.blocks)
-				for (instruction in block.instructions) {
-					var location = instruction.provenance.location;
-					if (location != null)
-						return 'a deleted lambda at ${location.path}:${location.line}';
-				}
+		var location = fn == null ? null : firstLocation(fn);
+		if (location != null)
+			return 'a deleted lambda at ${location.path}:${location.line}';
 		return 'a deleted lambda in ${LambdaName.outermost(name)}';
+	}
+
+	/**
+	 * Where `fn`'s code starts. A cached function is read from its body's rows: decoding its blocks would leave them cached on a
+	 * function no build lowers again.
+	 */
+	static function firstLocation(fn:IrFunction):Null<compiler.ir.model.SourceProvenance.SourceLocation> {
+		var body = fn.body;
+		if (body != null)
+			return body.firstLocation();
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				if (instruction.provenance.location != null)
+					return instruction.provenance.location;
+		return null;
 	}
 
 	/**

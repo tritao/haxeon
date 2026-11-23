@@ -5,6 +5,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.model.SourceProvenance.SourceLocation;
 
 /**
  * A function body as a table (docs/design/IR_CORE_COLUMNS.md): one row per instruction or terminator in parallel `Int` columns
@@ -217,6 +218,20 @@ class IrBody {
 	 */
 	public function provenanceTable():Array<SourceProvenance>
 		return provenancePool;
+
+	/** The location of the first instruction that has one, in block order, read from the rows without decoding them. */
+	public function firstLocation():Null<SourceLocation> {
+		for (block in 0...blockIds.length) {
+			var terminator = terminatorRow(block), row = blockFirstRows[block];
+			while (row >= 0 && row != terminator) {
+				var location = provenance(row).location;
+				if (location != null)
+					return location;
+				row = nextRows[row];
+			}
+		}
+		return null;
+	}
 
 	public inline function float(row:Int):Float
 		return floats[auxes[row]];
