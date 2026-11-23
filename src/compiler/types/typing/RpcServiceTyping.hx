@@ -17,7 +17,8 @@ class RpcServiceTyping {
 	public static inline final CONNECTION = "haxeon.rpc.RpcConnection";
 	public static inline final METHOD = "haxeon.rpc.RpcMethod";
 
-	public static function typeCall(session:TypingSession, body:BodyTyping, receiver:TypedExpression, operation:String,
+	public static function typeCall(session:TypingSession, body:BodyTyping, receiver:TypedExpression, methodKey:String,
+			operation:String,
 			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var serving = operation == "serve";
 		if (serving ? arguments.length != 2 : arguments.length < 1 || arguments.length > 2)
@@ -108,7 +109,8 @@ class RpcServiceTyping {
 			: ObjectLiteral(fields, span),
 			typed = body.typeExpression(BlockExpression(bindings, result, span), inner);
 		session.invalidateUnknownCall(scope);
-		return new TypedExpression(TBlockExpression([TVar(binding.id, receiver, span)], typed), typed.type, span);
+		return new TypedExpression(TBlockExpression([TVar(binding.id, receiver, span)], typed), typed.type, span, false,
+			null, null, methodKey);
 	}
 
 	static function parameter(local:TemporaryLocal, type:AstType, span:SourceSpan):AstArgument

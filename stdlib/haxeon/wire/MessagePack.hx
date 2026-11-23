@@ -26,4 +26,12 @@ class MessagePack {
 			throw new MessagePackError("MessagePack value has trailing bytes");
 		return value;
 	}
+
+	/** Encodes a value as MessagePack. Haxeon generates the codec for the value's concrete type. */
+	public static function encode<T>(value:T):Bytes
+		throw new haxe.Exception("MessagePack.encode must be lowered by the compiler");
+
+	/** Decodes one MessagePack value. Haxeon generates the codec from the expected result type. */
+	public static function decode<T>(bytes:Bytes):T
+		throw new haxe.Exception("MessagePack.decode must be lowered by the compiler");
 }

@@ -662,8 +662,28 @@ class SemanticIndex {
 	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
 		return symbols.get(id);
 
-	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
-		return signatures.get(id);
+	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
+		var signature = signatures.get(id);
+		if (signature != null)
+			return signature;
+		var symbol = symbols.get(id), declaration = symbol == null ? null : declaredFunctions.get(symbol.name);
+		if (declaration == null)
+			return null;
+		var typeParameters = declaration.typeParameters ?? [],
+			name = typeParameters.length == 0
+				? declaration.name : declaration.name + "<" + typeParameters.join(", ") + ">",
+			parameters = [
+				for (argument in declaration.arguments)
+					(argument.optional || argument.defaultValue != null ? "?" : "") + argument.name + ":"
+					+ displayAstType(argument.type)
+			],
+			result = displayAstType(declaration.result);
+		return {
+			label: name + "(" + parameters.join(", ") + "):" + result,
+			parameters: parameters,
+			result: result
+		};
+	}
 
 	public function calls():Array<SemanticCallEdge> {
 		var result = callEdges.copy();

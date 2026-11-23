@@ -168,10 +168,26 @@ class RpcConnection {
 		var call = takePending(id);
 		if (call == null)
 			return false;
+		#if !haxe_ver
 		defer call.failure(error("cancelled", true));
 		enqueue(Cancel(id));
+		#else
+		cancelPending(id, call, "cancelled");
+		#end
 		return true;
 	}
+
+	#if haxe_ver
+	function cancelPending(id:Int, call:PendingCall, reason:String):Void {
+		try
+			enqueue(Cancel(id))
+		catch (failure:Dynamic) {
+			call.failure(error(reason, true));
+			throw failure;
+		}
+		call.failure(error(reason, true));
+	}
+	#end
 
 	function takePending(id:Int):Null<PendingCall> {
 		var call = pending.get(id);
@@ -266,10 +282,24 @@ class RpcConnection {
 		if (messageBudget < 1 || bytes < maxMessageBytes)
 			throw "Invalid RPC poll budget";
 		polling = true;
+		#if !haxe_ver
 		defer polling = false;
+		#end
 		sendMessagesLeft = messageBudget;
 		sendBytesLeft = bytes;
+		#if !haxe_ver
 		return pollInternal(messageBudget, bytes);
+		#else
+		var count:Int;
+		try
+			count = pollInternal(messageBudget, bytes)
+		catch (failure:Dynamic) {
+			polling = false;
+			throw failure;
+		}
+		polling = false;
+		return count;
+		#end
 	}
 
 	function pollInternal(messageBudget:Int, byteBudget:Int):Int {
@@ -292,8 +322,12 @@ class RpcConnection {
 		for (id in expired) {
 			var call = takePending(id);
 			if (call != null) {
+				#if !haxe_ver
 				defer call.failure(error("timeout", true));
 				enqueue(Cancel(id));
+				#else
+				cancelPending(id, call, "timeout");
+				#end
 			}
 		}
 		var expiredRequests:Array<Int> = [];
@@ -395,4 +429,17 @@ class RpcConnection {
 
 	static function error(code:String, ambiguous:Bool):RpcError
 		return {code: code, message: code, ambiguous: ambiguous};
+
+	/** Registers a service implementation. Haxeon generates dispatch and codecs for the supplied interface. */
+	public function serve<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end,
+			implementation:Service):Void
+		throw new haxe.Exception("RpcConnection.serve must be lowered by the compiler");
+
+	/**
+		Returns a client stub whose methods take a request, a response callback and an error callback,
+		and return a call ID. Haxeon generates the stub and codecs for the supplied interface.
+		The default timeout is 1000 milliseconds.
+	 */
+	public function of<Service>(service:#if haxe_ver Class < Service > #else Dynamic #end, ?timeoutMs:Int):Dynamic
+		throw new haxe.Exception("RpcConnection.of must be lowered by the compiler");
 }

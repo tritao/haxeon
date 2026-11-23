@@ -218,6 +218,9 @@ class CompilerArguments {
 			throw new UsageError("--wasm-memory-contract requires --wasm-import-memory");
 		if (memoryContract != null && memoryBase != 0)
 			throw new UsageError("--wasm-memory-contract and --wasm-memory-base are mutually exclusive");
+		// XML is emitted after compilation and still needs the parsed declarations.
+		if (xmlOutput != null)
+			optionFlags = optionFlags.filter(flag -> flag != compiler.CompileOptions.NO_KEEP_SESSION);
 		var options = compiler.CompileOptions.fromArguments(optionFlags);
 		return {
 			target: target,

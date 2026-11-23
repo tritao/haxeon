@@ -221,15 +221,8 @@ class CallResolver {
 		try {
 			var dynamicMethod = DynamicMethods.read(session, receiver, name, span);
 			var call = dynamicMethod != null ? callDynamicMethod(dynamicMethod, name, arguments, span,
-				scope) : switch receiver.type {
-					case TInstance(NominalKind.Class, RpcServiceTyping.CONNECTION,
-						_) if ((name == "serve" || name == "of")
-						&& !receiver.expression.match(TClassRef(_))):
-						RpcServiceTyping.typeCall(session, bodyTyper, receiver, name, arguments, span, scope);
-					default:
-						typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
-							contextualGenericArguments);
-				};
+				scope) : typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
+				contextualGenericArguments);
 			var declared = declaredReceiver == null ? receiver : declaredReceiver;
 			// The member's span is made only where the checker looks.
 			if (session.nullSafety.active())
@@ -1101,6 +1094,9 @@ class CallResolver {
 			if (method == null)
 				fail("E1007", 'Missing signature for method "$methodKey"', span);
 			MemberAccess.method(session, methodInfo.owner, name, span);
+			var generated = typeWireCall(methodKey, method, arguments, span, scope, expectedType);
+			if (generated != null)
+				return generated;
 			if (BodyTyper.functionTypeParameters(method).length > 0) {
 				var prepared = typeGenericCallArguments(method, arguments, scope, span);
 				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope,
@@ -1131,6 +1127,9 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
+		if (methodInfo.owner == RpcServiceTyping.CONNECTION && (method.name == "serve" || method.name == "of"))
+			return RpcServiceTyping.typeCall(session, bodyTyper, receiver, methodKey, method.name, arguments, span,
+				scope);
 		if (session.relations.isValueClass(receiver.type) && !session.isPureCall(methodKey)
 			&& !session.isReadOnlyReceiver(methodKey))
 			ValuePlaceRules.requireWritable(session, receiver, span);
@@ -1881,6 +1880,12 @@ class CallResolver {
 			if (abstractValue != null)
 				return typeMethodCall(abstractValue, methodName, arguments, span, scope, expectedType, false, false);
 		}
+		var method = session.signatures.get(name);
+		if (method != null && method.isStatic) {
+			var generated = typeWireCall(name, method, arguments, span, scope, expectedType);
+			if (generated != null)
+				return generated;
+		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}
 
@@ -2184,6 +2189,72 @@ class CallResolver {
 		return null;
 	}
 
+	/** Lower calls to the stdlib declarations while retaining their identity for tooling. */
+	function typeWireCall(name:String, method:AstFunction, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope, expectedType:Null<CompilerType>):Null<TypedExpression> {
+		var json = switch name {
+			case "haxeon.wire.JsonWire.encode", "haxeon.wire.JsonWire.decode": true;
+			case "haxeon.wire.MessagePack.encode", "haxeon.wire.MessagePack.decode": false;
+			case "haxeon.rpc.RpcMethod.wire":
+				return typeRpcDescriptor(name, arguments, span, scope, expectedType, false);
+			default: return null;
+		};
+		if (arguments.length != 1)
+			fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+		var format = json ? "JsonWire" : "MessagePack";
+		if (method.name == "encode") {
+			var value = typeExpressionValue(arguments[0], scope),
+				keyed = json ? WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span)
+					: WireCodecGenerator.request(session, value.type, session.currentContext.name, span),
+				encoder = json ? WireCodecGenerator.jsonEncodeName(keyed) : WireCodecGenerator.encodeName(keyed);
+			return new TypedExpression(TCall(encoder, [value]), json ? TString : TBytes, span, false, null, null, name);
+		}
+		var resultType = switch expectedType {
+			case null, TNull: throw new CompileError(new Diagnostic("E1009",
+				'$format.decode requires an expected result type', span));
+			case type: type;
+		};
+		var source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), json ? TString : TBytes,
+			'$format.decode input', "E1002"),
+			keyed = json ? WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span)
+				: WireCodecGenerator.request(session, resultType, session.currentContext.name, span),
+			decoder = json ? WireCodecGenerator.jsonDecodeName(keyed) : WireCodecGenerator.decodeName(keyed);
+		return new TypedExpression(TCall(decoder, [source]), resultType, span, false, null, null, name);
+	}
+
+	function typeRpcDescriptor(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>, serviceMethod:Bool):TypedExpression {
+		var count = serviceMethod ? 2 : 1;
+		if (arguments.length != count)
+			fail("E1008", 'Function "$name" expects $count argument(s), got ${arguments.length}', span);
+		var owner = RpcServiceTyping.METHOD;
+		switch expectedType {
+			case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
+				var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
+					1);
+				var constructorArguments = [id];
+				for (type in [request, response]) {
+					var keyed = WireCodecGenerator.request(session, type, session.currentContext.name, span);
+					constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.encodeName(keyed)),
+						TFunction([keyed], TBytes, []), span));
+					constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
+						TFunction([TBytes], keyed, []), span));
+				}
+				var methodName = serviceMethod ? arguments[1] : NullLiteral(span);
+				constructorArguments.push(bodyTyper.coerceArgument(typeExpressionValue(methodName, scope),
+					TNullable(TString), name, 2));
+				var constructor = session.signatures.required(owner + ".new");
+				var typed = session.representation.adaptConstructorArguments(expectedType, owner, constructor,
+					constructorArguments);
+				session.invalidateUnknownCall(scope);
+				return new TypedExpression(TNew(owner, typed, true), expectedType, span, false, null, null,
+					serviceMethod ? null : name);
+			default:
+				throw new CompileError(new Diagnostic("E1009",
+					"RpcMethod.wire requires an expected RpcMethod<Request, Response> type", span));
+		}
+	}
+
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
 		if (name == "__reference_equal") {
@@ -2269,79 +2340,8 @@ class CallResolver {
 			if (typeFunction != null)
 				return typeBuiltinCall(typeFunction, arguments, span, scope, expectedType);
 		}
-		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var value = typeExpressionValue(arguments[0], scope);
-			var keyed = WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.jsonEncodeName(keyed), [value]), TString, span);
-		}
-		if (name == "JsonWire.decode" || name == "haxeon.wire.JsonWire.decode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var resultType = switch expectedType {
-				case null, TNull:
-					throw new CompileError(new Diagnostic("E1009", "JsonWire.decode requires an expected result type",
-						span));
-				case type: type;
-			};
-			var source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TString, "JsonWire.decode input",
-				"E1002");
-			var keyed = WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(keyed), [source]), resultType,
-				span);
-		}
-		if (name == "haxeon.rpc.RpcMethod.wire" || name == "$rpc.method") {
-			var serviceMethod = name == "$rpc.method", count = serviceMethod ? 2 : 1;
-			if (arguments.length != count)
-				fail("E1008", 'Function "$name" expects $count argument(s), got ${arguments.length}', span);
-			var owner = RpcServiceTyping.METHOD;
-			switch expectedType {
-				case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
-					var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
-						1);
-					var constructorArguments = [id];
-					for (type in [request, response]) {
-						var keyed = WireCodecGenerator.request(session, type, session.currentContext.name, span);
-						constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.encodeName(keyed)),
-							TFunction([keyed], TBytes, []), span));
-						constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
-							TFunction([TBytes], keyed, []), span));
-					}
-					var methodName = serviceMethod ? arguments[1] : NullLiteral(span);
-					constructorArguments.push(bodyTyper.coerceArgument(typeExpressionValue(methodName, scope),
-						TNullable(TString), name, 2));
-					var constructor = session.signatures.required(owner + ".new");
-					var typed = session.representation.adaptConstructorArguments(expectedType, owner, constructor,
-						constructorArguments);
-					session.invalidateUnknownCall(scope);
-					return new TypedExpression(TNew(owner, typed, true), expectedType, span);
-				default:
-					fail("E1009", "RpcMethod.wire requires an expected RpcMethod<Request, Response> type", span);
-			}
-		}
-		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var value = typeExpressionValue(arguments[0], scope);
-			var keyed = WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.encodeName(keyed), [value]), TBytes, span);
-		}
-		if (name == "MessagePack.decode" || name == "haxeon.wire.MessagePack.decode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var resultType = switch expectedType {
-				case null, TNull:
-					throw new CompileError(new Diagnostic("E1009",
-						"MessagePack.decode requires an expected result type", span));
-				case type:
-					type;
-			};
-			var bytes = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input",
-				"E1002");
-			var keyed = WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.decodeName(keyed), [bytes]), resultType, span);
-		}
+		if (name == "$rpc.method")
+			return typeRpcDescriptor(name, arguments, span, scope, expectedType, true);
 		if (name == "Std.isOfType" || name == "Std.isExactType") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);

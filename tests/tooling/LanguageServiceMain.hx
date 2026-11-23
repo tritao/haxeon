@@ -863,7 +863,67 @@ class LanguageServiceMain {
 			inheritedDefinition.span.end).indexOf("context") < 0)
 			throw "definition through an interface extending a same-package sibling did not reach the sibling";
 		inferredDeclarationTypes();
+		wireAndRpcDeclarations();
 		Sys.println("PASS: compiler-backed language service snapshot works");
+	}
+
+	static function wireAndRpcDeclarations():Void {
+		var path = "WireAndRpc.hx",
+			source =
+				'
+import haxeon.rpc.RpcConnection;
+import haxeon.rpc.RpcMethod;
+import haxeon.wire.JsonWire;
+import haxeon.wire.MessagePack;
+
+interface Echo {
+	function echo(request:Int):Int;
+}
+
+function exercise(connection:RpcConnection, implementation:Echo):Void {
+	var bytes = MessagePack.encode(42);
+	var packed:Int = MessagePack.decode(bytes);
+	var json = JsonWire.encode(packed);
+	var decoded:Int = JsonWire.decode(json);
+	var method:RpcMethod<Int, Int> = RpcMethod.wire(1);
+	connection.serve(Echo, implementation);
+	var stub = connection.of(Echo, 200);
+	stub.echo(decoded, response -> {}, error -> {});
+}
+',
+			service = new LanguageService();
+		service.update(path, source);
+		service.analyze("WireAndRpc");
+		for (call in [
+			{receiver: "MessagePack", name: "encode", module: "wire/MessagePack", parameter: "value:T"},
+			{receiver: "MessagePack", name: "decode", module: "wire/MessagePack", parameter: "bytes:Bytes"},
+			{receiver: "JsonWire", name: "encode", module: "wire/JsonWire", parameter: "value:T"},
+			{receiver: "JsonWire", name: "decode", module: "wire/JsonWire", parameter: "source:String"},
+			{receiver: "RpcMethod", name: "wire", module: "rpc/RpcMethod", parameter: "id:Int"},
+			{receiver: "connection", name: "serve", module: "rpc/RpcConnection", parameter: "implementation:Service"},
+			{receiver: "connection", name: "of", module: "rpc/RpcConnection", parameter: "timeoutMs:Int"}
+		]) {
+			var prefix = call.receiver + ".",
+				member = source.indexOf(prefix + call.name + "(") + prefix.length,
+				hover = service.hover(path, member + 1),
+				documentation = service.hoverDocumentation(path, member + 1),
+				definition = service.definition(path, member + 1),
+				signature = service.signatureHelp(path, member + call.name.length + 2);
+			if (hover == null || hover.indexOf(call.parameter) < 0 || documentation == null
+				|| documentation.markdown.indexOf("Haxeon generates") < 0)
+				throw '${call.name}: hover omitted the declaration signature or documentation ($hover)';
+			if (definition == null || !StringTools.endsWith(definition.path, "/haxeon/" + call.module + ".hx")
+				|| definition.span.file.slice(definition.span.start, definition.span.end).indexOf(call.name) < 0)
+				throw '${call.name}: definition did not reach the stdlib declaration';
+			if (signature == null || signature.label.indexOf(call.parameter) < 0)
+				throw '${call.name}: signature help omitted the declared parameter';
+			var found = false;
+			for (item in service.complete(path, member))
+				if (item.label == call.name)
+					found = true;
+			if (!found)
+				throw '${call.name}: completion omitted the declared method';
+		}
 	}
 
 	/**

@@ -938,23 +938,23 @@ class LanguageService {
 								kind: "enumCase",
 								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})'
 							});
-			for (classDecl in ast.classes)
-				if (classDecl.name == qualifier) {
-					for (field in classDecl.fields)
-						if (field.isStatic && (prefix.length == 0 || StringTools.startsWith(field.name, prefix)))
-							result.push({
-								label: field.name,
-								kind: "field",
-								detail: '${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}'
-							});
-					for (method in classDecl.methods)
-						if (method.isStatic && (prefix.length == 0 || StringTools.startsWith(method.name, prefix)))
-							result.push({
-								label: method.name,
-								kind: "method",
-								detail: methodDetail(state, ast, classDecl.name, method)
-							});
+			if (semanticContext == null || semanticContext.receiver == null) {
+				var owner = memberQualifier(state.source, position, true);
+				for (entry in ast.imports)
+					if ((entry.alias ?? sourceName(entry.path)) == owner) {
+						owner = entry.path;
+						break;
+					}
+				for (candidate in compiler.modules) {
+					var declarations = effectiveAst(candidate);
+					if (declarations != null)
+						for (classDecl in declarations.classes)
+							if ((candidate == state && classDecl.name == owner)
+								|| ModuleCanonicalizer.qualifiedTypeName(declarations.packageName, classDecl.name)
+								== owner)
+								addClassMembers(candidate, declarations, classDecl, true, prefix, result);
 				}
+			}
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
@@ -1526,22 +1526,14 @@ class LanguageService {
 		switch type {
 			case TNullable(element):
 				addInstanceMembers(element, prefix, result);
-			case TInstance(Class, name, []):
+			case TInstance(Class, name, _):
 				for (state in compiler.modules) {
 					var ast = effectiveAst(state);
 					if (ast != null)
 						for (classDecl in ast.classes)
-							if (classDecl.name == name) {
-								for (field in classDecl.fields)
-									if (!field.isStatic)
-										addMember(field.name, "field",
-											'${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}', prefix,
-											result);
-								for (method in classDecl.methods)
-									if (!method.isStatic)
-										addMember(method.name, "method",
-											methodDetail(state, ast, classDecl.name, method),
-											prefix, result);
+							if (classDecl.name == name
+								|| ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name) == name) {
+								addClassMembers(state, ast, classDecl, false, prefix, result);
 								if (classDecl.base != null)
 									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base),
 										[]), prefix, result);
@@ -1582,6 +1574,17 @@ class LanguageService {
 				addMember("substring", "method", "substring(start,end):String", prefix, result);
 			default:
 		}
+	}
+
+	static function addClassMembers(state:ModuleState, ast:compiler.syntax.Ast.AstProgram,
+			declaration:compiler.syntax.Ast.AstClass, isStatic:Bool, prefix:String, result:Array<CompletionItem>):Void {
+		for (field in declaration.fields)
+			if (field.isStatic == isStatic)
+				addMember(field.name, "field", '${field.name}:${fieldTypeText(state, ast, declaration.name, field)}',
+					prefix, result);
+		for (method in declaration.methods)
+			if (method.isStatic == isStatic)
+				addMember(method.name, "method", methodDetail(state, ast, declaration.name, method), prefix, result);
 	}
 
 	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>,
@@ -2154,7 +2157,7 @@ class LanguageService {
 		return source.slice(start, end);
 	}
 
-	static function memberQualifier(source:SourceFile, position:Int):Null<String> {
+	static function memberQualifier(source:SourceFile, position:Int, qualified:Bool = false):Null<String> {
 		var end = position < 0 ? 0 : position > source.bytes.length ? source.bytes.length : position, start = end;
 		while (start > 0 && isIdentifierPart(source.bytes.get(start - 1)))
 			start--;
@@ -2163,6 +2166,13 @@ class LanguageService {
 		var qualifierEnd = start - 1, qualifierStart = qualifierEnd;
 		while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
 			qualifierStart--;
+		if (qualified)
+			while (qualifierStart >= 2 && source.bytes.get(qualifierStart - 1) == ".".code
+				&& isIdentifierPart(source.bytes.get(qualifierStart - 2))) {
+				qualifierStart -= 2;
+				while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
+					qualifierStart--;
+			}
 		return source.slice(qualifierStart, qualifierEnd);
 	}
 
