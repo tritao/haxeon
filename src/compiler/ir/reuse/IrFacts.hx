@@ -11,6 +11,10 @@ import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
  *
  * A fact is computed again at most once per stage run, when an entry or a rewrite first asks for it (`begin` starts a run). The
  * copies of the session state share the table, as they share the memos: a print names one value whatever build made it.
+ *
+ * As a build starts (`startBuild`), the facts no entry read in the last build are dropped, with the texts only they had interned
+ * (`sweep`): an entry kept since (a stage that did not run) holds a dropped fact at no print, so it is made again. A dropped
+ * fact's number is given to the next new one, whose prints are new, so no entry that held the old fact holds the new one.
  */
 @:nullSafety(Strict)
 class IrFacts {
@@ -31,6 +35,20 @@ class IrFacts {
 
 	/** The reader that last recorded each fact (`IrFactReader`), so a rewrite records a fact once. */
 	final recorded:Array<Int> = [];
+
+	/** The space of each fact (`space`), and the last build that read it; a dropped fact's space is -1. */
+	final spaceOf:Array<Int> = [];
+
+	final read:Array<Int> = [];
+
+	/** The numbers of dropped facts, which new facts take. */
+	final free:Array<Int> = [];
+
+	/** The build under way (`startBuild`), and how many facts it and the last one read. */
+	var build = 0;
+
+	var readNow = 0;
+	var readLast = 0;
 
 	var run = 0;
 	var lastPrint = 0;
@@ -104,19 +122,39 @@ class IrFacts {
 		var table = ids[space], known = table.get(key);
 		if (known != null)
 			return known;
-		var made = keys.length;
+		var made = free.pop();
+		if (made == null) {
+			made = keys.length;
+			kinds.push(kind);
+			keys.push(key);
+			values.push(0);
+			prints.push(0);
+			computed.push(0);
+			recorded.push(0);
+			spaceOf.push(space);
+			read.push(0);
+		} else {
+			kinds[made] = kind;
+			keys[made] = key;
+			values[made] = 0;
+			prints[made] = 0;
+			computed[made] = 0;
+			recorded[made] = 0;
+			spaceOf[made] = space;
+			read[made] = 0;
+		}
 		table.set(key, made);
-		kinds.push(kind);
-		keys.push(key);
-		values.push(0);
-		prints.push(0);
-		computed.push(0);
-		recorded.push(0);
 		return made;
 	}
 
-	/** The print of fact `id` in this run, computing its value with `pass`, the stage the fact belongs to, the first time. */
+	/** The print of fact `id` in this run, computing its value with `pass`, the stage the fact belongs to, the first time; 0 for a dropped fact. */
 	public function print(id:Int, pass:IrFactSource):Int {
+		if (spaceOf[id] < 0)
+			return 0;
+		if (read[id] != build) {
+			read[id] = build;
+			readNow++;
+		}
 		if (computed[id] != run) {
 			computed[id] = run;
 			var value = pass.fact(kinds[id], keys[id]);
@@ -141,6 +179,38 @@ class IrFacts {
 			index += 2;
 		}
 		return true;
+	}
+
+	/** Starts session build `number`: what the last build read is kept, and the rest dropped when it is much (`sweep`). */
+	public function startBuild(number:Int):Void {
+		build = number;
+		readLast = readNow;
+		readNow = 0;
+		if (keys.length - free.length > readLast * 2 + 1024)
+			sweep();
+	}
+
+	/** Drops the facts the last build did not read, and the interned texts no fact kept has as its value. */
+	function sweep():Void {
+		var values:Map<Int, Bool> = [];
+		for (id in 0...keys.length) {
+			if (spaceOf[id] < 0)
+				continue;
+			if (read[id] >= build - 1) {
+				values.set(this.values[id], true);
+				continue;
+			}
+			ids[spaceOf[id]].remove(keys[id]);
+			spaceOf[id] = -1;
+			keys[id] = "";
+			free.push(id);
+		}
+		var stale = [for (text => number in interned) if (!values.exists(number)) text];
+		for (text in stale)
+			interned.remove(text);
+		var lists = [for (key => list in singles) if (spaceOf[list[0]] < 0 || prints[list[0]] != list[1]) key];
+		for (key in lists)
+			singles.remove(key);
 	}
 
 	/** A number for a new reader, which `firstRead` tells its facts by. */

@@ -149,6 +149,7 @@ class IrStageMemos {
 	/** Starts an assembly run. */
 	public function startBuild():Void {
 		build++;
+		facts.startBuild(build);
 		helpers = keptHelpers;
 		keptHelpers = [];
 		for (memo in contributions)
