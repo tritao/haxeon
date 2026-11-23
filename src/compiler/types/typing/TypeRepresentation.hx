@@ -72,8 +72,8 @@ class TypeRepresentation {
 	static inline var MAX_OWNER_TYPE_NODES:Int = 4096;
 	final session:TypingSession;
 	final enumBodyUses:Map<String, Bool> = [];
-	/** `ownerNestsInStructure` by owner and parameter. */
-	final structureUses:Map<String, Bool> = [];
+	/** `ownerSignaturesHold` by question, owner and parameter. */
+	final signatureUses:Map<String, Bool> = [];
 	/** The body typer's conversions, which adapt a function value (`useConversions`). */
 	var conversions:Null<ConversionResolver> = null;
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
@@ -265,12 +265,19 @@ class TypeRepresentation {
 			if (ownerContainsValue(argument) || (switch argument {
 				case TDynamic: false;
 				default: ownerUsesGenericEnum(declaration, declaration.typeParameters[index])
-					|| ownerNestsInStructure(declaration, declaration.typeParameters[index]);
+					|| ownerNestsInStructure(declaration, declaration.typeParameters[index])
+					|| heldAsHandle(argument) && ownerHoldsInMap(declaration, declaration.typeParameters[index]);
 			}))
 				needsSpecialization = true;
 		}
 		if (!needsSpecialization)
 			return null;
+		// The specialization is named from its arguments, which must not change after: a literal's open structure among them
+		// (`new Table(["a" => {x: 1}])`) is closed now.
+		if (session.monomorphs.mentionsOpen(type)) {
+			arguments = [for (argument in arguments) session.monomorphs.closeReached(argument)];
+			type = TInstance(NominalKind.Class, name, arguments);
+		}
 		var substitutions:Map<String, CompilerType> = [],
 			policies:Array<String> = [],
 			representations:Array<CompilerType> = [];
@@ -553,16 +560,43 @@ class TypeRepresentation {
 	 * `T = String` reads (`{key:String}`): until a structure is a view of its record (`docs/design/STRUCTURE_VALUES.md`), such an
 	 * owner is specialized, as one holding a generic enum is.
 	 */
-	function ownerNestsInStructure(owner:AstClass, parameter:String):Bool {
-		var key = compiler.core.GlobalNames.of("structure:" + owner.name + ":" + parameter);
-		var known = structureUses.get(key);
+	function ownerNestsInStructure(owner:AstClass, parameter:String):Bool
+		return ownerSignaturesHold(owner, parameter, "structure",
+			type -> structureHolds(type, owner.name, parameter, []));
+
+	/**
+	 * Whether an instance member's declared type is a map whose values are `parameter` (`var entries:Map<String, T>`). A map holds a
+	 * runtime handle (another map, a native abstract) as the handle itself where its value type says so, and a boxed value where its
+	 * value type is Dynamic, so a shared body's map of `Dynamic` cannot read the entries of a map of maps: an owner whose argument
+	 * is such a handle is specialized for it.
+	 */
+	function ownerHoldsInMap(owner:AstClass, parameter:String):Bool
+		return ownerSignaturesHold(owner, parameter, "map", type -> mapValueHolds(type, owner.name, parameter, []));
+
+	/** Whether a value of `type` is a runtime handle a map stores unboxed: a compiler-owned map or a native abstract. */
+	function heldAsHandle(type:CompilerType):Bool
+		return switch type {
+			case TMap(key, value): RuntimeType.mapName(key, value) != null
+				&& !session.requiresSpecializedMap(key, value);
+			case TNativeAbstract(_): true;
+			case TAbstract(_, _, representation), TNullable(representation): heldAsHandle(representation);
+			default: false;
+		};
+
+	/**
+	 * Whether `holds` is true of an annotated instance member's type of `owner` (a field's, or a method's argument or result), with
+	 * the owner's type parameters as themselves; answered once per question (`kind`), owner and parameter.
+	 */
+	function ownerSignaturesHold(owner:AstClass, parameter:String, kind:String, holds:CompilerType->Bool):Bool {
+		var key = compiler.core.GlobalNames.of(kind + ":" + owner.name + ":" + parameter);
+		var known = signatureUses.get(key);
 		if (known != null)
 			return known;
 		var own = ownParameters(owner.name, owner.typeParameters), found = false;
 		// An unannotated member's type is its body's, which this does not type: such a member is not looked at.
 		function check(type:Null<AstType>, span:SourceSpan, parameters:Map<String, CompilerType>):Void
 			if (!found && type != null && !type.match(InferredType | ErrorType(_))
-				&& structureHolds(semanticType(type, span, parameters), owner.name, parameter, []))
+				&& holds(semanticType(type, span, parameters)))
 				found = true;
 		for (field in owner.fields)
 			if (!field.isStatic)
@@ -582,9 +616,49 @@ class TypeRepresentation {
 				check(argument.type, method.span, parameters);
 			check(method.result, method.span, parameters);
 		}
-		structureUses.set(key, found);
+		signatureUses.set(key, found);
 		return found;
 	}
+
+	/** Whether `type` has among its parts a map whose values are the type parameter `parameter` of `owner`, nullable or not. */
+	static function mapValueHolds(type:CompilerType, owner:String, parameter:String,
+			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
+		return switch type {
+			case TMap(key, value):
+				isParameter(value, owner, parameter) || mapValueHolds(key, owner, parameter, explored)
+					|| mapValueHolds(value, owner, parameter, explored);
+			case TAnonymous(_, fields):
+				if (explored.indexOf(fields) >= 0) false;
+				else {
+					explored.push(fields);
+					var found = false;
+					for (field in fields)
+						if (mapValueHolds(field.type, owner, parameter, explored))
+							found = true;
+					found;
+				}
+			case TInstance(_, _, arguments), TAbstract(_, arguments, _):
+				var found = false;
+				for (argument in arguments)
+					if (mapValueHolds(argument, owner, parameter, explored))
+						found = true;
+				found;
+			case TNullable(inner), TArray(inner), TIterator(inner): mapValueHolds(inner, owner, parameter, explored);
+			case TFunction(arguments, result, _):
+				var found = mapValueHolds(result, owner, parameter, explored);
+				for (argument in arguments)
+					if (mapValueHolds(argument, owner, parameter, explored))
+						found = true;
+				found;
+			default: false;
+		};
+
+	static function isParameter(type:CompilerType, owner:String, parameter:String):Bool
+		return switch type {
+			case TTypeParameter(declaration, name): (declaration:String) == owner && name == parameter;
+			case TNullable(inner): isParameter(inner, owner, parameter);
+			default: false;
+		};
 
 	/** Whether `type` has a structure among its parts that mentions the type parameter `parameter` of `owner`. */
 	static function structureHolds(type:CompilerType, owner:String, parameter:String,
