@@ -18,3 +18,6 @@ set(NK_BUILD_GPU ON CACHE BOOL "Build NativeKit's GPU module, which the UI packa
 set(NK_BUILD_TESTS OFF CACHE BOOL "Build NativeKit tests" FORCE)
 set(NK_BUILD_EXAMPLES OFF CACHE BOOL "Build NativeKit examples" FORCE)
 add_subdirectory("${HAXEON_NATIVEKIT_SOURCE}" nativekit)
+# The target the package's manifest names: both libraries it declares (native.cmake.libraries), which `nativekit` alone
+# leaves out of a build that is not an app's.
+add_custom_target(haxeon_nativekit DEPENDS nativekit nativekit_gpu)

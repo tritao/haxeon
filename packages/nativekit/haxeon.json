@@ -6,7 +6,7 @@
 	"native": {
 		"cmake": {
 			"source": ".",
-			"target": "nativekit",
+			"target": "haxeon_nativekit",
 			"libraries": ["nativekit", "nativekit_gpu"]
 		}
 	},
