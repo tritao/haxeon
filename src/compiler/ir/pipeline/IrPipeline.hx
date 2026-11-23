@@ -111,12 +111,14 @@ class IrPipeline {
 			closedEnumTagProgram).when(closesEnumTags),
 		new IrStage("value-array-rewrite", valueArrayRewrite),
 		IrFunctionStages.programStage("value-constructors", valueConstructors).when(wasmValueLanes),
-		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
+		IrFunctionStages.programStage("scalar-argument-joins", valuePhiScalarizationBodies).when(wasmValueLanes),
+		IrFunctionStages.programStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
 		IrFunctionStages.programStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
 		IrFunctionStages.programStage("value-constructors", valueConstructors).when(hashLink),
-		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
+		IrFunctionStages.programStage("scalar-argument-joins", valuePhiScalarizationBodies).when(hashLink),
+		IrFunctionStages.programStage("scalar-arguments", scalarArguments).when(hashLink),
 		new IrStage("scalar-closures", scalarClosures).when(hashLink),
 		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
@@ -586,7 +588,7 @@ class IrPipeline {
 	}
 
 	/**
-	 * Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen; its call rewrite can
+	 * Value joins are scalarized before `scalar-arguments` (`scalar-argument-joins`), before the scalar call ABI is chosen; its call rewrite can
 	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrFunctionPass
@@ -597,16 +599,12 @@ class IrPipeline {
 		return IrValuePhiScalarization.pass(program, bodyTypes(context), context.passScratch);
 
 	/** Wasm's scalar argument ABI, with value lanes. */
-	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, true, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrScalarArguments(program, true, bodyTypes(context), context.passScratch, context.lineage);
 
 	/** HashLink's scalar argument and result ABI. */
-	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, false, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrScalarArguments(program, false, bodyTypes(context), context.passScratch, context.lineage);
 
 	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
 		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch);

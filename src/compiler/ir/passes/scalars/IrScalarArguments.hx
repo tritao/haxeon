@@ -35,8 +35,13 @@ private typedef ScalarCallPlan = {
  * (docs/design/IR_CORE_COLUMNS.md, migration): value joins are split first (`IrValuePhiScalarization`), then each candidate is
  * cloned with its value arguments expanded into slots, and direct calls are redirected to the clones in place.
  */
-class IrScalarArguments {
+class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	public static inline final PREFIX = "$scalar-arguments:";
+
+	/** The fact of a function a call, a closure or a method call names: never stated for a candidate, 0 for any other. */
+	static inline final CALLEE = 0;
+
+	static inline final METHOD = 1;
 
 	/** Raw result slots and traced leaf carriers may cross only the verified private callable ABI. */
 	public static function isPrivateClosureType(type:IrType):Bool
@@ -64,6 +69,10 @@ class IrScalarArguments {
 	final freshOnly:Map<String, Bool> = [];
 	final terminalOnly:Map<String, Bool> = [];
 	final methodNames:Map<String, Bool> = [];
+	var clones:Map<String, IrBody> = [];
+	var pinnedClones:Map<String, IrBody> = [];
+	var originals:Array<IrFunction> = [];
+	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
 
 	/**
 	 * Splits value joins and rewrites `program`'s functions and calls for the scalar ABI, on bodies made with `types` (those of
@@ -79,11 +88,21 @@ class IrScalarArguments {
 			scratch = new IrPassScratch();
 		// Call rewriting judges value arguments by their uses, which a value join hides.
 		IrValuePhiScalarization.rewriteBodies(program, types, scratch);
-		new IrScalarArguments(program, argumentsOnly, types, scratch).run();
+		program.functions = compiler.ir.pipeline.IrFunctionStages.apply("scalar-arguments",
+			new IrScalarArguments(program, argumentsOnly, types, scratch), program.functions);
 	}
 
-	function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch) {
+	/**
+	 * The scalar ABI per function (`IrFunctionPass`) for the pipeline, after its value joins are split. The candidates are chosen
+	 * over the whole program each run; the rewrite of a function reads, for each function its calls and closures name and each method
+	 * it calls, whether it is a candidate or a candidate's method (`CALLEE`, `METHOD`): a function that names none keeps its form
+	 * unread while those facts hold, and one that names a candidate is rewritten each run, as its calls depend on the candidates'
+	 * layouts. The clones are added in `finish`.
+	 */
+	public function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.program = program;
+		this.lineage = lineage;
 		this.argumentsOnly = argumentsOnly;
 		this.types = types;
 		this.scratch = scratch;
@@ -94,31 +113,25 @@ class IrScalarArguments {
 		byName = [for (fn in program.functions) fn.name => fn];
 	}
 
-	function run():Void {
-		var bodies = [for (fn in program.functions) fn.bodyIn(types, scratch.bodyBuilder)];
+	/** The candidates, chosen over the whole program; only functions with a value in their signature are read. */
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+			names:compiler.ir.pipeline.IrFunctionIndex):Void {
+		originals = functions;
 		// Typed closure signatures are an ABI decision, including forwarding closures.
 		// Keep their scalar entry points available before IrScalarClosures rewrites
 		// indirect calls; judging those calls against the boxed ABI here creates a
 		// cycle that prevents allocation-free forwarding of value arguments/results.
 		var closureTargets:Map<String, Bool> = [];
 		if (!argumentsOnly)
-			for (body in bodies)
-				for (block in 0...body.blockCount()) {
-					var row = body.firstRow(block);
-					while (row >= 0) {
-						switch body.opcode(row) {
-							case IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
-								closureTargets.set(body.symbol(row).name, true);
-							default:
-						}
-						row = body.nextRow(row);
-					}
-				}
+			for (fn in functions)
+				for (name in closureNames(fn))
+					closureTargets.set(name, true);
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
-		for (body in bodies) {
-			if (!IrScalarAbiEligibility.permits(body.kind, false))
+		for (fn in functions) {
+			if (!IrScalarAbiEligibility.permits(fn.kind, false) || !signatureHasValue(fn))
 				continue;
+			var body = fn.bodyIn(types, scratch.bodyBuilder);
 			var resultType = body.types.type(body.result),
 				hasValue = isValue(resultType),
 				eligible = true,
@@ -180,7 +193,7 @@ class IrScalarArguments {
 					methodNames.set(method.name, true);
 		// Do not redirect a call if reconstructing its value arguments would allocate in the clone. In particular,
 		// handler edges can keep an otherwise field-only value alive across blocks.
-		var clones:Map<String, IrBody> = [], pinnedClones:Map<String, IrBody> = [], changed = true;
+		var changed = true;
 		while (changed) {
 			changed = false;
 			clones = [];
@@ -188,8 +201,9 @@ class IrScalarArguments {
 			var allCandidates = candidates.copy();
 			for (name in pinnedCandidates.keys())
 				allCandidates.set(name, pinnedCandidates.get(name));
-			for (body in bodies)
-				if (candidates.exists(body.name)) {
+			for (fn in functions) {
+				var body = candidates.get(fn.name);
+				if (body != null) {
 					var retainedValue = false;
 					for (index in 0...body.argumentCount()) {
 						var arg = body.argument(index);
@@ -211,8 +225,10 @@ class IrScalarArguments {
 					} else
 						clones.set(body.name, specialized);
 				}
-			for (body in bodies)
-				if (pinnedCandidates.exists(body.name)) {
+			}
+			for (fn in functions) {
+				var body = pinnedCandidates.get(fn.name);
+				if (body != null) {
 					var retainedValue = false;
 					for (index in 1...body.argumentCount()) {
 						var arg = body.argument(index);
@@ -228,15 +244,53 @@ class IrScalarArguments {
 					} else
 						pinnedClones.set(body.name, specialized);
 				}
+			}
 		}
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function fact(kind:Int, key:String):Int
+		return switch kind {
+			case CALLEE: candidates.exists(key) || pinnedCandidates.exists(key) ? compiler.ir.reuse.IrFacts.UNKNOWN : 0;
+			default: methodNames.exists(key) ? compiler.ir.reuse.IrFacts.UNKNOWN : 0;
+		};
+
+	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		if (reader.records())
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.Call, IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+							reader.read(CALLEE, body.symbol(row).name);
+						case IrOpcode.MethodCall:
+							reader.read(METHOD, body.symbol(row).name);
+						default:
+					}
+					row = body.nextRow(row);
+				}
+			}
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
-			return;
-		var rewritten:Array<IrFunction> = [];
-		for (index in 0...bodies.length)
-			rewritten.push(rewriteFunction(program.functions[index], bodies[index]));
-		for (body in bodies)
-			if (candidates.exists(body.name))
-				rewritten.push(publish(clones.get(body.name)));
+			return fn;
+		return rewriteFunction(fn, body);
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		throw new InternalError("The scalar ABI asks for no helper");
+
+	/** The rewritten functions, then the candidates' clones and the receiver-preserving ones a call selects. */
+	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
+		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
+			return rewritten;
+		rewritten = rewritten.copy();
+		for (fn in originals)
+			if (candidates.exists(fn.name))
+				rewritten.push(publish(clones.get(fn.name)));
+		if (!pinnedClones.keys().hasNext())
+			return rewritten;
 		// Receiver-preserving variants are only useful when a rewritten call selects one.
 		// Keep their transitive dependencies, but do not publish every possible variant into
 		// the program: an unused variant still consumes module and JIT metadata.
@@ -270,15 +324,57 @@ class IrScalarArguments {
 				throw new InternalError('Missing receiver-preserving clone "$name"');
 			discover(dependency);
 		}
-		for (body in bodies)
-			if (pinnedCandidates.exists(body.name)) {
-				var clone = pinnedClones.get(body.name);
+		for (fn in originals)
+			if (pinnedCandidates.exists(fn.name)) {
+				var clone = pinnedClones.get(fn.name);
 				if (clone == null)
-					throw new InternalError('Missing receiver-preserving clone for "${body.name}"');
+					throw new InternalError('Missing receiver-preserving clone for "${fn.name}"');
 				if (needed.exists(clone.name))
 					rewritten.push(publish(clone));
 			}
-		program.functions = rewritten;
+		return rewritten;
+	}
+
+	/** The functions `fn` takes as closures, read once per version in a session (`IrStageMemos.closureNames`). */
+	function closureNames(fn:IrFunction):Array<String> {
+		var known = lineage, version = known == null ? 0 : known.versionOf(fn);
+		if (known == null || version == 0)
+			return readClosureNames(fn.bodyIn(types, scratch.bodyBuilder));
+		var memo = known.memos.closureNames, names = memo.get(version);
+		if (names == null) {
+			names = readClosureNames(fn.bodyIn(types, scratch.bodyBuilder));
+			memo.keep(version, names);
+		} else if (known.checks && names.join(",") != readClosureNames(fn.bodyIn(types, scratch.bodyBuilder)).join(","))
+			throw new InternalError('--check-reuse: the closures reused for ${fn.name} differ from its body');
+		return names;
+	}
+
+	static function readClosureNames(body:IrBody):Array<String> {
+		var names:Array<String> = [];
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.StaticClosure, IrOpcode.InstanceClosure:
+						var name = body.symbol(row).name;
+						if (names.indexOf(name) < 0)
+							names.push(name);
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return names;
+	}
+
+	/** Whether `fn`'s result or an argument is a value: only such a function can be a candidate. */
+	function signatureHasValue(fn:IrFunction):Bool {
+		if (isValue(fn.result))
+			return true;
+		for (argument in fn.arguments)
+			if (isValue(argument.type))
+				return true;
+		return false;
 	}
 
 	/** `body`'s clone for the scalar ABI, its calls rewritten, its value joins split and its value allocations replaced. */
