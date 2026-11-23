@@ -47,7 +47,7 @@ class ScriptRun {
 			ContentDigest.makeHex(Bytes.ofString(path)).substr(0, 16)),
 			PackageManifest.program("script-" + module.toLowerCase().split("_").join("-"), entry, [path], [root],
 			true, [],
-			null, dependencies));
+			null, dependencies), null, entry);
 	}
 
 	/** The package a script declares (`package a.b;` before any other declaration), or null. */

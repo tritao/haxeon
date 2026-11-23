@@ -252,6 +252,14 @@ class Compiler {
 	function set_options(value:CompileOptions):CompileOptions {
 		if (value.key() != options.key())
 			sourceGeneration++;
+		if (value.scriptModule != options.scriptModule) {
+			// Both modules need to be parsed again when their grammar changes.
+			for (name in [options.scriptModule, value.scriptModule]) {
+				var module = name == null ? null : modules.get(name);
+				if (module != null)
+					module.render(module.source);
+			}
+		}
 		return options = value;
 	}
 

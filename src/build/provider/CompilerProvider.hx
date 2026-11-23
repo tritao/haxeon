@@ -79,6 +79,8 @@ class CompilerProvider {
 		if (!context.selfHosted)
 			arguments.push("--stdlib=" + stdlib);
 		// The passes are the request's (`CompileOptions`): the manifest's `inline: false` turns inlining off.
+		if (context.scriptModule != null)
+			arguments.push(CompileOptions.SCRIPT_MODULE + context.scriptModule);
 		if (!compilerInputs.inlineEnabled)
 			arguments.push("--no-inline");
 		for (rule in compilerInputs.nullSafety)

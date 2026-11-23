@@ -383,6 +383,10 @@ value stays null), and a warning can point out a surprising case.
 
 Different from Haxe on purpose:
 
+- The file invoked by `haxeon script.hx` or `haxeon run script.hx` can use top-level statements as an implicit
+  `main`. This applies only to the script file. Imported modules and project sources use the ordinary Haxe
+  module grammar.
+
 - `haxe.crypto.Sha256.encode` gives the SHA-256 of the string's UTF-8 bytes. Haxe's hashes those bytes but pads them
   with the string's UTF-16 length, so for a string beyond ASCII its digest is not the SHA-256 (Haxe 4.3.7 on HashLink:
   `encode("é")` is `b2207512...`, not `4a99557e...`). `Sha256.make(Bytes.ofString(s))` is the SHA-256 in both, so code

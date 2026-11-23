@@ -31,10 +31,13 @@ class ModuleAnalyzer {
 	final lookupParses:Map<String, LookupParse> = [];
 	final importedMembers:Map<String, {ast:compiler.syntax.Ast.AstProgram, members:Map<String, Bool>}> = [];
 
+	final scriptModule:Null<String>;
+
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool,
 			defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners,
-			?keepsTokens = true) {
+			?keepsTokens = true, ?scriptModule:String) {
+		this.scriptModule = scriptModule;
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
@@ -437,7 +440,7 @@ class ModuleAnalyzer {
 	function parseText(state:ModuleState):LookupParse {
 		var conditional = ConditionalCompilation.process(state.source, defines),
 			tokens = new Lexer(state.source, conditional.text).tokenizeTable(),
-			program = new Parser(tokens).parseProgram();
+			program = state.name == scriptModule ? Parser.parseScript(tokens) : new Parser(tokens).parseProgram();
 		if (program.packageName == null) {
 			var packageName = ModulePath.packageName(state.name);
 			if (packageName != null)

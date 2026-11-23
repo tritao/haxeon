@@ -19,6 +19,7 @@ typedef CompileOptionsInit = {
 	final ?phaseCollections:Bool;
 	final ?inlineAllocation:Bool;
 	final ?nullSafety:Array<NullSafetyRule>;
+	final ?scriptModule:String;
 }
 
 /**
@@ -112,7 +113,11 @@ class CompileOptions {
 	 */
 	public final nullSafety:Array<NullSafetyRule>;
 
+	/** The single module compiled with script grammar, when invoked as a script. */
+	public final scriptModule:Null<String>;
+
 	public function new(?init:CompileOptionsInit) {
+		scriptModule = init == null ? null : init.scriptModule;
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
 		strengthReduction = init == null || init.strengthReduction != false;
@@ -154,7 +159,8 @@ class CompileOptions {
 			checkIrBody: checkIrBody,
 			phaseCollections: phaseCollections,
 			inlineAllocation: inlineAllocation,
-			nullSafety: nullSafety
+			nullSafety: nullSafety,
+			scriptModule: scriptModule
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -190,10 +196,14 @@ class CompileOptions {
 			flags.push(NO_PHASE_COLLECTIONS);
 		if (inlineAllocation)
 			flags.push(INLINE_ALLOCATION);
+		if (scriptModule != null)
+			flags.push(SCRIPT_MODULE + scriptModule);
 		for (rule in nullSafety)
 			flags.push(NULL_SAFETY + rule.argument());
 		return flags;
 	}
+
+	public static inline final SCRIPT_MODULE = "--script-module=";
 
 	static inline final PARSE_THREADS = "--parse-threads=";
 
@@ -237,7 +247,8 @@ class CompileOptions {
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
 				INLINE_ALLOCATION: true;
-			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY);
+			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
+				|| StringTools.startsWith(argument, SCRIPT_MODULE);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -258,8 +269,16 @@ class CompileOptions {
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
-			nullSafety: nullSafetyFrom(arguments)
+			nullSafety: nullSafetyFrom(arguments),
+			scriptModule: scriptModuleFrom(arguments)
 		});
+
+	static function scriptModuleFrom(arguments:Array<String>):Null<String> {
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, SCRIPT_MODULE))
+				return argument.substr(SCRIPT_MODULE.length);
+		return null;
+	}
 
 	/** The rules of the `--null-safety=` flags among `arguments`, in order. A malformed one is a usage error. */
 	static function nullSafetyFrom(arguments:Array<String>):Array<NullSafetyRule> {

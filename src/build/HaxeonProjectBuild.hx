@@ -56,7 +56,7 @@ class HaxeonProjectBuild {
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, scope:BuildScope = Full,
 			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
-			?style:ReportStyle, aheadOfTime:Bool = false):Int {
+			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String):Int {
 		var shown = style == null ? ReportStyle.DEFAULT : style;
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
@@ -89,7 +89,8 @@ class HaxeonProjectBuild {
 					baseline,
 					// `--timings` asks for the compiler's reports too: the scripts that measure builds read them.
 					timingsEnabled ? shown.withVerbosity(Verbosity.Diagnostic) : shown,
-					scope == Check
+					scope == Check,
+					scriptModule
 				));
 		switch scope {
 			case Full:

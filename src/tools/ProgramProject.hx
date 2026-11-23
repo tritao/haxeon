@@ -21,7 +21,10 @@ class ProgramProject {
 	/** Where the built module is copied (a Haxe command line's `--hl FILE`), or null to leave it in the build. */
 	public final publishTo:Null<String>;
 
-	public function new(root:String, manifest:PackageManifest, ?publishTo:String) {
+	public final scriptModule:Null<String>;
+
+	public function new(root:String, manifest:PackageManifest, ?publishTo:String, ?scriptModule:String) {
+		this.scriptModule = scriptModule;
 		this.root = root;
 		this.manifest = manifest;
 		this.publishTo = publishTo;

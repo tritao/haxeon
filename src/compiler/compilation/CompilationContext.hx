@@ -87,7 +87,7 @@ class CompilationContext {
 		// A copy: the loader remembers the names no root holds, and each build probes again for those.
 		moduleAnalyzer = new ModuleAnalyzer(state.modules, state.types, natives, state.compiledOnce, defines,
 			owner.sourceLoader.copy(), buildSemanticModels,
-			state.declarationOwners, options.keepSession);
+			state.declarationOwners, options.keepSession, options.scriptModule);
 	}
 
 	/** A context with this one's configuration over `state`. */

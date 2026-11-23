@@ -1014,7 +1014,7 @@ class HaxeonCli {
 				options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, appScope, options.live, instrument, session,
 				options.buildMode == "development", null, null, options.style,
-				aheadOfTime) catch (error:haxe.Exception) {
+				aheadOfTime, program == null ? null : program.scriptModule) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}

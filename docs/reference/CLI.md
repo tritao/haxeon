@@ -709,6 +709,23 @@ up, as `dotnet run app.cs` does:
 - The file's name is its module's, dashes included (`check-self-hosting.hx`); a script is never imported by name, so it
   need not be an identifier. Only a further dot (`a.b.hx`) is refused, since it would read as a package.
 
+A script can declare `main` or run top-level statements as an implicit `main`. Combining both is a compile
+error. The statements run in source order and can call module-level functions and use types declared later in
+the file. Plain `var` and `final` declarations in the implicit `main` are locals. A script with an explicit
+`main` can still declare ordinary module fields. Read command-line arguments with `Sys.args()`.
+
+```haxe
+#!/usr/bin/env haxeon
+final args = Sys.args();
+Sys.println(greet(args.length > 0 ? args[0] : "world"));
+
+function greet(name:String):String
+	return 'hello $name';
+```
+
+Only the file invoked as a script accepts top-level statements. Imported modules and project sources use the
+ordinary Haxe module grammar.
+
 `haxeon.Script` (in the standard library) covers what shell scripts make short. It starts programs directly, never
 through a shell, so arguments need no quoting and a script runs the same on every platform:
 
