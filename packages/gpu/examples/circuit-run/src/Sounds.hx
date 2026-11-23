@@ -17,6 +17,7 @@ class Sounds implements Disposable {
 	var started = false;
 	var muted = false;
 	var available = false;
+	var pending:Null<SoundEffect>;
 
 	public function new() {
 		try {
@@ -31,7 +32,21 @@ class Sounds implements Disposable {
 		}
 	}
 
-	public function play(effect:SoundEffect):Void {
+	/** Coalesces cues from simulation ticks until the native frame callback returns. */
+	public function enqueue(effect:SoundEffect):Void
+		pending = effect;
+
+	public function clear():Void
+		pending = null;
+
+	public function flush():Void {
+		var effect = pending;
+		clear();
+		if (effect != null)
+			play(effect);
+	}
+
+	function play(effect:SoundEffect):Void {
 		if (!available || muted)
 			return;
 		try {

@@ -1,7 +1,10 @@
 import haxeon.gpu.Batch;
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.Surface;
-import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.App;
+import haxeon.platform.AppLoop;
+import haxeon.platform.FrameTick;
+import haxeon.platform.SurfaceFrame;
 import haxeon.ui.FontCollection;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
@@ -13,9 +16,8 @@ import haxeon.platform.WindowOptions;
 import nativekit.ffi.NativeKitTypes;
 import Circuit.CircuitEvent;
 import Circuit.Position;
-import Sounds.SoundEffect;
 
-class Main {
+class Main implements App {
 	static inline var stepSeconds = 1.0 / Circuit.ticksPerSecond;
 
 	final game = new Circuit();
@@ -36,13 +38,9 @@ class Main {
 	var submittedFrame = false;
 	var lastWidth = 0;
 	var lastHeight = 0;
-	var frameSubscription:SurfaceFrameSubscription;
 	final runtime:Runtime;
 
 	var running = true;
-	var frameFailure:Dynamic;
-	// Keep mixer calls out of the native frame callback so audio work cannot delay presentation.
-	var pendingSound:Null<SoundEffect>;
 
 	var previousPlayer:Position;
 	var previousDrone:Position;
@@ -51,12 +49,16 @@ class Main {
 
 	#if circuit_run_web
 	static var app:Main;
+	static var loop:AppLoop;
 
 	public static function main():Void {
 		var runtime = Runtime.start();
 		var sounds = new Sounds();
 		app = new Main(runtime, sounds);
-		try app.start() catch (error:Dynamic) {
+		try {
+			app.start();
+			loop = runtime.startApp(app.surface, app);
+		} catch (error:Dynamic) {
 			shutdown();
 			throw error;
 		}
@@ -65,15 +67,15 @@ class Main {
 	public static function poll():Int {
 		if (app == null)
 			return -1;
-		app.iterate(false);
-		if (app.frameFailure != null) {
-			Sys.println("Circuit Run frame failed: " + Std.string(app.frameFailure));
+		try {
+			if (!loop.tick()) {
+				shutdown();
+				return 2;
+			}
+		} catch (error:Dynamic) {
+			Sys.println("Circuit Run frame failed: " + Std.string(error));
 			shutdown();
 			return -1;
-		}
-		if (!app.running && app.inFlight == null) {
-			shutdown();
-			return 2;
 		}
 		return app.submittedFrame ? 1 : 0;
 	}
@@ -85,10 +87,15 @@ class Main {
 			app.running = false;
 			return;
 		}
-		app.dispose();
-		app.sounds.dispose();
-		app.runtime.dispose();
+		var stopped = app;
 		app = null;
+		defer stopped.runtime.dispose();
+		defer stopped.sounds.dispose();
+		defer stopped.dispose();
+		if (loop != null) {
+			loop.dispose();
+			loop = null;
+		}
 	}
 	#else
 	static function main():Void {
@@ -97,10 +104,7 @@ class Main {
 		var app = new Main(runtime, sounds);
 		defer app.dispose();
 		app.start();
-		while (app.running || app.inFlight != null)
-			app.iterate(true);
-		if (app.frameFailure != null)
-			throw app.frameFailure;
+		runtime.run(app.surface, app);
 	}
 	#end
 
@@ -126,7 +130,6 @@ class Main {
 		hudBinding = UiSurfaceBinding.attach(hudContext, window, surface, runtime.events);
 		hudContext.onAnimationFrameRequested = function() hudDirty = true;
 		hud = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
-		surface.onReady(prepareRenderer);
 		surface.onResize(function(width, _, _, _) {
 			if (width > 0)
 				hudBinding.setCoordinateScale(width / CircuitRenderer.width);
@@ -137,39 +140,22 @@ class Main {
 		snapshotPositions();
 	}
 
-	function iterate(wait:Bool):Void {
-		var hadEvent = runtime.events.poll();
-		if (hadEvent) {
-			for (_ in 1...64)
-				if (!runtime.events.poll())
-					break;
-		}
-		if (!hadEvent && wait && pendingSound == null)
-			runtime.events.wait(0.1);
-		var effect = pendingSound;
-		if (running && effect != null) {
-			pendingSound = null;
-			sounds.play(effect);
-		}
-	}
+	public function afterFrame():Void
+		sounds.flush();
+
+	public function shouldQuit():Bool
+		return !running;
 
 	function dispose():Void {
 		defer if (hudFonts != null) hudFonts.dispose();
 		defer if (hudRenderer != null) hudRenderer.dispose();
 		defer if (hudContext != null) hudContext.dispose();
-		defer if (hudBinding != null) hudBinding.dispose();
-		if (frameSubscription != null)
-			frameSubscription.dispose();
+		if (hudBinding != null)
+			hudBinding.dispose();
 	}
 
-	function prepareRenderer():Void {
-		if (renderer != null)
-			return;
-		try {
-			renderer = new CircuitRenderer(surface);
-			frameSubscription = surface.onFrame(onFrame);
-		} catch (error:Dynamic) failFrame(error);
-	}
+	public function ready():Void
+		renderer = new CircuitRenderer(surface);
 
 	function finishFrame(token:haxe.Int64, result:Result):Void {
 		var batch = inFlight;
@@ -179,8 +165,6 @@ class Main {
 		batch.dispose();
 		if (result == Result.Ok)
 			submittedFrame = true;
-		else
-			failFrame("NativeKit frame result " + Std.string(result));
 	}
 
 	function handleKey(key:Key, scancode:Int, action:InputAction, modifiers:Modifiers):Bool {
@@ -201,7 +185,7 @@ class Main {
 
 	function restart():Void {
 		game.reset();
-		pendingSound = null;
+		sounds.clear();
 		snapshotPositions();
 		accumulator = 0.0;
 		lastFrame = 0.0;
@@ -213,59 +197,48 @@ class Main {
 		hudDirty = true;
 	}
 
-	function failFrame(error:Dynamic):Void {
-		frameFailure = error;
-		running = false;
-	}
-
 	function onGameEvent(event:CircuitEvent):Void {
-		pendingSound = switch event {
+		sounds.enqueue(switch event {
 			case NodeCollected: Pickup;
 			case RoundFinished(Captured): Caught;
 			case RoundFinished(Cleared): Clear;
-		};
+		});
 		hudDirty = true;
 	}
 
-	function onFrame(width:Int, height:Int):Void {
-		if (!running || inFlight != null || width <= 0 || height <= 0)
-			return;
-		try {
-			var now = Sys.monotonicTime();
-			var delta = lastFrame == 0.0 ? 0.0 : Math.min(now - lastFrame, 0.1);
-			advanceSimulation(now);
-			var progress = accumulator / stepSeconds;
-			var player = lerp(previousPlayer, game.playerPosition(), progress);
-			var drone = lerp(previousDrone, game.dronePosition(), progress);
-			var frame = surface.acquireFrame();
-			defer if (!frame.isFinished()) frame.cancel();
-			var batch = renderer.record(game, player, drone, width, height);
-			var queued = false;
-			defer if (!queued) batch.dispose();
-			var gpuStep = batch.frameStep();
-			defer gpuStep.dispose();
+	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
+		var width = tick.width;
+		var height = tick.height;
+		var now = tick.timeSeconds;
+		var delta = lastFrame == 0.0 ? 0.0 : Math.min(now - lastFrame, 0.1);
+		advanceSimulation(now);
+		var progress = accumulator / stepSeconds;
+		var player = lerp(previousPlayer, game.playerPosition(), progress);
+		var drone = lerp(previousDrone, game.dronePosition(), progress);
+		var batch = renderer.record(game, player, drone, width, height);
+		var queued = false;
+		defer if (!queued) batch.dispose();
+		var gpuStep = batch.frameStep();
+		defer gpuStep.dispose();
 
-			var scale = width / CircuitRenderer.width;
-			var logicalHeight = height / scale;
-			if (hudDirty || hudContext.isDirty() || hudContext.needsAnimationFrame
-				|| width != lastWidth || height != lastHeight) {
-				hudLayout.setViewport(CircuitRenderer.width, logicalHeight);
-				hudLayout.deltaSeconds = delta;
-				hudContext.submit(hud, hudLayout);
-				hudDirty = false;
-				lastWidth = width;
-				lastHeight = height;
-			}
-			frameInfo.set(CircuitRenderer.width, logicalHeight, width, height, scale);
-			var uiStep = hudContext.frameStep(hudRenderer, frame, frameInfo);
-			defer uiStep.dispose();
-			frame.submit([gpuStep, uiStep]);
-			frameToken = frame.token();
-			inFlight = batch;
-			queued = true;
-		} catch (error:Dynamic) {
-			failFrame(error);
+		var scale = width / CircuitRenderer.width;
+		var logicalHeight = height / scale;
+		if (hudDirty || hudContext.isDirty() || hudContext.needsAnimationFrame
+			|| width != lastWidth || height != lastHeight) {
+			hudLayout.setViewport(CircuitRenderer.width, logicalHeight);
+			hudLayout.deltaSeconds = delta;
+			hudContext.submit(hud, hudLayout);
+			hudDirty = false;
+			lastWidth = width;
+			lastHeight = height;
 		}
+		frameInfo.set(CircuitRenderer.width, logicalHeight, width, height, scale);
+		var uiStep = hudContext.frameStep(hudRenderer, frame, frameInfo);
+		defer uiStep.dispose();
+		frame.submit([gpuStep, uiStep]);
+		frameToken = frame.token();
+		inFlight = batch;
+		queued = true;
 	}
 
 	function advanceSimulation(now:Float):Void {

@@ -56,6 +56,10 @@ class Surface implements Disposable {
 		return value;
 	}
 
+	@:allow(haxeon.platform.Runtime)
+	function usesEventPump(pump:EventPump):Bool
+		return events == pump;
+
 	/** Observes readiness for this surface. */
 	public function onReady(handler:Void->Void):EventSubscription {
 		if (handler == null)

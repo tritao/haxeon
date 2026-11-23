@@ -1,0 +1,122 @@
+package haxeon.platform;
+
+import haxe.Int64;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import nativekit.ffi.NativeKitTypes.Result;
+
+/** Drives an app from native surface callbacks and the runtime's event pump. */
+class AppLoop implements Disposable {
+	final events:EventPump;
+	final surface:Surface;
+	final app:App;
+	final readySubscription:EventSubscription;
+	final completionSubscription:EventSubscription;
+	var frameSubscription:Null<SurfaceFrameSubscription>;
+	var pending:Null<Int64>;
+	var frameRan = false;
+	var stopped = false;
+	var disposed = false;
+	var failure:Dynamic;
+
+	@:allow(haxeon.platform.Runtime)
+	private function new(events:EventPump, surface:Surface, app:App) {
+		this.events = events;
+		this.surface = surface;
+		this.app = app;
+		readySubscription = surface.onReady(startFrames);
+		try {
+			completionSubscription = surface.onFrameComplete(function(token, result) {
+				if (pending != null && token == pending) {
+					pending = null;
+					if (result != Result.Ok)
+						fail(new NativeKitError(result, "AppLoop.frame", "Rendering or presentation failed"));
+				}
+			});
+		} catch (error:Dynamic) {
+			readySubscription.dispose();
+			throw error;
+		}
+	}
+
+	/** Pumps one browser tick without blocking. Returns false once any submitted frame has completed and the app has stopped. */
+	public function tick():Bool
+		return advance(false);
+
+	@:allow(haxeon.platform.Runtime)
+	function advance(wait:Bool):Bool {
+		if (disposed)
+			return false;
+		try {
+			var hadEvent = false;
+			for (_ in 0...64) {
+				if (!events.poll())
+					break;
+				hadEvent = true;
+			}
+			stopped = stopped || app.shouldQuit();
+			if (wait && !hadEvent && !frameRan && (!stopped || pending != null))
+				events.wait(0.1);
+			if (frameRan) {
+				frameRan = false;
+				if (failure == null)
+					app.afterFrame();
+			}
+			stopped = stopped || app.shouldQuit();
+		} catch (error:Dynamic) {
+			fail(error);
+		}
+		if (!stopped || pending != null)
+			return true;
+		if (failure != null)
+			throw failure;
+		return false;
+	}
+
+	function startFrames():Void {
+		if (stopped || frameSubscription != null)
+			return;
+		try {
+			if (app.shouldQuit())
+				return;
+			app.ready();
+			frameSubscription = surface.onFrameTick(draw);
+		} catch (error:Dynamic) fail(error);
+	}
+
+	function draw(tick:FrameTick):Void {
+		if (stopped || frameRan || pending != null || tick.width <= 0 || tick.height <= 0)
+			return;
+		try {
+			if (app.shouldQuit())
+				return;
+			var frame = surface.acquireFrame();
+			defer {
+				if (frame.wasSubmitted())
+					pending = frame.token();
+				else if (!frame.isFinished())
+					frame.cancel();
+			}
+			frameRan = true;
+			app.frame(tick, frame);
+		} catch (error:Dynamic) fail(error);
+	}
+
+	function fail(error:Dynamic):Void {
+		if (failure == null)
+			failure = error;
+		stopped = true;
+	}
+
+	public function dispose():Void {
+		if (disposed)
+			return;
+		if (pending != null)
+			throw BindingError.invalidState("AppLoop.dispose", "Advance the loop until its submitted frame completes");
+		defer readySubscription.dispose();
+		defer completionSubscription.dispose();
+		if (frameSubscription != null)
+			frameSubscription.dispose();
+		disposed = true;
+	}
+}

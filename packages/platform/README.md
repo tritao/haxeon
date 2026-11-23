@@ -111,6 +111,20 @@ Managed argument, lifecycle, and event-data validation failures use `BindingErro
 uses the same error objects, preserving domain, code, operation, and diagnostic.
 Native result codes are retained for backend failures, including transport errors.
 
+## Application loop
+
+Create a window and surface, then call `runtime.run(surface, app)` with an
+`App` implementation before dispatching surface readiness. The loop calls
+`ready()` once the surface is ready and supplies a `FrameTick` and acquired
+`SurfaceFrame` to `frame(tick, frame)`. Submit or present that transaction
+inside the callback. The loop cancels a transaction left open.
+
+`afterFrame()` runs after the native callback returns and before the next
+frame. Use it for work such as triggering audio. Once `shouldQuit()` is true,
+the loop stops drawing and drains any submitted frame. On the browser path,
+call `runtime.startApp(surface, app)` and drive `loop.tick()` from
+`requestAnimationFrame` until it returns `false`, then dispose the loop.
+
 ## Window and surface events
 
 Use `window.onKey` and `window.onClose` for window events, and `surface.onReady`,

@@ -44,6 +44,20 @@ class Runtime implements Disposable {
 		return window;
 	}
 
+	/** Starts before SurfaceReady is dispatched. A browser host drives the returned loop with tick(). */
+	public function startApp(surface:Surface, app:App):AppLoop {
+		ensureLive();
+		if (surface == null || app == null || !surface.usesEventPump(events))
+			throw BindingError.invalidArgument("Runtime.startApp", "An app and a surface using this runtime's event pump are required");
+		return new AppLoop(events, surface, app);
+	}
+
+	/** Drives an app until it quits and any queued frame has completed. */
+	public function run(surface:Surface, app:App):Void {
+		scoped var loop = startApp(surface, app);
+		while (loop.advance(true)) {}
+	}
+
 	/** Destroys owned children, then ends the NativeKit generation. */
 	public function dispose():Void {
 		if (disposed || disposing)

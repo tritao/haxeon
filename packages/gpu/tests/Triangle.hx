@@ -27,6 +27,9 @@ import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
 import haxeon.gpu.SurfaceOptions as GpuSurfaceOptions;
 import haxeon.platform.Surface;
+import haxeon.platform.App;
+import haxeon.platform.FrameTick;
+import haxeon.platform.SurfaceFrame;
 import haxeon.gpu.Timestamp;
 import haxeon.platform.GraphicsImageRef;
 import haxeon.platform.Runtime;
@@ -541,11 +544,64 @@ class Triangle {
 		runtime.events.dispatch(windowKey);
 		if (!keySubscription.isDisposed() || !closeSubscription.isDisposed() || keyCalls != 1)
 			throw "Window key routing persisted after disposal";
+		scoped var loopWindow = runtime.createWindowNative(windowOptions);
+		var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
+		var app = new TriangleLoopApp(loopSurface);
+		runtime.run(loopSurface, app);
+		app.verify();
 		runtime.dispose();
 
 		Sys.println("draws_per_frame=400");
 		Sys.println("immediate_cpu_ms_per_frame=" + immediateMs / 12.0);
 		Sys.println("batched_encode_and_submit_ms_per_frame=" + batchedMs / 12.0);
 		return frames == 24 && immediateMs > batchedMs ? 42 : 4;
+	}
+}
+
+private class TriangleLoopApp implements App {
+	final surface:Surface;
+	var renderer:Renderer;
+	var batch:haxeon.gpu.Batch;
+	var token:haxe.Int64;
+	var frames = 0;
+	var afterFrames = 0;
+	var completions = 0;
+
+	public function new(surface:Surface) {
+		this.surface = surface;
+		surface.onFrameComplete(function(completed, result) {
+			if (completed == token && result == Result.Ok)
+				completions++;
+		});
+	}
+
+	public function ready():Void
+		renderer = Renderer.create(surface);
+
+	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
+		if (renderer == null || tick.timeSeconds <= 0.0)
+			throw "The app drew before its surface was ready";
+		frames++;
+		if (frames == 1)
+			return;
+		if (afterFrames != 1)
+			throw "The loop did not run post-frame work before drawing again";
+		batch = renderer.batch().windowPass(tick.width, tick.height).seal();
+		var step = batch.frameStep();
+		defer step.dispose();
+		token = frame.token();
+		frame.submit([step]);
+	}
+
+	public function afterFrame():Void
+		afterFrames++;
+
+	public function shouldQuit():Bool
+		return frames == 2;
+
+	public function verify():Void {
+		if (frames != 2 || afterFrames != 2 || completions != 1)
+			throw "The loop quit without completing the submitted frame";
+		batch.dispose();
 	}
 }

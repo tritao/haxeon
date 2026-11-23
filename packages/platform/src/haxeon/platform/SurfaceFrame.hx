@@ -18,6 +18,7 @@ class SurfaceFrame {
 	final value:SurfaceFrameHandle;
 	final target:SurfaceFrameTarget;
 	var finished:Bool = false;
+	var submitted:Bool = false;
 
 	@:allow(haxeon.platform.Surface)
 	function new(surface:Surface, value:SurfaceFrameHandle, target:SurfaceFrameTarget) {
@@ -47,6 +48,10 @@ class SurfaceFrame {
 	public function isFinished():Bool
 		return finished;
 
+	@:allow(haxeon.platform.AppLoop)
+	function wasSubmitted():Bool
+		return submitted;
+
 	/** Identifies this transaction in SurfaceFrameComplete events, including after submission. */
 	public function token():haxe.Int64
 		return haxe.Int64.make(0, value.rawValue());
@@ -64,6 +69,7 @@ class SurfaceFrame {
 		}
 		NativeKit.nk_surface_frame_submit_checked(value, handles);
 		finished = true;
+		submitted = true;
 		for (step in steps)
 			step.submitted();
 	}
