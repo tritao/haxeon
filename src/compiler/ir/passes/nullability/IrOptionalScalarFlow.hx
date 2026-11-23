@@ -24,7 +24,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
-import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 private typedef OptionalAlias = {
 	final root:Int;
@@ -40,18 +40,49 @@ private typedef OptionalClosure = {
  * Scalar components for optional values that do not need a boxed representation, per function (`IrFunctionPass`). A function's
  * summary says whether its types name a nullable object at all (`NULLABLE_OBJECTS`) and whether it calls an optional value
  * helper (`CALLS_HELPERS`). Its rewrite reads, for each nullable object its signature and values have, whether the object is a
- * value class (`VALUE`): a function with none keeps its form, and one with an optional value is rewritten each run (`REWRITE`,
- * never stated), as what it becomes depends on the whole program's candidates. It asks for the copy, box and unbox helpers the
- * function it hands on calls. `finish` adds the candidates' scalar forms, the receiver checks and the helpers.
+ * value class (`VALUE`); for a function with an optional value, also which functions it calls are candidates (`CANDIDATE`), what
+ * it reads of the classes it touches (`OBJECT`), of the values' slots (`LAYOUT`), of the methods it resolves (`METHOD`,
+ * `UNIQUE`) and of the callees it passes a place to (`CALLEE`). It asks for the copy, box and unbox helpers the function it hands
+ * on calls, the receiver checks and the component wrappers. `finish` adds the candidates' scalar forms, the receiver checks and
+ * the helpers, each derived (`IrFunctionStages.derived`) from what it reads the same way.
  */
 @:nullSafety(Strict)
 class IrOptionalScalarFlow implements IrFunctionPass {
 	public static inline final PREFIX = "$optional-scalar:";
 	public static inline final WRAPPER = "$optional-components:";
 
+	static inline final STAGE = "optional-scalar-flow";
+
 	// Facts.
+
+	/** Whether an object, by name, is a value class: 1 or 0. */
 	static inline final VALUE = 0;
-	static inline final REWRITE = 1;
+
+	/** Whether a function, by name, is a candidate: 1 or 0. */
+	static inline final CANDIDATE = 1;
+
+	/** The declaration of a class, by name (`objectText`): its base, whether it is a value and its fields. */
+	static inline final OBJECT = 2;
+
+	/** The slots of an optional value, by the value's name. */
+	static inline final LAYOUT = 3;
+
+	/** The method a class resolves a name to, by class and method name. */
+	static inline final METHOD = 4;
+
+	/** The one implementation every subclass of a class has of a method, by class and method name. */
+	static inline final UNIQUE = 5;
+
+	/** What passing a place to a function reads of it (`calleeText`), by its name. */
+	static inline final CALLEE = 6;
+
+	// Requests, besides the optional value helpers (`IrOptionalHelpers`).
+
+	/** The component wrapper of a value class. */
+	static inline final WRAPPER_REQUEST = 3;
+
+	/** The receiver check of a class. */
+	static inline final CHECK = 4;
 
 	// Summaries.
 	static inline final NULLABLE_OBJECTS = 1;
@@ -62,8 +93,12 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	final layouts:IrInlineValueLayout;
 	final wrappers:Map<String, IrObject> = [];
 	var candidates:Map<String, IrFunction> = [];
-	var functions = new IrFunctionIndex("optional-scalar-flow", []);
-	final receiverChecks:Map<String, IrFunction> = [];
+
+	/** The stage's input functions by name, made when first looked up. */
+	var inputIndex:Null<IrFunctionIndex> = null;
+
+	/** The receiver checks asked for, by name, with the class each checks. */
+	final receiverChecks:Map<String, String> = [];
 	final resolution:IrMethodResolution;
 	final helpers = new IrOptionalHelpers();
 
@@ -74,10 +109,26 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	/** The functions in program order, for the candidates' scalar forms (`finish`). */
 	var originals:Array<IrFunction> = [];
 
-	public function new(declarations:Array<IrObject>, ?types:IrTypeIds, ?builder:IrBodyBuilder) {
+	final lineage:Null<IrLineage>;
+	final checks:Bool;
+
+	/** By candidate, the version of the function its scalar form is made from. */
+	final versions:Map<String, Int> = [];
+
+	/** What the rewrite or helper being made reads through (`record`); null in the whole-program step. */
+	var reading:Null<IrFactReader> = null;
+
+	/** The wrappers and receiver checks the rewrite being made asked for, so each is asked for once. */
+	var askedNow:Map<String, Bool> = [];
+
+	/** With `lineage`, the session's memo derives the scalar forms and helpers (`IrFunctionStages.derived`). */
+	public function new(declarations:Array<IrObject>, ?types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:IrLineage,
+			checks = false) {
 		this.declarations = declarations;
 		this.types = types;
 		this.builder = builder;
+		this.lineage = lineage;
+		this.checks = checks;
 		objects = [for (object in declarations) object.name => object];
 		resolution = IrMethodResolution.over(declarations);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
@@ -91,7 +142,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	public function rewrite(originals:Array<IrFunction>):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(originals);
-		return IrFunctionStages.apply("optional-scalar-flow", this, originals);
+		return IrFunctionStages.apply(STAGE, this, originals);
 	}
 
 	static function nullableObject(type:IrType):Null<String>
@@ -129,7 +180,6 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	}
 
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
-		this.functions = names;
 		originals = functions;
 		for (index in 0...functions.length) {
 			var fn = functions[index];
@@ -151,77 +201,206 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 					changed = true;
 				}
 		}
+		var known = lineage;
+		if (known != null)
+			for (name in candidates.keys())
+				versions.set(name, known.version(name));
 	}
 
-	public function fact(kind:Int, key:String):Int
-		return switch kind {
-			case VALUE:
-				var object = objects.get(key);
-				object != null && object.isValue ? 1 : 0;
-			default: IrFacts.UNKNOWN;
+	public function fact(kind:Int, key:String):Int {
+		// What the fact is computed from is not what the rewrite being made reads.
+		var current = reading;
+		reading = null;
+		var value = switch kind {
+			case VALUE: isValueName(key) ? 1 : 0;
+			case CANDIDATE: candidates.exists(key) ? 1 : 0;
+			case _:
+				var known = lineage;
+				known == null ? 0 : known.memos.facts.intern(switch kind {
+					case OBJECT: objectText(key);
+					case LAYOUT: [for (slot in slots(key)) slotText(slot)].join("\n");
+					case METHOD:
+						var parts = key.split("\n");
+						resolution.find(parts[0], parts[1]) ?? "";
+					case UNIQUE:
+						var parts = key.split("\n");
+						resolution.uniqueImplementation(parts[0], parts[1]) ?? "";
+					case _: calleeText(key);
+				});
 		};
+		reading = current;
+		return value;
+	}
 
-	/** `optional`, reading the fact of the object a nullable object type names when `reader` records. */
-	function optionalRead(type:IrType, reader:Null<IrFactReader>):Null<String> {
-		var name = nullableObject(type);
-		if (name == null)
-			return null;
-		if (reader != null)
-			reader.read(VALUE, name);
-		return optional(type);
+	/** Records the fact of `kind` and `key` for the rewrite or helper being made. */
+	inline function record(kind:Int, key:String):Void {
+		var current = reading;
+		if (current != null)
+			current.read(kind, key);
+	}
+
+	/** Asks for the helper of `kind` for `name` once for the rewrite or helper being made. */
+	function ask(kind:Int, name:String):Void {
+		var current = reading;
+		if (current != null && !askedNow.exists(kind + ":" + name)) {
+			askedNow.set(kind + ":" + name, true);
+			current.request(kind, Obj(name));
+		}
+	}
+
+	/** `make` run with `reader` as what it reads through. */
+	function readingWith<T>(reader:IrFactReader, make:() -> T):T {
+		reading = reader;
+		askedNow = [];
+		var made = make();
+		reading = null;
+		return made;
 	}
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary == 0)
 			return fn;
-		var recording = reader.records() ? reader : null, result = fn;
-		if (summary & NULLABLE_OBJECTS != 0) {
-			var signature = optionalRead(fn.result, recording) != null;
-			for (arg in fn.arguments)
-				if (optionalRead(arg.type, recording) != null)
-					signature = true;
-			if (!signature && hasOptional(fn, recording)) {
-				reader.read(REWRITE, "");
-				if (eligible(fn))
+		return readingWith(reader, () -> {
+			var result = fn;
+			if (summary & NULLABLE_OBJECTS != 0) {
+				var signature = optional(fn.result) != null;
+				for (arg in fn.arguments)
+					if (optional(arg.type) != null)
+						signature = true;
+				if (!signature && hasOptional(fn) && eligible(fn))
 					result = scalarForm(fn, false);
 			}
-		}
-		// The helpers the function calls: the rewritten one's are read from its body, which the stages after this one read.
-		if (result != fn || summary & CALLS_HELPERS != 0)
-			helpers.scan(result.bodyIn(bodyTypes(), builder), reader);
-		return result;
+			// The helpers the function calls: the rewritten one's are read from its body, which the stages after this one read.
+			if (result != fn || summary & CALLS_HELPERS != 0)
+				helpers.scan(result.bodyIn(bodyTypes(), builder), reader);
+			result;
+		});
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
-		switch type {
-			case Obj(name): helpers.add(kind, name);
-			default: throw new InternalError("An optional value helper request names no value class");
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+		var value = switch type {
+			case Obj(name): name;
+			default: throw new InternalError("An optional scalar request names no class");
+		};
+		switch kind {
+			case WRAPPER_REQUEST: declareWrapper(value);
+			case CHECK: receiverChecks.set(receiverCheckName(value), value);
+			default: helpers.add(kind, value);
 		}
+	}
+
+	/** A function derived from `input` (`IrFunctionStages.derived`), made by `make` reading through the reader it is given. */
+	function derive(name:String, input:Int, make:() -> IrFunction):IrFunction
+		return IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, bodyTypes(), builder,
+			reader -> readingWith(reader, () -> {
+				var made = make();
+				helpers.scan(made.bodyIn(bodyTypes(), builder), reader);
+				made;
+			}));
 
 	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
 		var made:Array<IrFunction> = [];
 		for (fn in originals)
 			if (candidates.exists(fn.name))
-				made.push(scalarForm(fn, true));
-		var checks = [for (name => check in receiverChecks) {
-			name:name, check:check
+				made.push(derive(PREFIX + fn.name, versions.get(fn.name) ?? 0, () -> scalarForm(fn, true)));
+		var checked = [for (name => typeName in receiverChecks) {
+			name:name, typeName:typeName
 		}];
-		checks.sort((a, b) -> Reflect.compare(a.name, b.name));
-		for (entry in checks)
-			made.push(entry.check);
+		checked.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in checked)
+			made.push(derive(entry.name, IrFunctionStages.FROM_NAME,
+				() -> receiverCheckFunction(entry.name, entry.typeName)));
 		var wrapped = [for (name => declared in wrappers) {
 			name:name, declared:declared
 		}];
 		wrapped.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in wrapped)
 			declarations.push(entry.declared);
-		for (fn in made)
-			helpers.scan(fn.bodyIn(bodyTypes(), builder), null);
-		return helpers.append(rewritten.concat(made), declarations);
+		var shapes = new IrInlineValueLayout(IrObjectTable.of(objects));
+		return helpers.append(rewritten.concat(made), declarations,
+			(name, value, make) -> derive(name, IrFunctionStages.FROM_NAME, () -> {
+				// A helper reads its value's slots and the declarations of the values it holds.
+				record(LAYOUT, value);
+				for (held in heldValues(value))
+					record(OBJECT, held);
+				make();
+			}));
+	}
+
+	/** `name` and the values it holds, by value or as optional values, transitively. */
+	function heldValues(name:String):Array<String> {
+		var found = [name], index = 0;
+		while (index < found.length) {
+			var object = objects.get(found[index++]);
+			if (object != null)
+				for (field in object.fields)
+					switch field.type {
+						case Obj(held), Nullable(Obj(held)) if (isValueName(held) && found.indexOf(held) < 0):
+							found.push(held);
+						default:
+					}
+		}
+		return found;
+	}
+
+	/** The text of what a rewrite reads of class `name` (`OBJECT`): whether it is a value, its base and its fields. */
+	function objectText(name:String):String {
+		var object = objects.get(name);
+		if (object == null)
+			return "";
+		var parts = ['${object.isValue} ${object.base}'];
+		for (field in object.fields)
+			parts.push('${field.name} ${compiler.ir.model.IrTypeIdentity.text(field.type)} ${Std.string(field.nativeLayout)} '
+				+ '${Std.string(field.scalarStorage)} ${Std.string(field.nullableScalarStorage)}');
+		return parts.join("\n");
+	}
+
+	static function slotText(slot:IrInlineValueSlot):String
+		return '${slot.path.join(".")} ${compiler.ir.model.IrTypeIdentity.text(slot.type)} ${slot.isPresence} '
+			+ '${Std.string(slot.nativeLayout)} ${Std.string(slot.scalarStorage)} ${Std.string(slot.nullableScalarStorage)}';
+
+	/** The text of what passing a place to the function `name` reads of it (`canPassAliases`). */
+	function calleeText(name:String):String {
+		var called = inputs().get(name);
+		if (called == null)
+			return "";
+		var parts = [
+			'${IrProviders.passesAliases(called)} ${snapshotOnlyReceiver(called)} ${snapshotOnlyReceiver(called, true)}'
+		];
+		for (argument in called.arguments)
+			parts.push('${argument.name} ${compiler.ir.model.IrTypeIdentity.text(argument.type)}');
+		return parts.join("\n");
+	}
+
+	/** The stage's input functions by name. */
+	function inputs():IrFunctionIndex {
+		var known = inputIndex;
+		if (known == null)
+			inputIndex = known = new IrFunctionIndex(STAGE, originals);
+		return known;
+	}
+
+	/** Whether `name` is a candidate, read as a fact. */
+	function isCandidate(name:String):Bool {
+		record(CANDIDATE, name);
+		return candidates.exists(name);
+	}
+
+	/** The declaration of class `name`, read as a fact. */
+	function declaration(name:String):Null<IrObject> {
+		record(OBJECT, name);
+		return objects.get(name);
+	}
+
+	/** The function `name` a place is passed to, read as a fact. */
+	function callee(name:String):Null<IrFunction> {
+		record(CALLEE, name);
+		return inputs().get(name);
 	}
 
 	/** Whether `name` is a value class. */
 	function isValueName(name:String):Bool {
+		record(VALUE, name);
 		var object = objects.get(name);
 		return object != null && object.isValue;
 	}
@@ -234,7 +413,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 
 	/** Whether a call of the closure `binding` passes a candidate's values or an alias. */
 	function closureInvolved(binding:Null<OptionalClosure>, args:Array<IrValue>, alias:Map<Int, OptionalAlias>):Bool
-		return binding != null && (candidates.exists(binding.name) || hasAlias(args, alias));
+		return binding != null && (isCandidate(binding.name) || hasAlias(args, alias));
 
 	function optional(type:IrType):Null<String>
 		return switch type {
@@ -242,31 +421,39 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			default: null;
 		};
 
-	/** Whether `fn` has an optional value, reading the facts of the nullable objects it looks at through `reader`. */
-	function hasOptional(fn:IrFunction, reader:Null<IrFactReader>):Bool {
+	/** Whether `fn` has an optional value. */
+	function hasOptional(fn:IrFunction):Bool {
 		for (arg in fn.arguments)
-			if (optionalRead(arg.type, reader) != null)
+			if (optional(arg.type) != null)
 				return true;
 		var body = fn.bodyIn(bodyTypes(), builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				var out = body.output(row);
-				if (out.exists() && optionalRead(body.valueType(out), reader) != null)
+				if (out.exists() && optional(body.valueType(out)) != null)
 					return true;
 				row = body.nextRow(row);
 			}
 		}
-		return optionalRead(fn.result, reader) != null;
+		return optional(fn.result) != null;
 	}
 
-	function slots(name:String):Array<IrInlineValueSlot>
+	function slots(name:String):Array<IrInlineValueSlot> {
+		record(LAYOUT, name);
 		return layouts.slots(Nullable(Obj(name)));
+	}
 
 	public static function wrapperName(name:String):String
 		return WRAPPER + name;
 
+	/** The component wrapper of `name`, asked for so a rewrite reused declares it too. */
 	function wrapper(name:String):IrObject {
+		ask(WRAPPER_REQUEST, name);
+		return declareWrapper(name);
+	}
+
+	function declareWrapper(name:String):IrObject {
 		var known = wrappers.get(name);
 		if (known != null)
 			return known;
@@ -338,8 +525,12 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		return result;
 	}
 
-	function method(typeName:Null<String>, name:String):Null<String>
-		return typeName == null ? null : resolution.find(typeName, name);
+	function method(typeName:Null<String>, name:String):Null<String> {
+		if (typeName == null)
+			return null;
+		record(METHOD, typeName + "\n" + name);
+		return resolution.find(typeName, name);
+	}
 
 	/** Resolve class dispatch only when every possible subclass has the same implementation. */
 	function resolvedMethod(exact:Map<Int, String>, receiver:IrValue, name:String):Null<String> {
@@ -349,32 +540,41 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			case Obj(value): value;
 			default: return null;
 		};
-		var root = objects.get(typeName);
+		var root = declaration(typeName);
 		if (root == null || root.isValue)
 			return null;
+		record(UNIQUE, typeName + "\n" + name);
 		return resolution.uniqueImplementation(typeName, name);
 	}
 
 	function hasCandidateMethod(exact:Map<Int, String>, receiver:IrValue, name:String):Bool {
 		var target = resolvedMethod(exact, receiver, name);
-		return target != null && candidates.exists(target);
+		return target != null && isCandidate(target);
 	}
 
+	static function receiverCheckName(typeName:String):String
+		return "$optional-scalar:check-receiver:" + typeName;
+
+	/** The receiver check of `typeName`, asked for. */
 	function receiverCheck(typeName:String):String {
-		var name = "$optional-scalar:check-receiver:" + typeName;
-		if (!receiverChecks.exists(name)) {
-			var b = new IrBuilder(),
-				receiver = b.argument("receiver", Obj(typeName));
-			var missing = b.createBlock(), present = b.createBlock();
-			b.branch(b.equal(receiver, b.constNull(receiver.type)), missing, present);
-			b.select(missing);
-			b.terminate(Throw(b.toDyn(b.constString("Null access"))));
-			b.select(present);
-			b.returnValue(b.constVoid());
-			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks,
-				Provider(TypeKey.of(Obj(typeName)), ProviderOperation.ReceiverCheck)));
-		}
+		ask(CHECK, typeName);
+		var name = receiverCheckName(typeName);
+		receiverChecks.set(name, typeName);
 		return name;
+	}
+
+	/** The receiver check `name` of `typeName`: made of its name alone. */
+	static function receiverCheckFunction(name:String, typeName:String):IrFunction {
+		var b = new IrBuilder(),
+			receiver = b.argument("receiver", Obj(typeName));
+		var missing = b.createBlock(), present = b.createBlock();
+		b.branch(b.equal(receiver, b.constNull(receiver.type)), missing, present);
+		b.select(missing);
+		b.terminate(Throw(b.toDyn(b.constString("Null access"))));
+		b.select(present);
+		b.returnValue(b.constVoid());
+		return new IrFunction(name, b.arguments, Void, b.blocks,
+			Provider(TypeKey.of(Obj(typeName)), ProviderOperation.ReceiverCheck));
 	}
 
 	/** Array-backed mutable places retain their identity until the lane-place rewrite. */
@@ -482,7 +682,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			default: return null;
 		};
 		while (name != null) {
-			var object = objects.get(name);
+			var object = declaration(name);
 			if (object == null)
 				return null;
 			for (field in object.fields) {
@@ -503,7 +703,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			default: return null;
 		};
 		while (name != null) {
-			var object = objects.get(name);
+			var object = declaration(name);
 			if (object == null)
 				return null;
 			for (entry in object.fields)
@@ -586,7 +786,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			terminalReceiver:Bool = false):Bool {
 		if (!hasAlias(arguments, aliases))
 			return true;
-		var called = functions.get(name);
+		var called = callee(name);
 		if (StringTools.startsWith(name, "$") && (called == null || !IrProviders.passesAliases(called)))
 			return false;
 		if (called == null || called.arguments.length != arguments.length)
@@ -681,7 +881,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						&& values.exists(out.id)
 						&& args.length == 1
 						&& values.exists(args[0].id)):
-					case Call(_, name, args) if (candidates.exists(name.name) || hasAlias(args, alias)):
+					case Call(_, name, args) if (isCandidate(name.name) || hasAlias(args, alias)):
 						if (!canPassAliases(name.name, args, alias))
 							return false;
 					case CallClosure(_, closure, args) if (closureInvolved(bindings.get(closure.id), args, alias)):
@@ -881,7 +1081,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				default: throw new InternalError("Invalid value field owner");
 			};
 			while (owner != null) {
-				var object = objects.get(owner);
+				var object = declaration(owner);
 				if (object == null)
 					break;
 				for (candidate in object.fields)
@@ -896,7 +1096,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				root = partsAt(block, a.root, from);
 			function build(name:String, path:Array<String>):IrValue {
 				var result = new IrValue(next++, "$optional-alias-copy", Obj(name)),
-					object = objects.get(name);
+					object = declaration(name);
 				if (object == null)
 					throw new InternalError('Missing optional alias value "$name"');
 				add(block, ValueInit(result), from);
@@ -1130,7 +1330,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 						for (i in 0...to.length)
 							substitutions.set(to[i].id, from[i]);
 					case CallClosure(out, closure, arguments) if (bindings.exists(closure.id)
-						&& candidates.exists(bindingOf(closure.id).name)):
+						&& isCandidate(bindingOf(closure.id).name)):
 						var binding = bindingOf(closure.id),
 							args = binding.receiver == null ? arguments : [binding.receiver].concat(arguments);
 						var actual = [
@@ -1138,7 +1338,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 								alias.exists(argument.id) ? aliasValue(target, argument, located) : argument
 						];
 						emitCall(target, out, binding.name, actual, located);
-					case Call(out, name, arguments) if (candidates.exists(name.name)):
+					case Call(out, name, arguments) if (isCandidate(name.name)):
 						var actual = [
 							for (argument in arguments)
 								alias.exists(argument.id) ? aliasValue(target, argument, located) : argument
@@ -1186,7 +1386,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 					case CallClosure(out, closure, arguments)
 						if (bindings.exists(closure.id)
 						&& bindingOf(closure.id).receiver == null
-						&& functions.exists(bindingOf(closure.id).name)
+						&& callee(bindingOf(closure.id).name) != null
 						&& !hasAlias(arguments, alias)):
 						var binding = bindingOf(closure.id);
 						var boxed = [

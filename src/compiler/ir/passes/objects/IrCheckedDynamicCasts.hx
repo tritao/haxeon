@@ -14,6 +14,7 @@ import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
 import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -23,7 +24,7 @@ import compiler.ir.model.SourceProvenance.Located;
 /**
  * Check Dynamic-to-reference casts before target-specific casts, so failure remains catchable. Per function (`IrFunctionPass`):
  * the rewrite reads, for each cast it meets, what the program declares of the object it casts to (`DECLARATION`), and asks
- * for the cast's helper.
+ * for the cast's helper. With a lineage the helpers are derived from that declaration (`IrFunctionStages.derived`).
  */
 @:nullSafety(Strict)
 class IrCheckedDynamicCasts implements IrFunctionPass {
@@ -40,26 +41,40 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 	final checkObjects:Bool;
 	final checkValueObjects:Bool;
 	final checkFunctionCasts:Bool;
+	final stage:String;
+	final lineage:Null<IrLineage>;
+	final checks:Bool;
+	final types:Null<IrTypeIds>;
+	final builder:Null<IrBodyBuilder>;
 
+	public static inline final STAGE = "checked-dynamic-casts";
+
+	/** With `lineage` (and the `types` and `builder` of its bodies), the helpers are derived in the memo of `stage`. */
 	public function new(objects:Array<IrObject>, checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>,
-			checkValueObjects:Bool, checkFunctionCasts:Bool) {
+			checkValueObjects:Bool, checkFunctionCasts:Bool, stage = STAGE, ?lineage:IrLineage, checks = false,
+			?types:IrTypeIds, ?builder:IrBodyBuilder) {
 		declarations = [for (object in objects) object.name => object];
 		this.existingFunctions = existingFunctions;
 		this.checkObjects = checkObjects;
 		this.checkValueObjects = checkValueObjects;
 		this.checkFunctionCasts = checkFunctionCasts;
+		this.stage = stage;
+		this.lineage = lineage;
+		this.checks = checks;
+		this.types = types;
+		this.builder = builder;
 	}
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool,
 			?existingFunctions:Array<IrFunction>,
 			checkValueObjects:Bool = false, checkFunctionCasts:Bool = false):Array<IrFunction>
-		return IrFunctionStages.apply("checked-dynamic-casts", new IrCheckedDynamicCasts(objects, checkObjects,
+		return IrFunctionStages.apply(STAGE, new IrCheckedDynamicCasts(objects, checkObjects,
 			existingFunctions, checkValueObjects, checkFunctionCasts), functions);
 
 	/** The functions the helpers must not be made again for: `functions`, after the existing ones. */
 	function index(functions:Array<IrFunction>):Void {
 		var existing = existingFunctions;
-		known = new IrFunctionIndex("checked-dynamic-casts", existing == null ? functions : existing.concat(functions));
+		known = new IrFunctionIndex(stage, existing == null ? functions : existing.concat(functions));
 	}
 
 	public function summarize(fn:IrFunction):Int
@@ -109,49 +124,70 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		};
 
 	/**
-	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types`: a checked cast becomes a call of its
-	 * helper in place, in the body itself, or a copy when a cache holds it. The helpers are built as functions and encoded.
+	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types`, in the stage `stage`: a checked cast
+	 * becomes a call of its helper in place, in the body itself, or a copy when a cache holds it. The helpers are built as
+	 * functions and encoded. With `lineage` each function's rewrite is derived from its version and the declarations it read
+	 * (`IrFunctionStages.derived`), and so are the helpers.
 	 */
-	public static function rewriteBodies(functions:Array<IrFunction>, objects:Array<IrObject>, checkObjects:Bool,
-			existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool, checkFunctionCasts:Bool, types:IrTypeIds,
-			builder:IrBodyBuilder):Array<IrFunction> {
+	public static function rewriteBodies(stage:String, functions:Array<IrFunction>, objects:Array<IrObject>,
+			checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool,
+			checkFunctionCasts:Bool,
+			types:IrTypeIds, builder:IrBodyBuilder, ?lineage:IrLineage, checks = false):Array<IrFunction> {
 		var pass = new IrCheckedDynamicCasts(objects, checkObjects, existingFunctions, checkValueObjects,
-			checkFunctionCasts);
+			checkFunctionCasts, stage, lineage, checks, types, builder);
 		pass.index(functions);
-		var dyn = types.id(Dyn), rewritten:Array<IrFunction> = [];
-		inline function checked(body:IrBody, row:Int):Bool
-			return body.opcode(row) == IrOpcode.SafeCast
-				&& body.valueTypeId(body.operand(row, 0)) == dyn
-				&& pass.target(body.valueType(body.output(row))) != null;
-		for (fn in functions) {
-			var body = fn.bodyIn(types, builder), found = false;
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0 && !found) {
-					found = checked(body, row);
-					row = body.nextRow(row);
-				}
-			}
-			if (!found) {
-				rewritten.push(fn);
-				continue;
-			}
-			var edited = body.forEditing(builder);
-			for (block in 0...edited.blockCount()) {
-				var row = edited.firstRow(block);
-				while (row >= 0) {
-					if (checked(edited, row)) {
-						var helper = pass.helperFor(edited.valueType(edited.output(row)));
-						if (helper == null)
-							throw new InternalError("A checked cast has no checking helper");
-						edited.setOperation(row, IrOpcode.Call, IrSymbol.of(helper).id);
-					}
-					row = edited.nextRow(row);
-				}
-			}
-			rewritten.push(IrFunction.ofOwnedBody(edited));
-		}
+		if (lineage != null)
+			lineage.memos.facts.begin();
+		var rewritten = [
+			for (fn in functions)
+				IrFunctionStages.derived(stage, fn.name, pass, lineage == null ? 0 : lineage.versionOf(fn), lineage,
+				checks,
+				types, builder, reader -> pass.rewriteBody(fn, reader))
+		];
 		return rewritten.concat(pass.generated);
+	}
+
+	/** `fn`'s body with its checked casts calling their helpers, which it asks for; `fn` itself when it has none. */
+	function rewriteBody(fn:IrFunction, reader:IrFactReader):IrFunction {
+		var body = fn.bodyIn(bodyTypes(), builder), dyn = bodyTypes().id(Dyn), found = false;
+		// Whether `row` is a cast from Dyn that is checked, reading what decides it.
+		function checked(body:IrBody, row:Int):Bool {
+			if (body.opcode(row) != IrOpcode.SafeCast || body.valueTypeId(body.operand(row, 0)) != dyn)
+				return false;
+			var type = body.valueType(body.output(row));
+			reader.read(DECLARATION, castObject(type));
+			return target(type) != null;
+		}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (checked(body, row))
+					found = true;
+				row = body.nextRow(row);
+			}
+		}
+		if (!found)
+			return fn;
+		var edited = body.forEditing(builder);
+		for (block in 0...edited.blockCount()) {
+			var row = edited.firstRow(block);
+			while (row >= 0) {
+				if (checked(edited, row)) {
+					var type = edited.valueType(edited.output(row));
+					reader.request(0, type);
+					edited.setOperation(row, IrOpcode.Call, IrSymbol.of(PREFIX + IrTypeIdentity.text(type)).id);
+				}
+				row = edited.nextRow(row);
+			}
+		}
+		return IrFunction.ofOwnedBody(edited);
+	}
+
+	function bodyTypes():IrTypeIds {
+		var known = types;
+		if (known == null)
+			throw new InternalError("Checked casts on bodies need the program's types");
+		return known;
 	}
 
 	static function isDyn(type:IrType):Bool
@@ -195,30 +231,38 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 			return null;
 		var key = IrTypeIdentity.text(type), existing = helpers.get(key);
 		if (existing != null) return existing;
-		var name = PREFIX + key,
-			builder = new IrBuilder(),
-			input = builder.argument("value", Dyn),
-			check = builder.createBlock(),
-			accepted = builder.createBlock(),
-			rejected = builder.createBlock();
+		var name = PREFIX + key;
 		helpers.set(key, name);
 		var functions = known;
 		if (functions == null) throw new InternalError("Checked casts made a helper before indexing the program");
 		if (functions.exists(name)) return name;
-		if (!request.allowNull) builder.jump(check);
-		else builder.branch(builder.equal(input, builder.constNull(Dyn)), accepted, check);
-		builder.select(check);
-		var test = switch request.checked {
-			case Function(_, _): "__closure_is_of_type";
-			default: "__std_is_of_type";
-		};
-		builder.branch(builder.call(test, [input, builder.typeValue(request.checked)], Bool), accepted, rejected);
-		builder.select(accepted);
-		builder.returnValue(builder.safeCast(input, type));
-		builder.select(rejected);
-		builder.terminate(Throw(builder.toDyn(builder.constString('Invalid cast to ${request.name}'))));
-		generated.push(new IrFunction(name, builder.arguments, type, builder.blocks,
-			Provider(TypeKey.of(type), ProviderOperation.CheckedCast)));
+		var checked = request.checked, label = request.name, allowNull = request.allowNull;
+		function make(reader:IrFactReader):IrFunction {
+			reader.read(DECLARATION, castObject(type));
+			var builder = new IrBuilder(),
+				input = builder.argument("value", Dyn),
+				check = builder.createBlock(),
+				accepted = builder.createBlock(),
+				rejected = builder.createBlock();
+			if (!allowNull) builder.jump(check);
+			else builder.branch(builder.equal(input, builder.constNull(Dyn)), accepted, check);
+			builder.select(check);
+			var test = switch checked {
+				case Function(_, _): "__closure_is_of_type";
+				default: "__std_is_of_type";
+			};
+			builder.branch(builder.call(test, [input, builder.typeValue(checked)], Bool), accepted, rejected);
+			builder.select(accepted);
+			builder.returnValue(builder.safeCast(input, type));
+			builder.select(rejected);
+			builder.terminate(Throw(builder.toDyn(builder.constString('Invalid cast to $label'))));
+			return new IrFunction(name, builder.arguments, type, builder.blocks,
+				Provider(TypeKey.of(type), ProviderOperation.CheckedCast));
+		}
+		var bodies = types;
+		generated.push(lineage == null || bodies == null ? make(new IrFactReader(stage,
+			this)) : IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, lineage, checks, bodies,
+			builder, make));
 		return name;
 	}
 }

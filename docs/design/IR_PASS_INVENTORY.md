@@ -205,17 +205,17 @@ The "label" of a measured span can cover two passes where the code runs them bac
 | IrVerifier (verification, not a rewrite) | per-function memo, done | reads recorded through `IrVerifyTable`s | tables | 4.2M | 3.5% |
 | IrValueConstructors | (b), bounded | small `.new` value constructors (<= 16 blocks, <= 64 instructions) | the bodies of those constructors (inlines them) | 3.7M | 3.0% |
 | IrEnumDynamicDispatch | (b) | enum box descriptors; `needsEqual/Reflect/Compare` flags merged from per-function call names | bodies only for reachability pruning of `$enum-reflect-equals:*` | 3.5M | 2.8% |
-| IrValueInterfaceBoxes | (b) | value objects with interfaces and the implementation signatures | signatures | 3.5M | 2.8% |
+| IrValueInterfaceBoxes | (b), per-function memo, helpers derived, done | value objects with interfaces and the implementation signatures; a box's methods read the text of its plan, a cast the values it tests | signatures | 3.5M | 2.8% |
 | IrTypedInterfaceDispatch (`rewriteValueCalls`: (a); `generate`: (b) generator) | mixed | helper set = f(`$typed-interface:` names) | signatures | 3.4M | 2.8% |
-| IrCheckedDynamicCasts | (a) | none (helpers keyed by type) | names | 3.4M | 2.7% |
+| IrCheckedDynamicCasts | (a), per-function memo, helpers derived, done | none (helpers keyed by type, reading the declaration they test); the reflection helpers' casts are derived per helper | names | 3.4M | 2.7% |
 | IrValueDynamicDispatch | (b) | suffix set from value objects and `$value$equality:` names | names only | 3.4M | 2.7% |
-| IrOptionalFieldStorage + IrNullableScalarFields | (b) / (a) | `plans` from the object table only | value-method bodies (cloned per owner/field/path) | 3.0M | 2.4% |
+| IrOptionalFieldStorage + IrNullableScalarFields | (b), per-function memo, helpers derived, done / (a) | `plans` from the object table only; a rewrite reads the plans along each class it accesses, an accessor its plan | value-method bodies (cloned per owner/field/path, derived by version and the value declarations) | 3.0M | 2.4% |
 | IrValuePhiScalarization (twice) | (a) | none | none | 2.4M + 0.9M | 2.6% |
 | runtime-surface detection and the rest of `assemble` | (b) | which runtime helpers any call needs (a union of per-function facts) | none | 2.2M | 1.8% |
 | IrObjectReflection.generate | (b) generator, helpers derived, done | helper set = f(declared natives, reflectable objects); each helper reads the prints of its native and layouts | signatures | 1.9M | 1.5% |
-| IrOptionalScalarFlow + IrOptionalValueFlow.addHelpers | (c) fixpoint + (a) generator | `candidates` = greatest set such that each `eligible(fn)` holds given the others | callee bodies (`snapshotOnlyReceiver`), method resolution | 1.0M | 0.8% |
+| IrOptionalScalarFlow + IrOptionalValueFlow.addHelpers | (c) fixpoint + (a) generator, per-function memo, scalar forms and helpers derived, done | `candidates` = greatest set such that each `eligible(fn)` holds given the others; a rewrite reads candidacy, classes, slots, resolved methods and the callees it passes a place to as facts | callee bodies (`snapshotOnlyReceiver`, as a fact per callee), method resolution | 1.0M | 0.8% |
 | IrStaticNullChecks | (b), per-function memo, done | functions reachable from `__init` (call graph of per-function summaries) | none | 0.4M | 0.3% |
-| IrGenericOwnerErasure.generate | (b) generator | helper set = f(call names, objects) | callee signatures | 0.01M | 0.0% |
+| IrGenericOwnerErasure.generate (+ IrMethodReferences) | (b) generator, helpers derived, done | helper set = f(call names, objects); an operation reads the text of what it dispatches to, a type test its classes, a method reference the method it calls | callee signatures | 0.01M | 0.0% |
 
 Counting the table's rows, about 7 passes are (a), 12 are (b) and 4 are (c) (`IrInliner`, `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`; the
 last three are the candidate-pruning fixpoints). The inliner is already memoized and is left for last.

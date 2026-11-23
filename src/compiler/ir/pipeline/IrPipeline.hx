@@ -94,7 +94,8 @@ class IrPipeline {
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage(IrObjectReflection.STAGE, objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
-		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
+		IrFunctionStages.stage(IrOptionalFieldStorage.STAGE, optionalFieldStorage,
+			physicalFields).when(hasOptionalFields),
 		IrFunctionStages.stage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
 		IrFunctionStages.stage("enum-tag-escapes", assemblyEnumTagEscapes, escapedProgram)
@@ -146,6 +147,11 @@ class IrPipeline {
 
 	static function hasInterfaces(assembly:IrAssembly, context:IrPipelineContext):Bool
 		return assembly.objects != null && assembly.interfaces != null;
+
+	static function hasOptionalFields(assembly:IrAssembly, context:IrPipelineContext):Bool {
+		var objects = assembly.objects;
+		return objects != null && IrOptionalFieldStorage.hasPlans(objects);
+	}
 
 	static function hasReflectable(assembly:IrAssembly, context:IrPipelineContext):Bool
 		return assembly.objects != null && assembly.reflectableObjects != null;
@@ -296,8 +302,10 @@ class IrPipeline {
 
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		// Method values first: a bound method of an erased generic owner calls an erased operation, which erasure then makes.
-		IrMethodReferences.generate(assembly.functions, assembly.objects, context.lineage);
-		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects, context.lineage);
+		IrMethodReferences.generate(assembly.functions, assembly.objects, context.lineage,
+			derivedHelpers(IrMethodReferences.STAGE, context));
+		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects, context.lineage,
+			derivedHelpers(IrGenericOwnerErasure.STAGE, context));
 		return assembly;
 	}
 
@@ -328,7 +336,8 @@ class IrPipeline {
 	}
 
 	static function valueInterfaceBoxes(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrValueInterfaceBoxes(assembly.objects, assembly.interfaces);
+		return new IrValueInterfaceBoxes(assembly.objects, assembly.interfaces, null,
+			derivedHelpers(IrValueInterfaceBoxes.STAGE, context));
 
 	/** The box objects the value interface boxes made join the program's objects. */
 	static function addBoxObjects(assembly:IrAssembly, pass:IrFunctionPass):Void {
@@ -364,7 +373,8 @@ class IrPipeline {
 	static function checkedDynamicCasts(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrCheckedDynamicCasts(assembly.objects, assembly.generator.profile.nativeReflectionDispatch, null,
 			false,
-			false);
+			false, IrCheckedDynamicCasts.STAGE, context.lineage, context.options.checkReuse, bodyTypes(context),
+			context.passScratch.bodyBuilder);
 
 	/** An exported function is exposed; one already exposed is kept as it is, so it keeps its identity from build to build. */
 	static function exportedFunctions(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -433,7 +443,9 @@ class IrPipeline {
 	}
 
 	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrOptionalScalarFlow(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder);
+		return new IrOptionalScalarFlow(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.lineage,
+			context.options.checkReuse);
 
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrStaticNullChecks(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
@@ -463,13 +475,16 @@ class IrPipeline {
 		assembly.natives = IrObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
 			assembly.reachedNatives, context.options.checkReuse,
-			new IrDerivedHelpers(IrObjectReflection.STAGE, context.lineage, context.options.checkReuse,
-			bodyTypes(context),
-			context.passScratch.bodyBuilder));
+			derivedHelpers(IrObjectReflection.STAGE, context));
 		// A one-shot compile lets every function's objects go, the ones the stage decoded to read included.
 		encodeAll(assembly.functions, context);
 		return assembly;
 	}
+
+	/** What `stage` derives its helpers through (`IrDerivedHelpers`), in the session's memo when there is one. */
+	static function derivedHelpers(stage:String, context:IrPipelineContext):IrDerivedHelpers
+		return new IrDerivedHelpers(stage, context.lineage, context.options.checkReuse, bodyTypes(context),
+			context.passScratch.bodyBuilder);
 
 	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
@@ -495,22 +510,23 @@ class IrPipeline {
 		var functions = assembly.functions, start = assembly.generatedStart;
 		if (functions.length > start) {
 			var existing = functions.slice(0, start);
-			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies(functions.slice(start),
-				assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing, true, true,
-				bodyTypes(context), context.passScratch.bodyBuilder));
+			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies("reflection-casts",
+				functions.slice(start), assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing,
+				true,
+				true, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage,
+				context.options.checkReuse));
 		}
 		return assembly;
 	}
 
-	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var optionalStorage = new IrOptionalFieldStorage(assembly.objects);
-		if (optionalStorage.hasFields()) {
-			assembly.functions = optionalStorage.rewrite(assembly.functions, bodyTypes(context),
-				context.passScratch.bodyBuilder);
-			assembly.objects = optionalStorage.physicalObjects(assembly.objects);
-		}
-		return assembly;
-	}
+	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrOptionalFieldStorage(assembly.objects, context.lineage, context.options.checkReuse,
+			bodyTypes(context),
+			context.passScratch.bodyBuilder);
+
+	/** The objects hold the optional fields' slots in place of the fields. */
+	static function physicalFields(assembly:IrAssembly, pass:IrFunctionPass):Void
+		assembly.objects = cast(pass, IrOptionalFieldStorage).physicalObjects(assembly.objects);
 
 	/**
 	 * The conversion point (docs/design/IR_CORE_COLUMNS.md, migration): every function is encoded, and the stages from here on read

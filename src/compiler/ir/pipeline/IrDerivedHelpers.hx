@@ -32,6 +32,9 @@ class IrDerivedHelpers implements IrFunctionPass {
 		this.checks = checks;
 		this.types = types;
 		this.builder = builder;
+		// The declarations are this run's: what a fact printed before is printed again when next asked for.
+		if (lineage != null)
+			lineage.memos.facts.begin();
 	}
 
 	/** The helper `name`, which `make` makes, reading the declarations it is made of through the reader. */

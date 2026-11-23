@@ -119,8 +119,8 @@ class IrFunctionStages {
 	public static inline final FROM_NAME = -1;
 
 	/**
-	 * A function `stage` makes in its `finish` besides the functions' own forms, named `name`: a specialization of the function of
-	 * version `input`, or a helper (`FROM_NAME`). With `lineage`, last build's when it was made from the same input and the facts it
+	 * A function `stage` makes in its `finish` besides the functions' own forms, named `name`: a specialization or a rewrite of the
+	 * function of version `input` (which keeps that version when `make` returns it), or a helper (`FROM_NAME`). With `lineage`, last build's when it was made from the same input and the facts it
 	 * read still hold (its requests are replayed); else `make` makes it with a reader that records what it reads and asks for, in the
 	 * stage's own facts, and past the encode point it is encoded with `types` and frozen. Call it while the stage runs, after
 	 * `prepare`.
@@ -153,12 +153,15 @@ class IrFunctionStages {
 		} else {
 			reader.begin(false);
 			var made = make(reader);
+			// A function made from its input and left alone keeps the input's version.
+			var kept = input > 0 && lineage.versionOf(made) == input;
 			// What the memo keeps is frozen, so the stages after this one edit copies.
-			if (lineage.bodies) {
+			if (lineage.bodies && !kept) {
 				made.bodyIn(types, builder);
 				made.freezeBody(builder);
 			}
-			entry = new IrStageEntry(input, reader.recorded(), made, memos.versions.next(), 0, reader.requests());
+			entry = new IrStageEntry(input, reader.recorded(), made, kept ? input : memos.versions.next(), 0,
+				reader.requests());
 		}
 		memo.keep(name, entry);
 		lineage.set(entry.output, entry.outputVersion);

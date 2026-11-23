@@ -71,30 +71,36 @@ class IrOptionalValueFlow {
 			? BOX_PREFIX : UNBOX_PREFIX)
 			.length);
 
-	/** `functions` followed by the helpers of `needed`, `boxes` and `unboxes` (value class names), in name order of each. */
+	/**
+	 * `functions` followed by the helpers of `needed`, `boxes` and `unboxes` (value class names), in name order of each. With
+	 * `derive`, each helper is made through it, from its name, its value class and what makes it.
+	 */
 	public static function appendHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, needed:Map<String, Bool>,
-			boxes:Map<String, Bool>, unboxes:Map<String, Bool>):Array<IrFunction> {
+			boxes:Map<String, Bool>, unboxes:Map<String, Bool>,
+			?derive:(name:String, value:String, make:() -> IrFunction) -> IrFunction):Array<IrFunction> {
+		var made = derive ?? (_, _, make) -> make();
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object];
 		var names = [for (name in needed.keys()) name];
 		names.sort(Reflect.compare);
 		var result = functions.copy();
-		for (name in names) {
-			var builder = new IrBuilder(),
-				type:IrType = Nullable(Obj(name)),
-				value = builder.argument("value", type);
-			builder.returnValue(copyOptional(builder, value, name, declarations));
-			result.push(new IrFunction(copyName(name), builder.arguments, type, builder.blocks,
-				Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalCopy)));
-		}
+		for (name in names)
+			result.push(made(copyName(name), name, () -> {
+				var builder = new IrBuilder(),
+					type:IrType = Nullable(Obj(name)),
+					value = builder.argument("value", type);
+				builder.returnValue(copyOptional(builder, value, name, declarations));
+				new IrFunction(copyName(name), builder.arguments, type, builder.blocks,
+					Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalCopy));
+			}));
 		var shapes = new IrInlineValueLayout(IrObjectTable.of(declarations));
 		var allBoxes = [for (name in boxes.keys()) name];
 		allBoxes.sort(Reflect.compare);
 		for (name in allBoxes)
-			result.push(boxHelper(name, declarations, shapes));
+			result.push(made(boxName(name), name, () -> boxHelper(name, declarations, shapes)));
 		var allUnboxes = [for (name in unboxes.keys()) name];
 		allUnboxes.sort(Reflect.compare);
 		for (name in allUnboxes)
-			result.push(unboxHelper(name, declarations, shapes));
+			result.push(made(unboxName(name), name, () -> unboxHelper(name, declarations, shapes)));
 		return result;
 	}
 
@@ -329,7 +335,8 @@ class IrOptionalHelpers {
 		}
 	}
 
-	/** `functions` followed by the helpers found. */
-	public function append(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction>
-		return IrOptionalValueFlow.appendHelpers(functions, objects, copies, boxes, unboxes);
+	/** `functions` followed by the helpers found, made through `derive` when given (`IrOptionalValueFlow.appendHelpers`). */
+	public function append(functions:Array<IrFunction>, objects:Array<IrObject>,
+			?derive:(name:String, value:String, make:() -> IrFunction) -> IrFunction):Array<IrFunction>
+		return IrOptionalValueFlow.appendHelpers(functions, objects, copies, boxes, unboxes, derive);
 }
