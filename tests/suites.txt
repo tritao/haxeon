@@ -27,9 +27,9 @@
 # combinable but is not.
 
 format-check                     ci          unless-env=SKIP_FORMAT_CHECK -- scripts/haxeon dev format --check
-# Every module of the compiler and the build tool type-checks, not only the ones the entry point reaches: a switch over an IR enum in a
-# module only tests compile (IrInterpreter) once broke the wave.
-type-check-all                   quick       -- .tools/haxe/haxe --cwd . common.hxml -cp tests/compiler --macro "include('compiler')" --macro "include('build')" -hl out/type-check-all.hl --no-output -main Main
+# Every module of the compiler and the build tool, and every tests/compiler main, type-checks with stock Haxe, not only what the
+# entry point reaches (tests/integration/test-type-check-all.sh).
+type-check-all                   quick       -- bash tests/integration/test-type-check-all.sh
 # The compiler as stock Haxe builds it compiles the compiler's own sources (tools.CompilerExecutable): a change only the compiler's
 # own checks reject (a null check moved into a helper, E1005) passed every stock-Haxe check and broke `haxeon dev aot`.
 self-build                       quick,ci    -- bash tests/integration/test-self-build.sh
