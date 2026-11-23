@@ -3,12 +3,11 @@ package compiler.hl.lower;
 import compiler.ir.analysis.IrLoopBounds;
 import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.IrBody;
-import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrValueId;
 
 /**
  * What both HashLink backends know of the array bounds in the block being lowered: the array and index pairs a check proved
- * in range since the last row that may shrink an array (`HlLoweringDecisions.keepsArrayBounds`), the pairs an access in the
+ * in range since the last row that may shrink an array (`IrLoopBounds.keepsArrays`), the pairs an access in the
  * block validated, and the loops' proofs (`IrLoopBounds`), made when an access first asks. One serves every function
  * lowered: `startFunction` and `startBlock` empty it.
  */
@@ -57,9 +56,9 @@ class HlArrayBounds {
 		pairValidated.resize(0);
 	}
 
-	/** Steps past a row of opcode `opcode`: one that may run code or shrink an array forgets every proof. */
-	public function step(opcode:IrOpcode):Void
-		if (!HlLoweringDecisions.keepsArrayBounds(opcode))
+	/** Steps past row `row`: one that may run code or shrink an array forgets every proof (`IrLoopBounds.keepsArrays`). */
+	public function step(row:Int):Void
+		if (!loops.keepsArrays(row))
 			proofs++;
 
 	/** Whether a check since the last row that may shrink `array` proved `index` in range of it. */

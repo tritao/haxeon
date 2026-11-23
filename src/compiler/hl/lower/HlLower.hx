@@ -1352,7 +1352,7 @@ class HlLower {
 			var row = body.firstRow(block);
 			while (row >= 0 && row != terminator) {
 				var instructionStart = instructions.length, opcode = body.opcode(row);
-				arrayBounds.step(opcode);
+				arrayBounds.step(row);
 				var output = body.output(row), receiver = HlLoweringDecisions.receiverOf(body, row);
 				if (receiver.exists() && scalarOptionals.get(receiver) == null && !nonNull.has(row))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));

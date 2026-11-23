@@ -282,7 +282,7 @@ class HlcFunctionLower {
 			throw new InternalError('Reachable IR block $id of ${body.name} has no terminator');
 		while (row >= 0 && row != terminator) {
 			position(row);
-			arrayBounds.step(body.opcode(row));
+			arrayBounds.step(row);
 			var receiver = HlLoweringDecisions.receiverOf(body, row);
 			if (receiver.exists())
 				nullCheck(row, receiver, switch body.opcode(row) {

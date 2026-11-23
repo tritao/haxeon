@@ -67,8 +67,8 @@ class LoopBoundsMain {
 			"scan") == 0,
 			"unknown call can resize aliases");
 		expect(count("function scan(a:Array<Int>, b:Array<Int>):Int { var n = 0; for (i in 0...a.length) { b[0] = 1; n += a[i]; } return n; }",
-			"scan") == 0,
-			"array writes through an alias reject the unchanged-length proof");
+			"scan") == 1,
+			"an array write through an alias only grows the array, which keeps the proof");
 		expect(count("function scan(a:Array<Int>):Int { var n = 0; try { for (i in 0...a.length) n += a[i]; } catch (e:Dynamic) { n = 1; } return n; }",
 			"scan") == 0,
 			"handler edges do not inherit loop facts");
@@ -76,8 +76,8 @@ class LoopBoundsMain {
 			"scan") == 0,
 			"captured length invalidated before loop entry must retain checks");
 		expect(count("function scan(a:Array<Int>, alias:Array<Int>):Int { var limit=a.length; alias[20]=7; var sum=0; for(i in 0...limit) sum+=a[i]; return sum; }",
-			"scan") == 0,
-			"preheader alias write invalidates the captured length conservatively");
+			"scan") == 1,
+			"a preheader write through an alias only grows the array, which keeps the captured length a bound");
 		expect(count("function resize(a:Array<Int>):Void { a.pop(); } function scan(a:Array<Int>):Int { resize(a); var sum=0; for(i in 0...a.length) sum+=a[i]; return sum; }",
 			"scan") == 1,
 			"a fresh length read after resizing still proves the loop access");

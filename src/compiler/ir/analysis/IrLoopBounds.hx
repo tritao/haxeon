@@ -116,9 +116,10 @@ class IrLoopBounds {
 		return result;
 	}
 
+	/** Whether values of `type` are numbers, booleans or enum tags, held in place. */
 	static function isScalar(type:IrType):Bool
 		return switch type {
-			case F64, I32, Bool: true;
+			case F64, F32, I32, I64, Bool, EnumTag(_): true;
 			default: false;
 		};
 
@@ -357,7 +358,7 @@ class IrLoopBounds {
 			if (loops.contains(loop, id)) {
 				var row = body.firstRow(graph.indexOf(id));
 				while (row >= 0) {
-					if (mayResize(row))
+					if (!keepsArrays(row))
 						return false;
 					row = body.nextRow(row);
 				}
@@ -382,7 +383,7 @@ class IrLoopBounds {
 			seenBlocks[id] = stamp;
 			var after = id != home, row = body.firstRow(graph.indexOf(id));
 			while (row >= 0) {
-				if (after && mayResize(row))
+				if (after && !keepsArrays(row))
 					return false;
 				if (row == definition)
 					after = true;
@@ -403,22 +404,44 @@ class IrLoopBounds {
 		return StringTools.startsWith(name, "__value_array_read_") || name == "__value_array_validate"
 			|| name == "__value_array_is_initialized" || IrScalarWordBits.matches(name);
 
-	function mayResize(row:Int):Bool
+	/**
+	 * Whether row `row` of the body being read leaves every array as long as it is: it runs no code of the program's and
+	 * shrinks no array. Only the rows named here do; anything else, every other call included, may. Both the loops' proofs and
+	 * the HashLink backends' proofs within a block (`HlArrayBounds`) ask this.
+	 *
+	 * Arithmetic and comparisons run no code on scalars only: on a dynamic value or an object they may call its `toString` or
+	 * `__compare`. A write of an array element or of a class's field only ever grows an array, and a throw leaves the proofs
+	 * with the code it leaves.
+	 */
+	public function keepsArrays(row:Int):Bool
 		return switch body.opcode(row) {
-			case IrOpcode.Call:
-				var name = body.symbol(row).name;
-				!(name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME || pureCalls.exists(name)
-					|| readsValueArray(name));
-			case IrOpcode.CNativeCall, IrOpcode.CallClosure, IrOpcode.MethodCall, IrOpcode.MemoryStore,
-				IrOpcode.ArraySet,
-				IrOpcode.IteratorNew, IrOpcode.IteratorNext, IrOpcode.IteratorHasNext, IrOpcode.SafeCast,
-				IrOpcode.ToVirtual:
+			case IrOpcode.Phi, IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString,
+				IrOpcode.ConstBool, IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.StaticDataAddress,
+				IrOpcode.PointerOffset,
+				IrOpcode.MemoryLoad, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64, IrOpcode.FloatToInt,
+				IrOpcode.FloatToFloat, IrOpcode.Upcast, IrOpcode.ClassId, IrOpcode.GlobalGet, IrOpcode.GlobalSet,
+				IrOpcode.StaticClosure, IrOpcode.InstanceClosure, IrOpcode.NewObject, IrOpcode.ValueInit,
+				IrOpcode.FieldGet,
+				IrOpcode.ArrayGet, IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.MakeEnum, IrOpcode.EnumIndex,
+				IrOpcode.EnumField, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView, IrOpcode.EnumTagBox,
+				IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox, IrOpcode.BeginTry,
+				IrOpcode.EndTry,
+				IrOpcode.Catch, IrOpcode.Unreachable, IrOpcode.Return, IrOpcode.Throw, IrOpcode.Rethrow, IrOpcode.Jump,
+				IrOpcode.Branch, IrOpcode.Switch:
 				true;
+			case IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.Div, IrOpcode.Mod, IrOpcode.BitAnd, IrOpcode.BitXor,
+				IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight, IrOpcode.Less,
+				IrOpcode.LessEqual, IrOpcode.Equal:
+				isScalar(body.valueType(body.operand(row, 0))) && isScalar(body.valueType(body.operand(row, 1)));
 			case IrOpcode.FieldSet:
 				switch body.valueType(body.operand(row, 0)) {
-					case Obj(_): false;
-					default: true;
+					case Obj(_): true;
+					default: false;
 				}
+			case IrOpcode.Call:
+				var name = body.symbol(row).name;
+				name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME || pureCalls.exists(name)
+					|| readsValueArray(name);
 			default: false;
 		};
 

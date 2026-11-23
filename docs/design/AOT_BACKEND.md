@@ -446,7 +446,7 @@ Milestone 2: the C lowering writes what `HlLower` writes inline, from the same d
 fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves the JIT start-up time, which C does not pay);
 value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
 table prologue of dispatch functions; ordinary C function calls (`CNativeCall`) through the runtime's dispatch. Array bounds
-checks are inline compares, dropped where an earlier check in the block still holds (`HlLower.keepsArrayBounds`) or the loop
+checks are inline compares, dropped where an earlier check in the block still holds (`IrLoopBounds.keepsArrays`) or the loop
 proves the index in range (`IrLoopBounds`). Objects are allocated by `hl_alloc_obj`. The JIT allocates small objects inline
 on Linux x86-64 and AArch64; the C backend does with the typed option
 `CompileOptions.inlineAllocation` (`--inline-allocation`), which allocates by `hlc_new` from the collector's own descriptor
