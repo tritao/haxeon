@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.ir.analysis.IrReachability.IrBodyEdges;
 import compiler.ir.analysis.IrReachability.IrTrimSummary;
 import compiler.ir.model.Ir.IrNative;
 import compiler.ir.reuse.IrFunctionMemo;
@@ -12,6 +13,9 @@ import compiler.ir.reuse.IrFunctionMemo;
 class HlFunctionSummaries {
 	/** The signature text of each function, for the runtime ABI (`RuntimeAbi.describe`). */
 	public final abiSignatures = new IrFunctionMemo<String>();
+
+	/** What each function's body calls, makes and mentions, for a plain build's reachability walk (`IrReachabilityWalk`). */
+	public final walk = new IrFunctionMemo<IrBodyEdges>();
 
 	/** The globals and classes each function names, for a plain build's tables (`IrReachability.trimTables`). */
 	public final trim = new IrFunctionMemo<IrTrimSummary>();
@@ -27,6 +31,7 @@ class HlFunctionSummaries {
 	/** Drops what the build that just ended did not ask for. */
 	public function endBuild():Void {
 		abiSignatures.endBuild();
+		walk.endBuild();
 		trim.endBuild();
 		enumUses.endBuild();
 		natives.endBuild();

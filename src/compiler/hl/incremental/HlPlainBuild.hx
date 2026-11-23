@@ -19,7 +19,8 @@ class HlPlainBuild {
 		reachable:Map<String, Bool>
 	} {
 		var pruned = program.copy(),
-			walk = IrReachability.walkWithGeneratedRuntimeRoots(program, program.entryPoint, null, true);
+			walk = IrReachability.walkWithGeneratedRuntimeRoots(program, program.entryPoint, null, true,
+				summaries == null ? null : summaries.walk);
 		IrReachability.prune(pruned, walk.reachable);
 		IrReachability.trimTables(pruned, walk, summaries == null ? null : summaries.trim);
 		if (checkReuse)
