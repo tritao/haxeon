@@ -224,7 +224,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - uses: ./.github/actions/setup-host
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -234,11 +233,15 @@ jobs:
         id: android-toolchain
         run: |
           versions=native/android/versions.txt
-          sdkmanager --licenses < <(yes)
-          sdkmanager --install platform-tools "platforms;android-$ANDROID_API_LEVEL" \
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "$sdkmanager" --licenses < <(yes) > /dev/null
+          "$sdkmanager" --install platform-tools "platforms;android-$ANDROID_API_LEVEL" \
             "build-tools;$(sed -n 's/^build-tools=//p' "$versions")" \
             "ndk;$(sed -n 's/^ndk=//p' "$versions")" "cmake;$(sed -n 's/^cmake=//p' "$versions")"
           echo "image-path=$ANDROID_HOME/system-images/android-$ANDROID_API_LEVEL/$ANDROID_IMAGE_TARGET/$ANDROID_IMAGE_ARCH" >> "$GITHUB_OUTPUT"
+
+      # The native build in setup-host includes the Android host library once the pinned toolchain is in place.
+      - uses: ./.github/actions/setup-host
 
       - name: Build and stage the Haxeon SDK
         run: |
