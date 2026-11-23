@@ -815,6 +815,11 @@ class FrontendCompilation {
 				}
 				state.irSourceRevisions.set(fn.name, state.revision);
 				state.pendingIrFunctions.remove(fn.name);
+				// What the session keeps of the IR it had is its body alone: the new IR is compared as rows, encoded with the session's
+				// table, and keeps that encoding as its body, which the encode point then takes as it is.
+				var kept = previous == null ? null : previous.body;
+				if (kept != null && kept.types == context.state.inlineCache.types)
+					ir.bodyIn(kept.types);
 				// Typed again to the IR it already had (a helper every build types from the program's requests, an edit that changes
 				// nothing the function compiles to): the function keeps that IR and its version, so nothing after it sees a change.
 				if (previous != null && compiler.ir.codec.IrFunctionStateEquality.same(previous, ir)) {
