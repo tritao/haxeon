@@ -2221,6 +2221,9 @@ class CallResolver {
 		if (EnumCreation.handles(name))
 			return bodyTyper.typeExpression(EnumCreation.expand(session, name, arguments, span, expectedType), scope,
 				expectedType);
+		if (TypeReflection.handles(name))
+			return TypeReflection.type(session, name, arguments, span,
+				expression -> bodyTyper.typeExpression(expression, scope, expectedType));
 		if (name == "Type.enumIndex" || name == "Type.enumConstructor" || name == "Type.enumParameters"
 			|| name == "Type.enumEq") {
 			if (arguments.length == 0)

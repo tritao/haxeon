@@ -2,8 +2,11 @@
 
 Status: proposal, reviewed by haxeon-e4 (2026-11-19, folded in below); phase 2 is not started. Phase 1
 (`Type.enumConstructor`, `Type.enumParameters`, Haxe's `EnumValueTools`) has landed, and so have `Type.createEnum`,
-`Type.createEnumIndex` and `Type.allEnums` on a named enum (5b77054c4), none of which needs runtime type information. The
-decisions left are the user's (end of the note).
+`Type.createEnumIndex` and `Type.allEnums` on a named enum (5b77054c4), none of which needs runtime type information. So
+have, on a class or enum named where they are called, `getClassName`, `getEnumName`, `getEnumConstructs`,
+`getInstanceFields`, `getClassFields`, `createInstance` with an array literal and `createEmptyInstance` (`TypeReflection`,
+slice 1's folding); the rest of the API is `E1009` until classes and enums are values. The decisions left are the user's
+(end of the note).
 
 ## Scope
 

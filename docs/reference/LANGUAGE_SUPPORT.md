@@ -220,6 +220,15 @@ The current subset includes:
   checked, as a call of a method on it is: null throws "Null access", as Haxe's does. `Type.enumEq` also compares
   `Dynamic` values; the others need the enum's type where they are typed. `Dynamic` and Haxe's `EnumValue` type wait for
   enums as runtime values (`docs/design/TYPE_VALUES.md`).
+- On a class or enum named where they are called: `Type.getClassName(C)` (an interface and `String` too),
+  `Type.getEnumName(E)`, `Type.getEnumConstructs(E)`, `Type.getInstanceFields(C)` (the class's methods, then its variables,
+  each in declaration order, then its base's, an override listed with the base that declares it, as HashLink lists them,
+  without HashLink's empty slot for an implemented interface), `Type.getClassFields(C)` (its statics in declaration order),
+  `Type.createInstance(C, [arguments])` (with the arguments written as an array literal) and `Type.createEmptyInstance(C)`
+  (an object whose constructor and field initializers have not run, its variables at their type's default, null for a
+  reference: a non-generic class only). `Type.getClass`, `getSuperClass`, `getEnum`, `resolveClass`, `resolveEnum` and
+  `typeof`, and any of these on a class or enum held as a value, are `E1009`: they need classes and enums as runtime
+  values.
 - On an enum named where they are called: `Type.createEnumIndex(E, index, ?params)`, `Type.createEnum(E, name, ?params)`
   and `Type.allEnums(E)` (its constructors without arguments, in order). They throw what HashLink's `Type` throws for
   an index out of range, an unknown name, a constructor with arguments given none, or a wrong count of arguments. A
@@ -334,8 +343,8 @@ HashLink):
   is a type mismatch. It waits for the same views (`docs/design/STRUCTURE_VALUES.md`, step 4); the differential case
   `structure-from-class` records it.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
-  `write` (`getContent` and `saveContent` work), and the `Type` API beyond an enum value's (`typeof`, `getClass`,
-  `getClassName`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
+  `write` (`getContent` and `saveContent` work), and the `Type` API on a class or enum held as a value (`typeof`, `getClass`,
+  `getSuperClass`, `resolveClass`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
   does not have yet (`docs/design/TYPE_VALUES.md`).
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.

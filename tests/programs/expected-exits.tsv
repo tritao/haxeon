@@ -674,5 +674,6 @@ dynamic-structure-shared-copy	42
 array-native-null-access	42
 float-to-int-range	42
 loop-bounds-replaced-array	42
+type-class-reflection	42
 enum-abstract-value-scope	42
 key-value-iteration	42
