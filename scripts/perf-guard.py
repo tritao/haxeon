@@ -6,7 +6,7 @@ compile server, and building a small project from a cold start.
     scripts/perf-guard.py --update                 also write into the baselines the metrics that improved beyond their tolerance
     scripts/perf-guard.py --raise=METRIC=REASON    also write METRIC's measured value though it is higher, with REASON beside it in
                                                    the baseline (`raise_reason`); repeat it for each metric raised
-    scripts/perf-guard.py --only=incremental       only one part (self-compile, incremental or small-project)
+    scripts/perf-guard.py --only=incremental       only one part (self-compile, incremental, small-project or live)
     scripts/perf-guard.py --quick                  only the edit-cost session, without its signature edit (see below): a few
                                                    minutes, for a change to the IR, the backends or the typer
 
@@ -772,6 +772,328 @@ def measure_small_project_mode(out, mode, expected_server):
     return metrics
 
 
+# The live part (tests/perf/live-baseline.json): `haxeon run --watch --live` as a user runs it, on two apps, timed from the save
+# of each edit to the running app's patch-applied event, from the watch-events file (tools.WatchEvents) and the reports the build
+# prints at the diagnostic verbosity. Each app takes LIVE_WARM_EDITS unmeasured body edits (the first edits of a session pay for
+# what it has not compiled yet), then LIVE_BODY_EDITS body edits, whose median is kept, and one signature edit, which recompiles
+# the changed function's callers and patches an adapter in. Edits are LIVE_EDIT_GAP_SECONDS apart, as a user's are, so the
+# server's work between requests is over before the next one. Its stages, from the save:
+#   watch       the watcher noticing the save and waiting for it to settle (rebuild-started)
+#   client      the CLI's build up to the compile request, and the server taking it up: the request's first message,
+#               `loading N sources` (a server still busy with the last request's work holds it here)
+#   compile     the server's compile up to the published patch (`driver phases` stamp=), with the compiler phases in it
+#   pickup      from the published stamp to the live host reading the patch (the host's tick)
+#   apply       the runtime staging, compiling and committing the patch, and the app's liveRebuild (patch timing apply=)
+# and, off the patch's path, `rest`: what the request and the CLI do after the patch is applied, up to build-ok. Every wall time
+# varies with the machine's load, so the walls are compared with a wide tolerance, to catch a wait added on the path, and the
+# functions each patch carries are compared exactly. A second session per app follows the server's live data
+# (measure_live_growth). The CLI and the server are what a user's edits run on: haxeon-aot, which main builds when it is not
+# current; the metrics that depend on it are named after it (`aot_`).
+#   small   tests/perf/live-project: a host program of three files
+#   ui      the app template (`haxeon create`), a window on haxeon-ui: one file of its own over about 500 of the package's, the
+#           size of program a UI edit recompiles. Runs under xvfb-run; skipped, passing, without it.
+LIVE_BASELINE = os.path.join(ROOT, "tests", "perf", "live-baseline.json")
+LIVE_PROJECT = os.path.join(ROOT, "tests", "perf", "live-project")
+LIVE_WARM_EDITS = 2
+LIVE_BODY_EDITS = 5
+LIVE_EDIT_GAP_SECONDS = 2.0
+LIVE_GROWTH_EDITS = 10
+LIVE_GROWTH_WARM_EDITS = 4
+LIVE_STAGES = ("watch", "client", "compile", "pickup", "apply")
+
+
+class LiveApp:
+    """One app of the live part: where its project comes from, the file its edits change, its n-th body edit and its signature
+    edit (each an (old, new) pair of text), and what runs the watch."""
+
+    def __init__(self, name, prepare, path, body, signature, prefix=()):
+        self.name, self.prepare, self.path, self.body, self.signature, self.prefix = name, prepare, path, body, signature, prefix
+
+
+def live_apps(work):
+    def small(project):
+        shutil.rmtree(project, ignore_errors=True)
+        shutil.copytree(LIVE_PROJECT, project)
+
+    def ui(project):
+        # The native build of haxeon-ui takes minutes; it is kept between runs, and the template's files are written afresh.
+        for name in (os.path.join("src", "Main.hx"), "haxeon.toml", "haxeon.lock"):
+            if os.path.exists(os.path.join(project, name)):
+                os.remove(os.path.join(project, name))
+        os.makedirs(project, exist_ok=True)
+        with open(os.path.join(work, "ui-create.log"), "w") as log:
+            status = subprocess.run([os.path.join(ROOT, "scripts", "haxeon"), "create", "."], cwd=project, stdout=log,
+                                    stderr=subprocess.STDOUT).returncode
+        if status != 0:
+            raise SystemExit(f"perf-guard: haxeon create failed for the live ui app (exit {status}); log: {log.name}")
+
+    apps = [LiveApp("small", small, os.path.join("src", "model", "Counter.hx"),
+                    lambda index: ("return 1;" if index == 0 else f"return {index + 1};", f"return {index + 2};"),
+                    (os.path.join("src", "model", "Report.hx"), "static function label(value:Int):String",
+                     "static function label(value:Int, ?suffix:String):String"))]
+    if shutil.which("xvfb-run"):
+        apps.append(LiveApp("ui", ui, os.path.join("src", "Main.hx"),
+                            lambda index: ("times')" if index == 0 else f"times ({index})')", f"times ({index + 1})')"),
+                            (os.path.join("src", "Main.hx"), "static function options():DesktopUiHostOptions",
+                             "static function options(?width:Int):DesktopUiHostOptions"), ("xvfb-run", "-a")))
+    else:
+        print("perf-guard: live ui: skipped (no xvfb-run)")
+    return apps
+
+
+def live_project(work, app):
+    """Where `app`'s project is built. The directory names the package `haxeon create` makes, so it is not a dependency's name."""
+    return os.path.join(work, app.name + "-app")
+
+
+def replace_once(path, old, new):
+    with open(path) as source:
+        text = source.read()
+    if text.count(old) != 1:
+        raise SystemExit(f"perf-guard: {path} no longer holds the live edit's anchor {old!r} exactly once; "
+                         "choose another in scripts/perf-guard.py and update the live baseline")
+    with open(path, "w") as target:
+        target.write(text.replace(old, new))
+
+
+class LiveWatch:
+    """`haxeon run --watch --live` on a project, read through its watch-events file and the live host's log."""
+
+    def __init__(self, app, project, work, env):
+        self.project, self.env = project, env
+        self.events = os.path.join(project, "build", "host", "main.hl.watch-events.jsonl")
+        self.host_log = os.path.join(project, "build", "host", "main.hl.watch.log")
+        self.log = open(os.path.join(work, f"{app.name}-watch.log"), "w")
+        self.process = subprocess.Popen(list(app.prefix) + [os.path.join(ROOT, "scripts", "haxeon"), "run", "--watch", "--live",
+                                                            "-v", "diagnostic"],
+                                        cwd=project, env=env, stdin=subprocess.DEVNULL, stdout=self.log,
+                                        stderr=subprocess.STDOUT, start_new_session=True)
+        self.read = 0
+        self.seen = []
+        self.timings = []
+
+    def poll(self):
+        """The events appended since the last call, with the host's `patch timing` lines in order."""
+        if self.process.poll() is not None:
+            raise SystemExit(f"perf-guard: the live watch exited ({self.process.returncode}); log: {self.log.name}")
+        if os.path.exists(self.events):
+            with open(self.events) as source:
+                # A line still being appended is read once it is whole.
+                lines = source.read().split("\n")[:-1]
+            # The watch empties the file when it starts.
+            if len(lines) < self.read:
+                self.read = 0
+            for line in lines[self.read:]:
+                self.seen.append(json.loads(line))
+            self.read = len(lines)
+        if os.path.exists(self.host_log):
+            with open(self.host_log) as source:
+                self.timings = [dict(field.split("=") for field in line.split("ms: ", 1)[1].split())
+                                for line in source.read().splitlines() if line.startswith("haxeon: patch timing ms: ")]
+
+    def running(self):
+        """Whether the watch has launched the app, after its first build."""
+        with open(self.log.name) as source:
+            return "haxeon: running " in source.read()
+
+    def wait(self, condition, timeout, what):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.poll()
+            found = condition()
+            if found:
+                return found
+            time.sleep(0.01)
+        raise SystemExit(f"perf-guard: the live watch did not {what} within {timeout} s; log: {self.log.name}")
+
+    def edit(self, path, old, new):
+        """Saves one edit and waits for the running app to apply its patch; returns the edit's stages."""
+        start = len(self.seen)
+        patched = len(self.timings)
+        saved = time.time() * 1000.0
+        replace_once(os.path.join(self.project, path), old, new)
+
+        def finished():
+            events = self.seen[start:]
+            ok = next((event for event in events if event["kind"] in ("build-ok", "build-failed")), None)
+            if ok is not None and ok["kind"] == "build-failed":
+                raise SystemExit(f"perf-guard: a live edit of {path} failed to build; log: {self.log.name}")
+            outcome = next((event for event in events if event["kind"] in ("patch-applied", "patch-rejected", "reload")
+                            and event["revision"] is not None), None)
+            if outcome is not None and outcome["kind"] != "patch-applied":
+                raise SystemExit(f"perf-guard: a live edit of {path} did not patch ({outcome['kind']}: {outcome['message']}); "
+                                 f"log: {self.log.name}")
+            return events if ok is not None and outcome is not None and len(self.timings) > patched else None
+
+        events = self.wait(finished, 120, f"patch the edit of {path}")
+        started = next(event for event in events if event["kind"] == "rebuild-started")
+        lines = [event for event in events if event["kind"] == "output-line"]
+        requested = next(event for event in lines if event["line"].startswith("loading "))
+        applied = next(event for event in events if event["kind"] == "patch-applied")
+        ok = next(event for event in events if event["kind"] == "build-ok")
+        driver = live_report(lines, "driver phases (ms): ")
+        phases = live_report(lines, "compiler phases ")
+        host = {name: float(value) for name, value in self.timings[patched].items()}
+        with open(os.path.join(self.project, "build", "host", "main.hl.live.patch.json")) as source:
+            summary = json.load(source)
+        if summary["revision"] != applied["revision"]:
+            raise SystemExit(f"perf-guard: the live summary is of revision {summary['revision']}, the app applied "
+                             f"{applied['revision']}; log: {self.log.name}")
+        # The host's tick reads the stamp, then the summary, then the patch, and applies it.
+        picked = applied["time"] - host["apply"] - host["read"] - host["description"]
+        stage = {"watch": started["time"] - saved, "client": requested["time"] - started["time"],
+                 "compile": float(driver["stamp"]), "apply": host["apply"] + host["read"] + host["description"]}
+        stage["pickup"] = picked - requested["time"] - stage["compile"]
+        stage["total"] = applied["time"] - saved
+        stage["rest"] = ok["time"] - applied["time"]
+        stage["functions"] = len(summary["changedFunctions"])
+        worker = live_report(lines, "worker allocations: ") if any(event["line"].startswith("worker allocations: ")
+                                                                   for event in lines) else {}
+        stage["heap"] = int(worker.get("heap", "0").replace(",", ""))
+        stage["phases"] = {name: float(phases[name]) for name in ("frontend", "typing/lowering", "ir-assembly",
+                                                                  "incremental-backend", "patch") if name in phases}
+        return stage
+
+    def stop(self):
+        try:
+            os.killpg(self.process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            self.process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            os.killpg(self.process.pid, signal.SIGKILL)
+            self.process.wait()
+        self.log.close()
+
+
+def live_report(lines, prefix):
+    """The `name=value` fields of the build's report line that starts with `prefix`, nested groups flattened."""
+    line = next((event["line"] for event in lines if event["line"].startswith(prefix)), None)
+    if line is None:
+        raise SystemExit(f"perf-guard: the live build printed no {prefix.strip()!r} report")
+    fields = {}
+    for word in line.replace("(", " ").replace(")", " ").split():
+        if "=" in word:
+            name, value = word.split("=", 1)
+            fields.setdefault(name, value)
+    return fields
+
+
+def measure_live_app(app, work, env, mode):
+    """The timed session of one app, then the session that follows the server's live data; returns their metrics, named after
+    the app and `mode` (the server program)."""
+    project = live_project(work, app)
+    app.prepare(project)
+    watch = LiveWatch(app, project, work, env)
+    try:
+        # The first build, the native build of the app's packages and the app's start.
+        watch.wait(watch.running, 1800, "start the app")
+        time.sleep(LIVE_EDIT_GAP_SECONDS)
+        edits = []
+        for index in range(LIVE_WARM_EDITS + LIVE_BODY_EDITS):
+            old, new = app.body(index)
+            edits.append(watch.edit(app.path, old, new))
+            time.sleep(LIVE_EDIT_GAP_SECONDS)
+        body = edits[LIVE_WARM_EDITS:]
+        path, old, new = app.signature
+        signature = watch.edit(path, old, new)
+        server = live_server_memory(os.path.join(work, "session"))
+    finally:
+        watch.stop()
+    for label, stage in [(f"body edit {index + 1}", stage) for index, stage in enumerate(body)] + [("signature edit", signature)]:
+        print(f"perf-guard: live {mode} {app.name:5} {label:14} total {stage['total']:6.0f} ms = "
+              + " + ".join(f"{name} {stage[name]:.0f}" for name in LIVE_STAGES)
+              + f"; rest {stage['rest']:.0f} ms, {stage['functions']} functions; compile phases "
+              + " ".join(f"{name}={value:.0f}" for name, value in stage["phases"].items()) + " (ms)")
+    print(f"perf-guard: live {mode} {app.name:5} server {server} (not compared); heap after each edit "
+          + " ".join(f"{stage['heap'] / 1048576.0:.0f}" for stage in edits + [signature]) + " MB")
+    middle = sorted(body, key=lambda stage: stage["total"])[len(body) // 2]
+    print(f"perf-guard: live {mode} {app.name:5} median body edit {middle['total']:.0f} ms: "
+          + ", ".join(f"{name} {median([stage[name] for stage in body]):.0f}" for name in LIVE_STAGES + ("rest",))
+          + " (each stage's own median)")
+    name = f"{mode}_{app.name}"
+    metrics = {f"{name}_body_edit_ms": round(middle["total"]), f"{name}_signature_edit_ms": round(signature["total"]),
+               f"{app.name}_body_edit_functions": middle["functions"],
+               f"{app.name}_signature_edit_functions": signature["functions"]}
+    metrics.update(measure_live_growth(app, work, env, mode))
+    return metrics
+
+
+def measure_live_growth(app, work, env, mode):
+    """The server's live data over LIVE_GROWTH_EDITS body edits, in a session of its own: every build there ends with a full
+    collection and logs what stayed alive (compiler.tools.CompilerMemoryLog), which would weigh on the timed session's walls.
+    A live session must keep about what a plain one keeps: the history of a revision it can no longer patch from is garbage."""
+    # A server of its own, started with the log on.
+    stop_workers(os.path.join(work, "session"))
+    project = live_project(work, app)
+    app.prepare(project)
+    memory_log = os.path.join(work, f"{app.name}-memory.log")
+    if os.path.exists(memory_log):
+        os.remove(memory_log)
+    watch = LiveWatch(app, project, work, dict(env, HAXEON_COMPILER_MEMORY_LOG=memory_log))
+    try:
+        watch.wait(watch.running, 1800, "start the app")
+        for index in range(LIVE_GROWTH_EDITS):
+            old, new = app.body(index)
+            watch.edit(app.path, old, new)
+    finally:
+        watch.stop()
+    # The live host's build logs there too, from a server of its own.
+    output = os.path.join(project, "build", "host", "main.hl")
+    with open(memory_log) as source:
+        live = [round(float(word.split("=", 1)[1]) * 1073741824) for line in source if line.startswith(output + " ")
+                for word in line.split() if word.startswith("live-after-major=")]
+    # The first build and the edits that fill the session are left out: its caches, and the publications it keeps to take back
+    # (CompilerPublication.RETRACTABLE), each with a snapshot of the session.
+    settled = live[1 + LIVE_GROWTH_WARM_EDITS:]
+    print(f"perf-guard: live {mode} {app.name:5} server live data after each edit "
+          + " ".join(f"{value / 1048576.0:.0f}" for value in live[1:]) + " MB")
+    return {f"{mode}_{app.name}_server_live_bytes": settled[-1],
+            f"{mode}_{app.name}_server_live_growth_bytes": settled[-1] - settled[0]}
+
+
+def live_server_memory(session):
+    """The program, peak and current resident set of the compile server that compiles the app, as a line: of the session's
+    servers (the live host's build has one too), the largest."""
+    found = []
+    for name in sorted(os.listdir(session)):
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(session, name)) as source:
+                pid = json.load(source)["pid"]
+            with open(f"/proc/{pid}/status") as source:
+                rows = dict(row.split(":", 1) for row in source.read().splitlines() if ":" in row)
+            program = os.path.basename(os.readlink(f"/proc/{pid}/exe"))
+        except (OSError, ValueError, KeyError):
+            continue
+        found.append((int(rows["VmHWM"].split()[0]) // 1024, int(rows["VmRSS"].split()[0]) // 1024, program))
+    if not found:
+        return "not found"
+    peak, resident, program = max(found)
+    return f"{program}: peak {peak} MB, resident {resident} MB"
+
+
+def measure_live_edits(out):
+    """The live part (the comment above LIVE_BASELINE), with haxeon-aot current."""
+    work = os.path.join(out, "live")
+    # Kept between runs, as a user's is: it holds the server program the CLI builds once for the checkout's compiler.
+    session = os.path.join(work, "session")
+    os.makedirs(session, exist_ok=True)
+    env = dict(os.environ, HAXEON_COMPILER_SESSION_DIR=session)
+    # What a user's edits run on: the CLI and the server built ahead of time (main builds haxeon-aot when it is not current).
+    mode = "aot"
+    metrics = {}
+    for app in live_apps(work):
+        stop_workers(session)
+        try:
+            metrics.update(measure_live_app(app, work, env, mode))
+        finally:
+            stop_workers(session)
+    return metrics
+
+
 # The metrics the compiler is optimized for, in the order of the priorities, and those that only guard against regressions:
 # each is (baseline, metric, label) and appears in the summary the run ends with. A primary metric's row is marked with `*`.
 PRIMARY = [(INCREMENTAL_BASELINE, "noop_instructions", "no-op"),
@@ -844,7 +1166,7 @@ def compare(path, metrics, update, raises, compared):
 def baseline_metrics():
     """The names of the metrics the baselines hold."""
     names = set()
-    for path in (BASELINE, INCREMENTAL_BASELINE, SMALL_PROJECT_BASELINE):
+    for path in (BASELINE, INCREMENTAL_BASELINE, SMALL_PROJECT_BASELINE, LIVE_BASELINE):
         with open(path) as source:
             names.update(json.load(source)["metrics"])
     return names
@@ -853,7 +1175,7 @@ def baseline_metrics():
 def main(arguments):
     update = "--update" in arguments
     quick = "--quick" in arguments
-    parts = ["self-compile", "incremental", "small-project"]
+    parts = ["self-compile", "incremental", "small-project", "live"]
     raises = {}
     for argument in arguments:
         if argument.startswith("--only=") and argument[len("--only="):] in parts:
@@ -880,7 +1202,7 @@ def main(arguments):
     hl = hashlink()
     built_aot = False
     try:
-        if "incremental" in parts or "small-project" in parts:
+        if "incremental" in parts or "small-project" in parts or "live" in parts:
             built_aot = build_aot(hl, out)
         return measure_parts(hl, out, parts, update, raises)
     finally:
@@ -897,7 +1219,7 @@ def measure_parts(hl, out, parts, update, raises):
         improvements.extend(found[1])
         raised.extend(found[2])
 
-    if parts != ["small-project"]:
+    if any(part in parts for part in ("self-compile", "incremental", "edit-cost")):
         tool = os.environ.get("HAXEON_COMPILER_HL") or run([os.path.join(ROOT, "scripts", "haxeon"), "dev", "tool-path",
                                                             ENTRY]).strip()
         sources = os.path.join(out, "sources.txt")
@@ -934,6 +1256,8 @@ def measure_parts(hl, out, parts, update, raises):
         gather(compare(INCREMENTAL_BASELINE, metrics, update, raises, compared))
     if "small-project" in parts:
         gather(compare(SMALL_PROJECT_BASELINE, measure_small_project(hl, out), update, raises, compared))
+    if "live" in parts:
+        gather(compare(LIVE_BASELINE, measure_live_edits(out), update, raises, compared))
     summary("primary", PRIMARY, compared)
     summary("regression guards", REGRESSION_GUARDS, compared)
     unmeasured = sorted(set(raises) - {name for _, name in compared})

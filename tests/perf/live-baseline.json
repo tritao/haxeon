@@ -1,0 +1,65 @@
+{
+	"about": "scripts/perf-guard.py, live part: haxeon run --watch --live on tests/perf/live-project (small) and on the app template over haxeon-ui (ui), from the save of an edit to the running app's patch-applied event, with the CLI and server built ahead of time (haxeon-aot, aot_). Measured on Linux x86-64. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
+	"metrics": {
+		"aot_small_body_edit_ms": {
+			"value": 113,
+			"tolerance": 0.5,
+			"why": "Median save-to-applied wall of a body edit of the small program. Wall varies with the machine's load, so only a wait added on the edit's path (a poll, a write, a collection, work left from the last request) fails it."
+		},
+		"aot_small_signature_edit_ms": {
+			"value": 104,
+			"tolerance": 0.5,
+			"why": "Save-to-applied wall of a changed static signature in the small program, which recompiles its callers and patches an adapter in; loose for the same reason."
+		},
+		"aot_ui_body_edit_ms": {
+			"value": 1769,
+			"tolerance": 0.5,
+			"why": "Median save-to-applied wall of a body edit of the UI app, whose program is mostly haxeon-ui. Wall varies with the machine's load, so only a wait added on the edit's path (a poll, a write, a collection, work left from the last request) fails it."
+		},
+		"aot_ui_signature_edit_ms": {
+			"value": 2556,
+			"tolerance": 0.5,
+			"why": "Save-to-applied wall of a changed static signature in the UI app, whose program is mostly haxeon-ui, which recompiles its callers and patches an adapter in; loose for the same reason."
+		},
+		"small_body_edit_functions": {
+			"value": 3,
+			"tolerance_abs": 0,
+			"why": "The functions the body edit's patch carries, which the runtime compiles: the edited one and what it is inlined into. Deterministic."
+		},
+		"small_signature_edit_functions": {
+			"value": 3,
+			"tolerance_abs": 0,
+			"why": "The edited function, its callers and the adapter: deterministic."
+		},
+		"ui_body_edit_functions": {
+			"value": 2,
+			"tolerance_abs": 0,
+			"why": "The functions the body edit's patch carries, which the runtime compiles: the edited one and what it is inlined into. Deterministic."
+		},
+		"ui_signature_edit_functions": {
+			"value": 10,
+			"tolerance_abs": 0,
+			"why": "The edited function, its callers and the adapter: deterministic."
+		},
+		"aot_small_server_live_bytes": {
+			"value": 32212255,
+			"tolerance": 0.03,
+			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps."
+		},
+		"aot_small_server_live_growth_bytes": {
+			"value": 0,
+			"tolerance_abs": 4194304,
+			"why": "Live data growth over the growth session's edits after those that fill the session. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack absorbs the collector's page rounding."
+		},
+		"aot_ui_server_live_bytes": {
+			"value": 924491710,
+			"tolerance": 0.03,
+			"why": "The server's live data after the growth session's last edit (a full collection ends each build): what a live session keeps."
+		},
+		"aot_ui_server_live_growth_bytes": {
+			"value": -11811160,
+			"tolerance_abs": 16777216,
+			"why": "Live data growth over the growth session's edits after those that fill the session. A live session must keep about what a plain one keeps; growth here is history kept per revision. The slack absorbs the collector's page rounding."
+		}
+	}
+}

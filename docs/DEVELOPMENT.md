@@ -87,7 +87,15 @@ few minutes, and is the check for a change to the IR, the backends or the typer 
 The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
 no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
 instructions of every process the command starts and the bytes the server allocated for the request; the CLI's wall is printed.
-`--only=self-compile`, `--only=incremental` or `--only=small-project` runs one part. The `edit-replay-short` suite (`wave`)
+The live part runs `haxeon run --watch --live` as a user does, on `tests/perf/live-project` (three files) and on the app template
+(`haxeon create`, a window on haxeon-ui, run under `xvfb-run`; skipped without it), with the server and CLI a user's edits run on:
+`haxeon-aot` (built when it is not current), which names the metrics (`aot_`). Each edit is timed from its save to the
+running app's `patch-applied` event (the watch-events file), and split into the watch's settle, the CLI's work before the request,
+the compile up to the published patch, the host's pickup and the runtime's apply. It gates the median body edit and the signature
+edit with a wide tolerance (wall varies with load; it catches a wait added on the path), the functions each patch carries, and, from
+a second session whose builds each end with a full collection, the server's live data after the edits and its growth over them.
+The first run builds haxeon-ui's native libraries, which takes minutes; later runs keep them.
+`--only=self-compile`, `--only=incremental`, `--only=small-project` or `--only=live` runs one part. The `edit-replay-short` suite (`wave`)
 replays the last two commits that change `src/compiler` as warm builds in one server, each checked against a fresh build;
 `edit-replay` (`ci`) replays four.
 
@@ -98,7 +106,7 @@ self-compile (instructions, wall, peak, allocation, live data) and the increment
 guards.
 
 Each metric is compared with `tests/perf/self-compile-baseline.json`, `tests/perf/incremental-baseline.json` or
-`tests/perf/small-project-baseline.json`, which hold its
+`tests/perf/small-project-baseline.json` or `tests/perf/live-baseline.json`, which hold its
 value and tolerance and why the tolerance is what it is. Above the tolerance the suite fails; below it the suite passes and asks
 for the baseline to be updated, so a gain is locked in. A baseline never moves up by itself: `--update` writes only the
 metrics that improved beyond their tolerance, so a metric that got worse within it stays where it was and a series of updates
