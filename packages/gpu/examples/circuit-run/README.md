@@ -1,6 +1,6 @@
 # Circuit Run
 
-A desktop Haxeon maze-chase sample inspired by the small Sokol-based game
+A Haxeon maze-chase sample inspired by the small Sokol-based game
 [pacman.zig](https://github.com/floooh/pacman.zig). Circuit Run uses its own
 maze and draws every tile and actor from colored rectangles in one GPU draw
 call. The GLSL files in `src/shaders/` are embedded at compile time.
@@ -32,4 +32,16 @@ the checkout's Haxeon compiler and HashLink runtime. See the
 [GPU package setup](../../README.md) for NativeKit checkout instructions.
 
 The game advances in fixed 120 Hz steps and accepts buffered turns at tile
-centers. NativeKit schedules rendering through the window's frame clock.
+centers. NativeKit schedules rendering through the window's frame clock. Each
+frame submits a sealed maze batch and the retained HUD on the same surface.
+
+For WebGL2, build the browser host with the NativeKit Emscripten SDK and serve
+the output over HTTP.
+
+```sh
+packages/gpu/examples/circuit-run/web/build.sh
+python3 -m http.server --directory packages/gpu/examples/circuit-run/build/web 8080
+```
+
+Open `http://localhost:8080`. If Emscripten is outside the NativeKit checkout,
+set `EMSDK` to its installation directory.

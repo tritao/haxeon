@@ -21,7 +21,6 @@ class Surface implements Disposable {
 	final window:Window;
 	final frameSource:PlatformSurface;
 	final registration:haxeon.platform.DisposalRegistration;
-	final renderers:Array<Renderer> = [];
 	var value:SurfaceHandle;
 	var disposed:Bool = false;
 
@@ -93,13 +92,9 @@ class Surface implements Disposable {
 	public function acquireFrame():SurfaceFrame
 		return frameSource.acquireFrame();
 
-	@:allow(haxeon.gpu.Renderer)
-	function platformSurface():PlatformSurface
-		return frameSource;
-
 	public function createRenderer():Renderer {
 		ensureLive();
-		return Renderer.create(this);
+		return Renderer.create(frameSource);
 	}
 
 	/** Sets the surface's position and size in window-local logical pixels. */
@@ -121,9 +116,7 @@ class Surface implements Disposable {
 		if (disposed)
 			return;
 		frameSource.clearFrameCallback();
-		var snapshot = renderers.copy();
-		for (index in 0...snapshot.length)
-			snapshot[snapshot.length - 1 - index].dispose();
+		frameSource.releaseDependents();
 		GpuResult.check(NativeKitGpu.nkgpu_surface_destroy(value), "surface.dispose");
 		frameSource.releaseBorrowed();
 		disposed = true;
@@ -133,20 +126,6 @@ class Surface implements Disposable {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(haxeon.gpu.Renderer)
-	function attachRenderer(renderer:Renderer):Void {
-		ensureLive();
-		renderers.push(renderer);
-	}
-
-	@:allow(haxeon.gpu.Renderer)
-	function rendererDisposed(renderer:Renderer):Void {
-		renderers.remove(renderer);
-	}
-
-	@:allow(haxeon.gpu.Renderer)
-	function windowOwner():Window
-		return window;
 
 	function ensureLive():Void {
 		if (disposed)

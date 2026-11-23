@@ -21,6 +21,7 @@ class Surface implements Disposable {
 	final ownsHandle:Bool;
 	var disposed:Bool = false;
 	var owner:Null<DisposalRegistration>;
+	final dependents = new haxeon.platform.internal.DisposalRegistry();
 	var frameSubscription:Null<SurfaceFrameSubscription>;
 
 	@:allow(haxeon.platform.Window)
@@ -121,10 +122,21 @@ class Surface implements Disposable {
 		NativeKit.nk_surface_request_frame_checked(value);
 	}
 
+	/** Registers a resource that must be released before this surface. */
+	public function registerDependent(release:Void->Void):DisposalRegistration {
+		ensureLive();
+		return dependents.register(release);
+	}
+
+	@:allow(haxeon.gpu.Surface)
+	function releaseDependents():Void
+		dependents.releaseAll();
+
 	public function dispose():Void {
 		if (disposed)
 			return;
 		clearFrameCallback();
+		releaseDependents();
 		if (ownsHandle)
 			NativeKit.nk_surface_destroy_checked(value);
 		disposed = true;

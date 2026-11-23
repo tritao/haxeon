@@ -14,7 +14,7 @@ import haxeon.gpu.Readback;
 import haxeon.gpu.RenderPassDesc;
 import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
-import haxeon.gpu.Surface;
+import haxeon.platform.Surface;
 import haxeon.gpu.Timestamp;
 import haxeon.gpu.Uniforms;
 
@@ -28,6 +28,7 @@ import haxeon.gpu.Shader.ShaderBuilder;
 /** Owns one renderer and all resources created through it. */
 class Renderer implements Disposable {
 	final surface:Surface;
+	final registration:haxeon.platform.DisposalRegistration;
 	final resources = new haxeon.platform.internal.DisposalRegistry();
 	var value:nkgpu_renderer;
 	var disposed:Bool = false;
@@ -37,14 +38,13 @@ class Renderer implements Disposable {
 	private function new(surface:Surface, value:nkgpu_renderer) {
 		this.surface = surface;
 		this.value = value;
+		registration = surface.registerDependent(dispose);
 	}
 
 	public static function create(surface:Surface):Renderer {
 		var made = NativeKitGpu.nkgpu_renderer_create(surface.nativeHandle());
 		GpuResult.check(made.status, "renderer.create");
-		var renderer = new Renderer(surface, made.out_renderer);
-		surface.attachRenderer(renderer);
-		return renderer;
+		return new Renderer(surface, made.out_renderer);
 	}
 
 	public function nativeHandle():nkgpu_renderer {
@@ -311,7 +311,7 @@ class Renderer implements Disposable {
 
 	@:allow(haxeon.gpu.Batch)
 	function ownsFrame(frame:haxeon.platform.SurfaceFrame):Bool
-		return frame.belongsTo(surface.platformSurface());
+		return frame.belongsTo(surface);
 
 	public function uniforms(size:Int):Uniforms {
 		ensureFrame();
@@ -336,7 +336,7 @@ class Renderer implements Disposable {
 			throw BindingError.invalidState("Renderer.dispose", "Cannot dispose a GPU renderer during an active frame");
 		GpuResult.check(NativeKitGpu.nkgpu_renderer_destroy(value), "renderer.dispose");
 		disposed = true;
-		surface.rendererDisposed(this);
+		registration.detach();
 		resources.releaseAll();
 	}
 

@@ -934,6 +934,17 @@ class UiContext implements Disposable {
 	}
 
 	public function render(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
+		prepareRender(renderer, surface, null, frame);
+	}
+
+	/** Seals the retained UI over earlier work in the same surface frame. */
+	public function frameStep(renderer:Renderer, acquired:haxeon.platform.SurfaceFrame,
+			frame:FrameInfo):haxeon.platform.SurfaceFrameStep {
+		return prepareRender(renderer, null, acquired, frame);
+	}
+
+	function prepareRender(renderer:Renderer, surface:Null<Surface>, acquired:Null<haxeon.platform.SurfaceFrame>,
+			frame:FrameInfo):Null<haxeon.platform.SurfaceFrameStep> {
 		RenderCost.begin();
 		var renderStartedAt = Sys.time();
 		var renderStartAllocatedAt = AllocationProbe.now();
@@ -1084,7 +1095,11 @@ class UiContext implements Disposable {
 		diagnosticStage = 24;
 		var nativeRenderStartedAt = Sys.time();
 		var nativeRenderStartAllocatedAt = AllocationProbe.now();
-		session.render(renderer, surface, frame);
+		var step = null;
+		if (acquired == null)
+			session.render(renderer, surface, frame);
+		else
+			step = session.frameStep(renderer, acquired, frame);
 		var renderMetrics = frameMetrics;
 		if (renderMetrics != null) {
 			var renderEndedAt = Sys.time();
@@ -1099,6 +1114,7 @@ class UiContext implements Disposable {
 		if (RenderCost.enabled) RenderCost.render(renderStartedAt, nativeRenderStartedAt, Sys.time(),
 			submittedNodeCount);
 		diagnosticStage = 0;
+		return step;
 	}
 
 	/**

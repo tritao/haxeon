@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitTypes.SurfaceFlags;
 class SurfaceOptions {
 	public static function forGpu(width:Int, height:Int, ?flags:SurfaceFlags):PlatformSurfaceOptions {
 		var options = new PlatformSurfaceOptions(width, height);
-		options.flags = flags ?? SurfaceFlags.empty();
+		options.flags = (flags ?? SurfaceFlags.empty()) | SurfaceFlags.Depth | SurfaceFlags.Stencil;
 		options.api = NativeKitGpu.nkgpu_default_graphics_api();
 		if (options.api == GraphicsApi.Opengl) {
 			options.flags = options.flags | SurfaceFlags.ForwardCompatible;

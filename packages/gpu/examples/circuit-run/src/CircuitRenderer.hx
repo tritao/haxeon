@@ -1,11 +1,13 @@
 import haxe.io.Bytes;
+import haxeon.gpu.Batch;
 import haxeon.gpu.Buffer;
+import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.BufferDesc;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Pipeline;
 import haxeon.gpu.Renderer;
 import haxeon.gpu.Shader;
-import haxeon.gpu.Surface;
+import haxeon.platform.Surface;
 
 import Circuit.Position;
 
@@ -13,6 +15,7 @@ class CircuitRenderer {
 	static inline var tileSize = 36;
 	public static inline var width = Circuit.width * tileSize;
 	public static inline var height = Circuit.height * tileSize;
+	public static inline var surfaceHeight = height + CircuitHud.height;
 	static inline var floatBytes = 4;
 	static inline var positionComponents = 2;
 	static inline var colorComponents = 3;
@@ -33,16 +36,24 @@ class CircuitRenderer {
 	final vertices = Bytes.alloc((backgroundRectangles + Circuit.width * Circuit.height * maxRectanglesPerTile
 		+ actorCount * rectanglesPerActor) * verticesPerRectangle * stride);
 	var writeOffset = 0;
+	var hudFraction = 0.0;
 
 	final renderer:Renderer;
+	final commands:CommandBuffer;
 	final pipeline:Pipeline;
 	final buffer:Buffer;
 
 	public function new(surface:Surface) {
-		renderer = surface.createRenderer();
+		renderer = Renderer.create(surface);
+		commands = renderer.commandBuffer(64);
 		var shader = Shader.begin(renderer, ShaderLanguage.Glsl,
+		#if circuit_run_web
+			Embed.text("shaders/maze-web.vert.glsl"),
+			Embed.text("shaders/maze-web.frag.glsl")).build();
+		#else
 			Embed.text("shaders/maze.vert.glsl"),
 			Embed.text("shaders/maze.frag.glsl")).build();
+		#end
 		pipeline = Pipeline.begin(renderer, shader, stride)
 			.attribute(0, 0, 0, VertexFormat.Float2)
 			.attribute(1, 0, colorOffset, VertexFormat.Float3)
@@ -52,13 +63,14 @@ class CircuitRenderer {
 		buffer = Buffer.create(renderer, desc);
 	}
 
-	public function draw(game:Circuit, player:Position, drone:Position):Void {
+	public function record(game:Circuit, player:Position, drone:Position, width:Int, height:Int):Batch {
+		hudFraction = Math.min(1.0, CircuitHud.height * (width / CircuitRenderer.width) / height);
 		prepareVertices(game, player, drone);
-		renderer.withFrame(function() {
-			pipeline.apply();
-			buffer.applyVertex(0);
-			renderer.draw(0, Std.int(writeOffset / stride));
-		});
+		commands.reset();
+		commands.applyPipeline(pipeline);
+		commands.applyVertexBuffer(0, buffer, 0);
+		commands.draw(0, Std.int(writeOffset / stride), 1);
+		return renderer.batch().windowPass(width, height).commands(commands).seal();
 	}
 
 	function prepareVertices(game:Circuit, player:Position, drone:Position):Void {
@@ -114,7 +126,7 @@ class CircuitRenderer {
 
 	function vertex(x:Float, y:Float, color:Int):Void {
 		vertices.setFloat(writeOffset, 2.0 * x / width - 1.0);
-		vertices.setFloat(writeOffset + floatBytes, 1.0 - 2.0 * y / height);
+		vertices.setFloat(writeOffset + floatBytes, 1.0 - 2.0 * (hudFraction + y / height * (1.0 - hudFraction)));
 		vertices.setFloat(writeOffset + colorOffset, ((color >> 16) & 255) / 255.0);
 		vertices.setFloat(writeOffset + colorOffset + floatBytes, ((color >> 8) & 255) / 255.0);
 		vertices.setFloat(writeOffset + colorOffset + 2 * floatBytes, (color & 255) / 255.0);

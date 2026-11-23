@@ -1,6 +1,14 @@
-import haxeon.gpu.FrameTick;
-import haxeon.gpu.Surface;
-import haxeon.ui.host.DesktopUiSurface;
+import haxeon.gpu.Batch;
+import haxeon.gpu.SurfaceOptions;
+import haxeon.platform.Surface;
+import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.event.EventSubscription;
+import haxeon.ui.FontCollection;
+import haxeon.ui.FrameInfo;
+import haxeon.ui.LayoutFrame;
+import haxeon.ui.Renderer;
+import haxeon.ui.core.UiContext;
+import haxeon.ui.host.UiSurfaceBinding;
 import haxeon.platform.Runtime;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.WindowOptions;
@@ -16,10 +24,25 @@ class Main {
 	final sounds:Sounds;
 	var surface:Surface;
 	var renderer:CircuitRenderer;
-	var hud:DesktopUiSurface;
+	var hud:CircuitHud;
+	var hudContext:UiContext;
+	var hudRenderer:Renderer;
+	var hudFonts:FontCollection;
+	var hudBinding:UiSurfaceBinding;
+	final hudLayout = new LayoutFrame(CircuitRenderer.width, CircuitRenderer.surfaceHeight);
+	final frameInfo = new FrameInfo(CircuitRenderer.width, CircuitRenderer.surfaceHeight,
+		CircuitRenderer.width, CircuitRenderer.surfaceHeight, 1.0);
+	var hudDirty = true;
+	var inFlight:Null<Batch>;
+	var frameToken:haxe.Int64;
+	var submittedFrame = false;
+	var lastWidth = 0;
+	var lastHeight = 0;
+	var eventSubscription:EventSubscription;
+	var frameSubscription:SurfaceFrameSubscription;
+	final runtime:Runtime;
 
 	var running = true;
-	var surfaceReady = false;
 	var frameFailure:Dynamic;
 	// Keep mixer calls out of the native frame callback so audio work cannot delay presentation.
 	var pendingSound:Null<SoundEffect>;
@@ -29,56 +52,131 @@ class Main {
 	var lastFrame = 0.0;
 	var accumulator = 0.0;
 
+	#if circuit_run_web
+	static var app:Main;
+
+	public static function main():Void {
+		var runtime = Runtime.start();
+		var sounds = new Sounds();
+		app = new Main(runtime, sounds);
+		try app.start() catch (error:Dynamic) {
+			shutdown();
+			throw error;
+		}
+	}
+
+	public static function poll():Int {
+		if (app == null)
+			return -1;
+		app.iterate(false);
+		if (app.frameFailure != null) {
+			Sys.println("Circuit Run frame failed: " + Std.string(app.frameFailure));
+			shutdown();
+			return -1;
+		}
+		if (!app.running && app.inFlight == null) {
+			shutdown();
+			return 2;
+		}
+		return app.submittedFrame ? 1 : 0;
+	}
+
+	public static function shutdown():Void {
+		if (app == null)
+			return;
+		if (app.inFlight != null) {
+			app.running = false;
+			return;
+		}
+		app.dispose();
+		app.sounds.dispose();
+		app.runtime.dispose();
+		app = null;
+	}
+	#else
 	static function main():Void {
 		scoped var runtime = Runtime.start();
 		scoped var sounds = new Sounds();
-		new Main(sounds).run(runtime);
+		var app = new Main(runtime, sounds);
+		defer app.dispose();
+		app.start();
+		while (app.running || app.inFlight != null)
+			app.iterate(true);
+		if (app.frameFailure != null)
+			throw app.frameFailure;
 	}
+	#end
 
-	function new(sounds:Sounds) {
+	function new(runtime:Runtime, sounds:Sounds) {
+		this.runtime = runtime;
 		this.sounds = sounds;
 	}
 
-	function run(runtime:Runtime):Void {
-		var options = new WindowOptions(CircuitRenderer.width, CircuitRenderer.height + CircuitHud.height);
+	function start():Void {
+		var options = new WindowOptions(CircuitRenderer.width, CircuitRenderer.surfaceHeight);
 		options.title = "Circuit Run | Arrows to steer, R to restart, M to mute";
+		options.flags = WindowFlags.Resizable;
 		var window = runtime.createWindow(options);
-		surface = Surface.create(window, CircuitRenderer.width, CircuitRenderer.height);
-		surface.setBounds(0, CircuitHud.height,
-			CircuitRenderer.width, CircuitRenderer.height);
-		scoped var events = runtime.events.listen(onPlatformEvent);
-		var hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
-		hud = DesktopUiSurface.mount(window, runtime.events, CircuitRenderer.width, CircuitHud.height, hudView,
-			failFrame);
-
-		while (running && !surfaceReady) {
-			if (!runtime.events.poll())
-				runtime.events.wait(0.1);
-		}
-		if (frameFailure != null)
-			throw frameFailure;
-		if (!running)
-			return;
-
-		renderer = new CircuitRenderer(surface);
+		surface = window.createSurface(SurfaceOptions.forGpu(CircuitRenderer.width, CircuitRenderer.surfaceHeight));
+		hudFonts = FontCollection.create();
+		#if circuit_run_web
+		hudFonts.add("/assets/IBMPlexSans-Regular.ttf");
+		#else
+		hudFonts.addSystemFallbacks();
+		#end
+		hudRenderer = Renderer.create();
+		hudContext = new UiContext(null, hudFonts);
+		hudBinding = UiSurfaceBinding.attach(hudContext, window, surface, runtime.events);
+		hudContext.onAnimationFrameRequested = function() hudDirty = true;
+		hud = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
+		eventSubscription = runtime.events.listen(onPlatformEvent);
 		snapshotPositions();
-		scoped var frames = surface.onFrame(onFrame);
-		while (running) {
-			if (!runtime.events.poll() && running && pendingSound == null)
-				runtime.events.wait(0.1);
-			var effect = pendingSound;
-			if (running && effect != null) {
-				pendingSound = null;
-				sounds.play(effect);
-			}
+	}
+
+	function iterate(wait:Bool):Void {
+		var hadEvent = runtime.events.poll();
+		if (hadEvent) {
+			for (_ in 1...64)
+				if (!runtime.events.poll())
+					break;
 		}
-		if (frameFailure != null)
-			throw frameFailure;
+		if (!hadEvent && wait && pendingSound == null)
+			runtime.events.wait(0.1);
+		var effect = pendingSound;
+		if (running && effect != null) {
+			pendingSound = null;
+			sounds.play(effect);
+		}
+	}
+
+	function dispose():Void {
+		defer if (hudFonts != null) hudFonts.dispose();
+		defer if (hudRenderer != null) hudRenderer.dispose();
+		defer if (hudContext != null) hudContext.dispose();
+		defer if (hudBinding != null) hudBinding.dispose();
+		defer if (eventSubscription != null) eventSubscription.dispose();
+		if (frameSubscription != null)
+			frameSubscription.dispose();
 	}
 
 	function onPlatformEvent(event:PlatformEvent):Void {
 		switch event {
-			case SurfaceReady(source) if (surface.ownsEventSource(source)): surfaceReady = true;
+			case SurfaceReady(source) if (surface.ownsEventSource(source) && renderer == null):
+				try {
+					renderer = new CircuitRenderer(surface);
+					frameSubscription = surface.onFrame(onFrame);
+				} catch (error:Dynamic) failFrame(error);
+			case SurfaceResize(source, width, _, _, _) if (surface.ownsEventSource(source) && width > 0):
+				hudBinding.setCoordinateScale(width / CircuitRenderer.width);
+			case SurfaceFrameComplete(source, token, result)
+				if (surface.ownsEventSource(source) && inFlight != null && token == frameToken):
+				var batch = inFlight;
+				inFlight = null;
+				batch.dispose();
+				if (result == Result.Ok)
+					submittedFrame = true;
+				else
+					failFrame("NativeKit frame result " + Std.string(result));
 			case WindowClose(_): running = false;
 			case Key(_, key, _, action, _) if (action == InputAction.Press):
 				switch key {
@@ -101,12 +199,12 @@ class Main {
 		snapshotPositions();
 		accumulator = 0.0;
 		lastFrame = 0.0;
-		hud.invalidate();
+		hudDirty = true;
 	}
 
 	function toggleSound():Void {
 		sounds.toggleMute();
-		hud.invalidate();
+		hudDirty = true;
 	}
 
 	function failFrame(error:Dynamic):Void {
@@ -120,18 +218,45 @@ class Main {
 			case RoundFinished(Captured): Caught;
 			case RoundFinished(Cleared): Clear;
 		};
-		hud.invalidate();
+		hudDirty = true;
 	}
 
-	function onFrame(frame:FrameTick):Void {
-		if (!running)
+	function onFrame(width:Int, height:Int):Void {
+		if (!running || inFlight != null || width <= 0 || height <= 0)
 			return;
 		try {
-			advanceSimulation(frame.timeSeconds);
+			var now = Sys.monotonicTime();
+			var delta = lastFrame == 0.0 ? 0.0 : Math.min(now - lastFrame, 0.1);
+			advanceSimulation(now);
 			var progress = accumulator / stepSeconds;
 			var player = lerp(previousPlayer, game.playerPosition(), progress);
 			var drone = lerp(previousDrone, game.dronePosition(), progress);
-			renderer.draw(game, player, drone);
+			var frame = surface.acquireFrame();
+			defer if (!frame.isFinished()) frame.cancel();
+			var batch = renderer.record(game, player, drone, width, height);
+			var queued = false;
+			defer if (!queued) batch.dispose();
+			var gpuStep = batch.frameStep();
+			defer gpuStep.dispose();
+
+			var scale = width / CircuitRenderer.width;
+			var logicalHeight = height / scale;
+			if (hudDirty || hudContext.isDirty() || hudContext.needsAnimationFrame
+				|| width != lastWidth || height != lastHeight) {
+				hudLayout.setViewport(CircuitRenderer.width, logicalHeight);
+				hudLayout.deltaSeconds = delta;
+				hudContext.submit(hud, hudLayout);
+				hudDirty = false;
+				lastWidth = width;
+				lastHeight = height;
+			}
+			frameInfo.set(CircuitRenderer.width, logicalHeight, width, height, scale);
+			var uiStep = hudContext.frameStep(hudRenderer, frame, frameInfo);
+			defer uiStep.dispose();
+			frame.submit([gpuStep, uiStep]);
+			frameToken = frame.token();
+			inFlight = batch;
+			queued = true;
 		} catch (error:Dynamic) {
 			failFrame(error);
 		}
