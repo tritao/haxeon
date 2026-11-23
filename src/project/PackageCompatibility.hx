@@ -79,9 +79,11 @@ class PackageCompatibility {
 				}
 			}
 			if (StringTools.startsWith(constraint, "^")) {
+				// The leftmost part that is not zero stays as it is, as in Cargo and npm: ^1.2 is below 2, ^0.3 below 0.4.
 				var lower = parseVersion(constraint.substr(1)),
 					current = parseVersion(actual);
-				if (compare(current, lower) < 0 || current[0] != lower[0])
+				if (compare(current, lower) < 0 || current[0] != lower[0]
+					|| lower[0] == 0 && (current[1] != lower[1] || lower[1] == 0 && current[2] != lower[2]))
 					return false;
 				continue;
 			}
