@@ -92,8 +92,10 @@ here and on the site.
      behaviour: retained state visible on both sides, which is the claim no competitor shows. A continuous recording at
      launch, with the reproducible example linked. Then the batteries grid and the showcase (Materia, Exosuit). Actions:
      **Build your first app**, **Get the demo source**.
-  3. **The language:** a short tabbed tour, each tab a few lines of code that compile and run, with its output: types
-     that infer, enums and pattern matching, null safety, zero-cost abstract types.
+  3. **The language:** a short tabbed tour, each tab a few lines of code that compile and run, with its output, Haxeon's
+     own features first: value types (`struct` with generated equality and hashing), enums and pattern matching, null
+     safety, cleanup with `defer`, typed JSON (`JsonWire`, generated, no reflection), zero-cost abstract types. Inference
+     shows in every sample rather than as a tab of its own: every competitor has it.
   4. **C and C++ interop:** a real header, the generated binding and the Haxeon call side by side, the result visible.
   5. **One codebase, three outputs:** one sample run on the JIT VM, built as a native executable and as WebAssembly, with
      the real commands and what each produces; the platform table here.
