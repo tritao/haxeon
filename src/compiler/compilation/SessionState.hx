@@ -139,11 +139,17 @@ class SessionState {
 
 	/**
 	 * Releases the modules' generated IR functions, for a compile that keeps no session once its IR pipeline has its input: the
-	 * passes then hold the only copy of the program. Changes the modules in place, as `releaseRetained` does.
+	 * passes then hold the only copy of the program. The memos keyed by those functions are emptied with them, as their keys would
+	 * keep the functions alive. Changes the modules and the memos in place, as `releaseRetained` does.
 	 */
-	public function releaseGeneratedIr():Void
+	public function releaseGeneratedIr():Void {
 		for (state in modules)
 			state.irFunctions = [];
+		irTypeMentions.clear();
+		irCalls.clear();
+		irSources.clear();
+		staticReferences.clear();
+	}
 
 	/**
 	 * Releases the modules' tokens, syntax trees, semantic models and canonical declarations, for a compile that keeps no session
@@ -177,9 +183,10 @@ class SessionState {
 	/**
 	 * Releases the records only a next build reads to decide what to redo (dependency edges, fingerprints, the answers typed bodies
 	 * relied on, the inferred signatures and declaration types), for a compile that keeps no session once its frontend has assembled
-	 * the IR tables. Changes the modules in place, as `releaseRetained` does.
+	 * the IR tables, with the facts the typed units' reads name. Changes the modules in place, as `releaseRetained` does.
 	 */
-	public function releaseIncrementalRecords():Void
+	public function releaseIncrementalRecords():Void {
+		declarationFacts.clear();
 		for (state in modules) {
 			state.signatureFingerprints = [];
 			state.interfaceFingerprints = [];
@@ -196,6 +203,7 @@ class SessionState {
 			state.keyPathUses = [];
 			state.unitReads = [];
 		}
+	}
 
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
 			backend:BackendSession) {

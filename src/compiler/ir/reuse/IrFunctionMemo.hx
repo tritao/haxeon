@@ -32,6 +32,12 @@ class IrFunctionMemo<V> {
 	public inline function set(fn:IrFunction, value:V):Void
 		current.set(fn, value);
 
+	/** Forgets every entry, for a compile that keeps no session: their keys would keep the functions alive. */
+	public function clear():Void {
+		current = new ObjectMap();
+		last = new ObjectMap();
+	}
+
 	/** Drops what the build that just ended did not ask for. */
 	public function endBuild():Void {
 		last = current;

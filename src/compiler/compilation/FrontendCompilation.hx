@@ -298,6 +298,11 @@ class FrontendCompilation {
 			build.typedNew = null;
 			context.state.lastTypedProgram = null;
 			context.state.releaseIncrementalRecords();
+			// The reads recorded while typing hold the facts they name; only a next build's invalidation reads them.
+			build.reads = null;
+			var semantic = context.state.semanticProgram;
+			if (semantic != null)
+				semantic.declarations.bindReads(null);
 			// Nothing reads the typed bodies past the tables; live patching still reads the semantic program's parameter defaults.
 			build.typedByName = [];
 			for (state in context.state.modules)

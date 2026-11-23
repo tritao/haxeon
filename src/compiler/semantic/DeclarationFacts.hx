@@ -73,26 +73,54 @@ class DeclarationFacts {
 	/** The revision of the build in progress: 1 for the first. */
 	public var revision(default, null) = 0;
 
-	final ids:Array<Map<String, Int>> = [for (_ in 0...11)[]];
-	final aspects:Array<Int> = [];
-	final names:Array<String> = [];
-	final changedAt:Array<Int> = [];
-	final dependencies:Array<Null<Array<Int>>> = [];
+	var ids:Array<Map<String, Int>> = [for (_ in 0...11)[]];
+	var aspects:Array<Int> = [];
+	var names:Array<String> = [];
+	var changedAt:Array<Int> = [];
+	var dependencies:Array<Null<Array<Int>>> = [];
 
 	/** The module whose state holds a `Unit` fact's reads, by fact. */
-	final unitModules:Map<Int, String> = [];
+	var unitModules:Map<Int, String> = [];
 
 	/** The latest change of each fact and of what it goes through, for the revision in `effectiveIn`. */
-	final effective:Array<Int> = [];
+	var effective:Array<Int> = [];
 
-	final effectiveIn:Array<Int> = [];
+	var effectiveIn:Array<Int> = [];
 
 	/** The reader that last recorded each fact (`ReadSink`), so that a sink records a fact once. */
-	final recordedBy:Array<Int> = [];
+	var recordedBy:Array<Int> = [];
 
 	var lastSink = 0;
 
 	public function new() {}
+
+	/**
+	 * Forgets every fact, for a compile that keeps no session once its typing is done: only a next build's invalidation reads
+	 * them. The revision stays, so a fact named again is new.
+	 */
+	public function clear():Void {
+		ids = [for (_ in 0...11)[]];
+		aspects = [];
+		names = [];
+		changedAt = [];
+		dependencies = [];
+		unitModules = [];
+		effective = [];
+		effectiveIn = [];
+		recordedBy = [];
+		expanded = [];
+		members = [];
+		path = [];
+		next = [];
+		successors = [];
+		named = [];
+		visitedIn = [];
+		order = [];
+		lowest = [];
+		latest = [];
+		onPath = [];
+		walkReads = null;
+	}
 
 	/** Starts a build: facts changed from here on change at the new revision. */
 	public function beginBuild():Int
@@ -161,7 +189,7 @@ class DeclarationFacts {
 		expanded[id] = true;
 	}
 
-	final expanded:Array<Bool> = [];
+	var expanded:Array<Bool> = [];
 
 	inline function isExpanded(id:Int):Bool
 		return id < expanded.length && expanded[id];
@@ -277,20 +305,20 @@ class DeclarationFacts {
 	}
 
 	// The walk's stacks, kept between walks so that a walk allocates nothing once they have grown.
-	final members:Array<Int> = [];
-	final path:Array<Int> = [];
-	final next:Array<Int> = [];
-	final successors:Array<Null<Array<Int>>> = [];
-	final named:Array<Bool> = [];
+	var members:Array<Int> = [];
+	var path:Array<Int> = [];
+	var next:Array<Int> = [];
+	var successors:Array<Null<Array<Int>>> = [];
+	var named:Array<Bool> = [];
 	var counter = 0;
 	var walkReads:Null<(unit:Int) -> Null<UnitReads>> = null;
 
 	// The walk's state per fact, valid where `visitedIn` holds the walk's number.
-	final visitedIn:Array<Int> = [];
-	final order:Array<Int> = [];
-	final lowest:Array<Int> = [];
-	final latest:Array<Int> = [];
-	final onPath:Array<Bool> = [];
+	var visitedIn:Array<Int> = [];
+	var order:Array<Int> = [];
+	var lowest:Array<Int> = [];
+	var latest:Array<Int> = [];
+	var onPath:Array<Bool> = [];
 	var walkEpoch = 0;
 
 	function growWalk(fact:Int):Void
