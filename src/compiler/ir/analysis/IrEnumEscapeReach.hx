@@ -149,7 +149,15 @@ class IrEnumEscapeReach {
 			default:
 		}
 
-	public function collect(roots:Array<IrType>, supportsCallableEscape:IrType->Bool):Map<String, Bool> {
+	/** The enums `roots` reach that are not a callable `supportsCallableEscape` accepts. */
+	public function collect(roots:Array<IrType>, supportsCallableEscape:IrType->Bool):Map<String, Bool>
+		return walker(supportsCallableEscape)(roots);
+
+	/**
+	 * A walk that takes roots one list after the other and gives, after each, every enum it has reached so far: what one list
+	 * reaches through what an earlier one visited, that one reached already, so the walk visits each part of the program once.
+	 */
+	public function walker(supportsCallableEscape:IrType->Bool):Array<IrType>->Map<String, Bool> {
 		var unsupported:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [],
 			inspectedMaps = new IrTypeMap<Bool>(), // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
@@ -325,10 +333,12 @@ class IrEnumEscapeReach {
 				for (child in children)
 					walk(child);
 		};
-		for (root in roots) {
-			inspect(root, true);
-			walkReferences(root);
-		}
-		return unsupported;
+		return function(roots:Array<IrType>):Map<String, Bool> {
+			for (root in roots) {
+				inspect(root, true);
+				walkReferences(root);
+			}
+			return unsupported;
+		};
 	}
 }

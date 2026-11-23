@@ -169,9 +169,14 @@ class IrInlineEnumEligibility {
 		}
 		for (index in 0...program.functions.length)
 			replay(program.functions[index], uses[index], bodyTypes, program.entryPoint);
+		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
+		var walk = reflectionReach.walker(supportsCallableEscape), reached:Map<String, Bool> = [];
 		for (reason in escapeOrder)
-			for (name in reflectionReach.collect(escapeRoots.get(reason), supportsCallableEscape).keys()) block(name,
-				reason);
+			for (name in walk(escapeRoots.get(reason)).keys())
+				if (!reached.exists(name)) {
+					reached.set(name, true);
+					block(name, reason);
+				}
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
