@@ -79,9 +79,22 @@ The table follows README.md; when a platform's status changes there, it changes 
 
 ## Page map
 
-- **Home:** the headline (what Haxeon is), the three differences, what you can build (apps first, with a 30-second
-  recording of an app edited while it runs and the UI Showcase running in the browser), a short look at the language with
-  code, the platform table, and Get started.
+- **Home**, in this order (from the homepage research, `docs/reports/2026-11-website-homepage-research.md`):
+  1. **Hero:** what Haxeon is (a language and runtime), one sentence, and a short verified program with its output. Primary
+     action **Get started**, secondary **See live editing**.
+  2. **Apps, the largest section:** a real UI app beside its source (the task list of guide 3). The visitor sees state made
+     before an edit (items, a completed one, an unsaved draft), the code change, and the same state after it with the new
+     behaviour: retained state visible on both sides, which is the claim no competitor shows. A continuous recording at
+     launch, with the reproducible example linked. Then the batteries grid and the showcase (Materia, Exosuit). Actions:
+     **Build your first app**, **Get the demo source**.
+  3. **C and C++ interop:** a real header, the generated binding and the Haxeon call side by side, the result visible.
+  4. **One codebase, three outputs:** one sample run on the JIT VM, built as a native executable and as WebAssembly, with
+     the real commands and what each produces; the platform table here.
+  5. **What else you can build:** tiles for tools, games and 3D, scripts and embedding, each with a runnable example and
+     its guide.
+  6. **Start building:** the shortest install-and-run path on the page (install, create, run), then Get started again.
+
+  No news feed on the home page: verified examples and the platform table show progress better than dated posts.
 - **Get started** (`docs/guides/00-get-started.md`): install a C and C++ toolchain and CMake (the one command for each
   system, as `haxeon doctor` prints it), then Haxeon from a release archive (`docs/reference/RELEASES.md`; no
   checkout), then "Your first app".
@@ -92,11 +105,24 @@ The table follows README.md; when a platform's status changes there, it changes 
   4. Calling a C or C++ library.
   5. Shipping: desktop executables, Android packages, the web bundle.
   6. Use cases: an editor, a 3D app (GPU, camera, glTF), a game loop with live-tweaked logic.
-- **Coming from:** Flutter, .NET, Go, Haxe. Each is an honest comparison and a translation table. "Coming from Haxe" holds
-  the compatibility table (`docs/reference/LANGUAGE_SUPPORT.md`).
+- **Coming from:** Flutter, .NET, Go, each an honest comparison and a translation table; and one page **Coming from Haxe,
+  HashLink and Lime** (OpenFL, HaxeFlixel, Heaps, HaxeUI users included). The relation to Haxe is a minor matter on the
+  site: one line on About and this page, nothing on the home page. The page answers, with versioned and verified tables
+  (`docs/reports/2026-11-website-haxe-ecosystem-research.md`): whether existing `.hx` compiles (the compatibility table,
+  `docs/reference/LANGUAGE_SUPPORT.md`, and the first error a reader is likely to hit), what happens to macros, what
+  becomes of haxelib, `.hxml`, `-lib` and `-D`, which libraries and frameworks work per output (tested, needs changes,
+  unsupported, untested), how JavaScript, hxcpp and HashLink workflows map to Haxeon's (Haxeon's VM is a HashLink fork:
+  say what is the same and what differs), and a walkthrough moving a small real project.
 - **Reference:** the language, the CLI, the manifest, the packages (`ui`, `platform`, `gpu`, `audio`, `animation`,
   `editor`), the error codes, the standard library API.
-- **About:** the project, its relation to Haxe and HashLink, the licenses.
+- **About:** the project, its maintainers and support channels, the licenses, and one line on its origin: *Haxeon is an
+  independent language and runtime built on Haxe; it compiles a growing subset of Haxe.*
+
+Top navigation: **Language**, **Build** (Apps first, then tools, games and 3D, scripts, embedding; Apps has its own
+landing page with the demo, the platform table, the UI package and the first-app guide), **Docs**, **Examples**, **About**,
+and a persistent **Get started**. Docs sections: Start here (install, first program, first app), Learn the language (a
+tour), Build guides, Runtime and targets (the JIT and live editing, what state survives which edit, executables built
+ahead of time, WebAssembly, packaging), C and C++ interop, Reference.
 
 ## Documentation rules
 
@@ -148,6 +174,16 @@ shows something: the UI Showcase on the home page and, later, a playground.
 - A package registry page.
 - The site generator rewritten in Haxeon, once the pages are stable.
 
+## Branding
+
+Haxeon has its own identity: wordmark, icon, palette, favicon, social cards and docs theme, none derived from Haxe's (not
+Haxe orange `#EA8220`, not its logo). Haxe is named in plain text only, on About and Coming from Haxe, with Haxeon's
+independence from the Haxe Foundation stated there.
+
 ## Open
 
 - Domain and hosting.
+- The hero headline. Candidates: *Edit code. Keep state.* (leads with what nobody else shows, with the demo right below);
+  *Haxeon is a programming language and runtime.* (the plainest).
+- A trademark check of the name "Haxeon" before launch: it contains "Haxe", the research found the Foundation's branding
+  guidance but no naming policy, and did not establish availability.
