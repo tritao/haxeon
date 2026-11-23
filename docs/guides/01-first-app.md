@@ -19,8 +19,9 @@ haxeon create my_app
 cd my_app
 ```
 
-`haxeon create` makes a new directory from the app template: a window with a counter. It prints what it created and
-what to run next. It creates runners for Android, Linux, macOS, web and Windows. Use `--platforms` to choose a subset.
+The app template starts with a counter that runs in a desktop window and in a browser. `haxeon create` prints what it
+created and what to run next. It creates runners for Android, Linux, macOS, web and Windows. Use `--platforms` to choose
+a subset.
 
 ## What is in the project
 
@@ -31,7 +32,7 @@ my_app/
   android/         the Gradle project, manifest and resources
   linux/           the Linux runner: the project that builds the app's executable
   macos/           the macOS runner, which builds the app as my_app.app
-  web/             the page that hosts the WebAssembly app
+  web/             the page and guest exports for the WebAssembly app
   windows/         the Windows runner, which builds my_app.exe
 ```
 
@@ -53,7 +54,7 @@ version = "1.0.0"
 platforms = ["android", "linux", "macos", "web", "windows"]
 
 [dependencies]
-ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "windows"] }
+ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "web", "windows"] }
 
 [compatibility]
 haxeon = "^0.3"
@@ -63,7 +64,8 @@ haxeon = "^0.3"
 - `nullSafety = "strict"` makes the compiler reject code that could use a `null` where a value is required.
 - The `[app]` section makes the project an app rather than a command-line program: its display name, its identifier
   (`--org` on `haxeon create` sets the part before the name), its version and the platforms it is built for.
-- The desktop runners use the SDK’s UI package.
+- The desktop and web runners use the SDK’s UI package. The same `UiApplication` receives a `UiHostContext` on both,
+  and `UiHost.run(create, options())` selects the host.
 
 [The manifest reference](../reference/MANIFEST.md) describes every field.
 
@@ -128,11 +130,14 @@ platform.
 
 - **Linux, macOS and Windows** build and run apps, each through its runner, as above. Console programs
   (`haxeon create my_tool --template console`) build and run there too.
-- **Android** uses the app's Gradle runner. Use `haxeon build --target android` to make a debug APK, or
+- **Android** uses the app's Gradle runner and starts with a greeting until the UI toolkit supports it. Use `haxeon build --target android` to make a debug APK, or
   `haxeon run --target android --watch` to edit live on a connected device. See [Android](../reference/ANDROID.md).
 - **The web** uses the page in `web/`. Use `haxeon build --target wasm32` or `--target wasm-gc` to make a bundle.
-  Serve the output directory over HTTP and open its `index.html`. The web runner currently starts the
-  template's managed entry point. The toolkit's WebGL2 host runs the UI Showcase separately.
+  Serve `build/web/wasm32/` (or `build/web/wasm-gc/`) over HTTP and open its `index.html` in a browser with WebGL2.
+  The page runs the same counter in `src/Main.hx` using the WebGL2 host and fonts from the SDK.
+  Edit `web/` to change the runner. Live editing is available through the desktop runners.
+  When building the SDK from source, install Emscripten with `vendor/nativekit/tools/setup-web.sh`
+  before running `scripts/build-native.sh` to include the browser UI host.
   See [WebAssembly backend](../reference/WASM_BACKEND.md) for the two targets.
 - **iOS** is planned.
 

@@ -12,3 +12,8 @@ fi
 
 cmake --preset "$preset" -S "$root_dir"
 cmake --build --preset "$preset"
+
+# The browser host is built once for this SDK, independently of the desktop target.
+if [[ -f "$root_dir/vendor/nativekit/.tools/emsdk/emsdk_env.sh" ]]; then
+	bash "$root_dir/scripts/build-web-sdk.sh"
+fi

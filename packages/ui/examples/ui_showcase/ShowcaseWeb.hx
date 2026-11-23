@@ -16,10 +16,10 @@ import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.host.BrowserUiHost;
-import haxeon.ui.host.BrowserUiHostOptions;
-import haxeon.ui.host.BrowserUiHostOptions.BrowserUiFontAsset;
 import haxeon.ui.host.BrowserUiHostSession;
 import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiFontAsset;
+import haxeon.ui.host.UiHostOptions;
 import haxeon.ui.host.UiHostSession.UiHostLifecycle;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
@@ -333,13 +333,13 @@ class ShowcaseWeb {
 
 	static function startReusableHost():Int {
 		try {
-			var options = new BrowserUiHostOptions();
+			var options = new UiHostOptions();
 			options.title = "Haxeon UI Explorer";
 			options.width = requestedWidth;
 			options.height = requestedHeight;
 			options.eventQueueCapacity = 64;
 			options.fonts = [for (font in webFontSpecs())
-				new BrowserUiFontAsset(font.name, font.uri, font.bundledPath, font.family)];
+				new UiFontAsset(font.name, font.uri, font.bundledPath, font.family)];
 			var startedSession = BrowserUiHost.start(options, function(context) {
 				explorer = new UiExplorer(context.fonts, "WEBGL2 · WASM", function() {
 					openGraphicsRequested = true;

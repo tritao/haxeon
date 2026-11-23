@@ -27,6 +27,7 @@ for target in hl wasm32 wasm-gc; do
         options+=(--wasm-import-memory --wasm-memory-contract="$work/memory.json")
     fi
     if [[ $target != hl ]]; then
+        options+=(--ffi-interface="$ui/bindings/nativekit-ui-browser-wasm.hxi")
         for symbol in main configure configureMode configureUiVisual configureBenchmark frame status diagnostic caretOffset caretAffinity caretDirection shutdown; do
             options+=(--export="ShowcaseWeb.$symbol")
         done

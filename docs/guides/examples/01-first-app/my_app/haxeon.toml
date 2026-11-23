@@ -13,7 +13,7 @@ version = "1.0.0"
 platforms = ["android", "linux", "macos", "web", "windows"]
 
 [dependencies]
-ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "windows"] }
+ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "web", "windows"] }
 
 [compatibility]
 haxeon = "^0.3"

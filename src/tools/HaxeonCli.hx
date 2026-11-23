@@ -924,8 +924,10 @@ class HaxeonCli {
 		if (instrument)
 			Sys.putEnv("HL_PROF_BOUNDARY", ProfileCapture.boundaryConfiguration(project.manifest.instrument));
 
-		var home = haxeonHome(), app = program == null ? project.manifest.app : null;
-		NativeTargetSupport.validate(project, targetInfo);
+		var home = haxeonHome(),
+			app = program == null ? project.manifest.app : null,
+			webHost = app != null && targetInfo.isWasm() ? AppRunner.webHost(project, home) : null;
+		NativeTargetSupport.validate(project, targetInfo, webHost != null);
 		if (hostBuild) {
 			// An app builds through its runner project (docs/design/PROJECT_BUILDS.md); a script or another program as before.
 			if (app != null && options.profile)
@@ -1089,12 +1091,8 @@ class HaxeonCli {
 		}
 		if (targetInfo.isWasm()) {
 			var targetName = targetInfo.toString();
-			if (app != null && !options.compilerOnly) {
+			if (app != null && !options.compilerOnly)
 				AppRunner.runnerDirectory(project, app, "web");
-				for (resolved in project.packages.packages)
-					if (resolved.manifest.native != null)
-						throw new UsageError('Web app runners cannot build native package "${resolved.name}" yet');
-			}
 			var output = options.output == null ? Path.join([
 				HaxeonProjectBuild.outputDirectory(project, false),
 				targetName,
@@ -1107,13 +1105,13 @@ class HaxeonCli {
 				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, scope(options),
 				false,
 				false, null, options.buildMode == "development",
-				targetInfo, null, options.style) catch (error:haxe.Exception) {
+				targetInfo, null, options.style, false, null, webHost) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
 			releaseQuietOutput(options, buildStatus != 0);
 			if (buildStatus == 0 && app != null && !options.plan && !options.compilerOnly)
-				output = AppRunner.bundleWeb(project, app, home, targetInfo, output);
+				output = AppRunner.bundleWeb(project, app, home, targetInfo, output, webHost);
 			reportBuilt(options, output, buildStatus, started);
 			return buildStatus;
 		}
@@ -1203,17 +1201,19 @@ class HaxeonCli {
 			|| options.profile || options.quiet || options.output != null || options.device != null
 			|| options.gradleInputs != null || options.runtimeArguments.length > 0)
 			throw new UsageError("haxeon check takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color and --diagnostic-format. See 'haxeon check --help'.");
-		NativeTargetSupport.validate(project, target);
+		var home = haxeonHome(),
+			webHost = target.isWasm() && project.manifest.app != null ? AppRunner.webHost(project, home) : null;
+		NativeTargetSupport.validate(project, target, webHost != null);
 		var started = announceBuild(options, project,
 			target.isWasm() ? target.toString() : (target.isAndroid() ? "android" : "host"),
 			options.buildMode, true),
 			// Nothing is written there: it names the check's source list, beside the build's, in the build's directory.
 			output = Path.join([HaxeonProjectBuild.outputDirectory(project, false), "check", "main"]),
-			status = HaxeonProjectBuild.build(project, haxeonHome(), output, options.defines, options.jobs, false,
+			status = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, false,
 				false,
 				options.timings, resolutionMs, false, Check, false, false, null, options.buildMode == "development",
 				target,
-				null, options.style);
+				null, options.style, false, null, webHost);
 		reportBuilt(options, null, status, started, "No errors");
 		return status;
 	}

@@ -2,8 +2,6 @@ package haxeon.ui.host;
 
 /** Window, pacing, and deterministic-capture policy for DesktopUiHost. */
 class DesktopUiHostOptions extends UiHostOptions {
-	/** Stable application identity, including Windows taskbar grouping. */
-	public var applicationId:Null<String> = null;
 	public var customTitlebar:Bool = false;
 	/** Where to put the window before it is first shown, such as where it was on the last run; null lets the system choose. */
 	public var placement:Null<WindowPlacement> = null;
@@ -27,15 +25,13 @@ class DesktopUiHostOptions extends UiHostOptions {
 	 * returns false do not count toward `frameLimit` or start the `captureSeconds` timer, so a capture of
 	 * an application that opens its document in the background shows the document, not its loading state.
 	 */
-	/** Called after a successful frame render, before capture bookkeeping. */
-	public var onFrameRendered:Null<Void->Void> = null;
 	public var captureReady:Null<Void->Bool> = null;
 	/** True while application state changes without input events, such as live simulation. */
 	public var continuousFrames:Null<Void->Bool> = null;
 	public var eventHistoryLimit:Int = 100;
 	public var icons:Null<ApplicationIconSet> = null;
 
-	public function new() super();
+	public function new(?source:UiHostOptions) super(source);
 
 	/**
 	 * Applies the host's standard command-line flags, so any app can be run for a number of frames, captured or driven by a
@@ -71,9 +67,9 @@ class DesktopUiHostOptions extends UiHostOptions {
 		return this;
 	}
 
-	public function validate():Void {
-		if (title == null || title.length == 0 || width <= 0 || height <= 0 || minimumWidth < 0 || minimumHeight < 0
-			|| eventQueueCapacity <= 0 || targetFps <= 0.0 || frameLimit < 0 || captureSeconds < 0.0
+	override public function validate():Void {
+		super.validate();
+		if (minimumWidth < 0 || minimumHeight < 0 || targetFps <= 0.0 || frameLimit < 0 || captureSeconds < 0.0
 			|| !Math.isFinite(captureSeconds) || eventHistoryLimit < 0)
 			throw "Desktop UI host options are invalid";
 		if (captureDirectory != null && captureDirectory.length == 0)

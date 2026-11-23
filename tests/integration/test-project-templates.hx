@@ -60,11 +60,19 @@ function main() {
 		if (manifest.indexOf(text) < 0)
 			Script.fail('FAIL: the app manifest lacks $text:\n$manifest');
 	// Both web targets use the same page and the SDK loader.
-	for (target in ["wasm32", "wasm-gc"]) {
+	var webSdk = Path.join([root, "out", "sdk", "platforms", "web", "ui"]);
+	for (target in FileSystem.exists(webSdk) ? ["wasm32", "wasm-gc"] : []) {
 		log = Path.join([work, target + ".log"]);
 		expectStatus(haxeon(["build", "--target", target], app, log), 0, log, 'building the $target web bundle');
 		var bundle = Path.join([app, "build", "web", target]);
-		for (file in ["index.html", "haxeon-host.js", "haxeon-build.js", "main.wasm"])
+		for (file in [
+			"index.html",
+			"haxeon-host.js",
+			"haxeon-build.js",
+			"main.wasm",
+			"ui/nativekit_ui_haxeon.wasm",
+			"ui/assets/IBMPlexSans-Regular.ttf"
+		])
 			if (!FileSystem.exists(Path.join([bundle, file])))
 				Script.fail('FAIL: the web bundle lacks $file');
 	}

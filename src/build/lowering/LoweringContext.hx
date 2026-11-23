@@ -50,12 +50,15 @@ class LoweringContext {
 
 	public final scriptModule:Null<String>;
 
+	public final webHost:Null<String>;
+
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
 			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle,
-			?checkOnly:Bool, ?scriptModule:String) {
+			?checkOnly:Bool, ?scriptModule:String, ?webHost:String) {
+		this.webHost = webHost;
 		this.scriptModule = scriptModule;
 		this.checkOnly = checkOnly == true;
 		this.reportStyle = reportStyle == null ? compiler.tools.ReportStyle.DEFAULT : reportStyle;

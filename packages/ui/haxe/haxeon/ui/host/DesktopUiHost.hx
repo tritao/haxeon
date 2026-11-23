@@ -26,14 +26,14 @@ import sys.io.File;
 /** Owns the complete NativeKit desktop lifecycle for one UIKit application. */
 class DesktopUiHost {
 	public static function run(options:DesktopUiHostOptions,
-			create:DesktopUiHostContext->DesktopUiApplication):Int {
+			create:DesktopUiHostContext->UiApplication):Int {
 		var host = open(options, create);
 		while (host.tick()) {}
 		return host.close();
 	}
 
 	public static function open(options:DesktopUiHostOptions,
-			create:DesktopUiHostContext->DesktopUiApplication):DesktopUiHostSession {
+			create:DesktopUiHostContext->UiApplication):DesktopUiHostSession {
 		if (options == null || create == null)
 			throw "Desktop UI host requires options and an application factory";
 		options.validate();
@@ -85,10 +85,7 @@ class DesktopUiHost {
 			try {
 				var appState:Dynamic = null;
 				try {
-					if (runtime != null && runtime.app() != null) {
-						var recordedApp:DesktopUiApplication = cast runtime.app();
-						appState = recordedApp.diagnosticState();
-					}
+					if (runtime != null) appState = diagnosticState(runtime.app());
 				} catch (_:Dynamic) {}
 				File.appendContent(recordPath, Json.stringify({
 					kind: "failure",
@@ -626,7 +623,7 @@ class DesktopUiHost {
 					at: Sys.time(),
 					scheduledAt: activeScript.scheduledAt,
 					delivered: activeScript.delivered,
-					appState: (cast liveRuntime.app(): DesktopUiApplication).diagnosticState()
+					appState: diagnosticState(liveRuntime.app())
 				}) + "\n");
 			};
 			var beforeScriptedInput = function(at:Float):Void {
@@ -825,8 +822,14 @@ class DesktopUiHost {
 	static function noFunctions(_:Dynamic, value:Dynamic):Dynamic
 		return Reflect.isFunction(value) ? "<function>" : value;
 
+	static function diagnosticState(application:Null<UiApplication>):Dynamic {
+		if (!Std.isOfType(application, UiDiagnosticsProvider)) return null;
+		var provider:UiDiagnosticsProvider = cast application;
+		return provider.diagnosticState();
+	}
+
 	static function writeDiagnostics(options:DesktopUiHostOptions, window:WindowHandle,
-			application:DesktopUiApplication, renderer:Renderer, state:UiHostRuntime,
+			application:UiApplication, renderer:Renderer, state:UiHostRuntime,
 			events:Array<String>, frames:Array<Dynamic>, eventCounts:Map<String, Int>,
 			frameRequestCounts:Map<String, Int>, loopTiming:Dynamic):Void {
 		var directory:String = cast options.captureDirectory;
@@ -839,7 +842,7 @@ class DesktopUiHost {
 		File.saveContent(directory + "/layout.json",
 			Json.stringify(application.context().inspect(), noFunctions, "  ") + "\n");
 		File.saveContent(directory + "/app-state.json",
-			Json.stringify(application.diagnosticState(), noFunctions, "  ") + "\n");
+			Json.stringify(diagnosticState(application), noFunctions, "  ") + "\n");
 		var metrics = application.context().frameMetrics;
 		var stats = renderer.stats();
 		var frameData:Dynamic = {

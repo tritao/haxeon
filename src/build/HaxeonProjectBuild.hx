@@ -49,7 +49,7 @@ class HaxeonProjectBuild {
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, scope:BuildScope = Full,
 			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
-			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String):Int {
+			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String, ?webHost:String):Int {
 		var shown = style == null ? ReportStyle.DEFAULT : style;
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
@@ -61,8 +61,9 @@ class HaxeonProjectBuild {
 		var environment = new BuildEnvironment(project.root, outputDirectory(project, instrument), BuildProfile.Release,
 			buildTarget, null,
 			instrument ? project.manifest.instrument : null),
-			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared,
-				aheadOfTime),
+			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target,
+				webHost != null ? NativeArtifactDemand.None : NativeArtifactDemand.Shared,
+				aheadOfTime, webHost != null),
 			lowerStarted = Sys.time() * 1000.0,
 			execution = PlanLowerer.lower(plan,
 				new LoweringContext(
@@ -83,7 +84,8 @@ class HaxeonProjectBuild {
 					// `--timings` asks for the compiler's reports too: the scripts that measure builds read them.
 					timingsEnabled ? shown.withVerbosity(Verbosity.Diagnostic) : shown,
 					scope == Check,
-					scriptModule
+					scriptModule,
+					webHost
 				));
 		switch scope {
 			case Full:

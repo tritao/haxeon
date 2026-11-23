@@ -5,25 +5,25 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.host.DesktopUiApplication;
-import haxeon.ui.host.DesktopUiHost;
-import haxeon.ui.host.DesktopUiHostContext;
-import haxeon.ui.host.DesktopUiHostOptions;
-import haxeon.ui.host.DesktopUiHostSession;
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiDiagnosticsProvider;
+import haxeon.ui.host.UiHost;
+import haxeon.ui.host.UiHostContext;
+import haxeon.ui.host.UiHostOptions;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.Text;
 
 /** The window's content. Change `view` while `haxeon run --watch` runs: the window updates and keeps the count. */
-class App implements DesktopUiApplication {
+class App implements UiApplication implements UiDiagnosticsProvider {
 	final ui:UiContext;
-	final host:DesktopUiHostContext;
+	final host:UiHostContext;
 
 	/** The highest count so far. */
 	var best = 0;
 
-	public function new(host:DesktopUiHostContext) {
+	public function new(host:UiHostContext) {
 		this.host = host;
 		ui = new UiContext(null, host.fonts);
 	}
@@ -75,18 +75,17 @@ class Main {
 	/** How much a click adds. */
 	public static var step = 3;
 
-	static var session:Null<DesktopUiHostSession> = null;
 	static var app:Null<App> = null;
 
-	static function options():DesktopUiHostOptions {
-		var options = new DesktopUiHostOptions();
+	static function options():UiHostOptions {
+		var options = new UiHostOptions();
 		options.title = "My App";
 		options.width = 480;
 		options.height = 320;
-		return options.withArguments(Sys.args());
+		return options;
 	}
 
-	static function create(host:DesktopUiHostContext):App {
+	static function create(host:UiHostContext):App {
 		var created = new App(host);
 		app = created;
 		return created;
@@ -94,18 +93,18 @@ class Main {
 
 	/** `haxeon run`: open the window and run until it closes. */
 	static function main():Int
-		return DesktopUiHost.run(options(), create);
+		return UiHost.run(create, options());
 
 	// `haxeon run --watch` sees these, keeps one process and calls them instead of `main`, so edits apply to the running app.
 
 	public static function start(arguments:String):Void
-		session = DesktopUiHost.open(options(), create);
+		UiHost.start(create, options());
 
 	public static function tick():Int
-		return session != null && session.tick() ? 1 : 0;
+		return UiHost.tick();
 
 	public static function close():Int
-		return session == null ? 0 : session.close();
+		return UiHost.close();
 
 	public static function saveState():String
 		return Std.string(count.value);

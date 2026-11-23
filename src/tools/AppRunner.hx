@@ -109,8 +109,26 @@ class AppRunner {
 		return fragment;
 	}
 
+	public static function webHost(project:ResolvedProject, home:String):Null<String> {
+		var needsHost = false;
+		for (resolved in project.packages.packages) {
+			if (resolved.manifest.native == null)
+				continue;
+			var cmake = resolved.manifest.native.cmake;
+			if (cmake == null || (cmake.target != "nativekit_ui" && cmake.target != "haxeon_nativekit"))
+				throw new UsageError('Web app runners cannot build native package "${resolved.name}"');
+			needsHost = true;
+		}
+		if (!needsHost)
+			return null;
+		var directory = Path.join([home, "platforms", "web", "ui"]);
+		if (!FileSystem.exists(Path.join([directory, "nativekit_haxeon_memory_contract.json"])))
+			throw new UsageError("This SDK is missing the WebGL2 UI host. For a source SDK, install Emscripten with vendor/nativekit/tools/setup-web.sh and rebuild the SDK.");
+		return directory;
+	}
+
 	public static function bundleWeb(project:ResolvedProject, app:AppManifest, home:String, target:Target,
-			module:String):String {
+			module:String, host:Null<String>):String {
 		var platform = "web",
 			runner = runnerDirectory(project, app, platform),
 			targetName = target.toString(),
@@ -121,6 +139,9 @@ class AppRunner {
 		if (status != 0)
 			throw new UsageError('Could not copy the web runner into $bundle');
 		File.copy(Path.join([home, "platforms", "web", "haxeon-host.js"]), Path.join([bundle, "haxeon-host.js"]));
+		if (host != null && ProcessRunner.run("cmake", ["-E", "copy_directory", host, Path.join([bundle, "ui"])],
+			project.root, null) != 0)
+			throw new UsageError('Could not copy the WebGL2 UI host into $bundle');
 		var bundledModule = Path.join([bundle, "main.wasm"]);
 		if (module != bundledModule)
 			File.copy(module, bundledModule);

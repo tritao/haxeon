@@ -1,36 +1,43 @@
-#if (android || wasm)
+#if android
+// Keep the greeting until the UI toolkit supports Android.
 function main():Void
 	Sys.println("Hello from {{name}}");
 #else
 import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.host.DesktopUiApplication;
-import haxeon.ui.host.DesktopUiHost;
-import haxeon.ui.host.DesktopUiHostContext;
-import haxeon.ui.host.DesktopUiHostOptions;
-import haxeon.ui.host.DesktopUiHostSession;
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiDiagnosticsProvider;
+import haxeon.ui.host.UiHost;
+import haxeon.ui.host.UiHostContext;
+import haxeon.ui.host.UiHostOptions;
+import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.Text;
 
 /** The window's content. Change `view` while `haxeon run --watch` runs: the window updates and keeps the count. */
-class App implements DesktopUiApplication {
+class App implements UiApplication implements UiDiagnosticsProvider {
 	final ui:UiContext;
-	final host:DesktopUiHostContext;
+	final theme = Theme.light();
+	final host:UiHostContext;
 
-	public function new(host:DesktopUiHostContext) {
+	public function new(host:UiHostContext) {
 		this.host = host;
-		ui = new UiContext(null, host.fonts);
+		ui = new UiContext(null, host.fonts, theme);
 	}
 
 	function view():View {
 		var style = new LayoutStyle();
+		style.width = LayoutAxis.grow();
+		style.height = LayoutAxis.grow();
+		style.background = theme.tokens.panelBackground;
 		style.padding = new Insets(24, 24, 24, 24);
 		style.childGap = 12;
 		return new Column("root", [
@@ -63,18 +70,19 @@ class Main {
 	/** The app's state: a live edit keeps it, and a reload carries it through `saveState` and `restoreState`. */
 	public static final count = new Signal(0);
 
-	static var session:Null<DesktopUiHostSession> = null;
+	static var rendered:Int = -1;
 	static var app:Null<App> = null;
 
-	static function options():DesktopUiHostOptions {
-		var options = new DesktopUiHostOptions();
+	static function options():UiHostOptions {
+		var options = new UiHostOptions();
 		options.title = "{{name}}";
 		options.width = 480;
 		options.height = 320;
-		return options.withArguments(Sys.args());
+		options.onFrameRendered = () -> rendered = count.value;
+		return options;
 	}
 
-	static function create(host:DesktopUiHostContext):App {
+	static function create(host:UiHostContext):App {
 		var created = new App(host);
 		app = created;
 		return created;
@@ -82,18 +90,24 @@ class Main {
 
 	/** `haxeon run`: open the window and run until it closes. */
 	static function main():Int
-		return DesktopUiHost.run(options(), create);
+		return UiHost.run(create, options());
 
 	// `haxeon run --watch` sees these, keeps one process and calls them instead of `main`, so edits apply to the running app.
 
 	public static function start(arguments:String):Void
-		session = DesktopUiHost.open(options(), create);
+		UiHost.start(create, options());
 
 	public static function tick():Int
-		return session != null && session.tick() ? 1 : 0;
+		return UiHost.tick();
 
 	public static function close():Int
-		return session == null ? 0 : session.close();
+		return UiHost.close();
+
+	public static function frame(time:Float):Int
+		return UiHost.tick(time);
+
+	public static function renderedCount():Int
+		return rendered;
 
 	public static function saveState():String
 		return Std.string(count.value);

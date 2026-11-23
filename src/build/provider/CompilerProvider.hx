@@ -49,6 +49,25 @@ class CompilerProvider {
 					"--entry=" + project.manifest.entry
 				],
 			inputs:Array<String> = [];
+		if (context.webHost != null) {
+			var contract = haxe.io.Path.join([context.webHost, "nativekit_haxeon_memory_contract.json"]);
+			arguments.push("--wasm-import-memory");
+			if (target == "wasm-gc")
+				arguments.push("--wasm-legacy-exceptions");
+			arguments.push("--wasm-memory-contract=" + contract);
+			inputs.push(contract);
+		}
+		if (context.environment.target.isWasm() && project.manifest.app != null) {
+			var exports = haxe.io.Path.join([project.root, "web", "exports.txt"]);
+			if (sys.FileSystem.exists(exports)) {
+				for (line in File.getContent(exports).split("\n")) {
+					var name = StringTools.trim(line);
+					if (name != "")
+						arguments.push("--export=" + name);
+				}
+				inputs.push(exports);
+			}
+		}
 		// A check writes nothing, so it has no outputs and always runs; its compiler session makes a repeat cheap.
 		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
 		for (sourceRoot in compilerInputs.roots)

@@ -47,8 +47,23 @@ jobs:
           path: out/sdk/platforms/android/haxeon-host.aar
           if-no-files-found: error
 
+  web-host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-host
+      - run: nice -n 10 vendor/nativekit/tools/setup-web.sh
+      - run: nice -n 10 scripts/build-web-sdk.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-platform
+          path: out/sdk/platforms/web/ui
+          if-no-files-found: error
+
   package:
-    needs: android-host
+    needs: [android-host, web-host]
     name: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -117,6 +132,10 @@ jobs:
         with:
           name: android-platform
           path: out/sdk/platforms/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-platform
+          path: out/sdk/platforms/web/ui
 
       - name: Package
         run: ${{ steps.version.outputs.haxeon }} dev package --version=${{ steps.version.outputs.version }} --output=out/release

@@ -298,30 +298,6 @@
       return message;
     }
 
-    function validateMemoryContract() {
-      const contract = {
-        version: Module["_nkui_haxeon_memory_contract_version"](),
-        pageSize: Module["_nkui_haxeon_memory_contract_page_size"](),
-        hostBase: Module["_nkui_haxeon_memory_contract_host_base"](),
-        hostLimit: Module["_nkui_haxeon_memory_contract_host_limit"](),
-        guestBase: Module["_nkui_haxeon_memory_contract_guest_base"](),
-        guestLimit: Module["_nkui_haxeon_memory_contract_guest_limit"](),
-        memorySize: Module["_nkui_haxeon_memory_contract_memory_size"]()
-      };
-      const status = Module["_nkui_haxeon_memory_contract_status"]();
-      if (contract.version !== 1)
-        throw new Error("unsupported memory contract version " + contract.version);
-      if (status !== 0)
-        throw new Error("native heap crossed the Haxeon guest boundary");
-      if (contract.hostBase !== 0 || contract.hostLimit !== contract.guestBase ||
-          contract.guestBase >= contract.guestLimit || contract.guestLimit !== contract.memorySize ||
-          contract.pageSize !== 65536 || contract.memorySize % contract.pageSize !== 0)
-        throw new Error("native memory partition is invalid");
-      if (!hostMemory || hostMemory.buffer.byteLength !== contract.memorySize)
-        throw new Error("shared memory size does not match the Haxeon contract");
-      return contract;
-    }
-
     function readAllocatorStats() {
       const names = ["heap_base", "heap_top", "root_base", "root_top", "root_limit", "metadata_base", "metadata_top", "allocation_count", "allocated_bytes", "largest_allocation_bytes", "collection_count"];
       if (!guest || names.some(name => typeof guest["haxeon.memory." + name] !== "function"))
@@ -492,7 +468,7 @@
         .then(module => {
           const instantiateStarted = performance.now();
           return HaxeonWasmHost.instantiate(module,
-              {emscripten: Module, memory: hostMemory, contract: validateMemoryContract(), wrap: timeHostCall})
+              {emscripten: Module, memory: hostMemory, contract: memoryContract, wrap: timeHostCall})
             .then(started => {
               benchmarkGuestInstantiateMs = performance.now() - instantiateStarted;
               return started.instance;
@@ -605,19 +581,13 @@
       canvas,
       noInitialRun: false,
       instantiateWasm(imports, receiveInstance) {
-        fetch("nativekit_ui_haxeon.wasm")
-          .then(response => response.arrayBuffer())
-          .then(bytes => {
-            benchmarkHostBytes = bytes.byteLength;
-            return WebAssembly.instantiate(bytes, imports);
-          })
-          .then(result => {
-            hostMemory = Object.values(result.instance.exports)
-              .find(value => value instanceof WebAssembly.Memory);
-            benchmarkHostReadyAt = performance.now();
-            receiveInstance(result.instance);
-          })
-          .catch(error => setResult(22, "NativeKit host failed: " + error.message));
+        HaxeonWasmHost.instantiateEmscripten("nativekit_ui_haxeon.wasm", imports, bytes => {
+          benchmarkHostBytes = bytes.byteLength;
+        }).then(({instance, memory}) => {
+          hostMemory = memory;
+          benchmarkHostReadyAt = performance.now();
+          receiveInstance(instance);
+        }).catch(error => setResult(22, "NativeKit host failed: " + error.message));
         return {};
       },
       onRuntimeInitialized() {
@@ -626,7 +596,7 @@
           return;
         }
         try {
-          memoryContract = validateMemoryContract();
+          memoryContract = HaxeonWasmHost.emscriptenContract(Module, hostMemory);
         } catch (error) {
           setResult(26, "NativeKit shared memory contract failed: " + error.message);
           return;

@@ -5,18 +5,19 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.host.DesktopUiApplication;
 import haxeon.ui.host.DesktopUiHost;
 import haxeon.ui.host.DesktopUiHostContext;
 import haxeon.ui.host.DesktopUiHostOptions;
 import haxeon.ui.host.DesktopUiHostSession;
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiDiagnosticsProvider;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.Text;
 
 /** The window's content. Change `view` while `haxeon run --watch` runs: the window updates and keeps the count. */
-class App implements DesktopUiApplication {
+class App implements UiApplication implements UiDiagnosticsProvider {
 	final ui:UiContext;
 	final host:DesktopUiHostContext;
 

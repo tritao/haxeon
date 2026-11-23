@@ -175,13 +175,13 @@ for each step of the app until it returns 0, and `close` at the end. The templat
 
 ```haxe
 public static function start(arguments:String):Void
-	session = DesktopUiHost.open(options(), create);
+	UiHost.start(create, options());
 
 public static function tick():Int
-	return session != null && session.tick() ? 1 : 0;
+	return UiHost.tick();
 
 public static function close():Int
-	return session == null ? 0 : session.close();
+	return UiHost.close();
 ```
 
 Patches are applied between two calls to `tick`, so no code is half-way through when it changes.

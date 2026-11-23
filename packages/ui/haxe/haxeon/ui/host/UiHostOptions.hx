@@ -9,10 +9,30 @@ class UiHostOptions {
 	public var height:Int = 800;
 	public var eventQueueCapacity:Int = 256;
 
-	public function new() {}
+	/** Browser fonts, with the SDK default used when omitted. */
+	public var fonts:Null<Array<UiFontAsset>> = null;
+	/** Called after a successful frame render. */
+	public var onFrameRendered:Null<Void->Void> = null;
+
+	public function new(?source:UiHostOptions) {
+		if (source == null) return;
+		title = source.title;
+		applicationId = source.applicationId;
+		width = source.width;
+		height = source.height;
+		eventQueueCapacity = source.eventQueueCapacity;
+		fonts = source.fonts;
+		onFrameRendered = source.onFrameRendered;
+	}
 
 	public function validate():Void {
 		if (title == null || title.length == 0 || width <= 0 || height <= 0 || eventQueueCapacity <= 0)
 			throw "UI host options are invalid";
+		if (fonts != null)
+			for (font in fonts)
+				if (font == null || font.name == null || font.name.length == 0 || font.uri == null
+					|| font.uri.length == 0
+					|| font.bundledPath == null || font.bundledPath.length == 0)
+					throw "UI font asset is invalid";
 	}
 }

@@ -42,8 +42,8 @@ class PlanLowerer {
 					artifactActions.set(artifact.id.key(), [actionId]);
 				}
 			for (resolvedPackage in project.packages.packages)
-				if (resolvedPackage.nativeSources.length > 0
-					|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
+				if (context.webHost == null && (resolvedPackage.nativeSources.length > 0
+					|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null))) {
 					var packageArtifacts = [
 						for (artifact in plan.artifacts)
 							if (artifact.id.packageId == resolvedPackage.name) artifact

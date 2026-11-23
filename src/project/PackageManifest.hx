@@ -57,7 +57,11 @@ class FfiManifest {
 	public final interfaces:Array<String>;
 	public final projections:Array<String>;
 
-	public function new(imports:Array<String>, interfaces:Array<String>, projections:Array<String>) {
+	public final wasmInterfaces:Array<String>;
+
+	public function new(imports:Array<String>, interfaces:Array<String>, projections:Array<String>,
+			wasmInterfaces:Array<String>) {
+		this.wasmInterfaces = wasmInterfaces.copy();
 		this.imports = imports.copy();
 		this.interfaces = interfaces.copy();
 		this.projections = projections.copy();
@@ -450,10 +454,11 @@ class PackageManifest {
 				throw new InternalError('$path "ffi" must be an object');
 			var imports = stringArray(ffiData, "imports", path, []),
 				interfaces = stringArray(ffiData, "interfaces", path, []),
-				projections = stringArray(ffiData, "projections", path, []);
-			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0)
-				throw new InternalError('$path "ffi" requires "imports", "interfaces", or "projections"');
-			ffi = new FfiManifest(imports, interfaces, projections);
+				projections = stringArray(ffiData, "projections", path, []),
+				wasmInterfaces = stringArray(ffiData, "wasmInterfaces", path, []);
+			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0 && wasmInterfaces.length == 0)
+				throw new InternalError('$path "ffi" requires "imports", "interfaces", "wasmInterfaces", or "projections"');
+			ffi = new FfiManifest(imports, interfaces, projections, wasmInterfaces);
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,

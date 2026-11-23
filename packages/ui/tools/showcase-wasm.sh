@@ -118,6 +118,7 @@ compiler_args=(
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net-wasm.hxi"
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap"
 	--ffi-interface="$module_dir/bindings/nativekit-ui-wasm.hxi"
+	--ffi-interface="$module_dir/bindings/nativekit-ui-browser-wasm.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui.hxmap"
 	--ffi-interface="$module_dir/bindings/nativekit-ui-showcase-wasm.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui-showcase.hxmap"

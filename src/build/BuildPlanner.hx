@@ -31,8 +31,8 @@ class BuildPlanner {
 
 	/** The plan of `project`'s build; with `aheadOfTime` a native target's program is C (`CModule`) rather than bytecode. */
 	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
-			nativeDemand:NativeArtifactDemand, aheadOfTime:Bool = false):BuildPlan {
-		NativeTargetSupport.validate(project, target);
+			nativeDemand:NativeArtifactDemand, aheadOfTime:Bool = false, providedByWebHost:Bool = false):BuildPlan {
+		NativeTargetSupport.validate(project, target, providedByWebHost);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
 			nativeStatic = new Map<String, ArtifactId>(),

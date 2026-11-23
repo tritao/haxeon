@@ -5,8 +5,9 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.host.DesktopUiApplication;
-import haxeon.ui.host.DesktopUiHostContext;
+import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiDiagnosticsProvider;
+import haxeon.ui.host.UiHostContext;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.KeyedView;
@@ -26,9 +27,9 @@ import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 
 /** The window's content: a list of tasks, the selected task's detail, a form that adds one, and a settings tab. */
-class App implements DesktopUiApplication {
+class App implements UiApplication implements UiDiagnosticsProvider {
 	final ui:UiContext;
-	final host:DesktopUiHostContext;
+	final host:UiHostContext;
 
 	// The app's state. `view()` builds the window's content from it each time the window draws a frame.
 	final tasks = [new Task("Buy milk"), new Task("Write the report"), new Task("Call the plumber")];
@@ -39,7 +40,7 @@ class App implements DesktopUiApplication {
 	var theme = Theme.light();
 	final listScroll = new ScrollController();
 
-	public function new(host:DesktopUiHostContext) {
+	public function new(host:UiHostContext) {
 		this.host = host;
 		ui = new UiContext(null, host.fonts, theme);
 	}

@@ -5,7 +5,7 @@ import project.ResolvedProject;
 
 /** Validates native provider capabilities before any compiler or linker runs. */
 class NativeTargetSupport {
-	public static function validate(project:ResolvedProject, target:Target):Void {
+	public static function validate(project:ResolvedProject, target:Target, providedByWebHost:Bool = false):Void {
 		for (resolvedPackage in project.packages.packages) {
 			if (resolvedPackage.ffiImports.length > 0 && !target.isNative())
 				throw new InternalError('Package ${resolvedPackage.name} declares FFI imports, but target "${target.toString()}" is not a native target');
@@ -15,7 +15,7 @@ class NativeTargetSupport {
 					|| (resolvedPackage.manifest.native.cmake == null && resolvedPackage.nativeSources.length == 0)))
 					throw new InternalError('Package ${resolvedPackage.name} FFI import "${ffi.config.name}" enables cxxThunks, but generated C++ thunks require native.sources or native.cmake');
 			var native = resolvedPackage.manifest.native;
-			if (native == null)
+			if (native == null || providedByWebHost)
 				continue;
 			var supported = false;
 			for (supportedTarget in native.supportedTargets)

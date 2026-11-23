@@ -33,6 +33,7 @@
     "interfaces": [
       "bindings/nativekit-ui.hxi"
     ],
+    "wasmInterfaces": ["bindings/nativekit-ui-wasm.hxi", "bindings/nativekit-ui-browser-wasm.hxi"],
     "projections": [
       "bindings/nativekit-ui.hxmap"
     ]

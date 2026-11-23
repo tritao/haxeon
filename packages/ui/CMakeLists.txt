@@ -710,6 +710,7 @@ if(NK_BUILD_EXAMPLES)
                 DEPENDS
                     "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase-wasm.sh"
                     "${NKUI_HAXEON_MEMORY_CONTRACT}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-browser-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase.hxmap"
@@ -731,10 +732,9 @@ if(NK_BUILD_EXAMPLES)
                 examples/ui_haxeon/host.cpp
                 src/platform/wasm/haxeon_memory_contract.cpp)
             target_include_directories(nativekit_ui_haxeon PRIVATE
-                "${CMAKE_CURRENT_BINARY_DIR}")
+                "${CMAKE_CURRENT_BINARY_DIR}" "${NKUI_NATIVEKIT_DIR}/src")
             target_link_libraries(nativekit_ui_haxeon PRIVATE NativeKit::ui NativeKit::nativekit
                 NativeKit::wasm_host_allocator)
-            add_dependencies(nativekit_ui_haxeon nativekit_ui_haxeon_guest)
             set(NKUI_HAXEON_FONT_DIR "${NKUI_VENDOR_DIR}/skribidi/example/data")
             set(NKUI_HAXEON_FONT_PATHS
                 "${NKUI_HAXEON_FONT_DIR}/IBMPlexSans-Regular.ttf"
@@ -778,11 +778,24 @@ if(NK_BUILD_EXAMPLES)
             # Derive native exports from the compiled guest so new UI calls cannot become runtime stubs.
             find_program(NKUI_NODE_EXECUTABLE node REQUIRED)
             set(NKUI_HAXEON_HOST_EXPORTS "${CMAKE_CURRENT_BINARY_DIR}/nativekit_ui_host_exports.json")
+            option(NKUI_HAXEON_SDK_HOST "Export the browser SDK's UI bindings" OFF)
+            if(NKUI_HAXEON_SDK_HOST)
+                set(NKUI_HAXEON_EXPORT_SOURCE "-")
+                set(NKUI_HAXEON_HOST_INTERFACES
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
+                    "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-browser-wasm.hxi")
+            else()
+                set(NKUI_HAXEON_EXPORT_SOURCE "${NKUI_HAXEON_GUEST_WASM}")
+                set(NKUI_HAXEON_EXPORT_DEPS "${NKUI_HAXEON_GUEST_WASM}")
+            endif()
             add_custom_command(OUTPUT "${NKUI_HAXEON_HOST_EXPORTS}"
                 COMMAND "${NKUI_NODE_EXECUTABLE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/tools/guest-host-exports.js"
-                    "${NKUI_HAXEON_GUEST_WASM}" "${NKUI_HAXEON_HOST_EXPORTS}"
-                DEPENDS "${NKUI_HAXEON_GUEST_WASM}"
+                    "${NKUI_HAXEON_EXPORT_SOURCE}" "${NKUI_HAXEON_HOST_EXPORTS}" ${NKUI_HAXEON_HOST_INTERFACES}
+                DEPENDS ${NKUI_HAXEON_EXPORT_DEPS} ${NKUI_HAXEON_HOST_INTERFACES}
                     "${CMAKE_CURRENT_SOURCE_DIR}/tools/guest-host-exports.js"
                 VERBATIM)
             add_custom_target(nativekit_ui_haxeon_exports DEPENDS "${NKUI_HAXEON_HOST_EXPORTS}")
@@ -804,16 +817,18 @@ if(NK_BUILD_EXAMPLES)
                         "--preload-file=${NKUI_HAXEON_FONT_PATH}@/assets/${NKUI_HAXEON_FONT_NAME}")
                 endforeach()
             endif()
-            set(NKUI_HAXEON_ASSET_COMMANDS
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${NKUI_HAXEON_GUEST_WASM}"
-                    "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/nativekit_ui_haxeon_guest.wasm"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_haxeon/web_shell.html"
-                    "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/nativekit_ui_haxeon.html"
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${NKUI_HAXEON_DIR}/stdlib/haxeon/wasm/haxeon-host.js"
-                    "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/haxeon-host.js")
+            if(NOT NKUI_HAXEON_SDK_HOST)
+                set(NKUI_HAXEON_ASSET_COMMANDS
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${NKUI_HAXEON_GUEST_WASM}"
+                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/nativekit_ui_haxeon_guest.wasm"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_haxeon/web_shell.html"
+                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/nativekit_ui_haxeon.html"
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${NKUI_HAXEON_DIR}/stdlib/haxeon/wasm/haxeon-host.js"
+                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/haxeon-host.js")
+            endif()
             if(NOT NKUI_HAXEON_BUNDLE_FONTS)
                 list(APPEND NKUI_HAXEON_ASSET_COMMANDS
                     COMMAND ${CMAKE_COMMAND} -E rm -f
@@ -821,30 +836,18 @@ if(NK_BUILD_EXAMPLES)
                     COMMAND ${CMAKE_COMMAND} -E make_directory
                         "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets"
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${NKUI_HAXEON_FONT_ASSET_DIR}/IBMPlexSans-Regular.ttf"
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets/IBMPlexSans-Regular.ttf"
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${NKUI_HAXEON_FONT_ASSET_DIR}/IBMPlexSansArabic-Regular.ttf"
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets/IBMPlexSansArabic-Regular.ttf"
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${NKUI_HAXEON_FONT_ASSET_DIR}/IBMPlexSansHebrew-Regular.ttf"
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets/IBMPlexSansHebrew-Regular.ttf"
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${NKUI_HAXEON_FONT_ASSET_DIR}/IBMPlexSansJP-Regular.ttf"
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets/IBMPlexSansJP-Regular.ttf"
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        "${NKUI_HAXEON_FONT_ASSET_DIR}/NotoEmoji-Regular.ttf"
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets/NotoEmoji-Regular.ttf")
+                        ${NKUI_HAXEON_FONT_ASSET_PATHS}
+                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets")
             endif()
             add_custom_target(nativekit_ui_haxeon_assets
                 ${NKUI_HAXEON_ASSET_COMMANDS}
                 DEPENDS
-                    nativekit_ui_haxeon_guest
-                    nativekit_ui_haxeon_fonts
+                    ${NKUI_HAXEON_EXPORT_DEPS}
                     ${NKUI_HAXEON_FONT_ASSET_PATHS}
                     "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_haxeon/web_shell.html"
                     "${NKUI_HAXEON_DIR}/stdlib/haxeon/wasm/haxeon-host.js"
-                COMMENT "Copying NativeKit Haxeon browser host")
+                COMMENT "Copying NativeKit Haxeon browser host"
+                VERBATIM)
             add_dependencies(nativekit_ui_haxeon nativekit_ui_haxeon_assets)
         endif()
     endif()

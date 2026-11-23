@@ -12,6 +12,7 @@
       "bindings/nativekit.hxi",
       "bindings/nativekit-net.hxi"
     ],
+    "wasmInterfaces": ["bindings/nativekit-wasm.hxi", "bindings/nativekit-net-wasm.hxi"],
     "projections": [
       "bindings/nativekit.hxmap",
       "bindings/nativekit-net.hxmap"

@@ -37,15 +37,15 @@ change them in this guide.
 file, `src/App.hx`, and `src/Main.hx` keeps only the window:
 
 ```haxe
-static function options():DesktopUiHostOptions {
-	var options = new DesktopUiHostOptions();
+static function options():UiHostOptions {
+	var options = new UiHostOptions();
 	options.title = "Task List";
 	options.width = 720;
 	options.height = 480;
-	return options.withArguments(Sys.args());
+	return options;
 }
 
-static function create(host:DesktopUiHostContext):App {
+static function create(host:UiHostContext):App {
 	var created = new App(host);
 	app = created;
 	return created;
@@ -53,7 +53,7 @@ static function create(host:DesktopUiHostContext):App {
 
 /** `haxeon run`: open the window and run until it closes. */
 static function main():Int
-	return DesktopUiHost.run(options(), create);
+	return UiHost.run(create, options());
 ```
 
 The rest of `src/Main.hx` (`start`, `tick`, `close`, `saveState`, `restoreState`) lets `haxeon run --watch`
@@ -61,7 +61,7 @@ patch the running app, and stays as the template wrote it, apart from the state 
 
 ## How a window gets its content
 
-`DesktopUiHost.run` opens the window and calls `create` once to make your application object. Each time the window draws
+`UiHost.run` starts the platform host and calls `create` once to make your application object. Each time the window draws
 a frame, it calls the object's `submit`, which builds a tree of views and hands it to the `UiContext`:
 
 ```haxe
@@ -264,7 +264,7 @@ A `Theme` holds the colours, text styles and spacing every control draws with. `
 two built-in palettes. The app passes its theme to the `UiContext` when it makes it:
 
 ```haxe
-public function new(host:DesktopUiHostContext) {
+public function new(host:UiHostContext) {
 	this.host = host;
 	ui = new UiContext(null, host.fonts, theme);
 }

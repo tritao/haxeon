@@ -8,13 +8,15 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxe.io.Bytes;
 import haxeon.ui.FontCollection;
+import haxeon.ui.FontFamily;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
 
 /** Reusable nonblocking browser adapter for UiApplication. */
 class BrowserUiHost {
-	final options:BrowserUiHostOptions;
+	final options:UiHostOptions;
+	final fontAssets:Array<UiFontAsset>;
 	final create:UiHostContext->UiApplication;
 	final session:BrowserUiHostSession;
 	var initialized:Bool = false;
@@ -30,7 +32,7 @@ class BrowserUiHost {
 	var fonts:Null<FontCollection> = null;
 	var hostContext:Null<UiHostContext> = null;
 	var runtime:Null<UiHostRuntime> = null;
-	var pending:Null<UiHostPendingResources<BrowserUiFontAsset>> = null;
+	var pending:Null<UiHostPendingResources<UiFontAsset>> = null;
 	var loaded:Null<Map<String, Bytes>> = null;
 	var pendingCount:Int = 0;
 	var logicalWidth:Float;
@@ -40,7 +42,7 @@ class BrowserUiHost {
 	var pixelScale:Float = 1.0;
 	var surfaceReady:Bool = false;
 
-	public static function start(options:BrowserUiHostOptions,
+	public static function start(options:UiHostOptions,
 			create:UiHostContext->UiApplication):BrowserUiHostSession {
 		if (options == null || create == null)
 			throw "Browser UI host requires options and an application factory";
@@ -50,9 +52,14 @@ class BrowserUiHost {
 		return host.session;
 	}
 
-	function new(options:BrowserUiHostOptions, create:UiHostContext->UiApplication) {
+	function new(options:UiHostOptions, create:UiHostContext->UiApplication) {
 		this.options = options;
 		this.create = create;
+		fontAssets = options.fonts ?? [
+			new UiFontAsset("IBMPlexSans-Regular", "ui/assets/IBMPlexSans-Regular.ttf",
+				"/assets/IBMPlexSans-Regular.ttf",
+				FontFamily.Default)
+		];
 		logicalWidth = options.width;
 		logicalHeight = options.height;
 		session = new BrowserUiHostSession();
@@ -78,6 +85,7 @@ class BrowserUiHost {
 			var createdWindow = NativeKit.nk_window_create(windowOptions);
 			if (createdWindow.status != Result.Ok) throw "Browser window creation failed";
 			window = createdWindow.out_window.borrow();
+			NativeKitUIBrowser.nkui_browser_pointer_events(window.rawValue(), 1);
 
 			var surfaceOptions = new NativeSurfaceOptions();
 			surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil);
@@ -92,7 +100,7 @@ class BrowserUiHost {
 			events = new EventPump();
 			eventSubscription = events.listen(handleEvent);
 			fonts = FontCollection.create();
-			if (options.fonts.length == 0) finishResources();
+			if (fontAssets.length == 0) finishResources();
 			else loadFonts();
 		} catch (error:Dynamic) {
 			fail("browser-start", error);
@@ -103,13 +111,13 @@ class BrowserUiHost {
 		session.transition(UiHostLifecycle.LoadingResources);
 		#if nativekit_bundle_web_fonts
 		try {
-			for (font in options.fonts) fonts.add(font.bundledPath, font.family);
+			for (font in fontAssets) fonts.add(font.bundledPath, font.family);
 			finishResources();
 		} catch (error:Dynamic) fail("font-load", error);
 		#else
 		pending = new UiHostPendingResources();
 		loaded = new Map();
-		for (font in options.fonts) {
+		for (font in fontAssets) {
 			var resource = new ResourceValue();
 			resource.set_struct_size(ResourceValue.size());
 			resource.set_flags(ResourceFlags.Readable);
@@ -127,7 +135,7 @@ class BrowserUiHost {
 		if (stopped || session.state == UiHostLifecycle.Stopping || session.state == UiHostLifecycle.Stopped) return;
 		#if !nativekit_bundle_web_fonts
 		if (loaded != null)
-			for (font in options.fonts) {
+			for (font in fontAssets) {
 				var bytes = loaded.get(font.name);
 				if (bytes == null) throw "Missing downloaded browser font " + font.name;
 				fonts.addData(font.name, bytes, font.family);
@@ -319,7 +327,10 @@ class BrowserUiHost {
 		var ownedWindow = window;
 		window = WindowHandle.invalid();
 		if (ownedWindow.isValid())
-			try NativeKit.nk_window_destroy(ownedWindow) catch (error:Dynamic) session.cleanupFailed("window-destroy",
+			try {
+				NativeKitUIBrowser.nkui_browser_pointer_events(ownedWindow.rawValue(), 0);
+				NativeKit.nk_window_destroy(ownedWindow);
+			} catch (error:Dynamic) session.cleanupFailed("window-destroy",
 				error);
 		var wasInitialized = initialized;
 		initialized = false;

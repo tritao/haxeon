@@ -121,7 +121,9 @@ class PackageResolver {
 				}
 			}
 			if (manifest.ffi != null) {
-				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfaces, manifest.packageName,
+				var interfaces = platform == "web"
+					&& manifest.ffi.wasmInterfaces.length > 0 ? manifest.ffi.wasmInterfaces : manifest.ffi.interfaces;
+				ffiInterfaces = resolveFiles(resolvedRoot, interfaces, manifest.packageName,
 					"FFI interface");
 				ffiProjections = resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName,
 					"FFI projection");
