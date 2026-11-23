@@ -1,14 +1,8 @@
 #!/usr/bin/env haxeon
 /**
- * The guides in docs/guides, as docs/guides/README.md lays them out: every ```haxe and ```toml block of `NN-slug.md` appears,
- * line for line after its common indentation, in a file of `examples/NN-slug/` (a `// ...` or `# ...` line skips lines), a
- * ```text title="Output" block in an `expected-output.txt` there, and a guide or a reference page (docs/reference) links only to
- * guides, reference pages and URLs.
- * Then each example project, copied out of the tree, builds with this checkout's haxeon: a program with an
- * `expected-output.txt` runs and prints it, and an app gets its runners from `haxeon create .`, builds through this machine's and
- * opens its window for a few frames, under xvfb-run when there is one. "Your first app" also
- * builds its app ahead of time and runs that, and "Live editing" runs its app under `run --watch --live` and makes the edits
- * the guide makes. `--no-build` checks the pages only.
+ * Check published links and match the guides, language tour and migration pages to their examples, as described in
+ * docs/guides/README.md. Build copies of each project and check its output or open its app for a few frames.
+ * `--no-build` checks the pages only.
  */
 import haxe.io.Path;
 import haxeon.Script;
@@ -24,69 +18,74 @@ private typedef Block = {
 }
 
 private typedef Example = {
+	final section:String;
 	final slug:String;
 	final source:String;
 	final relative:String;
 }
 
-/** Where a guide or a reference page may link: guides (and their examples) and reference pages, which the site publishes. */
-final PUBLISHED = ["docs/guides/", "docs/reference/"];
+/** The published sections also determine which pages and examples the suite checks. */
+final PUBLISHED = ["guides", "learn", "coming-from", "reference"];
 
 function main() {
 	// With `/` on every system, as the links resolved against it are.
 	var root = Path.normalize(Path.directory(Path.directory(Script.directory()))),
-		guides = Path.join([root, "docs", "guides"]),
-		failures:Array<String> = [];
-	var pages = [for (name in FileSystem.readDirectory(guides)) if (StringTools.endsWith(name, ".md")) name];
-	pages.sort(Reflect.compare);
-	var checked = 0;
-	for (name in pages) {
-		var page = Path.join([guides, name]), text = normalize(File.getContent(page)), shown = 'docs/guides/$name';
-		checkLinks(root, page, shown, text, failures);
-		if (name == "README.md")
-			continue;
-		if (!~/^[0-9][0-9]-[a-z0-9-]+\.md$/.match(name)) {
-			failures.push('$shown: a guide is named NN-slug.md (docs/guides/README.md)');
-			continue;
-		}
-		var example = Path.join([guides, "examples", Path.withoutExtension(name)]),
-			files = FileSystem.exists(example) ? exampleFiles(example, "") : [];
-		for (block in fencedBlocks(text)) {
-			var output = block.language == "text" && block.info.indexOf('title="Output"') >= 0;
-			if (block.language != "haxe" && block.language != "hx" && block.language != "toml" && !output)
+		failures:Array<String> = [],
+		examples:Array<Example> = [],
+		pages = 0,
+		checked = 0;
+	for (section in PUBLISHED) {
+		var directory = Path.join([root, "docs", section]);
+		var names = [for (name in FileSystem.readDirectory(directory)) if (StringTools.endsWith(name, ".md")) name];
+		names.sort(Reflect.compare);
+		if (section != "reference")
+			examples = examples.concat(exampleProjects(section, Path.join([directory, "examples"])));
+		for (name in names) {
+			var page = Path.join([directory, name]),
+				text = normalize(File.getContent(page)),
+				shown = 'docs/$section/$name';
+			checkLinks(root, page, shown, text, failures);
+			pages++;
+			if (section == "reference")
 				continue;
-			checked++;
-			var candidates = output
-				? [for (file in files) if (Path.withoutDirectory(file) == "expected-output.txt") file] : files;
-			if (candidates.length == 0) {
-				failures.push('$shown:${block.line}: no example ${output ? "expected-output.txt" : "file"} under '
-					+ 'docs/guides/examples/${Path.withoutExtension(name)}/ to hold this block');
+			if (section == "guides" && name != "README.md" && !~/^[0-9][0-9]-[a-z0-9-]+\.md$/.match(name)) {
+				failures.push('$shown: a guide is named NN-slug.md (docs/guides/README.md)');
 				continue;
 			}
-			var gap = block.language == "toml" ? "# ..." : output ? null : "// ...", found = false;
-			for (file in candidates)
-				if (contains(normalize(File.getContent(Path.join([example, file]))).split("\n"), block.lines, gap)) {
-					found = true;
-					break;
+			var example = Path.join([directory, "examples", Path.withoutExtension(name)]),
+				files = FileSystem.exists(example) ? exampleFiles(example, "") : [];
+			for (block in fencedBlocks(text)) {
+				var output = block.language == "text" && block.info.indexOf('title="Output"') >= 0;
+				if (block.language != "haxe" && block.language != "hx" && block.language != "toml" && !output)
+					continue;
+				checked++;
+				var candidates = output
+					? [for (file in files) if (Path.withoutDirectory(file) == "expected-output.txt") file] : files;
+				if (candidates.length == 0) {
+					failures.push('$shown:${block.line}: no example ${output ? "expected-output.txt" : "file"} under '
+						+ 'docs/$section/examples/${Path.withoutExtension(name)}/ to hold this block');
+					continue;
 				}
-			if (!found)
-				failures.push('$shown:${block.line}: this ```${block.info} block is in no file of docs/guides/examples/'
-					+ '${Path.withoutExtension(name)}/:\n${block.lines.join("\n")}');
+				var gap = block.language == "toml" ? "# ..." : output ? null : "// ...", found = false;
+				for (file in candidates) {
+					var contents = normalize(File.getContent(Path.join([example, file]))).split("\n");
+					if (contains(contents, block.lines, gap)) {
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					failures.push('$shown:${block.line}: this ```${block.info} block is in no file of docs/$section/examples/'
+						+ '${Path.withoutExtension(name)}/:\n${block.lines.join("\n")}');
+			}
 		}
 	}
-	var reference = Path.join([root, "docs", "reference"]),
-		referencePages =
-			[for (name in FileSystem.readDirectory(reference)) if (StringTools.endsWith(name, ".md")) name];
-	referencePages.sort(Reflect.compare);
-	for (name in referencePages) {
-		var page = Path.join([reference, name]);
-		checkLinks(root, page, 'docs/reference/$name', normalize(File.getContent(page)), failures);
-	}
 	if (failures.length > 0)
-		Script.fail("FAIL: the guides do not match their examples, or the pages link outside what the site publishes:\n\n"
+		Script.fail("FAIL: blocks do not match their examples, or links leave the published docs:\n\n"
 			+ failures.join("\n\n"));
+	var pageSummary = '$checked blocks match their examples and links in $pages published pages pass';
 	if (Sys.args().indexOf("--no-build") >= 0) {
-		Sys.println('PASS: $checked code blocks of ${pages.length - 1} guides are in their examples, and the links of the guides and ${referencePages.length} reference pages stay in what the site publishes');
+		Sys.println('PASS: $pageSummary');
 		return;
 	}
 
@@ -99,12 +98,12 @@ function main() {
 		Script.check("cmake", ["-E", "rm", "-rf", work]);
 	FileSystem.createDirectory(work);
 	var built = 0;
-	for (example in exampleProjects(Path.join([guides, "examples"]))) {
+	for (example in examples) {
 		// A copy, so builds write nowhere in the tree; under its own directory name, which names the package.
-		var project = Path.join([work, example.slug, example.relative]);
+		var project = Path.join([work, example.section, example.slug, example.relative]);
 		copyTree(example.source, project);
 		var app = isApp(project);
-		Sys.println('== ${example.slug}/${example.relative}');
+		Sys.println('== ${example.section}/${example.slug}/${example.relative}');
 		if (app) {
 			var log = Path.join([project, "create.log"]);
 			expectStatus(haxeon(["create", "."], project, log), 0, log, "adding the runner with haxeon create .");
@@ -115,20 +114,20 @@ function main() {
 			openWindow(project, ["run", "--"], "run");
 		else
 			runProgram(project);
-		switch example.slug {
-			case "01-first-app":
+		switch [example.section, example.slug] {
+			case ["guides", "01-first-app"]:
 				firstApp(root, project);
-			case "02-live-editing":
-				liveEditing(root, Path.join([guides, "examples", example.slug]), project);
-			case "03-ui-basics":
-				uiBasics(Path.join([guides, "examples", example.slug]), project);
-			case "05-shipping":
+			case ["guides", "02-live-editing"]:
+				liveEditing(root, Path.join([root, "docs", example.section, "examples", example.slug]), project);
+			case ["guides", "03-ui-basics"]:
+				uiBasics(Path.join([root, "docs", example.section, "examples", example.slug]), project);
+			case ["guides", "05-shipping"]:
 				shipping(project);
 			case _:
 		}
 		built++;
 	}
-	Sys.println('PASS: $checked code blocks of ${pages.length - 1} guides are in their examples, the links of the guides and ${referencePages.length} reference pages stay in what the site publishes, and $built example projects build and run');
+	Sys.println('PASS: $pageSummary, and $built example projects build and run');
 }
 
 /** "Your first app": the manifest is the one `haxeon create my_app` writes, and the release build runs on its own. */
@@ -360,8 +359,8 @@ function runProgram(project:String):Void {
 			+ File.getContent(expected));
 }
 
-/** Each project under `examples` (a directory with a haxeon.toml), by guide. */
-function exampleProjects(examples:String):Array<Example> {
+/** Each project under a section's `examples` directory, grouped by page. */
+function exampleProjects(section:String, examples:String):Array<Example> {
 	var result:Array<Example> = [];
 	var slugs = [for (name in FileSystem.readDirectory(examples))
 		if (FileSystem.isDirectory(Path.join([examples, name]))) name];
@@ -370,6 +369,7 @@ function exampleProjects(examples:String):Array<Example> {
 		for (file in exampleFiles(Path.join([examples, slug]), ""))
 			if (Path.withoutDirectory(file) == "haxeon.toml")
 				result.push({
+					section: section,
 					slug: slug,
 					source: Path.join([examples, slug, Path.directory(file)]),
 					relative: Path.directory(file)
@@ -542,13 +542,13 @@ function checkLinks(root:String, page:String, shown:String, text:String, failure
 		var resolved = Path.normalize(Path.join([Path.directory(page), path])),
 			relative = resolved.substr(root.length + 1);
 		var published = false;
-		for (prefix in PUBLISHED)
+		for (section in PUBLISHED)
 			if (StringTools.startsWith(relative
 				+ (FileSystem.exists(resolved) && FileSystem.isDirectory(resolved) ? "/" : ""),
-				prefix))
+				'docs/$section/'))
 				published = true;
 		if (!StringTools.startsWith(resolved, root + "/") || !published)
-			failures.push('$shown: links to $target, outside the guides and the reference pages the site publishes');
+			failures.push('$shown: links to $target, outside the published docs');
 		else if (!FileSystem.exists(resolved))
 			failures.push('$shown: links to $target, which does not exist');
 	}

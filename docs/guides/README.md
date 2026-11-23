@@ -12,15 +12,17 @@ Step-by-step guides to building apps with Haxeon. Read them in order: each one b
 The commands and options are in the [CLI reference](../reference/CLI.md), and the project file in the
 [manifest reference](../reference/MANIFEST.md).
 
-## Writing a guide
+To study the syntax, read [Learn the language](../learn/README.md). To bring experience or code from another platform,
+start with [Coming from another platform](../coming-from/README.md).
 
-Every piece of code a guide shows is part of a project that is built in CI, so a guide cannot show code that does not
-compile.
+## Writing pages with examples
 
-- A guide is `NN-slug.md` in this directory, numbered in reading order. Its code lives in `examples/NN-slug/`: one or
-  more ordinary Haxeon projects (each a directory with a `haxeon.toml`), plus any other files the guide needs, such as the
-  versions of a file the reader changes step by step.
-- Every ` ```haxe ` and ` ```toml ` block on the page must appear in a file under `examples/NN-slug/`, line for line. The
+CI builds the example projects for the guides, the language tour and the migration pages.
+
+- Name a guide `NN-slug.md` in reading order. Name a language or migration page `slug.md`. Put a page's code in
+  `examples/<page>/` beside it, using the filename without `.md` as `<page>`. The directory holds one or more Haxeon
+  projects, each with a `haxeon.toml`, and any other files needed to follow the page, such as step-by-step edits.
+- Every ` ```haxe ` and ` ```toml ` block on the page must appear in a file under `examples/<page>/`, line for line. The
   check ignores the block's common indentation, so a method can be shown without the indentation of its class, and
   trailing spaces. A line that holds only `// ...` (in Haxe) or `# ...` (in TOML) stands for lines left out: the parts
   around it must appear in the same file, in that order.
@@ -28,14 +30,14 @@ compile.
   and the check runs the program and compares what it prints with that file.
 - Commands go in ` ```sh ` blocks (` ```powershell ` for Windows only) and other output in ` ```text ` blocks; neither
   is checked against the examples, so keep them to what the reader types and sees.
-- A guide links only to other guides, to reference pages (`../reference/`) and to full URLs. It never links into
-  `docs/design/`, `docs/reports/`, `docs/internals/` or `docs/adr/`: those are not published. Reference pages follow the
-  same rule, and the check below checks theirs too.
+- For code in another language, label the block with that language, such as `dart`, `csharp` or `go`.
+- Published pages link to guides, language pages, migration pages, reference pages and their examples, or to full URLs.
+  Keep links to design notes, reports, internals and decision records in repository documentation.
 - An app is kept without its runner directories (`linux/` and the others): the check adds them with `haxeon create .`, so
   an example always has the runner the current template writes.
 
-`tests/integration/test-docs-guides.hx` checks all of this, then copies each example project out of the tree and builds
-it with the checkout's `haxeon`. It runs a program and compares its output when the project has an
+`tests/integration/test-docs-guides.hx` checks snippets and published links, then copies each example project out of the tree
+and builds it with the checkout's `haxeon`. It runs a program and compares its output when the project has an
 `expected-output.txt`, and opens an app for a few frames (under `xvfb-run` on Linux when it is installed). A guide that
 needs more, such as the live edits of [Live editing](02-live-editing.md), gets its own function there. Run it from the
 repository root:

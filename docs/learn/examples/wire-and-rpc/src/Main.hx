@@ -1,0 +1,34 @@
+import haxeon.rpc.MemoryTransport;
+import haxeon.rpc.RpcConnection;
+import haxeon.rpc.RpcMethod;
+import haxeon.wire.JsonWire;
+import haxeon.wire.MessagePack;
+
+@:wire typedef Greeting = {
+	@:id(1) var text:String;
+}
+
+function main():Void {
+	final greeting:Greeting = {text: "hello"};
+	final packed = MessagePack.encode(greeting);
+	final unpacked:Greeting = MessagePack.decode(packed);
+	Sys.println(unpacked.text);
+
+	final json = JsonWire.encode(greeting);
+	Sys.println(json);
+	final restored:Greeting = JsonWire.decode(json);
+
+	final pair = MemoryTransport.pair();
+	final clock = () -> 0.0;
+	final client = new RpcConnection(pair.client, clock);
+	final server = new RpcConnection(pair.server, clock);
+	final echo:RpcMethod<Greeting, Greeting> = RpcMethod.wire(100);
+	server.register(echo, (request, context) -> {
+		context.respond({text: request.text.toUpperCase()});
+	});
+	client.call(echo, restored, 1000, answer -> Sys.println(answer.text), error -> {
+		throw error.code;
+	});
+	server.poll();
+	client.poll();
+}

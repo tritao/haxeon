@@ -1,0 +1,3 @@
+entry = "Main"
+sourceRoots = ["src"]
+defines = ["verbose"]

@@ -1,0 +1,4 @@
+-cp src
+-main Main
+-D verbose
+--hl original.hl
