@@ -407,7 +407,7 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 	var existing:Null<IrFunctionIndex> = null;
 	var lookups:Null<IrTagEscapeSignatures> = null;
 
-	/** The reader of the function being rewritten when it records, else null. */
+	/** The reader of the function being rewritten; null in the whole-program step, which reads the tables directly. */
 	var reader:Null<IrFactReader> = null;
 
 	/** The enums whose adapters the function being rewritten asked for, so it asks once. */
@@ -576,9 +576,8 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 		}
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
-		this.reader = reader.records() ? reader : null;
-		if (this.reader != null)
-			asked = [];
+		this.reader = reader;
+		asked = [];
 		var walk = new IrBodyTagEscapes(this), body = fn.bodyIn(types, builder), result = fn;
 		if (walk.rewrite(body, false)) {
 			var edited = body.forEditing(builder);
@@ -1433,8 +1432,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (!names.keys().hasNext())
 			return fn;
-		// A reader that records nothing gains nothing from the reads: the tables are read directly, adapters required at once.
-		this.reader = reader.records() ? reader : null;
+		this.reader = reader;
 		var result = lower(fn);
 		if (result != fn) {
 			if (summary == HAS_INLINE_REQUESTS) {

@@ -140,18 +140,17 @@ class IrValueConstructors implements IrFunctionPass {
 		if (summary != CALLS_CONSTRUCTOR)
 			return fn;
 		var source = fn.bodyIn(types, scratch.bodyBuilder);
-		if (reader.records())
-			for (block in 0...source.blockCount()) {
-				var row = source.firstRow(block);
-				while (row >= 0) {
-					if (source.opcode(row) == IrOpcode.Call) {
-						var name = source.symbol(row).name;
-						if (name != source.name && StringTools.endsWith(name, SUFFIX))
-							reader.read(CONSTRUCTOR, name);
-					}
-					row = source.nextRow(row);
+		for (block in 0...source.blockCount()) {
+			var row = source.firstRow(block);
+			while (row >= 0) {
+				if (source.opcode(row) == IrOpcode.Call) {
+					var name = source.symbol(row).name;
+					if (name != source.name && StringTools.endsWith(name, SUFFIX))
+						reader.read(CONSTRUCTOR, name);
 				}
+				row = source.nextRow(row);
 			}
+		}
 		var body = expand(expandStraightLine(source, prepared, false), branches);
 		return body == source ? fn : IrFunction.ofOwnedBody(body);
 	}

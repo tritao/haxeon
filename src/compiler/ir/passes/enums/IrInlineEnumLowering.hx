@@ -728,17 +728,15 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		var body = fn.bodyIn(types, builder);
-		if (reader.records()) {
-			readEnums(body.result, reader);
-			for (value in 0...body.valueLimit())
-				readEnums(body.valueTypeId(IrValueId.of(value)), reader);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.TypeValue)
-						readEnums(body.aux(row), reader);
-					row = body.nextRow(row);
-				}
+		readEnums(body.result, reader);
+		for (value in 0...body.valueLimit())
+			readEnums(body.valueTypeId(IrValueId.of(value)), reader);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.TypeValue)
+					readEnums(body.aux(row), reader);
+				row = body.nextRow(row);
 			}
 		}
 		current = reader;

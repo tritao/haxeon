@@ -221,11 +221,11 @@ class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (summary != STORES)
 			return fn;
-		var body = fn.bodyIn(types, builder), recording = reader.records() ? reader : null;
-		if (!fields.needsRewrite(body, recording))
+		var body = fn.bodyIn(types, builder);
+		if (!fields.needsRewrite(body, reader))
 			return fn;
 		var edited = body.forEditing(builder);
-		fields.rewriteBody(edited, recording);
+		fields.rewriteBody(edited, reader);
 		return IrFunction.ofOwnedBody(edited);
 	}
 

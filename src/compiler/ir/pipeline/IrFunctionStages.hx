@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.IrFunction;
 import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
 import compiler.ir.reuse.IrStageMemo.IrStageEntry;
 
@@ -51,7 +52,7 @@ class IrFunctionStages {
 		if (lineage == null) {
 			var summaries = [for (fn in functions) pass.summarize(fn)];
 			pass.prepare(functions, summaries, new IrFunctionIndex(name, functions));
-			var reader = new IrFactReader(name, pass);
+			var reader = new IrFactReader(name, pass, IrFacts.unshared());
 			return pass.finish([for (index in 0...functions.length) {
 				reader.begin(false);
 				pass.transform(functions[index], summaries[index], reader);
@@ -129,7 +130,7 @@ class IrFunctionStages {
 			checks:Bool, types:compiler.ir.model.IrTypeIds, builder:Null<compiler.ir.model.IrBodyBuilder>,
 			make:IrFactReader->IrFunction):IrFunction {
 		if (lineage == null) {
-			var reader = new IrFactReader(stage, pass);
+			var reader = new IrFactReader(stage, pass, IrFacts.unshared());
 			reader.begin(false);
 			return make(reader);
 		}

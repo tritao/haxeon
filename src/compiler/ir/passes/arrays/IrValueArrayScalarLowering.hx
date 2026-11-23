@@ -98,15 +98,14 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 		if (summary != CALLS)
 			return fn;
 		var body = fn.bodyIn(types, scratch.bodyBuilder);
-		if (reader.records())
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.Call && helperName(body.symbol(row).name))
-						reader.read(HELPER, body.symbol(row).name);
-					row = body.nextRow(row);
-				}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call && helperName(body.symbol(row).name))
+					reader.read(HELPER, body.symbol(row).name);
+				row = body.nextRow(row);
 			}
+		}
 		var edited = rewriteBody(body, helpers, scratch);
 		return edited == body ? fn : IrFunction.ofOwnedBody(edited);
 	}

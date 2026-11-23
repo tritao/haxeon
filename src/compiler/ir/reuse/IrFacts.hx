@@ -62,6 +62,16 @@ class IrFacts {
 	public function new() {}
 
 	/**
+	 * A table of a compile that keeps no session, which a stage records in as a session's does: what it reads is computed once per
+	 * run, and nothing it records is ever checked again.
+	 */
+	public static function unshared():IrFacts {
+		var table = new IrFacts();
+		table.begin();
+		return table;
+	}
+
+	/**
 	 * A number for `text`, the same every time it is asked for in the session and different for another text: a fact whose value is
 	 * a whole-program choice the stage spells out (`IrScalarArguments`'s candidates) takes it.
 	 */

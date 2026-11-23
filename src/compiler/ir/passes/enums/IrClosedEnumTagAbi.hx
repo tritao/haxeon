@@ -32,6 +32,9 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;
 
+	/** Whether any tag is closed (1 or 0), by the empty key: a rewrite that finds none reads only this. */
+	static inline final ANY_CLOSED = 1;
+
 	final program:IrProgram;
 	final reflectableObjects:Null<Array<String>>;
 	final types:IrTypeIds;
@@ -45,7 +48,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	/** By type id: the tags the type names where the projection looks (`changes`), or null when not yet known. */
 	final tagNames:Array<Null<Array<String>>> = [];
 
-	/** The reader of the function being rewritten when it records, else null. */
+	/** The reader of the function being rewritten; null in the whole-program step, which reads the tables directly. */
 	var reader:Null<IrFactReader> = null;
 
 	/** The program with the closed tags projected, once the run is finished: the program itself when no tag is closed. */
@@ -104,7 +107,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 			default:
 		}
 
-	/** Whether the type of id `id` changes; the reader, when recording, reads the facts of the tags it names. */
+	/** Whether the type of id `id` changes; while a function is rewritten, the reader reads the facts of the tags it names. */
 	function changesId(id:Int):Bool {
 		var current = reader;
 		if (current != null) {
@@ -267,13 +270,12 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	}
 
 	public function fact(kind:Int, key:String):Int
-		return closed.exists(key) ? 1 : 0;
+		return (kind == ANY_CLOSED ? closed.keys().hasNext() : closed.exists(key)) ? 1 : 0;
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
-		// A reader that records must read the facts of the tags even when none is closed: one may be in a later build.
-		if (!reader.records() && !closed.keys().hasNext())
+		if (reader.read(ANY_CLOSED, "") == 0)
 			return fn;
-		this.reader = reader.records() ? reader : null;
+		this.reader = reader;
 		var result = projectFunction(fn, fn.bodyIn(types, builder));
 		this.reader = null;
 		return result;

@@ -322,7 +322,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		reader.read(CANDIDATES, "");
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
 			return fn;
-		if (reader.records() && readCandidateCalls(body, reader))
+		if (readCandidateCalls(body, reader))
 			reader.read(REWRITE, "");
 		return rewriteFunction(fn, body);
 	}

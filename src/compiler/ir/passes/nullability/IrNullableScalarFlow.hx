@@ -369,10 +369,10 @@ class IrBodyNullableScalars {
 		return called != null && called.arguments.length == body.operandCount(row) ? called : null;
 	}
 
-	/** The candidate `name`, read as a fact when the reader records. */
+	/** The candidate `name`, read as a fact while a function is rewritten. */
 	function candidate(name:String):Null<IrFunction> {
 		var current = reader;
-		if (current != null && current.records())
+		if (current != null)
 			current.read(IrNullableScalarFlow.CANDIDATE, name);
 		return functions.get(name);
 	}

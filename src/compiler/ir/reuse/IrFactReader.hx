@@ -6,12 +6,15 @@ import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
 
-/** What a rewrite reads about the program and the helpers it asks for, recorded for its memo entry when it has one. */
+/**
+ * What a rewrite reads about the program and the helpers it asks for, recorded for its memo entry. A compile without a session
+ * records too, in a table of its own (`IrFacts.unshared`), so one-shot and session builds run one code path.
+ */
 @:nullSafety(Strict)
 class IrFactReader {
 	final source:IrFactSource;
 	final pass:Null<IrFunctionPass>;
-	final facts:Null<IrFacts>;
+	final facts:IrFacts;
 	final spaces:Array<Int> = [];
 	final stage:String;
 	var number = 0;
@@ -22,10 +25,10 @@ class IrFactReader {
 	var checking = false;
 
 	/**
-	 * A reader for `pass`; with `facts`, it records what it reads. A stage that is no `IrFunctionPass` gives no pass but the `source`
+	 * A reader for `pass`, which records what it reads in `facts`. A stage that is no `IrFunctionPass` gives no pass but the `source`
 	 * of its facts, and asks for no helpers.
 	 */
-	public function new(stage:String, pass:Null<IrFunctionPass>, ?facts:IrFacts, ?source:IrFactSource) {
+	public function new(stage:String, pass:Null<IrFunctionPass>, facts:IrFacts, ?source:IrFactSource) {
 		this.stage = stage;
 		this.pass = pass;
 		this.facts = facts;
@@ -35,15 +38,9 @@ class IrFactReader {
 		this.source = from;
 	}
 
-	/** Whether it records what it reads: a reader without a memo only computes, so a pass may read its tables directly. */
-	public function records():Bool
-		return facts != null;
-
 	/** The value of the stage's fact of `kind` and `key` (`IrFactSource.fact`). */
 	public function read(kind:Int, key:String):Int {
 		var table = facts;
-		if (table == null)
-			return source.fact(kind, key);
 		while (spaces.length <= kind)
 			spaces.push(-1);
 		if (spaces[kind] < 0)
@@ -61,21 +58,17 @@ class IrFactReader {
 		var maker = pass;
 		if (maker == null)
 			throw new compiler.core.InternalError('Stage $stage asked for a helper through a reader without a pass');
-		if (facts != null) {
-			var list = asked;
-			if (list == null)
-				asked = list = [];
-			list.push(new IrStageRequest(kind, type, name));
-		}
+		var list = asked;
+		if (list == null)
+			asked = list = [];
+		list.push(new IrStageRequest(kind, type, name));
 		if (!checking)
 			maker.request(kind, type, name);
 	}
 
 	/** Starts the reads of one rewrite. */
 	public function begin(checks:Bool):Void {
-		var table = facts;
-		if (table != null)
-			number = table.newReader();
+		number = facts.newReader();
 		reads = [];
 		asked = null;
 		checking = checks;
@@ -83,8 +76,7 @@ class IrFactReader {
 
 	/** The facts read since `begin`, pairs of a fact and its print. */
 	public function recorded():Array<Int> {
-		var table = facts;
-		return reads.length == 0 ? IrLineage.NO_FACTS : table == null ? reads : table.shared(reads);
+		return reads.length == 0 ? IrLineage.NO_FACTS : facts.shared(reads);
 	}
 
 	/** The helpers asked for since `begin`, or null. */

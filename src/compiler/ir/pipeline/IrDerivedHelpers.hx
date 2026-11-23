@@ -41,7 +41,7 @@ class IrDerivedHelpers implements IrFunctionPass {
 	public function make(name:String, make:IrFactReader->IrFunction):IrFunction {
 		var known = types;
 		if (lineage == null || known == null) {
-			var reader = new IrFactReader(stage, this);
+			var reader = new IrFactReader(stage, this, compiler.ir.reuse.IrFacts.unshared());
 			reader.begin(false);
 			return make(reader);
 		}

@@ -75,25 +75,23 @@ class IrValueObjectRows implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != OBJECT_ROWS)
 			return fn;
-		if (reader.records()) {
-			var body = fn.bodyIn(types, builder), found = false;
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0 && !found) {
-					if (body.opcode(row) == opcode) {
-						var name = objectName(body.valueType(body.output(row)));
-						if (name != null && reader.read(VALUE, name) == 1)
-							found = true;
-					}
-					row = body.nextRow(row);
+		var body = fn.bodyIn(types, builder), found = false;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0 && !found) {
+				if (body.opcode(row) == opcode) {
+					var name = objectName(body.valueType(body.output(row)));
+					if (name != null && reader.read(VALUE, name) == 1)
+						found = true;
 				}
-				if (found)
-					break;
+				row = body.nextRow(row);
 			}
-			if (!found)
-				return fn;
-			reader.read(REWRITE, "");
+			if (found)
+				break;
 		}
+		if (!found)
+			return fn;
+		reader.read(REWRITE, "");
 		return rewrite(fn);
 	}
 

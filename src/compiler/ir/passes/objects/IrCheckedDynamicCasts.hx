@@ -260,8 +260,9 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 				Provider(TypeKey.of(type), ProviderOperation.CheckedCast));
 		}
 		var bodies = types;
-		generated.push(lineage == null || bodies == null ? make(new IrFactReader(stage,
-			this)) : IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, lineage, checks, bodies,
+		generated.push(lineage == null || bodies == null ? make(new IrFactReader(stage, this,
+			compiler.ir.reuse.IrFacts.unshared())) : IrFunctionStages.derived(stage, name, this,
+			IrFunctionStages.FROM_NAME, lineage, checks, bodies,
 			builder, make));
 		return name;
 	}

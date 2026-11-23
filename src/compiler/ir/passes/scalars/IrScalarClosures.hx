@@ -172,17 +172,15 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = bodyOf(fn);
-		if (reader.records()) {
-			readTypeFacts(body.result, reader);
-			for (value in 0...body.valueLimit())
-				readTypeFacts(body.valueTypeId(IrValueId.of(value)), reader);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.TypeValue)
-						readTypeFacts(body.aux(row), reader);
-					row = body.nextRow(row);
-				}
+		readTypeFacts(body.result, reader);
+		for (value in 0...body.valueLimit())
+			readTypeFacts(body.valueTypeId(IrValueId.of(value)), reader);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.TypeValue)
+					readTypeFacts(body.aux(row), reader);
+				row = body.nextRow(row);
 			}
 		}
 		return candidates.keys().hasNext() ? rewriteFunction(fn, body) : fn;
