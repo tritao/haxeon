@@ -129,14 +129,18 @@ the shared native cache and the VM in Haxeon's home.
 ## Android runner
 
 `android/` is a Gradle project of the app: its `AndroidManifest.xml`, resources and `build.gradle`, depending on
-Haxeon's Android host as a library (an AAR in the SDK). Native code builds through `externalNativeBuild` with the same
+Haxeon's Android host as a library: a prebuilt AAR in the SDK (`platforms/android/`), with the VM for each ABI, as the
+desktop runners link the SDK's prebuilt `libhaxeon-app`. An AAR is how Android libraries are distributed, and building the
+host from sources on first use would ship its sources and make the first build need the NDK and take minutes. Native code builds through `externalNativeBuild` with the same
 generated `haxeon.cmake`, once per ABI, with the NDK's CMake toolchain. The module and its live-editing files
 (`app.hl`, `.hli`, `.entry`, `.hcs`) are generated assets. The Gradle project inside the Haxeon checkout becomes the
 template for this one, and `-PhaxeonProject` goes.
 
 ## Web runner
 
-`web/` holds `index.html` and the loader script: the page, its canvas and its fonts are the app's. The fragment for the web
+`web/` holds `index.html`: the page, its canvas and its fonts are the app's. The loader is one for both Wasm targets,
+the host `stdlib/haxeon/wasm/haxeon-host.js` already serves `wasm32` and `wasm-gc` guests alike; the SDK ships it in
+`platforms/web/` and the page loads it, with the target the build chose. The fragment for the web
 builds native packages with Emscripten's CMake toolchain (`emcmake`), and the loader instantiates the module with them.
 
 ## Runner versions
@@ -168,8 +172,3 @@ runner beside the old one (`linux.new/`) for the user to merge.
 5. The web runner.
 6. Runner versions and `--fresh-runner`; the `package` and `native-package` templates; `[android]`'s app fields moved to
    `[app]`.
-
-## Open
-
-- Whether the Android host ships as an AAR in the release archive or is built from sources in the SDK on first use.
-- The web loader: one for `wasm32` and `wasm-gc`, or one per target.
