@@ -135,7 +135,10 @@ class ReleasePackage {
 		names.sort(Reflect.compare);
 		var published:Array<String> = [];
 		for (name in names) {
-			var live = index.live(name), manifest = live == null ? null : PackageManifest.find(live.path);
+			var live = index.live(name);
+			if (live == null)
+				throw new InternalError('The checkout\'s haxeon registry has "$name" without a package directory');
+			var manifest = PackageManifest.find(live.path);
 			if (manifest == null)
 				throw new InternalError('The checkout\'s haxeon registry has "$name" without a package directory');
 			RegistryPublisher.publish(manifest, registry, name, live.version, packages);

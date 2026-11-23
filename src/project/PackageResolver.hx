@@ -207,9 +207,11 @@ class PackageResolver {
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
 			// A live registry package keeps the lockfile's entry as it is: its version (in range) and the checksum a release wrote.
-			var kept = acquired.live && prior != null && PackageSourceCodec.equal(prior.source, requestedSource);
+			var kept = acquired.live && prior != null
+				&& PackageSourceCodec.equal(prior.source, requestedSource) ? prior : null;
 			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource,
-				kept ? prior.resolvedRevision : acquired.resolvedRevision, kept ? prior.checksum : acquired.checksum,
+				kept != null ? kept.resolvedRevision : acquired.resolvedRevision,
+				kept != null ? kept.checksum : acquired.checksum,
 				[for (dependencyName in resolvedDependencies) new PackageId(dependencyName)]));
 			return resolvedPackage;
 		}
