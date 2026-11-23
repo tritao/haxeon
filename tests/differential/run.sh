@@ -316,6 +316,7 @@ in_background run_error_case missing-field-call-bytes
 in_background run_error_case missing-field-call-nullable
 in_background run_error_case missing-field-call-function
 in_background run_error_case missing-field-call-subtype
+in_background run_error_case local-function-assignment
 in_background run_compile_failure generic-field-own-parameters-error
 in_background run_case generic-nullable-parameter-read 0
 in_background run_case generic-nullable-element-inference 0
