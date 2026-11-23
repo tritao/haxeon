@@ -7,9 +7,10 @@
 			"why": "Instructions of every process the build starts on the VM, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
 		"vm_build_allocated_bytes": {
-			"value": 60601712,
+			"value": 63321640,
 			"tolerance": 0.02,
-			"why": "What the compile server on the VM allocated for the build (its worker allocations): deterministic for a given compiler and project."
+			"why": "What the compile server on the VM allocated for the build (its worker allocations): deterministic for a given compiler and project.",
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (build about +1.7 and +0.7 MB)"
 		},
 		"vm_check_instructions": {
 			"value": 12677986887,
@@ -17,9 +18,10 @@
 			"why": "As vm_build_instructions, for a check, which types the project without writing a module."
 		},
 		"vm_check_allocated_bytes": {
-			"value": 64549216,
+			"value": 65821600,
 			"tolerance": 0.02,
-			"why": "What the compile server on the VM allocated for the check: deterministic for a given compiler and project."
+			"why": "What the compile server on the VM allocated for the check: deterministic for a given compiler and project.",
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (check about +2.4 and +0.9 MB)"
 		},
 		"vm_build_empty_store_instructions": {
 			"value": 16835342331,
@@ -32,9 +34,10 @@
 			"why": "Instructions of every process the build starts with haxeon-aot, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
 		"aot_build_allocated_bytes": {
-			"value": 38452176,
+			"value": 40496712,
 			"tolerance": 0.02,
-			"why": "What the compile server with haxeon-aot allocated for the build (its worker allocations): deterministic for a given compiler and project."
+			"why": "What the compile server with haxeon-aot allocated for the build (its worker allocations): deterministic for a given compiler and project.",
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.42 MB ahead of time; haxeon-aot does not build in 41a2453b8's window)"
 		},
 		"aot_check_instructions": {
 			"value": 1290040326,
@@ -42,9 +45,10 @@
 			"why": "As aot_build_instructions, for a check, which types the project without writing a module."
 		},
 		"aot_check_allocated_bytes": {
-			"value": 37554000,
+			"value": 38451128,
 			"tolerance": 0.02,
-			"why": "What the compile server with haxeon-aot allocated for the check: deterministic for a given compiler and project."
+			"why": "What the compile server with haxeon-aot allocated for the check: deterministic for a given compiler and project.",
+			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.53 MB ahead of time)"
 		},
 		"aot_build_empty_store_instructions": {
 			"value": 5190685279,

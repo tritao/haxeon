@@ -3,9 +3,10 @@
 	"input_revision": "b3a22d6bf8ec9487a7061b12f93259aaff161552",
 	"metrics": {
 		"allocated_bytes": {
-			"value": 2112024808,
+			"value": 2157630648,
 			"tolerance": 0.02,
-			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates."
+			"why": "Deterministic for a given source tree; the slack absorbs ordinary code growth between deliberate updates.",
+			"raise_reason": "A cold compile also runs the per-function stage passes made for warm-build reuse: enum-tag-lowering's (515979338, about +12 MB) and scalar-arguments and scalar-closures as per-function passes (9e762aab2, f25334794, about +16 MB), with smaller per-pass growth; and the null-safety checker's per-body mode lookup (fefa269cb, about +7 MB left after 70ed3e9b8)"
 		},
 		"collections": {
 			"value": 2,
