@@ -19,6 +19,12 @@ import compiler.ir.model.TypeKey;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.passes.values.IrValueLaneReference;
+import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 /**
  * Select one program-wide representation, then lower eligible enum values to their lane packets. On IR bodies
@@ -62,7 +68,7 @@ class IrInlineEnumLowering {
 	 */
 	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
 			?reflectableObjects:Array<String>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
-			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrProgram {
+			?lineage:IrLineage):IrProgram {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
@@ -197,31 +203,29 @@ class IrInlineEnumLowering {
 		var lowering = new IrInlineEnumLowering(planner, eligibility, types, helper,
 			[for (object in result.objects) if (object.isValue) object.name => true],
 			[for (entry in result.interfaces) entry.name => true], mapped, containsMapped);
-		for (fn in program.functions)
-			result.functions.push(lowering.lower(fn, fn.bodyIn(types, builder), builder));
+		var pass = new IrInlineEnumLoweringPass(lowering, types, builder);
+		result.functions = IrFunctionStages.run(IrInlineEnumLoweringPass.STAGE, pass, program.functions, lineage,
+			lineage != null && lineage.checks, builder);
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
-		for (name in names)
-			result.functions.push(helpers.get(name));
+		var made = [for (name in names) helpers.get(name)];
 		// The functions lowered here call their typed dispatchers already (`lower`); the others did before.
-		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces);
+		var dispatched = result.functions.length;
+		result.functions = result.functions.concat(made);
+		// The dispatch looks the functions up through the lineage, which then has the helpers too.
+		if (lineage != null)
+			lineage.settle(IrInlineEnumLoweringPass.STAGE, result.functions);
+		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces, lineage);
+		made = made.concat(result.functions.slice(dispatched + names.length));
 		// Lane-array reflection bridges use the logical enum adapter even when this source has no escape.
-		result.functions = result.functions.concat(IrInlineEnumEscapes.functions(result.enums, table, planner));
-		var calls:Map<String, Bool> = [];
-		for (fn in result.functions) {
-			var body = fn.bodyIn(types, builder);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.Call)
-						calls.set(body.symbol(row).name, true);
-					row = body.nextRow(row);
-				}
-			}
-		}
+		var escapes = IrInlineEnumEscapes.functions(result.enums, table, planner);
+		result.functions = result.functions.concat(escapes);
+		// The word access natives the functions call: the lowered functions' as their rewrite asked for them, the rest read here.
+		for (fn in made.concat(escapes))
+			pass.scanNatives(fn.bodyIn(types, builder), null);
 		var existing = [for (native in result.natives) native.name => true];
 		for (native in IrInlineEnumWordAccess.natives())
-			if (native.name != "haxe.Int64.toInt" && calls.exists(native.name) && !existing.exists(native.name))
+			if (native.name != "haxe.Int64.toInt" && pass.called.exists(native.name) && !existing.exists(native.name))
 				result.natives.push(native);
 		return result;
 	}
@@ -230,7 +234,7 @@ class IrInlineEnumLowering {
 		return "$inline-enum-global:" + name.length + ":" + name + ":" + field;
 
 	/** `fn` (whose body is `body`) lowered: itself when no position of it mentions a selected enum. */
-	function lower(fn:IrFunction, body:IrBody, builder:Null<IrBodyBuilder>):IrFunction {
+	public function lower(fn:IrFunction, body:IrBody, builder:Null<IrBodyBuilder>):IrFunction {
 		if (!mentionsSelected(body))
 			return fn;
 		var edited = body.forEditing(builder);
@@ -298,6 +302,10 @@ class IrInlineEnumLowering {
 			throw new InternalError('Missing selected inline enum storage "$name"');
 		return shape;
 	}
+
+	/** Whether the enum `name` is lowered to a value packet. */
+	public function isSelected(name:String):Bool
+		return planner.shape(name) != null;
 
 	inline function selected(type:IrType):Null<String>
 		return switch type {
@@ -555,4 +563,115 @@ class IrInlineEnumLowering {
 		if (containsMapped(value) || containsMapped(out))
 			throw new InternalError('Unsupported inline enum escape passed eligibility: row $row of ${body.name}');
 	}
+}
+
+/**
+ * The lowering of each function (`IrInlineEnumLowering.lower`), per function (`IrFunctionPass`). The rewrite reads, for each enum
+ * its types name, whether it is lowered (`SELECTED`): a function that names none is not read again while those facts hold, and
+ * one that names a lowered enum is rewritten each run (never stated), as what it becomes depends on the enums' layouts and the
+ * helpers it makes. It asks for the word access natives the function it hands on calls (`WORD_NATIVE`, by their place in
+ * `IrInlineEnumWordAccess.natives`).
+ */
+class IrInlineEnumLoweringPass implements IrFunctionPass {
+	public static inline final STAGE = "inline-enum-lowering";
+
+	static inline final SELECTED = 0;
+
+	final lowering:IrInlineEnumLowering;
+	final types:IrTypeIds;
+	final builder:Null<IrBodyBuilder>;
+	final natives:Array<String> = [for (native in IrInlineEnumWordAccess.natives()) native.name];
+
+	/** By type id, the enums the type names where the lowering looks, or null when not known yet. */
+	final enumNames:Array<Null<Array<String>>> = [];
+
+	/** The word access natives the functions call. */
+	public final called:Map<String, Bool> = [];
+
+	public function new(lowering:IrInlineEnumLowering, types:IrTypeIds, builder:Null<IrBodyBuilder>) {
+		this.lowering = lowering;
+		this.types = types;
+		this.builder = builder;
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
+
+	public function fact(kind:Int, key:String):Int
+		return lowering.isSelected(key) ? IrFacts.UNKNOWN : 0;
+
+	static function addEnums(type:IrType, names:Array<String>):Void
+		switch type {
+			case Enum(name):
+				if (names.indexOf(name) < 0)
+					names.push(name);
+			case Array(inner), Iterator(inner), Nullable(inner):
+				addEnums(inner, names);
+			case Function(arguments, result):
+				for (argument in arguments)
+					addEnums(argument, names);
+				addEnums(result, names);
+			default:
+		}
+
+	function readEnums(id:Int, reader:IrFactReader):Void {
+		if (id < 0)
+			return;
+		var names = id < enumNames.length ? enumNames[id] : null;
+		if (names == null) {
+			names = [];
+			addEnums(types.type(id), names);
+			while (enumNames.length <= id)
+				enumNames.push(null);
+			enumNames[id] = names;
+		}
+		for (name in names)
+			reader.read(SELECTED, name);
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		var body = fn.bodyIn(types, builder);
+		if (reader.records()) {
+			readEnums(body.result, reader);
+			for (value in 0...body.valueLimit())
+				readEnums(body.valueTypeId(IrValueId.of(value)), reader);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					if (body.opcode(row) == IrOpcode.TypeValue)
+						readEnums(body.aux(row), reader);
+					row = body.nextRow(row);
+				}
+			}
+		}
+		var result = lowering.lower(fn, body, builder);
+		scanNatives(result.bodyIn(types, builder), reader);
+		return result;
+	}
+
+	/** The word access natives `body` calls: asked for through `reader` when given, else noted. */
+	public function scanNatives(body:IrBody, reader:Null<IrFactReader>):Void
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call) {
+					var index = natives.indexOf(body.symbol(row).name);
+					if (index >= 0) {
+						if (reader != null)
+							reader.request(index, Void);
+						else
+							called.set(natives[index], true);
+					}
+				}
+				row = body.nextRow(row);
+			}
+		}
+
+	public function request(kind:Int, type:IrType):Void
+		called.set(natives[kind], true);
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions;
 }

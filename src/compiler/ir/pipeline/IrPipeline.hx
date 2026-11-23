@@ -419,10 +419,9 @@ class IrPipeline {
 	}
 
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var input = assembly.functions;
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
 			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage);
-		assembly.functions = stableChanged("inline-enum-lowering", input, enumOutput.functions, context);
+		assembly.functions = enumOutput.functions;
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;
 		assembly.staticFields = enumOutput.staticFields;
@@ -487,28 +486,6 @@ class IrPipeline {
 			cache.stableGenerated(stage, made, context.passScratch.bodyBuilder);
 		encodeAll(functions, context);
 		return functions;
-	}
-
-	/**
-	 * `output`, which a stage past the conversion point made from `input` with every function a body: in a session, one it changed
-	 * or made the same as last build is last build's, so the stages after it reuse what they made of it; a one-shot compile lets the
-	 * objects of the functions it made go.
-	 */
-	static function stableChanged(stage:String, input:Array<IrFunction>, output:Array<IrFunction>,
-			context:IrPipelineContext):Array<IrFunction> {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		var given:Map<String, IrFunction> = [for (fn in input) fn.name => fn];
-		var changed = [for (fn in output) if (given.get(fn.name) != fn) fn];
-		if (!retained || cache == null) {
-			for (fn in changed)
-				fn.releaseDecoded();
-			return output;
-		}
-		var stable = cache.stableGenerated(stage, changed, context.passScratch.bodyBuilder);
-		if (changed.length == 0)
-			return output;
-		var index = 0;
-		return [for (fn in output) given.get(fn.name) != fn ? stable[index++] : fn];
 	}
 
 	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
