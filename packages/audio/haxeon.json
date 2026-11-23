@@ -20,5 +20,13 @@
       "bindings/nativekit-audio.hxmap"
     ]
   },
+  "publish": {
+    "exclude": [
+      "tests",
+      "tools",
+      "examples",
+      "native"
+    ]
+  },
   "target": "host"
 }

@@ -15,6 +15,13 @@
       "bindings/nativekit-gpu.hxmap"
     ]
   },
+  "publish": {
+    "exclude": [
+      "tests",
+      "tools",
+      "bench"
+    ]
+  },
   "target": "host",
   "dependencies": {
     "haxeon-platform": {

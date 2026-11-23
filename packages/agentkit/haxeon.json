@@ -3,5 +3,6 @@
 	"package": { "name": "haxeon-agentkit" },
 	"sourceRoots": ["src"],
 	"scopeSourceRoots": false,
+	"publish": { "exclude": ["tests"] },
 	"target": "host"
 }

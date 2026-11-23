@@ -17,6 +17,9 @@
     },
     "haxeon-editor": {
       "path": "../editor"
+    },
+    "haxeon-nativekit": {
+      "path": "../nativekit"
     }
   },
   "native": {
@@ -36,6 +39,26 @@
     ],
     "projections": [
       "bindings/nativekit-ui.hxmap"
+    ]
+  },
+  "publish": {
+    "exclude": [
+      "tests",
+      "examples",
+      "bench",
+      "tools",
+      "docs",
+      "vendor/harfbuzz/test",
+      "vendor/harfbuzz/perf",
+      "vendor/harfbuzz/docs",
+      "vendor/skribidi/example",
+      "vendor/skribidi/screenshots",
+      "vendor/skribidi/test",
+      "vendor/sheenbidi/Tools",
+      "vendor/sheenbidi/Tests",
+      "vendor/clay/examples",
+      "vendor/clay/bindings",
+      "vendor/nanovg/example"
     ]
   },
   "target": "host"

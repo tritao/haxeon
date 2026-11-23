@@ -33,5 +33,6 @@
     "haxeon-platform": {
       "path": "../platform"
     }
-  }
+  },
+  "publish": false
 }

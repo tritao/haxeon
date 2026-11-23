@@ -5,15 +5,19 @@ project(UIKit VERSION 0.1.0 LANGUAGES C CXX)
 include(GNUInstallDirs)
 include(CTest)
 
-set(NKUI_NATIVEKIT_DIR "$ENV{NATIVEKIT_DIR}" CACHE PATH
-    "Path to the NativeKit source checkout")
-if(NOT NKUI_NATIVEKIT_DIR)
-    set(NKUI_NATIVEKIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../vendor/nativekit" CACHE PATH
-        "Path to the NativeKit source checkout" FORCE)
-endif()
-
 # NativeKit comes from whoever builds UIKit: a graph that already has its targets (an app's runner adds the nativekit package
-# first) keeps them; otherwise UIKit adds NativeKit itself, top level or not.
+# first) keeps them, and UIKit reads NativeKit's private headers from where they were added; otherwise UIKit adds NativeKit
+# itself, top level or not, from NATIVEKIT_DIR or the repository's submodule.
+if(TARGET nativekit)
+    get_target_property(NKUI_NATIVEKIT_DIR nativekit SOURCE_DIR)
+else()
+    set(NKUI_NATIVEKIT_DIR "$ENV{NATIVEKIT_DIR}" CACHE PATH
+        "Path to the NativeKit source checkout")
+    if(NOT NKUI_NATIVEKIT_DIR)
+        set(NKUI_NATIVEKIT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../vendor/nativekit" CACHE PATH
+            "Path to the NativeKit source checkout" FORCE)
+    endif()
+endif()
 if(NOT TARGET NativeKit::nativekit)
     set(NK_BUILD_GPU ON CACHE BOOL "Build NativeKit GPU for UIKit" FORCE)
     add_subdirectory("${NKUI_NATIVEKIT_DIR}" "${CMAKE_BINARY_DIR}/nativekit")

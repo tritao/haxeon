@@ -7,5 +7,6 @@
 		"haxeon-agentkit": { "path": "../agentkit" },
 		"haxeon-platform": { "path": "../platform" }
 	},
+	"publish": { "exclude": ["tests"] },
 	"target": "host"
 }

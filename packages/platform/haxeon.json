@@ -17,5 +17,12 @@
       "bindings/nativekit-net.hxmap"
     ]
   },
+  "publish": {
+    "exclude": [
+      "tests",
+      "tools",
+      "docs"
+    ]
+  },
   "target": "host"
 }
