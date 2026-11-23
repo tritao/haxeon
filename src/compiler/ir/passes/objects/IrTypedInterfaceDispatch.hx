@@ -423,7 +423,7 @@ class IrTypedInterfaceCalls implements IrFunctionPass {
 		return IrFunctionRewrite.instructions(fn, replacement);
 	}
 
-	public function request(kind:Int, type:IrType):Void {}
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;

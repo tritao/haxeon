@@ -279,7 +279,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		return result;
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The closed enum tag ABI asks for no helper");
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction> {

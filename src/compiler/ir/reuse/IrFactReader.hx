@@ -47,16 +47,16 @@ class IrFactReader {
 		return table.value(id);
 	}
 
-	/** Asks for the helper of `kind` for `type` (`IrFunctionPass.request`). */
-	public function request(kind:Int, type:IrType):Void {
+	/** Asks for the helper of `kind` for `type` and `name` (`IrFunctionPass.request`). */
+	public function request(kind:Int, type:IrType, ?name:String):Void {
 		if (facts != null) {
 			var list = asked;
 			if (list == null)
 				asked = list = [];
-			list.push(new IrStageRequest(kind, type));
+			list.push(new IrStageRequest(kind, type, name));
 		}
 		if (!checking)
-			pass.request(kind, type);
+			pass.request(kind, type, name);
 	}
 
 	/** Starts the reads of one rewrite. */

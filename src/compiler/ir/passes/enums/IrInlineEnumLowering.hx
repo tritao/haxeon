@@ -673,7 +673,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 			}
 		}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		called.set(natives[kind], true);
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>

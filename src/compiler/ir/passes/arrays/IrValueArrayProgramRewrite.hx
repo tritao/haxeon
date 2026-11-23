@@ -682,7 +682,7 @@ private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPa
 		return rewrite(fn);
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new compiler.core.InternalError("A value array element's rewrite asks for no helper");
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>

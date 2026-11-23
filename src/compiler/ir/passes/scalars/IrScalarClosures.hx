@@ -188,7 +188,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		return candidates.keys().hasNext() ? rewriteFunction(fn, body) : fn;
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The scalar closure ABI asks for no helper");
 
 	function note(type:IrType):Bool {

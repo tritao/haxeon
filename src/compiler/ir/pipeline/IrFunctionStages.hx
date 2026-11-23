@@ -80,7 +80,7 @@ class IrFunctionStages {
 				var requests = entry.requests;
 				if (requests != null)
 					for (request in requests)
-						pass.request(request.kind, request.type);
+						pass.request(request.kind, request.type, request.name);
 				if (checks)
 					check(name, pass, reader, fn, entry);
 			} else {
@@ -142,7 +142,7 @@ class IrFunctionStages {
 			var requests = entry.requests;
 			if (requests != null)
 				for (request in requests)
-					pass.request(request.kind, request.type);
+					pass.request(request.kind, request.type, request.name);
 			if (checks) {
 				reader.begin(true);
 				var now = make(reader);

@@ -143,7 +143,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		return result;
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		helpers.set(helperName(kind, type), type);
 
 	public static function helperName(kind:Int, type:IrType):String

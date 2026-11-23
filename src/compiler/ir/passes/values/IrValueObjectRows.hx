@@ -96,7 +96,7 @@ class IrValueObjectRows implements IrFunctionPass {
 		return rewrite(fn);
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("A value object rows rewrite asks for no helper");
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>

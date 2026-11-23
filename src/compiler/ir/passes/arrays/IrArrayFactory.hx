@@ -161,7 +161,7 @@ class IrArrayFactoryPass implements compiler.ir.pipeline.IrFunctionPass {
 		return IrFunction.ofOwnedBody(edited);
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		typed = true;
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction> {

@@ -348,7 +348,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		});
 	}
 
-	public function request(kind:Int, type:IrType):Void {
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		if (kind == UNBOX) {
 			var id = key(type), helper = unboxNames.get(id);
 			if (helper == null) {

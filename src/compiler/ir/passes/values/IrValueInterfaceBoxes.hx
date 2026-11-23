@@ -91,7 +91,7 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 		return object == null || !object.isValue ? 0 : object.interfaces.length == 0 ? 1 : 2;
 	}
 
-	public function request(kind:Int, type:IrType):Void {
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		var name = switch type {
 			case Obj(name), Virtual(name): name;
 			default: "";

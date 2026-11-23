@@ -95,7 +95,7 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		return IrFunctionRewrite.instructions(fn, replacement);
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		helperFor(type);
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>

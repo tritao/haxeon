@@ -66,7 +66,7 @@ class IrConstantBranches implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
 		return fold(fn, reader);
 
-	public function request(kind:Int, type:IrType):Void {}
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;

@@ -192,7 +192,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		return result;
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		switch type {
 			case Obj(name): helpers.add(kind, name);
 			default: throw new InternalError("An optional value helper request names no value class");

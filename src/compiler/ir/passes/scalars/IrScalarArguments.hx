@@ -302,7 +302,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		return false;
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The scalar ABI asks for no helper");
 
 	/** The rewritten functions, then the candidates' clones and the receiver-preserving ones a call selects. */

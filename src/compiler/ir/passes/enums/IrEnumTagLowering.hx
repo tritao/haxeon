@@ -569,7 +569,7 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 		}
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		switch type {
 			case EnumTag(name): required.set(name, true);
 			default: throw new InternalError("An enum tag adapter request names no tag");
@@ -1424,7 +1424,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 			required.set(enumName, true);
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		switch type {
 			case EnumTag(name): required.set(name, true);
 			default: throw new InternalError("An enum tag adapter request names no tag");

@@ -156,7 +156,7 @@ class IrValueConstructors implements IrFunctionPass {
 		return body == source ? fn : IrFunction.ofOwnedBody(body);
 	}
 
-	public function request(kind:Int, type:IrType):Void
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The value constructor expansion asks for no helper");
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>
