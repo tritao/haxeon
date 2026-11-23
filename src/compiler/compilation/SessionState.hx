@@ -240,6 +240,17 @@ class SessionState {
 		return result;
 	}
 
+	/**
+	 * A state with this one's sources and nothing a build left in it: what a first build of the same text starts from. The frontend's
+	 * reuse check (`--check-reuse`) builds the program on it and compares.
+	 */
+	public function freshFromSources():SessionState {
+		var result = new SessionState(new TypeRegistry(), new GenericSpecializationRegistry(), backend.forCandidate());
+		for (name => state in modules)
+			result.modules.set(name, new ModuleState(name, state.source));
+		return result;
+	}
+
 	/** The module `name`, copied first when it is still the one `rollback` holds, so a build never writes a module it shares. */
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState {
 		var state:ModuleState = modules.get(name);

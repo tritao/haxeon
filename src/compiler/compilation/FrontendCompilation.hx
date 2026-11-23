@@ -1454,10 +1454,7 @@ class FrontendCompilation {
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With `--check-reuse`
 		// the passes run anyway and the result is compared with the reused one.
 		// A build that keeps no session has no next build to give its final IR to, so it records no inputs to match.
-		var inputs = context.options.keepSession ? pipelineInputs(context, generator, build.instrumentScope, cached,
-			build.initializers, irNatives, irCNatives, objects, build.interfaces, build.enums, build.staticFields,
-			entryPoint,
-			build.reflectable) : null,
+		var inputs = context.options.keepSession ? inputsOf(build) : null,
 			previousPipeline = context.state.pipelineSnapshot,
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null
 				|| inputs == null ? "no earlier build" : previousPipeline.mismatch(inputs),
@@ -1466,6 +1463,8 @@ class FrontendCompilation {
 			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null,
 			ir:IrProgram,
 			inlinerChanged:Array<String>;
+		if (checkingReuse && inputs != null && context.state.compiledOnce && !context.livePatching)
+			checkFrontendReuse(build, inputs);
 		build.reuseMiss = reuseMiss;
 		build.matchesPrevious = matchesPrevious;
 		build.checkingReuse = checkingReuse;
@@ -1619,6 +1618,40 @@ class FrontendCompilation {
 			reused: reused,
 			reuseMiss: reuseMiss
 		};
+	}
+
+	/** What the build gives the IR pipeline (see `PipelineInputs`), with `objects` and `functions` in place of the build's when given. */
+	static function inputsOf(build:FrontendBuild, ?objects:Array<IrObject>, ?functions:Array<IrFunction>):PipelineInputs
+		return pipelineInputs(build.context, build.generator, build.instrumentScope, functions ?? build.cached,
+			build.initializers, build.irNatives, build.irCNatives, objects ?? build.objects, build.interfaces,
+			build.enums, build.staticFields, build.semanticAssembly.entryPoint, build.reflectable);
+
+	/**
+	 * `--check-reuse` of what the frontend kept from earlier builds (typed bodies, their IR, objects): the frontend run again on the
+	 * same sources from a fresh state (`SessionState.freshFromSources`) must give the IR pipeline the same inputs, positions
+	 * included. The IR and backend checks recompute from these inputs, so a body kept typed against a declaration's old position
+	 * passes them. The object cache may also hold content-named objects an edit left unused (`isGeneratedObjectOfRetypedFunction`),
+	 * which nothing reads and a fresh state has not made: those and their printers are left out. A live build is not checked: it
+	 * keeps the layouts and identities of the module it patches, which a fresh state has not.
+	 */
+	static function checkFrontendReuse(build:FrontendBuild, inputs:PipelineInputs):Void {
+		var fresh = build.context.over(build.context.state.freshFromSources()), freshBuild:Null<FrontendBuild> = null;
+		try
+			freshBuild = throughTables(fresh, build.entryModule, build.token, [], true, false, null, null, null).build
+		catch (error:CompileError)
+			throw new InternalError('--check-reuse: the frontend run afresh fails where the warm build passed (${error.message})');
+		if (freshBuild == null)
+			throw new InternalError("--check-reuse: the frontend run afresh produced no IR tables");
+		var made = [for (object in freshBuild.objects) object.name => true],
+			unusedPrinters = [
+				for (object in build.objects)
+					if (!made.exists(object.name)) IrProgramAssembler.anonymousStringName(object.name) => true
+			],
+			difference = PipelineSnapshot.inputsDifference(inputsOf(freshBuild),
+				inputsOf(build, [for (object in build.objects) if (made.exists(object.name)) object],
+				[for (fn in build.cached) if (!unusedPrinters.exists(fn.name)) fn]));
+		if (difference != null)
+			throw new InternalError('--check-reuse: what the frontend kept from earlier builds differs from a fresh frontend run ($difference)');
 	}
 
 	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */

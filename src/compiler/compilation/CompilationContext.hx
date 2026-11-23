@@ -67,10 +67,12 @@ class CompilationContext {
 
 	final owner:Compiler;
 	final defines:Map<String, String>;
+	final buildSemanticModels:Bool;
 
 	public function new(compiler:Compiler, state:SessionState, ?buildSemanticModels = true, ?requireEntry = false) {
 		this.owner = compiler;
 		this.requireEntry = requireEntry;
+		this.buildSemanticModels = buildSemanticModels;
 		this.state = state;
 		defines = owner.defines;
 		rootModules = owner.rootModules.copy();
@@ -87,6 +89,10 @@ class CompilationContext {
 			owner.sourceLoader.copy(), buildSemanticModels,
 			state.declarationOwners, options.keepSession);
 	}
+
+	/** A context with this one's configuration over `state`. */
+	public function over(state:SessionState):CompilationContext
+		return new CompilationContext(owner, state, buildSemanticModels, requireEntry);
 
 	public function parse(module:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>,
 			structural:Map<String, Bool>):Void {
