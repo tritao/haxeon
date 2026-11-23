@@ -295,8 +295,12 @@ class IrValueArrayProgramRewrite {
 				row = body.nextRow(row);
 			}
 		}
-		return found;
+		return found.length == 0 ? NO_ARRAY_TYPES : found;
 	}
+
+	/** The array types of a function that names none, shared. */
+	@:processWide("an empty list, only ever read")
+	static final NO_ARRAY_TYPES:Array<Int> = [];
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
 		var types = IrTypeIds.ofFunctions(program.functions), scratch = new IrPassScratch();

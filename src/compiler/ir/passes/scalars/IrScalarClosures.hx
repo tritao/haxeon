@@ -924,6 +924,10 @@ class IrClosureUses {
 
 	public final names:Array<String> = [];
 
+	/** The record of a function that does nothing with closures, shared. */
+	@:processWide("an empty record, only ever read")
+	static final NONE = new IrClosureUses();
+
 	function new() {}
 
 	public static function of(fn:IrFunction, types:IrTypeIds, scratch:IrPassScratch, useCounts:Array<Int>,
@@ -1018,6 +1022,6 @@ class IrClosureUses {
 				row = body.nextRow(row);
 			}
 		}
-		return uses;
+		return uses.events.length == 0 ? NONE : uses;
 	}
 }

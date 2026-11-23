@@ -35,6 +35,24 @@ class IrFacts {
 	var lastPrint = 0;
 	var lastReader = 0;
 
+	/** The lists of one fact the readers recorded, by fact and print, each kept once (`shared`). */
+	final singles:Map<Int, Array<Int>> = [];
+
+	/**
+	 * `reads`, a list of facts and their prints a reader recorded, or an equal one recorded before: most rewrites read one fact,
+	 * the same one, and their entries share its list.
+	 */
+	public function shared(reads:Array<Int>):Array<Int> {
+		if (reads.length != 2)
+			return reads;
+		var key = reads[0] * 65599 + reads[1], known = singles.get(key);
+		if (known != null && known[0] == reads[0] && known[1] == reads[1])
+			return known;
+		if (known == null)
+			singles.set(key, reads);
+		return reads;
+	}
+
 	/** By text, the number `intern` gave it. */
 	final interned:Map<String, Int> = [];
 

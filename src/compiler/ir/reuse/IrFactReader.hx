@@ -69,8 +69,10 @@ class IrFactReader {
 	}
 
 	/** The facts read since `begin`, pairs of a fact and its print. */
-	public function recorded():Array<Int>
-		return reads.length == 0 ? IrLineage.NO_FACTS : reads;
+	public function recorded():Array<Int> {
+		var table = facts;
+		return reads.length == 0 ? IrLineage.NO_FACTS : table == null ? reads : table.shared(reads);
+	}
 
 	/** The helpers asked for since `begin`, or null. */
 	public function requests():Null<Array<IrStageRequest>>
