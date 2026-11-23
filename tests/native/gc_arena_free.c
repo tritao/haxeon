@@ -11,6 +11,8 @@
 HL_API void hl_gc_profile_stats(unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*);
 HL_PRIM double hl_gc_allocated_since_collection(void);
 HL_API void *hl_hballoc(void);
+HL_API void hl_hbset(void *map, uchar *key, vdynamic *value);
+HL_API vdynamic *hl_hbget(void *map, uchar *key);
 
 #ifdef _MSC_VER
 #	define NOINLINE __declspec(noinline)
@@ -121,7 +123,7 @@ static NOINLINE varray *copied_out(void *arena) {
 		uchar *stored = (uchar*)hl_gc_alloc_noptr(sizeof(key));
 		memcpy(stored,key,sizeof(key));
 		int value = k;
-		hl_hbset_n(map,stored,3,hl_make_dyn(&value,&hlt_i32));
+		hl_hbset(map,stored,hl_make_dyn(&value,&hlt_i32));
 	}
 	hl_aptr(maps,void*)[0] = map;
 	// A map boxed in a Dynamic, as a table of references stores one.
@@ -317,7 +319,7 @@ int main(void) {
 		unsigned char *data = hl_aptr(hl_aptr(copy,varray*)[1],unsigned char*)[0];
 		void *map = hl_aptr(hl_aptr(copy,varray*)[2],void*)[0];
 		uchar key[8] = {'k','n','a',0};
-		vdynamic *value = hl_hbget_n(map,key,3);
+		vdynamic *value = hl_hbget(map,key);
 		if(!check(data[7] == 7 && data[31] == 31 && value && value->v.i == 13,"the copy, its bytes and its map survive the release and a collection")) goto done;
 		vdynamic *box = hl_aptr(hl_aptr(copy,varray*)[3],vdynamic*)[0];
 		if(!check(box->v.ptr == map,"a boxed map is copied with the map it holds")) goto done;
