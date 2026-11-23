@@ -620,7 +620,11 @@ static int run_renderer_tests(nk_surface surface, nk_graphics_api api, bool stre
                          nkgpu_last_error());
             result = 7;
         } else if (frames == 0) {
-            if (nkui_renderer_render_frame_overlay(renderer, list, surface, &frame_info) != NKUI_OK)
+            nk_surface_frame acquired = NK_INVALID_HANDLE;
+            nk_surface_frame_target target{};
+            target.struct_size = sizeof(target);
+            if (nk_surface_acquire_frame(surface, &acquired, &target) != NK_OK ||
+                nkui_renderer_render_into_frame(renderer, list, acquired, &frame_info, 1) != NKUI_OK)
                 result = 18;
             uint8_t gradient_left[4]{};
             uint8_t gradient_right[4]{};
@@ -631,6 +635,11 @@ static int run_renderer_tests(nk_surface surface, nk_graphics_api api, bool stre
             if (gradient_left[0] <= gradient_left[2] || gradient_right[2] <= gradient_right[0] ||
                 image_sample[2] <= image_sample[1])
                 result = 11;
+            if (acquired != NK_INVALID_HANDLE &&
+                (nk_surface_cancel_frame(acquired) != NK_OK ||
+                 nkui_renderer_render_into_frame(renderer, list, acquired, &frame_info, 1) !=
+                     NKUI_ERROR_INVALID_HANDLE))
+                result = 18;
         }
         if (!result) {
             nkui_text_metrics current_metrics{};

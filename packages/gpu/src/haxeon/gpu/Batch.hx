@@ -5,7 +5,7 @@ import haxeon.platform.BindingError;
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.RenderPassDesc;
-import haxeon.gpu.SurfaceFrame;
+import haxeon.platform.SurfaceFrame;
 
 import haxeon.gpu.Renderer;
 
@@ -82,7 +82,7 @@ class Batch implements Disposable {
 		return this;
 	}
 
-	/** Replays a sealed batch against the renderer's current surface frame. */
+	/** Replays a sealed batch on the render executor. The caller presents an acquired frame. */
 	public function submit(?frame:SurfaceFrame):Void {
 		ensureLive();
 		if (!sealed)
@@ -92,7 +92,8 @@ class Batch implements Disposable {
 			GpuResult.check(NativeKitGpu.nkgpu_batch_submit(renderer.nativeHandle(), value, null),
 				"batch.submit");
 		else {
-			frame.ensureRenderer(renderer);
+			if (!renderer.ownsFrame(frame))
+				throw BindingError.invalidArgument("Batch.submit", "Frame belongs to another surface");
 			GpuResult.check(NativeKitGpu.nkgpu_batch_submit(renderer.nativeHandle(), value,
 				frame.nativeTarget()), "batch.submit");
 		}

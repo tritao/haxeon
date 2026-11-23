@@ -894,11 +894,12 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_renderer_render_frame(renderer: nkui_renderer, list: nkui_display_list, surface: nk_surface, frame_info: ptr<const<nkui_frame_info>>) -> nkui_result;
 	/**
-	 * Renders a display list over the currently presented frame without clearing it.
-	 * The retained UI surface remains on-demand; request later frames with
-	 * nk_surface_request_frame() after state, input, or animation changes.
+	 * Draws a display list into an acquired frame on the render executor.
+	 * Use load_existing to preserve the frame's color contents. The caller owns
+	 * scheduling, presentation, and cancellation. Framebuffer dimensions in
+	 * frame_info must match the target.
 	 */
-	extern fn nkui_renderer_render_frame_overlay(renderer: nkui_renderer, list: nkui_display_list, surface: nk_surface, frame_info: ptr<const<nkui_frame_info>>) -> nkui_result;
+	extern fn nkui_renderer_render_into_frame(renderer: nkui_renderer, list: nkui_display_list, frame: nk_surface_frame, frame_info: ptr<const<nkui_frame_info>>, load_existing: nk_bool) -> nkui_result;
 	/**
 	 * Measures the GPU time of the renderer's frames while enabled (nkgpu_set_frame_timing). Off by default.
 	 */

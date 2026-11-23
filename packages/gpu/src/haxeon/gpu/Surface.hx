@@ -1,14 +1,13 @@
 package haxeon.gpu;
 
 import haxeon.platform.BindingError;
-import haxeon.platform.NativeKitError;
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.SurfaceFrameTiming;
 import haxeon.platform.Window;
 
 import haxeon.gpu.FrameTick;
-import haxeon.gpu.SurfaceFrame;
+import haxeon.platform.SurfaceFrame;
 
 import haxeon.gpu.Renderer;
 
@@ -90,16 +89,13 @@ class Surface implements Disposable {
 		frameSource.requestFrame();
 	}
 
-	/** Acquires an immutable surface frame for explicit batch submission. */
-	public function acquireFrame():haxeon.gpu.SurfaceFrame {
-		ensureLive();
-		var target = new SurfaceFrameTarget();
-		target.set_struct_size(SurfaceFrameTarget.size());
-		var acquired = NativeKit.nk_surface_acquire_frame(value, target);
-		if (acquired.status != Result.Ok)
-			throw new NativeKitError(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());
-		return new haxeon.gpu.SurfaceFrame(this, acquired.out_frame, acquired.out_target);
-	}
+	/** Acquires the platform surface's frame. */
+	public function acquireFrame():SurfaceFrame
+		return frameSource.acquireFrame();
+
+	@:allow(haxeon.gpu.Renderer)
+	function platformSurface():PlatformSurface
+		return frameSource;
 
 	public function createRenderer():Renderer {
 		ensureLive();
@@ -152,7 +148,6 @@ class Surface implements Disposable {
 	function windowOwner():Window
 		return window;
 
-	@:allow(haxeon.gpu.SurfaceFrame)
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("Surface.ensureLive", "GPU surface has been disposed");

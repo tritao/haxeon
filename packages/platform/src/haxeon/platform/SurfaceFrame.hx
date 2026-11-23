@@ -1,11 +1,7 @@
-package haxeon.gpu;
+package haxeon.platform;
 
 import haxeon.platform.BindingError;
 
-import haxeon.gpu.Batch;
-import haxeon.gpu.Surface;
-
-import haxeon.gpu.Renderer;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
@@ -19,12 +15,12 @@ import haxeon.platform.NativeKitError;
  */
 class SurfaceFrame {
 	final surface:Surface;
-	final value:Dynamic;
-	final target:Dynamic;
+	final value:SurfaceFrameHandle;
+	final target:SurfaceFrameTarget;
 	var finished:Bool = false;
 
-	@:allow(haxeon.gpu.Surface)
-	function new(surface:Surface, value:Dynamic, target:Dynamic) {
+	@:allow(haxeon.platform.Surface)
+	function new(surface:Surface, value:SurfaceFrameHandle, target:SurfaceFrameTarget) {
 		this.surface = surface;
 		this.value = value;
 		this.target = target;
@@ -34,9 +30,9 @@ class SurfaceFrame {
 	public function present():Void {
 		ensureOpen();
 		var status = NativeKit.nk_surface_present_frame(value);
+		if (status != Result.ErrorWrongThread) finished = true;
 		if (status != Result.Ok)
 			throw new NativeKitError(status, "surfaceFrame.present", NativeKit.nk_last_error());
-		finished = true;
 	}
 
 	/** Cancels the frame and releases its platform transaction. */
@@ -52,24 +48,23 @@ class SurfaceFrame {
 		return finished;
 
 	@:allow(haxeon.gpu.Batch)
-	@:allow(haxeon.gpu.Renderer)
-	function nativeTarget():Dynamic {
+	function nativeTarget():SurfaceFrameTarget {
 		ensureOpen();
 		return target;
 	}
 
-	@:allow(haxeon.gpu.Batch)
-	@:allow(haxeon.gpu.Renderer)
-	function ensureRenderer(renderer:Renderer):Void {
+	/** Native token for render-executor interoperability. */
+	public function nativeHandle():SurfaceFrameHandle {
 		ensureOpen();
-		if (!renderer.ownsSurface(surface))
-			throw BindingError.invalidArgument("SurfaceFrame.ensureRenderer",
-				"GPU surface frame belongs to another renderer");
+		return value;
 	}
+
+	public function belongsTo(surface:Surface):Bool
+		return this.surface == surface;
 
 	function ensureOpen():Void {
 		if (finished)
-			throw BindingError.invalidState("SurfaceFrame.ensureOpen", "GPU surface frame has already finished");
-		surface.ensureLive();
+			throw BindingError.invalidState("SurfaceFrame.ensureOpen", "Surface frame has already finished");
+		surface.nativeHandle();
 	}
 }

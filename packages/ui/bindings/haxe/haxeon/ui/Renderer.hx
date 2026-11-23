@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 import NativeKitUI;
+import haxeon.platform.SurfaceFrame;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
@@ -42,11 +43,12 @@ class Renderer implements Disposable {
 			frame.nativeValue()), "renderer.renderFrame");
 	}
 
-	/** Composites a display list over contents already rendered in the current frame. */
-	public function renderFrameOverlay(list:DisplayList, surface:Surface, frame:FrameInfo):Void {
+	/** Draws a display list on the render executor into an acquired frame owned by the caller. */
+	public function renderIntoFrame(list:DisplayList, frame:SurfaceFrame, info:FrameInfo,
+			loadExisting:Bool = true):Void {
 		ensureLive();
-		UiResult.check(NativeKitUI.nkui_renderer_render_frame_overlay(value, list.nativeHandle(),
-			surface.nativeHandle(), frame.nativeValue()), "renderer.renderFrameOverlay");
+		UiResult.check(NativeKitUI.nkui_renderer_render_into_frame(value, list.nativeHandle(), frame.nativeHandle(),
+			info.nativeValue(), loadExisting), "renderer.renderIntoFrame");
 	}
 
 	/** Registers a native-owned shader implementation for a custom effect. */

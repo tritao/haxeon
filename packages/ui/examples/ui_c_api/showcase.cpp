@@ -772,7 +772,7 @@ struct WebShowcase {
 
             if (nkgpu_frame_begin_on(gpu, &target, 1) != NKGPU_OK ||
                 nkgpu_end_frame(gpu) != NKGPU_ERROR_WRONG_STATE ||
-                nkgpu_end_frame_deferred_present(gpu) != NKGPU_OK)
+                nkgpu_frame_end_on(gpu) != NKGPU_OK)
                 return false;
 
             constexpr uint32_t count = 2;
@@ -837,7 +837,7 @@ struct WebShowcase {
                 nkui_layout_session_render_into_frame(showcase.renderer, session, frame, &info);
             if (result == NKUI_OK &&
                 (nkgpu_frame_begin_on(gpu, &target, 0) != NKGPU_OK ||
-                 nkgpu_end_frame_deferred_present(gpu) != NKGPU_OK))
+                 nkgpu_frame_end_on(gpu) != NKGPU_OK))
                 return false;
             const auto overlay = pixel(32, 32);
             const auto outside = pixel(90, 32);

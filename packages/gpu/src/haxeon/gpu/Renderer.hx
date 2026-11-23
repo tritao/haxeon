@@ -15,7 +15,6 @@ import haxeon.gpu.RenderPassDesc;
 import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
 import haxeon.gpu.Surface;
-import haxeon.gpu.SurfaceFrame;
 import haxeon.gpu.Timestamp;
 import haxeon.gpu.Uniforms;
 
@@ -96,31 +95,9 @@ class Renderer implements Disposable {
 	/** Draws one surface frame and preserves the original error if cleanup also fails. */
 	public function withFrame(draw:Void->Void):Void {
 		beginFrame();
-		drawFrame(draw, true);
-	}
-
-	/** Draws into an acquired frame. The caller presents or cancels it. */
-	public function withFrameOn(frame:SurfaceFrame, draw:Void->Void, clear:Bool = true):Void {
-		ensureLive();
-		if (frameActive)
-			throw BindingError.invalidState("Renderer.withFrameOn", "GPU frame is already active");
-		if (frame == null)
-			throw BindingError.invalidArgument("Renderer.withFrameOn", "Acquired frame is required");
-		frame.ensureRenderer(this);
-		GpuResult.check(NativeKitGpu.nkgpu_frame_begin_on(value, frame.nativeTarget(), clear ? 1 : 0),
-			"renderer.withFrameOn");
-		frameActive = true;
-		passActive = true;
-		drawFrame(draw, false);
-	}
-
-	function drawFrame(draw:Void->Void, present:Bool):Void {
 		try {
 			draw();
-			if (present)
-				endFrame();
-			else
-				finishFrame(NativeKitGpu.nkgpu_end_frame_deferred_present(value), "renderer.withFrameOn");
+			endFrame();
 		} catch (error:Dynamic) {
 			try abortFrame() catch (_:Dynamic) {}
 			throw error;
@@ -332,9 +309,9 @@ class Renderer implements Disposable {
 	public function batch():Batch
 		return Batch.begin(this);
 
-	@:allow(haxeon.gpu.SurfaceFrame)
-	function ownsSurface(surface:Surface):Bool
-		return this.surface == surface;
+	@:allow(haxeon.gpu.Batch)
+	function ownsFrame(frame:haxeon.platform.SurfaceFrame):Bool
+		return frame.belongsTo(surface.platformSurface());
 
 	public function uniforms(size:Int):Uniforms {
 		ensureFrame();
@@ -367,8 +344,7 @@ class Renderer implements Disposable {
 		return disposed;
 
 	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.Pipeline,
-		haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch, haxeon.gpu.CommandBuffer, haxeon.gpu.Uniforms,
-		haxeon.gpu.SurfaceFrame)
+		haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch, haxeon.gpu.CommandBuffer, haxeon.gpu.Uniforms)
 	function ensureFrame():Void {
 		ensureLive();
 		if (!frameActive)
@@ -377,7 +353,7 @@ class Renderer implements Disposable {
 
 	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.ShaderBuilder,
 		haxeon.gpu.Pipeline, haxeon.gpu.PipelineBuilder, haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch,
-		haxeon.gpu.CommandBuffer, haxeon.gpu.Uniforms, haxeon.gpu.SurfaceFrame)
+		haxeon.gpu.CommandBuffer, haxeon.gpu.Uniforms)
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("Renderer.ensureLive", "GPU renderer has been disposed");
@@ -385,7 +361,7 @@ class Renderer implements Disposable {
 
 	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.ShaderBuilder,
 		haxeon.gpu.Pipeline, haxeon.gpu.PipelineBuilder, haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch,
-		haxeon.gpu.Uniforms, haxeon.gpu.SurfaceFrame)
+		haxeon.gpu.Uniforms)
 	function registerResource(release:Void->Void):haxeon.platform.DisposalRegistration {
 		ensureLive();
 		return resources.register(release);
@@ -393,7 +369,7 @@ class Renderer implements Disposable {
 
 	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.ShaderBuilder,
 		haxeon.gpu.Pipeline, haxeon.gpu.PipelineBuilder, haxeon.gpu.Readback, haxeon.gpu.Batch,
-		haxeon.gpu.Uniforms, haxeon.gpu.SurfaceFrame)
+		haxeon.gpu.Uniforms)
 	@:allow(haxeon.gpu.Timestamp)
 	function ensureResourceOperation():Void {
 		ensureLive();

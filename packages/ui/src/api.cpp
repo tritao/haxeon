@@ -4016,7 +4016,8 @@ extern "C" nkui_result nkui_renderer_get_gpu_frame_time(nkui_renderer renderer,
 
 static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_display_list list,
                                               nk_surface surface, const nkui_frame_info *frame_info,
-                                              bool load_existing) {
+                                              bool load_existing,
+                                              const nk_surface_frame_target *acquired_target) {
     if (!frame_info || frame_info->struct_size < sizeof(*frame_info) ||
         !std::isfinite(frame_info->logical_width) || !std::isfinite(frame_info->logical_height) ||
         !std::isfinite(frame_info->pixel_scale) || frame_info->logical_width <= 0.0f ||
@@ -4025,8 +4026,9 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
         return NKUI_ERROR_INVALID_ARGUMENT;
     const int32_t width = frame_info->framebuffer_width;
     const int32_t height = frame_info->framebuffer_height;
-    const bool threaded = nk::core::render_executor_physical();
-    if (!surface || nk_surface_set_frame_mode(surface, NK_SURFACE_FRAME_ON_DEMAND) != NK_OK)
+    const bool threaded = !acquired_target && nk::core::render_executor_physical();
+    if (!acquired_target &&
+        (!surface || nk_surface_set_frame_mode(surface, NK_SURFACE_FRAME_ON_DEMAND) != NK_OK))
         return NKUI_ERROR_INVALID_ARGUMENT;
     nk_surface_frame frame = NK_INVALID_HANDLE;
     uint64_t frame_acquired_at_ns = 0;
@@ -4040,7 +4042,13 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
     } frame_guard;
     nk_surface_frame_target frame_target{};
     frame_target.struct_size = sizeof(frame_target);
-    if (threaded) {
+    if (acquired_target) {
+        frame_target = *acquired_target;
+        if (frame_target.width != width || frame_target.height != height)
+            return NKUI_ERROR_INVALID_ARGUMENT;
+        if (nkgpu_bind_frame_target(&frame_target) != NKGPU_OK)
+            return NKUI_ERROR_RENDERING;
+    } else if (threaded) {
         drain_orphan_completions();
 #if defined(__ANDROID__)
         /* The first frame can outlast the next Android frame callback. A frame still in flight on this
@@ -4076,7 +4084,7 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
     if (!threaded)
         discard_stale_renderer(*renderer_slot, frame_target);
     if (!threaded && !renderer_slot->renderer) {
-        auto ui_renderer = nkui::create_ui_renderer(surface);
+        auto ui_renderer = nkui::create_ui_renderer(surface, acquired_target);
         if (!ui_renderer)
             return NKUI_ERROR_RENDERING;
         renderer_slot->renderer = std::move(ui_renderer);
@@ -4550,14 +4558,21 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
 extern "C" nkui_result nkui_renderer_render_frame(nkui_renderer renderer, nkui_display_list list,
                                                   nk_surface surface,
                                                   const nkui_frame_info *frame_info) {
-    return renderer_render_frame_impl(renderer, list, surface, frame_info, false);
+    return renderer_render_frame_impl(renderer, list, surface, frame_info, false, nullptr);
 }
 
-extern "C" nkui_result nkui_renderer_render_frame_overlay(nkui_renderer renderer,
-                                                          nkui_display_list list,
-                                                          nk_surface surface,
-                                                          const nkui_frame_info *frame_info) {
-    return renderer_render_frame_impl(renderer, list, surface, frame_info, true);
+extern "C" nkui_result nkui_renderer_render_into_frame(nkui_renderer renderer,
+                                                       nkui_display_list list,
+                                                       nk_surface_frame frame,
+                                                       const nkui_frame_info *frame_info,
+                                                       nk_bool load_existing) {
+    if (load_existing > 1)
+        return NKUI_ERROR_INVALID_ARGUMENT;
+    nk::core::FrameTicket ticket{};
+    if (!nk::core::lookup_frame_ticket(frame, &ticket))
+        return NKUI_ERROR_INVALID_HANDLE;
+    return renderer_render_frame_impl(renderer, list, ticket.surface, frame_info, load_existing != 0,
+                                      &ticket.target);
 }
 
 namespace {

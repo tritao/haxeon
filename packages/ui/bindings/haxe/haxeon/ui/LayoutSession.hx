@@ -3,6 +3,7 @@ package haxeon.ui;
 import haxeon.ui.debug.RenderCost;
 
 import NativeKitUI;
+import haxeon.platform.SurfaceFrame;
 import NativeKitUI.nkui_layout_measure_callbackCallback;
 import haxe.io.Bytes;
 import nativekit.ffi.NativeKit;
@@ -299,14 +300,14 @@ class LayoutSession implements Disposable {
 		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
 	}
 
-	/** Draws the submitted tree into a caller-owned frame and preserves its color contents. */
-	public function renderIntoFrame(renderer:Renderer, frame:SurfaceFrameHandle, info:FrameInfo):Void {
+	/** Draws on the render executor into a caller-owned frame, preserving its color contents. */
+	public function renderIntoFrame(renderer:Renderer, frame:SurfaceFrame, info:FrameInfo):Void {
 		ensureLive();
 		var started = RenderCost.time();
 		updateRenderablePaints();
 		if (RenderCost.enabled) RenderCost.renderable += Sys.time() - started;
 		var nativeStarted = RenderCost.time();
-		UiResult.check(NativeKitUI.nkui_layout_session_render_into_frame(renderer.nativeHandle(), value, frame,
+		UiResult.check(NativeKitUI.nkui_layout_session_render_into_frame(renderer.nativeHandle(), value, frame.nativeHandle(),
 			info.nativeValue()), "layoutSession.renderIntoFrame");
 		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
 	}

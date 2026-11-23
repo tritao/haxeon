@@ -18,7 +18,7 @@ import haxeon.ui.ParagraphStyle;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
+import haxeon.platform.Surface;
 import haxeon.ui.TextAlignment;
 import haxeon.ui.TextColorRange;
 import haxeon.ui.TextDirection;
@@ -63,6 +63,7 @@ class Transaction {
 			return 12;
 		}
 		var surface = createdSurface.out_surface.borrow();
+		scoped var managedSurface = Surface.borrowNativeHandle(surface);
 
 		var list = DisplayList.create();
 		var path = new PathBuilder().moveTo(0.0, 0.0).lineTo(244.0, 12.0).lineTo(244.0, 180.0).lineTo(12.0,
@@ -161,12 +162,13 @@ class Transaction {
 					return 15;
 				var frame = new FrameInfo(256.0, 192.0, size.out_width, size.out_height, scale.out_scale);
 				try {
-					renderer.renderFrame(list, Surface.fromNativeHandle(surface), frame);
+					var acquired = managedSurface.acquireFrame();
+					defer if (!acquired.isFinished()) acquired.cancel();
+					renderer.renderIntoFrame(list, acquired, frame, false);
+					acquired.present();
 				} catch (_:Dynamic) {
 					return 16;
 				}
-				if (NativeKit.nk_surface_present(surface) != Result.Ok)
-					return 16;
 				rendered++;
 			}
 			attempts++;

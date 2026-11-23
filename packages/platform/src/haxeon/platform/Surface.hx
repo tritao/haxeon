@@ -13,6 +13,7 @@ import nativekit.ffi.NativeKitTypes.SurfaceFrameCallbackCallback;
 import nativekit.ffi.NativeKitTypes.SurfaceHandle;
 import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
+import nativekit.ffi.NativeKitTypes.SurfaceFrameTarget;
 
 /** Owns one graphics surface attached to a NativeKit window. */
 class Surface implements Disposable {
@@ -64,6 +65,17 @@ class Surface implements Disposable {
 		var subscription = new SurfaceFrameSubscription(this, callback);
 		frameSubscription = subscription;
 		return subscription;
+	}
+
+	/** Acquires the surface target for render-executor submission. */
+	public function acquireFrame():SurfaceFrame {
+		ensureLive();
+		var target = new SurfaceFrameTarget();
+		target.set_struct_size(SurfaceFrameTarget.size());
+		var acquired = NativeKit.nk_surface_acquire_frame(value, target);
+		if (acquired.status != Result.Ok)
+			throw new NativeKitError(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());
+		return new SurfaceFrame(this, acquired.out_frame, acquired.out_target);
 	}
 
 	/** Captures timing for the current frame callback. Backends may omit a presentation ID. */

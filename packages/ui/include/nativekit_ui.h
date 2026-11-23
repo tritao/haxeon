@@ -1215,13 +1215,15 @@ NKUI_API nkui_result nkui_renderer_render_frame(nkui_renderer renderer, nkui_dis
                                                 const nkui_frame_info *frame_info);
 
 /**
- * Renders a display list over the currently presented frame without clearing it.
- * The retained UI surface remains on-demand; request later frames with
- * nk_surface_request_frame() after state, input, or animation changes.
+ * Draws a display list into an acquired frame on the render executor.
+ * Use load_existing to preserve the frame's color contents. The caller owns
+ * scheduling, presentation, and cancellation. Framebuffer dimensions in
+ * frame_info must match the target.
  */
-NKUI_API nkui_result nkui_renderer_render_frame_overlay(nkui_renderer renderer,
-                                                        nkui_display_list list, nk_surface surface,
-                                                        const nkui_frame_info *frame_info);
+NKUI_API nkui_result nkui_renderer_render_into_frame(nkui_renderer renderer,
+                                                    nkui_display_list list, nk_surface_frame frame,
+                                                    const nkui_frame_info *frame_info,
+                                                    nk_bool load_existing);
 
 /**
  * Releases the caller's ownership of a UI resource.
