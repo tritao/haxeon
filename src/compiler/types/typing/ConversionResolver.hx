@@ -131,7 +131,9 @@ class ConversionResolver {
 	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
 			?use:NullSafetyUse):TypedExpression {
 		var converted = convert(value, expected, callee, position, "E1009");
-		session.nullSafety.checkConversion(value, expected, use == null ? Argument(callee, position) : use);
+		// The use is made only where the checker looks: a call coerces every argument of every body.
+		if (session.nullSafety.active())
+			session.nullSafety.checkConversion(value, expected, use == null ? Argument(callee, position) : use);
 		return converted;
 	}
 

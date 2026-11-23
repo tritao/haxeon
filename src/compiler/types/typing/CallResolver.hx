@@ -220,7 +220,9 @@ class CallResolver {
 			var call = typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
 				contextualGenericArguments);
 			var declared = declaredReceiver == null ? receiver : declaredReceiver;
-			session.nullSafety.checkReceiver(declared, name, NullSafety.memberSpan(declared.span, name, span));
+			// The member's span is made only where the checker looks.
+			if (session.nullSafety.active())
+				session.nullSafety.checkReceiver(declared, name, NullSafety.memberSpan(declared.span, name, span));
 			return call;
 		} catch (missing:MissingMember) {
 			// Only this call's own member is missing (not one called among its arguments), and only a value takes an extension:
@@ -1886,11 +1888,13 @@ class CallResolver {
 		];
 		while (typedArguments.length < expected.length)
 			typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
-		// As coerceArguments, with the parameters' names for the null-safety checker; an optional one may take null.
+		// As coerceArguments, with the parameters' names for the null-safety checker where it looks; an optional one may take null.
+		var checked = session.nullSafety.active();
 		typedArguments = [for (index in 0...typedArguments.length) {
 			var parameter = enumCase.params[index];
-			bodyTyper.coerceArgument(typedArguments[index], expected[index], name, index + 1,
-				parameter == null || parameter.optional ? Unchecked : NamedArgument(name, parameter.name ?? ""));
+			var use = checked && parameter != null
+				&& !parameter.optional ? NamedArgument(name, parameter.name ?? "") : Unchecked;
+			bodyTyper.coerceArgument(typedArguments[index], expected[index], name, index + 1, use);
 		}];
 		// The constructed enum's storage is named after its type arguments, so a literal's structure among them closes here.
 		var resultType:CompilerType = enumCase.aliasType ?? session.monomorphs.closeReached(instance);

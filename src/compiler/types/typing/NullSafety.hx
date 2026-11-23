@@ -64,6 +64,12 @@ class NullSafety {
 
 	final session:TypingSession;
 
+	/** The mode of what is not checked, shared: every body asks for one. */
+	static final OFF:{mode:NullSafetyMode, warns:Bool} = {mode: Off, warns: false};
+
+	/** The fold `resolve` reuses for every body. */
+	final fold = new ModeFold();
+
 	/** The compile's rules (`CompileOptions.nullSafety`). */
 	public var rules:Array<NullSafetyRule> = [];
 
@@ -168,13 +174,13 @@ class NullSafety {
 	/** The mode of the class or abstract `owner` alone (its rules and metadata), which decides whether its fields' initialization is checked. */
 	public function declarationMode(owner:String):{mode:NullSafetyMode, warns:Bool} {
 		var declaration = declarationOf(owner);
-		return declaration == null ? {mode: Off, warns: false} : resolve(owner, declaration, []);
+		return declaration == null ? OFF : resolve(owner, declaration, []);
 	}
 
 	/** The mode of a member with `memberMetadata` of `owner`, as Haxe's `safety_mode` reads the rules, the type's metadata, then the member's. */
 	public function memberMode(owner:String, memberMetadata:Array<AstMetadata>):{mode:NullSafetyMode, warns:Bool} {
 		var declaration = declarationOf(owner);
-		return declaration == null ? {mode: Off, warns: false} : resolve(owner, declaration, memberMetadata);
+		return declaration == null ? OFF : resolve(owner, declaration, memberMetadata);
 	}
 
 	function resolve(owner:String, declaration:CheckedDeclaration,
@@ -184,41 +190,25 @@ class NullSafety {
 			} {
 		// The standard library is not checked, as stock Haxe's is not unless a rule names it.
 		if (declaration.span.file.isStandardLibrarySource)
-			return {mode: Off, warns: false};
-		var entries:Array<NullSafetyMode> = [];
+			return OFF;
+		// Haxe's `safety_mode` over the rules, then the type's metadata, then the member's: Off anywhere wins, Strict and
+		// StrictThreaded override, and Loose applies only when nothing came before. Folded as met, as every body asks.
+		fold.reset();
 		if (rules.length > 0) {
 			var typeName = owner.substr(owner.lastIndexOf(".") + 1),
 				modulePath = modulePathOf(owner, declaration.span);
 			for (rule in rules)
 				if (rule.matches(modulePath, typeName))
-					entries.push(rule.mode);
+					fold.add(rule.mode);
 		}
 		for (entry in declaration.metadata)
 			if (entry.name == "nullSafety")
-				entries.push(metadataMode(entry));
+				fold.add(metadataMode(entry));
 		for (entry in memberMetadata)
 			if (entry.name == "nullSafety")
-				entries.push(metadataMode(entry));
-		if (entries.length == 0)
-			return {mode: Off, warns: false};
-		// Haxe's `safety_mode`: Off anywhere wins, Strict and StrictThreaded override, and Loose applies only when nothing came before.
-		var mode:Null<NullSafetyMode> = null, warnsOnly = true;
-		for (entry in entries) {
-			switch entry {
-				case Off:
-					return {mode: Off, warns: false};
-				case Loose:
-					if (mode == null)
-						mode = Loose;
-					warnsOnly = false;
-				case Warn:
-					mode = Strict;
-				case Strict, StrictThreaded:
-					mode = entry;
-					warnsOnly = false;
-			}
-		}
-		return mode == null ? {mode: Off, warns: false} : {mode: mode, warns: warnsOnly};
+				fold.add(metadataMode(entry));
+		var found = fold.result();
+		return found == null ? OFF : found;
 	}
 
 	/** A module's dot path from the type's package and its file's name, which holds wherever the file was loaded from. */
@@ -580,4 +570,41 @@ private typedef CheckedDeclaration = {
 	final metadata:Array<AstMetadata>;
 	final span:SourceSpan;
 	final member:String->Null<Array<AstMetadata>>;
+}
+
+/** Haxe's `safety_mode` over the modes a body's rules and metadata state, in order (`NullSafety.resolve`). */
+private class ModeFold {
+	var off = false;
+	var mode:Null<NullSafetyMode> = null;
+	var warnsOnly = true;
+
+	public function new() {}
+
+	public function reset():Void {
+		off = false;
+		mode = null;
+		warnsOnly = true;
+	}
+
+	/** Off anywhere wins, Strict and StrictThreaded override, and Loose applies only when nothing came before. */
+	public function add(entry:NullSafetyMode):Void
+		switch entry {
+			case Off:
+				off = true;
+			case Loose:
+				if (mode == null)
+					mode = Loose;
+				warnsOnly = false;
+			case Warn:
+				mode = Strict;
+			case Strict, StrictThreaded:
+				mode = entry;
+				warnsOnly = false;
+		}
+
+	/** The mode found, or null when it is Off. */
+	public function result():Null<{mode:NullSafetyMode, warns:Bool}> {
+		var found = mode;
+		return off || found == null ? null : {mode: found, warns: warnsOnly};
+	}
 }
