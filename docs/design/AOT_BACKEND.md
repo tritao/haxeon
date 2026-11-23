@@ -439,7 +439,8 @@ publishes it beside the executable, where the release package takes it from.
 
 Milestones 1 to 5 are done. `tests/aot/test-aot-programs.sh --all` passes all 645 programs of `tests/programs` with the
 JIT's exact exit code, stdout and stderr, stack traces included; `tests/aot/programs.txt` lists them and is the runner's
-default, and the `ci` suite `aot-programs` runs it. No IR construct of the programs is unsupported.
+default, and the `ci` suite `aot-programs` runs it; `aot-programs-release` runs it on a release build, and `aot-programs-sanitized`
+with AddressSanitizer and UndefinedBehaviorSanitizer (`--sanitize`). No IR construct of the programs is unsupported.
 
 Milestone 2: the C lowering writes what `HlLower` writes inline, from the same decisions
 (`HlLoweringDecisions`: the value array constants and read selection, `cNativeInvocation`): the array push and byte read and write
