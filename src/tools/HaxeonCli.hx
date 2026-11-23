@@ -1097,7 +1097,7 @@ class HaxeonCli {
 							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines,
 								options.jobs, false, false, false, 0.0,
-								options.selfHosted, change.compilerOnly ? CompilerOnly : app != null
+								options.selfHosted, change.compilerOnly ? Edit : app != null
 								? BuildScope.Module : Full, options.live,
 								instrument, session,
 								options.buildMode == "development", null, null, options.style);

@@ -20,6 +20,9 @@ class Executor implements ExecutionBackend {
 	var digests = new ContentDigestCache();
 	final sharedDigests:Null<ContentDigestCache>;
 
+	/** Whether `execute` writes the digest store when it ends; a watch's edit build leaves that to the watch's idle time. */
+	final saveDigests:Bool;
+
 	/** Actions whose fingerprint another action consumes; see `fingerprintFor`. */
 	var dependedOn:Map<String, Bool> = [];
 
@@ -27,7 +30,8 @@ class Executor implements ExecutionBackend {
 	final verbosity:Verbosity;
 
 	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void,
-			?sharedDigests:ContentDigestCache, ?verbosity:Verbosity) {
+			?sharedDigests:ContentDigestCache, ?verbosity:Verbosity, saveDigests:Bool = true) {
+		this.saveDigests = saveDigests;
 		this.verbosity = verbosity == null ? Verbosity.Normal : verbosity;
 		this.sharedDigests = sharedDigests;
 		this.environment = environment;
@@ -48,7 +52,8 @@ class Executor implements ExecutionBackend {
 		var result = executeWaves(plan);
 		#end
 		// Kept now, not when the process ends: a watch session or the program `haxeon run` starts may run for hours.
-		digests.save();
+		if (saveDigests)
+			digests.save();
 		return result;
 	}
 

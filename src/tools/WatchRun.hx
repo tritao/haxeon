@@ -86,6 +86,9 @@ class WatchRun {
 					// Writes that are not edits (the app's log, build output) also notify; do not scan again for them at once.
 					if (notified)
 						Sys.sleep(NOTIFIED_IDLE_SECONDS);
+					else if (session != null)
+						// No save is pending and the sources are as the last build found them: what it left for later is done now.
+						session.runIdleWork();
 					continue;
 				}
 				var previous = baseline;
@@ -128,8 +131,10 @@ class WatchRun {
 					WatchEvents.emit(events, "build-failed", build);
 					continue;
 				}
+				// A project resolved again may watch other directories; an edit of Haxe contents keeps the same one.
+				if (updated != project)
+					watcher = reopenWatcher(watcher, project);
 				project = updated;
-				watcher = reopenWatcher(watcher, project);
 				var published = liveHost == null ? null : publication(output);
 				WatchEvents.emit(events, "build-ok", build, published == null ? null : published.revision);
 				if (liveHost != null && compilerOnly && published != null)
@@ -165,6 +170,8 @@ class WatchRun {
 		}
 		if (watcher != null)
 			watcher.close();
+		if (session != null)
+			session.runIdleWork();
 		process.close();
 		finishProfile(profile);
 		printLog(logPath, logOffset);

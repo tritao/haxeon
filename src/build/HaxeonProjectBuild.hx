@@ -2,6 +2,8 @@ package build;
 
 import build.BuildEnvironment.BuildProfile;
 import build.BuildScope;
+import build.execution.ActionFingerprint;
+import build.execution.ActionResult.ExecutionResult;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.ExecutionPlan;
@@ -91,7 +93,7 @@ class HaxeonProjectBuild {
 				));
 		switch scope {
 			case Full:
-			case CompilerOnly:
+			case CompilerOnly | Edit:
 				execution = compilerExecution(execution);
 			case Check | Module:
 				execution = checkExecution(execution);
@@ -108,7 +110,8 @@ class HaxeonProjectBuild {
 				Sys.print(timings.toString());
 			return 0;
 		}
-		var result = ExecutionBackendFactory.create(environment, jobs, null, session,
+		var result = scope == Edit && session != null ? executeEdit(execution, environment, jobs, session,
+			shown.verbosity) : ExecutionBackendFactory.create(environment, jobs, null, session,
 			shown.verbosity).execute(execution);
 		timings.add("execute", result.elapsedMs);
 		if (explain)
@@ -116,6 +119,33 @@ class HaxeonProjectBuild {
 		if (timingsEnabled)
 			Sys.print(timings.toString());
 		return result.exitCode;
+	}
+
+	/**
+		An `Edit` build: each compile runs unchecked, after its recorded fingerprint is dropped, and records its fingerprint when the
+		watch is idle. The digest store is written then too.
+	**/
+	static function executeEdit(plan:ExecutionPlan, environment:BuildEnvironment, jobs:Int, session:BuildSession,
+			verbosity:Verbosity):ExecutionResult {
+		var target = environment.target.toString(), buildRoot = environment.buildRoot;
+		for (action in plan.actions)
+			ActionFingerprint.forget(buildRoot, action);
+		// Run on every build (`alwaysRun`), so the executor neither checks nor records a fingerprint.
+		var unchecked = new ExecutionPlan([
+			for (action in plan.actions)
+				new ExecutionAction(action.id, [], action.inputs, action.outputs, action.description, action.action,
+				false, true)
+		]);
+		var result = ExecutionBackendFactory.create(environment, jobs, null, session, verbosity,
+			false).execute(unchecked);
+		if (result.exitCode == 0)
+			for (action in plan.actions)
+				// From the inputs the compiler reported reading, so an edit saved since the compile is not taken as compiled.
+				session.whenIdle("fingerprint:" + action.id.key(),
+					() -> ActionFingerprint.save(buildRoot, action,
+					ActionFingerprint.compute(action, buildRoot, target, [], session.digests, true)));
+		session.whenIdle("digests", session.digests.save);
+		return result;
 	}
 
 	/** The compile and every action it depends on (the FFI imports it reads), without the native libraries. */

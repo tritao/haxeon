@@ -97,6 +97,7 @@ class BuildSystemMain {
 		testDigestStore();
 		testSharedDigestsAcrossExecutions();
 		testWorkerVersionMemo();
+		testIdleWork();
 		testWatchChangeClassification();
 		testWatchSnapshot();
 		testWatchEventsFile();
@@ -866,6 +867,41 @@ class BuildSystemMain {
 ");
 		expect(!executor().execute(new ExecutionPlan([action])).actions[0].skipped && runs == 3,
 			"a same-size edit right after a build still reruns the action");
+		FileTree.remove(root);
+	}
+
+	/**
+		A watch's edit build leaves work for when the watch is idle (`BuildSession.whenIdle`): the latest under each key, in the order
+		first left, once. It drops the action's recorded fingerprint first (`ActionFingerprint.forget`), so a build in between reruns
+		the action rather than taking outputs it did not see for up to date.
+	**/
+	static function testIdleWork():Void {
+		var session = new BuildSession(), ran:Array<String> = [];
+		session.whenIdle("a", () -> ran.push("a1"));
+		session.whenIdle("b", () -> ran.push("b"));
+		session.whenIdle("a", () -> ran.push("a2"));
+		session.runIdleWork();
+		session.runIdleWork();
+		expect(ran.join(",") == "a2,b",
+			'idle work runs the latest under each key, in first order, once: ${ran.join(",")}');
+		var root = temporaryDirectory("idle-work"),
+			buildRoot = Path.join([root, "build"]),
+			source = Path.join([root, "input.txt"]),
+			output = Path.join([root, "output.txt"]),
+			runs = 0;
+		File.saveContent(source, "input\n");
+		var environment = new BuildEnvironment(root, buildRoot),
+			action = new ExecutionAction(new ActionId("idle-work"), [], [source], [output], "write output",
+				Compiler("compiler", [], root, new Map(), () -> {
+					runs++;
+					File.saveContent(output, "built\n");
+					return 0;
+				}));
+		var execute = () -> new Executor(environment, 1, _ -> {}, session.digests).execute(new ExecutionPlan([action]));
+		execute();
+		expect(execute().actions[0].skipped && runs == 1, "a recorded fingerprint skips the action");
+		ActionFingerprint.forget(buildRoot, action);
+		expect(!execute().actions[0].skipped && runs == 2, "a forgotten fingerprint reruns the action");
 		FileTree.remove(root);
 	}
 

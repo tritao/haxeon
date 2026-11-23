@@ -146,6 +146,13 @@ class ActionFingerprint {
 		File.saveContent(path, Json.stringify({fingerprint: fingerprint}) + "\n");
 	}
 
+	/** Drops the recorded fingerprint, so no build takes outputs it is about to replace for up to date. */
+	public static function forget(buildRoot:String, action:ExecutionAction):Void {
+		var path = recordPath(buildRoot, action);
+		if (FileSystem.exists(path))
+			FileSystem.deleteFile(path);
+	}
+
 	public static function outputsExist(action:ExecutionAction):Bool {
 		if (action.outputs.length == 0)
 			return false;
