@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.NominalInheritance;
 import compiler.types.analysis.BindingWalker;
 
 import compiler.core.Diagnostic;
@@ -511,7 +512,15 @@ class StatementTyper {
 				fail("E1007", "Cannot set inline closure", span);
 			if (binding == null) {
 				var thisType = scope.receiverType(),
-					instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
+					owner = session.currentContext.lexicalOwner;
+				var instanceOwner = thisType == null ? null : NominalInheritance.name(thisType);
+				if (instanceOwner != null && DynamicMethods.declaration(session, instanceOwner, name, false) != null)
+					return methodAssignment(bodyTyper.implicitReceiver(span, scope), name, expression, span, scope,
+						assigned);
+				if (owner != null && DynamicMethods.declaration(session, owner, name, true) != null)
+					return methodAssignment(new TypedExpression(TClassRef(owner), TInstance(Class, owner, []), span),
+						name, expression, span, scope, assigned);
+				var instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
 				if (instanceField != null) {
 					if (thisType == null)
 						throw new InternalError('Missing "this" type for field "$name"');
@@ -543,8 +552,7 @@ class StatementTyper {
 						session.representation.resolveField(thisType, name, span).physical),
 						span);
 				}
-				var owner = session.currentContext.lexicalOwner,
-					staticField:Null<StaticFieldInfo> = null;
+				var staticField:Null<StaticFieldInfo> = null;
 				if (owner != null)
 					staticField = bodyTyper.findStaticFieldNullable(owner, name);
 				if (staticField == null)
@@ -588,6 +596,9 @@ class StatementTyper {
 		session.nullSafety.checkReceiver(declaredObject, fieldName, BodyTyper.referencePrefixSpan(name, span));
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
+		var methodStore = methodAssignment(object, fieldName, expression, span, scope, assigned);
+		if (methodStore != null)
+			return methodStore;
 		var propertyWrite = bodyTyper.accessorPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
@@ -727,6 +738,9 @@ class StatementTyper {
 			NullSafety.memberSpan(declaredObject.span, fieldName, span));
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
+		var methodStore = methodAssignment(object, fieldName, expression, span, scope, assigned);
+		if (methodStore != null)
+			return methodStore;
 		var propertyWrite = bodyTyper.accessorPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
@@ -777,6 +791,25 @@ class StatementTyper {
 				}
 				statement;
 		};
+	}
+
+	function methodAssignment(object:TypedExpression, name:String, expression:AstExpression, span:SourceSpan,
+			scope:Scope, assigned:Null<AssignedValue>):Null<TypedStatement> {
+		var owner = NominalInheritance.name(object.type),
+			isStatic = object.expression.match(TClassRef(_));
+		if (owner == null || DynamicMethods.declaration(session, owner, name, isStatic) == null)
+			return null;
+		var field = DynamicMethods.resolve(session, object, name, span);
+		if (field == null)
+			fail("E1002", "Cannot rebind this method : please use 'dynamic' before method declaration",
+				AbstractProperties.nameSpan(span, name, false));
+		var source = bodyTyper.typeExpression(expression, scope, field.type),
+			value = stored(assigned, bodyTyper.coerce(source, field.type, 'field "$name"', "E1002", Assignment(span)),
+				source);
+		scope.invalidateField(name);
+		return isStatic ? staticStore(owner, name, value, source.type, field.type, span, scope, assigned)
+			: TFieldAssign(object, name, session.representation.boundaryCast(value, field.storage.type, object.type),
+			span);
 	}
 
 	/** A store of `value` to the static `name` of `owner`: a call of its setter where it is a property (`ClassProperties`). */

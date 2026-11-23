@@ -343,10 +343,10 @@ The Haxe code Haxeon rejects or runs differently is listed in
   `iterator`, `keyValueIterator` or `copy` (on HashLink they need the `hokeys`
   native array); an explicit cast of a map of maps to `Map<String, Dynamic>`
   crashes in the runtime cast, as the generic-owner case did before `bbcf8d261`.
-- **`Array<Null<Int>>.contains` does not compile:** HashLink lowering asks for
-  an `__array_index_of_any` helper that does not exist.
-- **Parsing and patterns.** `dynamic function` is not parsed. In a `switch`
-  pattern, an upper-case capture name binds a variable (Haxe rejects it), and a
+- **Dynamic methods Haxe accepts and Haxeon does not:** `dynamic` methods of an
+  interface, static dynamic methods of an abstract, and dynamic methods with their
+  own type parameters.
+- **Switch patterns.** In a `switch` pattern, an upper-case capture name binds a variable (Haxe rejects it), and a
   capture named like a module-level function resolves to the function.
 - **Generic owners specialized only from annotated members.** An owner whose
   member holds its parameter inside a structure is specialized (`3c1041b09`),

@@ -129,6 +129,7 @@ dynamic-equal-unused-and-used-struct
 dynamic-field-access
 dynamic-increment
 dynamic-method-call
+dynamic-methods
 dynamic-modulo
 dynamic-number-cast
 dynamic-object-empty-array

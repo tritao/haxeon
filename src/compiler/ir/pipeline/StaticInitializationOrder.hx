@@ -145,7 +145,8 @@ class StaticInitializationOrder {
 		// `walk_class` walks them without marking them walked, so a read from elsewhere walks one again, once, from there.
 		var statics = [
 			for (field in classDecl.fields)
-				if (field.isStatic && !isFunctionExpression(field.initializer)) field.name
+				if (field.isStatic && field.isDynamicMethod != true
+				&& !isFunctionExpression(field.initializer)) field.name
 		];
 		statics.sort(Reflect.compare);
 		for (field in statics) {

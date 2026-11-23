@@ -157,6 +157,8 @@ private class ConstructorFlow {
 			case TField(object, name) if (isThis(object)):
 				if (pending.exists(name))
 					report('Cannot use field $name until initialization.', value.span);
+			case TMethodRef(_, _, true):
+			// Binding the implementation stores a closure without running its body.
 			case TMethodRef(object, method) if (isThis(object)):
 				report('Cannot use method ${memberName(method)} until all instance fields are initialized.',
 					value.span);

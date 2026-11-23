@@ -21,6 +21,14 @@ import compiler.ir.verify.IrVerifier;
  * receiver, so they compare equal (`Reflect.compareMethods`).
  */
 class IrMethodReferences {
+	static inline final DYNAMIC_SLOT_PREFIX = "$dynamic$";
+
+	public static inline function dynamicSlot(member:String):String
+		return DYNAMIC_SLOT_PREFIX + member;
+
+	public static inline function isDynamicSlot(member:String):Bool
+		return StringTools.startsWith(member, DYNAMIC_SLOT_PREFIX);
+
 	static inline final PREFIX = "$method-reference:";
 
 	/** Whether `name` is a method reference's closure target. */

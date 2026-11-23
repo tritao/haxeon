@@ -511,6 +511,8 @@ class PurityInference {
 		var fn = signatures.get(key);
 		if (fn == null || fn.isExtern == true)
 			return isAnnotatedPure(key);
+		if (fn.isDynamic == true)
+			return false;
 		if (fn.isStatic)
 			return true;
 		var owner = compiler.core.QualifiedName.parent(key);

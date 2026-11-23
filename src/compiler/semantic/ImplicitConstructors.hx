@@ -79,9 +79,12 @@ class ImplicitConstructors {
 		return null;
 	}
 
-	static function hasInstanceInitializers(declaration:AstClass):Bool {
+	public static function hasInstanceInitializers(declaration:AstClass):Bool {
 		for (field in declaration.fields)
 			if (!field.isStatic && field.initializer != null)
+				return true;
+		for (method in declaration.methods)
+			if (!method.isStatic && method.isDynamic == true)
 				return true;
 		return false;
 	}

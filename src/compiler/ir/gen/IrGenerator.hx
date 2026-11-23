@@ -2417,7 +2417,7 @@ class IrGenerator {
 					lowerType(expression.storageType == null ? expression.type : expression.storageType)),
 					lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
-			case TMethodRef(object, name):
+			case TMethodRef(object, name, dynamicImplementation):
 				// A method with a dispatch entry is referenced through it; its owner and member are the method's.
 				var dispatched = compiler.types.typing.DefaultArguments.dispatchTarget(name),
 					method = dispatched == null ? name : dispatched,
@@ -2437,7 +2437,8 @@ class IrGenerator {
 				// subclasses, so its method is bound directly.
 				var target = typedDispatch != null ? typedDispatch : dispatchesVirtually(object.type)
 					? IrMethodReferences.name(owner,
-					member, compiler.semantic.SemanticSignature.type(object.type),
+					dynamicImplementation == true ? IrMethodReferences.dynamicSlot(member) : member,
+					compiler.semantic.SemanticSignature.type(object.type),
 					compiler.semantic.SemanticSignature.type(expression.type)) : name;
 				builder.instanceClosure(target, lowerExpression(object, builder, localTypes),
 					lowerType(expression.type));

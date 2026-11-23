@@ -339,6 +339,7 @@ try-typed-interface	42
 std-is-of-type-interface-dynamic	42
 dynamic-field-access	42
 dynamic-method-call	42
+dynamic-methods	42
 dynamic-arithmetic	42
 dynamic-increment	42
 dynamic-modulo	42

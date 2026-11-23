@@ -456,6 +456,8 @@ class IrObjectReflection {
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
 				for (method in owner.methods) {
+					if (compiler.ir.gen.IrMethodReferences.isDynamicSlot(method.name))
+						continue;
 					var fn = functionsByName.get(method.functionName.name);
 					if (fn != null && fn.arguments.length > 0)
 						methods.set(method.name,

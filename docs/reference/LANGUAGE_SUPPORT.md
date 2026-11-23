@@ -161,6 +161,8 @@ The current subset includes:
   `@:isVar` property's), so a read in `set_x` still calls `get_x`. A `never` side cannot be accessed, a `null` side only
   from the class and its subclasses (or `@:allow`, `@:access`), a missing accessor is reported, and so is the variable of a
   property without storage, in Haxe's words and at its places.
+- Dynamic class methods (`dynamic function`) store a callable value on each object or, for a static method, on its class.
+  Assigning a new function changes subsequent calls. A subclass can override an instance dynamic method.
 - Variables and properties in an interface (`interface Shape { var x:Int; var area(get, never):Int; }`), as in Haxe: an
   implementing class has each, public, with an access that unifies with the interface's (each side the same, or the
   interface's `null` or `never`) and the same type, and the accessors of its `get` and `set` sides, in Haxe's words and at

@@ -438,6 +438,7 @@ typedef AstSwitchCase = {
 typedef AstFunction = {
 	/** Explicit override modifier, checked against inherited instance methods. */
 	final ?isOverride:Bool;
+	final ?isDynamic:Bool;
 	final name:String;
 	final isStatic:Bool;
 

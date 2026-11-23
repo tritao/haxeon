@@ -218,14 +218,17 @@ class CallResolver {
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, contextualGenericArguments:Bool = true,
 			?declaredReceiver:TypedExpression):TypedExpression {
 		try {
-			var call = switch receiver.type {
-				case TInstance(NominalKind.Class, RpcServiceTyping.CONNECTION, _) if ((name == "serve" || name == "of")
-					&& !receiver.expression.match(TClassRef(_))):
-					RpcServiceTyping.typeCall(session, bodyTyper, receiver, name, arguments, span, scope);
-				default:
-					typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
-						contextualGenericArguments);
-			};
+			var dynamicMethod = DynamicMethods.read(session, receiver, name, span);
+			var call = dynamicMethod != null ? callDynamicMethod(dynamicMethod, name, arguments, span,
+				scope) : switch receiver.type {
+					case TInstance(NominalKind.Class, RpcServiceTyping.CONNECTION,
+						_) if ((name == "serve" || name == "of")
+						&& !receiver.expression.match(TClassRef(_))):
+						RpcServiceTyping.typeCall(session, bodyTyper, receiver, name, arguments, span, scope);
+					default:
+						typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
+							contextualGenericArguments);
+				};
 			var declared = declaredReceiver == null ? receiver : declaredReceiver;
 			// The member's span is made only where the checker looks.
 			if (session.nullSafety.active())
@@ -1573,6 +1576,18 @@ class CallResolver {
 			outerLocal, [known], session.isPureCall);
 	}
 
+	function callDynamicMethod(callee:TypedExpression, name:String, arguments:Array<AstExpression>,
+			span:SourceSpan, scope:Scope):TypedExpression {
+		return switch callee.type {
+			case TFunction(parameters, result, optional):
+				var typed = functionValueArguments(arguments, parameters, optional, null, scope, span,
+					'Function field "$name"', name);
+				session.invalidateUnknownCall(scope);
+				new TypedExpression(TClosureCall(callee, typed), result, span);
+			default: throw new InternalError("Dynamic method without a function type");
+		};
+	}
+
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):TypedExpression {
 		// A static method of a class or abstract by its qualified name (`C.m()`, or `m()` inside C); module functions have no info.
@@ -1580,6 +1595,8 @@ class CallResolver {
 		if (calledMethod != null)
 			MemberAccess.method(session, calledMethod.owner, name.substr(name.lastIndexOf(".") + 1), span);
 		var hasSignature = session.signatures.exists(name);
+		if (hasSignature && session.signatures.required(name).isDynamic == true)
+			return typeClosureCall(Variable(name, span), arguments, span, scope, name);
 		if (hasSignature && BodyTyper.functionTypeParameters(session.signatures.required(name)).length > 0) {
 			var signature = session.signatures.required(name),
 				infoOwner:Null<String> = null,
@@ -1683,6 +1700,12 @@ class CallResolver {
 			return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner,
 				methodInfo.isStatic,
 				prepared.substitutions, receiver);
+		}
+		if (DynamicMethods.isDynamic(session, method, methodInfo.owner)) {
+			if (methodInfo.isStatic)
+				return typeClosureCall(Variable(methodKey, span), arguments, span, scope, methodKey);
+			var callee = bodyTyper.typedMember(bodyTyper.implicitReceiver(span, scope), name, span);
+			return callDynamicMethod(callee, name, arguments, span, scope);
 		}
 		if (methodInfo.isStatic) {
 			var typed = typeDeclaredCallArguments(arguments, method, scope, methodKey, span);
@@ -2123,6 +2146,8 @@ class CallResolver {
 		if (method == null || method.isExtern == true)
 			fail("E1007", 'Missing body for base method "$methodKey"', span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
+		if (DynamicMethods.isDynamic(session, method, methodInfo.owner))
+			fail("E1007", 'Cannot call super.$name since it\'s a dynamic method', span);
 		if (BodyTyper.functionTypeParameters(method).length > 0)
 			fail("E1016", 'super.$name() cannot call a generic method yet', span);
 		var receiver = typeExpressionValue(Variable("this", span), scope),
@@ -3159,10 +3184,8 @@ class CallResolver {
 
 		var constructorName = typeName + ".new",
 			hasConstructor = session.signatures.exists(constructorName),
-			implicitConstructor = !hasConstructor && [
-				for (field in declaration.fields)
-					if (!field.isStatic && field.initializer != null) field
-			].length > 0;
+			implicitConstructor = !hasConstructor
+				&& compiler.semantic.ImplicitConstructors.hasInstanceInitializers(declaration);
 		if (!hasConstructor) {
 			if (arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
@@ -3235,10 +3258,8 @@ class CallResolver {
 				substitutions = session.representation.nominalSubstitutions(valueType),
 				constructorName = typeName + ".new",
 				hasConstructor = session.signatures.exists(constructorName),
-				implicitConstructor = !hasConstructor && [
-					for (field in classDecl.fields)
-						if (!field.isStatic && field.initializer != null) field
-				].length > 0;
+				implicitConstructor = !hasConstructor
+					&& compiler.semantic.ImplicitConstructors.hasInstanceInitializers(classDecl);
 			if (!hasConstructor && arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 			var constructor = hasConstructor ? session.signatures.required(constructorName) : null,
@@ -3257,10 +3278,8 @@ class CallResolver {
 			return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);
 		var constructorName = typeName + ".new",
 			hasConstructor = session.signatures.exists(constructorName),
-			implicitConstructor = !hasConstructor && classDecl != null && [
-				for (field in classDecl.fields)
-					if (!field.isStatic && field.initializer != null) field
-			].length > 0;
+			implicitConstructor = !hasConstructor && classDecl != null
+				&& compiler.semantic.ImplicitConstructors.hasInstanceInitializers(classDecl);
 		var expected = hasConstructor ? bodyTyper.argumentTypesOf(session.signatures.required(constructorName))
 			: PlatformAbi.constructorArguments(typeName),
 			resolvedExpected:Array<CompilerType> = [];

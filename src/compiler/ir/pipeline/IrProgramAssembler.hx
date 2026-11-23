@@ -119,7 +119,7 @@ class IrProgramAssembler {
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				if (field.isStatic && !field.isInline && initializer != null) {
+				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && initializer != null) {
 					var global = classDecl.name + "." + field.name;
 					probes.set(global, initializerFunction(generator, "__init$probe", [
 						TStaticFieldAssign(classDecl.name, field.name, initializer, field.span)
@@ -138,31 +138,43 @@ class IrProgramAssembler {
 		if (warnings != null)
 			for (classDecl in initialization.loops)
 				warnings.push(StaticInitializationOrder.loopWarning(classDecl));
-		var statements:Array<TypedStatement> = [],
+		var bindings = new IrBuilder(),
+			lastCall:Null<IrValue> = null,
+			functions:Array<IrFunction> = [],
+			statements:Array<TypedStatement> = [],
 			spans:Array<compiler.core.Source.SourceSpan> = [];
+		// Static method closures must exist when class initialization begins, including calls from __init__.
+		for (classDecl in classes)
+			for (field in classDecl.fields)
+				if (field.isStatic && field.isDynamicMethod == true && field.initializer != null) {
+					var name = "__init$method" + functions.length;
+					functions.push(initializerFunction(generator, name, [
+						TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span)
+					], field.span));
+					lastCall = bindings.call(name, [], Void);
+				}
 		for (classDecl in classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				if (field.isStatic && !field.isInline && initializer != null) {
+				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && initializer != null) {
 					spans.push(field.span);
 					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
 				}
 			}
-		if (statements.length == 0 && inits.length == 0)
+		if (statements.length == 0 && inits.length == 0 && functions.length == 0)
 			return [];
-		var functions:Array<IrFunction> = [];
+		var bindingCount = functions.length;
 		for (offset in 0...Std.int((statements.length + 7) / 8)) {
 			var start = offset * 8;
 			functions.push(initializerFunction(generator, "__init$part" + offset, statements.slice(start, start + 8),
 				spans[start]));
 		}
-		var boot = new IrBuilder(), lastCall:Null<IrValue> = null;
 		for (name in inits)
-			lastCall = boot.call(name, [], Void);
-		for (fn in functions)
-			lastCall = boot.call(fn.name, [], Void);
-		boot.returnValue(lastCall);
-		functions.unshift(new IrFunction("__init", [], Void, boot.blocks, Ordinary));
+			lastCall = bindings.call(name, [], Void);
+		for (index in bindingCount...functions.length)
+			lastCall = bindings.call(functions[index].name, [], Void);
+		bindings.returnValue(lastCall);
+		functions.unshift(new IrFunction("__init", [], Void, bindings.blocks, Ordinary));
 		return functions;
 	}
 
@@ -381,6 +393,14 @@ class IrProgramAssembler {
 						name: "$haxeonObservableState",
 						type: generator.lowerType(TInstance(NominalKind.Class, "haxeon.reactive.ObservableSource", []))
 					});
+				var dynamicSlots:Map<String, Bool> = [];
+				var current = classDecl;
+				while (current != null) {
+					for (field in current.fields)
+						if (!field.isStatic && field.isDynamicMethod == true)
+							dynamicSlots.set(field.name, true);
+					current = current.base == null ? null : classesByName.get(current.base);
+				}
 				var methods:Array<IrObjectMethod> = [];
 				for (methodDecl in classDecl.methods)
 					if (!methodDecl.isStatic && !methodDecl.isConstructor) {
@@ -389,7 +409,8 @@ class IrProgramAssembler {
 						var methodName = functionName.substring(separator + 1, functionName.length);
 						// A method slot holds the method's dispatch entry when it has one (`DefaultArguments`).
 						methods.push({
-							name: methodName,
+							name: dynamicSlots.exists(methodName)
+								? compiler.ir.gen.IrMethodReferences.dynamicSlot(methodName) : methodName,
 							functionName: compiler.ir.model.IrSymbol.of(methodDecl.dispatchEntry == null
 								? functionName : methodDecl.dispatchEntry)
 						});

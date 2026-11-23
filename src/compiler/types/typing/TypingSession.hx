@@ -215,12 +215,17 @@ class TypingSession {
 			if (StringTools.endsWith(origin, CONSTRUCTOR_SUFFIX)) {
 				var owner = origin.substr(0, origin.length - CONSTRUCTOR_SUFFIX.length),
 					declaration = classDecls == null ? null : classDecls.entry(owner);
-				if (declaration != null)
+				if (declaration != null) {
+					recorder.read(FactAspect.Members, owner);
+					for (method in declaration.methods)
+						if (!method.isStatic && method.isDynamic == true)
+							recorder.read(FactAspect.Signature, owner + "." + method.name);
 					for (field in declaration.fields)
 						if (!field.isStatic && field.initializer != null) {
 							recorder.read(FactAspect.Initializer, owner + "." + field.name);
 							recorder.read(FactAspect.Unit, compiler.semantic.InitializerUnit.of(owner, field.name));
 						}
+				}
 			}
 		}
 		return true;

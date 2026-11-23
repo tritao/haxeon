@@ -892,6 +892,12 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				warnings: initializerContextWarnings
 			});
 		}
+		for (method in classDecl.methods) {
+			if (method.name == "new" || method.isDynamic != true || !method.isStatic
+				&& DynamicMethods.inherited(session, classDecl, method.name))
+				continue;
+			fields.push(DynamicMethods.field(session, classDecl.name, method, erasedSubstitutions));
+		}
 		var propertyFacts = StructProperties.evaluate(session.declarations,
 			TInstance(NominalKind.Class, classDecl.name, []));
 		for (metadata in classDecl.metadata) {
@@ -2129,7 +2135,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				BodyTyper.fail("E1007",
 					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"',
 					span);
-			var implementationName = implementation.owner + "." + method.name;
+			var implementationName = implementation.owner + "." + method.name,
+				implementationMethod = session.signatures.get(implementationName);
+			if (implementationMethod != null
+				&& DynamicMethods.isDynamic(session, implementationMethod, implementation.owner))
+				BodyTyper.fail("E1007",
+					'Field ${method.name} has different property access than in $interfaceName (dynamic method should be method)',
+					InterfaceProperties.methodNameSpan(implementationMethod));
 			if (!session.signatures.exists(implementationName)
 				|| !sameSignature(session.signatures.required(implementationName), method,
 				classSubstitutions, interfaceSubstitutions))

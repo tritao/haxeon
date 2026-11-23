@@ -623,11 +623,8 @@ class SemanticAssembly {
 					declaredConstructor = true;
 			if (declaredConstructor)
 				continue;
-			for (field in classDecl.fields)
-				if (!field.isStatic && field.initializer != null) {
-					invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
-					break;
-				}
+			if (ImplicitConstructors.hasInstanceInitializers(classDecl))
+				invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
 		}
 		// A call may resolve to a static extension without its body naming it (`text.trim()` after `using StringTools`). When the
 		// extensions a module's code sees change, every body of the module is typed again.

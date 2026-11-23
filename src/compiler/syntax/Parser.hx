@@ -885,13 +885,13 @@ class Parser {
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false,
 			isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false, ?isPublic:Bool,
-			isOverride:Bool = false):AstFunction {
+			isOverride:Bool = false, isDynamic:Bool = false):AstFunction {
 		var outer = enterLambdaMember(name);
 		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
 		var parsed:AstFunction;
 		try {
 			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline,
-				isPublic, isOverride);
+				isPublic, isOverride, isDynamic);
 		} catch (error:CompileError) {
 			leaveLambdaMember(outer);
 			throw error;
@@ -903,7 +903,7 @@ class Parser {
 	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool,
 			isExtern:Bool,
 			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>,
-			isOverride:Bool):AstFunction {
+			isOverride:Bool, isDynamic:Bool):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -960,6 +960,7 @@ class Parser {
 			isStatic: isStatic,
 			isPublic: isPublic,
 			isOverride: isOverride,
+			isDynamic: isDynamic,
 			// A function with `@:hlNative` is the native, as Haxe compiles it on HashLink: an extern one, whose body (if it has one)
 			// is typed but never runs (`ProgramTyper.checkNativeBoundBodies`). Haxeon binds it on Wasm too, as it binds an extern's
 			// `@:hlNative` there (the Wasm runtime provides `haxeon_runtime`'s natives).
@@ -1081,9 +1082,19 @@ class Parser {
 				}
 				// Haxe's position of a field starts at its first modifier, after its metadata.
 				var modifierStart = spanOf(current());
-				var isStatic = false, isInline = false, isFinal = false, isOverride = false, isExternMember = false;
+				var isStatic = false,
+					isInline = false,
+					isFinal = false,
+					isOverride = false,
+					isExternMember = false,
+					isDynamic = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
+					if (kindOf(current()) == TokenKind.Identifier && textOf(current()) == "dynamic") {
+						isDynamic = true;
+						advance();
+						continue;
+					}
 					if (kindOf(current()) == TokenKind.Identifier && textOf(current()) == "override") {
 						isOverride = true;
 						advance();
@@ -1116,9 +1127,14 @@ class Parser {
 						methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
 						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, isPublic,
-						isOverride));
-				} else
-					fields.push(parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart));
+						isOverride, isDynamic));
+				} else {
+					var field = parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart);
+					if (isDynamic)
+						throw new CompileError(new Diagnostic("E1007",
+							"Invalid accessor 'dynamic' for variable " + field.name, modifierStart));
+					fields.push(field);
+				}
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;

@@ -1083,6 +1083,8 @@ class CanonicalComparison {
 	}
 
 	function astFunction(left:AstFunction, right:AstFunction):Bool {
+		if (!(left.isDynamic == right.isDynamic))
+			return false;
 		if (!(left.isOverride == right.isOverride))
 			return false;
 		if (!(left.name == right.name))

@@ -1176,7 +1176,7 @@ class DeclarationIndex {
 	function validateInheritedMethods(program:AstProgram):Void {
 		for (decl in program.classes) {
 			var own = declarationSubstitutions(decl.name, decl.typeParameters);
-			var overrides:Map<String, Bool> = [];
+			var overrides:Map<String, String> = [], dynamicOverrides:Map<String, Bool> = [];
 			var base = decl.base == null ? null : resolve(decl.base, decl.span, own);
 			while (base != null) {
 				var baseName = NominalInheritance.name(base);
@@ -1190,8 +1190,10 @@ class DeclarationIndex {
 					for (original in parent.methods) {
 						if (method.name != original.name || method.isStatic && original.isStatic)
 							continue;
-						if (!method.isStatic && !original.isStatic)
-							overrides.set(method.name, true);
+						if (!overrides.exists(method.name))
+							overrides.set(method.name, baseName);
+						if (original.isDynamic == true)
+							dynamicOverrides.set(method.name, true);
 						var member = decl.name + "." + method.name,
 							ancestor = baseName + "." + original.name;
 						if (method.isStatic != original.isStatic)
@@ -1208,10 +1210,18 @@ class DeclarationIndex {
 				}
 				base = parent.base == null ? null : resolve(parent.base, parent.span, inherited);
 			}
-			for (method in decl.methods)
-				if (method.isOverride == true && !overrides.exists(method.name))
+			for (method in decl.methods) {
+				var overridden = overrides.get(method.name), dynamicBase = dynamicOverrides.exists(method.name);
+				if (method.isOverride == true && overridden == null)
 					fail('Method "${decl.name}.${method.name}" is declared override but has no inherited instance method',
 						method.span);
+				if (dynamicBase && method.isOverride != true)
+					fail('Field ${method.name} should be declared with \'override\' since it is inherited from superclass $overridden',
+						method.span);
+				if (dynamicBase && method.isInline == true
+					|| overridden != null && !dynamicBase && method.isDynamic == true)
+					fail('Field ${method.name} has different property access than in superclass', method.span);
+			}
 		}
 	}
 
@@ -1278,6 +1288,8 @@ class DeclarationIndex {
 			expected = types.resultType(original, right);
 		if (TypeRelations.equals(result, expected))
 			return true;
+		if (original.isDynamic == true)
+			return false;
 		// Covariant class results have the same pointer ABI; arbitrary function-type coercions require adapters.
 		return switch [result, expected] {
 			case [TInstance(Class, _, _), TInstance(Class, _, _)]: var relations = new TypeRelations(this);
@@ -1321,6 +1333,10 @@ class DeclarationIndex {
 	}
 
 	function resolveFunction(fn:AstFunction, owner:String, ?ownerSubstitutions:Map<String, CompilerType>):Void {
+		if (fn.isDynamic == true && fn.isInline == true)
+			fail("Invalid modifier combination: dynamic + inline", fn.span);
+		if (fn.isDynamic == true && fn.typeParameters != null && fn.typeParameters.length > 0)
+			fail("Dynamic methods with their own type parameters are not supported yet", fn.span);
 		var substitutions:Map<String, CompilerType> = ownerSubstitutions == null
 			? [] : [for (name => type in ownerSubstitutions) name => type],
 			typeParameters = fn.typeParameters;

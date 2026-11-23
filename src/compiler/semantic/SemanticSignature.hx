@@ -150,6 +150,7 @@ class SemanticSignature {
 		// The argument names and `inline` are part of it too: a body is typed against its signature's arguments, and a build that
 		// keeps the validated signature (`SemanticProgram.replaceBodies`) keeps their names and the flag.
 		return fn.name
+			+ (fn.isDynamic == true ? " dynamic" : "")
 			+ (fn.isOverride == true ? " override" : "")
 			+ (fn.isInline == true ? " inline" : "")
 			+ (fn.isPublic == null ? "" : fn.isPublic ? " public" : " private")

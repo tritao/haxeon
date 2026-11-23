@@ -181,7 +181,8 @@ class TypedTypeMap {
 			case TIntToInt64(value): TIntToInt64(expression(value));
 			case TFloatToInt(value): TFloatToInt(expression(value));
 			case TToDynamic(value): TToDynamic(expression(value));
-			case TMethodRef(object, functionName): TMethodRef(expression(object), functionName);
+			case TMethodRef(object, functionName, dynamicImplementation):
+				TMethodRef(expression(object), functionName, dynamicImplementation);
 			case TLambda(name, environment, captures): TLambda(name, environment,
 				[for (item in captures) capture(item)]);
 			case TAdd(left, right): TAdd(expression(left), expression(right));
