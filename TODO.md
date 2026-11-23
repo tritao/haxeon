@@ -15,17 +15,12 @@ Longer-term direction is in `ROADMAP.md`.
   its GNU ABI mixes with the MSVC-built VM and runtime. macOS keeps the Xcode
   tools (Apple's SDK is not redistributable) and Android the NDK either way.
 
-- **A bare enum abstract value is found by package.** Enum abstracts are
-  abstracts that declare values (`552099308`), and a case name resolves among
-  the values of the matched abstract (`43b27f9b8`). A bare value with no
-  expected type still searches every enum abstract and prefers the one in the
-  current package (`BodyTyper`, tests `SamePackageEnumAbstractValueMain`,
-  `AmbiguousEnumAbstractValueMain`); resolve it as Haxe does and remove the
-  package rule.
 - **Most of Haxe's `Type` API is missing.** Haxeon has the enum-value part, on a value of a known enum type:
   `Type.enumIndex`, `Type.enumEq`, `Type.enumConstructor`, `Type.enumParameters` and Haxe's global
   `haxe.EnumTools.EnumValueTools` (`getName`, `getParameters`, `getIndex`, `equals`), which the typer provides
-  (`EnumReflection`, `StaticExtensions.enumValueTool`). The rest (`E1007: Unknown function "Type.getClassName"`) needs
+  (`EnumReflection`, `StaticExtensions.enumValueTool`). On a class or enum named at the call, `getClassName`,
+  `getEnumName`, `getEnumConstructs`, `getInstanceFields`, `getClassFields`, `createInstance` and `createEmptyInstance`
+  are written out by the typer (`TypeReflection`). The rest (E1009, "needs classes and enums as runtime values") needs
   classes and enums as runtime values; the design is `docs/design/TYPE_VALUES.md` (reviewed by haxeon-e4, decisions
   for the user listed at its end). Haxe libraries that serialize, log or load plugins need it. In phases:
   2. `Class<T>`, `Enum<T>` and `EnumValue` on HashLink, wasm32 and wasm-gc: one `TypeDescriptor` per declaration,
@@ -249,6 +244,24 @@ Design debt and levers left once the peak work lands:
 - **Language-service latency.** The perf guard benchmarks compile-server
   edits (`scripts/perf-guard.py`, incremental part); language-service
   rebuilds (latency, memory) are not benchmarked.
+- **Delete the transitional reuse paths.** `IrLineage.handedOn`, the
+  `stableGenerated`/`generatedSources` bridges and the static-check copies go
+  once static-null-checks and object reflection are per-function passes; then
+  a per-stage recording view (one code path for one-shot and session builds,
+  as `HlLoweringView` does) and one fact-print table in place of `IrFacts`,
+  `HlFactPrints`, the inliner's prints and `IrVerifyMemo`'s string compare.
+- **Null safety on the rest of `compiler.ir`.** `compiler.ir.pipeline` needs
+  `IrAssembly`'s per-stage tables made non-null per phase, `compiler.ir.gen`
+  needs the SSA builder's null sentinels and the frontend calls that return
+  `Null` reworked, and `IrLoopBounds` keeps state set by `reset()`.
+- **One scripted reorganization commit** at a quiet point: `ir/model` into the
+  `ir` root, `compiler.hl` to `compiler.backend.hl`, `compiler.tools` to
+  `compiler.driver`, `src/tools` to `src/cli`, `src/runtime` to `src/live`
+  (`scripts/apply-ir-layout.py` does the moves). `IrGenerator.hx` is a better
+  split candidate than any folder merge.
+- **Does a plain `Compiler` build live by default?** The Compiler API with
+  default options builds live (field migrations and all); decide whether that
+  is the intended default.
 - **The collection policy.** The peak is the last collection's survivors plus
   the 1 GB trigger; a trigger tied to the live data is a policy to measure,
   not necessarily more collections.
@@ -297,6 +310,30 @@ The Haxe code Haxeon rejects or runs differently is listed in
   that is never called goes unreported; Haxe types the body at the declaration
   and reports it. Typing it once at the declaration too, and discarding the
   result, would report it.
+- **Maps print and convert differently.** `trace(map)` prints `~map_string_i32:...`
+  where Haxe prints `[a => 1]` (`Map.toString`); a Map or Array passed where a
+  `KeyValueIterable` is expected is rejected; `ObjectMap` has no `keys`,
+  `iterator`, `keyValueIterator` or `copy` (on HashLink they need the `hokeys`
+  native array); an explicit cast of a map of maps to `Map<String, Dynamic>`
+  crashes in the runtime cast, as the generic-owner case did before `bbcf8d261`.
+- **`Array<Null<Int>>.contains` does not compile:** HashLink lowering asks for
+  an `__array_index_of_any` helper that does not exist.
+- **Parsing and patterns.** `dynamic function` is not parsed. In a `switch`
+  pattern, an upper-case capture name binds a variable (Haxe rejects it), and a
+  capture named like a module-level function resolves to the function.
+- **Generic owners specialized only from annotated members.** An owner whose
+  member holds its parameter inside a structure is specialized (`3c1041b09`),
+  but only when the member's type is written; one inferred from the body is not
+  checked.
+- **Float to Int out of range on Wasm traps** (`I32TruncF64S`); HashLink and
+  the C backend give the JIT's result (`native/shared/float_to_int.h`).
+- **A failed bounds check reports the wrong line on HashLink:** an uncaught
+  out-of-range read is reported at the function's `return`, where the C
+  backend reports the access.
+- **Anonymous structure field order** differs between a stock-built and a
+  Haxeon-built program (watch-event JSON: alphabetical against declaration
+  order). Haxe leaves it unspecified; decide what Haxeon guarantees and match
+  stock HashLink where users see it (`haxe.Json`).
 - **Lone surrogates.** Printing a String with a lone high surrogate swallows
   the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
   conversion takes it as the pair's low half.
@@ -404,13 +441,29 @@ typer's drain order) and 5 (live pruning).
   up again: make the boxed original a small adapter over the split body instead of
   cloning large bodies, and find the downstream cost with a symbolized profile first.
 
-- **Session memory after the IR columns chain.** The per-function stage
-  memos and keeping each function as its frozen body past the encode point
-  (`fa6bde3fd`) brought the signature edit below its level before the chain,
-  but the server's live data is still above it and cold allocation is higher
-  (`tests/perf/incremental-baseline.json`). The stages before the encode point
-  still keep the generator's objects; see IR_CORE_COLUMNS.md, "Session caching
-  model".
+- **Live-mode server memory.** On the app template, the live server settles
+  about 5% above `tests/perf/live-baseline.json` and still grows per edit. A
+  heap diff between builds 4 and 12 shows about 67 IR functions with their
+  bodies kept per build (held from the stage memos or the inline cache:
+  `IrStageEntry.output`, `InlineMemo`, `IrLineageCell.fn`) and two large
+  pointer-free blocks of unknown owner; the three retractable publications copy
+  the type registry, object and inline caches and the assembler state instead
+  of sharing them. The baseline predates recorded reads (`540848a15`): measure
+  it before and after that commit before raising it.
+- **Signature edits.** perf-guard's signature edit retypes about 1,350
+  functions. About 40% of its cost is per retyped function and needed; the
+  avoidable part is the inliner remaking every transitive caller of a changed
+  callee (early cutoff on what each caller read, in progress), HashLink
+  metadata lowering redone for the program, and the collections this
+  allocation triggers.
+- **The body edit outside IR assembly:** whole-program purity inference (the
+  recorded reads give the exact "declarations unchanged" signal a
+  per-function memo needs), IR generation, the ABI description, generated
+  helpers and the encode.
+- **After a live patch, the server writes the whole module and its build id
+  before replying,** which delays the next edit; write them after the reply.
+- **AOT small-project instructions** are above their baseline
+  (`aot_build_instructions`, `aot_check_instructions`), not yet investigated.
 
 The 2026-11-18 profile of a self-compile (Haxeon-built release compiler,
 29 s on one thread) is flat: compiler code 48%, string-keyed maps 18.5%,
