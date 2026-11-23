@@ -92,9 +92,14 @@ The table follows README.md; when a platform's status changes there, it changes 
   3. **C and C++ interop:** a real header, the generated binding and the Haxeon call side by side, the result visible.
   4. **One codebase, three outputs:** one sample run on the JIT VM, built as a native executable and as WebAssembly, with
      the real commands and what each produces; the platform table here.
-  5. **What else you can build:** tiles for tools, games and 3D, scripts and embedding, each with a runnable example and
+  5. **The whole toolchain, one command:** what ships with Haxeon, each with its command: the language server (`haxeon
+     lsp`, used by the VS Code extension), the debugger (Debug Adapter Protocol: breakpoints, stepping, watchpoints,
+     logpoints, exception breaks, across a live edit), the formatter and linter (`fmt`, `lint`), the profiler (`run
+     --profile`, Perfetto or VS Code), build, check and test, packages (`add`, `publish`, the registry and lockfile), C and
+     C++ bindings (`ffi import`), and `doctor`.
+  6. **What else you can build:** tiles for tools, games and 3D, scripts and embedding, each with a runnable example and
      its guide.
-  6. **Start building:** the shortest install-and-run path on the page (install, create, run), then Get started again.
+  7. **Start building:** the shortest install-and-run path on the page (install, create, run), then Get started again.
 
   No news feed on the home page: verified examples and the platform table show progress better than dated posts.
 - **Get started** (`docs/guides/00-get-started.md`): install a C and C++ toolchain and CMake (the one command for each
@@ -166,7 +171,8 @@ shows something: the UI Showcase on the home page and, later, a playground.
   `haxeon run` opens and `haxeon run --watch --live` edits.
 - Guides 1 to 5 written and their code compiled in CI.
 - The home page recording, and the UI Showcase on the web.
-- A VS Code extension over the existing language server.
+- A VS Code extension over the existing language server, with the debugger in it: today debugging goes through the
+  vendored HashLink debug adapter, which users set up on their own, so "debug in VS Code" is not one step yet.
 - The internal reference pages moved out of the published set (done: `docs/internals/`).
 
 ## After launch
