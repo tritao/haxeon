@@ -832,6 +832,10 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 */
 	extern fn nkgpu_end_frame(renderer: nkgpu_renderer) -> nkgpu_result;
 	/**
+	 * Finishes GPU work and leaves presentation of the acquired frame to the caller.
+	 */
+	extern fn nkgpu_end_frame_deferred_present(renderer: nkgpu_renderer) -> nkgpu_result;
+	/**
 	 * Ends the active pass while keeping the frame open.
 	 */
 	extern fn nkgpu_end_pass(renderer: nkgpu_renderer) -> nkgpu_result;
@@ -845,6 +849,14 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 * Begins a frame without opening a pass, for plans that contain several passes.
 	 */
 	extern fn nkgpu_frame_begin(renderer: nkgpu_renderer) -> nkgpu_result;
+	/**
+	 * Begins an immediate window pass on an open, caller-acquired frame target.
+	 * Call on the render executor. A clear value of one clears color, and zero
+	 * preserves the previous color contents. Depth and stencil are reset.
+	 * Finish with nkgpu_end_frame_deferred_present(). The caller presents or
+	 * cancels the surface frame on the platform executor.
+	 */
+	extern fn nkgpu_frame_begin_on(renderer: nkgpu_renderer, target: ptr<const<nk_surface_frame_target>>, clear: u32) -> nkgpu_result;
 	/**
 	 * Reports the renderer's frame timing (see nkgpu_set_frame_timing).
 	 */

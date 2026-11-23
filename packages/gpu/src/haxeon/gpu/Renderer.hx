@@ -96,9 +96,31 @@ class Renderer implements Disposable {
 	/** Draws one surface frame and preserves the original error if cleanup also fails. */
 	public function withFrame(draw:Void->Void):Void {
 		beginFrame();
+		drawFrame(draw, true);
+	}
+
+	/** Draws into an acquired frame. The caller presents or cancels it. */
+	public function withFrameOn(frame:SurfaceFrame, draw:Void->Void, clear:Bool = true):Void {
+		ensureLive();
+		if (frameActive)
+			throw BindingError.invalidState("Renderer.withFrameOn", "GPU frame is already active");
+		if (frame == null)
+			throw BindingError.invalidArgument("Renderer.withFrameOn", "Acquired frame is required");
+		frame.ensureRenderer(this);
+		GpuResult.check(NativeKitGpu.nkgpu_frame_begin_on(value, frame.nativeTarget(), clear ? 1 : 0),
+			"renderer.withFrameOn");
+		frameActive = true;
+		passActive = true;
+		drawFrame(draw, false);
+	}
+
+	function drawFrame(draw:Void->Void, present:Bool):Void {
 		try {
 			draw();
-			endFrame();
+			if (present)
+				endFrame();
+			else
+				finishFrame(NativeKitGpu.nkgpu_end_frame_deferred_present(value), "renderer.withFrameOn");
 		} catch (error:Dynamic) {
 			try abortFrame() catch (_:Dynamic) {}
 			throw error;

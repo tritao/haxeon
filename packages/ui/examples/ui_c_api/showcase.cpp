@@ -764,23 +764,15 @@ struct WebShowcase {
         target.struct_size = sizeof(target);
         nkui_layout_session session{};
         nkgpu_renderer gpu{};
-        nkgpu_batch batch{};
         const bool passed = [&] {
             if (nkgpu_renderer_create(surface, &gpu) != NKGPU_OK ||
-                nkgpu_batch_begin(gpu, &batch) != NKGPU_OK ||
                 nkui_layout_session_create(&session) != NKUI_OK ||
                 nk_surface_acquire_frame(surface, &frame, &target) != NK_OK)
                 return false;
 
-            nkgpu_batch_pass pass{};
-            pass.struct_size = sizeof(pass);
-            pass.kind = NKGPU_BATCH_PASS_WINDOW;
-            pass.clear = 1;
-            pass.width = target.width;
-            pass.height = target.height;
-            if (nkgpu_batch_append_pass(batch, &pass) != NKGPU_OK ||
-                nkgpu_batch_seal(batch) != NKGPU_OK ||
-                nkgpu_batch_submit(gpu, batch, &target) != NKGPU_OK)
+            if (nkgpu_frame_begin_on(gpu, &target, 1) != NKGPU_OK ||
+                nkgpu_end_frame(gpu) != NKGPU_ERROR_WRONG_STATE ||
+                nkgpu_end_frame_deferred_present(gpu) != NKGPU_OK)
                 return false;
 
             constexpr uint32_t count = 2;
@@ -843,6 +835,10 @@ struct WebShowcase {
                 return false;
             const auto result =
                 nkui_layout_session_render_into_frame(showcase.renderer, session, frame, &info);
+            if (result == NKUI_OK &&
+                (nkgpu_frame_begin_on(gpu, &target, 0) != NKGPU_OK ||
+                 nkgpu_end_frame_deferred_present(gpu) != NKGPU_OK))
+                return false;
             const auto overlay = pixel(32, 32);
             const auto outside = pixel(90, 32);
             const auto corner = pixel(2, 2);
@@ -863,19 +859,20 @@ struct WebShowcase {
                 nkui_layout_session_render_into_frame(showcase.renderer, session, presented, &info);
             const auto stale_present = nk_surface_present_frame(presented);
             if (status != NK_OK || stale_render != NKUI_ERROR_INVALID_HANDLE ||
-                stale_present != NK_ERROR_INVALID_HANDLE) {
+                stale_present != NK_ERROR_INVALID_HANDLE ||
+                nkgpu_frame_begin_on(gpu, &target, 1) != NKGPU_ERROR_INVALID_HANDLE) {
                 EM_ASM({ console.error("Shared frame presentation", $0, $1, $2); },
                        status, stale_render, stale_present);
                 return false;
             }
             return true;
         }();
+        if (!passed && gpu.id)
+            nkgpu_frame_abort(gpu);
         if (frame != NK_INVALID_HANDLE)
             nk_surface_cancel_frame(frame);
         if (session.id)
             nkui_layout_session_destroy(session);
-        if (batch.id)
-            nkgpu_batch_destroy(batch);
         if (gpu.id)
             nkgpu_renderer_destroy(gpu);
         return passed;

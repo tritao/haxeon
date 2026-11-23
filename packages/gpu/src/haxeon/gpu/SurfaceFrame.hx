@@ -52,12 +52,14 @@ class SurfaceFrame {
 		return finished;
 
 	@:allow(haxeon.gpu.Batch)
+	@:allow(haxeon.gpu.Renderer)
 	function nativeTarget():Dynamic {
 		ensureOpen();
 		return target;
 	}
 
 	@:allow(haxeon.gpu.Batch)
+	@:allow(haxeon.gpu.Renderer)
 	function ensureRenderer(renderer:Renderer):Void {
 		ensureOpen();
 		if (!renderer.ownsSurface(surface))
