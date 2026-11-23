@@ -55,7 +55,7 @@ class Runtime implements Disposable {
 	/** Drives an app until it quits and any queued frame has completed. */
 	public function run(surface:Surface, app:App):Void {
 		scoped var loop = startApp(surface, app);
-		while (loop.advance(true)) {}
+		loop.run();
 	}
 
 	/** Destroys owned children, then ends the NativeKit generation. */

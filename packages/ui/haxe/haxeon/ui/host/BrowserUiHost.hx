@@ -1,5 +1,6 @@
 package haxeon.ui.host;
 
+import haxeon.platform.EventLoop;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
@@ -26,6 +27,7 @@ class BrowserUiHost {
 	var window:WindowHandle = WindowHandle.invalid();
 	var surface:SurfaceHandle = SurfaceHandle.invalid();
 	var events:Null<EventPump> = null;
+	var eventLoop:EventLoop;
 	var eventSubscription:Null<EventSubscription> = null;
 	var fonts:Null<FontCollection> = null;
 	var hostContext:Null<UiHostContext> = null;
@@ -90,6 +92,7 @@ class BrowserUiHost {
 			surface = createdSurface.out_surface.borrow();
 
 			events = new EventPump();
+			eventLoop = new EventLoop(events);
 			eventSubscription = events.listen(handleEvent);
 			fonts = FontCollection.create();
 			if (options.fonts.length == 0) finishResources();
@@ -241,7 +244,7 @@ class BrowserUiHost {
 			{
 				eventDispatching = true;
 				defer eventDispatching = false;
-				while (!stopping && events != null && events.poll()) {}
+				eventLoop.drain(function() return !stopping);
 			}
 			if (cleanupPending || stopping) {
 				stopHost();

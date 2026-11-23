@@ -7,7 +7,7 @@ import nativekit.ffi.NativeKitTypes.Result;
 
 /** Drives an app from native surface callbacks and the runtime's event pump. */
 class AppLoop implements Disposable {
-	final events:EventPump;
+	final loop:EventLoop;
 	final surface:Surface;
 	final app:App;
 	final readySubscription:EventSubscription;
@@ -21,7 +21,7 @@ class AppLoop implements Disposable {
 
 	@:allow(haxeon.platform.Runtime)
 	private function new(events:EventPump, surface:Surface, app:App) {
-		this.events = events;
+		loop = new EventLoop(events);
 		this.surface = surface;
 		this.app = app;
 		readySubscription = surface.onReady(startFrames);
@@ -44,19 +44,17 @@ class AppLoop implements Disposable {
 		return advance(false);
 
 	@:allow(haxeon.platform.Runtime)
+	function run():Void
+		EventLoop.run(function() return advance(true));
+
 	function advance(wait:Bool):Bool {
 		if (disposed)
 			return false;
 		try {
-			var hadEvent = false;
-			for (_ in 0...64) {
-				if (!events.poll())
-					break;
-				hadEvent = true;
-			}
-			stopped = stopped || app.shouldQuit();
-			if (wait && !hadEvent && !frameRan && (!stopped || pending != null))
-				events.wait(0.1);
+			loop.step(function(hadEvent) {
+				stopped = stopped || app.shouldQuit();
+				return wait && !hadEvent && !frameRan && (!stopped || pending != null) ? 0.1 : null;
+			});
 			if (frameRan) {
 				frameRan = false;
 				if (failure == null)

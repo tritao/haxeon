@@ -125,6 +125,10 @@ the loop stops drawing and drains any submitted frame. On the browser path,
 call `runtime.startApp(surface, app)` and drive `loop.tick()` from
 `requestAnimationFrame` until it returns `false`, then dispose the loop.
 
+Hosts that own frame scheduling can use `EventLoop` directly. Each iteration
+drains up to 64 events. A desktop host can choose an idle wait after processing
+the batch. A browser host can drain events without blocking.
+
 ## Window and surface events
 
 Use `window.onKey` and `window.onClose` for window events, and `surface.onReady`,

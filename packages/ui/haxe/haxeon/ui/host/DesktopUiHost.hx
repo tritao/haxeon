@@ -1,5 +1,6 @@
 package haxeon.ui.host;
 
+import haxeon.platform.EventLoop;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.event.EventPump;
@@ -28,7 +29,7 @@ class DesktopUiHost {
 	public static function run(options:DesktopUiHostOptions,
 			create:DesktopUiHostContext->DesktopUiApplication):Int {
 		var host = open(options, create);
-		while (host.tick()) {}
+		EventLoop.run(host.tick);
 		return host.close();
 	}
 
@@ -671,82 +672,92 @@ class DesktopUiHost {
 					beforeScriptedInput, afterScriptedInput)) delivered = true;
 				return delivered;
 			};
+			var eventLoop = new EventLoop(pump);
+			var measureLoop = false;
+			var pollStarted = 0.0;
+			var framesBeforePoll = 0;
+			var callbackBeforePoll = 0.0;
+			var hadEvent = false;
+			var waitStarted = 0.0;
+			var callbackBeforeWait = 0.0;
+			var framesBeforeWait = 0;
+			var profilingPoll = false;
+			var finishPoll = function(polled:Bool):Null<Float> {
+				if (profilingPoll) {
+					profilingPoll = false;
+					ProfileSpan.end("ui.events");
+				}
+				if (polled) hadEvent = true;
+				if (drainScriptedInput()) hadEvent = true;
+				// Surface callbacks run directly in the backend pump, without a queued event.
+				var hadFrame = liveRuntime.rendered != framesBeforePoll;
+				var backgroundStarted = measureLoop ? Sys.time() : 0.0;
+				if (measureLoop) {
+					loopTiming.loops++;
+					loopTiming.pollSeconds += backgroundStarted - pollStarted;
+					loopTiming.pollFrameSeconds += callbackSeconds - callbackBeforePoll;
+					loopTiming.pollFrames += liveRuntime.rendered - framesBeforePoll;
+				}
+				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
+				if (active && backgroundPoll != null) backgroundPoll();
+				if (measureLoop) loopTiming.backgroundSeconds += Sys.time() - backgroundStarted;
+				if (session.state == UiHostLifecycle.Failed) throw session.error;
+				if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0
+					&& Sys.time() - captureState.startedAt >= options.captureSeconds
+					&& (script == null || script.complete && scriptedCount == 0)) {
+					writeDiagnostics(options, cast liveRuntime.app(), cast liveRuntime.frameRenderer(), liveRuntime,
+						eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
+					session.stop();
+				}
+				if (active && surfaceAvailable && nextCaretFrameAt >= 0.0 && Sys.time() >= nextCaretFrameAt) {
+					nextCaretFrameAt = -1.0;
+					scheduleFrameWithReason("text-caret");
+				}
+				if (active && surfaceAvailable && nextAnimationFrameAt >= 0.0
+					&& Sys.time() >= nextAnimationFrameAt) {
+					nextAnimationFrameAt = -1.0;
+					scheduleFrameWithReason("animation");
+				}
+				submitFrameRequest();
+				if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) {
+					frameGc.idle();
+					if (profileFrameOpen) {
+						ProfileFrame.idle();
+						profileFrameOpen = false;
+					}
+				}
+				if (!active || hadEvent || hadFrame) return null;
+				waitStarted = measureLoop ? Sys.time() : 0.0;
+				callbackBeforeWait = callbackSeconds;
+				framesBeforeWait = liveRuntime.rendered;
+				var waitSeconds = 1.0 / options.targetFps;
+				var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
+				if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
+				if (surfaceAvailable && nextAnimationFrameAt >= 0.0)
+					waitSeconds = Math.min(waitSeconds, Math.max(0.0, nextAnimationFrameAt - Sys.time()));
+				return waitSeconds;
+			};
 			step = function() {
 				if (!active) return false;
 				try {
-					var measureLoop = options.captureDirectory != null && captureState.startedAt >= 0.0;
-					var pollStarted = measureLoop ? Sys.time() : 0.0;
-					var framesBeforePoll = liveRuntime.rendered;
-					var callbackBeforePoll = callbackSeconds;
-					// Native polling can render. Deliver already-due scripted input first,
-					// then catch deadlines that elapsed during a native callback.
-					var hadEvent = drainScriptedInput();
-					// Polling waits for native events and runs the callbacks they trigger, frames included.
-					// Take every queued event before drawing; a bound keeps a flood from starving frames.
-					var polled = false;
-					{
-						ProfileSpan.begin("ui.events");
-						defer ProfileSpan.end("ui.events");
-						for (_ in 0...64) {
-							if (!pump.poll()) break;
-							polled = true;
-						}
+					measureLoop = options.captureDirectory != null && captureState.startedAt >= 0.0;
+					pollStarted = measureLoop ? Sys.time() : 0.0;
+					framesBeforePoll = liveRuntime.rendered;
+					callbackBeforePoll = callbackSeconds;
+					// Native polling can render, so deliver already-due scripted input first.
+					hadEvent = drainScriptedInput();
+					ProfileSpan.begin("ui.events");
+					profilingPoll = true;
+					defer if (profilingPoll) {
+						profilingPoll = false;
+						ProfileSpan.end("ui.events");
 					}
-					if (polled) hadEvent = true;
-					if (drainScriptedInput()) hadEvent = true;
-					// Surface callbacks run directly in the backend pump, without a queued event.
-					var hadFrame = liveRuntime.rendered != framesBeforePoll;
-					var backgroundStarted = measureLoop ? Sys.time() : 0.0;
-					if (measureLoop) {
-						loopTiming.loops++;
-						loopTiming.pollSeconds += backgroundStarted - pollStarted;
-						loopTiming.pollFrameSeconds += callbackSeconds - callbackBeforePoll;
-						loopTiming.pollFrames += liveRuntime.rendered - framesBeforePoll;
-					}
-					var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
-					if (active && backgroundPoll != null) backgroundPoll();
-					if (measureLoop) loopTiming.backgroundSeconds += Sys.time() - backgroundStarted;
-					if (session.state == UiHostLifecycle.Failed) throw session.error;
-					if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0
-						&& Sys.time() - captureState.startedAt >= options.captureSeconds
-						&& (script == null || script.complete && scriptedCount == 0)) {
-						writeDiagnostics(options, cast liveRuntime.app(), cast liveRuntime.frameRenderer(), liveRuntime,
-							eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
-						session.stop();
-					}
-					if (active && surfaceAvailable && nextCaretFrameAt >= 0.0 && Sys.time() >= nextCaretFrameAt) {
-						nextCaretFrameAt = -1.0;
-						scheduleFrameWithReason("text-caret");
-					}
-					if (active && surfaceAvailable && nextAnimationFrameAt >= 0.0
-						&& Sys.time() >= nextAnimationFrameAt) {
-						nextAnimationFrameAt = -1.0;
-						scheduleFrameWithReason("animation");
-					}
-					submitFrameRequest();
-					if (active && !hadEvent && !hadFrame && !frameRequested && !framePending) {
-						frameGc.idle();
-						if (profileFrameOpen) {
-							ProfileFrame.idle();
-							profileFrameOpen = false;
-						}
-					}
-					if (active && !hadEvent && !hadFrame) {
-						var waitStarted = measureLoop ? Sys.time() : 0.0;
-						var callbackBeforeWait = callbackSeconds;
-						var framesBeforeWait = liveRuntime.rendered;
-						var waitSeconds = 1.0 / options.targetFps;
-						var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
-						if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
-						if (surfaceAvailable && nextAnimationFrameAt >= 0.0)
-							waitSeconds = Math.min(waitSeconds, Math.max(0.0, nextAnimationFrameAt - Sys.time()));
-						pump.wait(waitSeconds);
-						if (measureLoop) {
-							loopTiming.waits++;
-							loopTiming.waitSeconds += Sys.time() - waitStarted;
-							loopTiming.waitFrameSeconds += callbackSeconds - callbackBeforeWait;
-							loopTiming.waitFrames += liveRuntime.rendered - framesBeforeWait;
-						}
+					var waited = eventLoop.step(finishPoll);
+					if (waited && measureLoop) {
+						loopTiming.waits++;
+						loopTiming.waitSeconds += Sys.time() - waitStarted;
+						loopTiming.waitFrameSeconds += callbackSeconds - callbackBeforeWait;
+						loopTiming.waitFrames += liveRuntime.rendered - framesBeforeWait;
 					}
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
