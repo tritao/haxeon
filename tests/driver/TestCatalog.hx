@@ -91,7 +91,7 @@ class TestCatalog {
 		"DeadPureValuesMain",
 		"ReceiverCheckElisionMain",
 		"NonNullFactsMain",
-		"BodyAnalysisMain",
+		"LoopForestMain",
 		"JumpThreadingMain",
 		"InlineConfigurationMain",
 		"LoopBoundsMain",

@@ -1,6 +1,5 @@
 package compiler.ir.analysis;
 
-import compiler.ir.analysis.IrBodyAnalysis.IrLoopForest;
 import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;

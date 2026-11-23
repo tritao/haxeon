@@ -54,13 +54,6 @@ class IrBody {
 	/** The edits made to this body, counted: a pass that edits a body in place compares the count to know whether it changed it. */
 	public var edits(default, null) = 0;
 
-	/**
-	 * The analysis the passes over this body share (`IrBodyAnalysis.of`), made when one first asks for it; it holds while the
-	 * body has the edit count it was made at.
-	 */
-	@:allow(compiler.ir.analysis.IrBodyAnalysis)
-	var analysis:Null<compiler.ir.analysis.IrBodyAnalysis> = null;
-
 	// The columns. A thawed copy of a body no edit touched shares its source's until its first edit (`sharing`).
 	var opcodes:Array<Int>;
 	var outputs:Array<Int>;
