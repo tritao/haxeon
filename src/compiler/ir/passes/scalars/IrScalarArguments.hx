@@ -38,6 +38,11 @@ private typedef ScalarCallPlan = {
  */
 @:nullSafety(Strict)
 class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
+	/** The functions each function takes as closures. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final CLOSURE_NAMES =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<String>>("closure-names");
+
 	public static inline final PREFIX = "$scalar-arguments:";
 
 	/** The fact of the candidates as a whole: their names, what kind each is and their signatures, interned (`IrFacts.intern`). */
@@ -424,7 +429,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		var known = lineage, version = known == null ? 0 : known.versionOf(fn);
 		if (known == null || version == 0)
 			return readClosureNames(fn.bodyIn(types, scratch.bodyBuilder));
-		var memo = known.memos.closureNames, names = memo.get(version);
+		var memo = known.memos.contribution(CLOSURE_NAMES), names = memo.get(version);
 		if (names == null) {
 			names = readClosureNames(fn.bodyIn(types, scratch.bodyBuilder));
 			memo.keep(version, names);

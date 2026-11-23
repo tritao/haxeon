@@ -29,6 +29,10 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  */
 @:nullSafety(Strict)
 class IrClosedEnumTagAbi implements IrFunctionPass {
+	/** What each function lets escape, for the closed enum tag ABI's choice (`IrTagEscapeRecord`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final ESCAPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrTagEscapeRecord>("tag-escapes");
+
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;
 
@@ -434,7 +438,7 @@ class IrTagEscapeRecord {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return read(fn.bodyIn(types, builder));
-		var memo = lineage.memos.tagEscapes, known = memo.get(version);
+		var memo = lineage.memos.contribution(IrClosedEnumTagAbi.ESCAPES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn.bodyIn(types, builder));
 			memo.keep(version, known);

@@ -166,6 +166,10 @@ private class ValueArrayFunctionIndex {
  */
 @:nullSafety(Strict)
 class IrValueArrayProgramRewrite {
+	/** The types naming an array or an iterator each function has. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final ARRAY_TYPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<Int>>("array-types");
+
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. The functions' bodies are made
 	 * with `types` (those of the program's bodies when not given, `IrTypeIds.ofFunctions`); a function that changes becomes its
@@ -273,7 +277,7 @@ class IrValueArrayProgramRewrite {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return readArrayTypes(fn.bodyIn(types, builder));
-		var memo = lineage.memos.arrayTypes, known = memo.get(version);
+		var memo = lineage.memos.contribution(ARRAY_TYPES), known = memo.get(version);
 		if (known == null) {
 			known = readArrayTypes(fn.bodyIn(types, builder));
 			memo.keep(version, known);

@@ -21,6 +21,10 @@ import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 /** HashLink's scalar argument/result convention applied to typed, non-erased closures. */
 @:nullSafety(Strict)
 class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
+	/** What each function's rows do with closures (`IrClosureUses`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final USES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrClosureUses>("closure-uses");
+
 	/** The fact of a function type, by its key: never stated for a candidate, 0 for any other. */
 	static inline final CANDIDATE = 0;
 
@@ -944,7 +948,7 @@ class IrClosureUses {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
-		var memo = lineage.memos.closureUses, known = memo.get(version);
+		var memo = lineage.memos.contribution(IrScalarClosures.USES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
 			memo.keep(version, known);

@@ -79,6 +79,11 @@ typedef IrClassDependencies = {
  */
 @:nullSafety(Strict)
 class IrTypeAwareWalk {
+	/** What each function gives the type-aware walks (`IrWalkSummary`), shared by the dispatch walk and the entry prune. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final SUMMARIES =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkSummary>("walk-summaries");
+
 	/**
 	 * `dynamicSites`: the native a dynamic site calls, to the provider operations it needs of every created type (default `defaultDynamicSites`).
 	 * `requireProviders`: report a reached typed operation with no row (the check that holds once the producers have run).
@@ -571,7 +576,7 @@ class IrWalkSummary {
 			scratch.fill(fn);
 			return scratch;
 		}
-		var memo = lineage.memos.walkSummaries, known = memo.get(version);
+		var memo = lineage.memos.contribution(IrTypeAwareWalk.SUMMARIES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn);
 			memo.keep(version, known);

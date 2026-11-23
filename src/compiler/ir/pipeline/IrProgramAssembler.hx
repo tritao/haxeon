@@ -43,6 +43,11 @@ import compiler.ir.model.Ir.IrStaticField;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
+	/** What each function needs of the runtime surface (`IrRuntimeNeeds`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final RUNTIME_NEEDS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrRuntimeNeeds>("runtime-needs");
+
 	/** The function a live build adds to initialize an object's added fields on existing instances. */
 	public static inline final LIVE_INITIALIZER:String = "__liveinit";
 
@@ -1392,7 +1397,7 @@ class IrRuntimeNeeds {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
-		var memo = lineage.memos.runtimeNeeds, known = memo.get(version);
+		var memo = lineage.memos.contribution(IrProgramAssembler.RUNTIME_NEEDS), known = memo.get(version);
 		if (known == null || known.cNativeKey != cNativeKey) {
 			known = read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
 			memo.keep(version, known);

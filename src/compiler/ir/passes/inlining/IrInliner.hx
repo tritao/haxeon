@@ -162,6 +162,10 @@ class IrInlineCache {
  */
 @:nullSafety(Strict)
 class IrInliner implements IrFactSource {
+	/** By the version of the inliner's output for a function, the function's inlined form, frozen (`inlinedVersion`): what a caller that splices it reads of it is that version (the inliner's facts). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final FORMS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlinedForm>("inlined-forms");
+
 	/** Instruction budget for a callee without an `inline` hint. */
 	public static inline var SmallBudget = 24;
 
@@ -368,7 +372,7 @@ class IrInliner implements IrFactSource {
 		var memos = memoizes && lineage != null ? lineage.memos : null;
 		memo = memos == null ? null : memos.stage(STAGE);
 		facts = memos == null ? null : memos.facts;
-		forms = memos == null ? null : memos.inlinedForms;
+		forms = memos == null ? null : memos.contribution(FORMS);
 		versions = memos == null ? null : memos.versions;
 		if (memos != null)
 			memos.facts.begin();

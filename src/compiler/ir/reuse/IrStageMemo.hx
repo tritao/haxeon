@@ -1,9 +1,7 @@
 package compiler.ir.reuse;
 
-import compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrFunction;
-import compiler.ir.passes.objects.IrTypedInterfaceDispatch.IrTypedInterfaceRequest;
 import compiler.ir.pipeline.IrFunctionPass.IrStageRequest;
 
 /** What one stage made of one function in a build, and what that rested on (`IrStageMemo`). */
@@ -108,52 +106,19 @@ class IrStageMemos {
 
 	final stages:Map<String, IrStageMemo> = [];
 
-	/** What each function gives the type-aware walks (`IrWalkSummary`), shared by the dispatch walk and the entry prune. */
-	public final walkSummaries = new IrContributionMemo<IrWalkSummary>();
+	/** The contribution memos the stages registered (`contribution`), by name, each begun with every build. */
+	final contributions:Map<String, IrContributionMemo<Dynamic>> = [];
 
-	/** The typed interface dispatchers each function calls (`IrTypedInterfaceDispatch.generate`). */
-	public final interfaceRequests = new IrContributionMemo<Array<IrTypedInterfaceRequest>>();
-
-	/** What each function stores for the walk of what initialization calls (`IrInitCalls.stores`), for the static null checks. */
-	public final initStores = new IrContributionMemo<compiler.ir.analysis.IrInitializationCalls.IrInitCalls>();
-
-	/** What each function the walk of what initialization calls reads calls (`IrInitCalls.calls`). */
-	public final initCalls = new IrContributionMemo<compiler.ir.analysis.IrInitializationCalls.IrInitCalls>();
-
-	/** What each function needs of the runtime surface (`IrRuntimeNeeds`). */
-	public final runtimeNeeds = new IrContributionMemo<compiler.ir.pipeline.IrProgramAssembler.IrRuntimeNeeds>();
-
-	/** The method references, erased operations and type tests each function asks for (`IrGenericOwnerErasure.requestsOf`). */
-	public final erasureRequests =
-		new IrContributionMemo<Array<compiler.ir.passes.objects.IrGenericOwnerErasure.IrErasureRequest>>();
-
-	/** What each function lets escape, for the closed enum tag ABI's choice (`IrTagEscapeRecord`). */
-	public final tagEscapes = new IrContributionMemo<compiler.ir.passes.enums.IrClosedEnumTagAbi.IrTagEscapeRecord>();
-
-	/** What each function lets escape or keeps in value form, for the inline enum eligibility (`IrInlineEnumUses`). */
-	public final inlineEnumUses =
-		new IrContributionMemo<compiler.ir.passes.enums.IrInlineEnumEligibility.IrInlineEnumUses>();
-
-	/** The functions each function takes as closures (`IrScalarArguments`). */
-	public final closureNames = new IrContributionMemo<Array<String>>();
-
-	/** What each function's rows do with closures (`IrClosureUses`). */
-	public final closureUses = new IrContributionMemo<compiler.ir.passes.scalars.IrScalarClosures.IrClosureUses>();
-
-	/** The types naming an array or an iterator each function has (`IrValueArrayProgramRewrite`). */
-	public final arrayTypes = new IrContributionMemo<Array<Int>>();
-
-	/** By version, the tables each function was checked against for ordinary operations on lane arrays (`IrVerifier`). */
-	public final checkedValueArrays = new IrContributionMemo<String>();
-
-	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
-	public final enumMentions = new IrContributionMemo<Array<String>>();
-
-	/**
-	 * By the version of the inliner's output for a function, the function's inlined form, frozen (`IrInliner.inlinedVersion`): what
-	 * a caller that splices it reads of it is that version (the inliner's facts).
-	 */
-	public final inlinedForms = new IrContributionMemo<compiler.ir.passes.inlining.IrInliner.IrInlinedForm>();
+	/** The session's memo of `key`, registered the first time a stage asks for it. */
+	public function contribution<T>(key:IrContributionKey<T>):IrContributionMemo<T> {
+		var memo = contributions.get(key.name);
+		if (memo == null) {
+			memo = new IrContributionMemo<Dynamic>();
+			memo.begin(build);
+			contributions.set(key.name, memo);
+		}
+		return cast memo;
+	}
 
 	/** The build the stages run for, counted by `startBuild`. */
 	public var build(default, null) = 0;
@@ -186,20 +151,8 @@ class IrStageMemos {
 		build++;
 		helpers = keptHelpers;
 		keptHelpers = [];
-		walkSummaries.begin(build);
-		interfaceRequests.begin(build);
-		erasureRequests.begin(build);
-		runtimeNeeds.begin(build);
-		initStores.begin(build);
-		initCalls.begin(build);
-		enumMentions.begin(build);
-		tagEscapes.begin(build);
-		inlineEnumUses.begin(build);
-		closureNames.begin(build);
-		closureUses.begin(build);
-		arrayTypes.begin(build);
-		checkedValueArrays.begin(build);
-		inlinedForms.begin(build);
+		for (memo in contributions)
+			memo.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */
@@ -398,6 +351,18 @@ class IrLineage {
 		set(entry.output, entry.outputVersion);
 		return entry.output;
 	}
+}
+
+/**
+ * The name a stage registers a contribution memo under (`IrStageMemos.contribution`), typed with what the memo keeps: a stage
+ * declares its key once, so no two stages share a memo by accident.
+ */
+@:nullSafety(Strict)
+class IrContributionKey<T> {
+	public final name:String;
+
+	public function new(name:String)
+		this.name = name;
 }
 
 /** A contribution a memo keeps, with the last build that used it. */

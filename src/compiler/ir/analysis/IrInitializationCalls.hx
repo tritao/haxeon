@@ -15,6 +15,14 @@ import compiler.ir.model.IrTypeIds;
  */
 @:nullSafety(Strict)
 class IrInitializationCalls {
+	/** What each function the walk of what initialization calls reads calls (`IrInitCalls.calls`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final CALLS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInitCalls>("init-calls");
+
+	/** What each function stores for the walk of what initialization calls (`IrInitCalls.stores`), for the static null checks. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final STORES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInitCalls>("init-stores");
+
 	final byName:Map<String, IrFunction>;
 	final summaries:Map<String, IrInitCalls> = [];
 	final detail:IrFunction->IrInitCalls;
@@ -382,7 +390,8 @@ class IrInitCalls {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return read(fn, types, builder, calls);
-		var memo = calls ? lineage.memos.initCalls : lineage.memos.initStores, known = memo.get(version);
+		var memo = lineage.memos.contribution(calls ? IrInitializationCalls.CALLS : IrInitializationCalls.STORES),
+			known = memo.get(version);
 		if (known == null) {
 			known = read(fn, types, builder, calls);
 			memo.keep(version, known);

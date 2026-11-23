@@ -21,6 +21,11 @@ private typedef EnumUseNode = {
 /** Conservative first source subset. A rejected enum keeps its nominal storage everywhere in the program. */
 @:nullSafety(Strict)
 class IrInlineEnumEligibility {
+	/** What each function lets escape or keeps in value form (`IrInlineEnumUses`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final USES =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlineEnumUses>("inline-enum-uses");
+
 	public final allowed:Map<String, Bool> = [];
 	public final reasons:Map<String, String> = [];
 	/** Type descriptors that describe a verified callable boundary for a selected enum. */
@@ -564,7 +569,7 @@ class IrInlineEnumUses {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return read(fn.bodyIn(types, builder));
-		var memo = lineage.memos.inlineEnumUses, known = memo.get(version);
+		var memo = lineage.memos.contribution(IrInlineEnumEligibility.USES), known = memo.get(version);
 		if (known == null) {
 			known = read(fn.bodyIn(types, builder));
 			memo.keep(version, known);

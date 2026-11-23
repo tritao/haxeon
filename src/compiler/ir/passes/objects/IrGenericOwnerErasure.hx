@@ -32,6 +32,11 @@ typedef IrErasureRequest = {
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
 @:nullSafety(Strict)
 class IrGenericOwnerErasure {
+	/** The method references, erased operations and type tests each function asks for (`requestsOf`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final REQUESTS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<IrErasureRequest>>("erasure-requests");
+
 	public static inline final METHOD_REFERENCE = 0;
 	public static inline final ERASED = 1;
 	public static inline final TYPE_TEST = 2;
@@ -48,7 +53,7 @@ class IrGenericOwnerErasure {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return readRequests(fn);
-		var memo = lineage.memos.erasureRequests, known = memo.get(version);
+		var memo = lineage.memos.contribution(REQUESTS), known = memo.get(version);
 		if (known == null) {
 			known = readRequests(fn);
 			memo.keep(version, known);

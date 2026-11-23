@@ -34,6 +34,11 @@ typedef IrTypedInterfaceRequest = {
 /** Closed-world typed entry points for value interface calls and specialized generic contracts. */
 @:nullSafety(Strict)
 class IrTypedInterfaceDispatch {
+	/** The typed interface dispatchers each function calls (`generate`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final REQUESTS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<IrTypedInterfaceRequest>>("interface-requests");
+
 	public static inline final PREFIX = "$typed-interface:";
 	public static inline final ADAPTER_PREFIX = "$typed-interface-entry:";
 
@@ -127,7 +132,7 @@ class IrTypedInterfaceDispatch {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return readRequests(fn);
-		var memo = lineage.memos.interfaceRequests, known = memo.get(version);
+		var memo = lineage.memos.contribution(REQUESTS), known = memo.get(version);
 		if (known == null) {
 			known = readRequests(fn);
 			memo.keep(version, known);

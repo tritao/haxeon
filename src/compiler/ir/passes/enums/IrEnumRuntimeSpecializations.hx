@@ -12,6 +12,10 @@ import compiler.types.typing.EnumRuntimeType;
 /** Select concrete runtime descriptors from current and cached IR, never from an erased template. */
 @:nullSafety(Strict)
 class IrEnumRuntimeSpecializations {
+	/** The specialized enums each function names (`materialize`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final MENTIONS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<String>>("enum-mentions");
+
 	@:processWide("a shared empty list of enum names, only ever read")
 	static final NONE:Array<String> = [];
 
@@ -39,7 +43,7 @@ class IrEnumRuntimeSpecializations {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return readMentions(fn, shared);
-		var memo = lineage.memos.enumMentions, known = memo.get(version);
+		var memo = lineage.memos.contribution(MENTIONS), known = memo.get(version);
 		if (known == null) {
 			known = readMentions(fn, null);
 			memo.keep(version, known);

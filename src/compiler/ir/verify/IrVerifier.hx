@@ -35,6 +35,11 @@ import compiler.ir.model.IrFunction.IrFunctionKind;
 
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
+	/** By version, the tables each function was checked against for ordinary operations on lane arrays. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final CHECKED_VALUE_ARRAYS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<String>("checked-value-arrays");
+
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
 	/** No ordinary array operation reads inline value lanes, on the functions' bodies (`types`, the program's when not given). */
 	/**
@@ -84,7 +89,7 @@ class IrVerifier {
 			return names.join(",");
 		}
 		var checks = lineage != null && lineage.checks,
-			memo = lineage == null ? null : lineage.memos.checkedValueArrays,
+			memo = lineage == null ? null : lineage.memos.contribution(CHECKED_VALUE_ARRAYS),
 			key = memo == null ? "" : sorted(valueObjects.keys()) + ";" + sorted(valueEnums.keys()) + ";"
 				+ sorted(ordinaryRefNatives.keys());
 		for (fn in program.functions) {
