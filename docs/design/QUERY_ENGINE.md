@@ -11,7 +11,7 @@ A one-string edit of the compiler's own sources takes about 7 s in the compile s
 already incremental (5% of the edit); the IR passes rerun over all ~8,200 functions (66%), with no stage above 0.6 s
 (`IR_PASS_INVENTORY.md`, "Edit time"). The gain is one mechanism applied to every stage, not a faster stage.
 
-Today each reuse path has its own cache and rule: the typer's semantic edges and `DeclarationTypes` reads, the inline
+Today each reuse path has its own cache and rule: the typer's recorded reads (`WARM_REBUILD_REUSE.md`), the inline
 cache's dependency lists, the verifier memo, `HlLoweringView`, the program-level no-op shortcut, the pipeline snapshot. The
 identity-keyed stage cache tried on 2026-11-18 never hit, because each build makes fresh table objects. The engine
 replaces them with one rule.

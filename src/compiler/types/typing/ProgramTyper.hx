@@ -117,7 +117,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			refreshing = classesToRefresh(semantic.program.classes, cachedMetadata.classes, selected);
 		}
 		var program = semantic.program;
-		for (decl in session.declarations.enumAbstractList) {
+		for (decl in session.declarations.enumAbstractsInOrder()) {
 			RawRepresentableGenerator.validate(session, bodyTyper, decl);
 			FlagsGenerator.validate(session, bodyTyper, decl);
 			for (value in decl.values)
@@ -228,11 +228,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (requireMain) {
 			var main:AstFunction;
 			if (entryPoint != null && session.signatures.exists(entryPoint))
-				main = BodyTyper.requiredMapValue(session.signatures, entryPoint);
+				main = session.signatures.required(entryPoint);
 			else if (entryPoint == null && session.signatures.exists("main"))
-				main = BodyTyper.requiredMapValue(session.signatures, "main");
+				main = session.signatures.required("main");
 			else if (entryPoint == null && session.signatures.exists("Main.main"))
-				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
+				main = session.signatures.required("Main.main");
 			else
 				throw new CompileError(new compiler.core.Diagnostic("E1000",
 					'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"',
@@ -557,13 +557,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
-			purityQueries: session.programOutput.records.purityQueriesByUnit(),
-			inlineConstantDependencies: session.programOutput.records.inlineConstantDependenciesByUnit(),
-			declarationTypeReads: session.programOutput.records.declarationTypeReadsByUnit(),
 			typedUnits: session.programOutput.records.typedUnits,
 			inferredSignatures: requiredTypes().typedSignatures(),
-			defaultArgumentSources: session.programOutput.records.defaultArgumentSourcesByUnit(),
-			noReturnQueries: session.programOutput.records.noReturnQueriesByUnit(),
 			keyPathUses: session.programOutput.records.keyPathUsesByUnit(),
 			metrics: {
 				allocationPhases: [
@@ -1344,7 +1339,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (declared != null)
 			fn = declared;
 		var selected = selectedBodies == null || selectedBodies.exists(key),
-			info = session.methodInfo.get(key);
+			info = session.methodInfoOf(key);
 		if (info == null) {
 			if (selected && fn.isExtern != true && !BodyTyper.isGeneric(fn))
 				return {
@@ -1557,7 +1552,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				if (abstractDecl.isExtern == true || method.isExtern == true
 					|| (selected != null && !selected.exists(name)))
 					continue;
-				var signature = BodyTyper.requiredMapValue(session.signatures, name);
+				var signature = session.signatures.required(name);
 				if (method.isStatic && !BodyTyper.isGeneric(signature))
 					methods.push({owner: abstractDecl.name, signature: signature});
 				else if (method.isStatic)
@@ -1735,7 +1730,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			&& (specialization != null || !isConstrainedOwnerTemplate(classDecl.name))
 			&& instanceInitializers.length > 0
 			&& !deferBodies
-			&& (specialization != null || selected == null || selected.exists(classDecl.name + ".new")))
+			&& (specialization != null || selected == null || selected.exists(classDecl.name + ".new"))) {
+			if (specialization == null)
+				session.recordComposedUnit(classDecl.name + ".new");
 			typedMethods.push({
 				name: (specialization == null ? classDecl.name : specialization.name) + ".new",
 				role: specialization == null ? UserFunction : GenericFunction,
@@ -1755,6 +1752,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				span: classDecl.span,
 				warnings: []
 			});
+		}
 		if (specialization == null && !deferBodies) {
 			if (!hasConstructor && typedMethods.length > 0 && typedMethods[typedMethods.length - 1].isConstructor)
 				constructor = typedMethods[typedMethods.length - 1];
@@ -2127,12 +2125,12 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					span);
 			var implementationName = implementation.owner + "." + method.name;
 			if (!session.signatures.exists(implementationName)
-				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method,
+				|| !sameSignature(session.signatures.required(implementationName), method,
 				classSubstitutions, interfaceSubstitutions))
 				BodyTyper.fail("E1003", implied ? 'Field ${method.name} has different type than in $interfaceName'
 					: 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"',
-					implied ? InterfaceProperties.methodNameSpan(BodyTyper.requiredMapValue(session.signatures,
-					implementationName)) : span);
+					implied
+					? InterfaceProperties.methodNameSpan(session.signatures.required(implementationName)) : span);
 		}
 	}
 

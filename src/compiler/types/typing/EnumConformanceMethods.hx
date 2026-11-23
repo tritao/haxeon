@@ -38,6 +38,16 @@ class EnumConformanceMethods {
 		type = session.monomorphs.closeReached(type);
 		var key = name(type, method);
 		session.output.requests.add(EnumMethodHelper(key, {type: type, method: method, origin: origin, span: span}));
+		// The helper is typed from the enum's method as the program has it: asking for it reads that method.
+		switch type {
+			case TInstance(NominalKind.Enum, owner, _):
+				var recorder = session.declarations.reads;
+				if (recorder != null) {
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Signature, owner + "." + method);
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Body, owner + "." + method);
+				}
+			default:
+		}
 		return type;
 	}
 

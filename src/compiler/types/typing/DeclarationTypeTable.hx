@@ -146,7 +146,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 	final session:Null<TypingSession>;
 	final typing:Null<DeclarationTyping>;
 	final program:compiler.syntax.Ast.AstProgram;
-	final classes:Map<String, AstClass>;
+	final classes:compiler.semantic.DeclarationTable<AstClass>;
 
 	/** The unannotated fields typed, being typed, failed or known, by key. */
 	final fields:Map<String, FieldState> = [];
@@ -170,12 +170,6 @@ class DeclarationTypeTable implements DeclarationTypes {
 	final defaultValueType:Null<AstExpression->Null<CompilerType>>;
 
 	/**
-	 * Records that the unit being typed read the inferred type of the declaration with this key, so that an edit that may change
-	 * the type retypes the unit (`UnitRecords.declarationTypeReads`); null where nothing records.
-	 */
-	final recordRead:Null<String->Void>;
-
-	/**
 	 * The keys of the functions whose signature the source leaves, in part, to their bodies (a result or an argument without a
 	 * type), by function: the only signatures typed here, and the only signature reads that are recorded. A map of its own keeps the lookup on
 	 * every signature read small.
@@ -192,11 +186,10 @@ class DeclarationTypeTable implements DeclarationTypes {
 	var checkingSeeds = false;
 
 	public function new(declared:DeclaredTypes, semantic:SemanticProgram,
-			defaultValueType:Null<AstExpression->Null<CompilerType>>, ?recordRead:String->Void, ?session:TypingSession,
+			defaultValueType:Null<AstExpression->Null<CompilerType>>, ?session:TypingSession,
 			?typing:DeclarationTyping) {
 		this.declared = declared;
 		this.defaultValueType = defaultValueType;
-		this.recordRead = recordRead;
 		this.session = session;
 		this.typing = typing;
 		this.program = semantic.program;
@@ -272,8 +265,11 @@ class DeclarationTypeTable implements DeclarationTypes {
 		if (field.type != null)
 			return declared.fieldType(owner, field, substitutions);
 		var key = fieldKey(owner, field);
-		if (recordRead != null)
-			recordRead(key);
+		// An inline constant's type is its value's, typed as a shared unit of its own (`InlineConstantResolver`).
+		if (session != null)
+			session.readUnit(field.isInline
+				? TypingSession.INLINE_CONSTANT_PREFIX + key : compiler.semantic.InitializerUnit.of(owner,
+				field.name));
 		return switch fields.get(key) {
 			case Typed(unit): substitute(unit.type, substitutions);
 			case Known(type): substitute(type, substitutions);
@@ -479,8 +475,8 @@ class DeclarationTypeTable implements DeclarationTypes {
 					DeclaredTypes.typedByDefault(argument)
 					&& defaultValueType != null ? defaultValueType(argument.defaultValue) : null)
 			];
-		if (recordRead != null)
-			recordRead(key);
+		if (session != null)
+			session.readUnit(key);
 		var signature = functionSignature(fn, key);
 		return [for (index in 0...fn.arguments.length) {
 			var argument = fn.arguments[index],
@@ -501,8 +497,8 @@ class DeclarationTypeTable implements DeclarationTypes {
 		var key = inferredKeys.get(fn);
 		if (key == null)
 			return null;
-		if (recordRead != null)
-			recordRead(key);
+		if (session != null)
+			session.readUnit(key);
 		var signature = functionSignature(fn, key);
 		return signature == null ? null : signature.arguments[index];
 	}
@@ -511,8 +507,8 @@ class DeclarationTypeTable implements DeclarationTypes {
 		var key = inferredKeys.get(fn);
 		if (key == null)
 			return declared.resultType(fn, substitutions);
-		if (recordRead != null)
-			recordRead(key);
+		if (session != null)
+			session.readUnit(key);
 		if (!AstFunctions.isInferred(fn.result))
 			return declared.resultType(fn, substitutions);
 		var signature = functionSignature(fn, key), result = signature == null ? null : signature.result;

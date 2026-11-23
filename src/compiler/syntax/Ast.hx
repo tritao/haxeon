@@ -79,7 +79,7 @@ typedef AstField = {
 	final metadata:Array<AstMetadata>;
 	/**
 	 * The field's annotation, or null when the source gives it none: its type is then its initializer's, which the typer gives
-	 * (`DeclarationTypes`), and a reader of it reads an inferred type (`SemanticDependencyKind.DeclarationType`).
+	 * (`DeclarationTypes`), and a reader of it reads the initializer's unit (`FactAspect.Unit`).
 	 */
 	final type:Null<AstType>;
 

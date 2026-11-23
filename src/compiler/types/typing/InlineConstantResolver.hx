@@ -44,7 +44,7 @@ class InlineConstantResolver {
 			return null;
 		var key = owner + "." + name,
 			cached = session.constants.inlineConstants.get(key),
-			unit = "$inline:" + key;
+			unit = TypingSession.INLINE_CONSTANT_PREFIX + key;
 		// The constant is typed once, as a shared unit of its own: what typing it produces belongs to its first user.
 		session.useSharedUnit(unit);
 		if (cached != null) {

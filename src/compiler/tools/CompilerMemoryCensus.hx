@@ -87,10 +87,7 @@ class CompilerMemoryCensus {
 				{name: "typed functions of modules",
 				release: () -> for (state in compiler.modules) {
 					state.typedFunctions = [];
-					state.purityQueries = [];
-					state.noReturnQueries = [];
 					state.keyPathUses = [];
-					state.defaultArgumentSources = [];
 				}
 			},
 				{name: "IR functions of modules",

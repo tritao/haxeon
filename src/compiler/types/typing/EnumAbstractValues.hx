@@ -74,7 +74,7 @@ class EnumAbstractValues {
 	/** The value at a use site: the cached constant, typed as the abstract and located at `span`, where it is used. */
 	public static function typed(typer:BodyTyper, declaration:AstAbstract, value:AstEnumAbstractValue,
 			span:SourceSpan):TypedExpression {
-		typer.recordInlineConstantDependency(declaration.name);
+		typer.recordEnumAbstractValue(declaration.name);
 		var expression = InlineConstantEvaluator.locatedAt(raw(typer, declaration, value), span);
 		return typer.session.constants.enumAbstractConstantOwner == declaration.name
 			? new TypedExpression(expression.expression,

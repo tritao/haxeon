@@ -13,6 +13,10 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.StructProperties;
 import compiler.types.DeclarationTypes.DeclaredTypes;
+import compiler.semantic.DeclarationFacts;
+import compiler.semantic.DeclarationFacts.FactAspect;
+import compiler.semantic.DeclarationReads;
+import compiler.semantic.DeclarationTable;
 
 /** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
@@ -60,24 +64,69 @@ class OpenStructure {
 
 /** Shared owner of source declarations and parsed-type resolution. */
 class DeclarationIndex {
-	public final aliases:Map<String, AstTypeAlias> = [];
-	public final enums:Map<String, AstEnum> = [];
+	public final aliases = new DeclarationTable<AstTypeAlias>(FactAspect.Shape, FactAspect.Shape,
+		DeclarationFacts.KIND_ALIASES);
+	/** Every enum: `get` reads its constructors (`FactAspect.Members`), `exists` its shape; one constructor is read alone (`Case`). */
+	public final enums = new DeclarationTable<AstEnum>(FactAspect.Members, FactAspect.Shape,
+		DeclarationFacts.KIND_ENUMS);
+
 	/** Every abstract, enum abstracts included. */
-	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	public final abstracts = new DeclarationTable<compiler.syntax.Ast.AstAbstract>(FactAspect.Shape, FactAspect.Shape,
+		DeclarationFacts.KIND_ABSTRACTS);
 
 	/** The abstracts that are enum abstracts (they declare values), for the lookups of values. */
-	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	public final enumAbstracts = new DeclarationTable<compiler.syntax.Ast.AstAbstract>(FactAspect.Shape,
+		FactAspect.Shape,
+		DeclarationFacts.KIND_ENUM_ABSTRACTS);
 
 	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
-	public final enumAbstractList:Array<compiler.syntax.Ast.AstAbstract> = [];
+	final enumAbstractList:Array<compiler.syntax.Ast.AstAbstract> = [];
 
-	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
+	final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
+
+	/** Where the lookups of the unit being typed are recorded (`DeclarationReads`); null where nothing records. */
+	public var reads(default, null):Null<DeclarationReads> = null;
+
+	/** Records the lookups of the units typed from here on in `reads`. */
+	public function bindReads(reads:Null<DeclarationReads>):Void {
+		this.reads = reads;
+		aliases.reads = reads;
+		enums.reads = reads;
+		abstracts.reads = reads;
+		enumAbstracts.reads = reads;
+		interfaces.reads = reads;
+		classes.reads = reads;
+	}
+
+	/** Records that the unit being typed read what a reference to the type `name` means. */
+	inline function readShape(name:String):Void {
+		var recorder = reads;
+		if (recorder != null && recorder.recording)
+			recorder.read(FactAspect.Shape, name);
+	}
+
+	/** The enum abstracts in declaration order: a read of every one of them. */
+	public function enumAbstractsInOrder():Array<compiler.syntax.Ast.AstAbstract> {
+		var recorder = reads;
+		if (recorder != null && recorder.recording)
+			recorder.read(FactAspect.Kind, DeclarationFacts.KIND_ENUM_ABSTRACTS);
+		return enumAbstractList;
+	}
+
+	/** The aliases in declaration order: a read of every one of them. */
+	public function aliasesInOrder():Array<compiler.syntax.Ast.AstTypeAlias> {
+		var recorder = reads;
+		if (recorder != null && recorder.recording)
+			recorder.read(FactAspect.Kind, DeclarationFacts.KIND_ALIASES);
+		return aliasList;
+	}
 
 	// This index belongs to one semantic declaration snapshot; rebuilding the index drops the cache.
 	final abstractEqualityOperators:Map<String, Bool> = [];
 
 	/** Whether this abstract declares its own equality operator. */
 	public function declaresEqualityOperator(name:String):Bool {
+		readShape(name);
 		if (abstractEqualityOperators.exists(name))
 			return abstractEqualityOperators.get(name);
 		var declaration = abstractDeclaration(name), found = false;
@@ -136,13 +185,17 @@ class DeclarationIndex {
 		return abstracts.get(name);
 
 	public function abstractNames():Array<String> {
-		var names = [for (name in abstracts.keys()) name];
+		var names = [for (name in abstracts.withoutReads().keys()) name];
 		names.sort(Reflect.compare);
 		return names;
 	}
 
-	public final interfaces:Map<String, AstInterface> = [];
-	public final classes:Map<String, AstClass> = [];
+	public final interfaces = new DeclarationTable<AstInterface>(FactAspect.Shape, FactAspect.Shape,
+		DeclarationFacts.KIND_INTERFACES);
+
+	/** Every class: `get` reads its members, `exists` its shape. */
+	public final classes = new DeclarationTable<AstClass>(FactAspect.Members, FactAspect.Shape,
+		DeclarationFacts.KIND_CLASSES);
 	public final symbols:Map<String, DeclarationSymbol> = [];
 
 	final typeConstraints:Map<String, Array<compiler.syntax.Ast.AstTypeConstraint>> = [];
@@ -523,7 +576,7 @@ class DeclarationIndex {
 						kind:NominalKind
 					};
 					if (classes.exists(name)) {
-						var found = classes.get(name);
+						var found = classes.entry(name);
 						declaration = {
 							typeParameters: found.typeParameters,
 							typeConstraints: found.typeConstraints,
@@ -650,7 +703,9 @@ class DeclarationIndex {
 		var enumDecl = enums.get(name);
 		if (enumDecl != null)
 			return resolveBareNominal(name, NominalKind.Enum, enumDecl.typeParameters.length, span);
-		var classDecl = classes.get(name);
+		var classDecl = classes.entry(name);
+		if (classDecl != null)
+			readShape(name);
 		if (classDecl != null)
 			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class,
 				classDecl.typeParameters.length, span);
@@ -791,12 +846,12 @@ class DeclarationIndex {
 	function findRecursiveAliases():Map<String, Bool> {
 		var edges:Map<String, Array<String>> = [],
 			result:Map<String, Bool> = [];
-		for (name => alias in aliases) {
+		for (name => alias in aliases.withoutReads()) {
 			var referenced:Array<String> = [];
 			collectAliasReferences(alias.type, alias.typeParameters, referenced);
 			edges.set(name, referenced);
 		}
-		for (name => alias in aliases) {
+		for (name => alias in aliases.withoutReads()) {
 			var anonymous = switch alias.type {
 				case AnonymousType(_): true;
 				default: false;
@@ -971,7 +1026,7 @@ class DeclarationIndex {
 		};
 
 	function validateCycles():Void {
-		for (name in aliases.keys()) {
+		for (name in aliases.withoutReads().keys()) {
 			if (!aliases.exists(name))
 				throw new InternalError('Alias "$name" disappeared during cycle validation');
 			var alias = aliases.get(name),
@@ -980,7 +1035,7 @@ class DeclarationIndex {
 				substitutions.set(parameter, TTypeParameter(alias.name, parameter));
 			resolveAlias(alias, [], substitutions);
 		}
-		for (name in classes.keys()) {
+		for (name in classes.withoutReads().keys()) {
 			visitClass(name, []);
 			if (!classes.exists(name))
 				throw new InternalError('Class "$name" disappeared during cycle validation');
@@ -995,13 +1050,13 @@ class DeclarationIndex {
 					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
 			}
 		}
-		for (name in interfaces.keys())
+		for (name in interfaces.withoutReads().keys())
 			visitInterface(name, []);
 		validateInterfaceInstantiations();
 	}
 
 	function validateInterfaceInstantiations():Void {
-		for (name in interfaces.keys()) {
+		for (name in interfaces.withoutReads().keys()) {
 			if (!interfaces.exists(name))
 				throw new InternalError('Interface "$name" disappeared during inheritance validation');
 			var decl = interfaces.get(name);
@@ -1010,7 +1065,7 @@ class DeclarationIndex {
 					TTypeParameter(decl.name, parameter)
 			])), decl.span);
 		}
-		for (name in classes.keys()) {
+		for (name in classes.withoutReads().keys()) {
 			if (!classes.exists(name))
 				throw new InternalError('Class "$name" disappeared during inheritance validation');
 			var decl = classes.get(name);

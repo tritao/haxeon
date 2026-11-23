@@ -126,6 +126,7 @@ class SemanticProgram {
 				if (selected.exists(fn.name) && replacement != null) {
 					var next = withBody(fn, replacement);
 					changedSignatures.push({name: fn.name, fn: next});
+					declarations.declaredTypes.forgetFunction(fn);
 					next;
 				} else fn;
 			}];
@@ -157,11 +158,16 @@ class SemanticProgram {
 			}
 			var methods = withSelectedBodies(decl.name, decl.methods, replacement.methods, selected, changedSignatures,
 				null);
+			forgetReplaced(decl.methods, methods);
 			var next:Dynamic = copyWithMethods(decl, methods);
 			// Keep validated field types while refreshing source-bearing initializer syntax.
 			Reflect.setField(next, "span", replacement.span);
 			Reflect.setField(next, "metadata", replacement.metadata);
-			Reflect.setField(next, "fields", withInitializers(decl.fields, replacement.fields));
+			var fields = withInitializers(decl.fields, replacement.fields);
+			for (index in 0...decl.fields.length)
+				if (fields[index] != decl.fields[index])
+					declarations.declaredTypes.forgetField(decl.fields[index]);
+			Reflect.setField(next, "fields", fields);
 			classes[index] = cast next;
 			nextClassSources[index] = replacement;
 		}
@@ -172,10 +178,13 @@ class SemanticProgram {
 				var index = declarationPositions().abstracts.get(owner),
 					decl = program.abstracts[index],
 					replacement = currentAbstracts.get(owner);
-				if (replacement != null)
-					abstracts[index] = cast copyWithMethods(decl,
-						withSelectedBodies(decl.name, decl.methods, replacement.methods, selected, changedSignatures,
-						decl.typeParameters));
+				if (replacement != null) {
+					var methods = withSelectedBodies(decl.name, decl.methods, replacement.methods, selected,
+						changedSignatures,
+						decl.typeParameters);
+					forgetReplaced(decl.methods, methods);
+					abstracts[index] = cast copyWithMethods(decl, methods);
+				}
 			}
 		}
 		var nextProgram:AstProgram = {
@@ -189,8 +198,18 @@ class SemanticProgram {
 			classes: classes,
 			functions: functions
 		};
+		// The enums are the current program's: those made again are other objects than the ones this program resolved.
+		var currentEnums:Map<String, compiler.syntax.Ast.AstEnum> = [for (decl in current.enums) decl.name => decl];
+		for (decl in program.enums)
+			if (currentEnums.get(decl.name) != decl)
+				declarations.declaredTypes.forgetEnum(decl);
 		var nextSignatures = signatures,
 			nextSignaturesByOwner = signaturesByOwner;
+		for (changed in changedSignatures) {
+			var previous = signatures.get(changed.name);
+			if (previous != null && previous != changed.fn)
+				declarations.declaredTypes.forgetFunction(previous);
+		}
 		if (changedSignatures.length > 0) {
 			nextSignatures = signatures.copy();
 			nextSignaturesByOwner = signaturesByOwner.copy();
@@ -222,6 +241,13 @@ class SemanticProgram {
 		next.positions = positions;
 		return next;
 	}
+
+	/** Forgets what was resolved for each method of `previous` that `next` replaced (`DeclaredTypes.forgetFunction`). */
+	function forgetReplaced(previous:Array<AstFunction>, next:Array<AstFunction>):Void
+		if (previous != next)
+			for (index in 0...previous.length)
+				if (next[index] != previous[index])
+					declarations.declaredTypes.forgetFunction(previous[index]);
 
 	/**
 	 * Whether refreshing a class from `current` gives what refreshing it from `source` gave: the parts a refresh takes are the same
@@ -348,8 +374,8 @@ class SemanticProgram {
 
 	/**
 	 * The table of function signatures typing resolves calls against: interface, class and abstract methods under their
-	 * qualified names, then the program's functions. Purity inference runs over it at typing time, and the drift check of
-	 * `SemanticAssembly` must run over the same table to agree with what a cached body relied on.
+	 * qualified names, then the program's functions. Purity inference runs over it at typing time, and `SemanticAssembly` infers
+	 * the answers typed bodies read (`FactAspect.Purity`) over the same table, so that the two agree.
 	 */
 	public static function signatureTable(program:AstProgram):Map<String, AstFunction> {
 		var signatures:Map<String, AstFunction> = [];

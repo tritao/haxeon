@@ -110,14 +110,15 @@ class BodyTyper implements BodyTyping {
 	}
 
 	function declareNoReturnFunctions():Void {
-		for (name in compiler.types.analysis.NoReturnDeclarations.declared(session.signatures).keys())
+		for (name in compiler.types.analysis.NoReturnDeclarations.declared(session.signatures.withoutReads()).keys())
 			session.noReturnFunctions.set(name, true);
 	}
 
 	/** Every override of a `@:noReturn` method is declared too: a call through the base method must still never return. */
 	function checkNoReturnOverrides():Void {
-		var violation = compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls,
-			session.interfaceDecls);
+		var violation =
+			compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls.withoutReads(),
+			session.interfaceDecls.withoutReads());
 		if (violation != null)
 			fail("E1006",
 				'Method ${violation.method.name} overrides or implements @:noReturn ${violation.base} and must be declared @:noReturn too',
@@ -1075,7 +1076,7 @@ class BodyTyper implements BodyTyping {
 		var signatureName = resolvedCallName(name);
 		if (!session.signatures.exists(signatureName))
 			return null;
-		var signature = requiredMapValue(session.signatures, signatureName);
+		var signature = session.signatures.required(signatureName);
 		return isGeneric(signature) ? null : functionResultType(signature, signature.span);
 	}
 
@@ -1651,7 +1652,7 @@ class BodyTyper implements BodyTyping {
 	}
 
 	function isEnumAbstractValueName(name:String):Bool {
-		for (candidate in session.declarations.enumAbstractList)
+		for (candidate in session.declarations.enumAbstractsInOrder())
 			for (value in candidate.values)
 				if (value.name == name)
 					return true;
@@ -1954,9 +1955,9 @@ class BodyTyper implements BodyTyping {
 				new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt, []),
 					span);
 			else if (session.signatures.exists(functionName)) {
-				var fn = requiredMapValue(session.signatures, functionName),
+				var fn = session.signatures.required(functionName),
 					types = argumentTypesOf(fn),
-					methodInfo = session.methodInfo.get(functionName);
+					methodInfo = session.methodInfoOf(functionName);
 				// A static method value of a class or abstract (`C.m`); a module function has no method info.
 				if (methodInfo != null)
 					MemberAccess.method(session, methodInfo.owner,
@@ -2009,7 +2010,7 @@ class BodyTyper implements BodyTyping {
 					var expectedAbstract = expectedAbstractName == null
 						? null : session.enumAbstractDecls.get(expectedAbstractName);
 					if (expectedAbstract == null && expectedAbstractName != null)
-						for (candidateName => candidate in session.enumAbstractDecls)
+						for (candidateName => candidate in session.enumAbstractDecls.readAll())
 							if (lastPathSegment(candidateName) == lastPathSegment(expectedAbstractName)) {
 								expectedAbstract = candidate;
 								break;
@@ -2040,7 +2041,7 @@ class BodyTyper implements BodyTyping {
 						enumCaseName = parts[parts.length - 1];
 					var enumAbstractName = session.enumAbstractName(enumName);
 					if (enumAbstractName != null) {
-						var enumAbstract = requiredMapValue(session.enumAbstractDecls, enumAbstractName);
+						var enumAbstract = session.enumAbstractDecls.required(enumAbstractName);
 						for (value in enumAbstract.values)
 							if (value.name == enumCaseName)
 								return EnumAbstractValues.typed(this, enumAbstract, value, span);
@@ -2051,7 +2052,7 @@ class BodyTyper implements BodyTyping {
 						isEnumAlias = resolvedEnumName != null && resolvedEnumName != enumName;
 					if (resolvedEnumName != null) {
 						enumName = resolvedEnumName;
-						var enumDecl = requiredMapValue(session.enumDecls, enumName);
+						var enumDecl = session.enumConstructorDeclaration(enumName, enumCaseName);
 						var index = -1;
 						for (i in 0...enumDecl.cases.length)
 							if (enumDecl.cases[i].name == enumCaseName)
@@ -2422,12 +2423,23 @@ class BodyTyper implements BodyTyping {
 		return new TypedExpression(value.expression, value.type, span, false, null, null, owner + "." + name);
 	}
 
-	/** Substitution must retain the dependencies erased by constant folding, including inside default arguments. */
+	/**
+	 * Substitution must retain the dependencies erased by constant folding, including inside default arguments: the unit reads the
+	 * constant's initializer, with its position, which its code holds.
+	 */
 	function recordInlineConstantDependency(target:String):Void {
 		inlineConstantResolver.recordDependency(target);
-		session.output.records.recordInlineConstantDependency(defaultArgumentCaller == null
-			? context.name : defaultArgumentCaller,
-			target);
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Initializer, target);
+	}
+
+	/** An enum abstract's value substituted at a use: the unit reads the abstract, whose shape holds its values and their lines. */
+	function recordEnumAbstractValue(abstractName:String):Void {
+		inlineConstantResolver.recordDependency(abstractName);
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Shape, abstractName);
 	}
 
 	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
@@ -2459,7 +2471,7 @@ class BodyTyper implements BodyTyping {
 		switch typedObject.expression {
 			case TClassRef(className):
 				if (session.enumAbstractDecls.exists(className)) {
-					var abstractDecl = requiredMapValue(session.enumAbstractDecls, className);
+					var abstractDecl = session.enumAbstractDecls.required(className);
 					for (value in abstractDecl.values)
 						if (value.name == name)
 							return EnumAbstractValues.typed(this, abstractDecl, value, span);
@@ -2517,8 +2529,8 @@ class BodyTyper implements BodyTyping {
 		var getter = interfaceProperty != null ? InterfaceProperties.accessor(session, interfaceProperty, true,
 			span) : ClassProperties.instanceAccessor(session, typedObject.type, name, true, typedObject, span);
 		if (getter != null) {
-			var method = requiredMapValue(session.signatures, getter);
-			var methodInfo = session.methodInfo.get(getter),
+			var method = session.signatures.required(getter);
+			var methodInfo = session.methodInfoOf(getter),
 				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
 				methodResult = session.representation.resolveMethodResult(typedObject.type, owner, method),
 				call = new TypedExpression(TMethodCall(typedObject, getter, []), methodResult.physical, span);
@@ -2532,7 +2544,7 @@ class BodyTyper implements BodyTyping {
 			var resolvedMethodInfo = findMethod(owner, name);
 			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
 				var methodKey = resolvedMethodInfo.owner + "." + name,
-					method = requiredMapValue(session.signatures, methodKey);
+					method = session.signatures.required(methodKey);
 				MemberAccess.method(session, resolvedMethodInfo.owner, name, span);
 				if (session.relations.isValueClass(typedObject.type)
 					&& !session.isPureCall(methodKey)
@@ -2602,8 +2614,8 @@ class BodyTyper implements BodyTyping {
 	 */
 	public function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
 			span:SourceSpan):TypedExpression {
-		var method = requiredMapValue(session.signatures, setter),
-			methodInfo = session.methodInfo.get(setter),
+		var method = session.signatures.required(setter),
+			methodInfo = session.methodInfoOf(setter),
 			owner = methodInfo == null ? requiredString(parentPath(setter)) : methodInfo.owner,
 			arguments = session.representation.adaptMethodArguments(object.type, owner, method, [value]),
 			methodResult = session.representation.resolveMethodResult(object.type, owner, method);
@@ -2693,8 +2705,13 @@ class BodyTyper implements BodyTyping {
 		body.resolution = session.syntaxResolutions.ofDefault(argument);
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
-			session.output.records.recordDefaultArgumentSource(defaultArgumentCaller,
-				typed.span.generatedReason == null ? typed.span.file : null);
+			// The caller holds the default's syntax, with its positions in the declaration's file as that file's text has them.
+			var recorder = session.declarations.reads;
+			if (recorder != null) {
+				recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Signature, declarationName);
+				if (typed.span.generatedReason == null)
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Snapshot, typed.span.file.path);
+			}
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;
 			return typed;
@@ -2881,7 +2898,7 @@ class BodyTyper implements BodyTyping {
 			samePackage:Array<compiler.syntax.Ast.AstAbstract> = [],
 			declaredBy:Array<String> = [];
 		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
-		for (candidate in session.declarations.enumAbstractList) {
+		for (candidate in session.declarations.enumAbstractsInOrder()) {
 			var candidateName = candidate.name;
 			for (value in candidate.values)
 				if (value.name == name) {
@@ -2925,7 +2942,7 @@ class BodyTyper implements BodyTyping {
 		if (enumName == null)
 			return null;
 		return new TypedExpression(TEnumLiteral(enumName, index),
-			enumLiteralType(requiredMapValue(session.enumDecls, enumName), null, span), span);
+			enumLiteralType(session.enumDecls.required(enumName), null, span), span);
 	}
 
 	/**
@@ -2977,7 +2994,7 @@ class BodyTyper implements BodyTyping {
 			case TInstance(Class, className, arguments):
 				var found:Null<CompilerType> = null;
 				if (session.classDecls.exists(className)) {
-					var classDecl = requiredMapValue(session.classDecls, className);
+					var classDecl = session.classDecls.required(className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = session.declarations.types.fieldType(className, field,
@@ -3175,7 +3192,7 @@ class BodyTyper implements BodyTyping {
 		var enumName = enumName(type);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return false;
-		var enumDecl = requiredMapValue(session.enumDecls, enumName),
+		var enumDecl = session.enumDecls.required(enumName),
 			coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in cases) for (arm in switchCase.arms)
 				{
 					constructorIndex:arm.constructorIndex,

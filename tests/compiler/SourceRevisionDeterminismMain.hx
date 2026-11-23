@@ -78,10 +78,10 @@ class SourceRevisionDeterminismMain {
 
 		var source = new compiler.core.Source.SourceFile("Defaults.hx", "original");
 		var state = new compiler.modules.ModuleState("Caller", source);
-		state.defaultArgumentSources.set("call", ["Defaults.hx" => source]);
-		state.copy().defaultArgumentSources.get("call").remove("Defaults.hx");
-		if (!state.defaultArgumentSources.get("call").exists("Defaults.hx"))
-			throw "Transaction copy mutated source dependencies";
+		state.unitReads.set("call", new compiler.semantic.DeclarationFacts.UnitReads(1, [0]));
+		state.copy().unitReads.remove("call");
+		if (!state.unitReads.exists("call"))
+			throw "Transaction copy mutated what a unit read";
 
 		Sys.println("PASS: initializer and default argument provenance matches cold compilation after source edits");
 	}

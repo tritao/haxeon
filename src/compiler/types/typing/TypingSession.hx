@@ -13,10 +13,17 @@ import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.core.Source.SourceSpan;
 import compiler.types.analysis.Scope;
+import compiler.semantic.DeclarationFacts;
+import compiler.semantic.DeclarationFacts.FactAspect;
+import compiler.semantic.DeclarationPrints;
+import compiler.semantic.DeclarationTable;
 
 /** Where typing stood before a body: see `TypingSession.checkpoint`. */
 typedef TypingCheckpoint = {
 	final contexts:Int;
+
+	/** How many units were recording their reads (`DeclarationReads.depth`). */
+	final reads:Int;
 	final outputs:Int;
 	final output:TypingOutput;
 	final defaultArgumentDepth:Int;
@@ -37,26 +44,63 @@ typedef TypingCheckpoint = {
  * the output of the unit being typed (`output`), merged into the program's (`programOutput`) in declaration order.
  */
 class TypingSession {
-	public var signatures:Map<String, AstFunction> = [];
+	/** The program's functions by name (`SemanticProgram.signatures`): a lookup reads the function's signature. */
+	public var signatures = new DeclarationTable<AstFunction>(FactAspect.Signature, FactAspect.Signature,
+		DeclarationPrints.KIND_FUNCTIONS);
 
-	public var methodInfo:Map<String, SemanticMethodInfo> = [];
+	/**
+	 * What the program knows of each method, by name. Its values are flat records, so they stay in a map: a lookup goes through
+	 * `methodInfoOf`, which reads the method's signature.
+	 */
+	var methodInfo:Map<String, SemanticMethodInfo> = [];
 
-	/** `signatures` and `methodInfo` by owner, then member name, as the program bound last has them. */
+	/**
+	 * `signatures` and `methodInfo` by owner, then member name, as the program bound last has them; a lookup of an owner reads its
+	 * members (`readMembers`).
+	 */
 	public var signaturesByOwner:Map<String, Map<String, AstFunction>> = [];
 
 	public var methodsByOwner:Map<String, Map<String, SemanticMethodInfo>> = [];
 
+	/** What the program knows of method `name`, or null: a read of its signature. */
+	public function methodInfoOf(name:String):Null<SemanticMethodInfo> {
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Signature, name);
+		return methodInfo.get(name);
+	}
+
+	/**
+	 * The enum `enumName`, for code that names its constructor `caseName` alone: a read of the enum's shape and of that constructor
+	 * (its index and parameters), not of the enum's other constructors.
+	 */
+	public function enumConstructorDeclaration(enumName:String, caseName:String):compiler.syntax.Ast.AstEnum {
+		var declaration = enumDecls.header(enumName), recorder = reads();
+		if (declaration == null)
+			throw new compiler.core.InternalError('Missing enum "$enumName"');
+		if (recorder != null)
+			recorder.read(FactAspect.Case, enumName + "." + caseName);
+		return declaration;
+	}
+
+	/** Records that the unit being typed read the members of `owner` (a lookup of `signaturesByOwner` or `methodsByOwner`). */
+	public function readMembers(owner:String):Void {
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Members, owner);
+	}
+
 	/** The program's static extensions (`StaticExtensions`), from the program bound last. */
 	public var staticExtensions:compiler.semantic.StaticExtensionTable = compiler.semantic.StaticExtensionTable.empty();
 	public final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
-	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];
-	public var interfaceDecls:Map<String, compiler.syntax.Ast.AstInterface> = [];
-	public var enumDecls:Map<String, compiler.syntax.Ast.AstEnum> = [];
+	public var classDecls:compiler.semantic.DeclarationTable<compiler.syntax.Ast.AstClass>;
+	public var interfaceDecls:compiler.semantic.DeclarationTable<compiler.syntax.Ast.AstInterface>;
+	public var enumDecls:compiler.semantic.DeclarationTable<compiler.syntax.Ast.AstEnum>;
 
 	var enumsByFile:Null<Map<String, Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}>>> = null;
 
 	public final enumRepresentations:EnumRuntimeRepresentations;
-	public var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	public var enumAbstractDecls:compiler.semantic.DeclarationTable<compiler.syntax.Ast.AstAbstract>;
 
 	/**
 	 * The enum abstract a source name denotes, directly or through typedefs, or null. Every lookup of an enum abstract by a
@@ -118,10 +162,89 @@ class TypingSession {
 		output = outputs.pop();
 	}
 
-	/** Records that the code being typed uses the shared unit `name`: a generic function specialization, an inline constant. */
-	public function useSharedUnit(name:String):Void
+	/**
+	 * Records that the code being typed uses the shared unit `name`: a generic function specialization, an inline constant. What
+	 * the shared unit read is read through it (`FactAspect.Unit`).
+	 */
+	public function useSharedUnit(name:String):Void {
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Unit, name);
 		if (output != programOutput)
 			output.recordUse(name, bodyContexts.length < 2 ? null : anonymousUnit());
+	}
+
+	/** Where the reads of the units typed are recorded, or null where nothing records. */
+	inline function reads():Null<compiler.semantic.DeclarationReads>
+		return declarations == null ? null : declarations.reads;
+
+	/**
+	 * Starts recording the reads of `unit`, which reads what it is made from: its own signature and body, a field's initializer,
+	 * or the body and signature of the generic function a specialization is made from.
+	 */
+	function beginReads(unit:String):Bool {
+		var recorder = reads();
+		if (recorder == null)
+			return false;
+		recorder.begin(unit);
+		var field = compiler.semantic.InitializerUnit.field(unit);
+		if (field != null)
+			recorder.read(FactAspect.Initializer, field);
+		else if (StringTools.startsWith(unit, INLINE_CONSTANT_PREFIX))
+			recorder.read(FactAspect.Initializer, unit.substr(INLINE_CONSTANT_PREFIX.length));
+		else {
+			var origin = compiler.semantic.GeneratedNames.specializedFunction(unit);
+			recorder.read(FactAspect.Signature, origin);
+			recorder.read(FactAspect.Body, origin);
+			// A function is typed against the types its own signature names, whatever their kind: their members are its reads too.
+			// Its callers read only the typedefs and abstracts the signature expands (`DeclarationFacts.setDependencies`).
+			var facts = recorder.facts, named = facts.dependenciesOf(facts.id(FactAspect.Signature, origin));
+			if (named != null)
+				for (shape in named)
+					recorder.read(FactAspect.Members, facts.name(shape));
+			// A constructor starts with its class's instance field initializers, each typed as a unit of its own.
+			if (StringTools.endsWith(origin, CONSTRUCTOR_SUFFIX)) {
+				var owner = origin.substr(0, origin.length - CONSTRUCTOR_SUFFIX.length),
+					declaration = classDecls == null ? null : classDecls.entry(owner);
+				if (declaration != null)
+					for (field in declaration.fields)
+						if (!field.isStatic && field.initializer != null) {
+							recorder.read(FactAspect.Initializer, owner + "." + field.name);
+							recorder.read(FactAspect.Unit, compiler.semantic.InitializerUnit.of(owner, field.name));
+						}
+			}
+		}
+		return true;
+	}
+
+	static inline final CONSTRUCTOR_SUFFIX = ".new";
+
+	/** The body depths at which a shared unit records its reads: the body it enters there is the shared unit's, not a unit of its own. */
+	final sharedReadDepths:Array<Int> = [];
+
+	function beginSharedReads(name:String):Bool {
+		if (!beginReads(name))
+			return false;
+		sharedReadDepths.push(bodyContexts.length);
+		return true;
+	}
+
+	function endSharedReads(recording:Bool):Void
+		if (recording) {
+			sharedReadDepths.pop();
+			reads().end();
+		}
+
+	/**
+	 * Records what a unit the typer makes without typing a body reads (a constructor made of its class's field initializers): what
+	 * it is made from, as `enterBody` records for a body.
+	 */
+	public function recordComposedUnit(unit:String):Void
+		if (beginReads(unit))
+			reads().end();
+
+	/** The name prefix of an inline constant's shared unit (`InlineConstantResolver`). */
+	public static inline final INLINE_CONSTANT_PREFIX = "$inline:";
 
 	/**
 	 * Types the shared unit `name` with `type`, into an output of its own when a unit is being typed. Call `useSharedUnit` first:
@@ -132,19 +255,29 @@ class TypingSession {
 	 */
 	public function typeSharedUnit(name:String, type:() -> Void, checkOnly:Bool = false, unused:Bool = false):Void {
 		if (output == programOutput && !checkOnly && !unused) {
-			type();
+			var recording = beginSharedReads(name);
+			try {
+				type();
+			} catch (error:haxe.Exception) {
+				endSharedReads(recording);
+				throw error;
+			}
+			endSharedReads(recording);
 			return;
 		}
 		var unit = new TypingOutput(true, bodyContexts.length, checkOnly);
 		sharedOutputs.set(name, unit);
 		outputs.push(output);
 		output = unit;
+		var recording = beginSharedReads(name);
 		try {
 			type();
 		} catch (error:haxe.Exception) {
+			endSharedReads(recording);
 			endUnit(unit);
 			throw error;
 		}
+		endSharedReads(recording);
 		endUnit(unit);
 	}
 
@@ -160,8 +293,10 @@ class TypingSession {
 	 */
 	public function checkpoint():TypingCheckpoint {
 		var context = bodyContexts.length == 0 ? null : currentContext;
+		var recorder = reads();
 		return {
 			contexts: bodyContexts.length,
+			reads: recorder == null ? 0 : recorder.depth,
 			outputs: outputs.length,
 			output: output,
 			defaultArgumentDepth: defaultArgumentDepth,
@@ -193,6 +328,9 @@ class TypingSession {
 	 */
 	public function rewind(mark:TypingCheckpoint):Void {
 		monomorphs.discardFrom(mark.monomorphs);
+		var recorder = reads();
+		if (recorder != null)
+			recorder.endTo(mark.reads);
 		if (bodyContexts.length > mark.contexts)
 			bodyContexts.splice(mark.contexts, bodyContexts.length - mark.contexts);
 		if (outputs.length > mark.outputs)
@@ -428,15 +566,15 @@ class TypingSession {
 
 		declarations = semantic.declarations;
 		// Every reader of a declaration's type asks the program's table from here on.
-		types = new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType,
-			recordDeclarationTypeRead,
-			this, typing);
+		types = new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType, this, typing);
 		declarations.bindTypes(types);
 		relations = semantic.relations;
-		signatures = semantic.signatures;
+		signatures = new DeclarationTable(FactAspect.Signature, FactAspect.Signature, DeclarationPrints.KIND_FUNCTIONS,
+			semantic.signatures);
 		methodInfo = semantic.methodInfo;
 		signaturesByOwner = semantic.signaturesByOwner;
 		methodsByOwner = semantic.methodsByOwner;
+		signatures.reads = declarations.reads;
 		staticExtensions = semantic.staticExtensions;
 		enumDecls = declarations.enums;
 		enumsByFile = null;
@@ -452,7 +590,7 @@ class TypingSession {
 		var index = enumsByFile;
 		if (index == null) {
 			index = [];
-			for (name => declaration in enumDecls) {
+			for (name => declaration in enumDecls.withoutReads()) {
 				var filePath = declaration.span.file.path,
 					entries = index.get(filePath);
 				if (entries == null) {
@@ -464,6 +602,11 @@ class TypingSession {
 			enumsByFile = index;
 		}
 		var found = index.get(path);
+		// What a file's enums are is a read of each of them, whichever unit built the index.
+		var recorder = reads();
+		if (recorder != null && found != null)
+			for (entry in found)
+				recorder.read(FactAspect.Members, entry.name);
 		return found == null ? noEnums : found;
 	}
 
@@ -481,33 +624,34 @@ class TypingSession {
 	/** `@:pure` on a function, or on the class of a static method, promises no observable writes.
 	 * Calls to annotated or inferred-pure functions keep flow facts about captured locals, mutable fields and map entries.
 	 *
-	 * Records the answer against the function currently being typed: typed bodies are cached
-	 * between incremental compiles, so a later compile whose fresh purity answer for `name`
-	 * disagrees with what this body relied on must retype this body, even though its own source
-	 * did not change. See `purityQueries` and the drift check in `SemanticAssembly`.
+	 * The unit being typed reads the answer (`FactAspect.Purity`): typed bodies are cached between incremental compiles, so a
+	 * later compile whose purity answer for `name` changed types this body again, even though its own source did not change.
 	 */
 	public function isPureCall(name:String):Bool {
 		var answer = inferredPureFunctions.exists(name) || isDeclaredPure(name);
-		var caller = currentContext.name;
-		if (caller != "")
-			output.records.recordPurity(caller, name, answer);
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Purity, name);
 		return answer;
 	}
 
-	/** Records that the body being typed read the inferred type of the declaration `key` (see `DeclarationTypeTable`). */
-	public function recordDeclarationTypeRead(key:String):Void {
-		var reader = currentContext.name;
-		if (reader != "")
-			output.records.recordDeclarationTypeRead(reader, key);
+	/**
+	 * Records that the unit being typed read what `unit` gave an unannotated declaration: its result and arguments, or its field's
+	 * type (`DeclarationTypeTable`), which change with whatever `unit` read.
+	 */
+	public function readUnit(unit:String):Void {
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Unit, unit);
 	}
 
 	/** A value method can have global effects without writing its receiver. */
 	public function isReadOnlyReceiver(name:String):Bool {
 		var key = compiler.types.analysis.ReceiverMutationInference.PREFIX + name,
 			answer = inferredPureFunctions.exists(key);
-		var caller = currentContext.name;
-		if (caller != "")
-			output.records.recordPurity(caller, key, answer);
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Purity, key);
 		return answer;
 	}
 
@@ -588,7 +732,8 @@ class TypingSession {
 
 	/** Annotated functions and read-only compiler intrinsics; the inference seeds from these. */
 	function isDeclaredPure(name:String):Bool
-		return compiler.types.analysis.PurityAnnotations.isDeclaredPure(name, signatures, classDecls);
+		return compiler.types.analysis.PurityAnnotations.isDeclaredPure(name, signatures.withoutReads(),
+			classDecls.withoutReads());
 
 	/** Static and module functions inferred pure by `PurityInference`. */
 	public var inferredPureFunctions:Map<String, Bool> = [];
@@ -633,7 +778,8 @@ class TypingSession {
 	function localPurityInference():compiler.types.analysis.PurityInference {
 		var inference = localPurity;
 		if (inference == null) {
-			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls,
+			inference = compiler.types.analysis.PurityInference.create(signatures.withoutReads(),
+				classDecls.withoutReads(), enumDecls.withoutReads(),
 				isDeclaredPure, isTypeName);
 			localPurity = inference;
 		}
@@ -658,25 +804,28 @@ class TypingSession {
 
 	public function inferPureFunctions():Void {
 		localPurity = null;
-		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures, classDecls,
-			declarations.abstracts, enumDecls, isDeclaredPure,
+		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures.withoutReads(),
+			classDecls.withoutReads(),
+			declarations.abstracts.withoutReads(), enumDecls.withoutReads(), isDeclaredPure,
 			isTypeName);
 	}
 
 	function isTypeName(name:String):Bool
-		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls,
-			declarations.abstracts)
+		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls.withoutReads(),
+			interfaceDecls.withoutReads(), enumDecls.withoutReads(),
+			declarations.abstracts.withoutReads())
 			|| enumAbstractName(name) != null;
 
 	public function hasPureAnnotation(name:String):Bool
-		return compiler.types.analysis.PurityAnnotations.hasPureAnnotation(name, signatures, classDecls);
+		return compiler.types.analysis.PurityAnnotations.hasPureAnnotation(name, signatures.withoutReads(),
+			classDecls.withoutReads());
 
 	/** Whether a call to `name` was typed as never returning; recorded the same way as `isPureCall`. */
 	public function isNoReturnCall(name:String):Bool {
 		var answer = noReturnFunctions.exists(name);
-		var caller = currentContext.name;
-		if (caller != "")
-			output.records.recordNoReturn(caller, name, answer);
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.NoReturn, name);
 		return answer;
 	}
 
@@ -748,8 +897,11 @@ class TypingSession {
 			body.resolution = currentContext.resolution;
 		}
 		// A unit's outermost body: a top-level one, or a declaration's unit typed on demand inside another body.
-		if (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth)
+		if (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth) {
 			programOutput.records.typedUnits.set(name, true);
+			if (sharedReadDepths.length == 0 || sharedReadDepths[sharedReadDepths.length - 1] != bodyContexts.length)
+				body.recordsReads = beginReads(name);
+		}
 		if (StringTools.startsWith(name, DEFAULT_ARGUMENT_PREFIX))
 			defaultArgumentDepth++;
 		bodyContexts.push(body);
@@ -768,6 +920,8 @@ class TypingSession {
 		if (currentContext != body)
 			throw new InternalError("Body typing contexts must be left in stack order");
 		bodyContexts.pop();
+		if (body.recordsReads)
+			reads().end();
 		if (StringTools.startsWith(body.name, DEFAULT_ARGUMENT_PREFIX))
 			defaultArgumentDepth--;
 	}

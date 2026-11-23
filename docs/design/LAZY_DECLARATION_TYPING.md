@@ -308,7 +308,11 @@ As built (after slice 5):
 
 ## Invalidation
 
-### Today
+The rule below now runs on recorded reads (`WARM_REBUILD_REUSE.md`, "Typing: recorded reads"): a reader of an inferred type
+reads the unit that types the declaration, so it is typed again when anything that unit read changed. The edges this section
+names (`DeclarationType`, `Initializer`, the call maps) are gone; the sections are kept for the reasoning.
+
+### Today (before recorded reads)
 
 - A function's signature fingerprint renders an unannotated result as `_` (`SemanticSignature`). So an edit that changes
   only an unannotated body is classified as a body change, even when its inferred result changes.

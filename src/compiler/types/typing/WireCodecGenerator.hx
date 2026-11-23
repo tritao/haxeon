@@ -280,7 +280,7 @@ class WireCodecGenerator {
 
 	static function wireAlias(session:TypingSession, type:CompilerType):Null<AstTypeAlias> {
 		var match:Null<AstTypeAlias> = null;
-		for (alias in session.declarations.aliasList) {
+		for (alias in session.declarations.aliasesInOrder()) {
 			if (alias.typeParameters.length != 0 || !switch alias.type {
 				case AnonymousType(_): true;
 				default: false;

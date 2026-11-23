@@ -32,6 +32,14 @@ class EnumRecursion {
 	}
 
 	public function isRecursive(name:String):Bool {
+		// The answer is the program's enums and value classes, whichever unit asked first.
+		var recorder = session.declarations.reads;
+		if (recorder != null) {
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Kind,
+				compiler.semantic.DeclarationFacts.KIND_ENUMS);
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Kind,
+				compiler.semantic.DeclarationFacts.KIND_CLASSES);
+		}
 		if (!ready) build();
 		if (!results.exists(name)) {
 			var root = "enum:" + name;
@@ -41,14 +49,14 @@ class EnumRecursion {
 	}
 
 	function build():Void {
-		for (declaration in session.enumDecls) {
+		for (declaration in session.enumDecls.withoutReads()) {
 			var arguments = [for (parameter in declaration.typeParameters) TTypeParameter(declaration.name, parameter)];
 			var instance = TInstance(NominalKind.Enum, declaration.name, arguments);
 			add("enum:" + declaration.name, declaration.name, declaration.typeParameters,
 				[for (constructor in declaration.cases) for (parameter in constructor.params)
 				session.representation.enumParameterType(declaration.typeParameters, parameter, instance)]);
 		}
-		for (declaration in session.classDecls) {
+		for (declaration in session.classDecls.withoutReads()) {
 			var arguments = [for (parameter in declaration.typeParameters) TTypeParameter(declaration.name, parameter)];
 			if (!session.relations.isValueClass(TInstance(NominalKind.Class, declaration.name, arguments))) continue;
 			var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,

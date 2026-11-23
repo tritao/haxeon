@@ -190,8 +190,6 @@ class TestCatalog {
 		"CaptureAnalysisMain",
 		"ModuleCanonicalizerMain",
 		"QualifiedMainTypeMain",
-		"SemanticDependencyCollectorMain",
-		"ResolvedSemanticDependencyMain",
 		"InlineDefaultArgumentMain",
 		"InlineEnumAbstractConstantMain",
 		"InvalidationMain",

@@ -274,7 +274,7 @@ class CallResolver {
 			if (expectedType != null && !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(fn.result, expectedType, parameters, preset, span);
 			var prepared = typeGenericCallArguments(fn, arguments, scope, span, [first], preset);
-			var info = session.methodInfo.get(key);
+			var info = session.methodInfoOf(key);
 			return genericInstantiation.specialize(key, fn, prepared.arguments, span, scope,
 				info == null ? null : info.owner, true, prepared.substitutions);
 		}
@@ -1199,7 +1199,7 @@ class CallResolver {
 			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 		MemberAccess.method(session, abstractName, name, span);
 		var methodKey = abstractName + "." + name,
-			signature = requiredMapValue(session.signatures, methodKey),
+			signature = session.signatures.required(methodKey),
 			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
 				typeArguments);
 		if (declaration.isExtern == true || method.isExtern == true) {
@@ -1240,7 +1240,7 @@ class CallResolver {
 		if (declaration == null)
 			throw new InternalError('Missing abstract declaration "$abstractName"');
 		var methodKey = abstractName + "." + accessor,
-			signature = requiredMapValue(session.signatures, methodKey),
+			signature = session.signatures.required(methodKey),
 			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
 				typeArguments);
 		if (declaration.isExtern == true || signature.isExtern == true)
@@ -1567,16 +1567,16 @@ class CallResolver {
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):TypedExpression {
 		// A static method of a class or abstract by its qualified name (`C.m()`, or `m()` inside C); module functions have no info.
-		var calledMethod = session.methodInfo.get(name);
+		var calledMethod = session.methodInfoOf(name);
 		if (calledMethod != null)
 			MemberAccess.method(session, calledMethod.owner, name.substr(name.lastIndexOf(".") + 1), span);
 		var hasSignature = session.signatures.exists(name);
-		if (hasSignature && BodyTyper.functionTypeParameters(requiredMapValue(session.signatures, name)).length > 0) {
-			var signature = requiredMapValue(session.signatures, name),
+		if (hasSignature && BodyTyper.functionTypeParameters(session.signatures.required(name)).length > 0) {
+			var signature = session.signatures.required(name),
 				infoOwner:Null<String> = null,
 				infoStatic = true;
-			if (session.methodInfo.exists(name)) {
-				var resolvedInfo = requiredMapValue(session.methodInfo, name);
+			var resolvedInfo = session.methodInfoOf(name);
+			if (resolvedInfo != null) {
 				infoOwner = resolvedInfo.owner;
 				infoStatic = resolvedInfo.isStatic;
 			}
@@ -1587,7 +1587,7 @@ class CallResolver {
 		var expectedArguments:Array<CompilerType> = [],
 			result:CompilerType = TVoid;
 		if (hasSignature) {
-			var signature = requiredMapValue(session.signatures, name);
+			var signature = session.signatures.required(name);
 			expectedArguments = bodyTyper.argumentTypesOf(signature);
 			result = bodyTyper.functionResultType(signature, signature.span);
 		} else if (session.externals.exists(name)) {
@@ -1611,7 +1611,7 @@ class CallResolver {
 			fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}',
 				span);
 		var typed = traced ? [traceLine(arguments, scope, span)] : hasSignature ? typeDeclaredCallArguments(arguments,
-			requiredMapValue(session.signatures, name), scope, name,
+			session.signatures.required(name), scope, name,
 			span) : typeCallArguments(arguments, expectedArguments, scope, name, span);
 		var call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name,
 			typed), result, span);
@@ -1953,7 +1953,8 @@ class CallResolver {
 			enumName = enumName(qualifiedType);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return null;
-		var declaration = requiredMapValue(session.enumDecls, enumName);
+		// A constructor named alone reads that constructor: its index and parameters, not the enum's other ones.
+		var declaration = session.enumConstructorDeclaration(enumName, caseName);
 		for (index in 0...declaration.cases.length)
 			if (declaration.cases[index].name == caseName)
 				return {
@@ -2058,7 +2059,7 @@ class CallResolver {
 		var owner = session.currentContext.lexicalOwner,
 			baseType:Null<AstType> = null;
 		if (owner != null && session.classDecls.exists(owner))
-			baseType = requiredMapValue(session.classDecls, owner).base;
+			baseType = session.classDecls.required(owner).base;
 		if (baseType == null)
 			fail("E1007", "super() requires a base-class constructor", span);
 		var baseInstance = session.declarations.resolve(baseType, span, session.currentContext.typeSubstitutions),
@@ -2079,10 +2080,10 @@ class CallResolver {
 				span);
 		MemberAccess.method(session, resolvedBase, "new", span);
 		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments,
-			requiredMapValue(session.signatures, constructorName), scope,
+			session.signatures.required(constructorName), scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope,
 			constructorName, span),
-			method = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
+			method = hasConstructor ? session.signatures.required(constructorName) : null,
 			physicalArguments = session.representation.adaptConstructorArguments(baseInstance, resolvedBase, method,
 				semanticArguments);
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
@@ -2094,7 +2095,7 @@ class CallResolver {
 		var owner = session.currentContext.lexicalOwner,
 			baseType:Null<AstType> = null;
 		if (owner != null && session.classDecls.exists(owner))
-			baseType = requiredMapValue(session.classDecls, owner).base;
+			baseType = session.classDecls.required(owner).base;
 		if (baseType == null)
 			fail("E1007", 'super.$name() requires a base class', span);
 		if (scope.receiverType() == null)
@@ -2299,15 +2300,15 @@ class CallResolver {
 					// Runtime type tests name a declaration, not an instantiation; generic arguments are erased here.
 					if (session.classDecls.exists(targetName)) TInstance(NominalKind.Class, targetName,
 						[
-							for (_ in requiredMapValue(session.classDecls, targetName).typeParameters)
+							for (_ in session.classDecls.required(targetName).typeParameters)
 								TDynamic
 						]);
 					else if (session.interfaceDecls.exists(targetName)) TInstance(NominalKind.Interface, targetName, [
-						for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters)
+						for (_ in session.interfaceDecls.required(targetName).typeParameters)
 							TDynamic
 					]);
 					else TInstance(NominalKind.Enum, targetName, [
-						for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters)
+						for (_ in session.enumDecls.required(targetName).typeParameters)
 							TDynamic
 					]);
 			};
@@ -2986,7 +2987,7 @@ class CallResolver {
 			case TInstance(Class, className, []):
 				var found = false;
 				if (session.classDecls.exists(className)) {
-					var classDecl = requiredMapValue(session.classDecls, className);
+					var classDecl = session.classDecls.required(className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = true;
@@ -3087,7 +3088,7 @@ class CallResolver {
 	public function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
-		var declaration = requiredMapValue(session.classDecls, typeName),
+		var declaration = session.classDecls.required(typeName),
 			parameters = declaration.typeParameters,
 			substitutions:Map<String, CompilerType> = [];
 		var constructorExpectation = switch expectedType {
@@ -3116,7 +3117,7 @@ class CallResolver {
 			if (arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 		} else {
-			var constructor = requiredMapValue(session.signatures, constructorName),
+			var constructor = session.signatures.required(constructorName),
 				required = constructor.arguments.length;
 			while (required > 0 && AstPredicates.isOptionalArgument(constructor.arguments[required - 1]))
 				required--;
@@ -3128,7 +3129,7 @@ class CallResolver {
 		}
 
 		var typed:Array<TypedExpression> = [],
-			constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null;
+			constructor = hasConstructor ? session.signatures.required(constructorName) : null;
 		for (index in 0...arguments.length) {
 			var expectedArgument:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions) && constructor != null)
@@ -3177,7 +3178,7 @@ class CallResolver {
 		if (hasExplicitTypeArguments) {
 			if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
 				fail("E1007", 'Unknown class "$typeName"', span);
-			var classDecl = requiredMapValue(session.classDecls, typeName),
+			var classDecl = session.classDecls.required(typeName),
 				valueType = session.representation.semanticType(AppliedType(typeName, typeArguments), span,
 					session.currentContext.typeSubstitutions),
 				substitutions = session.representation.nominalSubstitutions(valueType),
@@ -3189,7 +3190,7 @@ class CallResolver {
 				].length > 0;
 			if (!hasConstructor && arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
-			var constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
+			var constructor = hasConstructor ? session.signatures.required(constructorName) : null,
 				semanticArguments = constructor == null ? [] : typeDeclaredCallArguments(arguments,
 					constructor, scope, constructorName, span,
 					substitutions),
@@ -3200,7 +3201,7 @@ class CallResolver {
 		if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName))
 			|| session.interfaceDecls.exists(typeName))
 			fail("E1007", 'Unknown class "$typeName"', span);
-		var classDecl = session.classDecls.exists(typeName) ? requiredMapValue(session.classDecls, typeName) : null;
+		var classDecl = session.classDecls.exists(typeName) ? session.classDecls.required(typeName) : null;
 		if (classDecl != null && classDecl.typeParameters.length > 0)
 			return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);
 		var constructorName = typeName + ".new",
@@ -3209,8 +3210,8 @@ class CallResolver {
 				for (field in classDecl.fields)
 					if (!field.isStatic && field.initializer != null) field
 			].length > 0;
-		var expected = hasConstructor ? bodyTyper.argumentTypesOf(requiredMapValue(session.signatures,
-			constructorName)) : PlatformAbi.constructorArguments(typeName),
+		var expected = hasConstructor ? bodyTyper.argumentTypesOf(session.signatures.required(constructorName))
+			: PlatformAbi.constructorArguments(typeName),
 			resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
@@ -3218,7 +3219,7 @@ class CallResolver {
 			fail("E1008",
 				'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 		var typed = hasConstructor ? typeDeclaredCallArguments(arguments,
-			requiredMapValue(session.signatures, constructorName), scope,
+			session.signatures.required(constructorName), scope,
 			constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName, span),
 			nativeConstructor = PlatformAbi.constructorNative(typeName),
 			valueType = PlatformAbi.valueType(typeName);
@@ -3229,7 +3230,7 @@ class CallResolver {
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var decl = requiredMapValue(session.declarations.abstracts, name),
+		var decl = session.declarations.abstracts.required(name),
 			constructorName = name + ".new",
 			constructor = session.signatures.get(constructorName);
 		if (constructor == null)

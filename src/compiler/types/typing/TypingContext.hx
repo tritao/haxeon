@@ -7,6 +7,9 @@ import compiler.types.analysis.Scope;
 
 /** Mutable state owned by one function or lambda while its body is checked. */
 class TypingContext {
+	/** Whether this body is a unit's outermost, which records the unit's reads until it is left (`TypingSession.enterBody`). */
+	public var recordsReads = false;
+
 	public final functionName:String;
 	/** Source function whose body is being typed; generated bodies keep their declaration identity. */
 	public final sourceFunctionName:String;

@@ -53,6 +53,9 @@ class SessionState {
 
 	/** The purity and no-return facts of the last canonical program (`SemanticAssembly`), while it is made of the same modules. */
 	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
+
+	/** The facts typed units read (`DeclarationFacts`); every copy shares it, as a print only moves forward. */
+	public var declarationFacts(default, null) = new compiler.semantic.DeclarationFacts();
 	public var publishedAbi:Null<RuntimeAbiDescriptor> = null;
 	public var compiledOnce = false;
 
@@ -167,7 +170,6 @@ class SessionState {
 			state.canonicalClasses = [];
 			state.canonicalNamespaceUses = [];
 			state.canonicalFunctionNamespaceUses = [];
-			state.canonicalCalls = [];
 			// Nothing canonical is left to reuse: a later canonicalization starts over.
 			state.canonicalRevision = -1;
 		}
@@ -179,7 +181,6 @@ class SessionState {
 	 */
 	public function releaseIncrementalRecords():Void
 		for (state in modules) {
-			state.semanticDependencies = [];
 			state.signatureFingerprints = [];
 			state.interfaceFingerprints = [];
 			state.aliasFingerprints = [];
@@ -192,10 +193,8 @@ class SessionState {
 			state.bodyFingerprints = [];
 			state.declarationTypeDigests = [];
 			state.inferredSignatures = [];
-			state.purityQueries = [];
-			state.noReturnQueries = [];
 			state.keyPathUses = [];
-			state.defaultArgumentSources = [];
+			state.unitReads = [];
 		}
 
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
@@ -223,6 +222,7 @@ class SessionState {
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.programFacts = programFacts;
+		result.declarationFacts = declarationFacts;
 		result.publishedAbi = publishedAbi;
 		result.compiledOnce = compiledOnce;
 		result.rehydrationBaseline = rehydrationBaseline;

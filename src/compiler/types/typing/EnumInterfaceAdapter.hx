@@ -24,6 +24,15 @@ class EnumInterfaceAdapter {
 		type = session.monomorphs.closeReached(type);
 		interfaceType = session.monomorphs.closeReached(interfaceType);
 		var key = name(type, interfaceType);
+		// The adapter is made from the enum's methods and the interface, as the program has them: asking for it reads both.
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			for (declared in [type, interfaceType])
+				switch declared {
+					case TInstance(_, owner, _):
+						recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Members, owner);
+					default:
+				}
 		session.output.requests.add(EnumInterfaceAdapterHelper(key, {
 			type: type,
 			interfaceType: interfaceType,

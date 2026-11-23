@@ -1,11 +1,16 @@
 package compiler.compilation;
 
-import compiler.core.PeakProbe;
-import compiler.core.PhaseCollections;
+import compiler.abi.PositionalName;
+import compiler.compilation.PipelineSnapshot.PipelineInputs;
 import compiler.core.AllocationMeter;
+import compiler.core.AllocationMeter.AllocationSnapshot;
+import compiler.core.AllocationMeter.PhaseAllocation;
+import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
-import compiler.runtime.PlatformAbi;
+import compiler.core.PeakProbe;
+import compiler.core.PhaseCollections;
+import compiler.ir.gen.IrGenerator;
 import compiler.ir.model.Ir.IrCNative;
 import compiler.ir.model.Ir.IrEnum;
 import compiler.ir.model.Ir.IrInterface;
@@ -14,33 +19,26 @@ import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.Ir.IrStaticField;
 import compiler.ir.model.Ir.IrType;
-import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
-import compiler.abi.PositionalName;
 import compiler.ir.model.IrFunction;
-import compiler.ir.gen.IrGenerator;
 import compiler.ir.pipeline.IrProgramAssembler;
+import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
+import compiler.runtime.PlatformAbi;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticAssembly;
 import compiler.semantic.SemanticAssembly.SemanticAssemblyResult;
-import compiler.semantic.SemanticSignature;
-import compiler.core.CancellationToken;
 import compiler.semantic.SemanticProgram;
+import compiler.semantic.SemanticSignature;
+import compiler.syntax.Ast.AstProgram;
+import compiler.types.Type.CompilerType;
+import compiler.types.TypedAst.TypedProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
-import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.EnumRuntimeType;
 import compiler.types.typing.RetainedFromPrevious;
 import compiler.types.typing.TypingFailure;
-import compiler.types.Type.CompilerType;
-import compiler.modules.ModuleState.SemanticDependencyKind;
-import compiler.semantic.SemanticDependencyCollector;
-import compiler.syntax.Ast.AstProgram;
-import compiler.core.AllocationMeter.AllocationSnapshot;
-import compiler.core.AllocationMeter.PhaseAllocation;
-import compiler.compilation.PipelineSnapshot.PipelineInputs;
 
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
@@ -152,16 +150,14 @@ private class FrontendBuild {
 		var functionName:String;
 		var target:String;
 	}>;
-	public var purityQueries:Map<String, Map<String, Bool>>;
-	public var noReturnQueries:Map<String, Map<String, Bool>>;
 	public var keyPathUses:Map<String, Map<String, Bool>>;
-	public var inlineConstantDependencies:Map<String, Map<String, Bool>>;
-	public var declarationTypeReads:Map<String, Map<String, Bool>>;
 	public var typedUnits:Map<String, Bool>;
 
 	/** The signatures of the unannotated functions this build typed, by key, which `publishInferredSignatures` keeps. */
 	public var inferredSignatures:Map<String, compiler.types.DeclarationTypes.InferredSignature> = [];
-	public var defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;
+
+	/** What the units typed in this build read (`DeclarationReads`), which `publishUnitReads` keeps in their modules. */
+	public var reads:Null<compiler.semantic.DeclarationReads>;
 
 	// Publication of the typed program, pruning and IR generation.
 	public var reindexedModules:Map<String, Bool>;
@@ -423,7 +419,7 @@ class FrontendCompilation {
 	static function assembleSemantics(build:FrontendBuild):Void {
 		build.semanticAssembly = SemanticAssembly.run(build.context, build.entryModule, build.token,
 			build.rollbackModules,
-			build.names, build.bodyChanged, build.signatureChanged, build.structuralChanged, build.indexSemantics);
+			build.names, build.structuralChanged, build.indexSemantics);
 		build.frontendDoneAt = now();
 		build.allocationAfterSemantic = AllocationMeter.sample();
 	}
@@ -456,6 +452,10 @@ class FrontendCompilation {
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			semantic.staticExtensions = semanticAssembly.staticExtensions;
+			// What each unit typed now reads is recorded while it is typed, and published with it (`publishUnitReads`).
+			var reads = new compiler.semantic.DeclarationReads(context.state.declarationFacts);
+			build.reads = reads;
+			semantic.declarations.bindReads(reads);
 			build.allocationAfterAnalysis = AllocationMeter.sample();
 			build.analysisDoneAt = now();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.natives.signatures(),
@@ -478,16 +478,12 @@ class FrontendCompilation {
 			build.typerMetrics = typedResult.metrics;
 			var runtimeDependencies = typedResult.runtimeDependencies;
 			build.runtimeDependencies = runtimeDependencies;
-			build.purityQueries = typedResult.purityQueries;
-			build.noReturnQueries = typedResult.noReturnQueries;
 			build.keyPathUses = typedResult.keyPathUses;
-			build.inlineConstantDependencies = typedResult.inlineConstantDependencies;
-			build.declarationTypeReads = typedResult.declarationTypeReads;
 			build.typedUnits = typedResult.typedUnits;
 			build.inferredSignatures = typedResult.inferredSignatures;
-			build.defaultArgumentSources = typedResult.defaultArgumentSources;
 			checkTypedRuntimeDependencies(context, runtimeDependencies, names);
 			context.state.semanticProgram = semantic;
+			semantic.declarations.bindReads(null);
 		} catch (error:CompileError) {
 			// Typing recovers from a failed body and goes on, so the error can carry one diagnostic per failed body: each goes to
 			// the module of its file.
@@ -736,10 +732,6 @@ class FrontendCompilation {
 			owners = build.semanticAssembly.owners,
 			generatedByModule = build.semanticAssembly.generatedByModule,
 			invalidated = build.semanticAssembly.invalidated,
-			inlineConstantDependencies = build.inlineConstantDependencies,
-			defaultArgumentSources = build.defaultArgumentSources,
-			purityQueries = build.purityQueries,
-			noReturnQueries = build.noReturnQueries,
 			keyPathUses = build.keyPathUses,
 			retyped = build.retyped,
 			regenerated = build.regenerated,
@@ -787,35 +779,6 @@ class FrontendCompilation {
 			var state = context.state.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
-			var dependencies = state.semanticDependencies.get(fn.name);
-			if (dependencies != null)
-				state.semanticDependencies.set(fn.name, [
-					for (dependency in dependencies)
-						if (dependency.kind != SemanticDependencyKind.InlineConstant
-						&& dependency.kind != SemanticDependencyKind.DeclarationType) dependency
-				]);
-			var constants = inlineConstantDependencies.get(fn.name);
-			if (constants != null)
-				for (target in constants.keys())
-					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name,
-						SemanticDependencyKind.InlineConstant, target,
-						context.state.semanticWorkspace.resolveSymbolId(target));
-			addDeclarationTypeEdges(context, state, fn.name, build.declarationTypeReads.get(fn.name));
-			var sourceRecord = defaultArgumentSources.get(fn.name);
-			if (sourceRecord != null)
-				state.defaultArgumentSources.set(fn.name, sourceRecord);
-			else
-				state.defaultArgumentSources.remove(fn.name);
-			var purityRecord = purityQueries.get(fn.name);
-			if (purityRecord != null)
-				state.purityQueries.set(fn.name, purityRecord);
-			else
-				state.purityQueries.remove(fn.name);
-			var noReturnRecord = noReturnQueries.get(fn.name);
-			if (noReturnRecord != null)
-				state.noReturnQueries.set(fn.name, noReturnRecord);
-			else
-				state.noReturnQueries.remove(fn.name);
 			var keyPathRecord = keyPathUses.get(fn.name);
 			if (keyPathRecord != null)
 				state.keyPathUses.set(fn.name, keyPathRecord);
@@ -860,7 +823,7 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
-		publishInitializerReads(build);
+		publishUnitReads(build);
 		publishDeclarationTypeDigests(build);
 		publishInferredSignatures(build);
 		var objectCache = context.state.objectCache;
@@ -869,46 +832,45 @@ class FrontendCompilation {
 		build.allocationAfterFunctions = AllocationMeter.sample();
 	}
 
-	/** Replaces the `DeclarationType` edges of `owner`, which was just typed, with the declaration types it read. */
-	static function addDeclarationTypeEdges(context:CompilationContext, state:ModuleState, owner:String,
-			reads:Null<Map<String, Bool>>):Void {
-		var dependencies = state.semanticDependencies.get(owner);
-		if (dependencies != null)
-			for (dependency in dependencies)
-				if (dependency.kind == SemanticDependencyKind.DeclarationType) {
-					state.semanticDependencies.set(owner, [
-						for (dependency in dependencies)
-							if (dependency.kind != SemanticDependencyKind.DeclarationType) dependency
-					]);
-					break;
-				}
-		if (reads != null)
-			for (target in reads.keys())
-				SemanticDependencyCollector.addDependency(state.semanticDependencies, owner,
-					SemanticDependencyKind.DeclarationType, target,
-					context.state.semanticWorkspace.resolveSymbolId(target));
+	/**
+	 * Keeps what each unit typed in this build read in the state of the module that holds it (`ModuleState.unitReads`), as of this
+	 * build's revision: the next build types it again only when one of those facts changed after that.
+	 */
+	static function publishUnitReads(build:FrontendBuild):Void {
+		var reads = build.reads;
+		if (reads == null)
+			return;
+		var context = build.context,
+			facts = context.state.declarationFacts,
+			owners = build.semanticAssembly.owners;
+		for (unit => read in reads.units) {
+			var module = unitModule(unit, owners, build.typedByName);
+			// A unit no function holds (a generic body typed for its errors alone) is read by nothing.
+			if (module == null)
+				continue;
+			context.state.writableState(module, build.rollbackModules).unitReads.set(unit,
+				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read));
+			facts.placeUnit(facts.id(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit), module);
+		}
 	}
 
 	/**
-	 * A field initializer is a unit of its own (`Class.__init.x`, `InitializerUnit`) and no typed function: what each typed one read
-	 * is published under that name, in the module of its class.
+	 * The module whose state holds unit `unit`: its function's, the class's for a field initializer or an inline constant, and the
+	 * module of the code that first asked for a specialization.
 	 */
-	static function publishInitializerReads(build:FrontendBuild):Void {
-		var owners = build.semanticAssembly.owners;
-		for (unit in build.typedUnits.keys()) {
-			var module = initializerModule(unit, owners);
-			if (module == null)
-				continue;
-			var state = build.context.state.modules.get(module);
-			if (state == null)
-				continue;
-			var reads = build.declarationTypeReads.get(unit);
-			if (reads == null && !state.semanticDependencies.exists(unit))
-				continue;
-			addDeclarationTypeEdges(build.context, build.context.state.writableState(module, build.rollbackModules),
-				unit,
-				reads);
+	static function unitModule(unit:String, owners:Map<String, String>,
+			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>):Null<String> {
+		var owner = owners.get(unit);
+		if (owner != null)
+			return owner;
+		var typed = typedByName.get(unit);
+		if (typed != null)
+			return resolveFunctionModule(typed, owners, typedByName, []);
+		if (StringTools.startsWith(unit, compiler.types.typing.TypingSession.INLINE_CONSTANT_PREFIX)) {
+			var field = unit.substr(compiler.types.typing.TypingSession.INLINE_CONSTANT_PREFIX.length);
+			return owners.get(compiler.core.QualifiedName.parentOrEmpty(field) + ".new");
 		}
+		return initializerModule(unit, owners);
 	}
 
 	/**
@@ -945,20 +907,40 @@ class FrontendCompilation {
 					publish(owners.get(classDecl.name + ".new"), classDecl.name + "." + field.name, field.type);
 		if (!context.options.checkReuse || changed.length == 0)
 			return;
-		for (change in changed)
+		var facts = context.state.declarationFacts, reads = build.reads;
+		for (change in changed) {
+			// The unit that gives the declaration its type, which its readers read (`TypingSession.readUnit`).
+			var unit = inferredUnit(change.declaration, owners, build.typed());
+			var fact = facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit);
+			if (fact < 0)
+				continue;
 			for (module in build.names) {
 				var state = context.state.modules.get(module);
 				if (state == null)
 					continue;
-				for (owner => dependencies in state.semanticDependencies)
-					for (dependency in dependencies)
-						if (dependency.kind == SemanticDependencyKind.DeclarationType
-							&& dependency.target == change.declaration
-							&& !build.typedByName.exists(owner)
-							&& !build.typedUnits.exists(owner))
-							throw new InternalError('--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
-								+ 'but "$owner", which read it, kept the body typed against the old one');
+				for (reader => record in state.unitReads)
+					if (record.facts.indexOf(fact) >= 0 && (reads == null || !reads.units.exists(reader)))
+						throw new InternalError('--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
+							+ 'but "$reader", which read it, kept the body typed against the old one');
 			}
+		}
+	}
+
+	/** The unit that types unannotated declaration `declaration`: its function, or its field's initializer or inline constant. */
+	static function inferredUnit(declaration:String, owners:Map<String, String>, typed:TypedProgram):String {
+		if (owners.exists(declaration)
+			&& !owners.exists(compiler.core.QualifiedName.parentOrEmpty(declaration) + ".new"))
+			return declaration;
+		var owner = compiler.core.QualifiedName.parentOrEmpty(declaration),
+			name = compiler.core.QualifiedName.last(declaration);
+		for (classDecl in typed.classes)
+			if (classDecl.name == owner)
+				for (field in classDecl.fields)
+					if (field.name == name)
+						return field.isInline ? compiler.types.typing.TypingSession.INLINE_CONSTANT_PREFIX + declaration
+							: compiler.semantic.InitializerUnit.of(owner,
+							name);
+		return declaration;
 	}
 
 	/**
@@ -1016,7 +998,6 @@ class FrontendCompilation {
 					for (key => signature in state.inferredSignatures)
 						recordInferredSignature(build.context, module, key, signature);
 			}
-			publishResolvedDependencies(build.context, build.typed(), build.reindexedModules, build.rollbackModules);
 		}
 		build.allocationAfterIndexPublication = AllocationMeter.sample();
 	}
@@ -1108,8 +1089,11 @@ class FrontendCompilation {
 			// otherwise assembling cached bodies can resurrect the previous owner's stale IR.
 			var supersededOwner = typedByName.exists(cached) && owners.get(cached) != name;
 			// Even when the generic origin is unchanged, a specialization can depend on a changed type's
-			// representation. Its cached body and optional-value helpers are no longer valid in that case.
-			if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner)
+			// representation. Its cached body and optional-value helpers are no longer valid in that case. A specialization is a
+			// unit of its own, invalidated by what it read, whatever retyped its generic function.
+			var specialization = fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization;
+			if (sourceOwner != null && owners.exists(sourceOwner)
+				&& (specialization || !invalidated.exists(sourceOwner))
 				&& !supersededOwner
 				&& !invalidated.exists(cached) && !supersededByRetyping) {
 				valid.set(cached, true);
@@ -1697,10 +1681,8 @@ class FrontendCompilation {
 		for (cached in names) {
 			state.typedFunctions.remove(cached);
 			state.typedSourceRevisions.remove(cached);
-			state.purityQueries.remove(cached);
-			state.noReturnQueries.remove(cached);
+			state.unitReads.remove(cached);
 			state.keyPathUses.remove(cached);
-			state.defaultArgumentSources.remove(cached);
 			state.pendingIrFunctions.remove(cached);
 			state.irFunctions.remove(cached);
 			state.irSourceRevisions.remove(cached);
@@ -1766,14 +1748,17 @@ class FrontendCompilation {
 			previous = context.state.lastTypedProgram;
 		if (previous == null)
 			return null;
-		// As pruning keeps them (`pruneModule`): not typed again, and neither the function nor its origin invalidated.
+		// As pruning keeps them (`pruneModule`): not typed again, and neither the function nor its origin invalidated. A
+		// specialization is a unit of its own, kept while what it read is current, however its generic function was invalidated.
 		var units:Map<String, Bool> = [];
 		for (module in modules) {
 			var state = context.state.modules.get(module);
 			if (state != null)
 				for (name => fn in state.typedFunctions)
 					if (!selected.exists(name) && !invalidated.exists(name)
-						&& (fn.origin == null || !invalidated.exists(fn.origin)))
+						&& (fn.origin == null
+						|| fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
+						|| !invalidated.exists(fn.origin)))
 						units.set(name, true);
 		}
 		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
@@ -2431,98 +2416,6 @@ class FrontendCompilation {
 							context.state.semanticWorkspace.resolveSymbolId,
 							context.state.semanticWorkspace.resolveEnumCaseId);
 			}
-	}
-
-	/** Replace provisional edges with dependencies proven by typed resolution. */
-	static function publishResolvedDependencies(context:CompilationContext, typed:TypedProgram,
-			reindexedModules:Map<String, Bool>,
-			rollbackModules:Map<String, ModuleState>):Void {
-		for (module in reindexedModules.keys()) {
-			var state = context.state.writableState(module, rollbackModules),
-				model = state.semanticModel;
-			if (model == null)
-				continue;
-			var resolved:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>> = [];
-			for (owner => dependencies in state.semanticDependencies)
-				for (dependency in dependencies)
-					if (dependency.kind != SemanticDependencyKind.Body
-						&& dependency.kind != SemanticDependencyKind.Initializer) {
-						var targetId = dependency.targetId == null
-							? context.state.semanticWorkspace.resolveTypeSymbolId(dependency.target)
-							: dependency.targetId;
-						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target,
-							targetId);
-					}
-			for (dependency in model.index.resolvedDependencies())
-				SemanticDependencyCollector.addDependency(resolved, dependency.owner, dependency.kind,
-					dependency.target, dependency.targetId);
-			for (name => fn in state.typedFunctions)
-				if (state.typedSourceRevisions.get(name) == state.revision) {
-					for (argument in fn.arguments)
-						addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, argument.type,
-							context);
-					addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, fn.result, context);
-				}
-			for (classDecl in typed.classes)
-				if (modelOwnsType(model.program, classDecl.name)) {
-					if (classDecl.base != null)
-						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout,
-							classDecl.base, context);
-					for (interfaceName in classDecl.interfaces)
-						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout,
-							interfaceName, context);
-					for (field in classDecl.fields)
-						addResolvedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, field.type,
-							context);
-				}
-			state.semanticDependencies = resolved;
-		}
-	}
-
-	static function addResolvedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
-			owner:String,
-			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext):Void
-		addResolvedTypeDependencyWithin(result, owner, kind, type, context, []);
-
-	/** `explored` holds the anonymous structures already walked: one can contain itself, and a repeat adds nothing. */
-	static function addResolvedTypeDependencyWithin(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
-			owner:String,
-			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext,
-			explored:Array<Array<compiler.types.Type.AnonymousField>>):Void
-		switch type {
-			case TAbstract(name, arguments, representation):
-				addResolvedNamedTypeDependency(result, owner, kind, name, context);
-				for (argument in arguments)
-					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
-				addResolvedTypeDependencyWithin(result, owner, kind, representation, context, explored);
-			case TInstance(_, name, arguments):
-				addResolvedNamedTypeDependency(result, owner, kind, name, context);
-				for (argument in arguments)
-					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
-			case TNullable(element), TArray(element), TIterator(element):
-				addResolvedTypeDependencyWithin(result, owner, kind, element, context, explored);
-			case TMap(key, value):
-				addResolvedTypeDependencyWithin(result, owner, kind, key, context, explored);
-				addResolvedTypeDependencyWithin(result, owner, kind, value, context, explored);
-			case TFunction(arguments, resultType, _):
-				for (argument in arguments)
-					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
-				addResolvedTypeDependencyWithin(result, owner, kind, resultType, context, explored);
-			case TAnonymous(_, fields):
-				if (explored.indexOf(fields) < 0) {
-					explored.push(fields);
-					for (field in fields)
-						addResolvedTypeDependencyWithin(result, owner, kind, field.type, context, explored);
-				}
-			default:
-		}
-
-	static function addResolvedNamedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
-			owner:String,
-			kind:SemanticDependencyKind, target:String, context:CompilationContext):Void {
-		var targetId = context.state.semanticWorkspace.resolveTypeSymbolId(target);
-		if (targetId != null)
-			SemanticDependencyCollector.addDependency(result, owner, kind, target, targetId);
 	}
 
 	static function modelOwnsType(program:compiler.syntax.Ast.AstProgram, name:String):Bool {

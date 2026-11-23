@@ -9,8 +9,8 @@ import compiler.syntax.Ast.AstMetadata;
 
 /**
  * `@:pure` annotation and type-name lookups shared between the typing session (which resolves
- * them against its own live declaration maps) and the pre-typing purity-drift check (which
- * resolves them against a plain canonical program, before any type is connected).
+ * them against its own live declaration maps) and the purity inference `SemanticAssembly` moves the answers typed bodies read
+ * by (which resolves them against a plain canonical program, before any type is connected).
  */
 class PurityAnnotations {
 	public static function isTypeName(name:String, classDecls:Map<String, AstClass>,

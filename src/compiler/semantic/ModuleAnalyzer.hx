@@ -233,15 +233,6 @@ class ModuleAnalyzer {
 		state.dependencies.sort(Reflect.compare);
 		var typeAliases = AliasTable.of(importAliases(ast.imports));
 		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
-		var previousDependencies = state.semanticDependencies;
-		state.semanticDependencies = SemanticDependencyCollector.collectSemanticDependencies(state, entry, typeAliases);
-		// What typing read stays until the reader is typed again: the edges walked to find the readers of a changed inferred type
-		// must include those of a module edited in the same build.
-		for (owner => dependencies in previousDependencies)
-			for (dependency in dependencies)
-				if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.DeclarationType)
-					SemanticDependencyCollector.addDependency(state.semanticDependencies, owner, dependency.kind,
-						dependency.target, dependency.targetId);
 		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
 		mergeChanges(bodyChanged, changes.bodyChanged);
 		mergeChanges(signatureChanged, changes.signatureChanged);

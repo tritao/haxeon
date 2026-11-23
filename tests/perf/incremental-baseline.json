@@ -47,12 +47,12 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 1445744312,
+			"value": 1398005584,
 			"tolerance": 0.03,
 			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
 		"signature_edit_retyped_functions": {
-			"value": 1431,
+			"value": 1352,
 			"tolerance": 0.05,
 			"why": "The constructor's callers and what depends on them: deterministic; the slack absorbs new callers."
 		},

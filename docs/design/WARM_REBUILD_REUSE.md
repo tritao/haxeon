@@ -40,19 +40,24 @@ and no edge between declarations is kept by hand.
 
 - **Facts.** What a unit can read is a fact: an aspect of a declaration or of the program, by name
   (`DeclarationFacts`). The aspects are a function's signature and its body, a type's shape (what a reference to it means:
-  kind, type parameters and constraints, base and interfaces, metadata, and for a value type its fields), a class's members,
-  a field's initializer, a callee's purity and never-returns answers, a source file's snapshot (a default argument copied
-  from it), and a unit (what a unit read, for the units whose result others take: an inferred declaration, a
+  kind, type parameters and constraints, base and interfaces, metadata, and for a value type its fields), a class's members
+  (an enum's constructors), one enum constructor (its index and parameters), a field's initializer, a callee's purity and
+  never-returns answers, a source file's snapshot (a default argument copied from it), every declaration of a kind (for code
+  that searches them all), and a unit (what a unit read, for the units whose result others take: an inferred declaration, a
   specialization, an inline constant).
-- **Prints.** Each fact has a print, a digest of what a reader sees: made from the canonical declaration, where names are
-  resolved, with positions as lines. A body's print also takes the names its canonicalization resolved, so a declaration
-  added elsewhere that changes what a name means changes the print. A fact also names the facts its meaning goes through
-  (the shapes a signature names, the reads of an inferred declaration's unit), so a typedef edit reaches the readers of
-  every signature naming it without the signature's text changing.
+- **Prints.** When a module's canonical declarations are made again, each part is compared with the one it replaces
+  (`DeclarationPrints`, `CanonicalComparison`): the canonical forms, where names are resolved, with positions as lines
+  where code copied into a reader carries them. A body whose text, line and scope (the names every module sees, the
+  module's imports and declarations) are unchanged is the same without being walked. A fact also names the facts its
+  meaning goes through: the shapes of the typedefs and abstracts its declaration names, which a type naming them expands. A
+  class, interface or enum is named, not expanded: its readers read what they use of it themselves. So a typedef edit reaches
+  the readers of every signature naming it, and an enum constructor added does not reach the callers of a function whose
+  signature names the enum. A function reads the members of every type its own signature names.
 - **Revisions.** Every build has a revision. A fact keeps the revision its print last changed at; a unit keeps the
-  revision it was typed at and the facts it read. A unit is current while no fact it read, or that one of those names,
-  changed after it was typed: invalidation checks each unit's reads, memoized per fact for the build, and keeps no reverse
-  index to rebuild. Prints are made again only for the modules whose canonical declarations were made again.
+  revision it was typed at and the facts it read. A unit is current while no fact it read, or that one of those goes
+  through, changed after it was typed: invalidation checks each unit's reads, with the latest change of each fact found
+  once per build (facts that go through each other are one component), and keeps no reverse index to rebuild. A build in
+  which no fact changed checks nothing.
 - **Where reads are recorded.** At the typer's lookups: the declaration tables (`DeclarationIndex`, the signature tables),
   name resolution, the declaration types (`DeclarationTypes`), purity and never-returns answers, inline constants and
   default arguments. A cached answer is recorded on every use, not only when it is computed. A read outside a unit (program

@@ -827,7 +827,7 @@ class TypeRepresentation {
 		var owner = fieldOwner(receiver, name);
 		if (owner == null)
 			return made;
-		var declaration = requiredMapValue(session.classDecls, owner);
+		var declaration = session.classDecls.required(owner);
 		for (field in declaration.fields)
 			if (field.name == name && !field.isStatic)
 				return withMemberSource(made, session.declarations.types.fieldType(owner, field,
@@ -1011,7 +1011,7 @@ class TypeRepresentation {
 			// A class's value in its own type parameters stores as each representation of them does: the elaboration pass makes it.
 			case TInstance(Class, _, _) if (isOwnInstance(type)): fieldType(type, name, span);
 			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
-				var declaration = requiredMapValue(session.classDecls, className),
+				var declaration = session.classDecls.required(className),
 					specialization = genericOwner(type),
 					substitutions = specialization == null
 						? erasedNominalSubstitutions(className) : specialization.substitutions,

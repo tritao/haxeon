@@ -291,7 +291,7 @@ class GenericInstantiation {
 	 * so a body nothing calls is typed for its errors and never merged.
 	 */
 	public function typeMemberBody(baseName:String, fn:AstFunction, owner:String, instanceMember:Bool):Void {
-		var underlying = instanceMember ? requiredMapValue(session.declarations.abstracts, owner).underlying : null,
+		var underlying = instanceMember ? session.declarations.abstracts.required(owner).underlying : null,
 			representation = session.representation.genericFunction(fn, [], underlying),
 			specialization = session.genericSpecializations.request(baseName, [], representation.policies),
 			constants:Map<String, String> = [];
@@ -525,7 +525,7 @@ class GenericInstantiation {
 		}
 
 	function abstractReceiverType(name:String, substitutions:Map<String, CompilerType>):CompilerType {
-		var decl = requiredMapValue(session.declarations.abstracts, name),
+		var decl = session.declarations.abstracts.required(name),
 			arguments = [
 				for (parameter in decl.typeParameters)
 					requiredMapValue(substitutions, parameter)

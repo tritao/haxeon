@@ -568,7 +568,7 @@ class ExpressionTyper {
 	/** Descriptors for every source struct and legacy C record in this typed program. */
 	public function nativeTypeDescriptors():Array<NativeTypeDescriptorData> {
 		var names = [
-			for (name in session.classDecls.keys())
+			for (name in session.classDecls.withoutReads().keys())
 				if (isStructDeclaration(session.classDecls.get(name))) name
 		];
 		names.sort(Reflect.compare);
@@ -807,9 +807,21 @@ class ExpressionTyper {
 				continue;
 			}
 			var values = typedAnnotationValues.get(metadataKey(annotation));
-			if (values != null)
+			if (values != null) {
+				// The values were typed against the annotation's declaration (`prepareNativeTypeAnnotations`): using them reads it.
+				var recorder = session.declarations.reads;
+				if (recorder != null) {
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Members, annotation.name);
+					var declaration = session.classDecls.entry(annotation.name);
+					if (declaration != null)
+						for (field in declaration.fields)
+							if (field.initializer != null)
+								recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Initializer,
+									annotation.name + "." + field.name);
+				}
 				for (value in values)
 					result.push(value);
+			}
 		}
 		return result;
 	}
@@ -949,6 +961,10 @@ class ExpressionTyper {
 			span:SourceSpan):Null<NativeTypeDescriptorDefault> {
 		if (initializer == null)
 			return null;
+		// The descriptor holds the default: the unit asking for it reads the field's initializer.
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Initializer, owner + "." + fieldName);
 		var value = descriptorDefaultConstant(type, initializer);
 		if (value == null) {
 			var reason = switch initializer {
