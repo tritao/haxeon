@@ -51,7 +51,8 @@ app process. The job runs the check outside the standard test suites because it
 needs a booted Android device.
 
 To run the same check from a checkout, set `ANDROID_HOME` to the toolchain SDK
-or source `scripts/android-env.sh` for a checkout-local SDK. Build and stage
+or source `scripts/android-env.sh` for a checkout-local SDK, and install the
+pinned toolchain into it with `cmake -P cmake/haxeon-android-toolchain.cmake`. Build and stage
 Haxeon, then run the check with a booted, unlocked device or emulator visible
 in `adb devices`.
 

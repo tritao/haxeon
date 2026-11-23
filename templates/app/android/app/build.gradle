@@ -15,7 +15,7 @@ new File(host.parentFile, 'versions.txt').withInputStream { versions.load(it) }
 
 android {
     namespace inputs.getProperty('id')
-    compileSdk 36
+    compileSdk Integer.parseInt(versions.getProperty('platform'))
 
     defaultConfig {
         applicationId inputs.getProperty('id')

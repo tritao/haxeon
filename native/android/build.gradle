@@ -7,7 +7,7 @@ file('versions.txt').withInputStream { versions.load(it) }
 
 android {
     namespace 'org.haxeon.android'
-    compileSdk 36
+    compileSdk Integer.parseInt(versions.getProperty('platform'))
     ndkVersion versions.getProperty('ndk')
 
     defaultConfig {

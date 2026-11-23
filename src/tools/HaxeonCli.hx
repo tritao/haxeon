@@ -605,7 +605,7 @@ class HaxeonCli {
 		configureAndroidEnvironment(home);
 		var adb = androidExecutable(home, "adb");
 		if (!FileSystem.exists(adb))
-			throw new InternalError('Android adb is missing at $adb (install the Android platform tools and set ANDROID_HOME)');
+			throw new InternalError('Android adb is missing at $adb; ${androidInstallHint(home)}');
 		var result = capture(adb, ["devices", "-l"]);
 		Sys.print(result.output);
 		return result.status;
@@ -1445,7 +1445,7 @@ class HaxeonCli {
 		if (!FileSystem.exists(host))
 			throw new InternalError('Android host AAR is missing at $host; use an SDK built with the Android toolchain');
 		if (!FileSystem.exists(sdk))
-			throw new InternalError('Android SDK is missing under $sdk');
+			throw new InternalError('Android SDK is missing under $sdk; ${androidInstallHint(home)}');
 		var wrapperJar = Path.join([androidDirectory, "gradle", "wrapper", "gradle-wrapper.jar"]);
 		var arguments = [
 			"-classpath",
@@ -1475,7 +1475,7 @@ class HaxeonCli {
 		configureAndroidEnvironment(home);
 		var adb = androidExecutable(home, "adb");
 		if (!FileSystem.exists(adb))
-			throw new InternalError('Android adb is missing at $adb');
+			throw new InternalError('Android adb is missing at $adb; ${androidInstallHint(home)}');
 		var device = selectAndroidDevice(adb, requestedDevice);
 
 		var status = ProcessRunner.run(adb, ["-s", device, "install", "-r", apk], Sys.getCwd(), new Map());
@@ -1527,6 +1527,10 @@ class HaxeonCli {
 		process.close();
 		return {status: status, output: stdout + stderr};
 	}
+
+	/** How to install the pinned Android toolchain into the SDK the CLI uses (ANDROID_HOME, or .tools/android-sdk). */
+	static function androidInstallHint(home:String):String
+		return 'install the pinned toolchain with: cmake -P ${Path.join([home, "cmake", "haxeon-android-toolchain.cmake"])}';
 
 	static function androidSdkDirectory(home:String):String {
 		for (variable in ["ANDROID_HOME", "ANDROID_SDK_ROOT"]) {

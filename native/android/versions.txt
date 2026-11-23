@@ -2,3 +2,4 @@ ndk=30.0.16248370
 build-tools=36.0.0
 cmake=3.30.5
 gradle=9.5.0
+platform=36

@@ -326,10 +326,11 @@ foreach(_registry_manifest IN LISTS _registry_manifests)
 endforeach()
 file(CONFIGURE OUTPUT "${HAXEON_SDK_DIR}/registry/index.json" CONTENT "${_registry_index}\n")
 set(_sdk_lib "${HAXEON_SDK_DIR}/lib/${_sdk_target}")
-# The scripts native packages' CMake builds include or run (build.native.NativeCMakeProvider, NativeCache), from the SDK's
-# cmake/ in a checkout as in a release. Copied file by file, so the launcher's haxeon-command brings an edit to them along.
+# The scripts native packages' CMake builds include or run (build.native.NativeCMakeProvider, NativeCache), and the Android
+# toolchain installer, from the SDK's cmake/ in a checkout as in a release. Copied file by file, so the launcher's haxeon-command brings an edit to them along.
 set(_sdk_native_scripts)
-foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument haxeon-locked haxeon-publish haxeon-real-path)
+foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument haxeon-locked haxeon-publish haxeon-real-path
+    haxeon-android-toolchain)
   add_custom_command(OUTPUT "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
     COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/cmake/${_script}.cmake" "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
     COMMAND "${CMAKE_COMMAND}" -E touch "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"

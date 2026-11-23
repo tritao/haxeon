@@ -14,11 +14,17 @@ endif()
 if(NOT _android_sdk)
   set(_android_sdk "${CMAKE_SOURCE_DIR}/.tools/android-sdk")
 endif()
-# The host library builds only with the whole pinned toolchain: an SDK with some
-# other CMake or build tools (a CI runner's, say) would fail Gradle's checks.
-foreach(_part ndk cmake build-tools)
-  file(STRINGS "${CMAKE_SOURCE_DIR}/native/android/versions.txt" _version REGEX "^${_part}=")
-  string(REGEX REPLACE "^${_part}=" "" _android_${_part} "${_version}")
+# The Android host library needs the whole pinned toolchain (cmake/haxeon-android-toolchain.cmake installs it): an SDK
+# with some other CMake or build tools, as CI runners have, would fail Gradle's checks. AUTO builds it when the toolchain
+# is there and says what is missing otherwise; ON (release builds) makes a missing piece an error; OFF never builds it.
+set(HAXEON_ANDROID AUTO CACHE STRING "Build the Android host library: AUTO, ON or OFF")
+set_property(CACHE HAXEON_ANDROID PROPERTY STRINGS AUTO ON OFF)
+file(STRINGS "${CMAKE_SOURCE_DIR}/native/android/versions.txt" _android_pins)
+foreach(_pin IN LISTS _android_pins)
+  if(_pin MATCHES "^([a-z-]+)=(.+)$")
+    string(REPLACE "-" "_" _key "${CMAKE_MATCH_1}")
+    set(_android_${_key} "${CMAKE_MATCH_2}")
+  endif()
 endforeach()
 find_package(Java QUIET COMPONENTS Runtime)
 set(_android_missing "")
@@ -26,14 +32,19 @@ if(NOT Java_FOUND)
   list(APPEND _android_missing "a Java runtime")
 endif()
 foreach(_path "ndk/${_android_ndk}/source.properties" "cmake/${_android_cmake}/bin/cmake"
-    "build-tools/${_android_build-tools}")
+    "build-tools/${_android_build_tools}" "platforms/android-${_android_platform}")
   if(NOT EXISTS "${_android_sdk}/${_path}")
     list(APPEND _android_missing "${_android_sdk}/${_path}")
   endif()
 endforeach()
-if(_android_missing)
-  list(JOIN _android_missing ", " _android_missing)
-  message(STATUS "Android host library skipped: missing ${_android_missing} (pins in native/android/versions.txt)")
+list(JOIN _android_missing ", " _android_missing_text)
+if(HAXEON_ANDROID STREQUAL "OFF")
+elseif(_android_missing AND HAXEON_ANDROID STREQUAL "ON")
+  message(FATAL_ERROR "HAXEON_ANDROID=ON, but the pinned Android toolchain is incomplete: missing "
+    "${_android_missing_text}. Install it with: cmake -P cmake/haxeon-android-toolchain.cmake")
+elseif(_android_missing)
+  message(STATUS "Android host library skipped: missing ${_android_missing_text} "
+    "(cmake -P cmake/haxeon-android-toolchain.cmake installs it)")
 else()
   add_custom_target(haxeon-android-sdk
     COMMAND "${CMAKE_COMMAND}" -E env "ANDROID_HOME=${_android_sdk}" "ANDROID_SDK_ROOT=${_android_sdk}"

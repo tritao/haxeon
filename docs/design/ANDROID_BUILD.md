@@ -10,15 +10,20 @@ contains the host activity and the HashLink VM with libffi for `arm64-v8a` and
 
 A toolchain-equipped SDK build stages the host AAR with `haxeon-sdk`. The build
 uses the Android SDK in `ANDROID_HOME`, `ANDROID_SDK_ROOT` or the checkout's
-`.tools/android-sdk`. Install the Android platform for API 36, platform tools,
-and the build tools, NDK and CMake versions in
-[versions.txt](../../native/android/versions.txt), with a JDK supported by the
-pinned Gradle and Android Gradle plugin. `scripts/android-env.sh` configures
-shell paths for a checkout-local installation.
+`.tools/android-sdk`. `cmake -P cmake/haxeon-android-toolchain.cmake` installs
+the toolchain pinned in [versions.txt](../../native/android/versions.txt) (the
+platform, platform tools, build tools, NDK and CMake) into that SDK with its
+`sdkmanager`; CI and the release workflow run the same script. The build also
+needs a JDK supported by the pinned Gradle and Android Gradle plugin.
+`scripts/android-env.sh` configures shell paths for a checkout-local
+installation.
 
-When the pinned NDK and Java are present at CMake configure time,
-`cmake --build --preset release --target haxeon-android-sdk` builds just
-the Android part of the SDK. `haxeon dev package` copies the staged
+`HAXEON_ANDROID` decides whether the SDK build includes the host library:
+`AUTO` (the default) builds it when the whole pinned toolchain and Java are
+present and otherwise says what is missing, `ON` (release builds) makes a
+missing piece a configure error, and `OFF` leaves it out.
+`cmake --build --preset release --target haxeon-android-sdk` builds just the
+Android part of the SDK. `haxeon dev package` copies the staged
 `platforms/` tree into the release archive.
 
 ## Building the app
