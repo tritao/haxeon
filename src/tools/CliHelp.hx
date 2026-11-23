@@ -82,7 +82,7 @@ class CliHelp {
 				},
 				{
 					name: "doctor",
-					summary: "Check the local compiler, HashLink runtime and Android tools",
+					summary: "Check the installation, the C and C++ toolchain, and Android tools",
 					details: ["Usage: haxeon doctor"]
 				},
 				{

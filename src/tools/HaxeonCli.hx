@@ -18,6 +18,7 @@ import build.execution.JobServer;
 import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
+import build.native.ToolchainCheck;
 import compiler.core.InternalError;
 import compiler.core.TextDigest;
 import compiler.core.UsageError;
@@ -616,16 +617,24 @@ class HaxeonCli {
 			Sys.println(AotCompiler.currentShipped(home, AotCompiler.BYTECODE) != null
 				? 'ok: compiler bytecode, which the VM runs without the compiler built ahead of time ($bytecode)'
 				: 'stale: compiler bytecode ($bytecode), not built from these sources');
+		// A program builds without them; an app, a package with C or C++ code and a build ahead of time need them. So a
+		// missing tool names its install command but does not fail the check.
+		if (ToolchainCheck.report()) {
+			Sys.println("An app, or a package with C or C++ code, needs the C and C++ toolchain. Install what is missing with:");
+			for (command in ToolchainCheck.installCommands())
+				Sys.println('  $command');
+		}
 		// Android builds need a checkout: its android/ host project and the SDK and NDK under its .tools.
 		if (source != null) {
 			var androidSdk = androidSdkDirectory(source), ndk = androidVersion(source, "ndk");
 			reportPath("Android SDK", androidSdk, false);
 			reportPath('Android NDK $ndk', Path.join([androidSdk, "ndk", ndk]), false);
 			reportPath("Android platform tools (adb)", androidExecutable(source, "adb"), false);
-			Sys.println("CMake and Ninja are only needed to rebuild the native runtime.");
 		}
 		if (missingRequired)
-			Sys.stderr().writeString("Run the repository's setup/bootstrap tools to install missing dependencies.\n");
+			Sys.stderr().writeString(source != null
+				? "Run the repository's setup/bootstrap tools to install missing dependencies.\n"
+				: "This release is incomplete: unpack its archive again.\n");
 		return missingRequired ? 1 : 0;
 	}
 
