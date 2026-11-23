@@ -6,3 +6,6 @@ out/
 /packages/ui/out/
 /packages/ui/tests/settings/build/
 packages/ui/tests/*/build/
+
+# Build output of the guides' example projects (docs/guides/examples).
+docs/guides/examples/*/build/

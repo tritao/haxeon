@@ -1,0 +1,9 @@
+{
+  "interface": "Geometry",
+  "functionPrefix": "geo_",
+  "functionCase": "camel",
+  "typeNames": {
+    "geo_point": "Point",
+    "geo_path": "Path"
+  }
+}

@@ -1,0 +1,19 @@
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+nullSafety = "strict"
+
+[package]
+name = "hello"
+
+[app]
+name = "Hello"
+id = "org.example.hello"
+version = "1.0.0"
+platforms = ["linux"]
+
+[dependencies]
+ui = "^0.3"
+
+[compatibility]
+haxeon = "^0.3"

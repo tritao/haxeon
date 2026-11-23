@@ -7,6 +7,30 @@ Longer-term direction is in `ROADMAP.md`.
   A package with native
   sources and no `[native.cmake]` cannot join a runner's graph. Under
   `--watch`, an edit to native code needs a restart.
+- **Rough edges met writing the user guides** (`docs/guides/03` to `05`).
+  - `--frames=N` counts drawn frames, and an idle window draws none, so an
+    app run with a large N (`--frames=400`) never stops.
+  - `--quiet` still prints the FFI importer's `imported ...` lines and the
+    native CMake build's output (`ninja: no work to do.`, and on a first
+    build CMake's whole configure log, with a warning that
+    `HAXEON_NATIVE_OUTPUT_DIR` and `HAXEON_TARGET` were not used).
+  - `haxeon ffi import --help`, or any unknown option, is an uncaught
+    `InternalError` (exit 70) instead of a usage error with the options.
+  - Naming an FFI record without importing its interface module
+    (`new geo_point()` without `import Geometry;`) reports `Missing module
+    "geo_point"` at line 1, column 1, with no hint about the import.
+  - An `ffi.imports` recipe cannot call a package's own `[native] sources`:
+    they link `<package>.hdll`, while the importer's `library` resolves to
+    `lib<name>.so`, so the call fails at run time ("Could not open ordinary
+    C library"). Only `[native.cmake]` with `library` works for it.
+  - `TextField` with a style loses its whole default style (height, padding,
+    corner radius), and the default is private, so a field cannot change only
+    its width.
+  - `NavigationStack` paints its screens with a fixed phone colour
+    (`NavUi.ground`), not the theme's, so it stays light under `Theme.dark()`.
+  - Nothing installs the Android SDK and NDK into `.tools/android-sdk`, which
+    the Android build requires; `docs/reference/ANDROID.md` says they live
+    there but not how they get there.
 - **Spike: bundle a C compiler with Haxeon** (after the app template). Apps
   that use native packages build C and C++ with the user's toolchain
   (`docs/design/WEBSITE.md`, native code), which on Windows means Visual

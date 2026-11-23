@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "name": "geometry",
+  "language": "c",
+  "header": "../native/include/geometry.h",
+  "includes": ["../native/include"],
+  "library": "geometry",
+  "interface": "Geometry"
+}

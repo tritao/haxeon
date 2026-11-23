@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "name": "shapes",
+  "language": "c++",
+  "profile": "direct",
+  "header": "../native/include/shapes.hpp",
+  "includes": ["../native/include"],
+  "std": "c++20",
+  "library": "geometry",
+  "interface": "Shapes",
+  "select": ["shapes::Circle"],
+  "cxxLifetimes": true,
+  "projection": true
+}

@@ -1,0 +1,19 @@
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+nullSafety = "strict"
+
+[package]
+name = "geometry-demo"
+
+[native.cmake]
+source = "native"
+target = "geometry"
+library = "geometry"
+
+[ffi]
+imports = ["ffi/geometry.ffi.json", "ffi/shapes.ffi.json"]
+projections = ["ffi/geometry.hxmap"]
+
+[compatibility]
+haxeon = "^0.3"
