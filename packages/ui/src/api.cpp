@@ -4594,11 +4594,12 @@ std::array<uint64_t, 6> plan_dependency_state(const ResourceSlot &slot) {
 
 } // namespace
 
-extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
-                                                        nkui_layout_session session,
-                                                        nk_surface surface,
-                                                        const nkui_frame_info *frame_info,
-                                                        nk_bool load_existing) {
+static nkui_result layout_session_render_frame(nkui_renderer renderer,
+                                               nkui_layout_session session,
+                                               nk_surface surface,
+                                               const nkui_frame_info *frame_info,
+                                               nk_bool load_existing,
+                                               const nk_surface_frame_target *acquired_target) {
     nkui::RenderCostFrame render_cost_frame;
     nkui::RenderCostProbe render_cost("frontend", {"acquire", "custom_plans", "reuse_check",
         "layout_plan", "resources", "atlas_upload", "seal", "execute", "enqueue"});
@@ -4608,8 +4609,9 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
         frame_info->logical_height <= 0.0f || frame_info->framebuffer_width <= 0 ||
         frame_info->framebuffer_height <= 0 || frame_info->pixel_scale <= 0.0f)
         return NKUI_ERROR_INVALID_ARGUMENT;
-    const bool threaded = nk::core::render_executor_physical();
-    if (!surface || nk_surface_set_frame_mode(surface, NK_SURFACE_FRAME_ON_DEMAND) != NK_OK)
+    const bool threaded = !acquired_target && nk::core::render_executor_physical();
+    if (!acquired_target &&
+        (!surface || nk_surface_set_frame_mode(surface, NK_SURFACE_FRAME_ON_DEMAND) != NK_OK))
         return NKUI_ERROR_INVALID_ARGUMENT;
     nk_surface_frame frame = NK_INVALID_HANDLE;
     uint64_t frame_acquired_at_ns = 0;
@@ -4623,7 +4625,14 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     } frame_guard;
     nk_surface_frame_target frame_target{};
     frame_target.struct_size = sizeof(frame_target);
-    if (threaded) {
+    if (acquired_target) {
+        frame_target = *acquired_target;
+        if (frame_target.width != frame_info->framebuffer_width ||
+            frame_target.height != frame_info->framebuffer_height)
+            return NKUI_ERROR_INVALID_ARGUMENT;
+        if (nkgpu_bind_frame_target(&frame_target) != NKGPU_OK)
+            return NKUI_ERROR_RENDERING;
+    } else if (threaded) {
         drain_orphan_completions();
 #if defined(__ANDROID__)
         /* The first frame can outlast the next Android frame callback. A frame still in flight on this
@@ -4664,7 +4673,7 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     if (!threaded)
         discard_stale_renderer(*renderer_slot, frame_target);
     if (!threaded && !renderer_slot->renderer) {
-        auto ui_renderer = nkui::create_ui_renderer(surface);
+        auto ui_renderer = nkui::create_ui_renderer(surface, acquired_target);
         if (!ui_renderer)
             return NKUI_ERROR_RENDERING;
         renderer_slot->renderer = std::move(ui_renderer);
@@ -5479,6 +5488,25 @@ extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
     const auto result = execute_inline(plan, frame_resources, text_engines);
     if (result == NKUI_OK && sealable) remember_plan(nullptr);
     return result;
+}
+
+extern "C" nkui_result nkui_layout_session_render_frame(nkui_renderer renderer,
+                                                        nkui_layout_session session,
+                                                        nk_surface surface,
+                                                        const nkui_frame_info *frame_info,
+                                                        nk_bool load_existing) {
+    return layout_session_render_frame(renderer, session, surface, frame_info, load_existing, nullptr);
+}
+
+extern "C" nkui_result nkui_layout_session_render_into_frame(nkui_renderer renderer,
+                                                             nkui_layout_session session,
+                                                             nk_surface_frame frame,
+                                                             const nkui_frame_info *frame_info) {
+    nk::core::FrameTicket ticket{};
+    if (!nk::core::lookup_frame_ticket(frame, &ticket))
+        return NKUI_ERROR_INVALID_HANDLE;
+    return layout_session_render_frame(renderer, session, ticket.surface, frame_info, true,
+                                       &ticket.target);
 }
 
 extern "C" nkui_result nkui_renderer_render(nkui_renderer renderer, nkui_display_list list,

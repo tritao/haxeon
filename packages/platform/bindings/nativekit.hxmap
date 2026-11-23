@@ -13,6 +13,7 @@
   "typeNames": {
     "nk_window": "WindowHandle",
     "nk_surface": "SurfaceHandle",
+    "nk_surface_frame": "SurfaceFrameHandle",
     "nk_webview": "WebViewHandle",
     "nk_view": "ViewHandle",
     "nk_monitor": "MonitorHandle",

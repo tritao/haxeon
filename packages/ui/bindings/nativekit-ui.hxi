@@ -744,6 +744,15 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	 */
 	extern fn nkui_layout_session_render_frame(renderer: nkui_renderer, session: nkui_layout_session, surface: nk_surface, frame_info: ptr<const<nkui_frame_info>>, load_existing: nk_bool) -> nkui_result;
 	/**
+	 * Composites the submitted layout over the contents of an acquired frame.
+	 *
+	 * Call synchronously on the render executor after earlier GPU work on the
+	 * frame has finished. The caller owns acquisition, presentation, cancellation
+	 * and frame scheduling. The framebuffer dimensions must match the acquired
+	 * target. A closed or unknown frame returns NKUI_ERROR_INVALID_HANDLE.
+	 */
+	extern fn nkui_layout_session_render_into_frame(renderer: nkui_renderer, session: nkui_layout_session, frame: nk_surface_frame, frame_info: ptr<const<nkui_frame_info>>) -> nkui_result;
+	/**
 	 * Selects whether a render-node subtree is rendered normally or cached as a raster.
 	 */
 	extern fn nkui_layout_session_set_cache_policy(session: nkui_layout_session, node_id: u32, policy: nkui_layout_cache_policy) -> nkui_result;

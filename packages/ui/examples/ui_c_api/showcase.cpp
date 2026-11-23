@@ -6,13 +6,16 @@
 #include "nativekit_system.h"
 #include "nativekit_time.h"
 #include "nativekit_ui.h"
+#include "nativekit_ui_layout.h"
 #include "nativekit_window.h"
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten/emscripten.h>
+#include <GLES3/gl3.h>
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <vector>
 
@@ -755,6 +758,129 @@ struct WebShowcase {
         return success;
     }
 
+    bool shared_frame_smoke(nk_surface surface) {
+        nk_surface_frame frame = NK_INVALID_HANDLE;
+        nk_surface_frame_target target{};
+        target.struct_size = sizeof(target);
+        nkui_layout_session session{};
+        nkgpu_renderer gpu{};
+        nkgpu_batch batch{};
+        const bool passed = [&] {
+            if (nkgpu_renderer_create(surface, &gpu) != NKGPU_OK ||
+                nkgpu_batch_begin(gpu, &batch) != NKGPU_OK ||
+                nkui_layout_session_create(&session) != NKUI_OK ||
+                nk_surface_acquire_frame(surface, &frame, &target) != NK_OK)
+                return false;
+
+            nkgpu_batch_pass pass{};
+            pass.struct_size = sizeof(pass);
+            pass.kind = NKGPU_BATCH_PASS_WINDOW;
+            pass.clear = 1;
+            pass.width = target.width;
+            pass.height = target.height;
+            if (nkgpu_batch_append_pass(batch, &pass) != NKGPU_OK ||
+                nkgpu_batch_seal(batch) != NKGPU_OK ||
+                nkgpu_batch_submit(gpu, batch, &target) != NKGPU_OK)
+                return false;
+
+            constexpr uint32_t count = 2;
+            constexpr uint32_t size =
+                NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + count * NKUI_LAYOUT_NODE_RECORD_BYTES;
+            std::array<uint8_t, size> tree{};
+            const auto write = [&](uint32_t offset, auto value) {
+                std::memcpy(tree.data() + offset, &value, sizeof(value));
+            };
+            write(0, uint32_t{NKUI_LAYOUT_TRANSACTION_VERSION});
+            write(4, count);
+            write(8, uint32_t{NKUI_LAYOUT_NODE_RECORD_BYTES});
+            write(12, size);
+            for (uint32_t index = 0; index < count; ++index) {
+                const uint32_t node =
+                    NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + index * NKUI_LAYOUT_NODE_RECORD_BYTES;
+                const float extent = index == 0 ? 64.0f : 128.0f;
+                write(node + NKUI_LAYOUT_NODE_ID_OFFSET, index + 1);
+                write(node + NKUI_LAYOUT_NODE_PARENT_OFFSET, int32_t(index) - 1);
+                write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
+                write(node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, uint32_t{NKUI_LAYOUT_VISUAL_BOX});
+                write(node + NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
+                write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
+                write(node + NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, extent);
+                write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, extent);
+                write(node + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, size);
+                write(node + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 16.0f);
+                write(node + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
+                write(node + NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET, 1.0f);
+                write(node + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
+                write(node + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
+            }
+            constexpr uint32_t root = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
+            constexpr uint32_t child = root + NKUI_LAYOUT_NODE_RECORD_BYTES;
+            write(root + NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET,
+                  uint32_t{NKUI_LAYOUT_CLIP_HORIZONTAL | NKUI_LAYOUT_CLIP_VERTICAL});
+            write(child + NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET, 20.0f);
+            write(child + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, 1.0f);
+            write(child + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET + 3 * sizeof(float), 1.0f);
+            const nkui_layout_frame_input layout{sizeof(layout), float(target.width),
+                                                  float(target.height), 0.0f};
+            const nkui_frame_info info{sizeof(info), layout.width, layout.height,
+                                       target.width, target.height, 1.0f};
+            const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &layout);
+            if (submitted != NKUI_OK) {
+                EM_ASM({ console.error("Shared frame layout submission", $0); }, submitted);
+                return false;
+            }
+
+            const auto pixel = [&](int x, int y) {
+                std::array<uint8_t, 4> color{};
+                glReadPixels(x, target.height - 1 - y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, color.data());
+                return color;
+            };
+            const auto background = pixel(32, 32);
+            auto wrong_size = info;
+            --wrong_size.framebuffer_width;
+            if (nkui_layout_session_render_into_frame(showcase.renderer, session, frame, &wrong_size) !=
+                NKUI_ERROR_INVALID_ARGUMENT)
+                return false;
+            const auto result =
+                nkui_layout_session_render_into_frame(showcase.renderer, session, frame, &info);
+            const auto overlay = pixel(32, 32);
+            const auto outside = pixel(90, 32);
+            const auto corner = pixel(2, 2);
+            GLint stencil_bits = 0;
+            glGetIntegerv(GL_STENCIL_BITS, &stencil_bits);
+            const auto gl_error = glGetError();
+            if (result != NKUI_OK || stencil_bits < 8 || background[2] < 10 || background[0] > 20 ||
+                overlay[0] < 240 || overlay[1] > 10 || outside != background ||
+                corner != background || gl_error != GL_NO_ERROR) {
+                EM_ASM({ console.error("Shared frame pixels", $0, $1, $2, $3, $4, $5, $6); },
+                       result, background[0], overlay[0], outside[0], corner[0], stencil_bits, gl_error);
+                return false;
+            }
+            const nk_surface_frame presented = frame;
+            frame = NK_INVALID_HANDLE;
+            const auto status = nk_surface_present_frame(presented);
+            const auto stale_render =
+                nkui_layout_session_render_into_frame(showcase.renderer, session, presented, &info);
+            const auto stale_present = nk_surface_present_frame(presented);
+            if (status != NK_OK || stale_render != NKUI_ERROR_INVALID_HANDLE ||
+                stale_present != NK_ERROR_INVALID_HANDLE) {
+                EM_ASM({ console.error("Shared frame presentation", $0, $1, $2); },
+                       status, stale_render, stale_present);
+                return false;
+            }
+            return true;
+        }();
+        if (frame != NK_INVALID_HANDLE)
+            nk_surface_cancel_frame(frame);
+        if (session.id)
+            nkui_layout_session_destroy(session);
+        if (batch.id)
+            nkgpu_batch_destroy(batch);
+        if (gpu.id)
+            nkgpu_renderer_destroy(gpu);
+        return passed;
+    }
+
     static void NK_CALL draw_frame(nk_surface surface, int32_t width, int32_t height,
                                    void *user_data) {
         auto &app = *static_cast<WebShowcase *>(user_data);
@@ -778,7 +904,7 @@ struct WebShowcase {
         ++app.showcase.rendered_frames;
         if (app.smoke && app.showcase.rendered_frames >= 1 && app.asset_loaded &&
             input_checks_complete)
-            app.finish(0);
+            app.finish(app.shared_frame_smoke(surface) ? 0 : 11);
     }
 
     bool start(bool smoke_mode) {
@@ -801,7 +927,7 @@ struct WebShowcase {
 
         nk_surface_options surface_options{};
         surface_options.struct_size = sizeof(surface_options);
-        surface_options.flags = NK_SURFACE_FORWARD_COMPATIBLE | NK_SURFACE_STENCIL;
+        surface_options.flags = NK_SURFACE_FORWARD_COMPATIBLE | NK_SURFACE_DEPTH | NK_SURFACE_STENCIL;
         surface_options.api = NK_GRAPHICS_OPENGL_ES;
         surface_options.major_version = 3;
         surface_options.width = window_options.width;

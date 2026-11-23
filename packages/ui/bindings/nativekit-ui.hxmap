@@ -33,6 +33,7 @@
   "typeNames": {
     "nk_handle": "nativekit.ffi.NativeKitTypes.Handle",
     "nk_surface": "nativekit.ffi.NativeKitTypes.SurfaceHandle",
+    "nk_surface_frame": "nativekit.ffi.NativeKitTypes.SurfaceFrameHandle",
     "nk_graphics_image": "nativekit.ffi.NativeKitTypes.GraphicsImage"
   }
 }

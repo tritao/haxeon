@@ -495,6 +495,18 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_render_frame(nkui_renderer rend
                                                               const nkui_frame_info *frame_info,
                                                               nk_bool load_existing);
 
+/**
+ * Composites the submitted layout over the contents of an acquired frame.
+ *
+ * Call synchronously on the render executor after earlier GPU work on the
+ * frame has finished. The caller owns acquisition, presentation, cancellation
+ * and frame scheduling. The framebuffer dimensions must match the acquired
+ * target. A closed or unknown frame returns NKUI_ERROR_INVALID_HANDLE.
+ */
+NKUI_API nkui_result NK_CALL nkui_layout_session_render_into_frame(
+    nkui_renderer renderer, nkui_layout_session session, nk_surface_frame frame,
+    const nkui_frame_info *frame_info);
+
 #ifdef __cplusplus
 }
 #endif

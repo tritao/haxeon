@@ -299,6 +299,18 @@ class LayoutSession implements Disposable {
 		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
 	}
 
+	/** Draws the submitted tree into a caller-owned frame and preserves its color contents. */
+	public function renderIntoFrame(renderer:Renderer, frame:SurfaceFrameHandle, info:FrameInfo):Void {
+		ensureLive();
+		var started = RenderCost.time();
+		updateRenderablePaints();
+		if (RenderCost.enabled) RenderCost.renderable += Sys.time() - started;
+		var nativeStarted = RenderCost.time();
+		UiResult.check(NativeKitUI.nkui_layout_session_render_into_frame(renderer.nativeHandle(), value, frame,
+			info.nativeValue()), "layoutSession.renderIntoFrame");
+		if (RenderCost.enabled) RenderCost.nativeCall += Sys.time() - nativeStarted;
+	}
+
 	public function dispose():Void {
 		if (disposed)
 			return;
