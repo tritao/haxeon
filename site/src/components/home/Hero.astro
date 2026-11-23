@@ -1,6 +1,12 @@
 ---
-import Program from './Program.astro';
+import CodeCard from '../CodeCard.astro';
 import { docsUrl } from '../../../docs.mjs';
+interface Props {
+  title: string;
+  description: string;
+}
+const { title, description } = Astro.props;
+
 const code = `function main() {
 	final tasks = ["Buy milk", "Write the report", "Call the plumber"];
 	for (task in tasks)
@@ -14,11 +20,8 @@ const output = `- Buy milk
 <section class="hero paper">
   <div class="wrap">
     <div>
-      <h1>A language and runtime for cross-platform apps and tools.</h1>
-      <p class="sub">
-        Develop on a live VM that keeps your program's state as you edit, ship one codebase as native
-        executables or WebAssembly, and call C and C++ directly.
-      </p>
+      <h1 id="_top" tabindex="-1">{title}</h1>
+      <p class="sub">{description}</p>
       <div class="ctas">
         <a class="btn primary" href={docsUrl('guides/00-get-started.md')}>Get started</a><a
           class="btn ghost"
@@ -28,6 +31,41 @@ const output = `- Buy milk
         </a>
       </div>
     </div>
-    <Program name="tasks" code={code} output={output} command="haxeon tasks.hx" />
+    <CodeCard
+      lang="haxe"
+      title="tasks.hx"
+      {code}
+      {output}
+      command="haxeon tasks.hx"
+      example="tasks"
+    />
   </div>
 </section>
+
+<style>
+  .hero.hero {
+    padding-block: 64px var(--hx-space-8);
+  }
+  .hero .wrap {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: var(--hx-space-7);
+    align-items: center;
+  }
+  .hero h1 {
+    font-size: clamp(2.3rem, 5.4vw, 4rem);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+  .hero p.sub {
+    margin-top: var(--hx-space-5);
+    font-size: 1.15rem;
+    color: var(--sl-color-gray-3);
+    max-width: 54ch;
+  }
+  @media (max-width: 900px) {
+    .hero .wrap {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

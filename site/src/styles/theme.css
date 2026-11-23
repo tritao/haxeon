@@ -1,31 +1,70 @@
-:root,
-:root[data-theme='light'] {
-  --sl-font: var(--body);
-  --sl-font-mono: var(--mono);
-  --sl-color-white: var(--ink);
-  --sl-color-black: var(--paper);
-  --sl-color-gray-1: var(--ink);
-  --sl-color-gray-2: var(--ink);
-  --sl-color-gray-3: var(--slate);
-  --sl-color-gray-4: var(--slate);
-  --sl-color-gray-5: var(--line);
-  --sl-color-gray-6: var(--sunk);
-  --sl-color-gray-7: var(--surface);
-  --sl-color-accent: var(--indigo);
-  --sl-color-accent-high: var(--indigo);
-  --sl-color-accent-low: var(--sunk);
-  --sl-color-text-invert: var(--indigo-ink);
-  --sl-color-bg-nav: var(--paper);
-  --sl-color-bg-sidebar: var(--surface);
-  --sl-color-bg-inline-code: var(--code-bg);
+@import './landing.css';
+
+:root {
+  --hx-font-display: token(shared.display);
+  --sl-font: token(shared.body);
+  --sl-font-mono: token(shared.mono);
+  --hx-space-1: token(shared.space-1);
+  --hx-space-2: token(shared.space-2);
+  --hx-space-3: token(shared.space-3);
+  --hx-space-4: token(shared.space-4);
+  --hx-space-5: token(shared.space-5);
+  --hx-space-6: token(shared.space-6);
+  --hx-space-7: token(shared.space-7);
+  --hx-space-8: token(shared.space-8);
+  --hx-radius-s: token(shared.radius-s);
+  --hx-radius-m: token(shared.radius-m);
+  --hx-radius-pill: token(shared.radius-pill);
+  --hx-stroke-icon: token(shared.stroke-icon);
+
   --sl-nav-height: 4rem;
-  background: var(--paper);
-  color: var(--ink);
-  color-scheme: light dark;
+  --sl-nav-pad-x: var(--hx-space-4);
+  --sl-nav-gap: var(--hx-space-5);
+  --sl-content-gap-y: var(--hx-space-4);
+  --sl-text-code: 0.86rem;
+
+  --sl-color-black: var(--sl-color-bg);
+  --sl-color-gray-1: var(--sl-color-white);
+  --sl-color-gray-2: var(--sl-color-white);
+  --sl-color-gray-4: var(--sl-color-gray-3);
+  --sl-color-gray-6: var(--sl-color-accent-low);
+  --sl-color-gray-7: var(--sl-color-bg-sidebar);
+  --sl-color-accent-high: var(--sl-color-accent);
+  --sl-color-text-accent: var(--sl-color-accent);
+  --sl-color-bg-accent: var(--sl-color-accent);
+  --sl-color-bg-nav: var(--sl-color-bg);
+  --sl-color-hairline: var(--sl-color-gray-5);
+  --sl-color-bg: token(dark.paper);
+  --sl-color-bg-sidebar: token(dark.surface);
+  --sl-color-accent-low: token(dark.sunk);
+  --sl-color-white: token(dark.ink);
+  --sl-color-gray-3: token(dark.slate);
+  --sl-color-gray-5: token(dark.line);
+  --sl-color-accent: token(dark.indigo);
+  --sl-color-text-invert: token(dark.indigo-ink);
+  --sl-color-green-high: token(dark.live);
+  --sl-color-green-low: token(dark.live-soft);
+  --sl-color-bg-inline-code: token(dark.code-bg);
+  --hx-code-fg: token(dark.code-fg);
+  --hx-code-muted: token(dark.code-comment);
+  --hx-grid: token(dark.grid);
 }
 
 :root[data-theme='light'] {
-  color-scheme: light;
+  --sl-color-bg: token(light.paper);
+  --sl-color-bg-sidebar: token(light.surface);
+  --sl-color-accent-low: token(light.sunk);
+  --sl-color-white: token(light.ink);
+  --sl-color-gray-3: token(light.slate);
+  --sl-color-gray-5: token(light.line);
+  --sl-color-accent: token(light.indigo);
+  --sl-color-text-invert: token(light.indigo-ink);
+  --sl-color-green-high: token(light.live);
+  --sl-color-green-low: token(light.live-soft);
+  --sl-color-bg-inline-code: token(light.code-bg);
+  --hx-code-fg: token(light.code-fg);
+  --hx-code-muted: token(light.code-comment);
+  --hx-grid: token(light.grid);
 }
 
 h1,
@@ -33,19 +72,15 @@ h2,
 h3,
 h4,
 h5,
-h6,
-.site-title {
-  font-family: var(--display);
+h6 {
+  font-family: var(--hx-font-display);
 }
 
 code,
 pre,
-.expressive-code pre > code,
 kbd,
-samp,
-.cmd,
-.drawing text {
-  font-family: var(--mono);
+samp {
+  font-family: var(--sl-font-mono);
   font-variant-ligatures: none;
   font-feature-settings:
     'liga' 0,
@@ -53,10 +88,107 @@ samp,
 }
 
 .sl-markdown-content :not(pre) > code {
-  color: var(--code-fg);
+  color: var(--hx-code-fg);
 }
 
 :focus-visible {
-  outline: 2px solid var(--indigo);
+  outline: 2px solid var(--sl-color-accent);
   outline-offset: 3px;
+}
+
+/* Expressive Code emits the same strip for Command.astro and Markdown shell fences. */
+.expressive-code.command-strip {
+  /* Expressive Code adds inline padding to the hanging indent in calc(). */
+  --ec-codePadBlk: 0px;
+  --ec-codePadInl: 0px;
+  --ec-codeFontSize: var(--sl-text-xs);
+  --ec-codeLineHt: normal;
+  min-width: 0;
+}
+
+.command-strip .frame {
+  display: flex;
+  align-items: center;
+  gap: var(--hx-space-2);
+  background: var(--sl-color-bg-inline-code);
+  border-radius: var(--hx-radius-s);
+  padding: var(--hx-space-2) 10px;
+}
+
+.command-strip .frame > pre {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.command-strip .ec-line {
+  column-gap: 1ch;
+}
+
+.command-strip [data-command-prompt] {
+  color: var(--hx-code-muted);
+  user-select: none;
+}
+
+.command-strip [data-command-prompt]::before {
+  content: attr(data-command-prompt);
+}
+
+.command-strip [data-command-prompt][hidden] {
+  display: inline;
+  visibility: hidden;
+}
+
+.command-strip .frame > .copy {
+  position: relative;
+  inset: auto;
+  margin-block: -3px;
+}
+
+.expressive-code.command-strip .copy > button {
+  width: auto;
+  height: auto;
+  padding: 3px 8px;
+  font: 600 var(--sl-text-2xs) var(--sl-font-mono);
+  color: var(--sl-color-gray-3);
+  background: var(--sl-color-bg-sidebar);
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: var(--hx-radius-s);
+}
+
+.expressive-code.command-strip .copy > button > div,
+.expressive-code.command-strip .copy > button::before {
+  display: none;
+}
+
+.expressive-code.command-strip .copy > button::after {
+  content: 'Copy';
+  position: static;
+  margin: 0;
+  mask: none;
+  background: none;
+}
+
+.command-strip .copy > [aria-live] {
+  position: absolute;
+  inset-inline-end: 100%;
+  white-space: nowrap;
+}
+
+/* Plain-text fences and the home page's program output use the same surface. */
+.expressive-code .frame > pre[data-language='text'],
+pre.output-pane {
+  padding: var(--hx-space-4) 18px;
+  background: var(--sl-color-bg-inline-code);
+  color: var(--hx-code-fg);
+  border: 0;
+  font: var(--hx-output-size, var(--sl-text-code)) / 1.65 var(--sl-font-mono);
+}
+
+.expressive-code:has(pre[data-language='text']) {
+  --ec-codePadBlk: 0px;
+  --ec-codePadInl: 0px;
 }

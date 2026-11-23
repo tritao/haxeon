@@ -100,7 +100,7 @@ try {
     const block = $(example);
     const name = block.attr('data-example');
     const source = sourceFor(block, 'haxe');
-    const output = block.find('.out').clone();
+    const output = block.find('.output-pane').clone();
     output.find('[data-prompt]').remove();
     const expected = output.text().trim();
     let actual;

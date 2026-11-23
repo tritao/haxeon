@@ -34,8 +34,16 @@ const diff = [
               code={lines.map(([, text]) => text).join('\n')}
               lang="haxe"
               frame="none"
-              ins={version === 2 ? lines.flatMap(([change], i) => change === 'add' ? [i + 1] : []) : []}
-              del={version === 2 ? lines.flatMap(([change], i) => change === 'del' ? [i + 1] : []) : []}
+              ins={
+                version === 2
+                  ? lines.flatMap(([change], i) => (change === 'add' ? [i + 1] : []))
+                  : []
+              }
+              del={
+                version === 2
+                  ? lines.flatMap(([change], i) => (change === 'del' ? [i + 1] : []))
+                  : []
+              }
             />
           </div>
         );
@@ -45,7 +53,9 @@ const diff = [
   <div class="app">
     <div class="window">
       <div class="tb">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span>Task List</span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span
+          >Task List</span
+        >
       </div>
       <div class="body">
         <h3 data-title>Tasks</h3>
@@ -94,7 +104,8 @@ const diff = [
 
       const countDone = () => list.querySelectorAll('input:checked').length;
       const updateTitle = () => {
-        title.textContent = version === 1 ? 'Tasks' : `Tasks · ${list.children.length - countDone()} left`;
+        title.textContent =
+          version === 1 ? 'Tasks' : `Tasks · ${list.children.length - countDone()} left`;
       };
 
       list.addEventListener('change', (event) => {
@@ -142,7 +153,9 @@ const diff = [
         versionLabel.textContent = `version ${version}`;
         apply.textContent = version === 1 ? 'Apply the edit' : 'Undo the edit';
         windowPanel.classList.remove('flash');
-        requestAnimationFrame(() => requestAnimationFrame(() => windowPanel.classList.add('flash')));
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => windowPanel.classList.add('flash')),
+        );
         announce(`Patched to version ${version}.`);
       });
 
@@ -154,3 +167,187 @@ const diff = [
 
   customElements.define('live-edit-demo', LiveEditDemo);
 </script>
+
+<style>
+  .demo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-m);
+    overflow: hidden;
+    background: var(--sl-color-bg-sidebar);
+  }
+  .demo > * {
+    min-width: 0;
+  }
+  .demo .editor {
+    background: var(--sl-color-bg-inline-code);
+    color: var(--hx-code-fg);
+    display: flex;
+    flex-direction: column;
+  }
+  .demo .editor .bar {
+    padding: 10px 14px;
+    font: 0.75rem var(--sl-font-mono);
+    color: var(--hx-code-muted);
+    border-bottom: 1px solid #ffffff14;
+    display: flex;
+    justify-content: space-between;
+    gap: var(--hx-space-2);
+    flex-wrap: wrap;
+  }
+  .demo :global(.ec-line.del .code) {
+    text-decoration: line-through;
+  }
+  .demo .app {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--sl-color-accent-low);
+  }
+  .window {
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .window .tb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--hx-space-2) 12px;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-3);
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--sl-color-gray-5);
+  }
+  .window .body {
+    padding: var(--hx-space-4);
+    display: grid;
+    gap: 10px;
+  }
+  .window h3 {
+    margin: 0;
+    font: 600 1.05rem var(--hx-font-display);
+  }
+  .task {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: var(--hx-space-2) 10px;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-s);
+  }
+  .task input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--sl-color-accent);
+    flex: none;
+  }
+  .tasks.v2 .task.done label span {
+    text-decoration: line-through;
+    color: var(--sl-color-gray-3);
+  }
+  .addrow {
+    display: flex;
+    gap: var(--hx-space-2);
+  }
+  .addrow input {
+    flex: 1;
+    min-width: 0;
+    padding: var(--hx-space-2) 10px;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-s);
+    background: var(--sl-color-bg-sidebar);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  .addrow button {
+    padding: var(--hx-space-2) 12px;
+    border-radius: var(--hx-radius-s);
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-bg-sidebar);
+    color: var(--sl-color-white);
+    font: inherit;
+    cursor: pointer;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .status {
+    font: 0.8rem var(--sl-font-mono);
+    color: var(--sl-color-gray-3);
+  }
+  .status :global(.kept) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--sl-color-green-low);
+    color: var(--sl-color-green-high);
+    border-radius: var(--hx-radius-pill);
+    padding: 3px 10px;
+    font: 600 0.78rem var(--sl-font-mono);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .flash {
+      animation: flash 900ms ease-out;
+    }
+    @keyframes flash {
+      from {
+        box-shadow: 0 0 0 3px var(--sl-color-green-high);
+      }
+      to {
+        box-shadow: 0 0 0 0 transparent;
+      }
+    }
+  }
+  .tasks {
+    display: grid;
+    gap: var(--hx-space-2);
+  }
+  .controls .reject {
+    padding: var(--hx-space-1);
+    border: 0;
+    color: var(--sl-color-accent);
+    background: none;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+  }
+  .demo-note {
+    color: var(--sl-color-gray-3);
+    font-size: 0.85rem;
+  }
+  .task label {
+    display: flex;
+    align-items: center;
+    gap: var(--hx-space-2);
+    width: 100%;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+
+  .demo :global(.expressive-code pre) {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .demo :global(.expressive-code .copy) {
+    display: none;
+  }
+  @media (max-width: 900px) {
+    .demo {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

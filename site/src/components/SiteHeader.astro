@@ -3,7 +3,6 @@ import Search from '@astrojs/starlight/components/Search.astro';
 import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
 import { docsUrl, sourceRef } from '../../docs.mjs';
 
-const { docs = false } = Astro.props;
 const version =
   process.env.HAXEON_SITE_MAIN_URL && sourceRef !== 'main'
     ? { label: sourceRef, main: process.env.HAXEON_SITE_MAIN_URL }
@@ -19,7 +18,7 @@ const nav = [
 const getStarted = docsUrl('guides/00-get-started.md');
 ---
 
-<div class:list={['site-nav', { 'docs-nav': docs }]}>
+<div class="site-nav">
   <a class="wordmark" href="/" aria-label="Haxeon home">Haxeon</a>
   <nav class="wide-nav" aria-label="Main">
     {
@@ -43,78 +42,73 @@ const getStarted = docsUrl('guides/00-get-started.md');
     </nav>
   </details>
   <div class="actions">
-    {docs && <Search />}
-    {
-      docs && (
-        <span class="version">
-          {version.label}
-          {version.main && (
-            <>
-              {' '}
-              · <a href={version.main}>main</a>
-            </>
-          )}
-        </span>
-      )
-    }
+    <Search />
+    <span class="version">
+      {version.label}
+      {
+        version.main && (
+          <>
+            {' '}
+            · <a href={version.main}>main</a>
+          </>
+        )
+      }
+    </span>
     <ThemeSelect />
-    <a class="get-started" href={getStarted}>Get started</a>
+    <a class="btn primary get-started" href={getStarted}>Get started</a>
   </div>
 </div>
 
 <style>
+  :global(header.header:has(> .site-nav)) {
+    --sl-nav-pad-y: 0;
+    border-color: var(--sl-color-gray-5);
+    background: color-mix(in srgb, var(--sl-color-bg-nav) 88%, transparent);
+    backdrop-filter: blur(8px);
+  }
   .site-nav {
     display: flex;
     align-items: center;
-    gap: var(--space-5);
+    gap: var(--sl-nav-gap);
     margin-inline: auto;
-    max-width: 1200px;
-    min-height: var(--sl-nav-height);
-    padding-inline: var(--space-4);
-  }
-  .docs-nav {
-    max-width: none;
-    padding: 0;
+    max-width: 1168px;
+    height: 100%;
+    line-height: 1.6;
   }
   .wordmark {
-    color: var(--ink);
-    font: 800 1.35rem/1 var(--display);
+    color: var(--sl-color-white);
+    font: 800 1.35rem/1 var(--hx-font-display);
     letter-spacing: -0.03em;
     text-decoration: none;
   }
   nav {
     display: flex;
-    gap: var(--space-5);
+    gap: var(--sl-nav-gap);
   }
   nav a,
   summary {
-    color: var(--ink);
+    color: var(--sl-color-white);
     text-decoration: none;
     font-weight: 500;
   }
   nav a:hover,
   nav a[aria-current] {
-    color: var(--indigo);
+    color: var(--sl-color-text-accent);
   }
   .actions {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--hx-space-3);
     margin-inline-start: auto;
   }
   .version {
-    color: var(--slate);
-    font-size: 0.82rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
     white-space: nowrap;
   }
   .get-started {
-    border-radius: var(--radius-pill);
-    background: var(--indigo);
-    color: var(--indigo-ink);
+    border: 0;
     padding: 0.5rem 1rem;
-    font-weight: 600;
-    font-size: 0.95rem;
-    text-decoration: none;
     white-space: nowrap;
   }
   .mobile-nav {
@@ -123,58 +117,71 @@ const getStarted = docsUrl('guides/00-get-started.md');
   }
   .mobile-nav nav {
     position: absolute;
-    inset-block-start: calc(100% + var(--space-3));
+    inset-block-start: calc(100% + var(--hx-space-3));
     inset-inline-start: 0;
     z-index: 1;
     display: grid;
-    gap: var(--space-2);
+    gap: var(--hx-space-2);
     min-width: 9rem;
-    padding: var(--space-3);
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-m);
+    padding: var(--hx-space-3);
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-m);
   }
   summary {
     cursor: pointer;
   }
   @media (max-width: 66rem) {
-    .docs-nav .wide-nav {
-      display: none;
-    }
-    .docs-nav .mobile-nav {
-      display: block;
-    }
-  }
-  @media (max-width: 50rem) {
-    .site-nav {
-      gap: var(--space-2);
-    }
     .wide-nav {
       display: none;
     }
     .mobile-nav {
       display: block;
     }
-    .docs-nav {
-      padding-inline-end: 2.75rem;
+  }
+  @media (max-width: 50rem) {
+    .site-nav,
+    .actions {
+      gap: var(--hx-space-2);
     }
-    .docs-nav .version {
+    .version {
       display: none;
     }
   }
-  @media (max-width: 28rem) {
+  @media (max-width: 30rem) {
     .actions {
-      gap: var(--space-1);
+      gap: var(--hx-space-1);
     }
     .get-started {
-      padding: var(--space-2);
-      font-size: 0.8rem;
+      padding-inline: var(--hx-space-2);
+      font-size: var(--sl-text-xs);
     }
-    .docs-nav {
-      gap: var(--space-1);
+    .actions :global(starlight-theme-select label) {
+      justify-content: center;
     }
-    .docs-nav :global(starlight-theme-select) {
+    .actions :global(starlight-theme-select .label-icon) {
+      inset-inline-start: auto;
+    }
+    .actions :global(starlight-theme-select select) {
+      margin-inline: 0;
+      width: 1.5rem;
+      padding-inline: 0;
+      color: transparent;
+    }
+    .actions :global(starlight-theme-select .caret) {
       display: none;
+    }
+  }
+  @media (max-width: 23rem) {
+    :global(header.header:has(> .site-nav)) {
+      --sl-nav-pad-x: var(--hx-space-2);
+      --sl-nav-gap: var(--hx-space-2);
+    }
+    .site-nav {
+      font-size: var(--sl-text-sm);
+    }
+    .wordmark {
+      font-size: var(--sl-text-lg);
     }
   }
 </style>

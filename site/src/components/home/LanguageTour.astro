@@ -1,5 +1,5 @@
 ---
-import Program from './Program.astro';
+import CodeCard from '../CodeCard.astro';
 
 const examples = [
   {
@@ -161,8 +161,8 @@ Sys.println(height.toFeet());`,
       <span class="eyebrow">The language</span>
       <h2>Typed, expressive, and quick to write.</h2>
       <p class="lede">
-        Static types with inference, value types, pattern matching, null safety and deterministic cleanup,
-        compiled fast enough to edit while it runs.
+        Static types with inference, value types, pattern matching, null safety and deterministic
+        cleanup, compiled fast enough to edit while it runs.
       </p>
     </div>
     <language-tour class="tour">
@@ -195,7 +195,7 @@ Sys.println(height.toFeet());`,
               hidden={index !== 0}
             >
               <p class="lede" set:html={description} />
-              <Program name={id} code={code} output={output} />
+              <CodeCard lang="haxe" {code} {output} example={id} />
             </div>
           ))
         }
@@ -208,7 +208,9 @@ Sys.println(height.toFeet());`,
   class LanguageTour extends HTMLElement {
     connectedCallback() {
       const tabs = [...this.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-      const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')!)!);
+      const panels = tabs.map(
+        (tab) => document.getElementById(tab.getAttribute('aria-controls')!)!,
+      );
       const select = (index: number) => {
         tabs.forEach((tab, i) => {
           tab.setAttribute('aria-selected', String(i === index));
@@ -239,3 +241,52 @@ Sys.println(height.toFeet());`,
 
   customElements.define('language-tour', LanguageTour);
 </script>
+
+<style>
+  .tour {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .tabs {
+    display: grid;
+    gap: 6px;
+  }
+  .tab {
+    text-align: left;
+    font: 600 0.95rem var(--sl-font);
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+  }
+  .tab[aria-selected='true'] {
+    background: var(--sl-color-bg-sidebar);
+    border-color: var(--sl-color-gray-5);
+    color: var(--sl-color-white);
+    box-shadow: inset 3px 0 0 var(--sl-color-accent);
+  }
+  .pane {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+  @media (max-width: 900px) {
+    .tour {
+      grid-template-columns: 1fr;
+    }
+    .tabs {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  .tabs {
+    align-content: start;
+  }
+
+  .pane[hidden] {
+    display: none;
+  }
+</style>

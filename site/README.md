@@ -9,7 +9,9 @@ Run these commands from `site/`.
 npm ci
 npm run dev
 npm run build
+npm run check:commands
 npm run check:links
+npm run check:examples
 ```
 
 Open the URL printed by Astro. The production build is static HTML in `dist/`. Use
@@ -20,6 +22,24 @@ Starlight reads Markdown directly from `../docs/guides/`, `../docs/reference/`, 
 `../docs/coming-from/`. Open pages with a Markdown heading or use Starlight frontmatter for metadata. Links can stay
 relative to the source files. The site rewrites links between published pages and links to guide examples in the
 repository. The CLI page appends command help generated from `../src/tools/CliHelp.hx` on each build.
+
+The home, Language, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
+page metadata, search and the theme switch. Its component overrides provide the shared site header and footer,
+including page navigation and last-updated metadata where available. Splash pages provide their own visible heading
+and full-width section layout.
+
+`src/styles/tokens.json` defines the palette and typography. `src/styles/theme.css` maps them to Starlight's
+custom properties and defines the Haxeon properties for details such as the display font and card radii. Keep
+component styles in their Astro components and use the shared landing styles for section and button primitives.
+
+`Command.astro`, `CodeCard.astro`, `Card.astro` and `PlatformTable.astro` live in `src/components/` and can also
+be imported in Astro or MDX docs pages. Expressive Code renders the component and Markdown code examples
+with the same grammar and theme. Use `sh`, `bash`, `shell`, or `console` for shell commands and
+`powershell`, `ps1`, or `pwsh` for PowerShell commands. Use `text` for output. The command strip adds a
+display prompt to each command line and a copy button for the fence contents. Shell script examples and
+transcripts can use the Expressive Code `frame="code"` option. With Google Chrome installed, run
+`npm run check:commands` after building to verify the Get started guide's command text, prompts, wrapping,
+and clipboard contents.
 
 After bootstrapping and building the native toolchain, run `npm run check:examples` to verify the homepage's program
 outputs and generated geometry binding. Run `npm run check:grammars` to check the shared TextMate grammars against

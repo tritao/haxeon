@@ -1,5 +1,6 @@
 ---
-import Command from './Command.astro';
+import Card from '../Card.astro';
+import Command from '../Command.astro';
 import { docsUrl } from '../../../docs.mjs';
 ---
 
@@ -10,26 +11,49 @@ import { docsUrl } from '../../../docs.mjs';
       <h2>The same language, beyond apps.</h2>
     </div>
     <div class="tiles">
-      <div>
+      <Card compact>
         <h3><a href={docsUrl('reference/CLI.md') + '#create'}>Tools</a></h3><Command
           command="haxeon create my_tool -t console"
         /><p>Command-line programs, built into one executable.</p>
-      </div>
-      <div>
+      </Card>
+      <Card compact>
         <h3><a href="/examples/#games-and-3d">Games and 3D</a></h3><div class="cmd">
           gpu · audio · animation
         </div><p>Tune a game's logic while you play it.</p>
-      </div>
-      <div>
+      </Card>
+      <Card compact>
         <h3><a href={docsUrl('reference/CLI.md') + '#scripts'}>Scripts</a></h3><Command
           command="haxeon script.hx"
         /><p>One file, no project, started at once.</p>
-      </div>
-      <div>
+      </Card>
+      <Card compact>
         <h3>Embedding</h3><div class="cmd">C or C++ host</div><p>
           Run Haxeon inside an existing application. Guide forthcoming.
         </p>
-      </div>
+      </Card>
     </div>
   </div>
 </section>
+
+<style>
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--hx-space-4);
+  }
+  .tiles p {
+    color: var(--sl-color-gray-3);
+    font-size: 0.92rem;
+  }
+
+  @media (max-width: 900px) {
+    .tiles {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 560px) {
+    .tiles {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

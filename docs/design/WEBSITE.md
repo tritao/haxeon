@@ -169,6 +169,12 @@ and reference Markdown in `docs/`, and picks up the language tour and migration 
 generates command help from the CLI source during the build. CI builds the site, checks its internal links and
 runs the homepage's standalone programs.
 
+The landing pages use Starlight's full-width splash template. Landing pages, docs and the 404 share the same
+header, search, theme switch and site footer. Docs keep Starlight's sidebars and page navigation where applicable.
+One theme maps the site design tokens onto Starlight's CSS variables. Landing components scope their own styles.
+The docs and homepage use the same Expressive Code grammars and theme, and shell command fences on the site use
+the same copyable command strip as the landing pages.
+
 The homepage includes an interactive live-edit preview, the language tour, platform and tooling details, and
 placeholder areas for Materia and Exosuit captures. The real live-edit recording and the UI Showcase's web runner
 are launch items. Domain, hosting and publication of release versions are open.

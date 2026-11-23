@@ -1,5 +1,5 @@
 ---
-import Command from './Command.astro';
+import Command from '../Command.astro';
 ---
 
 <section>
@@ -8,8 +8,8 @@ import Command from './Command.astro';
       <span class="eyebrow">Tooling</span>
       <h2>The whole toolchain, in one command.</h2>
       <p class="lede">
-        Everything ships with Haxeon and works the same in the editor and on the command line. No plugins to
-        assemble.
+        Everything ships with Haxeon and works the same in the editor and on the command line. No
+        plugins to assemble.
       </p>
     </div>
     <div class="tools">
@@ -31,7 +31,8 @@ import Command from './Command.astro';
             </path>
           </svg><h3>Debugger</h3>
         </div><div class="cmd">Debug Adapter Protocol</div><p>
-          Breakpoints, stepping, watchpoints, logpoints and exception breaks, even across a live edit.
+          Breakpoints, stepping, watchpoints, logpoints and exception breaks, even across a live
+          edit.
         </p>
       </div>
       <div>
@@ -55,7 +56,8 @@ import Command from './Command.astro';
       <div>
         <div class="th">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8.5 12l2.5 2.5 4.5-5"></path>
+            <rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8.5 12l2.5 2.5 4.5-5"
+            ></path>
           </svg><h3>Build and test</h3>
         </div><div class="cmd">haxeon build · check · test</div><p>
           Incremental builds through a compile server that stays warm.
@@ -64,7 +66,8 @@ import Command from './Command.astro';
       <div>
         <div class="th">
           <svg class="ico" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"></path><path d="M4 7.5l8 4.5 8-4.5M12 12v9"></path>
+            <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"></path><path d="M4 7.5l8 4.5 8-4.5M12 12v9"
+            ></path>
           </svg><h3>Packages</h3>
         </div><Command command="haxeon add ui" /><p>
           A registry, version ranges and a lockfile. Publish with <code>haxeon publish</code>.
@@ -89,3 +92,34 @@ import Command from './Command.astro';
     </div>
   </div>
 </section>
+
+<style>
+  .tools {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--hx-space-4);
+  }
+  .tools > div {
+    border-top: 2px solid var(--sl-color-gray-5);
+    padding-top: 14px;
+    display: grid;
+    gap: var(--hx-space-2);
+    align-content: start;
+    min-width: 0;
+  }
+  .tools p {
+    color: var(--sl-color-gray-3);
+    font-size: 0.92rem;
+  }
+
+  @media (max-width: 900px) {
+    .tools {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 560px) {
+    .tools {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

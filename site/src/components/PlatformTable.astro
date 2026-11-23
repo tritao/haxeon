@@ -48,7 +48,10 @@ const platforms = [
 <div class="plat">
   <table aria-label="Platforms">
     <thead>
-      <tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Live editing</th></tr>
+      <tr
+        ><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Live editing</th
+        ></tr
+      >
     </thead>
     <tbody>
       {
@@ -70,3 +73,62 @@ const platforms = [
     </tbody>
   </table>
 </div>
+
+<style>
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.92rem;
+  }
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+  }
+  th {
+    font: 600 0.75rem var(--sl-font-mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--sl-color-gray-3);
+  }
+  .pn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .pico {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    color: var(--sl-color-gray-3);
+  }
+  .pico :global(*) {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: var(--hx-stroke-icon);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .st {
+    font: 600 0.78rem var(--sl-font-mono);
+    padding: 2px 8px;
+    border-radius: var(--hx-radius-pill);
+  }
+  .st.ok {
+    background: var(--sl-color-green-low);
+    color: var(--sl-color-green-high);
+  }
+  .st.exp {
+    background: var(--sl-color-accent-low);
+    color: var(--sl-color-white);
+  }
+  .st.plan {
+    border: 1px dashed var(--sl-color-gray-5);
+    color: var(--sl-color-gray-3);
+  }
+
+  .plat {
+    overflow-x: auto;
+  }
+</style>

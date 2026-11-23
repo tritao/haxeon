@@ -10,3 +10,43 @@
     </p>
   </a>
 </div>
+
+<style>
+  .show {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--hx-space-5);
+    margin-top: var(--hx-space-6);
+  }
+  .show a {
+    text-decoration: none;
+    color: inherit;
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+  }
+  .shot {
+    aspect-ratio: 16 / 9;
+    max-width: 100%;
+    border-radius: var(--hx-radius-m);
+    border: 1px dashed var(--sl-color-gray-5);
+    background: repeating-linear-gradient(
+      135deg,
+      var(--sl-color-accent-low) 0 12px,
+      var(--sl-color-bg-sidebar) 12px 24px
+    );
+    display: grid;
+    place-items: center;
+    color: var(--sl-color-gray-3);
+    font: 0.8rem var(--sl-font-mono);
+  }
+  .show p {
+    color: var(--sl-color-gray-3);
+    font-size: 0.95rem;
+  }
+  @media (max-width: 900px) {
+    .show {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -1,0 +1,10 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+  command: string;
+}
+const { command } = Astro.props;
+---
+
+<Code code={command} lang="bash" />

@@ -1,6 +1,8 @@
 ---
-import Command from './Command.astro';
-import PlatformTable from './PlatformTable.astro';
+import Diagram from './Diagram.astro';
+import Card from '../Card.astro';
+import Command from '../Command.astro';
+import PlatformTable from '../PlatformTable.astro';
 import { docsUrl } from '../../../docs.mjs';
 ---
 
@@ -10,7 +12,7 @@ import { docsUrl } from '../../../docs.mjs';
       <span class="eyebrow">One codebase, three outputs</span>
       <h2>Develop live, ship native or WebAssembly.</h2>
     </div>
-    <div class="figure paper" style="margin-top:0;margin-bottom:20px">
+    <Diagram spaced>
       <svg
         class="drawing"
         viewBox="0 0 1000 190"
@@ -66,42 +68,55 @@ import { docsUrl } from '../../../docs.mjs';
         >
           .wasm module
         </text>
-        <text x="335" y="78" text-anchor="middle">live edits</text><text x="512" y="106">ahead of time, via C</text><text
-          x="665"
-          y="78"
-          text-anchor="middle"
-        >
-          WebAssembly
-        </text>
+        <text x="335" y="78" text-anchor="middle">live edits</text><text x="512" y="106"
+          >ahead of time, via C</text
+        ><text x="665" y="78" text-anchor="middle"> WebAssembly </text>
       </svg>
-    </div>
+    </Diagram>
     <div class="outputs">
-      <div>
+      <Card>
         <h3>Develop on the VM</h3><Command command="haxeon run --watch" /><p
           class="lede"
           style="font-size:0.95rem"
         >
           A fast JIT VM that starts at once and takes your edits while the program runs.
         </p>
-      </div>
-      <div>
+      </Card>
+      <Card>
         <h3>Ship a native executable</h3><Command command="haxeon build --build-mode=release" /><p
           class="lede"
           style="font-size:0.95rem"
         >
           Compiled ahead of time through C into one executable, with the VM linked in.
         </p>
-      </div>
-      <div>
+      </Card>
+      <Card>
         <h3>Build WebAssembly</h3><Command command="haxeon build --target wasm32" /><p
           class="lede"
           style="font-size:0.95rem"
         >
           A .wasm module, not a JavaScript bundle. Experimental.
         </p>
-      </div>
+      </Card>
     </div>
-    <PlatformTable />
+    <div class="platforms"><PlatformTable /></div>
     <p class="note"><a href={docsUrl('guides/05-shipping.md')}>Read the shipping guide</a></p>
   </div>
 </section>
+
+<style>
+  .outputs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--hx-space-4);
+  }
+  @media (max-width: 900px) {
+    .outputs {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .platforms {
+    margin-top: var(--hx-space-6);
+  }
+</style>
