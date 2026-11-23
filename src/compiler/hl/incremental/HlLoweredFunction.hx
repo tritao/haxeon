@@ -23,7 +23,7 @@ class HlLoweredFunction {
 	/** The answer each of `keys` got, which is the index `fn` uses for it. */
 	public final answers:Array<Int>;
 
-	/** The facts lowering read, as pairs of a fact and the print it had (`HlFactPrints`). */
+	/** The facts lowering read, as pairs of a fact and the print it had (`HlLoweringView`, `IrFacts`). */
 	public final facts:Array<Int>;
 
 	public function new(name:String, source:IrFunction, fn:HlFunction, keys:Array<Int>, answers:Array<Int>,

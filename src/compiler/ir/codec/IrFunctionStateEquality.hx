@@ -229,7 +229,7 @@ class IrFunctionStateEquality {
 	static function describe(value:IrValue):String
 		return 'value ${value.id} "${value.name}" ${value.type}';
 
-	static function sameKind(a:compiler.ir.model.IrFunction.IrFunctionKind,
+	public static function sameKind(a:compiler.ir.model.IrFunction.IrFunctionKind,
 			b:compiler.ir.model.IrFunction.IrFunctionKind):Bool
 		return switch [a, b] {
 			case [Ordinary, Ordinary]: true;

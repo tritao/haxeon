@@ -7,8 +7,8 @@ import compiler.ir.verify.IrVerifyMemo;
 
 /**
  * Verification that reuses an earlier build's acceptance of a function is as strict as verifying it again. `f` calls `g(1)`; the same `f`
- * object is accepted when `g` takes an integer, must be checked again, and rejected, when `g` takes a Bool, is skipped when only an
- * unrelated function appears, and when `g` is replaced by an equal function.
+ * object is accepted when `g` takes an integer, must be checked again, and rejected, when `g` takes a Bool, is checked once more when
+ * `g` takes an integer again, is skipped when only an unrelated function appears, and when `g` is replaced by an equal function.
  */
 class IrVerifyMemoMain {
 	static function callee(argument:IrType, name:String = "g"):IrFunction {
@@ -48,6 +48,10 @@ class IrVerifyMemoMain {
 		catch (error:InternalError)
 			rejected = error.message.indexOf("f") >= 0;
 		expect(rejected, "a function accepted against another signature of its callee was not checked again");
+		// A signature that changed and changed back has a new print (`IrFacts`): what read it is checked once more.
+		IrVerifier.verifyReusing(program([f, g]), memo);
+		expect(memo.checkedFunctions == 1 && memo.skippedFunctions == 1,
+			"a function that read a signature which changed and changed back was not checked again");
 		IrVerifier.verifyReusing(program([f, g, callee(I32, "h")]), memo);
 		expect(memo.skippedFunctions == 2 && memo.checkedFunctions == 1,
 			"an unrelated function made the others be checked again");

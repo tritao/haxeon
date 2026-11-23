@@ -1,42 +1,36 @@
 package compiler.ir.verify;
 
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrDeclarationEquality;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunction.IrFunctionKind;
+import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.reuse.IrFacts;
 
 /**
- * One thing the verifier read about the rest of the program while it checked a function: the table, the key and the answer it got, kept
- * by reference. Whether a later answer is the same is decided by its printed value, which is made once per object (`print`), so an
- * answer that is the same object costs a lookup. Comparing the answers with `==` would not do: they are `Dynamic`, and an enum value
- * without declared equality has none.
- */
-class IrVerifyRead {
-	public final table:String;
-	public final key:String;
-	public final value:Dynamic;
-
-	public function new(table:String, key:String, value:Dynamic) {
-		this.table = table;
-		this.key = key;
-		this.value = value;
-	}
-}
-
-/**
- * What the last build's verification learned: the functions it accepted, with the reads each acceptance leaned on. A function is
+ * What the last build's verification learned: the functions it accepted, with the facts each acceptance leaned on. A function is
  * verified again only when it is another function or when something it read gives another answer, so a build that changes a few
  * functions verifies those, and the functions that call them, and not the whole program.
  *
- * The verifier reads the program through `IrVerifyTable`s; every `get` and `exists` of a function's check is noted. A table has no
- * way to iterate, so a function-level check cannot read what it did not record.
+ * The verifier reads the program through `IrVerifyTable`s; every `get` and `exists` of a function's check is recorded as an answer
+ * fact (`IrFacts`) of the table's kind, its answer compared part by part (`sameAnswer`). A table has no way to iterate, so a
+ * function-level check cannot read what it did not record.
  */
-class IrVerifyMemo {
-	final accepted:Map<String, {fn:IrFunction, reads:Array<IrVerifyRead>}> = [];
-	final tables:Map<String, String -> Dynamic> = [];
-	var printed:haxe.ds.ObjectMap<Dynamic, String> = new haxe.ds.ObjectMap();
+class IrVerifyMemo extends IrFacts.IrAnswerSource {
+	/** The tables a read can be of, in the order of their kinds; a table of another name takes the next kind. */
+	static inline final SPACE = "verify";
 
-	/** What the function being checked has read, one map per table, in the order the tables were first used. */
-	final current:Array<Map<String, IrVerifyRead>> = [];
+	final accepted:Map<String, {fn:IrFunction, facts:Array<Int>}> = [];
+	final facts = new IrFacts();
+	final kinds:Map<String, Int> = [];
+	final names:Array<String> = [];
+	final spaces:Array<Int> = [];
+	final lookups:Array<Null<String->Dynamic>> = [];
 
-	final currentByTable:Map<String, Map<String, IrVerifyRead>> = [];
+	/** The reader number and the facts of the function being checked, pairs of a fact and its print. */
+	var reader = 0;
+
+	var reads:Array<Int> = [];
 
 	/** Whether the tables are noting their reads: from `begin` to `accept` or `abandon`. */
 	public var recordingFunction = false;
@@ -51,32 +45,54 @@ class IrVerifyMemo {
 
 	public var skippedFunctions = 0;
 
-	public function new() {}
+	public function new()
+		super();
 
 	/** Starts a build: the tables the reads are answered from. */
 	public function attach(named:Map<String, String -> Dynamic>):Void {
-		tables.clear();
 		checkedFunctions = 0;
 		skippedFunctions = 0;
+		for (index in 0...lookups.length)
+			lookups[index] = null;
 		for (name => lookup in named)
-			tables.set(name, lookup);
-		printed = new haxe.ds.ObjectMap();
+			lookups[kindOf(name)] = lookup;
+		facts.startBuild();
+		facts.begin();
+	}
+
+	/** The kind of the reads of table `name`. */
+	public function kindOf(name:String):Int {
+		var known = kinds.get(name);
+		if (known != null)
+			return known;
+		var made = names.length;
+		kinds.set(name, made);
+		names.push(name);
+		spaces.push(facts.space(SPACE, made));
+		lookups.push(null);
+		return made;
 	}
 
 	public function begin():Void {
-		for (reads in current)
-			reads.clear();
+		reader = facts.newReader();
+		reads = [];
 		recordingFunction = true;
+	}
+
+	/** Records the read of `key` in the table of `kind`, once per function. */
+	public function note(kind:Int, key:String):Void {
+		var id = facts.id(spaces[kind], kind, key);
+		if (facts.firstRead(id, reader)) {
+			reads.push(id);
+			reads.push(facts.printAnswer(id, this));
+		}
 	}
 
 	/** Ends the check of `fn` and remembers what it read. */
 	public function accept(fn:IrFunction):Void {
 		checkedFunctions++;
-		var reads:Array<IrVerifyRead> = [];
-		for (table in current)
-			for (read in table)
-				reads.push(read);
-		accepted.set(fn.name, {fn: fn, reads: reads});
+		accepted.set(fn.name, {fn: fn, facts: reads});
+		reads = [];
 		recordingFunction = false;
 	}
 
@@ -88,12 +104,11 @@ class IrVerifyMemo {
 		var known = accepted.get(fn.name);
 		if (known == null || (known.fn != fn && !compiler.ir.codec.IrFunctionStateEquality.same(known.fn, fn)))
 			return false;
-		for (read in known.reads) {
-			var lookup = tables.get(read.table);
-			if (lookup == null)
+		var read = known.facts, index = 0;
+		while (index < read.length) {
+			if (facts.printAnswer(read[index], this) != read[index + 1])
 				return false;
-			if (print(read.value) != print(lookup(read.key)))
-				return false;
+			index += 2;
 		}
 		skippedFunctions++;
 		return true;
@@ -108,29 +123,34 @@ class IrVerifyMemo {
 				enumChecked.remove(name);
 	}
 
-	/** The map a table notes its reads in; the same one for every call with the same name, so a table asks once. */
-	public function readsOf(table:String):Map<String, IrVerifyRead> {
-		var reads = currentByTable.get(table);
-		if (reads == null) {
-			reads = [];
-			currentByTable.set(table, reads);
-			current.push(reads);
-		}
-		return reads;
+	/** The answer each fact's print was made for, by fact. */
+	final answers:Array<Dynamic> = [];
+
+	override public function settle(id:Int, kind:Int, key:String, known:Bool):Bool {
+		while (answers.length <= id)
+			answers.push(null);
+		var lookup = lookups[kind], before = answers[id], after:Dynamic = lookup == null ? null : lookup(key);
+		answers[id] = after;
+		return known && sameAnswer(kind, before, after);
 	}
 
-	/** The printed form of an answer, once per object per build: a signature read by a thousand callers is printed once. */
-	function print(value:Dynamic):String {
-		if (value == null)
-			return "-";
-		if (!Reflect.isObject(value) && !Std.isOfType(value, String))
-			return Std.string(value);
-		var known = printed.get(value);
-		if (known == null) {
-			known = Std.string(value);
-			printed.set(value, known);
-		}
-		return known;
+	/** Whether two answers of a table read the same to the verifier: its declarations part by part, its flags and names as values. */
+	function sameAnswer(kind:Int, last:Dynamic, now:Dynamic):Bool {
+		if (last == null || now == null)
+			return last == now;
+		return switch names[kind] {
+			case "signatures":
+				var before:{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind} = last,
+					after:{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind} = now;
+				IrDeclarationEquality.sameTypes(before.arguments, after.arguments)
+					&& IrTypeIdentity.same(before.result, after.result)
+					&& compiler.ir.codec.IrFunctionStateEquality.sameKind(before.kind, after.kind);
+			case "objects": IrDeclarationEquality.sameObject(last, now);
+			case "interfaces": IrDeclarationEquality.sameInterface(last, now);
+			case "enums": IrDeclarationEquality.sameEnum(last, now);
+			case "globals": IrTypeIdentity.same(last, now);
+			case _: last == now;
+		};
 	}
 }
 
@@ -144,31 +164,27 @@ class IrVerifyTable<V> {
 	final has:String->Bool;
 	final name:String;
 	final memo:Null<IrVerifyMemo>;
-	final reads:Null<Map<String, IrVerifyRead>>;
+	final kind:Int;
 
 	public function new(name:String, read:String->Null<V>, has:String->Bool, ?memo:IrVerifyMemo) {
 		this.name = name;
 		this.read = read;
 		this.has = has;
 		this.memo = memo;
-		reads = memo == null ? null : memo.readsOf(name);
+		kind = memo == null ? -1 : memo.kindOf(name);
 	}
 
 	public function get(key:String):Null<V> {
 		var value = read(key);
 		if (memo != null && memo.recordingFunction)
-			note(key, value);
+			memo.note(kind, key);
 		return value;
 	}
 
 	public function exists(key:String):Bool {
 		var value = read(key);
 		if (memo != null && memo.recordingFunction)
-			note(key, value);
+			memo.note(kind, key);
 		return value != null || has(key);
 	}
-
-	function note(key:String, value:Dynamic):Void
-		if (reads.get(key) == null)
-			reads.set(key, new IrVerifyRead(name, key, value));
 }

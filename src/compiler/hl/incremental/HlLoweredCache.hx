@@ -17,7 +17,7 @@ class HlLoweredCache {
 	public final keys:HlRequestKeys;
 
 	/** The facts the entries read, with their prints (`HlLoweredFunction.facts`), shared by the copies like `keys`. */
-	public final facts:compiler.hl.lower.HlLoweringView.HlFactPrints;
+	public final facts:compiler.hl.lower.HlLoweringView.HlLoweringFacts;
 
 	/** The field stores each final function makes (`IrNonNullFields`), while it is the same object; shared by the copies like `keys`. */
 	public final nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo;
@@ -32,14 +32,14 @@ class HlLoweredCache {
 	public var environment = "";
 
 	public function new(?debug:HlDebugMetadataCache, ?keys:HlRequestKeys,
-			?facts:compiler.hl.lower.HlLoweringView.HlFactPrints, ?summaries:HlFunctionSummaries,
+			?facts:compiler.hl.lower.HlLoweringView.HlLoweringFacts, ?summaries:HlFunctionSummaries,
 			?nonNullStores:compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo) {
 		this.nonNullStores = nonNullStores == null
 			? new compiler.ir.analysis.IrNonNullFields.IrFieldStoreMemo() : nonNullStores;
 		this.summaries = summaries == null ? new HlFunctionSummaries() : summaries;
 		this.debug = debug == null ? new HlDebugMetadataCache() : debug;
 		this.keys = keys == null ? new HlRequestKeys() : keys;
-		this.facts = facts == null ? new compiler.hl.lower.HlLoweringView.HlFactPrints() : facts;
+		this.facts = facts == null ? new compiler.hl.lower.HlLoweringView.HlLoweringFacts() : facts;
 	}
 
 	public function copy():HlLoweredCache {

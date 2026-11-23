@@ -155,6 +155,11 @@ function names; reuse is by object identity of the `IrFunction` an entry was mad
 - **Stages past the encode point with a memo** (`IrStageMemos`, docs/design/WARM_REBUILD_REUSE.md): the per-function stages
   (`IrFunctionStages.run`, the static null checks among them) and the helpers they derive from a name or from declarations
   (`IrFunctionStages.derived`, the reflection helpers among them) keep what they made, frozen, by input version and facts.
+  A compile without a session records the same reads in a table of its own (`IrFacts.unshared`), so it runs the code path a
+  session does. The facts are one kind of table (`IrFacts`) for the stages, HashLink lowering (`HlLoweringView`) and the
+  verifier (`IrVerifyMemo`): a number a stage computes, or an answer (an object, a signature, a type) compared per kind
+  (`IrAnswerSource`). As a build starts, the session's table drops the facts the last build read none of, and the texts only
+  they interned; a contribution memo is registered by the stage that keeps it (`IrStageMemos.contribution`).
 - **Stages between the encode point and the inliner**: no cache of their own, but for the array factory's lowering in the
   value-array rewrite (`IrInlineCache.arrayFactories`, name → {source function, lowered function}): it edits every function
   that allocates an array, and reads only the function, so a function given as the same object is last build's result. A

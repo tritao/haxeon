@@ -263,10 +263,8 @@ class HlLower {
 			for (name => index in indices)
 				functionIndices.set(name, index);
 		typedInterfaces = new HlTypedInterfaceTables(program);
-		var facts = loweredCache == null ? null : loweredCache.facts;
-		if (facts != null)
-			facts.checkObjects = checkingLinks;
-		view = new HlLoweringView(typedInterfaces.keys, null, facts);
+		view = new HlLoweringView(typedInterfaces.keys, null, loweredCache == null ? null : loweredCache.facts,
+			checkingLinks);
 		// A live build keeps the code of the functions it does not regenerate without asking whether their facts still hold, so
 		// it reads none about fields, which an edit elsewhere can change.
 		if (!trustCache)

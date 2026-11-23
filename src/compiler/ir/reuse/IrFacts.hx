@@ -3,11 +3,29 @@ package compiler.ir.reuse;
 import compiler.ir.pipeline.IrFunctionPass.IrFactSource;
 
 /**
- * The session's table of facts the per-function stage memos read (`IrStageMemo`): a fact is what one stage knows about the
- * program besides the function it rewrites, named by the stage, a kind the stage defines and a key ("callee `f` returns the
- * constant true", "`T` is a value object"). Its value is a number the stage computes (`IrFactSource.fact`); its print is a
- * number that changes exactly when the value does, never given twice, so a memo entry that recorded a fact at a print still
- * holds while the fact has that print.
+ * What an answer fact is worked out from (`IrFacts.printAnswer`): an answer the source keeps per fact, typed as it is, and
+ * compares with the one it kept by kind. An answer is a part of the program (an object, a signature, a type), compared part by
+ * part, never by its text. A class, not an interface: HashLink calls an interface through a virtual made at each conversion.
+ */
+class IrAnswerSource {
+	function new() {}
+
+	/**
+	 * Works the answer of fact `id` (of `kind` and `key`) out as the program stands, keeps it for `id`, and returns whether it is the
+	 * same as the one kept before; `known` is false when no answer is kept for `id` yet.
+	 */
+	public function settle(id:Int, kind:Int, key:String, known:Bool):Bool
+		throw new compiler.core.InternalError("An answer source works its answers out");
+}
+
+/**
+ * A table of facts with prints, the one the reuse of each memo checks what it read against: the session's, which the per-function
+ * stage memos read (`IrStageMemo`), and those of HashLink lowering (`HlLoweringView`) and of verification (`IrVerifyMemo`). A
+ * fact is what one reader knows about the program besides the function it works on, named by a space (a stage and a kind it
+ * defines) and a key ("callee `f` returns the constant true", "`T` is a value object"). Its value is a number the stage computes
+ * (`IrFactSource.fact`), or an answer compared per kind (`IrAnswerSource`); its print is a number that changes exactly when the
+ * value or answer does, never given twice, so a memo entry that recorded a fact at a print still holds while the fact has that
+ * print.
  *
  * A fact is computed again at most once per stage run, when an entry or a rewrite first asks for it (`begin` starts a run). The
  * copies of the session state share the table, as they share the memos: a print names one value whatever build made it.
@@ -29,6 +47,9 @@ class IrFacts {
 	final keys:Array<String> = [];
 	final values:Array<Int> = [];
 	final prints:Array<Int> = [];
+
+	/** The name of each space, for `describe`. */
+	final spaceNames:Array<String> = [];
 
 	/** The run each fact was last computed in. */
 	final computed:Array<Int> = [];
@@ -113,6 +134,7 @@ class IrFacts {
 			return known;
 		var made = ids.length;
 		ids.push([]);
+		spaceNames.push(name);
 		spaces.set(name, made);
 		return made;
 	}
@@ -166,6 +188,29 @@ class IrFacts {
 		return prints[id];
 	}
 
+	/**
+	 * The print of answer fact `id` in this run, working its answer out with `source` the first time: a new print when the answer
+	 * is not the same as the one the print was made for; 0 for a dropped fact.
+	 */
+	public function printAnswer(id:Int, source:IrAnswerSource):Int {
+		if (spaceOf[id] < 0)
+			return 0;
+		if (read[id] != build) {
+			read[id] = build;
+			readNow++;
+		}
+		if (computed[id] != run) {
+			computed[id] = run;
+			if (!source.settle(id, kinds[id], keys[id], prints[id] != 0))
+				prints[id] = ++lastPrint;
+		}
+		return prints[id];
+	}
+
+	/** What fact `id` is about, for a message. */
+	public function describe(id:Int):String
+		return spaceOf[id] < 0 ? "a dropped fact" : spaceNames[spaceOf[id]] + " " + keys[id];
+
 	/** The value of fact `id`, computed in this run (`print` first). */
 	public inline function value(id:Int):Int
 		return values[id];
@@ -181,9 +226,9 @@ class IrFacts {
 		return true;
 	}
 
-	/** Starts session build `number`: what the last build read is kept, and the rest dropped when it is much (`sweep`). */
-	public function startBuild(number:Int):Void {
-		build = number;
+	/** Starts a build: what the last build read is kept, and the rest dropped when it is much (`sweep`). */
+	public function startBuild():Void {
+		build++;
 		readLast = readNow;
 		readNow = 0;
 		if (keys.length - free.length > readLast * 2 + 1024)
