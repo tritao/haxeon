@@ -100,7 +100,7 @@ class TestRunner {
 		this.root = root;
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "";
 		haxe = Path.join([root, ".tools", "haxe", "haxe" + suffix]);
-		hl = Path.join([Sys.getEnv("HAXEON_HASHLINK_DIR"), "hl" + suffix]);
+		hl = Path.join([Sys.getEnv("HAXEON_SDK"), "bin", "hl" + suffix]);
 		var server = Sys.getEnv("HAXEON_COMPILER_SERVER_HL");
 		serverCommand = server != null && server != "" && FileSystem.exists(server) ? [hl, server] : [
 			haxe,
@@ -797,7 +797,7 @@ class TestRunner {
 	function configureRuntimeLibraryPath():Void {
 		// "out" is relative, so a run finds the out of the directory it starts in first; the checkout's own out follows, for a
 		// program a test starts in another directory (a watched app in its project).
-		var paths = ["out", Path.join([root, "out"]), Sys.getEnv("HAXEON_HASHLINK_DIR")];
+		var paths = ["out", Path.join([root, "out"]), Path.join([Sys.getEnv("HAXEON_SDK"), "bin"])];
 		var variable = Sys.systemName() == "Windows"
 			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);

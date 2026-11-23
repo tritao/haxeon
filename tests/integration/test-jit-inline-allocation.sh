@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 source "$root/scripts/lib/env.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-jit-alloc.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+library=$("$root/scripts/hashlink-path.sh" --lib-dir)
 hooks=$(dirname "$(haxeon_native_test jitalloc.hdll)")
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -hl "$work/probe.hl" -main JitAllocationProbe
 # Compiled code allocates inline wherever the VM supports it; the probe checks it allocates every object either way.

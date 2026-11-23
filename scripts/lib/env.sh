@@ -90,11 +90,10 @@ haxeon_shared_library() {
 }
 
 # The path of a GC or JIT test helper the native build made (tests/native/CMakeLists.txt): a program (gc_owner_pages) or a
-# HashLink library (jitbox.hdll), in native-tests beside the HashLink directory, HL_GC_TEST_LIBRARY_DIR or the checkout's.
+# HashLink library (jitbox.hdll), in the checkout's CMake build directory (native-tests).
 haxeon_native_test() {
-	local library directory path
-	library=${HL_GC_TEST_LIBRARY_DIR:-$("$haxeon_root/scripts/hashlink-path.sh")} || exit 1
-	directory=$(cd "$library/.." && pwd)/native-tests
+	local directory path
+	directory=$("$haxeon_root/scripts/hashlink-path.sh" --build-dir)/native-tests || exit 1
 	path=$directory/$1
 	if [[ $1 != *.hdll && -f $path.exe ]]; then
 		path=$path.exe

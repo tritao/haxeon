@@ -60,7 +60,7 @@ class UnreachableTerminatorMain {
 		hashLink.entryPoint = "run";
 		var path = "out/unreachable-terminator.hl";
 		sys.io.File.saveBytes(path, compiler.hl.HlWriter.encode(compiler.hl.lower.HlLower.lower(hashLink)).flatten());
-		var process = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]),
+		var process = new sys.io.Process(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]),
 			output = process.stdout.readAll().toString() + process.stderr.readAll().toString(),
 			status = process.exitCode();
 		process.close();

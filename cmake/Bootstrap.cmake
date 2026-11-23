@@ -180,20 +180,9 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" AND "$ENV{PROCESSOR_ARCHITECTURE}" 
   endif()
 endif()
 
-# The checkout-built VM lives where cmake/hashlink-output-paths.txt says, the same table
-# scripts/hashlink-path.sh and build.HashLinkPath read. The version check below fails if
-# CMakeLists.txt ever builds it somewhere else.
-file(STRINGS "${HAXEON_ROOT}/cmake/hashlink-output-paths.txt" hashlink_output_paths)
-set(hashlink_output_dir "")
-foreach(entry IN LISTS hashlink_output_paths)
-  if(entry MATCHES "^${native_preset}=(.+)$")
-    string(STRIP "${CMAKE_MATCH_1}" hashlink_output_dir)
-  endif()
-endforeach()
-if(hashlink_output_dir STREQUAL "")
-  message(FATAL_ERROR "Missing HashLink output path for ${native_preset} in cmake/hashlink-output-paths.txt")
-endif()
-set(hashlink_executable "${HAXEON_ROOT}/${hashlink_output_dir}/hl")
+# The checkout-built VM is in the bin of the checkout's SDK, where scripts/hashlink-path.sh and build.HashLinkPath find it. The
+# version check below fails if CMakeLists.txt ever builds it somewhere else.
+set(hashlink_executable "${HAXEON_ROOT}/out/sdk/bin/hl")
 if(CMAKE_HOST_WIN32)
   string(APPEND hashlink_executable ".exe")
 endif()

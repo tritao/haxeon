@@ -9,7 +9,7 @@ fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-incremental.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+library=$("$root/scripts/hashlink-path.sh" --lib-dir)
 "${CC:-cc}" -std=gnu11 -Wall -Wextra -Werror "$root/tests/native/gc_apple_tracking_probe.c" -lpthread -o "$work/apple-backend"
 "$work/apple-backend"
 "${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" "$root/tests/native/gc_drop_barriers.c" -Wl,--wrap=hl_gc_write_barrier -rdynamic -L"$library" -lhl -lm -ldl -lpthread -o "$work/guards"

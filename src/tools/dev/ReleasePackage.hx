@@ -2,7 +2,6 @@ package tools.dev;
 
 import build.AotCompiler;
 import build.HashLinkPath;
-import build.HaxeonRelease;
 import build.HaxeonSdk;
 import build.execution.ProcessRunner;
 import compiler.core.InternalError;
@@ -17,7 +16,7 @@ import sys.io.File;
  * the standard library and templates copied in and its own manifest:
  *
  *   haxeon-sdk.toml                 the manifest: version, commit, platform, the compiler sources' digest and the roots below,
- *                                   and no `source`, which makes the directory a release (`build.HaxeonRelease`)
+ *                                   and no `source`, which makes the directory a release (`build.HaxeonSdk`)
  *   bin/                            the VM's directory: hl, haxeon, the CLI's bytecode (haxeon-cli.hl), the CLI and compiler built
  *                                   ahead of time with its stamp (and its .pdb with MSVC) when it is built and current, the
  *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
@@ -60,7 +59,7 @@ class ReleasePackage {
 			throw new InternalError('$native is stale: rebuild it with "haxeon dev aot", or remove it to package without it');
 
 		var name = 'haxeon-$version-${platform()}', root = Path.join([output, name]);
-		var bin = Path.join([root, HaxeonRelease.BIN]);
+		var bin = Path.join([root, "bin"]);
 		cmake(home, ["-E", "rm", "-rf", root]);
 		cmake(home, ["-E", "make_directory", bin]);
 		var vm = HashLinkPath.directory(home), suffix = Sys.systemName() == "Windows" ? ".exe" : "";
@@ -97,7 +96,7 @@ class ReleasePackage {
 				cmake(home, ["-E", "copy", Path.join([home, file]), root]);
 		var commit = ProcessRunner.capture("git", ["-C", home, "rev-parse", "--short=12", "HEAD"]);
 		File.saveContent(Path.join([root, HaxeonSdk.MANIFEST]),
-			HaxeonRelease.manifest(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
+			HaxeonSdk.releaseManifest(version, commit.status == 0 ? StringTools.trim(commit.output) : "unknown",
 			platform(), digest));
 		Sys.println('Staged $root' + (FileSystem.exists(native)
 			? "" : ' (without $native: run "haxeon dev aot" first to include it)'));

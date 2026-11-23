@@ -58,7 +58,7 @@ class AbstractTypeDependencyMain {
 	static function execute(bytes:haxe.io.Bytes, expected:Int):Void {
 		var path = "out/abstract-type-dependency.hl";
 		File.saveBytes(path, bytes);
-		var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
+		var child = new sys.io.Process(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 			code = child.exitCode();
 		child.close();

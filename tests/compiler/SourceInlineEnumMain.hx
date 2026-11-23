@@ -131,7 +131,7 @@ class SourceInlineEnumMain {
 			+ (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl") {
 			sys.io.File.saveBytes(path, HlWriter.encode(compiled.artifact.hashLink().module).flatten());
-			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
+			var vm = TestHashLink.directory(),
 				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [path]),
 				error = process.stderr.readAll().toString(),
 				status = process.exitCode();

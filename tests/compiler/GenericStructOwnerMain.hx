@@ -249,7 +249,7 @@ class GenericStructOwnerMain {
 		if (!sys.FileSystem.exists(hlDirectory)) sys.FileSystem.createDirectory(hlDirectory);
 		var hlPath = '$hlDirectory/haxeon-type-handle-${Std.random(0x7fffffff)}.hl';
 		File.saveBytes(hlPath, hashlink.bytes);
-		var hlStatus = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [hlPath]);
+		var hlStatus = Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [hlPath]);
 		sys.FileSystem.deleteFile(hlPath);
 		if (hlStatus != 42) throw 'HashLink lost a Dynamic type handle: $hlStatus';
 		for (target in [Wasm32, WasmGc]) {

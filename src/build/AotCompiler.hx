@@ -21,7 +21,7 @@ import sys.io.File;
  * (`haxeon-aot.sources`, `haxeon-compiler.hl.sources`) holds the digest of those sources when it was built; a program without
  * one, or with another digest, is ignored and the CLI and the compiler run on the VM as before. So an edit in a checkout never
  * runs an older CLI or compiler, and nothing chooses between them but what is installed. A release ships no compiler sources,
- * as its compiler cannot change: there the digest to match is the one its marker records (`HaxeonRelease.COMPILER_SOURCES`),
+ * as its compiler cannot change: there the digest to match is the one its marker records (`HaxeonSdk.COMPILER_SOURCES`),
  * written when the release was made.
  */
 class AotCompiler {
@@ -151,8 +151,8 @@ private class LazyDigest {
 			if (!FileSystem.exists(path) || !FileSystem.exists(stampPath))
 				return false;
 			if (digest == null)
-				digest = HaxeonRelease.isRelease(home) ? HaxeonRelease.field(home,
-					HaxeonRelease.COMPILER_SOURCES) : AotCompiler.sourcesDigest(home, compilerSource, digests);
+				digest = HaxeonSdk.isRelease(home) ? HaxeonSdk.releaseField(home,
+					HaxeonSdk.COMPILER_SOURCES) : AotCompiler.sourcesDigest(home, compilerSource, digests);
 			return digest != null && StringTools.trim(File.getContent(stampPath)) == digest;
 		} catch (_:Dynamic) {
 			return false;

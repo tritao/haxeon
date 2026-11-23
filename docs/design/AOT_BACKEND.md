@@ -374,7 +374,7 @@ built from the sources the CLI would otherwise build to bytecode. Its stamp, `ha
 sources (`CompilerSources.roots` and the standard library, by relative path and content, so it does not depend on where the files
 are unpacked); when the executable or the stamp is missing, or the digest differs, the CLI and the compiler run on the VM as
 before. So an edit in a checkout never runs an older CLI or compiler. A release ships no compiler sources, as its compiler cannot
-change: its marker (`haxeon-release.txt`, `build.HaxeonRelease`) records the digest of the sources it was made from, and the stamps
+change: its marker (`haxeon-release.txt`, `build.HaxeonSdk`) records the digest of the sources it was made from, and the stamps
 are matched against that, so a release always runs what it ships. `haxeon doctor` says which: ok, stale or not built. A build with
 a stale executable says so once, with the command that rebuilds it. Every command asks, so each file's digest comes from the
 user's store of content digests (`build.execution.DigestStore`, behind every `ContentDigestCache`), kept with the file's stat

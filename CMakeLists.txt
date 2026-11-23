@@ -53,20 +53,19 @@ add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
 if(HAXEON_GC_APPLE_SOFTWARE_TEST)
   target_compile_definitions(libhl PRIVATE HL_GC_APPLE_SOFTWARE_TEST=1)
 endif()
-# The SDK this build makes (docs/design/SDK_LAYOUT.md). The build of a preset the path table names (out/cmake/PRESET with an
-# entry in cmake/hashlink-output-paths.txt, which the scripts read too) publishes the checkout's own, whose bin the table gives;
-# any other build stages one in its build directory, so it never replaces the VM the checkout runs.
-set(_sdk_default "${CMAKE_BINARY_DIR}/sdk")
-get_filename_component(_build_name "${CMAKE_BINARY_DIR}" NAME)
-if(CMAKE_BINARY_DIR STREQUAL "${CMAKE_SOURCE_DIR}/out/cmake/${_build_name}")
-  file(STRINGS "${CMAKE_SOURCE_DIR}/cmake/hashlink-output-paths.txt" _path_entries REGEX "^${_build_name}=")
-  if(_path_entries)
-    string(REGEX REPLACE "^[^=]*=(.*)/bin$" "\\1" _sdk_relative "${_path_entries}")
-    set(_sdk_default "${CMAKE_SOURCE_DIR}/${_sdk_relative}")
-  endif()
+# The SDK this build makes (docs/design/SDK_LAYOUT.md). The build of the preset whose VM the checkout runs (out/cmake/release,
+# out/cmake/windows-msvc on Windows; build.HashLinkPath.forPreset) stages the checkout's own, out/sdk; any other stages one in
+# its build directory, so it never replaces it.
+if(CMAKE_HOST_WIN32)
+  set(_checkout_build "${CMAKE_SOURCE_DIR}/out/cmake/windows-msvc")
+else()
+  set(_checkout_build "${CMAKE_SOURCE_DIR}/out/cmake/release")
 endif()
-set(HAXEON_SDK_DIR "${_sdk_default}")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/cmake/hashlink-output-paths.txt")
+if(CMAKE_BINARY_DIR STREQUAL _checkout_build)
+  set(HAXEON_SDK_DIR "${CMAKE_SOURCE_DIR}/out/sdk")
+else()
+  set(HAXEON_SDK_DIR "${CMAKE_BINARY_DIR}/sdk")
+endif()
 # The VM and the programs beside it are the SDK's bin, which the haxeon launcher finds the SDK from (bin/..).
 set(HAXEON_HASHLINK_OUTPUT_DIR "${HAXEON_SDK_DIR}/bin")
 # The directory earlier layouts published the VM in.
@@ -76,6 +75,8 @@ file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/hashlink-runtime")
 # time before it held the CLI (now haxeon-aot), with its C build in out/aot-compiler.
 file(GLOB _haxeon_stale_files
   "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.so*" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl*.dylib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.dll"
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.a" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.lib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhlprof_hooks.a"
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/hlprof_penter.lib"
   "${CMAKE_BINARY_DIR}/runtime/haxeon_runtime.hdll" "${CMAKE_SOURCE_DIR}/out/haxeon_runtime.hdll"
   "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl" "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl.inputs"
   "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler" "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler.exe"
@@ -205,7 +206,8 @@ if(WIN32)
 else()
   target_link_libraries(hlvm INTERFACE m dl pthread)
 endif()
-set_target_properties(hlvm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+# The SDK takes it into lib/<target> (haxeon-sdk), where C test programs link it.
+set_target_properties(hlvm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/hashlink-lib")
 if(MSVC)
   set_target_properties(hlvm PROPERTIES OUTPUT_NAME libhl)
 else()
@@ -400,11 +402,17 @@ foreach(_program IN LISTS HAXEON_PROGRAMS)
   list(APPEND HAXEON_PUBLISHED_PROGRAMS "${_published}")
 endforeach()
 
-# Instrumented native builds link the function hooks from the HashLink tools directory: hlprof_penter.lib for /Gh /GH
-# on Windows, libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
+# Instrumented native builds link the function hooks from the SDK's lib/<target>: hlprof_penter.lib for /Gh /GH on Windows,
+# libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})
-    set_target_properties(${_hooks} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+    set_target_properties(${_hooks} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/hashlink-lib")
+    # The hooks are HashLink's targets, defined in its directory: a target of this one copies them.
+    add_custom_target(${_hooks}-sdk ALL
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${_hooks}>" "${_sdk_lib}"
+      DEPENDS ${_hooks}
+      VERBATIM)
   endif()
 endforeach()
 
@@ -417,6 +425,6 @@ if(TARGET haxeon)
 endif()
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})
-    add_dependencies(haxeon-native ${_hooks})
+    add_dependencies(haxeon-native ${_hooks}-sdk)
   endif()
 endforeach()

@@ -32,7 +32,7 @@ class LiveNativeShiftMain {
 			return output;
 		}
 		function run(output:String):Int {
-			return Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [output]);
+			return Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [output]);
 		}
 
 		var expected = run(compile(new CompilerSession(), second, [], "cold"));

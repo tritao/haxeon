@@ -71,7 +71,7 @@ class NativeToolchain {
 
 	public function instrumentHooks():String
 		return haxe.io.Path.join([
-			build.HashLinkPath.directory(compilerHome),
+			build.HashLinkPath.libraryDirectory(compilerHome),
 			environment.target.os == TargetOs.Linux ? "libhlprof_hooks.a" : "hlprof_penter.lib"
 		]);
 

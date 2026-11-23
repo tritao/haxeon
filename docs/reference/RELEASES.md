@@ -37,7 +37,7 @@ Platforms:
 
 `bin/haxeon` finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or `GetModuleFileNameW`, symbolic links resolved). The
 directory above `bin` is its SDK, which must hold `haxeon-sdk.toml`: that directory is `HAXEON_SDK` and, in a release,
-`HAXEON_HOME`; `bin` is the VM's directory (`HAXEON_HASHLINK_DIR`, `build.HashLinkPath`) and `bin/haxeon-cli.hl` is the CLI. A
+`HAXEON_HOME`; `bin` is the VM's directory (`build.HashLinkPath`) and `bin/haxeon-cli.hl` is the CLI. A
 checkout's `out/sdk/bin/haxeon` is found the same way; its manifest's `source` names the checkout, which is then `HAXEON_HOME`. A
 symbolic link to `bin/haxeon` from a directory on `PATH` works, and so does a checkout's `out/sdk/bin` on `PATH`.
 

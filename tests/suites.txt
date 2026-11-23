@@ -1,7 +1,7 @@
 # The test suites, in the order they run: `scripts/haxeon dev test quick|wave|ci|full` (scripts/test.sh, `ci` by default, the
 # others). Before the first suite the runner builds the native runtime and resolves the compiler entry point, the compiler, the build tool
 # and the CLI from the tool cache, and exports them (HAXEON_MAIN_HL, HAXEON_COMPILER_HL, HAXEON_COMPILER_SERVER_HL, HAXEON_BUILD_HL,
-# HAXEON_HASHLINK_DIR) with
+# HAXEON_SDK) with
 # HAXEON_NATIVE_READY=1, so every suite of one run uses the same builds.
 #
 #   <name> <groups> [options] -- <command>

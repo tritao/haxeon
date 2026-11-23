@@ -11,7 +11,7 @@ A release and a checkout lay Haxeon out differently, and code branches on which 
 
 - A release has `bin/`, `stdlib/`, `templates/` and `haxeon-release.txt` (`src/tools/dev/ReleasePackage.hx`); a checkout has
   `out/cmake/release/hashlink-runtime/`, `out/cmake/release/hlc-sdk/` and `scripts/haxeon`.
-- The launcher (`native/haxeon_main.c`) has compiled-in checkout paths and a release mode; `HaxeonRelease.isRelease` and
+- The launcher (`native/haxeon_main.c`) has compiled-in checkout paths and a release mode; `HaxeonSdk.isRelease` and
   `HashLinkPath` branch on the layout; the hlc SDK is found by three separate lookups (`src/tools/AppRunner.hx`,
   `src/tools/dev/AotBuild.hx`, `src/compiler/backend/c/HlcBuild.hx`).
 - The release layout is defined twice: in `ReleasePackage` and in the `haxeon-hlc-sdk` CMake target.
@@ -100,8 +100,8 @@ SDK it configured with changes.
 
 ## Migration
 
-About ten files hard-code `out/cmake/release`; nearly everything else goes through `cmake/hashlink-output-paths.txt` and
-`scripts/hashlink-path.sh`, so the published directory can move by editing one table.
+The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release: `scripts/hashlink-path.sh` and
+`build.HashLinkPath` give it (the path table that chose it per preset is gone), and the tools pass `HAXEON_SDK` alone.
 
 1. **Stage `out/sdk`, moving no paths.** Install rules and a target that stage `lib`, `include`, `cmake/HaxeonConfig.cmake`,
    `src` and the manifest, superseding `hlc-sdk`; one `HaxeonSdk.root(home)` replaces the three hlc SDK lookups; the
@@ -110,9 +110,9 @@ About ten files hard-code `out/cmake/release`; nearly everything else goes throu
 3. **Launcher and home:** the launcher finds its SDK from its own path and reads the manifest with its `source` field; the
    path table moves to `out/sdk/bin`, `hashlink-runtime` goes, and a release's root is its SDK, whose manifest replaces
    `haxeon-release.txt` (a release is an SDK without `source`). Announced to the other sessions: each worktree rebuilds
-   once. Built with two limits: `HAXEON_HOME` stays the checkout when there is one (the source root), so the code and tests
-   that read checkout files keep reading them there, and the VM's static archives (`libhl.a`, the profiler hooks) stay in
-   `bin` beside it, where C test programs link them, until they move to `lib/<target>`.
+   once. The VM's static archives (`libhl.a`, the profiler hooks) are in `lib/<target>`; `HAXEON_HASHLINK_DIR` and
+   `HL_GC_TEST_LIBRARY_DIR` are gone. Built with one limit: `HAXEON_HOME` stays the checkout when there is one (the source
+   root), so the code and tests that read checkout files keep reading them there.
 4. **Packages:** versions, the `nativekit` package, publishing with rewritten dependencies, the SDK registry (generated in
    a checkout, unpacked in a release), the lockfile rule and `[patch.haxeon]`; the template uses `ui = "^0.3"`.
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template

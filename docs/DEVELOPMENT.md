@@ -243,9 +243,11 @@ needs no library path, and it exports the VM's API to the libraries it loads, so
 those link nothing of HashLink's. It is placed in the `bin` of the checkout's
 SDK, `out/sdk/bin` ([SDK_LAYOUT.md](design/SDK_LAYOUT.md); another preset's
 build stages its own in `out/cmake/<preset>/sdk/bin`, and
-`scripts/hashlink-path.sh` prints the directory), with `haxeon` and the CLI's bytecode `haxeon-cli.hl`, `hlprof-live`,
-and `libhl.a` (`libhl.lib` with MSVC): the same VM without `main.c`, which
-`haxeon` and C test programs that host the VM themselves link.
+`scripts/hashlink-path.sh` prints the directory), with `haxeon`, the CLI's
+bytecode `haxeon-cli.hl` and `hlprof-live`. The SDK's `lib/<target>`
+(`scripts/hashlink-path.sh --lib-dir`, `build.HashLinkPath.libraryDirectory`)
+holds `libhl.a` (`hl.lib` with MSVC), the same VM without `main.c`, which C test
+programs that host the VM themselves link, and the profiler's function hooks.
 
 The build links the programs in `hashlink-staging` and publishes them by rename
 (`cmake/haxeon-replace.cmake`), never writing over the file in place. A process

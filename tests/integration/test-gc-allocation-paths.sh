@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 source "$root/scripts/lib/env.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-allocation.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+library=$("$root/scripts/hashlink-path.sh" --lib-dir)
 guards=$(haxeon_native_test gc_allocation_paths)
 for mode in 0 1; do
 	HL_GC_ALLOC_FAST=$mode PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \

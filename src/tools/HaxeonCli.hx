@@ -6,7 +6,7 @@ import build.BuildScope;
 import build.BuildSession;
 import build.HashLinkPath;
 import build.HaxeonProjectBuild;
-import build.HaxeonRelease;
+import build.HaxeonSdk;
 import build.NativeTargetSupport;
 import build.Target;
 import build.WorkspaceBuild;
@@ -580,7 +580,7 @@ class HaxeonCli {
 	static function doctor(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected doctor argument "${arguments[0]}"');
-		var home = haxeonHome(), suffix = executableSuffix(), release = HaxeonRelease.isRelease(home);
+		var home = haxeonHome(), suffix = executableSuffix(), release = HaxeonSdk.isRelease(home);
 		var haxePath = Path.join([home, ".tools", "haxe", "haxe" + suffix]);
 		var hashlinkPath = Path.join([HashLinkPath.directory(home), "hl" + suffix]);
 		var compilerPath = Path.join([home, "bootstrap", "compiler.hl"]);
@@ -589,7 +589,7 @@ class HaxeonCli {
 		var missingRequired = false;
 
 		if (release)
-			Sys.println('ok: Haxeon release ${HaxeonRelease.field(home, "version")} (${HaxeonRelease.field(home, "platform")}, $home)');
+			Sys.println('ok: Haxeon release ${HaxeonSdk.releaseField(home, "version")} (${HaxeonSdk.releaseField(home, "platform")}, $home)');
 		// A checkout builds the compiler from its sources with the pinned Haxe; a release ships it built.
 		if (!release || AotCompiler.program(home, compilerSource) == null)
 			missingRequired = reportPath("pinned Haxe compiler", haxePath, true) || missingRequired;
@@ -2179,7 +2179,7 @@ class HaxeonCli {
 	/** `haxeon version`: this CLI's version, the checkout's commit, which names the compiler, and the VM's version. */
 	static function version():Int {
 		var home = haxeonHome(),
-			released = HaxeonRelease.field(home, "commit"),
+			released = HaxeonSdk.releaseField(home, "commit"),
 			commit = released != null ? {status: 0, output: released} : ProcessRunner.capture("git",
 				["-C", home, "rev-parse", "--short=12", "HEAD"]),
 			hashlink = ProcessRunner.capture(Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]),

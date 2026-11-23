@@ -9,7 +9,6 @@ work=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/haxeon-vm-launchers.XXXXXX")" && pwd)
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/scripts" "$work/cmake" "$work/out/sdk/bin"
 cp "$root/scripts/hl" "$root/scripts/hlprof-live" "$root/scripts/hashlink-launch.sh" "$root/scripts/hashlink-path.sh" "$work/scripts/"
-cp "$root/cmake/hashlink-output-paths.txt" "$work/cmake/"
 for program in hl hlprof-live; do
 	set +e
 	"$work/scripts/$program" > "$work/missing.log" 2>&1

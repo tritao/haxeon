@@ -2,9 +2,8 @@
  *
  * `hl module.hl` runs any module; `haxeon ...` runs the CLI's bytecode, haxeon-cli.hl beside this executable. The executable
  * is bin/haxeon in Haxeon's SDK (docs/design/SDK_LAYOUT.md), a checkout's out/sdk or an unpacked release, which it finds from
- * its own path: the SDK is bin/.., whose manifest haxeon-sdk.toml it must hold. It sets HAXEON_SDK to the SDK,
- * HAXEON_HASHLINK_DIR to bin, and HAXEON_HOME to the manifest's `source`, the checkout the SDK was built from, or to the SDK
- * when it has none (a release).
+ * its own path: the SDK is bin/.., whose manifest haxeon-sdk.toml it must hold. It sets HAXEON_SDK to the SDK and
+ * HAXEON_HOME to the manifest's `source`, the checkout the SDK was built from, or to the SDK when it has none (a release).
  *
  * When Haxeon is built ahead of time (AOT_EXECUTABLE in the VM's directory, build.AotCompiler), the launcher runs the CLI in it
  * instead, `haxeon-aot cli ARGUMENTS`, which starts without the JIT. Whether that executable is current, built from these
@@ -76,8 +75,8 @@ static wchar_t *sdk_root( wchar_t **bin ) {
 
 /* Runs `AOT_EXECUTABLE cli` with this command's arguments, as typed (the command line after the program's name, which Windows
  * passes unsplit), and returns its exit code; -1 when there is no such executable or it cannot start. */
-static int run_ahead_of_time( void ) {
-	const wchar_t *directory = _wgetenv(L"HAXEON_HASHLINK_DIR"), *line = GetCommandLineW();
+static int run_ahead_of_time( const wchar_t *directory ) {
+	const wchar_t *line = GetCommandLineW();
 	wchar_t *program, *command;
 	size_t length;
 	STARTUPINFOW startup;
@@ -127,7 +126,6 @@ int wmain( int argc, wchar_t *argv[] ) {
 	manifest = join(sdk,L"" SDK_MANIFEST);
 	source = manifest == NULL ? NULL : manifest_source(_wfopen(manifest,L"r"));
 	_wputenv_s(L"HAXEON_SDK",sdk);
-	_wputenv_s(L"HAXEON_HASHLINK_DIR",bin);
 	if( source != NULL ) _putenv_s("HAXEON_HOME",source);
 	else _wputenv_s(L"HAXEON_HOME",sdk);
 	cli = join(bin,L"" CLI_BYTECODE);
@@ -141,7 +139,7 @@ int wmain( int argc, wchar_t *argv[] ) {
 		_putenv_s("HAXEON_STDERR_TERMINAL",terminal ? "1" : "0");
 	}
 	{
-		int status = run_ahead_of_time();
+		int status = run_ahead_of_time(bin);
 		if( status >= 0 ) return status;
 	}
 	if( _waccess(cli,0) != 0 ) {
@@ -196,8 +194,7 @@ static char *sdk_root( char **bin ) {
 }
 
 /* Becomes `AOT_EXECUTABLE cli ARGUMENTS` when that executable is beside the VM; returns only when it is not, or cannot start. */
-static void run_ahead_of_time( int argc, char *argv[] ) {
-	const char *directory = getenv("HAXEON_HASHLINK_DIR");
+static void run_ahead_of_time( const char *directory, int argc, char *argv[] ) {
 	char *program, **arguments;
 	size_t length;
 	if( directory == NULL ) return;
@@ -227,13 +224,12 @@ int main( int argc, char *argv[] ) {
 	manifest = join(sdk,SDK_MANIFEST);
 	source = manifest == NULL ? NULL : manifest_source(fopen(manifest,"r"));
 	setenv("HAXEON_SDK",sdk,1);
-	setenv("HAXEON_HASHLINK_DIR",bin,1);
 	setenv("HAXEON_HOME",source != NULL ? source : sdk,1);
 	cli = join(bin,CLI_BYTECODE);
 	if( cli == NULL || arguments == NULL ) return 1;
 	/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about. */
 	setenv("HAXEON_STDERR_TERMINAL",isatty(STDERR_FILENO) ? "1" : "0",1);
-	run_ahead_of_time(argc,argv);
+	run_ahead_of_time(bin,argc,argv);
 	if( access(cli,R_OK) != 0 ) {
 		fprintf(stderr,"Missing the Haxeon CLI bytecode %s; build the native runtime (scripts/build-native.sh)\n",cli);
 		return 1;

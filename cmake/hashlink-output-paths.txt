@@ -1,2 +1,0 @@
-release=out/sdk/bin
-windows-msvc=out/sdk/bin

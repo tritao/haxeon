@@ -15,7 +15,7 @@ class GeneratedProgramRunner {
 		File.saveBytes(path, HlWriter.encode(compiled.artifact.hashLink().module).flatten());
 		var status:Int;
 		try {
-			status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
+			status = Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 		} catch (error:Dynamic) {
 			FileSystem.deleteFile(path);
 			throw error;

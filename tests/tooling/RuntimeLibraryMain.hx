@@ -86,8 +86,6 @@ class RuntimeLibraryMain {
 		var root = haxe.io.Path.normalize(FileSystem.fullPath(".")) + "/out/runtime-library-test-"
 			+ Std.random(0x3fffffff);
 		directories(root + "/cmake");
-		// The checkout's path table, so the temporary checkout's VM is where the real one would be.
-		File.copy("cmake/hashlink-output-paths.txt", root + "/cmake/hashlink-output-paths.txt");
 		var hdll = RuntimeLibrary.libraryPath(root);
 		check(RuntimeLibrary.missing(root).length == 0, "no sources and no library: nothing to compare");
 		write(root + "/native/runtime.c", "DEFINE_PRIM(_I32,__a,_NO_ARG)\n");

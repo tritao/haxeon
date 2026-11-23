@@ -38,7 +38,7 @@ class SharedEqualityHelperEditMain {
 			} catch (error:Dynamic) {
 				throw '$label: ${Std.string(error).split("\n")[0]}';
 			}
-			return Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [root + "/main.hl"]);
+			return Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [root + "/main.hl"]);
 		}
 		// Whichever of the two comparisons has the shared helper's origin, stop comparing in each in turn.
 		for (edited in ["P.hx", "Q.hx"]) {

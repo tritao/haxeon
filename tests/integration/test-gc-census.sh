@@ -3,7 +3,7 @@
 # (HL_GC_CENSUS_AT), counts pages without collecting (HL_GC_CENSUS_NOGC), and prints nothing when it is not asked for.
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
-library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+library=$("$root/scripts/hashlink-path.sh" --lib-dir)
 source "$root/scripts/lib/env.sh"
 census=$(haxeon_native_test gc_census)
 run() {
