@@ -2694,15 +2694,10 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
-					case TArray(element)
-						if (operation == "value_index_of"
-						&& (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element)))
-						:
+					case TArray(element) if ((operation == "value_index_of" || operation == "index_of")
+						&& usesArraySearchEquality(element)):
 						lowerValueArrayIndexOf(builder, localTypes, element, lowered);
-					case TArray(element)
-						if (operation == "remove"
-						&& (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element)))
-						:
+					case TArray(element) if (operation == "remove" && usesArraySearchEquality(element)):
 						lowerValueArrayRemove(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered,
 						lowerType(expression.type));
@@ -5012,11 +5007,14 @@ class IrGenerator {
 		var leftType = lowerType(left.type), rightType = lowerType(right.type);
 		if (!Type.enumEq(leftType, rightType))
 			return false;
-		return switch leftType {
+		return isNullableScalar(leftType);
+	}
+
+	static function isNullableScalar(type:IrType):Bool
+		return switch type {
 			case Nullable(I32 | I64 | F32 | F64 | Bool): true;
 			default: false;
 		};
-	}
 
 	/** Dynamic reactive values use ordinary dynamic equality, with a reflexive Float NaN case. */
 	function lowerDynamicChangeEquality(left:IrValue, right:IrValue, builder:IrLocalsBuilder,
@@ -5136,13 +5134,12 @@ class IrGenerator {
 		return builder.load(resultName, Bool);
 	}
 
-	function isSemanticDynamic(type:CompilerType):Bool
-		return switch type {
-			case TDynamic: true;
-			default: false;
-		};
+	function usesArraySearchEquality(element:CompilerType):Bool {
+		var type = lowerType(element);
+		return type.match(Dyn) || isNullableScalar(type) || arrayValueElement(type) || isEnumType(element);
+	}
 
-	/** Compare typed struct elements with their declared equality, without entering a dynamic array view. */
+	/** Use the element's equality when its storage does not support a direct comparison. */
 	function lowerValueArrayIndexOf(builder:IrLocalsBuilder, localTypes:Map<String, IrType>, element:CompilerType,
 			arguments:Array<IrValue>):IrValue {
 		var array = arguments[0],
@@ -5173,16 +5170,18 @@ class IrGenerator {
 		builder.select(body);
 		var source = builder.load(arrayName, array.type),
 			index = builder.load(indexName, I32),
-			value = isSemanticDynamic(element) ? builder.call("__array_get_any", [source, index],
+			value = valueType.match(Dyn) ? builder.call("__array_get_any", [source, index],
 				Dyn) : elementGet(builder, source, index, valueType),
 			needleValue = builder.load(needleName, needle.type),
 			previous = builder.beginGenerated("value-array-index-equality"),
-			equal = builder.call(isSemanticDynamic(element) ? "__dynamic_equal" : isEnumType(element) ? compiler.types
-				.typing.EnumEqualityGenerator.equalsName(element) : ValueEqualityGenerator.equalsName(element),
-				[
-					value,
-					needleValue
-				], Bool);
+			equal = switch valueType {
+				case Nullable(_) if (isNullableScalar(valueType)): lowerNullableScalarEquality(value, needleValue,
+					builder, localTypes);
+				case Dyn: builder.call("__dynamic_equal", [value, needleValue], Bool);
+				default:
+					builder.call(isEnumType(element) ? compiler.types.typing.EnumEqualityGenerator.equalsName(element)
+						: ValueEqualityGenerator.equalsName(element), [value, needleValue], Bool);
+			};
 		builder.restoreSource(previous);
 		builder.branch(equal, found, next);
 		builder.select(found);
@@ -5218,7 +5217,8 @@ class IrGenerator {
 		builder.branch(builder.less(builder.load(foundName, I32),
 			builder.arraySize(builder.load(arrayName, array.type))), inBounds, missing);
 		builder.select(inBounds);
-		if (isSemanticDynamic(element)) {
+		var valueType = lowerType(element);
+		if (valueType.match(Dyn) || isNullableScalar(valueType)) {
 			// Keep the storage representation and uninitialized value-array slots intact.
 			builder.call("__array_remove_at_any", [builder.load(arrayName, array.type), builder.load(foundName, I32)],
 				Void);
