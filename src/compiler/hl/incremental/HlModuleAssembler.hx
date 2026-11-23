@@ -501,7 +501,7 @@ class HlModuleAssembler {
 	function vacate(name:String):Void {
 		var vacant = cache.vacate(name), lowered = published.entries.get(name);
 		if (vacant != null && lowered != null)
-			published.entries.set(name, lowered.from(vacant));
+			published.setEntry(name, lowered.from(vacant));
 	}
 
 	/**

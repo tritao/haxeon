@@ -224,9 +224,9 @@ class SessionState {
 			(startingBackend == null ? backend : startingBackend).forCandidate());
 		for (name => state in modules)
 			result.modules.set(name, state);
-		result.objectCache = [for (name => object in objectCache) name => object];
-		result.canonicalObjectCache = [for (name => object in canonicalObjectCache) name => object];
-		result.anonymousStrings = [for (name => fn in anonymousStrings) name => fn];
+		result.objectCache = objectCache.copy();
+		result.canonicalObjectCache = canonicalObjectCache.copy();
+		result.anonymousStrings = anonymousStrings.copy();
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.programFacts = programFacts;
@@ -243,7 +243,7 @@ class SessionState {
 		result.staticReferences = staticReferences;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
-		result.reachabilityCache = copyReachabilityCache(reachabilityCache);
+		result.reachabilityCache = reachabilityCache.copy();
 		result.declarationOwners = declarationOwners.copy();
 		return result;
 	}
@@ -328,16 +328,5 @@ class SessionState {
 			dependencyKeys: dependencyKeys,
 			initializationClasses: initializationClasses.copy()
 		});
-	}
-
-	static function copyReachabilityCache(source:Map<String, ReachabilityCache>):Map<String, ReachabilityCache> {
-		var result:Map<String, ReachabilityCache> = [];
-		for (entry => cached in source)
-			result.set(entry, {
-				names: cached.names.copy(),
-				dependencyKeys: [for (name => key in cached.dependencyKeys) name => key],
-				initializationClasses: cached.initializationClasses.copy()
-			});
-		return result;
 	}
 }

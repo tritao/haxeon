@@ -146,13 +146,14 @@ typedef SharedCallsEntry = {
 
 /** Each function's form with its runtime calls through helpers, by name, kept while the function is the same object. */
 class IrSharedCallsMemo {
+	/** Replaced as a whole by each run (`IrSharedRuntimeCalls.apply`), never changed in place, so a copy shares it. */
 	public var entries:Map<String, SharedCallsEntry> = [];
 
 	public function new() {}
 
 	public function copy():IrSharedCallsMemo {
 		var result = new IrSharedCallsMemo();
-		result.entries = [for (name => entry in entries) name => entry];
+		result.entries = entries;
 		return result;
 	}
 }

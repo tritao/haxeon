@@ -16,7 +16,7 @@ typedef GenericSpecialization = {
 }
 
 class GenericSpecializationRegistry {
-	final names:Map<String, String> = [];
+	var names:Map<String, String> = [];
 
 	public function new(?state:Bytes) {
 		if (state != null)
@@ -25,8 +25,7 @@ class GenericSpecializationRegistry {
 
 	public function copy():GenericSpecializationRegistry {
 		var result = new GenericSpecializationRegistry();
-		for (key => name in names)
-			result.names.set(key, name);
+		result.names = names.copy();
 		return result;
 	}
 

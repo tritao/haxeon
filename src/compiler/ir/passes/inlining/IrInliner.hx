@@ -138,16 +138,13 @@ class IrInlineCache {
 	}
 
 	public function copy():IrInlineCache {
+		// Each map is replaced as a whole by the run that changes it, never changed in place, so the copy shares them.
 		var result = new IrInlineCache();
 		result.types = types;
-		for (name => entry in originals)
-			result.originals.set(name, entry);
-		for (name => fn in published)
-			result.published.set(name, fn);
-		for (name => entry in instrumented)
-			result.instrumented.set(name, {source: entry.source, scope: entry.scope, result: entry.result});
-		for (name => entry in positionalPrints)
-			result.positionalPrints.set(name, entry);
+		result.originals = originals;
+		result.published = published;
+		result.instrumented = instrumented;
+		result.positionalPrints = positionalPrints;
 		result.positionalNatives = positionalNatives;
 		return result;
 	}
@@ -251,6 +248,12 @@ class IrInliner implements IrFactSource {
 
 	/** By function id, its inlined form when that is its source's encoding, unchanged, else null. */
 	final sourceBodies:Array<Null<IrBody>> = [];
+
+	/**
+	 * The frozen source bodies this run made for functions the cache had none for, by id: `keepOriginals` gives them to the
+	 * cache, whose map a copy of the cache shares and so is never changed in place.
+	 */
+	final madeOriginals:Array<Null<IrBody>> = [];
 
 	/** By function id, its source body as copy elision reads it, in a compile that keeps no session (else `IrInlineCache.originals`). */
 	final pristine:Array<Null<IrBody>> = [];
@@ -720,11 +723,11 @@ class IrInliner implements IrFactSource {
 	 * a compile that keeps a session encodes an unchanged function once.
 	 */
 	function originalBody(id:Int):IrBody {
-		var fn = functions[id], known = cache.originals.get(fn.name);
-		if (known != null && known.source == fn)
-			return known.body;
-		var body = sourceBody(fn);
-		cache.originals.set(fn.name, {source: fn, body: body});
+		var cached = cachedOriginal(id);
+		if (cached != null)
+			return cached;
+		var body = sourceBody(functions[id]);
+		madeOriginals[id] = body;
 		return body;
 	}
 
@@ -745,16 +748,21 @@ class IrInliner implements IrFactSource {
 	/** The cached frozen source body of function `id`, when the cache has one for its source. */
 	function cachedOriginal(id:Int):Null<IrBody> {
 		var fn = functions[id], known = cache.originals.get(fn.name);
-		return known != null && known.source == fn ? known.body : null;
+		return known != null && known.source == fn ? known.body : id < madeOriginals.length ? madeOriginals[id] : null;
 	}
 
 	/** Drops the cached original bodies of functions that are gone or whose source changed. */
 	function keepOriginals():Void {
 		var kept:Map<String, {source:IrFunction, body:IrBody}> = [];
-		for (fn in functions) {
-			var known = cache.originals.get(fn.name);
+		for (id in 0...functions.length) {
+			var fn = functions[id], known = cache.originals.get(fn.name);
 			if (known != null && known.source == fn)
 				kept.set(fn.name, known);
+			else {
+				var made = id < madeOriginals.length ? madeOriginals[id] : null;
+				if (made != null)
+					kept.set(fn.name, {source: fn, body: made});
+			}
 		}
 		cache.originals = kept;
 	}

@@ -96,8 +96,8 @@ class TypeRegistry {
 	static inline final MAGIC = "TID";
 	static inline final VERSION = 1;
 
-	final ids:Map<String, Int> = [];
-	final descriptors:Map<String, TypeDescriptor> = [];
+	var ids:Map<String, Int> = [];
+	var descriptors:Map<String, TypeDescriptor> = [];
 	var nextId:Int = 1;
 
 	public function new(?state:Bytes) {
@@ -107,10 +107,8 @@ class TypeRegistry {
 
 	public function copy():TypeRegistry {
 		var result = new TypeRegistry();
-		for (name => id in ids)
-			result.ids.set(name, id);
-		for (name => descriptor in descriptors)
-			result.descriptors.set(name, descriptor);
+		result.ids = ids.copy();
+		result.descriptors = descriptors.copy();
 		result.nextId = nextId;
 		return result;
 	}

@@ -5,7 +5,7 @@ package compiler.semantic;
 	names each module owns, so releasing one module costs its own declarations and not every declaration in the program.
 **/
 class DeclarationOwners {
-	final owners:Map<String, String> = [];
+	var owners:Map<String, String> = [];
 	final namesByModule:Map<String, Array<String>> = [];
 
 	public function new() {}
@@ -42,8 +42,7 @@ class DeclarationOwners {
 
 	public function copy():DeclarationOwners {
 		var result = new DeclarationOwners();
-		for (name => module in owners)
-			result.owners.set(name, module);
+		result.owners = owners.copy();
 		for (module => names in namesByModule)
 			result.namesByModule.set(module, names.copy());
 		return result;
