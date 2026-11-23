@@ -65,6 +65,24 @@ class FfiManifest {
 }
 
 /**
+ * How a package is published into a registry (`publish` in the manifest; RegistryPublisher): `publish = false` keeps it out of
+ * registries, the haxeon registry of a checkout included. `exclude` names files and directories, relative to the published
+ * package, that are left out, such as tests and the parts of vendored code that do not build; `vendor` names directories
+ * outside the package, relative to it, that are copied into it under the given path, as `{ nativekit = "../../vendor/nativekit" }`.
+ */
+class PublishManifest {
+	public final enabled:Bool;
+	public final exclude:Array<String>;
+	public final vendor:Map<String, String>;
+
+	public function new(enabled:Bool, ?exclude:Array<String>, ?vendor:Map<String, String>) {
+		this.enabled = enabled;
+		this.exclude = exclude == null ? [] : exclude.copy();
+		this.vendor = vendor == null ? [] : vendor.copy();
+	}
+}
+
+/**
  * What makes a project an app: its `[app]` section. An app builds through its runner projects, one per platform it names;
  * a project without the section is a program (docs/design/PROJECT_BUILDS.md).
  */
@@ -185,6 +203,17 @@ class PackageManifest {
 	/** The `[app]` section, which makes the project an app; null for a program. */
 	public final app:Null<AppManifest>;
 
+	/** `package.version`, which publishing writes; null for a package that has not been published. */
+	public final packageVersion:Null<String>;
+
+	public final publish:PublishManifest;
+
+	/**
+	 * `[patch.REGISTRY]`: for each registry, the packages a project resolves from a local directory instead (`NAME = { path = ... }`,
+	 * relative to the manifest), without changing the dependencies that name them. Only the root project's patches apply.
+	 */
+	public final patches:Map<String, Map<String, String>>;
+
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>,
 			sourceRoots:Array<String>,
 			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String,
@@ -193,7 +222,8 @@ class PackageManifest {
 			androidApplicationId:String,
 			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
 			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
-			?app:AppManifest) {
+			?app:AppManifest, ?packageVersion:String, ?publish:PublishManifest,
+			?patches:Map<String, Map<String, String>>) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -217,6 +247,9 @@ class PackageManifest {
 		this.compatibility = compatibility;
 		this.instrument = instrument == null ? new InstrumentManifest() : instrument;
 		this.app = app;
+		this.packageVersion = packageVersion;
+		this.publish = publish == null ? new PublishManifest(true) : publish;
+		this.patches = patches == null ? [] : patches;
 	}
 
 	/** The manifest `haxeon init` writes and every lookup prefers. */
@@ -269,10 +302,8 @@ class PackageManifest {
 	static final FIELD_ORDER = [
 		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
 		"target",
-		"defines", "inline", "nullSafety", "outputDir", "package", "app", "dependencies", "native", "ffi", "android",
-		"format",
-		"compatibility",
-		"instrument"
+		"defines", "inline", "nullSafety", "outputDir", "package", "app", "dependencies", "patch", "native", "ffi",
+		"android", "format", "compatibility", "publish", "instrument"
 	];
 
 	/** A manifest's objects (`decode`, or made by `haxeon init`) as a haxeon.toml's text. */
@@ -437,7 +468,55 @@ class PackageManifest {
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
 			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
-			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path));
+			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path),
+			packageData == null ? null : optionalNullableString(packageData, "version", '$path package'),
+			parsePublish(raw, path), parsePatches(raw, path));
+	}
+
+	/** `publish`: false, or a table with `exclude` and `vendor` (PublishManifest). */
+	static function parsePublish(raw:Dynamic, path:String):PublishManifest {
+		var value:Dynamic = Reflect.field(raw, "publish");
+		if (value == null)
+			return new PublishManifest(true);
+		if (Std.isOfType(value, Bool)) {
+			if (value)
+				throw new UsageError('$path "publish" is false or a table; leave it out to publish the package');
+			return new PublishManifest(false);
+		}
+		if (!isObject(value))
+			throw new UsageError('$path "publish" must be false or a table');
+		var vendor:Map<String, String> = [], rawVendor:Dynamic = Reflect.field(value, "vendor");
+		if (rawVendor != null) {
+			if (!isObject(rawVendor))
+				throw new UsageError('$path "publish.vendor" must be a table of directories');
+			for (name in Reflect.fields(rawVendor))
+				vendor.set(name, requiredValueString(Reflect.field(rawVendor, name), 'publish.vendor.$name', path));
+		}
+		return new PublishManifest(true, stringArray(value, "exclude", '$path publish', []), vendor);
+	}
+
+	/** `[patch.REGISTRY]`, each entry a `{ path = ... }` table. */
+	static function parsePatches(raw:Dynamic, path:String):Map<String, Map<String, String>> {
+		var patches:Map<String, Map<String, String>> = [], value:Dynamic = Reflect.field(raw, "patch");
+		if (value == null)
+			return patches;
+		if (!isObject(value))
+			throw new UsageError('$path "patch" must be a table of registries, as [patch.haxeon]');
+		for (registry in Reflect.fields(value)) {
+			var entries:Dynamic = Reflect.field(value, registry);
+			if (!isObject(entries))
+				throw new UsageError('$path "patch.$registry" must be a table of packages');
+			var patched:Map<String, String> = [];
+			for (name in Reflect.fields(entries)) {
+				var entry:Dynamic = Reflect.field(entries, name),
+					patchPath:Dynamic = isObject(entry) ? Reflect.field(entry, "path") : null;
+				if (!Std.isOfType(patchPath, String) || Reflect.fields(entry).length != 1)
+					throw new UsageError('$path "patch.$registry.$name" must be { path = "DIRECTORY" }');
+				patched.set(name, patchPath);
+			}
+			patches.set(registry, patched);
+		}
+		return patches;
 	}
 
 	/** The `[app]` section: a name (the package's by default), a reverse-domain `id`, a `version`, an `icon` and the `platforms`. */

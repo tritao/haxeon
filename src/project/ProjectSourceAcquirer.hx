@@ -7,17 +7,19 @@ class ProjectSourceAcquirer implements SourceAcquirer {
 	final path:PathSourceAcquirer;
 	final git:GitSourceAcquirer;
 	final haxelib:HaxelibSourceAcquirer;
-	final registry:RegistrySourceAcquirer;
+	public final registry:RegistrySourceAcquirer;
 
 	/**
 	 * `offline` acquires without the network: Git sources come only from checkouts the cache already holds (registry and Haxelib
-	 * sources always come from the local cache).
+	 * sources always come from the local cache). `sdkRegistry` is the SDK's registry, which the `haxeon` registry is.
 	 */
-	public function new(gitRoot:String, ?haxelibRoot:String, ?registryRoot:String, offline:Bool = false) {
+	public function new(gitRoot:String, ?haxelibRoot:String, ?registryRoot:String, offline:Bool = false,
+			?sdkRegistry:String) {
 		path = new PathSourceAcquirer();
 		git = new GitSourceAcquirer(gitRoot, offline);
 		haxelib = new HaxelibSourceAcquirer(haxelibRoot == null ? SourceCache.haxelibRoot() : haxelibRoot);
-		registry = new RegistrySourceAcquirer(registryRoot == null ? SourceCache.registryRoot() : registryRoot);
+		registry = new RegistrySourceAcquirer(registryRoot == null ? SourceCache.registryRoot() : registryRoot,
+			sdkRegistry);
 	}
 
 	public function acquire(source:PackageSource, ownerRoot:String, packageId:PackageId):AcquiredSource

@@ -2,7 +2,8 @@
 
 Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup), 2 (runners use `find_package(Haxeon)` and a data-only
 fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK) are
-built, with release builds through the runner; 4 to 6 are open. Reviewed independently before adoption; the five changes from
+built, with release builds through the runner; 4 (packages and the `haxeon` registry) is built, and a release's app template
+builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 and 6 are open. Reviewed independently before adoption; the five changes from
 that review are folded in below.
 
 ## Problem
@@ -114,7 +115,20 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
    `HL_GC_TEST_LIBRARY_DIR` are gone. Built with one limit: `HAXEON_HOME` stays the checkout when there is one (the source
    root), so the code and tests that read checkout files keep reading them there.
 4. **Packages:** versions, the `nativekit` package, publishing with rewritten dependencies, the SDK registry (generated in
-   a checkout, unpacked in a release), the lockfile rule and `[patch.haxeon]`; the template uses `ui = "^0.3"`.
+   a checkout, unpacked in a release), the lockfile rule and `[patch.haxeon]`; the template uses `ui = "^0.3"`. Built as:
+   - a package is published under its directory's name in `packages/` at Haxeon's version; its manifest's `publish` says what
+     is left out (`exclude`), what outside directory is copied in (`vendor`, how `nativekit` carries NativeKit), or `false`
+     (`credentials` and `filesystem`, whose native builds still include `cmake/nativekit-module.cmake` from the checkout);
+   - CMake writes the checkout's index at configure time (`out/sdk/registry/index.json`, live `path` entries), and
+     `haxeon dev package` publishes those packages into the release's `registry/`, then resolves each from it as a check;
+   - a live package is resolved with the manifest publishing would write (`RegistryPublisher.publishedManifest`), so a
+     project's graph and lockfile are the same in a checkout and a release;
+   - `HaxeonSdk.registryRoot(home)` is the one lookup; the `haxeon` registry is the SDK's for the packages it has, the
+     source cache's for others;
+   - the UI package depends on `nativekit` and takes NativeKit's headers from the graph's `nativekit` target. Programs that
+     are not apps build `nativekit` and the UI package's own NativeKit in the shared native cache, so NativeKit builds twice
+     there; a program using native packages from a release's registry is not supported yet (the shared native cache reads
+     `cmake/` files from a checkout).
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template
    tests against the archive.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a

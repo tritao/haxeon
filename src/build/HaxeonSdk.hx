@@ -33,6 +33,22 @@ class HaxeonSdk {
 		return sdk;
 	}
 
+	/**
+	 * The SDK's haxeon registry (`registry` in the manifest's `[roots]`, relative to the SDK unless absolute): the directory of the
+	 * index the resolver reads for the `haxeon` registry, a release's unpacked packages or a checkout's generated live index.
+	 * Null when `home` has no SDK or the SDK no registry.
+	 */
+	public static function registryRoot(home:String):Null<String> {
+		var sdk = isRelease(home) ? home : Path.join([home, "out", "sdk"]), manifest = Path.join([sdk, MANIFEST]);
+		if (!FileSystem.exists(manifest))
+			return null;
+		var roots:Dynamic = Reflect.field(toml.TomlParser.parse(File.getContent(manifest)), "roots"),
+			registry:Dynamic = roots == null ? null : Reflect.field(roots, "registry");
+		if (!Std.isOfType(registry, String))
+			return null;
+		return Path.normalize(Path.isAbsolute(registry) ? registry : Path.join([sdk, registry]));
+	}
+
 	/** The directory of the SDK's CMake package, which `find_package(Haxeon)` reads (`Haxeon_DIR`). */
 	public static function cmakeDirectory(home:String):String
 		return Path.join([root(home), "cmake"]);
@@ -48,14 +64,16 @@ class HaxeonSdk {
 			var separator = line.indexOf("=");
 			if (separator > 0 && StringTools.trim(line.substr(0, separator)) == name) {
 				var value = StringTools.trim(line.substr(separator + 1));
-				return StringTools.startsWith(value, '"') && StringTools.endsWith(value, '"') ? value.substr(1, value.length - 2) : value;
+				return StringTools.startsWith(value, '"')
+					&& StringTools.endsWith(value, '"') ? value.substr(1, value.length - 2) : value;
 			}
 		}
 		return null;
 	}
 
 	/** A release's manifest: its own roots, and what the release was made from. */
-	public static function releaseManifest(version:String, commit:String, platform:String, compilerSources:String):String
+	public static function releaseManifest(version:String, commit:String, platform:String,
+			compilerSources:String):String
 		return '# Haxeon\'s SDK manifest (docs/design/SDK_LAYOUT.md), of a release.\nversion = "$version"\ncommit = "$commit"\n'
-			+ 'platform = "$platform"\n$COMPILER_SOURCES = "$compilerSources"\n\n[roots]\nstdlib = "stdlib"\ntemplates = "templates"\n';
+			+ 'platform = "$platform"\n$COMPILER_SOURCES = "$compilerSources"\n\n[roots]\nstdlib = "stdlib"\ntemplates = "templates"\nregistry = "registry"\n';
 }

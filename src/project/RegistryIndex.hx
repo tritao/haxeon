@@ -11,23 +11,71 @@ import sys.io.File;
 /** Immutable release metadata used by the registry source adapter. */
 class RegistryVersion {
 	public final version:String;
-	public final checksum:String;
+
+	/** The release's checksum, which its unpacked directory's marker must hold; null for a live release. */
+	public final checksum:Null<String>;
+
 	public final yanked:Bool;
 	public final compatibility:PackageCompatibility;
 
-	public function new(version:String, checksum:String, yanked:Bool, compatibility:PackageCompatibility) {
+	/**
+	 * The directory a live release resolves from, as it is (`path` in the index, absolute or relative to it): a checkout's haxeon
+	 * registry lists each of its packages so (docs/design/SDK_LAYOUT.md). Null for a release unpacked below the index.
+	 */
+	public final path:Null<String>;
+
+	public function new(version:String, checksum:Null<String>, yanked:Bool, compatibility:PackageCompatibility,
+			?path:String) {
 		this.version = version;
 		this.checksum = checksum;
 		this.yanked = yanked;
 		this.compatibility = compatibility;
+		this.path = path;
 	}
 }
+
+/** A package of a registry, as a published package's dependency names it. */
+typedef RegistryPackage = {
+	final name:String;
+	final version:String;
+}
+
+/** A registry release that is not in the index: a range nothing matches, or a locked version an upgrade removed. */
+class MissingRelease extends InternalError {}
 
 class RegistryIndex {
 	public final packages:Map<String, Array<RegistryVersion>>;
 
 	public function new(packages:Map<String, Array<RegistryVersion>>) {
 		this.packages = packages;
+	}
+
+	/** The index of the registry in `directory` (its `index.json`), or null when it has none. */
+	public static function load(directory:String):Null<RegistryIndex> {
+		var path = Path.join([directory, "index.json"]);
+		return FileSystem.exists(path) ? parse(path, File.getContent(path)) : null;
+	}
+
+	/** The live release of `name` (`RegistryVersion.path`), or null when its releases are unpacked ones. */
+	public function live(name:String):Null<RegistryVersion> {
+		var candidates = packages.get(name);
+		if (candidates != null)
+			for (candidate in candidates)
+				if (candidate.path != null)
+					return candidate;
+		return null;
+	}
+
+	/** The packages the index resolves live, by their directory: what path dependencies on them are published as. */
+	public function liveDirectories():Map<String, RegistryPackage> {
+		var directories:Map<String, RegistryPackage> = [];
+		for (name => candidates in packages)
+			for (candidate in candidates)
+				if (candidate.path != null)
+					directories.set(FileSystem.exists(candidate.path)
+						? Path.normalize(FileSystem.fullPath(candidate.path)) : candidate.path,
+						{name: name, version: candidate.version});
+		return directories;
 	}
 
 	/** The highest release of `name` that is not yanked, which `haxeon add` writes a range from. */
@@ -53,7 +101,7 @@ class RegistryIndex {
 		for (candidate in sorted)
 			if (PackageCompatibility.satisfiesVersionRange(range, candidate.version) && (exact || !candidate.yanked))
 				return candidate;
-		throw new InternalError('Registry has no non-yanked release of "$name" matching "$range"');
+		throw new MissingRelease('Registry has no non-yanked release of "$name" matching "$range"');
 	}
 
 	public static function parse(path:String, content:String):RegistryIndex {
@@ -79,7 +127,8 @@ class RegistryIndex {
 				if (!Reflect.isObject(rawVersion) || Std.isOfType(rawVersion, Array))
 					throw new InternalError('$path package "$name" contains an invalid release');
 				var version = requiredString(rawVersion, "version", path),
-					checksum = requiredString(rawVersion, "checksum", path),
+					livePath:Dynamic = Reflect.field(rawVersion, "path"),
+					checksum = livePath == null ? requiredString(rawVersion, "checksum", path) : null,
 					yankedValue:Dynamic = Reflect.field(rawVersion, "yanked"),
 					yanked = yankedValue == null ? false : castBool(yankedValue),
 					compatibilityRaw:Dynamic = {
@@ -87,8 +136,14 @@ class RegistryIndex {
 						targets: Reflect.field(rawVersion, "targets"),
 						runtimeAbi: Reflect.field(rawVersion, "runtimeAbi")
 					};
+				if (livePath != null && !Std.isOfType(livePath, String))
+					throw new InternalError('$path package "$name" release "$version" has a "path" that is not a string');
 				versions.push(new RegistryVersion(version, checksum, yanked,
-					PackageCompatibility.parse(compatibilityRaw, '$path package "$name" release "$version"')));
+					PackageCompatibility.parse(compatibilityRaw, '$path package "$name" release "$version"'),
+					livePath == null ? null : Path.normalize(Path.isAbsolute(livePath) ? livePath : Path.join([
+						Path.directory(path),
+						livePath
+					]))));
 			}
 			packages.set(name, versions);
 		}
@@ -161,12 +216,12 @@ class RegistryIndex {
 		return value;
 	}
 
-	static function isExactVersion(value:String):Bool
+	public static function isExactVersion(value:String):Bool
 		return !StringTools.startsWith(value, "<") && !StringTools.startsWith(value, ">")
 			&& !StringTools.startsWith(value, "^")
 			&& !StringTools.startsWith(value, "~") && value.indexOf(",") < 0 && value.indexOf(" ") < 0;
 
-	static function compareVersions(left:String, right:String):Int {
+	public static function compareVersions(left:String, right:String):Int {
 		var a = versionParts(left), b = versionParts(right);
 		for (index in 0...3)
 			if (a[index] != b[index])

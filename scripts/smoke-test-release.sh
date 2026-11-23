@@ -2,7 +2,9 @@
 # Smoke test of a release archive (`haxeon dev package`, docs/reference/RELEASES.md), as a user meets it: unpacked into a
 # directory of its own outside any checkout, with a home directory of its own so every cache starts cold, and nothing but the
 # archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, and checks that
-# the compiles ran the compiler the archive is meant to run:
+# the compiles ran the compiler the archive is meant to run. On Linux it then creates the app template, which takes its UI package
+# from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain and GTK's
+# development files are needed) and runs each for a few frames, under xvfb-run when there is one:
 #
 #   scripts/smoke-test-release.sh ARCHIVE --aot      the CLI and compiler built ahead of time (bin/haxeon-aot)
 #   scripts/smoke-test-release.sh ARCHIVE --no-aot   the compiler's bytecode on the VM (bin/haxeon-compiler.hl)
@@ -126,6 +128,29 @@ echo "== haxeon script.hx"
 printf 'function main() {\n\tSys.println("script ok " + Sys.args().join(" "));\n}\n' >"$work/projects/hello-script.hx"
 output=$(cd "$work/projects" && "$haxeon" hello-script.hx a b) || fail "script run"
 [[ $output == "script ok a b" ]] || fail "the script printed: $output"
+
+if [[ $(uname -s) == Linux ]]; then
+	# The app template from the release's templates, its UI package from the release's haxeon registry, built through its
+	# Linux runner against the release's SDK with this machine's C toolchain, and run headless for a few frames.
+	echo "== haxeon create (app), build, run, and the same in release mode"
+	app=$work/projects/hello-app
+	(cd "$work/projects" && "$haxeon" create hello-app >/dev/null) || fail "haxeon create"
+	grep -q '^ui = "^' "$app/haxeon.toml" || fail "the app's manifest does not use the UI package from the haxeon registry"
+	headless=()
+	if command -v xvfb-run >/dev/null; then
+		headless=(xvfb-run -a)
+	fi
+	(cd "$app" && "$haxeon" build) || fail "haxeon build of the app"
+	(cd "$app" && "${headless[@]}" "$haxeon" run -- --frames=3 "--capture=$work/capture") || fail "haxeon run of the app"
+	[[ -f $work/capture/frame.png ]] || fail "the app wrote no frame.png"
+	(cd "$app" && "$haxeon" install >/dev/null) || fail "haxeon install of the app"
+	grep -q '"checksum"' "$app/haxeon.lock" || fail "the release wrote no checksums into the app's haxeon.lock"
+	(cd "$app" && "$haxeon" build --build-mode=release) || fail "haxeon build --build-mode=release of the app"
+	[[ ! -e $app/build/linux/app/hello-app.hl ]] || fail "the release build left a module beside the app"
+	"${headless[@]}" "$app/build/linux/app/hello-app" --frames=3 "--capture=$work/capture-release" ||
+		fail "the app compiled ahead of time"
+	[[ -f $work/capture-release/frame.png ]] || fail "the app compiled ahead of time wrote no frame.png"
+fi
 
 if [[ $expect_aot == 1 ]]; then
 	echo "== the same cold build on the VM (without bin/haxeon-aot)"

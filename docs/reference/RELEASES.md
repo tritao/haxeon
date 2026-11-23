@@ -12,7 +12,7 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 
 | Path | What it is |
 | --- | --- |
-| `haxeon-sdk.toml` | The SDK's manifest: `version`, `commit`, `platform` and `compiler-sources` (the digest of the compiler's sources and standard library the release was made from), and `[roots]` naming `stdlib` and `templates`. It has no `source`, which a checkout's names: that makes the directory a release. |
+| `haxeon-sdk.toml` | The SDK's manifest: `version`, `commit`, `platform` and `compiler-sources` (the digest of the compiler's sources and standard library the release was made from), and `[roots]` naming `stdlib`, `templates` and `registry`. It has no `source`, which a checkout's names: that makes the directory a release. |
 | `bin/hl`, `bin/haxeon` | The VM, and the VM with the CLI as its entry point (`native/haxeon_main.c`). |
 | `bin/haxeon-cli.hl` | The CLI's bytecode, which `bin/haxeon` runs when there is no executable built ahead of time. |
 | `bin/haxeon-aot`, `bin/haxeon-aot.sources` | The CLI and the compiler built ahead of time, one executable for the CLI (which `bin/haxeon` runs), a compile, the compile server and the language server, with its stamp (docs/design/AOT_BACKEND.md), and with MSVC its `haxeon-aot.pdb`, which its stack traces read. Present where the release job builds it. |
@@ -20,6 +20,7 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
 | `stdlib/` | The standard library. |
 | `templates/` | The project templates of `haxeon create` ([templates/README.md](../../templates/README.md)). |
+| `registry/` | The `haxeon` registry ([MANIFEST.md](MANIFEST.md)): `index.json` and each first-party package at `NAME/VERSION/` (`ui`, `platform`, `nativekit`, ...), published from the checkout's with its path dependencies on the others as version ranges, its submodules' files in it and its `publish.exclude` left out. |
 | `lib/<target>/`, `include/`, `src/`, `cmake/` | The VM libraries, runtime headers, entry points and the CMake package an app's runner, or any build of a program compiled ahead of time (`haxeon_add_c_executable`), finds with `find_package(Haxeon)`. |
 | `LICENSE`, `NOTICE`, `README.md` | |
 
@@ -68,7 +69,9 @@ nothing in the checkout's VM directory. A stale `haxeon-aot` is an error, since 
 The version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
 
 `scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
-starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script. It checks that no
+starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script; on Linux it also
+creates the app template, whose UI package comes from the release's registry, and builds it through its runner in development and
+release mode, running each for three frames with a capture (a C toolchain and GTK's development files are needed). It checks that no
 compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler. With
 `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
 

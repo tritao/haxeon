@@ -33,6 +33,7 @@ import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
 import build.native.NativeToolchain;
+import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import haxeon.io.FileTree;
@@ -48,6 +49,8 @@ import project.PackageSourceCodec;
 import project.PackageSourceTools;
 import project.PathSourceAcquirer;
 import project.ProjectDiscovery;
+import project.ProjectSourceAcquirer;
+import project.RegistryIndex;
 import project.RegistryPublisher;
 import project.RegistrySourceAcquirer;
 import project.SourceAcquirer;
@@ -111,6 +114,9 @@ class BuildSystemMain {
 		testRegistryAdapter();
 		testDefaultRegistryShorthand();
 		testRegistryPublisher();
+		testLiveRegistry();
+		testRegistryRepick();
+		testRegistryPatch();
 		testResolverDelegatesAcquisition();
 		testAlternateRootManifest();
 		testLockfileRoundTrip();
@@ -1689,14 +1695,118 @@ class BuildSystemMain {
 		writePackage(packageRoot,
 			'{"package":{"name":"published"},"sourceRoots":["src"],"compatibility":{"targets":["host"]}}',
 			["src/Published.hx"]);
-		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
-			registryRoot),
-			destination = Path.join([registryRoot, Sha256.encode("local"), "published", "1.0.0"]);
+		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), registryRoot, "published",
+			"1.0.0",
+			[]),
+			destination = Path.join([registryRoot, "published", "1.0.0"]);
 		expect(checksum.length == 64 && FileSystem.exists(Path.join([destination, ".haxeon-checksum"])),
 			"registry publication should create a checksum-marked immutable release");
-		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
-			registryRoot),
+		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), registryRoot, "published",
+			"1.0.0", []),
 			"registry publication should reject replacing an existing version");
+		FileTree.remove(root);
+	}
+
+	/**
+	 * A checkout's haxeon registry: live entries resolve from the package's directory under their registry name, with path
+	 * dependencies between them as registry dependencies, as publishing writes them; a lockfile entry in range is kept as it is.
+	 */
+	static function testLiveRegistry():Void {
+		var root = temporaryDirectory("live-registry"),
+			registry = Path.join([root, "sdk", "registry"]),
+			foo = Path.join([root, "packages", "foo"]),
+			bar = Path.join([root, "packages", "bar"]),
+			app = Path.join([root, "app"]);
+		writePackage(foo,
+			'{"package":{"name":"repo-foo"},"dependencies":{"repo-bar":{"path":"../bar"}},"publish":{"exclude":["tests"]}}',
+			["src/Foo.hx", "tests/FooTest.hx"]);
+		writePackage(bar, '{"package":{"name":"repo-bar"}}', ["src/Bar.hx"]);
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":"^0.3"}}', []);
+		ensureDirectory(registry);
+		File.saveContent(Path.join([registry, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"0.3.0","path":"../../packages/foo"}]},'
+			+ '"bar":{"versions":[{"version":"0.3.0","path":"../../packages/bar"}]}}}\n');
+		var resolver = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]), registry)),
+			manifest = Path.join([app, "haxeon.json"]),
+			project = resolver.resolve(manifest),
+			entry = project.lockfile.get("foo");
+		expect(project.packages.get("foo") != null && project.packages.get("bar") != null
+			&& project.packages.get("foo").root == FileSystem.fullPath(foo),
+			"a live registry package should resolve from its directory under its registry name, with its path dependency");
+		expect(entry != null && entry.resolvedRevision == "0.3.0" && entry.checksum == null
+			&& entry.dependencies.length == 1 && entry.dependencies[0].name == "bar",
+			"a live registry package should lock its version, no checksum, and its dependencies by registry name");
+		var released = new PackageLockfile([
+			for (locked in project.lockfile.entries)
+				locked.id.name == "foo" ? new PackageLockEntry(locked.id, locked.source, "0.3.7", "released-checksum",
+				locked.dependencies) : locked
+		]),
+			kept = resolver.resolve(manifest, released, true).lockfile.get("foo");
+		expect(kept.resolvedRevision == "0.3.7" && kept.checksum == "released-checksum",
+			"a live registry package should keep a lockfile's entry in range as it is");
+		var published = Json.parse(RegistryPublisher.publishedManifest(Path.join([foo, "haxeon.json"]), "foo", "0.3.0",
+			RegistryIndex.load(registry).liveDirectories()));
+		expect(Reflect.field(published, "package").name == "foo"
+			&& Reflect.field(published, "package").version == "0.3.0"
+			&& Reflect.field(published.dependencies, "bar") == "^0.3" && Reflect.field(published, "publish") == null,
+			"publishing should rename the package and turn its path dependency into a registry range");
+		var release = Path.join([root, "release-registry"]),
+			directories = RegistryIndex.load(registry).liveDirectories();
+		RegistryPublisher.publish(Path.join([bar, "haxeon.json"]), release, "bar", "0.3.0", directories);
+		RegistryPublisher.publish(Path.join([foo, "haxeon.json"]), release, "foo", "0.3.0", directories);
+		expect(FileSystem.exists(Path.join([release, "foo", "0.3.0", "src", "Foo.hx"]))
+			&& !FileSystem.exists(Path.join([release, "foo", "0.3.0", "tests"])),
+			"publishing should copy the package less its publish.exclude");
+		var fromRelease = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]),
+			release)).resolve(manifest);
+		expect(fromRelease.lockfile.get("foo").checksum != null
+			&& fromRelease.lockfile.get("bar").resolvedRevision == "0.3.0",
+			"the published packages should resolve from the release's registry, with checksums");
+		FileTree.remove(root);
+	}
+
+	/** A locked registry version an upgrade removed is picked again within the range, unless the resolution is strict. */
+	static function testRegistryRepick():Void {
+		var root = temporaryDirectory("registry-repick"),
+			registry = Path.join([root, "registry"]),
+			app = Path.join([root, "app"]),
+			foo = Path.join([registry, "foo", "1.1.0"]);
+		writePackage(foo, '{"package":{"name":"foo"}}', []);
+		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "new\n");
+		File.saveContent(Path.join([registry, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"1.1.0","checksum":"new"}]}}}\n');
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":"^1.0"}}', []);
+		var manifest = Path.join([app, "haxeon.json"]),
+			resolver = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]), registry)),
+			current = resolver.resolve(manifest).lockfile,
+			old = new PackageLockfile([
+				for (entry in current.entries)
+					entry.id.name == "foo" ? new PackageLockEntry(entry.id, entry.source, "1.0.0", "old",
+					entry.dependencies) : entry
+			]);
+		expect(resolver.resolve(manifest, old, true).lockfile.get("foo").resolvedRevision == "1.1.0",
+			"a locked registry version that is gone should be picked again within the range");
+		expectThrows(() -> resolver.resolve(manifest, old, true, null, null, true),
+			"a strict resolution should refuse a locked registry version that is gone");
+		FileTree.remove(root);
+	}
+
+	/** `[patch.haxeon]` resolves a registry dependency from a directory, without changing the dependency. */
+	static function testRegistryPatch():Void {
+		var root = temporaryDirectory("registry-patch"),
+			app = Path.join([root, "app"]),
+			local = Path.join([root, "local-foo"]);
+		writePackage(local, '{"package":{"name":"foo"}}', ["src/Foo.hx"]);
+		ensureDirectory(Path.join([app, "src"]));
+		File.saveContent(Path.join([app, "haxeon.toml"]),
+			'[package]\nname = "app"\n\n[dependencies]\nfoo = "^1.0"\n\n[patch.haxeon]\nfoo = { path = "../local-foo" }\n');
+		var project = new PackageResolver(new ProjectSourceAcquirer(Path.join([root, "cache"]), null,
+			Path.join([root, "registry"]))).resolve(Path.join([
+				app,
+				"haxeon.toml"
+			]));
+		expect(project.packages.get("foo") != null && project.packages.get("foo").root == FileSystem.fullPath(local),
+			"[patch.haxeon] should resolve the package from its directory");
 		FileTree.remove(root);
 	}
 

@@ -36,7 +36,6 @@ import project.PackageResolver;
 import project.PackageSourceCodec;
 import project.PackageSourceTools;
 import project.ProjectDiscovery;
-import project.ProjectSourceAcquirer;
 import project.RegistryIndex;
 import project.RegistryPublisher;
 import project.ResolvedPackage;
@@ -414,7 +413,8 @@ class HaxeonCli {
 			added = 'Added Git dependency ${name}@${options.rev}';
 		} else {
 			var registry = options.registry == null ? PackageSourceCodec.DEFAULT_REGISTRY : options.registry,
-				range = options.version == null ? "^" + registryIndex(registry).latest(name).version : options.version;
+				range = options.version == null ? "^" + registryIndex(registry,
+					name).latest(name).version : options.version;
 			// A dependency on the default registry is written as its version range alone: `ui = "^0.3.0"`.
 			source = registry == PackageSourceCodec.DEFAULT_REGISTRY ? range : {registry: registry, version: range};
 			added = 'Added ${name} ${range} from the "$registry" registry';
@@ -439,13 +439,9 @@ class HaxeonCli {
 		return 0;
 	}
 
-	/** The index of `registry` in the source cache, where `haxeon publish` and the resolver keep it. */
-	static function registryIndex(registry:String):RegistryIndex {
-		var path = Path.join([SourceCache.registryRoot(), TextDigest.sha256(registry), "index.json"]);
-		if (!FileSystem.exists(path))
-			throw new UsageError('The "$registry" registry is not available: no index at $path');
-		return RegistryIndex.parse(path, File.getContent(path));
-	}
+	/** The index of `registry` that `name` resolves from: the SDK's for the haxeon registry, else the source cache's. */
+	static function registryIndex(registry:String, name:String):RegistryIndex
+		return ProjectDiscovery.sourceAcquirer().registry.index(registry, name);
 
 	/**
 	 * Adds `name = { ... }` to a haxeon.toml's `[dependencies]` section (made at the end when there is none), keeping the rest of
@@ -515,8 +511,9 @@ class HaxeonCli {
 	static function publish(arguments:Array<String>):Int {
 		var options = parsePublishOptions(arguments),
 			manifestPath = projectManifest(options.projectPath),
-			checksum = RegistryPublisher.publish(manifestPath, options.registry, options.version,
-				SourceCache.registryRoot());
+			checksum = RegistryPublisher.publish(manifestPath,
+				Path.join([SourceCache.registryRoot(), TextDigest.sha256(options.registry)]),
+				PackageManifest.parse(manifestPath, File.getContent(manifestPath)).packageName, options.version, []);
 		Sys.println('Published ${options.version} from $manifestPath to ${options.registry} (checksum $checksum)');
 		return 0;
 	}
@@ -2017,8 +2014,8 @@ class HaxeonCli {
 
 	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool,
 			?target:Target):ResolvedProject {
-		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(manifestPath, lockfile,
-			locked, target);
+		return new PackageResolver(ProjectDiscovery.sourceAcquirer()).resolve(manifestPath, lockfile, locked, target,
+			null, locked);
 	}
 
 	/** Identifies the lockfile's current state without reading it. */

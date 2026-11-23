@@ -13,4 +13,7 @@ version = "1.0.0"
 platforms = {{platforms}}
 
 [dependencies]
-haxeon-ui = { path = "{{haxeon}}/packages/ui" }
+ui = "^{{haxeon_version}}"
+
+[compatibility]
+haxeon = "^{{haxeon_version}}"

@@ -6,6 +6,12 @@ import build.HaxeonSdk;
 import build.execution.ProcessRunner;
 import compiler.core.InternalError;
 import haxe.io.Path;
+import project.PackageManifest;
+import project.PackageResolver;
+import project.RegistryIndex;
+import project.RegistryPublisher;
+import project.RegistrySourceAcquirer;
+import project.SourceCache;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -22,6 +28,8 @@ import sys.io.File;
  *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
  *   stdlib/                         the standard library
  *   templates/                      the project templates of `haxeon create` (templates/README.md)
+ *   registry/                       the haxeon registry: index.json and each first-party package at NAME/VERSION/, published
+ *                                   from the checkout's (`publishRegistry`)
  *   lib/<target>/, include/, src/, cmake/
  *                                   the SDK's libraries, headers, entry points and CMake package (`find_package(Haxeon)`)
  *   LICENSE, NOTICE, README.md
@@ -85,6 +93,7 @@ class ReleasePackage {
 		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(home))]), digest + "\n");
 		cmake(home, ["-E", "copy_directory", Path.join([home, "stdlib"]), Path.join([root, "stdlib"])]);
 		cmake(home, ["-E", "copy_directory", Path.join([home, "templates"]), Path.join([root, "templates"])]);
+		publishRegistry(home, Path.join([root, "registry"]));
 		// The rest of the SDK as the native build staged it; the manifest is the release's own, written last.
 		for (part in ["lib", "include", "src", "cmake"])
 			cmake(home, ["-E", "copy_directory", Path.join([HaxeonSdk.root(home), part]), Path.join([root, part])]);
@@ -111,6 +120,31 @@ class ReleasePackage {
 			return status;
 		Sys.println('Archived ${Path.join([output, file])}');
 		return 0;
+	}
+
+	/**
+	 * The release's haxeon registry: each package of the checkout's (out/sdk/registry, which resolves them live) published at its
+	 * version, its path dependencies on the others as version ranges. Each is then resolved from the release's registry alone,
+	 * which checks that what was published is a whole package graph.
+	 */
+	static function publishRegistry(home:String, registry:String):Void {
+		var checkout = HaxeonSdk.registryRoot(home), index = checkout == null ? null : RegistryIndex.load(checkout);
+		if (index == null)
+			throw new InternalError('This checkout has no haxeon registry at $checkout: build it with scripts/build-native.sh');
+		var packages = index.liveDirectories(), names = [for (name in index.packages.keys()) name];
+		names.sort(Reflect.compare);
+		var published:Array<String> = [];
+		for (name in names) {
+			var live = index.live(name), manifest = live == null ? null : PackageManifest.find(live.path);
+			if (manifest == null)
+				throw new InternalError('The checkout\'s haxeon registry has "$name" without a package directory');
+			RegistryPublisher.publish(manifest, registry, name, live.version, packages);
+			published.push(Path.join([registry, name, live.version, Path.withoutDirectory(manifest)]));
+		}
+		var resolver = new PackageResolver(new RegistrySourceAcquirer(SourceCache.registryRoot(), registry));
+		for (manifest in published)
+			resolver.resolve(manifest);
+		Sys.println('Published ${names.length} packages into the release\'s haxeon registry: ${names.join(", ")}');
 	}
 
 	/** The release's platform name: the operating system and the processor, as `linux-x86_64` or `windows-arm64`. */

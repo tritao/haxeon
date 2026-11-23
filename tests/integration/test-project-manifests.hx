@@ -108,17 +108,20 @@ function main() {
 		< 0)
 		Script.fail('FAIL: add did not insert the dependency into [dependencies]:\n$manifest');
 
-	// add NAME takes the latest release that is not yanked from the haxeon registry, written as its version range alone.
+	// add NAME takes the latest release that is not yanked from the haxeon registry, written as its version range alone: the SDK's
+	// registry for the packages it has (a checkout's lists packages/ at Haxeon's version), the source cache's for the others.
 	var cache = Path.join([work, "source-cache"]),
 		registry = Path.join([cache, "registry", haxe.crypto.Sha256.encode("haxeon")]);
 	FileSystem.createDirectory(registry);
 	write(registry, "index.json",
-		'{"version":1,"packages":{"ui":{"versions":[{"version":"0.3.1","checksum":"a"},{"version":"0.4.0","checksum":"b","yanked":true}]}}}\n');
+		'{"version":1,"packages":{"widgets":{"versions":[{"version":"1.3.1","checksum":"a"},{"version":"1.4.0","checksum":"b","yanked":true}]}}}\n');
 	Sys.putEnv("HAXEON_SOURCE_CACHE", cache);
-	log = Path.join([work, "add-registry.log"]);
-	expectStatus(haxeon(["add", "ui"], app, log), 0, log, "add ui");
-	if (File.getContent(Path.join([app, "haxeon.toml"])).indexOf('\nui = "^0.3.1"\n') < 0)
-		Script.fail('FAIL: add ui did not write ui = "^0.3.1":\n${File.getContent(Path.join([app, "haxeon.toml"]))}');
+	for (added in [{key: "ui", value: "^"}, {key: "widgets", value: "^1.3.1\""}]) {
+		log = Path.join([work, 'add-${added.key}.log']);
+		expectStatus(haxeon(["add", added.key], app, log), 0, log, 'add ${added.key}');
+		if (File.getContent(Path.join([app, "haxeon.toml"])).indexOf('\n${added.key} = "${added.value}') < 0)
+			Script.fail('FAIL: add ${added.key} did not write ${added.key} = "${added.value}...:\n${File.getContent(Path.join([app, "haxeon.toml"]))}');
+	}
 	log = Path.join([work, "add-missing.log"]);
 	expectStatus(haxeon(["add", "missing"], app, log), 2, log, "add of a package the registry lacks");
 	expectText(log, 'The registry has no package "missing"', "the error for a package the registry lacks");

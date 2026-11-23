@@ -304,7 +304,26 @@ source = \"${CMAKE_SOURCE_DIR}\"
 [roots]
 stdlib = \"${CMAKE_SOURCE_DIR}/stdlib\"
 templates = \"${CMAKE_SOURCE_DIR}/templates\"
+registry = \"${HAXEON_SDK_DIR}/registry\"
 ")
+# The SDK's haxeon registry (docs/design/SDK_LAYOUT.md). A checkout's is this index: each package in packages/ at Haxeon's version,
+# resolved live from its directory (`path`), so an edit to a package shows on the next build; a release publishes the same
+# packages into its own (`haxeon dev package`). A package whose manifest says `"publish": false` is in neither.
+file(GLOB _registry_manifests CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/packages/*/haxeon.json")
+set(_registry_index "{\"version\": 1, \"packages\": {}}")
+foreach(_registry_manifest IN LISTS _registry_manifests)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_registry_manifest}")
+  file(READ "${_registry_manifest}" _registry_text)
+  string(JSON _registry_publish ERROR_VARIABLE _registry_no_publish GET "${_registry_text}" publish)
+  if(_registry_publish STREQUAL "OFF")
+    continue()
+  endif()
+  get_filename_component(_registry_root "${_registry_manifest}" DIRECTORY)
+  get_filename_component(_registry_name "${_registry_root}" NAME)
+  string(JSON _registry_index SET "${_registry_index}" packages "${_registry_name}"
+    "{\"versions\": [{\"version\": \"${HAXEON_VERSION}\", \"path\": \"${_registry_root}\"}]}")
+endforeach()
+file(CONFIGURE OUTPUT "${HAXEON_SDK_DIR}/registry/index.json" CONTENT "${_registry_index}\n")
 set(_sdk_lib "${HAXEON_SDK_DIR}/lib/${_sdk_target}")
 add_custom_target(haxeon-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}" "${HAXEON_SDK_DIR}/include" "${HAXEON_SDK_DIR}/src"

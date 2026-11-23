@@ -2,7 +2,8 @@
 
 Status: step 1 is built for Linux: `haxeon create` writes `linux/`, `haxeon build` generates the fragment and builds the runner
 with every native package in one graph, and `haxeon run` (with `--watch` and `--live`) runs the app's executable. The SDK the
-runner links is Haxeon's SDK ([SDK_LAYOUT.md](SDK_LAYOUT.md)), found with `find_package(Haxeon)`. Steps 2 to 6 are open. How an app is built for each platform: by platform projects the
+runner links is Haxeon's SDK ([SDK_LAYOUT.md](SDK_LAYOUT.md)), found with `find_package(Haxeon)`, and the app's packages come
+from the SDK's `haxeon` registry, so a created app builds from a release as from a checkout. Steps 2 to 6 are open. How an app is built for each platform: by platform projects the
 app owns, which `haxeon` generates once and then drives, as Flutter does, instead of builds Haxeon runs out of sight. How apps consume Haxeon (the SDK, `find_package(Haxeon)`, the `haxeon` registry) is
 [SDK_LAYOUT.md](SDK_LAYOUT.md).
 

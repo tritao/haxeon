@@ -27,16 +27,6 @@ class ProjectCreator {
 			templateDirectory = Path.join([home, "templates", options.template]);
 		if (!FileSystem.exists(templateDirectory))
 			throw new UsageError('This Haxeon has no "${options.template}" template ($templateDirectory)');
-		// The app template uses the UI package by its path in this Haxeon until the packages come from the haxeon registry.
-		if (options.template == "app" && !FileSystem.exists(Path.join([
-			home,
-			"packages",
-			"ui",
-			PackageManifest.JSON_NAME
-		]))
-			&& !FileSystem.exists(Path.join([home, "packages", "ui", PackageManifest.TOML_NAME])))
-			throw new UsageError('This Haxeon has no UI package ($home/packages/ui), which the app template uses; a release ships it with '
-				+ 'the haxeon registry. Use a checkout of Haxeon, or --template program');
 		var target = FileSystem.absolutePath(options.directory),
 			packageName = Path.withoutDirectory(Path.removeTrailingSlashes(Path.normalize(target)));
 		if (!isPackageName(packageName))
@@ -53,7 +43,6 @@ class ProjectCreator {
 				"name" => displayName(packageName),
 				"id" => options.org + "." + identifierPart(packageName),
 				"platforms" => "[" + [for (platform in platforms) '"$platform"'].join(", ") + "]",
-				"haxeon" => Path.normalize(FileSystem.absolutePath(home)),
 				// The major and minor version the runner finds the SDK at (find_package(Haxeon 0.3)).
 				"haxeon_version" => project.PackageCompatibility.CURRENT_HAXEON.split(".").slice(0, 2).join(".")
 			];

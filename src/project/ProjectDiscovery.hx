@@ -1,5 +1,6 @@
 package project;
 
+import build.HaxeonSdk;
 import build.Target;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -21,9 +22,15 @@ class ProjectDiscovery {
 			?program:PackageManifest):ResolvedProject {
 		var lockPath = lockfilePath(manifestPath),
 			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
-		return new PackageResolver(new ProjectSourceAcquirer(SourceCache.root(), null, null,
-			offline)).resolve(manifestPath,
-			lockfile, lockfile != null, target, program);
+		return new PackageResolver(sourceAcquirer(offline)).resolve(manifestPath, lockfile, lockfile != null, target,
+			program);
+	}
+
+	/** What every `haxeon` command acquires packages with: the source cache, and the SDK's registry as the `haxeon` registry. */
+	public static function sourceAcquirer(offline:Bool = false):ProjectSourceAcquirer {
+		var home = Sys.getEnv("HAXEON_HOME");
+		return new ProjectSourceAcquirer(SourceCache.root(), null, null, offline,
+			home == null || home == "" ? null : HaxeonSdk.registryRoot(home));
 	}
 
 	public static function lockfilePath(manifestPath:String):String

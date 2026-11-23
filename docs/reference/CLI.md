@@ -75,7 +75,8 @@ bug in Haxeon. The compiler run directly takes each valued option as `--name=val
 
 `haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`
 ([templates/README.md](../../templates/README.md)): `--template app` (the default) is a window with a counter and an
-`[app]` section ([MANIFEST.md](MANIFEST.md)), `--template program` a console program. `--platforms` lists an app's
+`[app]` section ([MANIFEST.md](MANIFEST.md)) that uses the UI package from the `haxeon` registry (`ui = "^0.3"`, with
+`compatibility.haxeon`), in a checkout and in a release alike; `--template program` a console program. `--platforms` lists an app's
 platforms (by default this machine's) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
 template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
 before; `create . --template program` replaces it.
@@ -501,7 +502,12 @@ native provider metadata. For local development, `publish` writes an immutable
 release and index below `~/.haxeon/cache/sources/registry`; projects then use
 `core = { registry = "local", version = "^1.0" }` and resolve through the normal
 package graph. A dependency on the `haxeon` registry is written as its range alone,
-`core = "^1.0"`.
+`core = "^1.0"`; that registry is the SDK's first (a release's unpacked packages, a checkout's
+`packages/` resolved live; [MANIFEST.md](MANIFEST.md)), then the cache's. `publish` turns path
+dependencies on packages of the registry into version ranges and refuses others, and copies the
+files Git tracks (submodules included) or, outside a repository, every file, less the manifest's
+`publish.exclude`. `install --locked` is strict: a locked registry version that is gone is an
+error, where a build or `install` picks again within the range.
 
 Repositories can declare workspace members. A workspace member with the same
 package name overrides an external dependency source while retaining the same

@@ -5,3 +5,6 @@ nullSafety = "strict"
 
 [package]
 name = "{{package}}"
+
+[compatibility]
+haxeon = "^{{haxeon_version}}"

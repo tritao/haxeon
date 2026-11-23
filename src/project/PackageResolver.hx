@@ -18,10 +18,12 @@ class PackageResolver {
 
 	/**
 	 * The project of the manifest at `manifestPath`, or of `program`, a root manifest made in memory (`PackageManifest.program`):
-	 * then `manifestPath` only places it, in the directory that must exist, and no file is read for it.
+	 * then `manifestPath` only places it, in the directory that must exist, and no file is read for it. `locked` follows
+	 * `lockfile`, whose graph the result must match; a registry entry whose version is gone (an upgraded SDK no longer has it)
+	 * or out of the manifest's range is picked again within the range, unless `strict` (`--locked`).
 	 */
 	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false, ?target:Target,
-			?program:PackageManifest):ResolvedProject {
+			?program:PackageManifest, strict:Bool = false):ResolvedProject {
 		if (locked && lockfile == null)
 			throw new InternalError("haxeon.lock is required for --locked resolution");
 		var absoluteManifest = program != null ? Path.join([
@@ -37,6 +39,7 @@ class PackageResolver {
 			nameToRoot = new Map<String, String>(),
 			ordered:Array<ResolvedPackage> = [],
 			lockEntries:Array<PackageLockEntry> = [],
+			repicked:Map<String, Bool> = [],
 			workspaceMembers:Map<String, {
 				root:String,
 				path:String
@@ -60,7 +63,9 @@ class PackageResolver {
 		}
 
 		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource, ?manifestOverride:String,
-				?manifestValue:PackageManifest):ResolvedPackage {
+				?manifestValue:PackageManifest, ?prior:PackageLockEntry):ResolvedPackage {
+			if (manifestValue == null)
+				manifestValue = acquired.manifest;
 			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
 				manifestFile = manifestOverride == null ? PackageManifest.pathIn(resolvedRoot) : manifestOverride,
 				resolvedManifest = manifestValue != null ? manifestFile : canonicalExistingFile(manifestFile,
@@ -135,6 +140,7 @@ class PackageResolver {
 				if (dependency == null)
 					throw new InternalError('Package "${manifest.packageName}" dependency "$dependencyName" is missing source metadata');
 				var lockEntry = locked ? lockfile.get(dependency.id.name) : null,
+					prior = lockfile != null ? lockfile.get(dependency.id.name) : null,
 					workspaceMember = workspaceMembers.get(dependency.id.name);
 				if (locked && lockEntry == null)
 					throw new InternalError('haxeon.lock has no entry for dependency "${dependency.id.name}"');
@@ -148,13 +154,47 @@ class PackageResolver {
 						throw new InternalError('haxeon.lock workspace source for "${dependency.id.name}" does not match the workspace');
 					acquiredDependency = new AcquiredSource(workspaceMember.root, resolvedSource);
 				} else {
-					if (locked && lockEntry != null && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
+					// The root project's [patch.REGISTRY] resolves a registry package from a directory instead, relative to the project.
+					var patch = switch dependency.source {
+						case PackageSource.Registry(registry, name, _):
+							var patches = rootManifest.patches.get(registry);
+							patches == null ? null : patches.get(name);
+						case _: null;
+					},
+						declared = patch != null ? PackageSource.Path(patch) : dependency.source,
+						owner = patch != null ? projectRoot : resolvedRoot;
+					if (locked && lockEntry != null && !PackageSourceCodec.equal(lockEntry.source, declared))
 						throw new InternalError('haxeon.lock source for "${dependency.id.name}" disagrees with the manifest');
-					resolvedSource = lockEntry == null ? dependency.source : lockEntry.resolvedSource();
-					requestedSource = dependency.source;
-					acquiredDependency = sourceAcquirer.acquire(resolvedSource, resolvedRoot, dependency.id);
+					var range = switch declared {
+						case PackageSource.Registry(_, _, range): range;
+						case _: null;
+					},
+						lockedVersion = range == null || lockEntry == null ? null : switch lockEntry.resolvedSource() {
+						case PackageSource.Registry(_, _, version): version;
+						case _: null;
+					};
+					// A live package keeps only a lockfile entry in range.
+					if (range != null && prior != null && prior.resolvedRevision != null
+						&& !PackageCompatibility.satisfiesVersionRange(range, prior.resolvedRevision))
+						prior = null;
+					// A registry entry whose version left the range is picked again, as one an upgrade removed is below.
+					if (lockedVersion != null && !PackageCompatibility.satisfiesVersionRange(range, lockedVersion)) {
+						if (strict)
+							throw new InternalError('haxeon.lock has "${dependency.id.name}" at a version outside "$range"');
+						lockEntry = null;
+						repicked.set(dependency.id.name, true);
+					}
+					resolvedSource = lockEntry == null ? declared : lockEntry.resolvedSource();
+					requestedSource = declared;
+					acquiredDependency = try sourceAcquirer.acquire(resolvedSource, owner,
+						dependency.id) catch (missing:project.RegistryIndex.MissingRelease) {
+							if (strict || lockEntry == null)
+								throw missing;
+							repicked.set(dependency.id.name, true);
+							sourceAcquirer.acquire(declared, owner, dependency.id);
+						}
 				}
-				var resolved = resolvePackage(acquiredDependency, requestedSource);
+				var resolved = resolvePackage(acquiredDependency, requestedSource, null, null, prior);
 				if (resolved.name != dependencyName)
 					throw new InternalError('Package "${manifest.packageName}" declares dependency "$dependencyName" but its manifest in ${resolved.root} names package "${resolved.name}"');
 				resolvedDependencies.push(resolved.name);
@@ -166,8 +206,10 @@ class PackageResolver {
 				ffiImports, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
-			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision,
-				acquired.checksum,
+			// A live registry package keeps the lockfile's entry as it is: its version (in range) and the checksum a release wrote.
+			var kept = acquired.live && prior != null && PackageSourceCodec.equal(prior.source, requestedSource);
+			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource,
+				kept ? prior.resolvedRevision : acquired.resolvedRevision, kept ? prior.checksum : acquired.checksum,
 				[for (dependencyName in resolvedDependencies) new PackageId(dependencyName)]));
 			return resolvedPackage;
 		}
@@ -184,7 +226,7 @@ class PackageResolver {
 		}
 		var resolvedLockfile = new PackageLockfile(lockEntries);
 		if (locked)
-			lockfile.validateGraph(resolvedLockfile);
+			lockfile.validateGraph(resolvedLockfile, repicked);
 		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage,
 			new ResolvedPackageGraph(ordered), resolvedLockfile);
 	}
