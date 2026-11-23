@@ -305,6 +305,40 @@ class IrObjectTools {
 		copy.methods = methods;
 		return copy;
 	}
+
+	/**
+	 * Whether two objects declare the same name, kind, base, interfaces, fields (names and types) and methods (names and the
+	 * functions they name): what the whole-program walks read of an object (`IrWalkTables`, `IrEnumEscapeReach`).
+	 */
+	public static function sameShape(left:IrObject, right:IrObject):Bool {
+		if (left == right)
+			return true;
+		if (left.name != right.name || left.isValue != right.isValue || left.base != right.base
+			|| !sameNames(left.interfaces, right.interfaces) || left.fields.length != right.fields.length
+			|| left.methods.length != right.methods.length)
+			return false;
+		for (index in 0...left.fields.length) {
+			var a = left.fields[index], b = right.fields[index];
+			if (a.name != b.name || !compiler.ir.model.IrTypeIdentity.same(a.type, b.type))
+				return false;
+		}
+		for (index in 0...left.methods.length) {
+			var a = left.methods[index], b = right.methods[index];
+			if (a.name != b.name || a.functionName.name != b.functionName.name)
+				return false;
+		}
+		return true;
+	}
+
+	/** Whether two lists of names are equal. */
+	public static function sameNames(left:Array<String>, right:Array<String>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
+	}
 }
 
 /** Callable contract required by an IR interface. */

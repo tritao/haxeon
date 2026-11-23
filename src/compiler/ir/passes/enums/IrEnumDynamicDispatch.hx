@@ -2,6 +2,7 @@ package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
+import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
 import compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
@@ -36,6 +37,11 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	/** Read-only: no type values in a function. */
 	@:processWide("a shared empty map, only ever read")
 	static final noTypeValues:Map<Int, IrType> = [];
+
+	/** The escape reach of the reflection decision, which a session keeps (`IrEnumEscapeReach.collectKept`). */
+	@:processWide("a kept reach's key, only ever read")
+	public static final OBSERVED =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("enum-dispatch-reach");
 
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
@@ -200,7 +206,8 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 				for (argument in native.arguments) IrEnumEscapeReach.addNativeRoot(roots, argument);
 				IrEnumEscapeReach.addNativeRoot(roots, native.result);
 			}
-			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name)).collect(roots, _ -> false);
+			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name)).collectKept(OBSERVED, roots,
+				_ -> false, lineage);
 			for (fn in functions) switch fn.kind {
 				case EnumEquality(_) if (fn.arguments.length == 2):
 					switch fn.arguments[0].type {

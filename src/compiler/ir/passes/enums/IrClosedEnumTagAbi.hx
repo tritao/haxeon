@@ -2,6 +2,7 @@ package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
+import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -32,6 +33,10 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	/** What each function lets escape, for the closed enum tag ABI's choice (`IrTagEscapeRecord`). */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final ESCAPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrTagEscapeRecord>("tag-escapes");
+
+	/** The escape reach of the closed tags' choice, which a session keeps (`IrEnumEscapeReach.collectKept`). */
+	@:processWide("a kept reach's key, only ever read")
+	public static final REACH = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("closed-tag-reach");
 
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;
@@ -269,7 +274,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
 					escape(Obj(object.name));
 		}
-		for (name in reach.collect(roots, _ -> false).keys())
+		for (name in reach.collectKept(REACH, roots, _ -> false, lineage).keys())
 			closed.remove(name);
 	}
 

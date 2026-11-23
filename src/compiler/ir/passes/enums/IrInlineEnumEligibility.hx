@@ -1,6 +1,7 @@
 package compiler.ir.passes.enums;
 
 import compiler.ir.analysis.IrEnumEscapeReach;
+import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -22,6 +23,16 @@ private typedef EnumUseNode = {
 @:nullSafety(Strict)
 class IrInlineEnumEligibility {
 	/** What each function lets escape or keeps in value form (`IrInlineEnumUses`). */
+	/** The escape reach of the reflected layouts, which a session keeps (`IrEnumEscapeReach.collectKept`). */
+	@:processWide("a kept reach's key, only ever read")
+	public static final REFLECTED =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("inline-enum-reflected-reach");
+
+	/** The escape reach of the escape reasons, which a session keeps (`IrEnumEscapeReach.collectEach`). */
+	@:processWide("a kept reach's key, only ever read")
+	public static final ESCAPES =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("inline-enum-escape-reach");
+
 	@:processWide("a contribution memo's key, only ever read")
 	public static final USES =
 		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlineEnumUses>("inline-enum-uses");
@@ -36,6 +47,7 @@ class IrInlineEnumEligibility {
 	final declarations:Map<String, IrEnum>;
 	final planner:IrInlineEnumLayout;
 	final reflectionReach:IrEnumEscapeReach;
+	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
 	final enumNodes:Map<String, Int> = [];
 	final objectNodes:Map<String, Int> = [];
 	final interfaceNodes:Map<String, Int> = [];
@@ -53,6 +65,7 @@ class IrInlineEnumEligibility {
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
 			?types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.planner = planner;
+		this.lineage = lineage;
 		var bodyTypes = types == null ? IrTypeIds.ofFunctions(program.functions) : types;
 		// What each function lets escape or keeps in value form, read once per version in a session (`IrInlineEnumUses`); the
 		// reach follows the closures and map stores the records name.
@@ -176,17 +189,16 @@ class IrInlineEnumEligibility {
 		for (index in 0...program.functions.length)
 			replay(program.functions[index], uses[index], bodyTypes, program.entryPoint);
 		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
-		var walk = reflectionReach.walker(supportsCallableEscape), reached:Map<String, Bool> = [];
-		// Each reason in the order has its roots.
-		for (reason in escapeOrder) {
-			var roots = escapeRoots.get(reason);
-			if (roots != null)
-				for (name in walk(roots).keys())
-					if (!reached.exists(name)) {
-						reached.set(name, true);
-						block(name, reason);
-					}
-		}
+		var rooted = [for (reason in escapeOrder) if (escapeRoots.get(reason) != null) reason],
+			reachedEach = reflectionReach.collectEach(ESCAPES, [for (reason in rooted) escapeRoots.get(reason) ?? []],
+				supportsCallableEscape, lineage),
+			reached:Map<String, Bool> = [];
+		for (index in 0...rooted.length)
+			for (name in reachedEach[index].keys())
+				if (!reached.exists(name)) {
+					reached.set(name, true);
+					block(name, rooted[index]);
+				}
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
@@ -438,7 +450,7 @@ class IrInlineEnumEligibility {
 
 	function reflectedUnsupportedEnums(reflected:Map<String, Bool>):Map<String, Bool> {
 		var roots:Array<IrType> = [for (name in reflected.keys()) Obj(name)];
-		return reflectionReach.collect(roots, supportsCallableEscape);
+		return reflectionReach.collectKept(REFLECTED, roots, supportsCallableEscape, lineage);
 	}
 
 	function block(name:String, reason:String):Void {

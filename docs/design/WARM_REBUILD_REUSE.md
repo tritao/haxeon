@@ -22,6 +22,8 @@ makes from the same sources, and its work is proportional to the edit.
   (`IrWalkRecord`): copies of the program's tables, its functions, and the summary of each function a walk reached. A
   build reuses the result while the tables are the same and each changed function declares the same and, when it was
   reached, has a summary with the same edges; any other change walks again.
+  The enum escape reaches keep theirs the same way (`IrReachRecord`), with the closures and map stores they were given
+  and each answer about a supported callable.
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
 - **Lowering (HashLink):** a function is lowered with relocations instead of table indices (`HlLoweredFunction`); a link step
   assigns the indices in the order a cold lowering would, so cold and warm output are equal by construction.

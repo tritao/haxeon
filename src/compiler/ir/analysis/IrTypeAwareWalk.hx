@@ -891,7 +891,7 @@ class IrWalkTables {
 	/** Whether `other` gives a walk what these give it. */
 	public function same(other:IrWalkTables):Bool {
 		if (keepCreatedClassMethods != other.keepCreatedClassMethods || dependencies != other.dependencies
-			|| !sameNames(roots, other.roots) || rootTypes.length != other.rootTypes.length
+			|| !IrObjectTools.sameNames(roots, other.roots) || rootTypes.length != other.rootTypes.length
 			|| objects.length != other.objects.length || interfaces.length != other.interfaces.length
 			|| natives.length != other.natives.length || cNatives.length != other.cNatives.length
 			|| staticFields.length != other.staticFields.length)
@@ -900,11 +900,11 @@ class IrWalkTables {
 			if (!IrTypeIdentity.same(rootTypes[index], other.rootTypes[index]))
 				return false;
 		for (index in 0...objects.length)
-			if (!sameObject(objects[index], other.objects[index]))
+			if (!IrObjectTools.sameShape(objects[index], other.objects[index]))
 				return false;
 		for (index in 0...interfaces.length) {
 			var left = interfaces[index], right = other.interfaces[index];
-			if (left != right && (left.name != right.name || !sameNames(left.bases, right.bases)))
+			if (left != right && (left.name != right.name || !IrObjectTools.sameNames(left.bases, right.bases)))
 				return false;
 		}
 		for (index in 0...natives.length) {
@@ -928,35 +928,6 @@ class IrWalkTables {
 		return true;
 	}
 
-	static function sameObject(left:IrObject, right:IrObject):Bool {
-		if (left == right)
-			return true;
-		if (left.name != right.name || left.isValue != right.isValue || left.base != right.base
-			|| !sameNames(left.interfaces, right.interfaces) || left.fields.length != right.fields.length
-			|| left.methods.length != right.methods.length)
-			return false;
-		for (index in 0...left.fields.length) {
-			var a = left.fields[index], b = right.fields[index];
-			if (a.name != b.name || !IrTypeIdentity.same(a.type, b.type))
-				return false;
-		}
-		for (index in 0...left.methods.length) {
-			var a = left.methods[index], b = right.methods[index];
-			if (a.name != b.name || a.functionName.name != b.functionName.name)
-				return false;
-		}
-		return true;
-	}
-
-	static function sameNames(left:Array<String>, right:Array<String>):Bool {
-		if (left.length != right.length)
-			return false;
-		for (index in 0...left.length)
-			if (left[index] != right[index])
-				return false;
-		return true;
-	}
-
 	static function sameOptionalNames(left:Null<Array<String>>, right:Null<Array<String>>):Bool
-		return left == null || right == null ? left == right : sameNames(left, right);
+		return left == null || right == null ? left == right : IrObjectTools.sameNames(left, right);
 }
