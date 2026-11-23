@@ -37,7 +37,13 @@ import compiler.ir.model.IrFunction.IrFunctionKind;
 class IrVerifier {
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
 	/** No ordinary array operation reads inline value lanes, on the functions' bodies (`types`, the program's when not given). */
-	public static function verifyValueArraysLowered(program:IrProgram, ?types:IrTypeIds):Void {
+	/**
+	 * No ordinary array operation reads or writes an array of inline value lanes. With `lineage`, a function the session checked at
+	 * the same version against the same value classes, inline enums and reference natives is not read again (not under
+	 * `--check-reuse`).
+	 */
+	public static function verifyValueArraysLowered(program:IrProgram, ?types:IrTypeIds,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
@@ -72,7 +78,22 @@ class IrVerifier {
 			}
 			return known == 1;
 		}
+		function sorted(keys:Iterator<String>):String {
+			var names = [for (name in keys) name];
+			names.sort(Reflect.compare);
+			return names.join(",");
+		}
+		var checks = lineage != null && lineage.checks,
+			memo = lineage == null ? null : lineage.memos.checkedValueArrays,
+			key = memo == null ? "" : sorted(valueObjects.keys()) + ";" + sorted(valueEnums.keys()) + ";"
+				+ sorted(ordinaryRefNatives.keys());
 		for (fn in program.functions) {
+			var version = lineage == null ? 0 : lineage.versionOf(fn);
+			if (memo != null && version != 0) {
+				if (!checks && memo.get(version) == key)
+					continue;
+				memo.keep(version, key);
+			}
 			var body = fn.bodyIn(types);
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);

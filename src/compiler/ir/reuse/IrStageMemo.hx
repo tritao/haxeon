@@ -134,6 +134,9 @@ class IrStageMemos {
 	/** The types naming an array or an iterator each function has (`IrValueArrayProgramRewrite`). */
 	public final arrayTypes = new IrContributionMemo<Array<Int>>();
 
+	/** By version, the tables each function was checked against for ordinary operations on lane arrays (`IrVerifier`). */
+	public final checkedValueArrays = new IrContributionMemo<String>();
+
 	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
 	public final enumMentions = new IrContributionMemo<Array<String>>();
 
@@ -178,6 +181,7 @@ class IrStageMemos {
 		closureNames.begin(build);
 		closureUses.begin(build);
 		arrayTypes.begin(build);
+		checkedValueArrays.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */

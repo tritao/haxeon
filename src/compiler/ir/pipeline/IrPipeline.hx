@@ -583,8 +583,7 @@ class IrPipeline {
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
-			bodyTypes(context), context.passScratch, context.options.keepSession ? context.inlineCache : null,
-			context.lineage);
+			bodyTypes(context), context.passScratch, context.lineage);
 		return program;
 	}
 

@@ -9,10 +9,10 @@ import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
+import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.passes.enums.IrEnumTagLowering;
 import compiler.ir.passes.enums.IrEnumTagStorage;
-import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.passes.nullability.IrOptionalScalarFlow;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.pipeline.IrProgramAssembler;
@@ -166,11 +166,11 @@ class IrValueArrayProgramRewrite {
 	/**
 	 * Discover every concrete value array in the assembled program before generating any helpers. The functions' bodies are made
 	 * with `types` (those of the program's bodies when not given, `IrTypeIds.ofFunctions`); a function that changes becomes its
-	 * edited body, owned by the next stage. A session's
-	 * `cache` keeps the allocation lowering of the functions given as the same objects as last compile (`IrArrayFactory.lower`).
+	 * edited body, owned by the next stage. With `lineage`, each element's rewrite and the allocation lowering reuse what they made
+	 * of each function the session has at the same version.
 	 */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget, ?types:IrTypeIds,
-			?scratch:IrPassScratch, ?cache:IrInlineCache, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
+			?scratch:IrPassScratch, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
@@ -247,9 +247,9 @@ class IrValueArrayProgramRewrite {
 		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)], types, builder),
 			slotNamespace = nextSlotNamespace(program);
 		for (key in keys)
-			rewriteIndexed(program, elements.get(key), pointerBits, target, index, slotNamespace++, scratch);
-		IrArrayFactory.lower(program, types, scratch, cache);
-		IrVerifier.verifyValueArraysLowered(program, types);
+			rewriteIndexed(program, elements.get(key), pointerBits, target, index, slotNamespace++, scratch, lineage);
+		IrArrayFactory.lower(program, types, scratch, lineage);
+		IrVerifier.verifyValueArraysLowered(program, types, lineage);
 		encodeAll(program, index);
 	}
 
@@ -328,7 +328,8 @@ class IrValueArrayProgramRewrite {
 	}
 
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
-			index:ValueArrayFunctionIndex, slotNamespace:Int, scratch:IrPassScratch):Void {
+			index:ValueArrayFunctionIndex, slotNamespace:Int, scratch:IrPassScratch,
+			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		switch element {
 			case EnumTag(name):
 				IrEnumTagStorage.request(program, name);
@@ -359,9 +360,10 @@ class IrValueArrayProgramRewrite {
 				new IrValueArrayOptionalComponents(objects, element, factory.helpers);
 			default: null;
 		};
-		for (functionIndex in 0...program.functions.length) {
-			var fn = program.functions[functionIndex],
-				selected = index.has(fn, element),
+		// Each function is rewritten for the element on its own (`ValueArrayElementPass`): one the element's rewrite does not touch
+		// is reused unread while its version is the same.
+		function rewriteOne(fn:IrFunction):IrFunction {
+			var selected = index.has(fn, element),
 				current = fn;
 			if (selected || index.needsDynamic(fn)) {
 				// A copy: the function stays as it was for the place methods that clone it.
@@ -391,13 +393,17 @@ class IrValueArrayProgramRewrite {
 			index.finish(current);
 			if (current != fn)
 				made.set(current.name, true);
-			if (rewritten != null)
-				rewritten.push(current);
-			else if (current != fn) {
-				rewritten = program.functions.slice(0, functionIndex);
-				rewritten.push(current);
-			}
+			return current;
 		}
+		var stage = "value-array-rewrite:" + IrTypeIdentity.text(element),
+			pass = new ValueArrayElementPass(fn -> index.has(fn, element) || index.needsDynamic(fn), rewriteOne),
+			output = compiler.ir.pipeline.IrFunctionStages.run(stage, pass, program.functions, lineage,
+				lineage != null && lineage.checks, builder);
+		for (position in 0...output.length)
+			if (output[position] != program.functions[position]) {
+				rewritten = output;
+				break;
+			}
 		var generatedMethods = methods.generate(originals),
 			generatedFactories = factory.functions(),
 			generatedElements = elements.functions(),
@@ -635,4 +641,43 @@ class IrValueArrayProgramRewrite {
 		}
 		return changed;
 	}
+}
+
+/**
+ * One element's rewrite of the value arrays per function (`IrFunctionPass`): a function the rewrite selects (`gate`: it names an
+ * array of the element, or has a dynamic view left) is rewritten each run (never stated), as what it becomes depends on the
+ * element's layout and the helpers the rewrite makes for it; any other is left as it is, and reused unread at the same version.
+ */
+private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPass {
+	static inline final REWRITE = 0;
+
+	final gate:IrFunction->Bool;
+	final rewrite:IrFunction->IrFunction;
+
+	public function new(gate:IrFunction->Bool, rewrite:IrFunction->IrFunction) {
+		this.gate = gate;
+		this.rewrite = rewrite;
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
+
+	public function fact(kind:Int, key:String):Int
+		return compiler.ir.reuse.IrFacts.UNKNOWN;
+
+	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+		if (!gate(fn))
+			return fn;
+		reader.read(REWRITE, "");
+		return rewrite(fn);
+	}
+
+	public function request(kind:Int, type:IrType):Void
+		throw new compiler.core.InternalError("A value array element's rewrite asks for no helper");
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions;
 }

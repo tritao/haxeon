@@ -58,6 +58,9 @@ class IrFunctionStages {
 			}]);
 		}
 		var memos = lineage.memos, memo = memos.stage(name), facts = memos.facts;
+		// A stage may be given functions that something between it and the last settling made: the lineage takes them first, so
+		// a name's version is its function's.
+		lineage.settle(name + ":input", functions);
 		facts.begin();
 		var count = functions.length,
 			entries:Array<Null<IrStageEntry>> = [],
