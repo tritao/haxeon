@@ -224,8 +224,11 @@ class IrPipeline {
 			functions:Array<IrFunction>):compiler.ir.analysis.IrTypeAwareWalk.IrClassDependencies {
 		var objectTable:Map<String, IrObject> = [for (object in assembly.objects) object.name => object],
 			present:Map<String, Bool> = [for (fn in functions) fn.name => true],
-			facts = assembly.generator.facts;
+			facts = assembly.generator.facts,
+			observable = [for (name in facts.observableFieldBits.keys()) name];
+		observable.sort(Reflect.compare);
 		return {
+			inputs: "observable-bits " + observable.join(" "),
 			symbols: IrObjectReflection.helperSymbols(),
 			of: (className, symbol) -> IrObjectReflection.dependencies(objectTable, facts.observableFieldBits,
 				className,
@@ -244,7 +247,7 @@ class IrPipeline {
 	static function dispatchWalk(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
 		var walk = IrEntryPrune.walk(pruneInputOf(assembly, context, functions), context.pruneRoots,
-			pruneDependencies(assembly, functions), context.lineage);
+			IrEntryPrune.DISPATCH_WALK, pruneDependencies(assembly, functions), context.lineage);
 		assembly.dispatchWalk = walk;
 		assembly.reachedNatives = walk.calledNatives;
 		if (context.pruneFromEntry)

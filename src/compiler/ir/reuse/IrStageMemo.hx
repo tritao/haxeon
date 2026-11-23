@@ -120,6 +120,20 @@ class IrStageMemos {
 		return cast memo;
 	}
 
+	/** The whole-program results the stages keep (`lastResult`), by key. */
+	final results:Map<String, Dynamic> = [];
+
+	/**
+	 * The whole-program result the session keeps under `key` from the last build that kept one, or null. It holds what it was worked
+	 * out from, which its stage compares with what the program gives now before it reuses it: no build is trusted to have left it.
+	 */
+	public function lastResult<T>(key:IrContributionKey<T>):Null<T>
+		return results.get(key.name);
+
+	/** Keeps `value` as the result under `key` (`lastResult`). */
+	public function keepResult<T>(key:IrContributionKey<T>, value:T):Void
+		results.set(key.name, value);
+
 	/** The build the stages run for, counted by `startBuild`. */
 	public var build(default, null) = 0;
 

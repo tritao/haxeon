@@ -6,8 +6,11 @@ import compiler.ir.model.IrOpcode;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrTypeAwareWalk.IrClassDependencies;
+import compiler.ir.analysis.IrTypeAwareWalk.IrWalkRecord;
 import compiler.ir.analysis.IrTypeAwareWalk.IrWalkResult;
+import compiler.ir.analysis.IrTypeAwareWalk.IrWalkRoots;
 import compiler.ir.model.Ir;
+import compiler.ir.reuse.IrStageMemo.IrContributionKey;
 
 /**
  * The prune of ADR 0003 §13 at the 3a point of `IrProgramAssembler.assemble` (docs/design/REACHABILITY_WALK.md): after the enum providers are
@@ -53,15 +56,28 @@ class IrPruneWatch {
 
 @:nullSafety(Strict)
 class IrEntryPrune {
-	/** The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. */
-	public static function walk(program:IrProgram, roots:Array<String>,
+	/** The walk of the dispatch decisions, which a session keeps (`IrTypeAwareWalk.runKept`). */
+	@:processWide("a kept walk's key, only ever read")
+	public static final DISPATCH_WALK = new IrContributionKey<IrWalkRecord>("dispatch-walk");
+
+	/** The walk the prune removes by, which a session keeps. */
+	@:processWide("a kept walk's key, only ever read")
+	public static final PRUNE_WALK = new IrContributionKey<IrWalkRecord>("entry-prune-walk");
+
+	/**
+	 * The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. In a session the walk is
+	 * kept as `key`; the result is the caller's to change.
+	 */
+	public static function walk(program:IrProgram, roots:Array<String>, key:IrContributionKey<IrWalkRecord>,
 			?classDependencies:IrClassDependencies, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrWalkResult {
 		var entries = roots.copy();
 		for (fn in program.functions)
 			if (fn.retention != Reachable)
 				entries.push(fn.name);
-		return IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true, classDependencies,
-			lineage);
+		var walkRoots:IrWalkRoots = {functions: entries, types: []};
+		if (lineage == null)
+			return IrTypeAwareWalk.run(program, walkRoots, null, false, true, classDependencies);
+		return IrTypeAwareWalk.runKept(key, program, walkRoots, true, classDependencies, lineage);
 	}
 
 	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
@@ -71,7 +87,7 @@ class IrEntryPrune {
 		// The type-aware walk alone: a class that is only mentioned, never created, keeps none of its methods. Its reach beyond what the old walk
 		// keeps are the provider rows a dynamic site reaches over the created types (the equality helper of a struct that only `__dynamic_equal`
 		// uses), which nothing calls by name until a later pass writes the call.
-		var walked = walk(program, roots, classDependencies, lineage);
+		var walked = walk(program, roots, PRUNE_WALK, classDependencies, lineage);
 		var reachable = walked.reached;
 		// A method named by a reachable call on a class that cannot have an instance keeps its class-table entry and loses its body: the
 		// verifier resolves the call against the table, but nothing can receive it, so the body is a stub that throws (the way an interface

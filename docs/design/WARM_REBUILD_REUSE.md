@@ -18,6 +18,10 @@ makes from the same sources, and its work is proportional to the edit.
 - **IR stages on bodies:** each stage moved onto IR bodies keeps what it made of each function, with the facts it read
   (`IrStageMemo`), and reuses it while the function and the facts are unchanged. The session caching model is in
   [IR_CORE_COLUMNS.md](IR_CORE_COLUMNS.md#session-caching-model).
+- **Whole-program walks:** the reachability walks of a plain build keep their result with what they read
+  (`IrWalkRecord`): copies of the program's tables, its functions, and the summary of each function a walk reached. A
+  build reuses the result while the tables are the same and each changed function declares the same and, when it was
+  reached, has a summary with the same edges; any other change walks again.
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
 - **Lowering (HashLink):** a function is lowered with relocations instead of table indices (`HlLoweredFunction`); a link step
   assigns the indices in the order a cold lowering would, so cold and warm output are equal by construction.
