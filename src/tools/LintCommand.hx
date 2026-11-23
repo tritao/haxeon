@@ -45,7 +45,8 @@ class LintCommand {
 
 	/**
 	 * Lints the files `arguments` names. `typedRules` runs a typed rule on the expanded files and returns its status: the
-	 * command line runs them in the `LintMain` tool, a test in its own process.
+	 * command line runs them in a program that links the compiler (its `lint` role, or the `LintMain` tool), a test in its own
+	 * process.
 	 */
 	public static function run(arguments:Array<String>, ?standardLibrary:String,
 			?typedRules:(rule:String, files:Array<String>) -> Int):Int {

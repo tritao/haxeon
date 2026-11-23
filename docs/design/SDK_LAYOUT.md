@@ -3,7 +3,8 @@
 Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup), 2 (runners use `find_package(Haxeon)` and a data-only
 fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK,
 and Haxeon's home is the SDK everywhere) are built, with release builds through the runner; 4 (packages and the `haxeon` registry) is built, and a release's app template
-builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 and 6 are open. Reviewed independently before adoption; the five changes from
+builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 (a release is the install plus an archive) is built; 6 is
+open. Reviewed independently before adoption; the five changes from
 that review are folded in below.
 
 ## Problem
@@ -141,7 +142,17 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
      native packages from a release's registry builds them in the shared native cache under the user's cache, with the
      SDK's `cmake/` scripts (step 3); `scripts/smoke-test-release.sh` builds one with `nativekit` and one with `filesystem`.
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template
-   tests against the archive.
+   tests against the archive. Built as:
+   - the install is a copy of the checkout's `out/sdk` as CMake staged it, without its manifest and live registry, so the
+     layout has one definition and a program the native build adds to `bin` (the profiler's recorder, Windows' import
+     library) ships without a second list;
+   - what only a release has: the programs a checkout builds from the compiler's sources when a command needs them,
+     prebuilt and stamped with the sources' digest, which `AotCompiler.shipped` finds beside the VM: the compiler's bytecode,
+     whose roles include the tools that carry the compiler (`haxeon lsp`, the typed lint rules, `haxeon ffi`), and the live
+     development host in both flavors. So a release does everything a user does, live patching included; `haxeon dev`,
+     `--self-hosted` and `haxeon heap inspect` stay with a checkout, and Android waits for `platforms/android` (step 6);
+   - the release workflow smoke-tests each platform's archive (`scripts/smoke-test-release.sh`), the app template where it
+     has a runner for the platform, and a program and the app patched under `run --watch --live`.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a
    network registry after that.
 

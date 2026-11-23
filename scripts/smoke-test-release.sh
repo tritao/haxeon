@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Smoke test of a release archive (`haxeon dev package`, docs/reference/RELEASES.md), as a user meets it: unpacked into a
 # directory of its own outside any checkout, with a home directory of its own so every cache starts cold, and nothing but the
-# archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, and checks that
-# the compiles ran the compiler the archive is meant to run. On Linux it then creates the app template, which takes its UI package
-# from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain and GTK's
-# development files are needed) and runs each for a few frames, under xvfb-run when there is one, then builds and runs a
-# program that uses the nativekit package from the same registry and one that uses filesystem, a NativeKit module's package
-# built on the same NativeKit. Nothing may be written into the release's directory:
+# archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, checks that
+# the compiles ran the compiler the archive is meant to run, and runs a program under `run --watch --live`, edits it and sees
+# the running program patched. Where the app template has a runner for this platform it then creates the app, which takes its
+# UI package from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain,
+# and on Linux GTK's development files, are needed) and runs each for a few frames, under xvfb-run when there is one, patches
+# the app running under `run --watch --live` (not on Windows), then builds and runs a program that uses the nativekit package
+# from the same registry and one that uses filesystem, a NativeKit module's package built on the same NativeKit. Nothing may be
+# written into the release's directory:
 #
 #   scripts/smoke-test-release.sh ARCHIVE --aot      the CLI and compiler built ahead of time (bin/haxeon-aot)
 #   scripts/smoke-test-release.sh ARCHIVE --no-aot   the compiler's bytecode on the VM (bin/haxeon-compiler.hl)
@@ -22,9 +24,11 @@ fi
 archive=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 expect_aot=$([[ $2 == --aot ]] && echo 1 || echo 0)
 python=$(command -v python3 || command -v python)
+# The platform as the app template names its runners (`AppRunner.hostPlatform`).
 case "$(uname -s)" in
-	MINGW* | MSYS* | CYGWIN*) suffix=.exe windows=1 ;;
-	*) suffix= windows=0 ;;
+	MINGW* | MSYS* | CYGWIN*) suffix=.exe windows=1 platform=windows ;;
+	Darwin) suffix= windows=0 platform=macos ;;
+	*) suffix= windows=0 platform=linux ;;
 esac
 
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-release-smoke.XXXXXX")
@@ -84,6 +88,44 @@ project_round() {
 	(cd "$project" && "$haxeon" check) || fail "haxeon check"
 }
 
+# Waits up to $4 seconds, while the process $1 runs, for file $2 to exist and, unless $3 is empty, for a line of it to match the
+# extended regular expression $3. A failure shows the watch's output, $work/live.log.
+wait_for() {
+	local pid=$1 file=$2 pattern=$3 deadline=$(($(date +%s) + $4))
+	until [[ -e $file ]] && { [[ -z $pattern ]] || grep -Eq -- "$pattern" "$file"; }; do
+		kill -0 "$pid" 2>/dev/null || { cat "$work/live.log" >&2; fail "the watch exited before $file matched '$pattern'"; }
+		(($(date +%s) < deadline)) || { cat "$work/live.log" >&2; fail "$file did not match '$pattern' in $4 s"; }
+		sleep 0.2
+	done
+}
+
+# Stops the process $1 and every process it started, deepest first: a watch's app outlives the CLI that launched it.
+stop_tree() {
+	local child
+	for child in $(pgrep -P "$1" 2>/dev/null || true); do
+		stop_tree "$child"
+	done
+	kill "$1" 2>/dev/null || true
+}
+
+# A program for `run --watch --live`, which runs it in the live host: its entry class's start, tick and close, and the state
+# methods a reload calls. Each tick prints the value $1; the program ends when its directory $2 holds a file `stop`.
+live_source() {
+	printf '%s\n' 'class Main {' \
+		"	static function value():String return \"$1\";" \
+		'	public static function start(arguments:String):Void {}' \
+		'	public static function tick():Int {' \
+		'		Sys.println("live value " + value());' \
+		'		Sys.sleep(0.1);' \
+		'		return sys.FileSystem.exists("stop") ? 0 : 1;' \
+		'	}' \
+		'	public static function close():Int return 0;' \
+		'	public static function saveState():String return "";' \
+		'	public static function restoreState(state:String):Void {}' \
+		'	static function main():Void {}' \
+		'}' >"$2/src/Main.hx"
+}
+
 # Whether this run's compiles went through the expected compiler: nothing was built from sources into the session directory
 # (a release has no Haxe to build with), and on Linux and macOS the resident worker is that compiler.
 check_compiler() {
@@ -131,27 +173,87 @@ printf 'function main() {\n\tSys.println("script ok " + Sys.args().join(" "));\n
 output=$(cd "$work/projects" && "$haxeon" hello-script.hx a b) || fail "script run"
 [[ $output == "script ok a b" ]] || fail "the script printed: $output"
 
-if [[ $(uname -s) == Linux ]]; then
+# The tools that carry the compiler, which a release runs as roles of its compiler's program.
+echo "== haxeon lint (a typed rule), haxeon ffi audit, and haxeon dev's refusal"
+(cd "$work/projects/hello" && "$haxeon" lint --only unbound-local src/Main.hx) || fail "haxeon lint --only unbound-local"
+if command -v clang >/dev/null; then
+	printf 'typedef struct point { int x; int y; } point;\nint point_sum(const point *p);\n' >"$work/projects/point.h"
+	output=$("$haxeon" ffi audit --target=x86_64-linux-gnu --target=arm64-apple-darwin --profile=portable-abi64 \
+		"$work/projects/point.h") ||
+		fail "haxeon ffi audit: $output"
+	[[ $output == PASS:* ]] || fail "haxeon ffi audit printed: $output"
+fi
+if output=$("$haxeon" dev tool-build-mode 2>&1); then
+	fail "haxeon dev ran in a release: $output"
+fi
+[[ $output == *"is a release"* ]] || fail "haxeon dev's refusal does not say why: $output"
+
+# The live host the release ships, the compile server's patches, and the edit seen in the running program.
+echo "== haxeon run --watch --live: an edit patches the running program"
+live=$work/projects/live
+mkdir -p "$live"
+(cd "$live" && "$haxeon" init >/dev/null) || fail "haxeon init of the live program"
+live_source one "$live"
+(cd "$live" && exec "$haxeon" run --watch --live) >"$work/live.log" 2>&1 &
+watch=$!
+wait_for "$watch" "$work/live.log" '^live value one' 300
+live_source two "$live"
+wait_for "$watch" "$work/live.log" '^live value two' 120
+grep -q '"kind":"patch-applied"' "$live/build/host/main.hl.watch-events.jsonl" ||
+	{ cat "$work/live.log" >&2; fail "the edit reached the program, but not as a patch"; }
+touch "$live/stop"
+wait "$watch" || { cat "$work/live.log" >&2; fail "haxeon run --watch --live exited with status $?"; }
+
+headless=()
+if command -v xvfb-run >/dev/null; then
+	headless=(xvfb-run -a)
+fi
+# `haxeon create` makes an app only for a platform the template has a runner for.
+if [[ -d $root/templates/app/$platform ]]; then
 	# The app template from the release's templates, its UI package from the release's haxeon registry, built through its
-	# Linux runner against the release's SDK with this machine's C toolchain, and run headless for a few frames.
+	# runner against the release's SDK with this machine's C toolchain, and run for a few frames.
 	echo "== haxeon create (app), build, run, and the same in release mode"
 	app=$work/projects/hello-app
 	(cd "$work/projects" && "$haxeon" create hello-app >/dev/null) || fail "haxeon create"
 	grep -q '^ui = "^' "$app/haxeon.toml" || fail "the app's manifest does not use the UI package from the haxeon registry"
-	headless=()
-	if command -v xvfb-run >/dev/null; then
-		headless=(xvfb-run -a)
-	fi
 	(cd "$app" && "$haxeon" build) || fail "haxeon build of the app"
 	(cd "$app" && "${headless[@]}" "$haxeon" run -- --frames=3 "--capture=$work/capture") || fail "haxeon run of the app"
 	[[ -f $work/capture/frame.png ]] || fail "the app wrote no frame.png"
 	(cd "$app" && "$haxeon" install >/dev/null) || fail "haxeon install of the app"
 	grep -q '"checksum"' "$app/haxeon.lock" || fail "the release wrote no checksums into the app's haxeon.lock"
 	(cd "$app" && "$haxeon" build --build-mode=release) || fail "haxeon build --build-mode=release of the app"
-	[[ ! -e $app/build/linux/app/hello-app.hl ]] || fail "the release build left a module beside the app"
-	"${headless[@]}" "$app/build/linux/app/hello-app" --frames=3 "--capture=$work/capture-release" ||
-		fail "the app compiled ahead of time"
+	[[ ! -e $app/build/$platform/app/hello-app.hl ]] || fail "the release build left a module beside the app"
+	# Where the runner puts the executable in its directory is the platform's (a bundle on macOS).
+	executable=$(find "$app/build/$platform/app" -name "hello-app$suffix" -type f | head -1)
+	[[ -n $executable ]] || fail "the release build made no hello-app$suffix under $app/build/$platform/app"
+	"${headless[@]}" "$executable" --frames=3 "--capture=$work/capture-release" || fail "the app compiled ahead of time"
 	[[ -f $work/capture-release/frame.png ]] || fail "the app compiled ahead of time wrote no frame.png"
+
+	# The live host in the app's runner. The app runs until its window closes, so the test stops it once a patch applied. An
+	# edit made before the watch took its first snapshot goes unseen, and one the host sees before it loaded the first module is
+	# no patch but the module it loads, so it edits until one applies.
+	if [[ $windows == 0 ]]; then
+		echo "== haxeon run --watch --live of the app: an edit patches the running app"
+		(cd "$app" && exec "${headless[@]}" "$haxeon" run --watch --live) >"$work/live.log" 2>&1 &
+		watch=$!
+		events=$app/build/host/main.hl.watch-events.jsonl
+		wait_for "$watch" "$events" '' 300
+		for edit in 1 2 3 4 5 6; do
+			sed -i.bak -E "s/(You|Edit[0-9]+) clicked/Edit$edit clicked/" "$app/src/Main.hx"
+			rm -f "$app/src/Main.hx.bak"
+			deadline=$(($(date +%s) + 40))
+			until grep -q '"kind":"patch-applied"' "$events" || (($(date +%s) >= deadline)); do
+				kill -0 "$watch" 2>/dev/null || { cat "$work/live.log" >&2; fail "the watch of the app exited"; }
+				sleep 0.2
+			done
+			if grep -q '"kind":"patch-applied"' "$events"; then
+				break
+			fi
+		done
+		grep -q '"kind":"patch-applied"' "$events" || { cat "$work/live.log" >&2; fail "no edit patched the running app"; }
+		stop_tree "$watch"
+		wait "$watch" 2>/dev/null || true
+	fi
 
 	# A program, not an app, with a native package from the release's registry: its CMake build runs in the shared native
 	# cache, which for a release is in the user's cache, with the SDK's CMake scripts and the Ninja on PATH.

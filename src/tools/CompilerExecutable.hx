@@ -11,6 +11,9 @@ import haxe.io.Path;
  *   haxeon-aot cli ARGUMENTS  the CLI (`tools.HaxeonCli`), which the `haxeon` launcher runs (native/haxeon_main.c)
  *   haxeon-aot serve STATE    a compile server (`compiler.tools.CompilerServer`), as `hl worker.hl STATE`
  *   haxeon-aot lsp            the language server on standard input and output (`LspMain`), as `haxeon lsp`
+ *   haxeon-aot lint ...       the lint rules that need the compiler's analysis (`LintMain`), as `haxeon lint` runs them
+ *   haxeon-aot ffi-import ... the C and C++ header importer (`FfiImportMain`), as `haxeon ffi import`
+ *   haxeon-aot ffi-audit ...  the cross-target C ABI auditor (`FfiAuditMain`), as `haxeon ffi audit`
  *   haxeon-aot ARGUMENTS      one compile (`compiler.tools.HaxeonCompiler`), as `hl compiler.hl ARGUMENTS`
  *
  * The compiler's own arguments are options (`--entry=...`) and source paths, never these words. Under the JIT each role is a
@@ -33,6 +36,12 @@ class CompilerExecutable {
 				compiler.tools.CompilerServer.serve(arguments[1]);
 			case "lsp":
 				Sys.exit(LspMain.run(arguments.slice(1)));
+			case "lint":
+				Sys.exit(LintMain.run(arguments.slice(1)));
+			case "ffi-import":
+				Sys.exit(FfiImportMain.run(arguments.slice(1)));
+			case "ffi-audit":
+				Sys.exit(FfiAuditMain.run(arguments.slice(1)));
 			case _:
 				compiler.tools.HaxeonCompiler.run(arguments);
 		}

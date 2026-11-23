@@ -344,13 +344,14 @@ clang-cl is the compiler the Windows release uses.
 
 The CLI (`haxeon`, the VM running `haxeon-cli.hl`) runs the compiler in three roles: one compile (`compiler.tools.HaxeonCompiler`,
 the one-shot fallback), a compile server per project (`compiler.tools.CompilerServer`, which `build.execution.CompilerClient`
-starts and reuses) and the language server (`LspMain`, `haxeon lsp`). Under the JIT each is a bytecode build of its own, made from
+starts and reuses), and the tools that carry the compiler: the language server (`LspMain`, `haxeon lsp`), the typed lint rules
+(`LintMain`) and the FFI tools (`FfiImportMain`, `FfiAuditMain`). Under the JIT each is a bytecode build of its own, made from
 the checkout's sources with the pinned Haxe and cached (the session directory, `out/tools`), and every start of one JITs all of its
 functions first (about a second for the compiler, and over a second for the CLI itself, on every command).
 
-Built ahead of time, the CLI and the three roles are one executable, `haxeon-aot` beside the VM (`HashLinkPath.directory`), whose
-entry point `tools.CompilerExecutable` takes the role from its first argument (`cli ARGUMENTS`, `serve STATE`, `lsp`, else the
-compiler's own arguments): ahead of time, code a role does not use costs nothing at start-up, and one file is what a release
+Built ahead of time, the CLI and the roles are one executable, `haxeon-aot` beside the VM (`HashLinkPath.directory`), whose
+entry point `tools.CompilerExecutable` takes the role from its first argument (`cli ARGUMENTS`, `serve STATE`, `lsp`, `lint`,
+`ffi-import`, `ffi-audit`, else the compiler's own arguments): ahead of time, code a role does not use costs nothing at start-up, and one file is what a release
 ships. One executable rather than a CLI beside a compiler: the CLI's sources are the compiler's (`src` and `lib/haxeon-io`, and
 the CLI imports much of the compiler), so the two are always current together and one stamp covers both; a second executable
 would double the build (about two minutes) and the size for no case where one is current without the other. `build.AotCompiler`
@@ -366,7 +367,8 @@ says where it is and whether it is current, and each place that would start the 
   (`compiler-session-v9:aot`), so a bytecode worker of the same sources is not reused once the executable is installed. A worker
   profiled with `HAXEON_COMPILER_PROFILE_PORT` stays on the VM, whose diagnostics port it is.
 - `CompilerClient.runOneShot` runs `haxeon-aot ARGUMENTS` instead of `hl compiler.hl ARGUMENTS`, on every platform.
-- `haxeon lsp` runs `haxeon-aot lsp`.
+- `haxeon lsp`, the typed rules of `haxeon lint` and `haxeon ffi` run `haxeon-aot lsp`, `lint`, `ffi-import` or `ffi-audit`
+  (`HaxeonCli.runCompilerRole`).
 
 The executable was `haxeon-compiler` before it held the CLI. It has a new name because the launcher cannot ask an executable which
 roles it has: an older one would take `cli ARGUMENTS` for a compile's arguments, and every `haxeon` command, `haxeon dev aot`
@@ -385,8 +387,9 @@ signature (device, inode, size and times) and reused while it holds: the check t
 its digest by a few seconds, since timestamps are whole seconds.
 
 A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler
-(docs/reference/RELEASES.md). It also ships the compiler's roles as bytecode with a stamp of its own (`haxeon-compiler.hl`), which
-`AotCompiler.program` runs on the VM when there is no current executable, as the launcher then runs the CLI's bytecode
+(docs/reference/RELEASES.md). It also ships the compiler's roles as bytecode with a stamp of its own (`haxeon-compiler.hl`, one of
+the programs `AotCompiler.shipped` names, with the live development host), which `AotCompiler.program` runs on the VM when there
+is no current executable, as the launcher then runs the CLI's bytecode
 (`haxeon-cli.hl`): a release has no pinned Haxe to build them from its sources, and the Windows release does not build the
 executable yet. The executable is made by `haxeon dev aot [--toolchain=NAME]` (`tools.dev.AotBuild`): the native build (for the hlc SDK), the checkout's compiler
 built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`), the C built

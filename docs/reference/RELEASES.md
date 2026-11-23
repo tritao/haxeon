@@ -16,8 +16,10 @@ project that uses a package with C or C++ code (the UI package, for one), an exe
 | `bin/hl`, `bin/haxeon` | The VM, and the VM with the CLI as its entry point (`native/haxeon_main.c`). |
 | `bin/haxeon-cli.hl` | The CLI's bytecode, which `bin/haxeon` runs when there is no executable built ahead of time. |
 | `bin/haxeon-aot`, `bin/haxeon-aot.sources` | The CLI and the compiler built ahead of time, one executable for the CLI (which `bin/haxeon` runs), a compile, the compile server and the language server, with its stamp (docs/design/AOT_BACKEND.md), and with MSVC its `haxeon-aot.pdb`, which its stack traces read. Present where the release job builds it. |
-| `bin/haxeon-compiler.hl`, `bin/haxeon-compiler.hl.sources` | The compiler's roles as bytecode, with its stamp: what the VM runs when there is no executable. |
-| `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in). |
+| `bin/haxeon-compiler.hl`, `bin/haxeon-compiler.hl.sources` | The compiler's roles as bytecode, with its stamp: what the VM runs when there is no executable. The roles include the tools that carry the compiler: the language server, the typed lint rules and `haxeon ffi`. |
+| `bin/haxeon-live-host.hl`, `bin/haxeon-live-host-instrument.hl` | The live development host `run --watch --live` runs the program or app in (`tools.LiveHost`), and its instrumented flavor for `--profile`, each with its stamp: a checkout builds them from the compiler's sources. |
+| `bin/hlprof-live` | The profiler's recorder, which `run --profile` runs. |
+| `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib`, `*.lib` | Shared libraries the native build put beside the VM, if any (Linux has none: `hl` has the runtime compiled in), and on Windows the VM's import library, which native packages link against. |
 | `stdlib/` | The standard library. |
 | `templates/` | The project templates of `haxeon create` ([templates/README.md](../../templates/README.md)). |
 | `registry/` | The `haxeon` registry ([MANIFEST.md](MANIFEST.md)): `index.json` and each first-party package at `NAME/VERSION/` (`ui`, `platform`, `nativekit`, ...), published from the checkout's with its path dependencies on the others as version ranges, its submodules' files in it and its `publish.exclude` left out. |
@@ -53,9 +55,17 @@ stamps against the digest of its `src/`, `lib/haxeon-io/` and `stdlib/`. A relea
 cannot change: it matches them against the digest its manifest records, so the pinned Haxe is never needed, and `haxeon doctor` does
 not ask for it.
 
-What a release does not do yet, as it needs a checkout's tools or sources: `haxeon dev`, `haxeon lint`, `haxeon ffi`,
-`--self-hosted` builds, live patching (`run --watch --live`, whose host is built from the compiler's sources) and Android
-builds. Native packages build against the SDK's `include/` and `cmake/`, as in a checkout.
+Every program a checkout builds from the compiler's sources when a command needs it is prebuilt in a release, beside the VM with
+its stamp (`AotCompiler.shipped`): the compiler and the tools that carry it (`haxeon lsp`, the typed rules of `haxeon lint`,
+`haxeon ffi`), and the live development host of `run --watch --live`. So live patching works from a release: its compile
+server patches the module, and the shipped host, or an app's runner built from the SDK's `libhaxeon-app` running it, applies
+them. Native packages build against the SDK's `include/` and `cmake/`, as in a checkout.
+
+What a release does not do, as it is for working on Haxeon or needs a checkout's tools: `haxeon dev` (it says so, and runs
+only from a checkout), `--self-hosted` builds (the committed bootstrap compiler) and `haxeon heap inspect` (HashLink's
+analyzer, built from the checkout's vendored sources). Android builds (`--target android`, `haxeon devices`) need the
+checkout's `android/` host and its SDK under `.tools` until their runner lands in the SDK (`platforms/android`,
+[SDK_LAYOUT.md](../design/SDK_LAYOUT.md)).
 
 ## Making one
 
@@ -67,25 +77,32 @@ scripts/haxeon dev package [--version=V] [--output=DIR] [--no-archive]
 scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot for an archive without it
 ```
 
-`haxeon dev package` (`tools.dev.ReleasePackage`, the one place the layout is defined) builds the compiler's bytecode with the
-pinned Haxe (`tools.CompilerExecutable`, through the tool cache), stages the directory in `out/release` with the bytecode's
-stamp and the sources' digest in the marker, checks that the sources still have that digest once the standard library is
-copied, and archives it with `cmake -E tar`. The compiler's sources are not shipped. It changes
-nothing in the checkout's VM directory. A stale `haxeon-aot` is an error, since the release would never run it: rebuild it or remove it.
+`haxeon dev package` (`tools.dev.ReleasePackage`) stages the directory in `out/release` in three steps. It installs the
+checkout's `out/sdk` as the native build staged it (the `haxeon-sdk` target and the VM's directory in CMakeLists.txt, the one
+definition of the layout), without its manifest and live registry; it materializes the roots that manifest names (the standard
+library, the templates, and the registry with each package published); and it adds what only a release has: the programs built
+from the compiler's sources (the compiler's bytecode with the pinned Haxe, `tools.CompilerExecutable` through the tool cache,
+and both live hosts with Haxeon, `tools.LiveHostBuild`), each stamped with the sources' digest, LICENSE, NOTICE and README.md,
+and the manifest recording that digest. It checks that the sources still have that digest, and archives the directory with
+`cmake -E tar`. The compiler's sources are not shipped. It changes nothing in the checkout's VM directory. A stale `haxeon-aot`
+is an error, since the release would never run it: rebuild it or remove it.
 The version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
 
 `scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
-starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script; on Linux it also
-creates the app template, whose UI package comes from the release's registry, and builds it through its runner in development and
-release mode, running each for three frames with a capture (a C toolchain and GTK's development files are needed), then builds and
-runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It checks that no
-compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler. With
-`--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
+starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script, a typed lint
+rule, `haxeon ffi audit` (with clang), `haxeon dev`'s refusal, and a program under `run --watch --live` that it edits while it
+runs, checking that the running program prints the new value and that the edit applied as a patch. Where the app template has a
+runner for the platform it also creates the app, whose UI package comes from the release's registry, builds it through its runner
+in development and release mode, running each for three frames with a capture (a C toolchain, and on Linux GTK's development
+files, are needed), patches the app running under `run --watch --live` (headless under `xvfb-run` on Linux; not on Windows), and
+builds and runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It
+checks that no compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler.
+With `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
 
 ## The release workflow
 
-`.github/workflows/release.yml` runs on `v*` tags and by hand (workflow_dispatch). One job per platform builds the VM and the
-CLI in release mode and the compiler ahead of time where supported, packages and smoke-tests, and uploads the archive. It runs no
+`.github/workflows/release.yml` runs on `v*` tags and by hand (workflow_dispatch). One job per platform (Linux, Windows, macOS) builds the VM and
+the CLI in release mode and the compiler ahead of time where supported, packages, smoke-tests the archive and uploads it. It runs no
 test suites; the macOS job may fail without failing the run. A final job downloads the archives and writes `SHA256SUMS`. For a
 tag it then checks that the tagged commit is on `main` and has a successful `ci.yml` run, and creates the GitHub release with
 the archives and checksums, or uploads them to the release if it exists. Run by hand, it stops before that: the archives are the

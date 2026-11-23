@@ -14,33 +14,33 @@ import project.RegistrySourceAcquirer;
 import project.SourceCache;
 import sys.FileSystem;
 import sys.io.File;
+import tools.LiveHostBuild;
 
 /**
  * `haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]`: stages this checkout's release for the platform it runs
  * on, `DIR/haxeon-VERSION-PLATFORM/` (`DIR` is `out/release` by default), and archives it beside, as `.tar.gz` or, on Windows,
- * `.zip` (docs/reference/RELEASES.md). The release is Haxeon's SDK (docs/design/SDK_LAYOUT.md): the native build's out/sdk, with
- * the standard library and templates copied in and its own manifest:
+ * `.zip` (docs/reference/RELEASES.md). The release is Haxeon's SDK (docs/design/SDK_LAYOUT.md), made in three steps:
  *
- *   haxeon-sdk.toml                 the manifest: version, commit, platform, the compiler sources' digest and the roots below,
- *                                   and no `source`, which makes the directory a release (`build.HaxeonSdk`)
- *   bin/                            the VM's directory: hl, haxeon, the CLI's bytecode (haxeon-cli.hl), the CLI and compiler built
- *                                   ahead of time with its stamp (and its .pdb with MSVC) when it is built and current, the
- *                                   compiler's bytecode with its stamp, and the shared libraries beside the VM
- *   stdlib/                         the standard library
- *   templates/                      the project templates of `haxeon create` (templates/README.md)
- *   registry/                       the haxeon registry: index.json and each first-party package at NAME/VERSION/, published
- *                                   from the checkout's (`publishRegistry`)
- *   lib/<target>/, include/, src/, cmake/
- *                                   the SDK's libraries, headers, entry points and CMake package (`find_package(Haxeon)`)
- *   LICENSE, NOTICE, README.md
+ * - the install: a copy of the checkout's out/sdk as its native build staged it (CMakeLists.txt, `haxeon-sdk`), which is the one
+ *   definition of the layout, without what a release has of its own (its manifest and registry) and without the leftovers of
+ *   publishing by rename;
+ * - the named roots materialized: the standard library, the templates, and the registry, each first-party package published from
+ *   the checkout's at its version (`publishRegistry`), at the relative roots the release's manifest names;
+ * - what only a release has: the programs a checkout builds from the compiler's sources when a command needs them, prebuilt and
+ *   stamped with the sources' digest (`AotCompiler.shipped`: the compiler's bytecode, with the pinned Haxe as the CLI builds the
+ *   compiler in a checkout, and both flavors of the live development host, `LiveHostBuild`), LICENSE, NOTICE and README.md, and
+ *   the manifest, which records that digest and names no `source`, which makes the directory a release (`build.HaxeonSdk`).
  *
- * It builds what a checkout's native build does not, the compiler's bytecode: `tools.CompilerExecutable` with the pinned Haxe, as the
- * CLI builds the compiler in a checkout, stamped with the sources' digest (`AotCompiler.bytecode`). It packages the compiler built
- * ahead of time when `haxeon dev aot` built it from these sources, and goes without it when there is none; a stale one is
- * an error, as the release would never run it. The compiler's sources stay behind: the marker records their digest, which the
- * stamps must hold.
+ * The compiler built ahead of time is in the install when `haxeon dev aot` built it from these sources; a stale one is an error,
+ * as the release would never run it. The compiler's sources stay behind: every stamp must hold the digest the manifest records.
  */
 class ReleasePackage {
+	/** Files that publishing by rename leaves beside a program a process still ran (cmake/haxeon-replace.cmake, haxeon-publish.cmake). */
+	static final PUBLISHING_LEFTOVER = ~/\.(new|old|replaced)-[0-9a-z]+$/;
+
+	/** The jobs the live hosts' builds run, as a build's default. */
+	static inline final BUILD_JOBS = 4;
+
 	public static function run(arguments:Array<String>, home:String):Int {
 		home = Path.normalize(home);
 		var output = Path.join([home, "out", "release"]),
@@ -61,44 +61,48 @@ class ReleasePackage {
 		var sdk = HaxeonSdk.ofCheckout(home),
 			compilerSource = AotCompiler.sources(sdk),
 			native = AotCompiler.executable(sdk),
-			digest = AotCompiler.sourcesDigest(sdk, compilerSource),
-			bytecode = new ToolArtifacts(home).resolve({main: "tools.CompilerExecutable", classPaths: [], defines: []});
-
+			digest = AotCompiler.sourcesDigest(sdk, compilerSource);
+		if (!FileSystem.exists(HashLinkPath.executable(sdk))
+			|| !FileSystem.exists(HashLinkPath.executable(sdk, "haxeon")))
+			throw new InternalError('Missing ${HashLinkPath.executable(sdk, "haxeon")}: build the native runtime first (haxeon dev native)');
 		if (FileSystem.exists(native) && AotCompiler.current(sdk) == null)
 			throw new InternalError('$native is stale: rebuild it with "haxeon dev aot", or remove it to package without it');
+		var shipped = [
+			{
+				name: AotCompiler.BYTECODE,
+				path: new ToolArtifacts(home).resolve({main: "tools.CompilerExecutable", classPaths: [], defines: []})
+			}
+		];
+		for (instrument in [false, true])
+			shipped.push({name: LiveHostBuild.name(instrument),
+				path: LiveHostBuild.build(sdk, BUILD_JOBS, instrument)});
 
 		var name = 'haxeon-$version-${platform()}', root = Path.join([output, name]);
-		var bin = Path.join([root, "bin"]);
 		cmake(home, ["-E", "rm", "-rf", root]);
-		cmake(home, ["-E", "make_directory", bin]);
-		var vm = HashLinkPath.directory(sdk), suffix = Sys.systemName() == "Windows" ? ".exe" : "";
-		var programs = ['hl$suffix', 'haxeon$suffix', "haxeon-cli.hl"];
-		if (FileSystem.exists(native))
-			programs = programs.concat([Path.withoutDirectory(native), Path.withoutDirectory(AotCompiler.stamp(sdk))]);
-		// An MSVC build's debug information, which its stack traces read, is beside it.
-		var symbols = Path.withoutExtension(native) + ".pdb";
-		if (FileSystem.exists(native) && FileSystem.exists(symbols))
-			programs.push(Path.withoutDirectory(symbols));
-		for (entry in FileSystem.readDirectory(vm))
-			if (~/\.(dll|hdll|dylib|so)(\.[0-9.]+)?$/.match(entry))
-				programs.push(entry);
-		for (program in programs) {
-			var path = Path.join([vm, program]);
-			if (!FileSystem.exists(path))
-				throw new InternalError('Missing $path: build the native runtime first (haxeon dev native)');
-			cmake(home, ["-E", "copy", path, bin]);
-		}
-		// Under the names `AotCompiler` looks for beside the release's VM.
-		var bytecodeName = Path.withoutDirectory(AotCompiler.bytecode(sdk));
-		cmake(home, ["-E", "copy", bytecode, Path.join([bin, bytecodeName])]);
-		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(sdk))]), digest + "\n");
+		cmake(home, ["-E", "make_directory", root]);
+		// The install.
+		for (entry in FileSystem.readDirectory(sdk))
+			if (entry != HaxeonSdk.MANIFEST && entry != "registry")
+				cmake(home, [
+					"-E",
+					FileSystem.isDirectory(Path.join([sdk, entry])) ? "copy_directory" : "copy",
+					Path.join([sdk, entry]),
+					Path.join([root, entry])
+				]);
+		var bin = Path.join([root, Path.withoutDirectory(HashLinkPath.directory(sdk))]);
+		for (entry in FileSystem.readDirectory(bin))
+			if (PUBLISHING_LEFTOVER.match(entry))
+				FileSystem.deleteFile(Path.join([bin, entry]));
 		// The roots the checkout's SDK names, materialized in the release.
 		cmake(home, ["-E", "copy_directory", HaxeonSdk.stdlib(sdk), Path.join([root, "stdlib"])]);
 		cmake(home, ["-E", "copy_directory", HaxeonSdk.templates(sdk), Path.join([root, "templates"])]);
 		publishRegistry(sdk, Path.join([root, "registry"]));
-		// The rest of the SDK as the native build staged it; the manifest is the release's own, written last.
-		for (part in ["lib", "include", "src", "cmake"])
-			cmake(home, ["-E", "copy_directory", Path.join([sdk, part]), Path.join([root, part])]);
+		// What only a release has; the manifest is written last.
+		for (program in shipped) {
+			// A new file, not one with the build's own mode: a compiler's output is private to its user.
+			File.copy(program.path, Path.join([bin, program.name]));
+			File.saveContent(AotCompiler.stampOf(Path.join([bin, program.name])), digest + "\n");
+		}
 		// The stamps hold the digest of what the release holds: no source changed while it was made.
 		if (AotCompiler.sourcesDigest(sdk, compilerSource) != digest)
 			throw new InternalError("The compiler sources changed while the release was made; run it again");

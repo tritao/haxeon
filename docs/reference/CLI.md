@@ -166,8 +166,9 @@ named. Each file is typed as the editor types it: its project is the nearest
 is the entry. If a file's program has type errors, they go to standard error, the
 bodies that typed are still checked, and a body that failed is not. The command exits
 with 1 when it names a local or a program does not type. The rule has no `--fix`:
-give each local it names a type. It runs in a tool of its own (`LintMain`), built on
-first use like the language server.
+give each local it names a type. It runs in a program that links the compiler, like the
+language server: the compiler's own (its `lint` role) when it is current, as in a release, else a tool of its own
+(`LintMain`) built on first use.
 
 The opt-in rule `module-namespace` names each module-level variable or function
 reached through its module's name, a Haxeon extension stock Haxe rejects (see

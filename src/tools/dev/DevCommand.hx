@@ -52,7 +52,11 @@ class DevCommand {
 		var command = arguments.length == 0 ? "" : arguments.shift();
 		if (command == "hl-stat")
 			return HlStatCommand.run(arguments);
-		var home = build.HaxeonSdk.requireSource(sdk, "haxeon dev");
+		var home = build.HaxeonSdk.source(sdk);
+		if (home == null)
+			throw new compiler.core
+				.UsageError('haxeon dev is for working on Haxeon itself and runs only in a checkout of its sources '
+				+ '(scripts/haxeon, or the checkout\'s out/sdk/bin/haxeon); this Haxeon ($sdk) is a release');
 		return switch command {
 			case "tool-path": toolPath(arguments, home);
 			case "tool-build-mode":

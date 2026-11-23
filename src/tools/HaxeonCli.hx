@@ -189,7 +189,7 @@ class HaxeonCli {
 				case "lint":
 					var stdlib = HaxeonSdk.stdlib(haxeonHome());
 					LintCommand.run(arguments, stdlib,
-						(rule, files) -> runTool("LintMain", ['--stdlib=$stdlib', rule].concat(files)));
+						(rule, files) -> runCompilerRole("lint", "LintMain", ['--stdlib=$stdlib', rule].concat(files)));
 				case "build": build(arguments, Build);
 				case "check": build(arguments, Check);
 				case "test": build(arguments, Test);
@@ -613,7 +613,7 @@ class HaxeonCli {
 			reportPath("CLI and compiler built ahead of time", aot, false);
 		var bytecode = AotCompiler.bytecode(home);
 		if (FileSystem.exists(bytecode))
-			Sys.println(AotCompiler.currentBytecode(home) != null
+			Sys.println(AotCompiler.currentShipped(home, AotCompiler.BYTECODE) != null
 				? 'ok: compiler bytecode, which the VM runs without the compiler built ahead of time ($bytecode)'
 				: 'stale: compiler bytecode ($bytecode), not built from these sources');
 		// Android builds need a checkout: its android/ host project and the SDK and NDK under its .tools.
@@ -802,35 +802,37 @@ class HaxeonCli {
 	static function ffi(arguments:Array<String>):Int {
 		var command = arguments.length == 0 ? "" : arguments.shift();
 		return switch command {
-			case "import": runTool("FfiImportMain", arguments);
-			case "audit": runTool("FfiAuditMain", arguments);
+			case "import": runCompilerRole("ffi-import", "FfiImportMain", arguments);
+			case "audit": runCompilerRole("ffi-audit", "FfiAuditMain", arguments);
 			case _: throw new UsageError('Usage: haxeon ffi import|audit ... (unknown ffi command "$command")');
 		};
 	}
 
 	/**
-	 * Runs the entry point `main` of this checkout, with the command's standard streams and directory, and returns its status.
-	 * The language server and the FFI tools carry the compiler with them, which would make every command's start several
-	 * times slower if this CLI contained them: each is its own HashLink build, from the tool cache (`haxeon dev tool-path`).
+	 * Runs a tool that carries the compiler with it (the language server, the typed lint rules, the FFI tools), with the
+	 * command's standard streams and directory, and returns its status. This CLI does not contain them, which would make
+	 * every command's start several times slower. It runs `role` of the compiler's program (`tools.CompilerExecutable`) when
+	 * one is current (`build.AotCompiler.program`: the executable built ahead of time, or a release's compiler bytecode);
+	 * else, in a checkout, the entry point `main` as a HashLink build of its own, from the tool cache (`haxeon dev tool-path`).
 	 */
-	static function runTool(main:String, arguments:Array<String>):Int
-		return new tools.dev.ToolArtifacts(HaxeonSdk.requireSource(haxeonHome(), "This command")).run({
+	static function runCompilerRole(role:String, main:String, arguments:Array<String>):Int {
+		var home = haxeonHome(), program = AotCompiler.program(home);
+		if (program != null)
+			return Sys.command(program.command[0], program.command.slice(1).concat([role]).concat(arguments));
+		if (HaxeonSdk.isRelease(home))
+			throw new InternalError('This Haxeon release has no current compiler to run (${AotCompiler.bytecode(home)}); '
+				+ "install the release again");
+		return new tools.dev.ToolArtifacts(HaxeonSdk.requireSource(home, "This command")).run({
 			main: main,
 			classPaths: [],
 			defines: []
-		},
-			arguments);
+		}, arguments);
+	}
 
-	/**
-	 * `haxeon lsp`: the language server, in the compiler built ahead of time or a release's compiler bytecode when it is current
-	 * (`build.AotCompiler.program`), else in its own bytecode build on the VM.
-	 */
+	/** `haxeon lsp`: the language server, given its SDK's standard library. */
 	static function languageServer(arguments:Array<String>):Int {
-		var home = haxeonHome(),
-			program = AotCompiler.program(home),
-			named = ['--stdlib=${HaxeonSdk.stdlib(home)}'].concat(arguments);
-		return program == null ? runTool("LspMain",
-			named) : Sys.command(program.command[0], program.command.slice(1).concat(["lsp"]).concat(named));
+		var home = haxeonHome();
+		return runCompilerRole("lsp", "LspMain", ['--stdlib=${HaxeonSdk.stdlib(home)}'].concat(arguments));
 	}
 
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
@@ -1056,7 +1058,7 @@ class HaxeonCli {
 					if (swapPath)
 						Sys.putEnv("PATH", buildPath);
 					try
-						liveHost = buildLiveHost(home, options.jobs, instrument, session, options.style)
+						liveHost = LiveHostBuild.program(home, options.jobs, instrument, session, options.style)
 					catch (error:haxe.Exception) {
 						if (swapPath)
 							Sys.putEnv("PATH", runPath);
@@ -1386,36 +1388,6 @@ class HaxeonCli {
 			} catch (_:Dynamic) {}
 			done.release();
 		});
-	}
-
-	/**
-	 * Builds the live development host (`tools.LiveHost`, from the compiler's sources) with Haxeon, as a project of its own under
-	 * the checkout's `out/live-host`. Under `--profile` it is the instrumented flavor, so a capture shows the host's polling and
-	 * patching beside the app's calls.
-	 */
-	static function buildLiveHost(home:String, jobs:Int, instrument:Bool, ?session:BuildSession,
-			?style:ReportStyle):String {
-		var source = HaxeonSdk.requireSource(home, "Live patching (haxeon run --watch --live)"),
-			root = Path.join([source, "out", "live-host"]),
-			manifestPath = Path.join([root, "haxeon.json"]);
-		FileSystem.createDirectory(root);
-		var manifest = Json.stringify({
-			version: 1,
-			"package": {name: "haxeon-live-host"},
-			entry: "tools.LiveHost",
-			sourceRoots: [Path.join([source, "src"])],
-			scopeSourceRoots: false,
-			target: "host",
-			outputDir: "build"
-		}, null, "  ");
-		if (!FileSystem.exists(manifestPath) || File.getContent(manifestPath) != manifest)
-			File.saveContent(manifestPath, manifest);
-		var project = discoverProject(manifestPath),
-			output = Path.join([HaxeonProjectBuild.outputDirectory(project, instrument), "host", "live-host.hl"]);
-		if (HaxeonProjectBuild.build(project, home, output, [], jobs, false, false, false, 0.0, false, Full, false,
-			instrument, session, true, null, null, style) != 0)
-			throw new InternalError("Could not build the live development host");
-		return output;
 	}
 
 	/** hlprof-live, which records and exports profiler captures. */
