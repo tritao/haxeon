@@ -137,11 +137,6 @@ class BodyTyper implements BodyTyping {
 		return compiler.core.QualifiedName.parent(path);
 	}
 
-	static function pathBeforeLast(path:String):String {
-		var parent = parentPath(path);
-		return parent == null ? "" : parent;
-	}
-
 	static function lastPathSegment(path:String):String {
 		return compiler.core.QualifiedName.last(path);
 	}
@@ -1565,9 +1560,11 @@ class BodyTyper implements BodyTyping {
 					return null;
 				var info = patternConstructor(name, span, expected, scope);
 				// Enum abstracts are erased to their underlying type, so the
-				// subject cannot name its values; a bare value name resolves as
-				// in any expression rather than binding the subject.
-				if (info == null && !scope.hasVisibleLocal(name) && isEnumAbstractValueName(name))
+				// subject cannot name its values; a bare value name of the subject's
+				// abstract, or one visible here, resolves as in any expression rather
+				// than binding the subject.
+				if (info == null && !scope.hasVisibleLocal(name)
+					&& (expectedEnumAbstractDeclaresValue(expected, name) || isEnumAbstractValueName(name, span)))
 					return null;
 				if (info != null) null;
 				else if (name == "_") null;
@@ -1651,13 +1648,9 @@ class BodyTyper implements BodyTyping {
 		return false;
 	}
 
-	function isEnumAbstractValueName(name:String):Bool {
-		for (candidate in session.declarations.enumAbstractsInOrder())
-			for (value in candidate.values)
-				if (value.name == name)
-					return true;
-		return false;
-	}
+	/** Whether the bare `name` is a value of an enum abstract visible without a qualifier where `span` is (`findBareEnumAbstract`). */
+	function isEnumAbstractValueName(name:String, span:SourceSpan):Bool
+		return findBareEnumAbstract(name, span) != null;
 
 	static function isSwitchCatchAll(value:AstExpression):Bool
 		return switch value {
@@ -2879,11 +2872,11 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/**
-	 * The enum abstract an uncontextualized bare value name belongs to.
-	 * In an enum abstract's own code (its methods and its statics' initializers) its values are its own members and win.
-	 * Among several abstracts declaring the value, the one in the current type's own package wins: its
-	 * types are visible without an import, as in Haxe. An ambiguity that leaves more than one is an
-	 * error.
+	 * The enum abstract an uncontextualized bare value name belongs to, among those Haxe makes visible without a qualifier: in an
+	 * enum abstract's own code (its methods and its statics' initializers) its values are its own members and win; then the enum
+	 * abstracts declared in the same file. An imported abstract's values reach the typer qualified (name resolution installs them as
+	 * the constructors of an imported enum are), and an abstract elsewhere in the program, its package's included, is not visible.
+	 * Two abstracts of the file declaring the value are an error.
 	 */
 	function findBareEnumAbstract(name:String, span:SourceSpan):Null<compiler.syntax.Ast.AstAbstract> {
 		var lexicalOwner = context.lexicalOwner,
@@ -2894,33 +2887,19 @@ class BodyTyper implements BodyTyping {
 				if (value.name == name)
 					return own;
 		var found:Null<compiler.syntax.Ast.AstAbstract> = null,
-			ambiguous = false,
-			samePackage:Array<compiler.syntax.Ast.AstAbstract> = [],
 			declaredBy:Array<String> = [];
-		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
-		for (candidate in session.declarations.enumAbstractsInOrder()) {
-			var candidateName = candidate.name;
+		for (candidate in session.enumAbstractsInFile(span.file.path))
 			for (value in candidate.values)
 				if (value.name == name) {
-					if (found != null)
-						ambiguous = true;
 					found = candidate;
-					declaredBy.push(candidateName);
-					if (pathBeforeLast(candidateName) == ownerPackage)
-						samePackage.push(candidate);
+					declaredBy.push(candidate.name);
 				}
-		}
-		if (ambiguous) {
-			if (samePackage.length != 1) {
-				declaredBy.sort(Reflect.compare);
-				fail("E1005",
-					'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}'
-					+ (samePackage.length > 1 ? ", and more than one of them is in the current package"
-					: ", and none of them is in the current package")
-					+ '. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
-					span);
-			}
-			found = samePackage[0];
+		if (declaredBy.length > 1) {
+			declaredBy.sort(Reflect.compare);
+			fail("E1005",
+				'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}'
+				+ '. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
+				span);
 		}
 		return found;
 	}

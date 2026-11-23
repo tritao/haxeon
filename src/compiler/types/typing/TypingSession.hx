@@ -106,6 +106,8 @@ class TypingSession {
 
 	var enumsByFile:Null<Map<String, Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}>>> = null;
 
+	var enumAbstractsByFile:Null<Map<String, Array<compiler.syntax.Ast.AstAbstract>>> = null;
+
 	public final enumRepresentations:EnumRuntimeRepresentations;
 	public var enumAbstractDecls:compiler.semantic.DeclarationTable<compiler.syntax.Ast.AstAbstract>;
 
@@ -585,6 +587,7 @@ class TypingSession {
 		staticExtensions = semantic.staticExtensions;
 		enumDecls = declarations.enums;
 		enumsByFile = null;
+		enumAbstractsByFile = null;
 		enumAbstractDecls = declarations.enumAbstracts;
 	}
 
@@ -616,6 +619,37 @@ class TypingSession {
 				recorder.read(FactAspect.Members, entry.name);
 		return found == null ? noEnums : found;
 	}
+
+	/**
+	 * The enum abstracts declared in the file at `path`. A bare value name with no expected type resolves
+	 * against them, its own abstract's and the imported ones (which name resolution qualifies), as in Haxe.
+	 */
+	public function enumAbstractsInFile(path:String):Array<compiler.syntax.Ast.AstAbstract> {
+		var index = enumAbstractsByFile;
+		if (index == null) {
+			index = [];
+			for (declaration in enumAbstractDecls.withoutReads()) {
+				var filePath = declaration.span.file.path,
+					entries = index.get(filePath);
+				if (entries == null) {
+					entries = [];
+					index.set(filePath, entries);
+				}
+				entries.push(declaration);
+			}
+			enumAbstractsByFile = index;
+		}
+		var found = index.get(path);
+		// What a file's enum abstracts are is a read of each of them, whichever unit built the index.
+		var recorder = reads();
+		if (recorder != null && found != null)
+			for (declaration in found)
+				recorder.read(FactAspect.Members, declaration.name);
+		return found == null ? noEnumAbstracts : found;
+	}
+
+	@:processWide("a shared empty value, never added to")
+	static final noEnumAbstracts:Array<compiler.syntax.Ast.AstAbstract> = [];
 
 	@:processWide("a shared empty value, never added to")
 	static final noEnums:Array<{

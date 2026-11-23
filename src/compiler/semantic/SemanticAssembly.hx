@@ -244,21 +244,27 @@ class SemanticAssembly {
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (imported in ast.imports) {
 				var importPath = imported.path;
-				if (ModuleAnalyzer.isWildcardImport(importPath))
-					continue;
 				var importedTypes:Array<String> = [],
 					importConstructors:Map<String, String> = [],
 					ambiguousImportConstructors:Map<String, Bool> = [];
-				var importedType = sourceTypeAliases.get(importPath);
-				if (importedType != null)
-					importedTypes.push(importedType);
-				// Importing a module imports every type declared in it, and with
-				// each enum its constructors, as in Haxe.
-				if (aliasesByModule.exists(importPath)
-					&& (imported.alias == null || imported.alias == QualifiedName.last(importPath)))
-					for (entry in aliasesByModule.get(importPath))
-						if (importedTypes.indexOf(entry.declarationName) < 0)
-							importedTypes.push(entry.declarationName);
+				if (ModuleAnalyzer.isWildcardImport(importPath)) {
+					// `import pack.Type.*` imports the type's statics: an enum's constructors and an enum abstract's values are among
+					// them, as in Haxe. A package's wildcard imports its types without their constructors.
+					var wildcardType = sourceTypeAliases.get(ModuleAnalyzer.importModulePath(importPath));
+					if (wildcardType != null)
+						importedTypes.push(wildcardType);
+				} else {
+					var importedType = sourceTypeAliases.get(importPath);
+					if (importedType != null)
+						importedTypes.push(importedType);
+					// Importing a module imports every type declared in it, and with
+					// each enum its constructors, as in Haxe.
+					if (aliasesByModule.exists(importPath)
+						&& (imported.alias == null || imported.alias == QualifiedName.last(importPath)))
+						for (entry in aliasesByModule.get(importPath))
+							if (importedTypes.indexOf(entry.declarationName) < 0)
+								importedTypes.push(entry.declarationName);
+				}
 				for (type in importedTypes)
 					if (enumCasesByType.exists(type))
 						for (caseName in enumCasesByType.get(type))

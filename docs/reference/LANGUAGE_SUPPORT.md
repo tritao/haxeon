@@ -8,6 +8,10 @@ The current subset includes:
 - An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
   prints as `Kind(9)`, and a nullable one as `null`).
+- A bare name is an enum abstract's value where Haxe makes it one: in the abstract's own code and module, where the
+  abstract is imported (`import pack.Kind`, `import pack.Kind.*`, which also imports an enum's constructors), and where a
+  value of the abstract is expected. An abstract elsewhere in the program, its own package's included, does not put its
+  values in scope, so a value named `Type` or `Array` there hides nothing.
 - A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.

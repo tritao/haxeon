@@ -1,9 +1,10 @@
 import compiler.Compiler;
 
 /**
- * Two enum abstracts over the same type that declare a value name compete for a bare reference to it. The one
- * in the current package wins (see SamePackageEnumAbstractValueMain); when that leaves none or several, the
- * reference is an error that names the abstracts and says how to qualify the value.
+ * A bare enum abstract value without an expected type is one of an abstract Haxe makes visible: its own module's, or an
+ * imported one's (the last import wins, as with enum constructors). Two abstracts of the same module that declare the name
+ * are an error that names them and says how to qualify the value; an abstract that is neither, its package's included,
+ * does not put the name in scope.
  */
 class AmbiguousEnumAbstractValueMain {
 	static function main():Void {
@@ -16,7 +17,7 @@ class AmbiguousEnumAbstractValueMain {
 				"package q; enum abstract Second(Int) from Int to Int { var Red = 2; var Right = 4; }"
 			];
 
-		// Neither abstract is in the using package: ambiguous, and the error lists both.
+		// Neither abstract is imported: the name is not in scope.
 		var foreign = failure([
 			first,
 			second,
@@ -26,31 +27,45 @@ class AmbiguousEnumAbstractValueMain {
 			],
 			["Main.hx", "class Main { static function main():Int return r.User.pick(); }"]
 		]);
-		expect(foreign != null && foreign.indexOf("E1005") >= 0
-			&& foreign.indexOf('Ambiguous enum abstract value "Red"') >= 0,
-			'a bare value declared by two foreign enum abstracts must be ambiguous, got: $foreign');
-		expect(foreign.indexOf('"p.First"') >= 0 && foreign.indexOf('"q.Second"') >= 0,
-			'the error must name both abstracts, got: $foreign');
-		expect(foreign.indexOf("none of them is in the current package") >= 0,
-			'the error must say no abstract is in the current package, got: $foreign');
-		expect(foreign.indexOf('"p.First.Red"') >= 0, 'the error must show how to qualify the value, got: $foreign');
+		expect(foreign != null && foreign.indexOf('Unknown variable "Red"') >= 0,
+			'a value of an abstract that is not imported must not be in scope, got: $foreign');
 
-		// Two abstracts in the using package: the same-package rule cannot choose either.
-		var local = failure([
-			["r/Left.hx", "package r; enum abstract Left(Int) from Int to Int { var Red = 1; }"],
-			["r/Right.hx", "package r; enum abstract Right(Int) from Int to Int { var Red = 2; }"],
+		// Imported, the abstracts' values are in scope, the last import's first.
+		expect(failure([
+			first,
+			second,
 			[
 				"r/User.hx",
-				"package r; class User { public static function pick():Int { var colour:Int = Red; return colour + Left.Red + Right.Red; } }"
+				"package r; import p.First; import q.Second; class User { public static function pick():Int { var colour:Int = Red; return colour + Left + Right; } }"
+			],
+			["Main.hx", "class Main { static function main():Int return r.User.pick(); }"]
+		]) == null, "imported values must be in scope");
+
+		// Two abstracts of the using module: ambiguous, and the error names both and how to qualify the value.
+		var local = failure([
+			[
+				"r/User.hx",
+				"package r; enum abstract Left(Int) from Int to Int { var Red = 1; } enum abstract Right(Int) from Int to Int { var Red = 2; } "
+					+ "class User { public static function pick():Int { var colour:Int = Red; return colour + Left.Red + Right.Red; } }"
 			],
 			["Main.hx", "class Main { static function main():Int return r.User.pick(); }"]
 		]);
-		expect(local != null && local.indexOf('"r.Left"') >= 0 && local.indexOf('"r.Right"') >= 0,
-			'two same-package enum abstracts must be ambiguous and named, got: $local');
-		expect(local.indexOf("more than one of them is in the current package") >= 0,
-			'the error must say several are in the current package, got: $local');
+		expect(local != null && local.indexOf('Ambiguous enum abstract value "Red"') >= 0
+			&& local.indexOf('"r.Left"') >= 0
+			&& local.indexOf('"r.Right"') >= 0, 'two abstracts of the module must be ambiguous and named, got: $local');
+		expect(local.indexOf('"r.Left.Red"') >= 0, 'the error must show how to qualify the value, got: $local');
 
-		// Qualifying the value, or declaring one abstract in the using package, removes the ambiguity.
+		// An abstract of the using package is not in scope without an import either; qualified values always are.
+		var samePackage = failure([
+			first,
+			[
+				"p/User.hx",
+				"package p; class User { public static function pick():Int { var colour:Int = Red; return colour; } }"
+			],
+			["Main.hx", "class Main { static function main():Int return p.User.pick(); }"]
+		]);
+		expect(samePackage != null && samePackage.indexOf('Unknown variable "Red"') >= 0,
+			'a same-package abstract must not put its values in scope, got: $samePackage');
 		expect(failure([
 			first,
 			second,
@@ -59,17 +74,8 @@ class AmbiguousEnumAbstractValueMain {
 				"package r; class User { public static function pick():Int { var colour:Int = p.First.Red; return colour + q.Second.Red; } }"
 			],
 			["Main.hx", "class Main { static function main():Int return r.User.pick(); }"]
-		]) == null, "qualified values must not be ambiguous");
-		expect(failure([
-			first,
-			second,
-			[
-				"p/User.hx",
-				"package p; class User { public static function pick():Int { var colour:Int = Red; return colour + q.Second.Red; } }"
-			],
-			["Main.hx", "class Main { static function main():Int return p.User.pick(); }"]
-		]) == null, "an enum abstract in the using package must outrank the one elsewhere");
-		Sys.println("PASS: ambiguous enum abstract values are reported with their candidates and a qualification hint");
+		]) == null, "qualified values must resolve");
+		Sys.println("PASS: bare enum abstract values resolve only where they are visible, and ambiguities name their candidates");
 	}
 
 	/** The first diagnostic from analysing `Main` over the given files, or null when they analyse cleanly. */

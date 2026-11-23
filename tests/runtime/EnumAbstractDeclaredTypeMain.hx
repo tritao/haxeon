@@ -59,7 +59,7 @@ class EnumAbstractDeclaredTypeMain {
 		call("switchMember", 9);
 		Runtime.dispose(live);
 
-		// Declared as Int, the expected type no longer says which abstract: still ambiguous, and still an error.
+		// Declared as Int, the expected type no longer says which abstract, and neither is visible from Main: an error.
 		compiler = new Compiler();
 		compiler.update("Left.hx", "enum abstract Left(Int) from Int to Int { var Shared = 1; }");
 		compiler.update("Right.hx", "enum abstract Right(Int) from Int to Int { var Shared = 20; }");
@@ -69,7 +69,7 @@ class EnumAbstractDeclaredTypeMain {
 		try {
 			compiler.compile("Main");
 		} catch (error:Dynamic) {
-			rejected = Std.string(error).indexOf("Ambiguous enum abstract value") >= 0;
+			rejected = Std.string(error).indexOf('Unknown variable "Shared"') >= 0;
 		}
 		if (!rejected)
 			throw "An Int-typed position cannot choose between two enum abstracts that declare the value";
