@@ -10,7 +10,7 @@ name = "my_app"
 name = "My App"
 id = "com.example.my_app"
 version = "1.0.0"
-platforms = ["linux"]
+platforms = ["linux", "macos", "windows"]
 
 [dependencies]
 ui = "^0.3"

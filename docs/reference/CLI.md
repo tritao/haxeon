@@ -82,7 +82,7 @@ before; `create . --template console` replaces it.
 
 An app builds through its runner project, the CMake project for each platform that `haxeon create` writes beside the
 sources (`linux/`, `macos/`, `windows/`), which is the app's to change (the executable's name, the bundle's Info.plist, the
-version resources, packaging; [PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)): `haxeon build` compiles the module,
+version resources, packaging): `haxeon build` compiles the module,
 writes `build/generated/PLATFORM/haxeon.cmake` and builds this machine's runner with CMake into `build/PLATFORM/app/`,
 where the executable (named after the package), its module and its native packages' libraries sit together, or on macOS
 make the bundle `NAME.app`; on Windows it builds with MSVC, as a Windows program (no console window from Explorer).

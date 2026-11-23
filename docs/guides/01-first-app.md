@@ -1,8 +1,7 @@
 # Your first app
 
 In this guide you create an app, run it, change it, and build an executable you can give to someone
-else. You need a computer running Linux: today `haxeon create` makes apps for Linux only. [Other
-platforms](#other-platforms) says where Windows, macOS, Android and the web stand.
+else, on Linux, macOS or Windows. [Other platforms](#other-platforms) says where Android and the web stand.
 
 ## Before you start
 
@@ -21,7 +20,7 @@ cd my_app
 ```
 
 `haxeon create` makes a new directory from the app template: a window with a counter. It prints what it created and
-what to run next.
+what to run next. It makes the app for Linux, macOS and Windows; `--platforms` narrows that.
 
 ## What is in the project
 
@@ -30,6 +29,8 @@ my_app/
   haxeon.toml      the project's manifest
   src/Main.hx      the app's code
   linux/           the Linux runner: the project that builds the app's executable
+  macos/           the macOS runner, which builds the app as my_app.app
+  windows/         the Windows runner, which builds my_app.exe
 ```
 
 `haxeon.toml` says what the project is and what it uses:
@@ -47,7 +48,7 @@ name = "my_app"
 name = "My App"
 id = "com.example.my_app"
 version = "1.0.0"
-platforms = ["linux"]
+platforms = ["linux", "macos", "windows"]
 
 [dependencies]
 ui = "^0.3"
@@ -64,10 +65,10 @@ haxeon = "^0.3"
 
 [The manifest reference](../reference/MANIFEST.md) describes every field.
 
-`linux/` is the app's **runner**: a small CMake project that builds the executable. It is yours to change, for
-example to rename the executable or package it. `haxeon build` compiles your code, writes a file the runner includes
-(under `build/generated/linux/`), then builds `linux/` with CMake. You do not need to touch the runner to write the app.
-Each platform gets its own runner directory as its runner lands in the template.
+`linux/`, `macos/` and `windows/` are the app's **runners**: each a small CMake project that builds the executable on its
+platform. They are yours to change, for example to rename the executable or package it. `haxeon build` compiles your
+code, writes a file the runner includes (under `build/generated/linux/` on Linux), then builds the runner of the
+platform you are on with CMake. You do not need to touch the runners to write the app.
 
 ## Run it
 
@@ -112,17 +113,19 @@ changed while it runs. To build the version you give to people, compile it ahead
 
 ```sh
 haxeon build --build-mode=release
-./build/linux/app/my_app
+haxeon run --build-mode=release
 ```
 
-A release build compiles your code to C and builds it with your C compiler into one executable,
-`build/linux/app/my_app`. The libraries it uses sit beside it in `build/linux/app/`: ship that directory. A release
-build cannot be edited while it runs; for that, go back to `haxeon run`.
+A release build compiles your code to C and builds it with your C compiler into one executable, in `build/linux/app/`
+on Linux with the libraries it uses beside it: ship that directory. On macOS the app is the bundle
+`build/macos/app/my_app.app`, and on Windows `build/windows/app/` holds `my_app.exe` and its DLLs. A release build cannot
+be edited while it runs; for that, go back to `haxeon run`. [Shipping](05-shipping.md) says what to give people on each
+platform.
 
 ## Other platforms
 
-- **Windows and macOS**: Haxeon runs there, and command-line programs (`haxeon create my_tool --template program`) build
-  and run. The app template has no Windows or macOS runner yet, so `haxeon create my_app` says so and stops.
+- **Linux, macOS and Windows** build and run apps, each through its runner, as above. Console programs
+  (`haxeon create my_tool --template console`) build and run there too.
 - **Android**: Haxeon builds Android apps (arm64-v8a and x86_64) and edits them live, but today only from a checkout of
   the Haxeon repository, not from a release, and not yet through a runner in your project. See
   [Android](../reference/ANDROID.md).

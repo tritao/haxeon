@@ -4,8 +4,8 @@ In this guide you build a small task list with the `ui` package: a list of tasks
 form that adds a task, a second tab with settings, and a switch between a light and a dark theme. Along the way you
 meet layout, text, lists, forms, navigation and theming.
 
-The finished project is in [examples/03-ui-basics/tasks](examples/03-ui-basics/tasks/), without its `linux/` runner, which
-`haxeon create .` adds. It builds and runs on Linux.
+The finished project is in [examples/03-ui-basics/tasks](examples/03-ui-basics/tasks/), without its runners (`linux/`,
+`macos/`, `windows/`), which `haxeon create .` adds. It builds and runs on Linux, macOS and Windows.
 
 ## Start from the app template
 
@@ -17,20 +17,22 @@ cd tasks
 haxeon run
 ```
 
-`haxeon create` wrote three files. `haxeon.toml` makes the project an app and depends on the UI package:
+`haxeon create` wrote the manifest, the code and a runner for each platform. `haxeon.toml` makes the project an app and
+depends on the UI package:
 
 ```toml
 [app]
 name = "Tasks"
 id = "org.example.tasks"
 version = "1.0.0"
-platforms = ["linux"]
+platforms = ["linux", "macos", "windows"]
 
 [dependencies]
 ui = "^0.3"
 ```
 
-`linux/CMakeLists.txt` is the app's Linux runner, which builds the executable. You do not need to change it in this guide.
+`linux/`, `macos/` and `windows/` are the app's runners, which build the executable on each platform. You do not need to
+change them in this guide.
 `src/Main.hx` holds the window's content and the code that opens the window. In this guide the content moves to its own
 file, `src/App.hx`, and `src/Main.hx` keeps only the window:
 
@@ -298,8 +300,8 @@ haxeon run
 Click a task to select it, tick Done, type a title and press Enter, then switch to Settings and turn on the dark theme.
 
 An app's window also takes a few options after `--` that let a script run it without a person: `--frames=N` stops after N
-drawn frames, `--capture=DIR` writes the last frame and diagnostics to DIR (the picture, `frame.png`, is taken with
-ImageMagick's `import`), and `--input-script=PATH` plays timed clicks and typing from a JSON file. Under Linux without a
+drawn frames, `--capture=DIR` writes the last frame and diagnostics to DIR (on Linux the picture too, `frame.png`, taken
+with ImageMagick's `import`), and `--input-script=PATH` plays timed clicks and typing from a JSON file. Under Linux without a
 display, run it with `xvfb-run`:
 
 ```sh

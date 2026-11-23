@@ -33,7 +33,7 @@ geometry-demo/
 Start with a program and add the directories:
 
 ```sh
-haxeon create geometry-demo --template program
+haxeon create geometry-demo --template console
 cd geometry-demo
 mkdir -p native/include ffi
 ```

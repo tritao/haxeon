@@ -10,7 +10,7 @@ name = "tasks"
 name = "Tasks"
 id = "org.example.tasks"
 version = "1.0.0"
-platforms = ["linux"]
+platforms = ["linux", "macos", "windows"]
 
 [dependencies]
 ui = "^0.3"

@@ -5,8 +5,8 @@
  * ```text title="Output" block in an `expected-output.txt` there, and a guide or a reference page (docs/reference) links only to
  * guides, reference pages and URLs.
  * Then each example project, copied out of the tree, builds with this checkout's haxeon: a program with an
- * `expected-output.txt` runs and prints it, and an app (Linux only, where the app template has its runner) gets its runner from
- * `haxeon create .`, builds and opens its window for a few frames, under xvfb-run when there is one. "Your first app" also
+ * `expected-output.txt` runs and prints it, and an app gets its runners from `haxeon create .`, builds through this machine's and
+ * opens its window for a few frames, under xvfb-run when there is one. "Your first app" also
  * builds its app ahead of time and runs that, and "Live editing" runs its app under `run --watch --live` and makes the edits
  * the guide makes. `--no-build` checks the pages only.
  */
@@ -104,10 +104,6 @@ function main() {
 		var project = Path.join([work, example.slug, example.relative]);
 		copyTree(example.source, project);
 		var app = isApp(project);
-		if (app && Sys.systemName() != "Linux") {
-			Sys.println('skip: ${example.slug}/${example.relative} is an app, and the app template has a runner for Linux only');
-			continue;
-		}
 		Sys.println('== ${example.slug}/${example.relative}');
 		if (app) {
 			var log = Path.join([project, "create.log"]);
@@ -139,7 +135,8 @@ function main() {
 function firstApp(root:String, project:String):Void {
 	var fresh = Path.join([Path.directory(project), "fresh"]), log = Path.join([project, "fresh.log"]);
 	FileSystem.createDirectory(fresh);
-	expectStatus(haxeon(["create", "my_app"], fresh, log), 0, log, "haxeon create my_app");
+	expectStatus(haxeon(["create", "my_app"], fresh, log), 0, log,
+		"haxeon create my_app");
 	if (File.getContent(Path.join([fresh, "my_app", "haxeon.toml"])) != File.getContent(Path.join([
 		project,
 		"haxeon.toml"
@@ -148,10 +145,10 @@ function firstApp(root:String, project:String):Void {
 			+ "update the example and the guide");
 	log = Path.join([project, "release.log"]);
 	expectStatus(haxeon(["build", "--build-mode=release"], project, log), 0, log, "haxeon build --build-mode=release");
-	var executable = Path.join([project, "build", "linux", "app", "my_app"]);
-	if (!FileSystem.exists(executable) || FileSystem.exists(executable + ".hl"))
-		Script.fail('FAIL: the release build did not leave $executable alone, without a module beside it');
-	openWindow(project, [], "release", executable);
+	var built = appFiles(Path.join([project, "build", PLATFORM, "app"]));
+	if (!FileSystem.exists(built.executable) || FileSystem.exists(built.module))
+		Script.fail('FAIL: the release build did not leave ${built.executable} alone, without a module beside it');
+	openWindow(project, [], "release", built.executable);
 }
 
 /**
@@ -198,15 +195,16 @@ function uiBasics(example:String, project:String):Void {
 function shipping(project:String):Void {
 	var log = Path.join([project, "release.log"]);
 	expectStatus(haxeon(["build", "--build-mode=release"], project, log), 0, log, "haxeon build --build-mode=release");
-	var app = Path.join([project, "build", "linux", "app"]);
-	if (!FileSystem.exists(Path.join([app, "my_app"])) || FileSystem.exists(Path.join([app, "my_app.hl"])))
-		Script.fail('FAIL: the release build did not leave $app/my_app alone, without a module beside it');
-	var archive = Path.join([project, "my_app-linux-x86_64.tar.gz"]),
+	var built = appFiles(Path.join([project, "build", PLATFORM, "app"]));
+	if (!FileSystem.exists(built.executable) || FileSystem.exists(built.module))
+		Script.fail('FAIL: the release build did not leave ${built.executable} alone, without a module beside it');
+	// The app directory, archived as the guide does on Linux, runs from wherever it is unpacked (a bundle's libraries are in it).
+	var archive = Path.join([project, 'my_app-$PLATFORM.tar.gz']),
 		unpacked = Path.join([Path.directory(project), "unpacked"]);
-	Script.check("tar", ["-czf", archive, "-C", Path.join([project, "build", "linux"]), "app"]);
+	Script.check("tar", ["-czf", archive, "-C", Path.join([project, "build", PLATFORM]), "app"]);
 	FileSystem.createDirectory(unpacked);
 	Script.check("tar", ["-xzf", archive, "-C", unpacked]);
-	openWindow(project, [], "unpacked", Path.join([unpacked, "app", "my_app"]));
+	openWindow(project, [], "unpacked", appFiles(Path.join([unpacked, "app"])).executable);
 	log = Path.join([project, "release-watch.log"]);
 	expectStatus(haxeon(["run", "--build-mode=release", "--watch"], project, log), 2, log,
 		"haxeon run --build-mode=release --watch");
@@ -332,8 +330,32 @@ function openWindow(project:String, arguments:Array<String>, name:String, ?execu
 		{cwd: project, log: log}) : Script.run(command[0],
 		command.slice(1), {cwd: project, log: log});
 	expectStatus(status, 0, log, 'running ${Path.withoutDirectory(project)} ($name) for ten frames');
-	if (!FileSystem.exists(Path.join([capture, "frame.png"])))
+	// The frames it rendered, and on Linux the window's image, which ImageMagick's import takes from the X server.
+	var metrics = content(Path.join([capture, "frame-metrics.json"])),
+		rendered:Null<Int> = metrics == "" ? null : haxe.Json.parse(metrics).renderedFrames;
+	if (rendered == null || rendered < 1)
+		Script.fail('FAIL: ${Path.withoutDirectory(project)} ($name) rendered no frame; its log:\n${File.getContent(log)}');
+	if (PLATFORM == "linux" && !FileSystem.exists(Path.join([capture, "frame.png"])))
 		Script.fail('FAIL: ${Path.withoutDirectory(project)} ($name) wrote no frame.png; its log:\n${File.getContent(log)}');
+}
+
+/** This machine's platform, as `[app].platforms` and the runners name it. */
+final PLATFORM = switch Sys.systemName() {
+	case "Windows": "windows";
+	case "Mac": "macos";
+	case _: "linux";
+};
+
+/** Where a runner's build in `directory` (its app/) puts my_app's executable and module: in a bundle on macOS. */
+function appFiles(directory:String):{executable:String, module:String} {
+	return switch PLATFORM {
+		case "windows": {executable: Path.join([directory, "my_app.exe"]), module: Path.join([directory, "my_app.hl"])};
+		case "macos": {
+			executable: Path.join([directory, "my_app.app", "Contents", "MacOS", "my_app"]),
+			module: Path.join([directory, "my_app.app", "Contents", "Resources", "my_app.hl"])
+		};
+		case _: {executable: Path.join([directory, "my_app"]), module: Path.join([directory, "my_app.hl"])};
+	};
 }
 
 /** A program runs, and prints its `expected-output.txt` when it has one. */
