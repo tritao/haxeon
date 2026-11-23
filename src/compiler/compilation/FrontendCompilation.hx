@@ -1323,13 +1323,22 @@ class FrontendCompilation {
 				break;
 			}
 		}
-		if (anyEdited)
+		if (anyEdited) {
+			// What each function names is kept while it is the same object, so an edit reads only the functions it made.
+			var sources = context.state.irSources;
 			for (moduleName in names) {
 				var state = modules.get(moduleName);
 				if (state == null)
 					continue;
 				var rehashed:Map<String, IrFunction> = [];
 				for (functionName => fn in state.irFunctions) {
+					var named = sources.get(fn);
+					if (named == null) {
+						named = compiler.ir.pipeline.IrSourceRehash.sourcesOf(fn);
+						sources.set(fn, named);
+					}
+					if (!compiler.ir.pipeline.IrSourceRehash.namesStale(named, currentHashes))
+						continue;
 					var replacement = compiler.ir.pipeline.IrSourceRehash.of(fn, currentHashes);
 					if (replacement != fn)
 						rehashed.set(functionName, replacement);
@@ -1344,6 +1353,8 @@ class FrontendCompilation {
 				}
 				writable.editedSinceIrScan = false;
 			}
+			sources.endBuild();
+		}
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
