@@ -41,7 +41,49 @@ class HxiParserMain {
 		return compiler;
 	}
 
+	static function checkWriterLayout():Void {
+		var signature = "extern fn geo_distance(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;",
+			source =
+				'interface Geometry @target("x86_64-linux-gnu") {
+				extern fn version() -> i32;
+				$signature
+			}',
+			model = HxiParser.parse("geometry.hxi", source),
+			fitWidth = signature.length + 4,
+			flat = HxiWriter.write(model, null, null, fitWidth),
+			width = fitWidth - 1,
+			wrapped = HxiWriter.write(model, null, null, width);
+		expect(flat.indexOf('\t$signature\n') >= 0, "a declaration at the column limit should stay on one line");
+		expect(wrapped.indexOf("\textern fn geo_distance(\n\t\ta: ptr<const<geo_point>>,\n\t\tb: ptr<const<geo_point>>\n\t) -> f64;\n")
+			>= 0,
+			"an overflowing signature should wrap its parameters and keep nested pointer types intact");
+		expect(wrapped.indexOf("\textern fn version() -> i32;\n") >= 0, "short declarations should stay on one line");
+		for (text in [flat, wrapped]) {
+			var reparsed = HxiParser.parse("geometry.hxi", text);
+			expect(HxiWriter.write(reparsed, null, null, fitWidth) == flat
+				&& HxiWriter.write(reparsed, null, null, width) == wrapped, "both layouts should round-trip");
+		}
+
+		var lists = HxiParser.parse("lists.hxi",
+			'interface Lists @target("x86_64-linux-gnu")
+			@depends("dependency_one", "dependency_two", "dependency_three") {
+			callback distance = fn(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;
+			struct points @layout(512, 8) { values: array<ptr<const<geo_point>>, 64> @offset(0); }
+		}'),
+			narrow = HxiWriter.write(lists, null, null, 45);
+		expect(narrow.indexOf('@depends(\n\t\t"dependency_one",\n\t\t"dependency_two",\n\t\t"dependency_three"\n\t) {')
+			>= 0,
+			"metadata arguments should wrap one per line");
+		expect(narrow.indexOf("callback distance = fn(\n\t\ta: ptr<const<geo_point>>,") >= 0,
+			"callback parameters should wrap like function parameters");
+		expect(narrow.indexOf("values: array<\n\t\t\tptr<const<geo_point>>,\n\t\t\t64\n\t\t> @offset(0);") >= 0,
+			"generic arguments should wrap from the field's indentation");
+		expect(HxiWriter.write(HxiParser.parse("lists.hxi", narrow)) == HxiWriter.write(lists),
+			"multiline metadata, callbacks and generics should retain their model");
+	}
+
 	static function main():Void {
+		checkWriterLayout();
 		var rawSource = 'interface raw @target("x86_64-linux-gnu") { extern fn invalid(value: i32 @out) -> void; }',
 			raw = HxiParser.parse("raw.hxi", rawSource);
 		switch raw.declarations[0] {

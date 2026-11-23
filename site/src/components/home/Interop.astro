@@ -1,6 +1,7 @@
 ---
 import Diagram from './Diagram.astro';
 import CodeCard from '../CodeCard.astro';
+import binding from './geometry.hxi?raw';
 import { docsUrl } from '../../../docs.mjs';
 const header = `typedef struct geo_point {
   double x;
@@ -14,14 +15,6 @@ double geo_distance(const geo_point *a,
 /* Moves point by (dx, dy) in place. */
 void geo_translate(geo_point *point,
                    double dx, double dy);`;
-const binding = `interface Geometry @target("x86_64-linux-gnu") @library("geometry") {
-  extern fn geo_distance(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;
-  extern fn geo_translate(point: ptr<geo_point>, dx: f64, dy: f64) -> void;
-  struct geo_point @layout(16, 8) {
-    x: f64 @offset(0);
-    y: f64 @offset(8);
-  }
-}`;
 const code = `import Geometry;
 
 function main() {
@@ -153,7 +146,7 @@ moved to: 4, 5`;
     font-size: 0.95rem;
     margin-bottom: var(--hx-space-2);
   }
-  @media (max-width: 900px) {
+  @media (max-width: 1100px) {
     .trio {
       grid-template-columns: minmax(0, 1fr);
     }

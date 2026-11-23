@@ -102,13 +102,13 @@ class CxxHeaderImporterMain {
 				case _:
 					throw "CXX_ABI_V1 calls should use the generic direct-symbol dispatch plan";
 			}
-		expect(generated.indexOf('extern fn __cxx_nkui__DisplayList__reset(__this: ptr<__cxx_nkui__DisplayList>) -> void @symbol("_ZN4nkui11DisplayList5resetEv")')
+		expect(generated.indexOf('extern fn __cxx_nkui__DisplayList__reset(\n\t\t__this: ptr<__cxx_nkui__DisplayList>\n\t) -> void @symbol("_ZN4nkui11DisplayList5resetEv")')
 			>= 0,
 			"instance methods should lower to HXI functions with an opaque this pointer");
-		expect(generated.indexOf('extern fn __cxx_nkui__DisplayList__size(__this: ptr<const<__cxx_nkui__DisplayList>>)')
+		expect(generated.indexOf('extern fn __cxx_nkui__DisplayList__size(\n\t\t__this: ptr<const<__cxx_nkui__DisplayList>>\n\t)')
 			>= 0,
 			"const methods should lower this as a const opaque pointer");
-		expect(generated.indexOf('extern fn __cxx_nkui__consume(value: ptr<__cxx_nkui__DisplayList>, mode: ptr<const<__cxx_nkui__Mode>>)')
+		expect(generated.indexOf('extern fn __cxx_nkui__consume(\n\t\tvalue: ptr<__cxx_nkui__DisplayList>,\n\t\tmode: ptr<const<__cxx_nkui__Mode>>\n\t)')
 			>= 0,
 			"C++ references should lower to non-null pointer ABI values");
 		expect(generated.indexOf('extern fn __cxx_nkui__acquire() -> ptr<__cxx_nkui__DisplayList> @symbol("_ZN4nkui7acquireEv") @borrowed;')
@@ -178,8 +178,8 @@ class CxxHeaderImporterMain {
 			&& callbackHxi.indexOf("callback __cxx_nkui__BinaryCallback = fn(arg0: c_int, arg1: c_int) -> c_int;") >= 0
 			&& callbackHxi.indexOf("callback __cxx_callback_") >= 0
 			&& callbackHxi.indexOf("extern fn __cxx_nkui__acquire_handler() -> __cxx_nkui__BinaryCallback") >= 0
-			&& callbackHxi.indexOf("extern fn __cxx_nkui__apply(callback: __cxx_nkui__BinaryCallback") >= 0
-			&& callbackHxi.indexOf("extern fn __cxx_nkui__set_handler(callback: __cxx_nkui__BinaryCallback @retained)")
+			&& callbackHxi.indexOf("extern fn __cxx_nkui__apply(\n\t\tcallback: __cxx_nkui__BinaryCallback,") >= 0
+			&& callbackHxi.indexOf("extern fn __cxx_nkui__set_handler(\n\t\tcallback: __cxx_nkui__BinaryCallback @retained\n\t)")
 			>= 0,
 			"C++ function-pointer aliases should lower to typed HXI callbacks without a thunk");
 		var callbackPlan = Lambda.find(callbackImport.plans, plan -> plan.name == "__cxx_nkui__apply");
@@ -477,7 +477,7 @@ class CxxHeaderImporterMain {
 			&& CxxTypeTools.isStringView(viewFunction.parameters[0].type)
 			&& viewMethod.thunkSymbol != null
 			&& viewFunction.thunkSymbol != null
-			&& stringViewText.indexOf("value: utf8, value__length: usize") >= 0
+			&& stringViewText.indexOf("value: utf8,\n\t\tvalue__length: usize") >= 0
 			&& stringViewSource.indexOf("std::string_view(arg0, arg0__length)") >= 0
 			&& stringViewProjection.indexOf("public function count(value:String):Int") >= 0
 			&& stringViewProjection.indexOf("haxe.Int64.ofInt(__cxx_value_bytes_0.length)") >= 0
@@ -527,7 +527,7 @@ class CxxHeaderImporterMain {
 			&& CxxTypeTools.isByteSpan(spanFunction.parameters[0].type)
 			&& spanMethod.thunkSymbol != null
 			&& spanFunction.thunkSymbol != null
-			&& spanText.indexOf("value: ptr<u8>, value__length: usize") >= 0
+			&& spanText.indexOf("value: ptr<u8>,\n\t\tvalue__length: usize") >= 0
 			&& spanSource.indexOf("std::span<const std::byte>(arg0, arg0__length)") >= 0
 			&& spanSource.indexOf("std::span<const std::uint8_t>(arg0, arg0__length)") >= 0
 			&& spanProjection.indexOf("public function byteCount(value:haxe.io.Bytes):Int") >= 0

@@ -5,7 +5,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { load } from 'cheerio';
 
-const haxeon = fileURLToPath(new URL('../../scripts/haxeon', import.meta.url));
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const haxeon = join(root, 'scripts/haxeon');
+const haxe = join(root, '.tools/haxe/haxe');
 const $ = load(await readFile(new URL('../dist/index.html', import.meta.url), 'utf8'));
 const examples = $('[data-example]').toArray();
 if (!examples.length) throw new Error('The homepage has no runnable examples.');
@@ -81,14 +83,17 @@ void geo_translate(geo_point *point, double dx, double dy) {
   for (const [name, content] of Object.entries(files)) await writeFile(join(project, name), content);
 
   const shown = sourceFor(block, 'hxi');
-  const target = shown.match(/@target\("([^"]+)"\)/)?.[1];
+  const target = shown.match(/@target\(\s*"([^"]+)"\s*\)/)?.[1];
   if (!target) throw new Error('geometry: missing target in rendered HXI');
   run([
     'ffi', 'import', `--target=${target}`, '--library=geometry', '--interface=Geometry',
     '--output=geometry.hxi', 'native/geometry.h',
   ], project);
-  const generated = await readFile(join(project, 'geometry.hxi'), 'utf8');
-  if (generated.replace(/^\/\/[^\n]*\n/, '').replaceAll('\t', '  ') !== shown) {
+  const generated = execFileSync(haxe, [
+    'common.hxml', '-cp', 'site/scripts', '--run', 'RenderGeometryHxi', join(project, 'geometry.hxi'),
+  ], { cwd: root, encoding: 'utf8' });
+  const sample = await readFile(new URL('../src/components/home/geometry.hxi', import.meta.url), 'utf8');
+  if (generated !== sample || generated.replaceAll('\t', '  ') !== shown) {
     throw new Error('geometry: rendered HXI differs from the generated binding');
   }
   return run(['run', '--quiet', '--jobs', '2'], project);

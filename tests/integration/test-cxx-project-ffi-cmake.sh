@@ -169,7 +169,7 @@ if command -v dumpbin.exe >/dev/null 2>&1 || command -v dumpbin >/dev/null 2>&1;
 	dumpbin_dependencies "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix"
 fi
 grep -q '@owned("haxeon_cxx_thunk_' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
-grep -q '__cxx_cxxthunk__set_handler(callback: __cxx_cxxthunk__BinaryCallback @retained)' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
+grep -q 'callback: __cxx_cxxthunk__BinaryCallback @retained' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project.hxi"
 grep -q 'return OwnedManagedWidget.adopt' "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/CxxCmakeThunkProjectFunctions.hx"
 
 set +e

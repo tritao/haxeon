@@ -1,0 +1,17 @@
+interface Geometry
+	@target("x86_64-linux-gnu")
+	@library("geometry") {
+	extern fn geo_distance(
+		a: ptr<const<geo_point>>,
+		b: ptr<const<geo_point>>
+	) -> f64;
+	extern fn geo_translate(
+		point: ptr<geo_point>,
+		dx: f64,
+		dy: f64
+	) -> void;
+	struct geo_point @layout(16, 8) {
+		x: f64 @offset(0);
+		y: f64 @offset(8);
+	}
+}
