@@ -46,7 +46,9 @@ class IrSharedRuntimeCalls {
 	public static function apply(program:IrProgram, ?memo:IrSharedCallsMemo):{program:IrProgram,
 		helpers:Array<String>} {
 		var helpers:Map<String, IrFunction> = [for (fn in program.functions) if (isHelper(fn.name)) fn.name => fn],
-			added:Array<IrFunction> = [];
+			added:Array<IrFunction> = [],
+			madeBefore:Map<String, IrFunction> = memo == null ? [] : memo.helpers,
+			made:Map<String, IrFunction> = [];
 		// The helper of each runtime function by signature, so a call site whose helper is known spells no name.
 		var named:Map<String, IrTypeMap<String>> = [];
 		function helper(name:String, arguments:Array<IrType>, result:IrType):String {
@@ -63,11 +65,16 @@ class IrSharedRuntimeCalls {
 				+ IrTypeIdentity.text(result);
 			bySignature.set(signature, key);
 			if (!helpers.exists(key)) {
-				var builder = new IrBuilder(),
-					parameters = [for (index in 0...arguments.length) builder.argument("value" + index,
-						arguments[index])];
-				builder.returnValue(builder.call(name, parameters, result));
-				var fn = new IrFunction(key, builder.arguments, result, builder.blocks, GeneratedHelper);
+				// A helper is its key's alone, so the one made for it before is the same object: what is kept for it stays.
+				var fn = madeBefore.get(key);
+				if (fn == null) {
+					var builder = new IrBuilder(),
+						parameters = [for (index in 0...arguments.length) builder.argument("value" + index,
+							arguments[index])];
+					builder.returnValue(builder.call(name, parameters, result));
+					fn = new IrFunction(key, builder.arguments, result, builder.blocks, GeneratedHelper);
+				}
+				made.set(key, fn);
 				helpers.set(key, fn);
 				added.push(fn);
 			}
@@ -121,8 +128,10 @@ class IrSharedRuntimeCalls {
 			kept.set(fn.name, {source: fn, result: rewritten, calls: calls});
 			result.functions.push(rewritten);
 		}
-		if (memo != null)
+		if (memo != null) {
 			memo.entries = kept;
+			memo.helpers = made;
+		}
 		added.sort((left, right) -> left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
 		for (fn in added)
 			result.functions.push(fn);
@@ -149,11 +158,15 @@ class IrSharedCallsMemo {
 	/** Replaced as a whole by each run (`IrSharedRuntimeCalls.apply`), never changed in place, so a copy shares it. */
 	public var entries:Map<String, SharedCallsEntry> = [];
 
+	/** The helpers the last run made, by name; replaced as a whole like `entries`. */
+	public var helpers:Map<String, IrFunction> = [];
+
 	public function new() {}
 
 	public function copy():IrSharedCallsMemo {
 		var result = new IrSharedCallsMemo();
 		result.entries = entries;
+		result.helpers = helpers;
 		return result;
 	}
 }
