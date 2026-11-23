@@ -467,6 +467,7 @@ reflect-object-dispatch
 reflect-string-fields
 reflect-typed-objects
 rpc-lifecycle
+rpc-wire-method
 same-package-module-type
 scalar-closure-boundaries
 scalar-closure-identity

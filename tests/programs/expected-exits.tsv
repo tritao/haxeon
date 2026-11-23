@@ -422,6 +422,7 @@ jit-boxed-allocation	42
 gc-shared-graph	42
 captured-call-reassignment	42
 rpc-lifecycle	42
+rpc-wire-method	42
 native-static-codec	42
 static-array-inference	42
 nullable-concrete-interfaces	42

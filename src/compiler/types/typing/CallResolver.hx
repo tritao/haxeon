@@ -2259,6 +2259,31 @@ class CallResolver {
 			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(keyed), [source]), resultType,
 				span);
 		}
+		if (name == "haxeon.rpc.RpcMethod.wire") {
+			if (arguments.length != 1)
+				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+			var owner = "haxeon.rpc.RpcMethod";
+			switch expectedType {
+				case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
+					var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
+						1);
+					var constructorArguments = [id];
+					for (type in [request, response]) {
+						var keyed = WireCodecGenerator.request(session, type, session.currentContext.name, span);
+						constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.encodeName(keyed)),
+							TFunction([keyed], TBytes, []), span));
+						constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
+							TFunction([TBytes], keyed, []), span));
+					}
+					var constructor = session.signatures.required(owner + ".new");
+					var typed = session.representation.adaptConstructorArguments(expectedType, owner, constructor,
+						constructorArguments);
+					session.invalidateUnknownCall(scope);
+					return new TypedExpression(TNew(owner, typed, true), expectedType, span);
+				default:
+					fail("E1009", "RpcMethod.wire requires an expected RpcMethod<Request, Response> type", span);
+			}
+		}
 		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);

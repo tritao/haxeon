@@ -49,20 +49,16 @@ accepted refusal. Handshake polling processes at most one send and one receive.
 
 ## Methods and asynchronous responses
 
-Give each method a permanent positive integer id and concrete request/response
-codecs. Construct codecs at concrete types so compiler-owned MessagePack calls
-can generate them. A descriptor preserves both types through `call` and
-`register`; dispatch stores byte-oriented closures without Dynamic/reflection.
+Give each method a permanent positive integer id. For wire types,
+`RpcMethod.wire(id)` uses the expected `RpcMethod<Request, Response>` type to
+generate MessagePack codecs for both types. The descriptor preserves both types
+through `call` and `register` without reflection or `Dynamic` in the codecs.
 
 ```haxe
 @:wire typedef Query = { @:id(1) var name:String; }
 @:wire typedef Answer = { @:id(1) var text:String; }
 
-var method = new RpcMethod<Query, Answer>(100,
-    function(value:Query) return MessagePack.encode(value),
-    function(bytes:Bytes):Query return MessagePack.decode(bytes),
-    function(value:Answer) return MessagePack.encode(value),
-    function(bytes:Bytes):Answer return MessagePack.decode(bytes));
+var method:RpcMethod<Query, Answer> = RpcMethod.wire(100);
 
 server.register(method, function(request, context) {
     // Retaining context for later asynchronous completion is supported.
@@ -72,6 +68,9 @@ client.call(method, {name: "workspace"}, 1000,
     function(answer) { Sys.println(answer.text); },
     function(error) { Sys.println(error.code); });
 ```
+
+For custom codecs, pass the functions explicitly to
+`new RpcMethod<Query, Answer>(100, encodeQuery, decodeQuery, encodeAnswer, decodeAnswer)`.
 
 Poll each endpoint from its event loop. Inject a monotonic clock returning
 milliseconds; `RpcContext.deadline()` uses the same clock domain. Polling is
