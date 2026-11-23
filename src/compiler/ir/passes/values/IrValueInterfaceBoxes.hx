@@ -113,6 +113,29 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 		return result;
 	}
 
+	/**
+	 * `rewrite` of functions a stage generated besides `existing`, in the stage `stage`: with `lineage` each function's rewrite is
+	 * derived from its version and what it read (`IrFunctionStages.derived`), and so are the helpers, made with `types` and
+	 * `builder` past the encode point.
+	 */
+	public static function rewriteDerived(stage:String, functions:Array<IrFunction>, objects:Array<IrObject>,
+			interfaces:Array<IrInterface>, existing:Array<IrFunction>,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, checks:Bool, types:compiler.ir.model.IrTypeIds,
+			builder:compiler.ir.model.IrBodyBuilder):Array<IrFunction> {
+		var pass = new IrValueInterfaceBoxes(objects, interfaces, existing,
+			new IrDerivedHelpers(stage, lineage, checks, types, builder));
+		pass.functionMap = new IrFunctionIndex(stage, existing.concat(functions));
+		var rewritten = [
+			for (fn in functions)
+				IrFunctionStages.derived(stage, fn.name, pass, lineage == null ? 0 : lineage.versionOf(fn), lineage,
+				checks, types, builder, reader -> pass.transform(fn, 0, reader))
+		];
+		var result = pass.finish(rewritten);
+		for (box in pass.made)
+			objects.push(box);
+		return result;
+	}
+
 	public function summarize(fn:IrFunction):Int
 		return 0;
 

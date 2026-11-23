@@ -25,8 +25,26 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	@:processWide("a contribution memo's key, only ever read")
 	public static final USES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrClosureUses>("closure-uses");
 
-	/** The fact of a function type, by its key: never stated for a candidate, 0 for any other. */
+	static inline final STAGE = "scalar-closures";
+
+	/** The stages the adapters' interface boxes and checked casts are derived in. */
+	static inline final BOX_STAGE = "scalar-closure-boxes";
+
+	static inline final CAST_STAGE = "scalar-closure-casts";
+
+	/**
+	 * The fact of a function type, by its key: 0 when it is no candidate, else its scalar ABI as text (`abi`), the physical type
+	 * and the fields its value arguments and result pass as, interned.
+	 */
 	static inline final CANDIDATE = 0;
+
+	/** The fact of an object name: the inline enum stored as that object, interned; 0 for none. */
+	static inline final INLINE_ENUM = 1;
+
+	// Helper kinds (`request`): each is made for a closure type.
+	static inline final ERASURE = 0;
+	static inline final RESTORATION = 1;
+	static inline final SIGNATURE_CHECK = 2;
 
 	final program:IrProgram;
 	final objects:Map<String, IrObject>;
@@ -38,9 +56,15 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	final erasures:Map<String, {maker:String, environment:String}> = [];
 	final restorations:Map<String, String> = [];
 	final signatureChecks:Map<String, String> = [];
-	final generatedFunctions:Array<IrFunction> = [];
+
+	/** The erased-call adapters asked for, by closure type, each made and rewritten in `finish`. */
+	final erasedCalls:Array<IrType> = [];
+
 	final generatedMakers:Array<IrFunction> = [];
 	final generatedObjects:Array<IrObject> = [];
+
+	/** By closure type key, the digest its helpers are named by. */
+	final suffixes:Map<String, String> = [];
 
 	/** How many operands read each value id of the function `IrClosureUses.read` is reading, its storage kept from one to the next. */
 	final useCounts:Array<Int> = [];
@@ -61,7 +85,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	 * next stage: edited in place, or a copy when a cache holds the body.
 	 */
 	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void
-		program.functions = compiler.ir.pipeline.IrFunctionStages.apply("scalar-closures",
+		program.functions = compiler.ir.pipeline.IrFunctionStages.apply(STAGE,
 			new IrScalarClosures(program, types == null ? IrTypeIds.ofFunctions(program.functions) : types,
 			scratch == null ? new IrPassScratch() : scratch),
 			program.functions);
@@ -69,8 +93,10 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	/**
 	 * The scalar closure ABI per function (`IrFunctionPass`). The candidate closure types are chosen over the whole program from
 	 * what each function's rows do with closures (`IrClosureUses`, one record per version in a session); the rewrite of a function
-	 * reads, for each function type its types name, whether it is a candidate (`CANDIDATE`): one that names none keeps its form
-	 * unread while those facts hold, and one that names a candidate is rewritten each run, with the adapters it makes.
+	 * reads, for each function type its types name, the type's scalar ABI (`CANDIDATE`), and asks for the adapters it calls
+	 * (`request`), so a session keeps it while those ABIs hold. The adapters are derived (`IrFunctionStages.derived`) from the
+	 * closure type their name digests, reading its ABI and the inline enums they box (`INLINE_ENUM`); the interface boxes and
+	 * checked casts they need are derived from them in stages of their own.
 	 */
 	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
@@ -138,8 +164,62 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			candidates.remove(name);
 	}
 
-	public function fact(kind:Int, key:String):Int
-		return candidates.exists(key) ? compiler.ir.reuse.IrFacts.UNKNOWN : 0;
+	public function fact(kind:Int, key:String):Int {
+		if (kind == INLINE_ENUM) {
+			var name = inlineEnums.get(key);
+			return name == null ? 0 : intern(name);
+		}
+		var type = candidates.get(key);
+		return type == null ? 0 : intern(abi(type));
+	}
+
+	/** A number for `text` in the session's facts; without a session nothing is checked again, so any number does. */
+	function intern(text:String):Int {
+		var known = lineage;
+		return known == null ? 1 : known.memos.facts.intern(text);
+	}
+
+	/**
+	 * What a rewrite or an adapter reads of the candidate `type`: its physical type, and for each value argument and a value result
+	 * the slots it passes as, each with its path and the physical types of the fields along it.
+	 */
+	function abi(type:IrType):String {
+		var text = new StringBuf();
+		text.add(key(mapType(type)));
+		switch type {
+			case Function(arguments, result):
+				for (index in 0...arguments.length)
+					if (isValue(arguments[index])) {
+						text.add("|" + index);
+						addSlots(text, arguments[index]);
+					}
+				if (isValue(result)) {
+					text.add("|result");
+					addSlots(text, result);
+				}
+			default:
+		}
+		return text.toString();
+	}
+
+	function addSlots(text:StringBuf, type:IrType):Void
+		for (slot in slots(type)) {
+			text.add(":" + slot.path.join(".") + "=" + key(mapType(slot.type)));
+			var logical = type;
+			for (part in slot.path) {
+				var field = fieldOf(logical, part);
+				text.add("," + key(mapType(field.type)));
+				logical = field.type;
+			}
+		}
+
+	/** Reads the ABI of every function type `type` names where `mapType` looks. */
+	function readTypeKeys(type:IrType, reader:compiler.ir.reuse.IrFactReader):Void {
+		var keys = [];
+		addFunctionKeys(type, keys);
+		for (name in keys)
+			reader.read(CANDIDATE, name);
+	}
 
 	static function addFunctionKeys(type:IrType, keys:Array<String>):Void
 		switch type {
@@ -187,11 +267,20 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				row = body.nextRow(row);
 			}
 		}
-		return candidates.keys().hasNext() ? rewriteFunction(fn, body) : fn;
+		return candidates.keys().hasNext() ? rewriteFunction(fn, body, reader) : fn;
 	}
 
 	public function request(kind:Int, type:IrType, name:Null<String>):Void
-		throw new InternalError("The scalar closure ABI asks for no helper");
+		switch kind {
+			case ERASURE:
+				ensureErasure(type);
+			case RESTORATION:
+				ensureRestoration(type);
+			case SIGNATURE_CHECK:
+				ensureSignatureCheck(type);
+			default:
+				throw new InternalError('Unknown scalar closure helper kind $kind');
+		}
 
 	function note(type:IrType):Bool {
 		return switch type {
@@ -244,10 +333,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			return rewritten;
 		var generated:Array<IrFunction> = [],
 			generatedIndex = 0;
-		while (generatedIndex < generatedFunctions.length) {
-			var fn = generatedFunctions[generatedIndex++];
-			generated.push(rewriteFunction(fn, bodyOf(fn)));
-		}
+		// Rewriting an adapter can ask for more.
+		while (generatedIndex < erasedCalls.length)
+			generated.push(erasedCall(erasedCalls[generatedIndex++]));
 		var mappedObjects:Array<IrObject> = [for (object in program.objects)
 			{
 				name:object.name,
@@ -293,9 +381,12 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			{
 				name:field.name, type:mapType(field.type)
 			}];
-		generated = IrValueInterfaceBoxes.rewrite(generated.concat(generatedMakers), program.objects,
-			program.interfaces, rewritten);
-		generated = IrCheckedDynamicCasts.rewrite(generated, program.objects, false, rewritten);
+		// The adapters' interface boxes and checked casts are derived from each adapter's version, so a kept adapter keeps them.
+		var checks = lineage != null && lineage.checks;
+		generated = IrValueInterfaceBoxes.rewriteDerived(BOX_STAGE, generated.concat(generatedMakers), program.objects,
+			program.interfaces, rewritten, lineage, checks, types, scratch.bodyBuilder);
+		generated = IrCheckedDynamicCasts.rewriteBodies(CAST_STAGE, generated, program.objects, false, rewritten, false,
+			false, types, scratch.bodyBuilder, lineage, checks);
 		var result = rewritten.concat(generated);
 		program.functions = result;
 		var hasTypeTest = false;
@@ -322,29 +413,29 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			default: false;
 		};
 
-	function inlineEnum(type:IrType):Null<String>
+	function inlineEnum(type:IrType, reader:compiler.ir.reuse.IrFactReader):Null<String>
 		return switch type {
-			case Obj(name): inlineEnums.get(name);
+			case Obj(name): reader.read(INLINE_ENUM, name) == 0 ? null : inlineEnums.get(name);
 			default: null;
 		};
 
-	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType, reader:compiler.ir.reuse.IrFactReader):IrValue {
 		switch type {
 			case EnumTag(name):
 				return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
 			default:
 		}
-		var enumName = inlineEnum(type);
+		var enumName = inlineEnum(type, reader);
 		return enumName == null ? builder.toDyn(value) : builder.intrinsic(InlineEnumBox(Enum(enumName)), [value], Dyn);
 	}
 
-	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType, reader:compiler.ir.reuse.IrFactReader):IrValue {
 		switch type {
 			case EnumTag(name):
 				return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type);
 			default:
 		}
-		var enumName = inlineEnum(type);
+		var enumName = inlineEnum(type, reader);
 		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)),
 			[value], type);
 	}
@@ -404,7 +495,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		return false;
 	}
 
-	function rewriteFunction(fn:IrFunction, source:IrBody):IrFunction {
+	function rewriteFunction(fn:IrFunction, source:IrBody, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (!needsRewrite(source))
 			return fn;
 		var body = source.forEditing(scratch.bodyBuilder), limit = body.valueLimit();
@@ -427,10 +518,11 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 						&& body.symbol(row).name == "__closure_is_of_type"):
 						var tested = typeValues.get(body.operand(row, 1));
 						if (tested != null && needsBoundaryAdapter(tested)) {
+							reader.request(SIGNATURE_CHECK, tested);
 							body.beginRow();
 							body.pushOperand(body.operand(row, 0));
 							var check = body.endRow(IrOpcode.Call, body.output(row),
-								IrSymbol.of(ensureSignatureCheck(tested)).id,
+								IrSymbol.of(signatureCheckName(tested)).id,
 								where);
 							body.linkAfter(block, row, check);
 							body.removeRow(block, row);
@@ -438,18 +530,17 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 					case IrOpcode.ToDyn if (needsBoundaryAdapter(body.valueType(body.operand(row, 0)))):
 						var input = body.operand(row, 0),
 							type = body.valueType(input),
-							erasure = ensureErasure(type),
 							boxed = body.newValue("$scalar-closure:erased", body.typeId(erasedType(type)));
+						reader.request(ERASURE, type);
 						body.beginRow();
 						body.pushOperand(input);
 						body.linkBefore(block, row,
-							body.endRow(IrOpcode.Call, boxed, IrSymbol.of(erasure.maker).id, where));
+							body.endRow(IrOpcode.Call, boxed, IrSymbol.of(erasureName(type)).id, where));
 						body.setOperand(row, 0, boxed);
-					case IrOpcode.SafeCast if ((switch (body.valueType(body.operand(row, 0))) {
-						case Dyn: true;
-						default: false;
-					}) && needsBoundaryAdapter(body.valueType(body.output(row)))): body.setOperation(row, IrOpcode.Call,
-						IrSymbol.of(ensureRestoration(body.valueType(body.output(row)))).id);
+					case IrOpcode.SafeCast if (restoresFromDynamic(body, row)):
+						var type = body.valueType(body.output(row));
+						reader.request(RESTORATION, type);
+						body.setOperation(row, IrOpcode.Call, IrSymbol.of(restorationName(type)).id);
 					case IrOpcode.StaticClosure if (candidates.exists(key(body.valueType(body.output(row))))):
 						body.setAux(row, IrSymbol.of(IrScalarArguments.PREFIX + body.symbol(row).name).id);
 					case IrOpcode.InstanceClosure if (candidates.exists(key(body.valueType(body.output(row))))):
@@ -471,6 +562,13 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		body.setResult(body.typeId(mapType(body.types.type(body.result))));
 		return IrFunction.ofOwnedBody(body);
 	}
+
+	/** Whether the cast at `row` takes a closure that needs a boundary adapter back from `Dyn`. */
+	function restoresFromDynamic(body:IrBody, row:Int):Bool
+		return switch body.valueType(body.operand(row, 0)) {
+			case Dyn: needsBoundaryAdapter(body.valueType(body.output(row)));
+			default: false;
+		};
 
 	/**
 	 * Replaces the closure call at `row` by one that passes each value argument's fields and, for a value result, a reference
@@ -567,33 +665,86 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		}
 	}
 
-	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */
-	function ensureSignatureCheck(type:IrType):String {
-		var callable = switch type {
+	/** The digest the adapters of the closure type whose key is `signature` are named by. */
+	function suffixOf(signature:String):String {
+		var known = suffixes.get(signature);
+		if (known == null) {
+			known = compiler.core.TextDigest.sha256(signature).substr(0, 32);
+			suffixes.set(signature, known);
+		}
+		return known;
+	}
+
+	/**
+	 * The adapter `name`, which `make` makes from the closure type the name digests: derived (`IrFunctionStages.derived`), so a
+	 * session keeps it while the ABIs and inline enums it read hold. What it adds to the program besides itself (objects, natives,
+	 * the adapters it calls) is added by its caller, every run.
+	 */
+	function helper(name:String, make:compiler.ir.reuse.IrFactReader->IrFunction):IrFunction {
+		var known = lineage;
+		return compiler.ir.pipeline.IrFunctionStages.derived(STAGE, name, this,
+			compiler.ir.pipeline.IrFunctionStages.FROM_NAME, known, known != null && known.checks, types,
+			scratch.bodyBuilder, make);
+	}
+
+	static function callableOf(type:IrType):IrType
+		return switch type {
 			case Nullable(inner): inner;
 			default: type;
-		}, signatureKey = key(callable), existing = signatureChecks.get(signatureKey);
+		};
+
+	function signatureCheckName(type:IrType):String
+		return "$scalar-closure:signature-check:" + suffixOf(key(callableOf(type)));
+
+	function erasureName(type:IrType):String
+		return switch type {
+			case Nullable(_): "$scalar-closure:erase-nullable:" + suffixOf(key(type));
+			default: "$scalar-closure:erase:" + suffixOf(key(type));
+		};
+
+	function restorationName(type:IrType):String
+		return switch type {
+			case Nullable(_): "$scalar-closure:restore-nullable:" + suffixOf(key(type));
+			default: "$scalar-closure:restore:" + suffixOf(key(type));
+		};
+
+	static function logicalOf(type:IrType, what:String):{arguments:Array<IrType>, result:IrType} {
+		switch type {
+			case Function(arguments, result):
+				return {arguments: arguments, result: result};
+			default:
+				throw new InternalError('Scalar closure $what requires a function');
+		}
+	}
+
+	/** The closure type a receiver query compares with: `type` taking the environment `environment` first. */
+	static function probeOf(type:IrType, environment:String, what:String):IrType
+		return switch type {
+			case Function(args, result): Function([Obj(environment)].concat(args), result);
+			default: throw new InternalError('Expected $what closure');
+		};
+
+	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */
+	function ensureSignatureCheck(type:IrType):String {
+		var callable = callableOf(type), signatureKey = key(callable), existing = signatureChecks.get(signatureKey);
 		if (existing != null)
 			return existing;
-		var suffix = compiler.core.TextDigest.sha256(signatureKey).substr(0, 32),
+		var suffix = suffixOf(signatureKey),
 			name = "$scalar-closure:signature-check:" + suffix,
 			environment = "$scalar-closure:environment:" + suffix,
 			wrapper = "$scalar-closure:erased-call:" + suffix;
 		signatureChecks.set(signatureKey, name);
 		ensureErasure(callable);
-		var b = new IrBuilder(),
-			closure = b.argument("closure", Dyn),
-			probeType:IrType = switch erasedType(callable) {
-				case Function(args, result): Function([Obj(environment)].concat(args), result);
-				default: throw new InternalError("Expected erased closure");
-			},
+		var probeType = probeOf(erasedType(callable), environment, "erased"),
+			query = receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType);
+		generatedMakers.push(helper(name, reader -> {
+			var b = new IrBuilder(),
+				closure = b.argument("closure", Dyn),
 				probe = b.staticClosure(wrapper, probeType),
-				found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [
-					closure,
-					probe
-				], Dyn);
-		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
-		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
+				found = b.call(query, [closure, probe], Dyn);
+			b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
+			new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper);
+		}));
 		return name;
 	}
 
@@ -610,33 +761,33 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				}))
 					throw new InternalError("Nullable scalar closure erasure requires a function");
 				var innerErasure = ensureErasure(inner),
-					suffix = compiler.core.TextDigest.sha256(signature).substr(0, 32),
-					maker = "$scalar-closure:erase-nullable:" + suffix,
+					maker = "$scalar-closure:erase-nullable:" + suffixOf(signature),
 					result = {
 						maker: maker,
 						environment: innerErasure.environment
 					};
 				erasures.set(signature, result);
-				var outputType = erasedType(type),
-					b = new IrBuilder(),
-					source = b.argument("closure", type),
-					absent = b.createBlock(),
-					present = b.createBlock();
-				b.branch(b.equal(source, b.constNull(type)), absent, present);
-				b.select(absent);
-				b.returnValue(b.constNull(outputType));
-				b.select(present);
-				b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)),
-					outputType));
-				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks, GeneratedHelper));
+				generatedMakers.push(helper(maker, reader -> {
+					var outputType = erasedType(type),
+						b = new IrBuilder(),
+						source = b.argument("closure", type),
+						absent = b.createBlock(),
+						present = b.createBlock();
+					b.branch(b.equal(source, b.constNull(type)), absent, present);
+					b.select(absent);
+					b.returnValue(b.constNull(outputType));
+					b.select(present);
+					b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)),
+						outputType));
+					new IrFunction(maker, b.arguments, outputType, b.blocks, GeneratedHelper);
+				}));
 				return result;
 			case Function(_, _):
 			default:
 				throw new InternalError("Scalar closure erasure requires a function");
 		}
-		var suffix = compiler.core.TextDigest.sha256(signature).substr(0, 32),
+		var suffix = suffixOf(signature),
 			environment = "$scalar-closure:environment:" + suffix,
-			wrapper = "$scalar-closure:erased-call:" + suffix,
 			maker = "$scalar-closure:erase:" + suffix,
 			result = {
 				maker: maker,
@@ -644,29 +795,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			};
 		erasures.set(signature, result);
 		ensureRestoration(type);
-		var logical = switch type {
-			case Function(arguments, result): {arguments: arguments, result: result};
-			default: throw new InternalError("Scalar closure erasure requires a function");
-		};
-		var body = new IrBuilder(),
-			receiver = body.argument("receiver", Obj(environment)),
-			arguments = [for (index in 0...logical.arguments.length) body.argument('argument$index', Dyn)],
-			adapted = [for (index in 0...logical.arguments.length)
-				(switch (logical.arguments[index]) {
-					case Dyn: true;
-					default: false;
-				})
-					? arguments[index] : fromDynamic(body, arguments[index], logical.arguments[index])],
-					closure = body.fieldGet(receiver, "closure", type),
-					call = body.callClosure(closure, adapted, logical.result);
-		body.returnValue((switch (logical.result) {
-			case Void: true;
-			default: false;
-		}) ? body.constNull(Dyn) : (switch (logical.result) {
-			case Dyn: true;
-			default: false;
-		}) ? call : toDynamic(body, call, logical.result));
-		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks, GeneratedHelper));
+		erasedCalls.push(type);
 		generatedObjects.push({
 			name: environment,
 			isValue: false,
@@ -675,36 +804,68 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			fields: [{name: "closure", type: mapType(type)}],
 			methods: []
 		});
-		var make = new IrBuilder(),
-			source = make.argument("closure", mapType(type)),
-			missing = make.createBlock(),
-			present = make.createBlock();
-		make.branch(make.equal(source, make.constNull(mapType(type))), missing, present);
-		make.select(missing);
-		make.returnValue(make.constNull(erasedType(type)));
-		make.select(present);
 		var restoredEnvironment = "$scalar-closure:restored-environment:" + suffix,
 			restoredWrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
-			probeType:IrType = switch mapType(type) {
-				case Function(args, result): Function([Obj(restoredEnvironment)].concat(args), result);
-				default: throw new InternalError("Expected scalar closure");
-			},
-				probe = make.staticClosure(restoredWrapper, probeType),
-				found = make.call(receiverQuery("$scalar-closure:receiver:typed:" + suffix, mapType(type), probeType), [
-					source,
-					probe
-				], Dyn),
+			query = receiverQuery("$scalar-closure:receiver:typed:" + suffix, mapType(type),
+				probeOf(mapType(type), restoredEnvironment, "scalar"));
+		generatedMakers.push(helper(maker, reader -> {
+			readTypeKeys(type, reader);
+			var physical = mapType(type),
+				make = new IrBuilder(),
+				source = make.argument("closure", physical),
+				missing = make.createBlock(),
+				present = make.createBlock();
+			make.branch(make.equal(source, make.constNull(physical)), missing, present);
+			make.select(missing);
+			make.returnValue(make.constNull(erasedType(type)));
+			make.select(present);
+			var probe = make.staticClosure(restoredWrapper, probeOf(physical, restoredEnvironment, "scalar")),
+				found = make.call(query, [source, probe], Dyn),
 				allocate = make.createBlock(),
 				unwrap = make.createBlock();
-		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
-		make.select(unwrap);
-		make.returnValue(make.fieldGet(make.safeCast(found, Obj(restoredEnvironment)), "closure", erasedType(type)));
-		make.select(allocate);
-		var captured = make.newObject(environment);
-		make.fieldSet(captured, "closure", source);
-		make.returnValue(make.instanceClosure(wrapper, captured, erasedType(type)));
-		generatedMakers.push(new IrFunction(maker, make.arguments, erasedType(type), make.blocks, GeneratedHelper));
+			make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
+			make.select(unwrap);
+			make.returnValue(make.fieldGet(make.safeCast(found, Obj(restoredEnvironment)), "closure",
+				erasedType(type)));
+			make.select(allocate);
+			var captured = make.newObject(environment);
+			make.fieldSet(captured, "closure", source);
+			make.returnValue(make.instanceClosure("$scalar-closure:erased-call:" + suffix, captured,
+				erasedType(type)));
+			new IrFunction(maker, make.arguments, erasedType(type), make.blocks, GeneratedHelper);
+		}));
 		return result;
+	}
+
+	/** The erased-call adapter of the closure type `type`: it takes its arguments as `Dyn`, rewritten to the type's ABI. */
+	function erasedCall(type:IrType):IrFunction {
+		var suffix = suffixOf(key(type)),
+			wrapper = "$scalar-closure:erased-call:" + suffix,
+			environment = "$scalar-closure:environment:" + suffix;
+		return helper(wrapper, reader -> {
+			readTypeKeys(type, reader);
+			var logical = logicalOf(type, "erasure"),
+				body = new IrBuilder(),
+				receiver = body.argument("receiver", Obj(environment)),
+				arguments = [for (index in 0...logical.arguments.length) body.argument('argument$index', Dyn)],
+				adapted = [for (index in 0...logical.arguments.length)
+					(switch (logical.arguments[index]) {
+						case Dyn: true;
+						default: false;
+					})
+						? arguments[index] : fromDynamic(body, arguments[index], logical.arguments[index], reader)],
+						closure = body.fieldGet(receiver, "closure", type),
+						call = body.callClosure(closure, adapted, logical.result);
+			body.returnValue((switch (logical.result) {
+				case Void: true;
+				default: false;
+			}) ? body.constNull(Dyn) : (switch (logical.result) {
+				case Dyn: true;
+				default: false;
+			}) ? call : toDynamic(body, call, logical.result, reader));
+			var fn = new IrFunction(wrapper, body.arguments, Dyn, body.blocks, GeneratedHelper);
+			rewriteFunction(fn, bodyOf(fn), reader);
+		});
 	}
 
 	function receiverQuery(name:String, first:IrType, second:IrType):String {
@@ -740,33 +901,30 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				}))
 					throw new InternalError("Nullable scalar closure restoration requires a function");
 				var innerMaker = ensureRestoration(inner),
-					maker = "$scalar-closure:restore-nullable:"
-						+ compiler.core.TextDigest.sha256(signatureKey).substr(0, 32),
-					b = new IrBuilder(),
-					original = b.argument("closure", Dyn),
-					missing = b.createBlock(),
-					present = b.createBlock();
+					maker = "$scalar-closure:restore-nullable:" + suffixOf(signatureKey);
 				restorations.set(signatureKey, maker);
-				b.branch(b.equal(original, b.constNull(Dyn)), missing, present);
-				b.select(missing);
-				b.returnValue(b.constNull(type));
-				b.select(present);
-				b.returnValue(b.safeCast(b.call(innerMaker, [original], inner), type));
-				generatedMakers.push(new IrFunction(maker, b.arguments, type, b.blocks, GeneratedHelper));
+				generatedMakers.push(helper(maker, reader -> {
+					var b = new IrBuilder(),
+						original = b.argument("closure", Dyn),
+						missing = b.createBlock(),
+						present = b.createBlock();
+					b.branch(b.equal(original, b.constNull(Dyn)), missing, present);
+					b.select(missing);
+					b.returnValue(b.constNull(type));
+					b.select(present);
+					b.returnValue(b.safeCast(b.call(innerMaker, [original], inner), type));
+					new IrFunction(maker, b.arguments, type, b.blocks, GeneratedHelper);
+				}));
 				return maker;
 			case Function(_, _):
 			default:
 				throw new InternalError("Scalar closure restoration requires a function");
 		}
-		var suffix = compiler.core.TextDigest.sha256(signatureKey).substr(0, 32),
+		var suffix = suffixOf(signatureKey),
 			environment = "$scalar-closure:restored-environment:" + suffix,
 			wrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
 			maker = "$scalar-closure:restore:" + suffix,
-			scalarOwn = candidates.exists(signatureKey),
-			logical = switch type {
-				case Function(arguments, result): {arguments: arguments, result: result};
-				default: throw new InternalError("Scalar closure restoration requires a function");
-			};
+			logical = logicalOf(type, "restoration");
 		restorations.set(signatureKey, maker);
 		ensureErasure(type);
 		generatedObjects.push({
@@ -777,7 +935,52 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			fields: [{name: "closure", type: erasedType(type)}],
 			methods: []
 		});
-		var call = new IrBuilder(),
+		// The adapters the restored call passes its arguments and result through.
+		for (argument in logical.arguments)
+			if (needsBoundaryAdapter(argument))
+				ensureErasure(argument);
+		if (needsBoundaryAdapter(logical.result))
+			ensureRestoration(logical.result);
+		generatedMakers.push(helper(wrapper, reader -> restoredCall(type, wrapper, environment, reader)));
+		var erasedEnvironment = "$scalar-closure:environment:" + suffix,
+			erasedWrapper = "$scalar-closure:erased-call:" + suffix,
+			probeType = probeOf(erasedType(type), erasedEnvironment, "erased"),
+			query = receiverQuery("$scalar-closure:receiver:erased:" + suffix, Dyn, probeType);
+		generatedMakers.push(helper(maker, reader -> {
+			readTypeKeys(type, reader);
+			var make = new IrBuilder(),
+				boxed = make.argument("closure", Dyn),
+				missing = make.createBlock(),
+				present = make.createBlock(),
+				physical = mapType(type);
+			make.branch(make.equal(boxed, make.constNull(Dyn)), missing, present);
+			make.select(missing);
+			make.returnValue(make.constNull(physical));
+			make.select(present);
+			var probe = make.staticClosure(erasedWrapper, probeType),
+				found = make.call(query, [boxed, probe], Dyn),
+				allocate = make.createBlock(),
+				unwrap = make.createBlock();
+			make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
+			make.select(unwrap);
+			make.returnValue(make.fieldGet(make.safeCast(found, Obj(erasedEnvironment)), "closure", physical));
+			make.select(allocate);
+			var decoded = make.safeCast(boxed, erasedType(type)),
+				captured = make.newObject(environment);
+			make.fieldSet(captured, "closure", decoded);
+			make.returnValue(make.instanceClosure(wrapper, captured, physical));
+			new IrFunction(maker, make.arguments, physical, make.blocks, GeneratedHelper);
+		}));
+		return maker;
+	}
+
+	/** The restored-call adapter of the closure type `type`: the scalar ABI's call, made on the boxed closure it holds. */
+	function restoredCall(type:IrType, wrapper:String, environment:String,
+			reader:compiler.ir.reuse.IrFactReader):IrFunction {
+		readTypeKeys(type, reader);
+		var scalarOwn = candidates.exists(key(type)),
+			logical = logicalOf(type, "restoration"),
+			call = new IrBuilder(),
 			receiver = call.argument("receiver", Obj(environment)),
 			arguments:Array<IrValue> = [];
 		for (index in 0...logical.arguments.length) {
@@ -812,12 +1015,12 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			erasedArguments = [for (index in 0...arguments.length) {
 				var argument = arguments[index], logicalType = logical.arguments[index];
 				if (needsBoundaryAdapter(logicalType)) {
-					var erased = call.call(ensureErasure(logicalType).maker, [argument], erasedType(logicalType));
+					var erased = call.call(erasureName(logicalType), [argument], erasedType(logicalType));
 					call.toDyn(erased);
 				} else (switch (argument.type) {
 					case Dyn: true;
 					default: false;
-				}) ? argument : toDynamic(call, argument, logicalType);
+				}) ? argument : toDynamic(call, argument, logicalType, reader);
 			}],
 				erasedResult = call.callClosure(closure, erasedArguments, Dyn),
 				result = (switch (logical.result) {
@@ -826,9 +1029,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		}) ? call.constVoid() : (switch (logical.result) {
 			case Dyn: true;
 			default: false;
-		}) ? erasedResult : needsBoundaryAdapter(logical.result) ? call.call(ensureRestoration(logical.result),
+		}) ? erasedResult : needsBoundaryAdapter(logical.result) ? call.call(restorationName(logical.result),
 			[erasedResult],
-			mapType(logical.result)) : fromDynamic(call, erasedResult, logical.result);
+			mapType(logical.result)) : fromDynamic(call, erasedResult, logical.result, reader);
 		if (resultSlots.length == 0)
 			call.returnValue(result);
 		else {
@@ -845,40 +1048,8 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			}
 			call.returnValue(call.constVoid());
 		}
-		generatedMakers.push(new IrFunction(wrapper, call.arguments,
-			resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks, ScalarArguments));
-		var make = new IrBuilder(),
-			boxed = make.argument("closure", Dyn),
-			missing = make.createBlock(),
-			present = make.createBlock(),
-			physical = mapType(type);
-		make.branch(make.equal(boxed, make.constNull(Dyn)), missing, present);
-		make.select(missing);
-		make.returnValue(make.constNull(physical));
-		make.select(present);
-		var erasedEnvironment = "$scalar-closure:environment:" + suffix,
-			erasedWrapper = "$scalar-closure:erased-call:" + suffix,
-			probeType:IrType = switch erasedType(type) {
-				case Function(args, result): Function([Obj(erasedEnvironment)].concat(args), result);
-				default: throw new InternalError("Expected erased closure");
-			},
-				probe = make.staticClosure(erasedWrapper, probeType),
-				found = make.call(receiverQuery("$scalar-closure:receiver:erased:" + suffix, Dyn, probeType), [
-					boxed,
-					probe
-				], Dyn),
-				allocate = make.createBlock(),
-				unwrap = make.createBlock();
-		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
-		make.select(unwrap);
-		make.returnValue(make.fieldGet(make.safeCast(found, Obj(erasedEnvironment)), "closure", physical));
-		make.select(allocate);
-		var decoded = make.safeCast(boxed, erasedType(type)),
-			captured = make.newObject(environment);
-		make.fieldSet(captured, "closure", decoded);
-		make.returnValue(make.instanceClosure(wrapper, captured, physical));
-		generatedMakers.push(new IrFunction(maker, make.arguments, physical, make.blocks, GeneratedHelper));
-		return maker;
+		return new IrFunction(wrapper, call.arguments, resultSlots.length == 0 ? mapType(logical.result) : Void,
+			call.blocks, ScalarArguments);
 	}
 
 	function isValue(type:IrType):Bool
