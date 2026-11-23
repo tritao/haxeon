@@ -12,6 +12,7 @@ import sys.io.File;
  */
 class CompilerMemoryLog {
 	/** The builds this worker has recorded. */
+	@:processWide("numbers the worker's builds for the opt-in heap dumps, so it counts across compiles on purpose")
 	static var builds = 0;
 
 	public static function record(label:String, ?session:CompilerSession):Void {
