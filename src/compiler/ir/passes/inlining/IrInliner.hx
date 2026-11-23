@@ -163,6 +163,10 @@ class IrInliner implements IrFactSource {
 	@:processWide("a contribution memo's key, only ever read")
 	public static final FORMS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlinedForm>("inlined-forms");
 
+	/** What each function's source calls (`IrCallEdges`), by the function's version, for the call graph's components. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final CALLS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrCallEdges>("inliner-calls");
+
 	/** Instruction budget for a callee without an `inline` hint. */
 	public static inline var SmallBudget = 24;
 
@@ -323,6 +327,7 @@ class IrInliner implements IrFactSource {
 
 	final facts:Null<IrFacts>;
 	final forms:Null<IrContributionMemo<IrInlinedForm>>;
+	final calls:Null<IrContributionMemo<IrCallEdges>>;
 	final versions:Null<compiler.ir.reuse.IrFunctionVersions>;
 
 	/** The function being inlined, innermost last, with the reader that records what its inlining reads (with a memo). */
@@ -376,6 +381,7 @@ class IrInliner implements IrFactSource {
 		memo = memos == null ? null : memos.stage(STAGE);
 		facts = memos == null ? null : memos.facts;
 		forms = memos == null ? null : memos.contribution(FORMS);
+		calls = memos == null ? null : memos.contribution(CALLS);
 		versions = memos == null ? null : memos.versions;
 		if (memos != null)
 			memos.facts.begin();
@@ -450,33 +456,40 @@ class IrInliner implements IrFactSource {
 			componentLabels.push(IrSymbol.of(functions[first[components[id]]].name).id);
 	}
 
+	/** What function `id`'s source calls: kept by its version in a session, so an unchanged source is not read again. */
+	function callEdges(id:Int):IrCallEdges {
+		var memo = calls, version = inputVersions[id];
+		if (memo == null || version == 0)
+			return IrCallEdges.read(sourceBody(functions[id]));
+		var known = memo.get(version);
+		if (known == null) {
+			known = IrCallEdges.read(sourceBody(functions[id]));
+			memo.keep(version, known);
+		} else if (checkingMemo && !known.same(IrCallEdges.read(sourceBody(functions[id]))))
+			throw new InternalError('--check-reuse: the call edges reused for ${functions[id].name} differ from its source');
+		return known;
+	}
+
 	/** Tarjan's algorithm over the call edges of the original bodies, visiting functions in name order so the numbering is deterministic. */
 	function computeComponents():Void {
 		var count = functions.length, edges:Array<Array<Int>> = [], copies = false;
 		for (id in 0...count) {
-			var targets:Array<Int> = [];
-			var body = sourceBody(functions[id]);
-			sourceSizes.push(body.instructionCount());
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					switch body.opcode(row) {
-						case IrOpcode.ValueInit if (!copies && IrCopyElision.isValueCopyRow(body, row)):
-							copies = true;
-						case IrOpcode.Call:
-							var target = functionId(body.aux(row));
-							if (target >= 0)
-								targets.push(target);
-						case IrOpcode.MethodCall:
-							var callee = resolveMethod(body.valueType(body.operand(row, 0)), body.symbol(row).name),
-								target = callee == null ? null : ids.get(callee);
-							if (target != null)
-								targets.push(target);
-						default:
-					}
-					row = body.nextRow(row);
+			var targets:Array<Int> = [], record = callEdges(id), sites = record.sites;
+			sourceSizes.push(record.size);
+			if (record.copies)
+				copies = true;
+			for (site in sites)
+				if (site >= 0) {
+					var target = functionId(site);
+					if (target >= 0)
+						targets.push(target);
+				} else {
+					var method = -site - 1,
+						callee = resolveMethod(record.receivers[method], record.methods[method]),
+						target = callee == null ? null : ids.get(callee);
+					if (target != null)
+						targets.push(target);
 				}
-			}
 			edges.push(targets);
 		}
 		ownsSources = !memoizes && !copies;
@@ -1412,5 +1425,55 @@ class IrInliner implements IrFactSource {
 			case EnumIndex(out, value): EnumIndex(use(out), use(value));
 			case EnumField(out, value, constructor, field): EnumField(use(out), use(value), constructor, field);
 		};
+	}
+}
+
+/**
+ * What one function's source calls, for the inliner's call graph (`IrInliner.computeComponents`): its calls in row order, each the
+ * callee's symbol id, or for a method call `-(index + 1)` into the receivers and methods; its size and whether it has a value
+ * copy. It depends on the body alone, so a session keeps it by the function's version (`IrInliner.CALLS`).
+ */
+@:nullSafety(Strict)
+class IrCallEdges {
+	public final sites:Array<Int> = [];
+	public final receivers:Array<IrType> = [];
+	public final methods:Array<String> = [];
+	public var size(default, null) = 0;
+	public var copies(default, null) = false;
+
+	function new() {}
+
+	public static function read(body:IrBody):IrCallEdges {
+		var edges = new IrCallEdges();
+		edges.size = body.instructionCount();
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.ValueInit if (!edges.copies && IrCopyElision.isValueCopyRow(body, row)):
+						edges.copies = true;
+					case IrOpcode.Call:
+						edges.sites.push(body.aux(row));
+					case IrOpcode.MethodCall:
+						edges.sites.push(-edges.receivers.length - 1);
+						edges.receivers.push(body.valueType(body.operand(row, 0)));
+						edges.methods.push(body.symbol(row).name);
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return edges;
+	}
+
+	/** Whether `other` names the same calls, for `--check-reuse`. */
+	public function same(other:IrCallEdges):Bool {
+		if (size != other.size || copies != other.copies || sites.join(",") != other.sites.join(",")
+			|| methods.join(",") != other.methods.join(",") || receivers.length != other.receivers.length)
+			return false;
+		for (index in 0...receivers.length)
+			if (!IrVerifier.sameType(receivers[index], other.receivers[index]))
+				return false;
+		return true;
 	}
 }
