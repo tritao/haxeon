@@ -85,47 +85,49 @@ class RuntimeLibraryMain {
 		// Normalized: the messages name paths with forward slashes, and Windows gives the working directory with back ones.
 		var root = haxe.io.Path.normalize(FileSystem.fullPath(".")) + "/out/runtime-library-test-"
 			+ Std.random(0x3fffffff);
-		directories(root + "/cmake");
-		var hdll = RuntimeLibrary.libraryPath(root);
-		check(RuntimeLibrary.missing(root).length == 0, "no sources and no library: nothing to compare");
+		// Its SDK, whose manifest names the checkout as its source, as the native build writes it.
+		var sdk = build.HaxeonSdk.ofCheckout(root);
+		write(sdk + "/" + build.HaxeonSdk.MANIFEST, 'version = "0.0.0"\nsource = "$root"\n');
+		var hdll = RuntimeLibrary.libraryPath(sdk);
+		check(RuntimeLibrary.missing(sdk).length == 0, "no sources and no library: nothing to compare");
 		write(root + "/native/runtime.c", "DEFINE_PRIM(_I32,__a,_NO_ARG)\n");
 		write(root + "/native/runtime/more.c", "DEFINE_PRIM(_I32,__b,_NO_ARG)\nDEFINE_PRIM(_I32,__c,_NO_ARG)\n");
 		write(root + "/native/runtime/notes.txt", "DEFINE_PRIM(_I32,__ignored,_NO_ARG)\n");
-		same(RuntimeLibrary.definedNatives(root).join(","), "__a,__b,__c",
+		same(RuntimeLibrary.definedNatives(sdk).join(","), "__a,__b,__c",
 			"runtime.c, then runtime/*.c in name order, .c files only");
-		check(RuntimeLibrary.missing(root).length == 0, "sources but no library built yet: nothing to compare");
+		check(RuntimeLibrary.missing(sdk).length == 0, "sources but no library built yet: nothing to compare");
 		directories(Path.directory(hdll));
 		File.saveBytes(hdll, library(["hlp___a", "hlp___b"]));
-		var lacking = RuntimeLibrary.missing(root);
+		var lacking = RuntimeLibrary.missing(sdk);
 		same(lacking.join(","), "__c", "an older library lacks the newer native");
-		var text = RuntimeLibrary.describe(root, lacking);
+		var text = RuntimeLibrary.describe(sdk, lacking);
 		check(text.indexOf(hdll) >= 0 && text.indexOf("out of date") >= 0 && text.indexOf("__c") >= 0
 			&& text.indexOf("lacks 1 function ") >= 0
-			&& text.indexOf(RuntimeLibrary.rebuildCommand(root)) >= 0,
+			&& text.indexOf(RuntimeLibrary.rebuildCommand(sdk)) >= 0,
 			"the message names the library, the function and the rebuild command: " + text);
-		var long = RuntimeLibrary.describe(root, ["__1", "__2", "__3", "__4", "__5", "__6"]);
+		var long = RuntimeLibrary.describe(sdk, ["__1", "__2", "__3", "__4", "__5", "__6"]);
 		check(long.indexOf("lacks 6 functions") >= 0 && long.indexOf("__4, ...") >= 0 && long.indexOf("__5") < 0,
 			"a long list is cut short with its count: " + long);
 		var thrown = "";
 		try
-			RuntimeLibrary.requireCurrent(root)
+			RuntimeLibrary.requireCurrent(sdk)
 		catch (error:Dynamic)
 			thrown = Std.string(error);
 		check(thrown.indexOf("out of date") >= 0, "requireCurrent refuses an older library");
 		Sys.putEnv("HAXEON_SKIP_RUNTIME_CHECK", "1");
-		RuntimeLibrary.requireCurrent(root);
+		RuntimeLibrary.requireCurrent(sdk);
 		check(RuntimeLibrary.skipped(), "HAXEON_SKIP_RUNTIME_CHECK=1 turns the check off");
 		Sys.putEnv("HAXEON_SKIP_RUNTIME_CHECK", "");
 		check(!RuntimeLibrary.skipped(), "an empty value does not");
 		File.saveBytes(hdll, library(["hlp___a", "hlp___b", "hlp___c", "hlp___extra_not_in_sources"]));
-		check(RuntimeLibrary.missing(root).length == 0, "a library with extra natives is current");
-		RuntimeLibrary.requireCurrent(root);
+		check(RuntimeLibrary.missing(sdk).length == 0, "a library with extra natives is current");
+		RuntimeLibrary.requireCurrent(sdk);
 		checks++;
 
 		// The real sources against the real library, with one native taken out: exactly that one is reported.
-		var home = Sys.getEnv("HAXEON_HOME");
-		if (home == null || home == "")
-			home = FileSystem.fullPath(".");
+		var home = build.HaxeonSdk.current();
+		if (home == null)
+			home = build.HaxeonSdk.ofCheckout(FileSystem.fullPath("."));
 		var real = RuntimeLibrary.libraryPath(home);
 		if (FileSystem.exists(real) && RuntimeLibrary.definedNatives(home).length > 0) {
 			var realDefined = RuntimeLibrary.definedNatives(home);

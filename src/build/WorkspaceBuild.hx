@@ -137,7 +137,7 @@ class WorkspaceBuild {
 					compile = id;
 			if (compile == null)
 				throw new InternalError('Workspace project "${member.name}" has no compile action to test');
-			var directories = [Path.join([home, "out"]), build.HashLinkPath.directory(home)], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
+			var directories = build.HashLinkPath.libraryPath(home), // What a passing run depends on besides the compile action: the module, the HashLink runtime,
 				// the native libraries it loads, and the files beside its project. The project directory
 				// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
 				inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
@@ -180,7 +180,7 @@ class WorkspaceBuild {
 	/** HashLink and Haxeon runtime libraries a module loads, without the many compiled programs beside them. */
 	static function runtimeFiles(home:String):Array<String> {
 		var files:Array<String> = [];
-		for (directory in [build.HashLinkPath.directory(home), Path.join([home, "out"])])
+		for (directory in build.HashLinkPath.libraryPath(home))
 			if (sys.FileSystem.exists(directory) && sys.FileSystem.isDirectory(directory))
 				for (entry in sys.FileSystem.readDirectory(directory)) {
 					var path = Path.join([directory, entry]);

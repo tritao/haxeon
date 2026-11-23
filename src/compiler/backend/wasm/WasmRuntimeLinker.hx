@@ -21,6 +21,31 @@ import haxe.io.BytesOutput;
 class WasmRuntimeLinker {
 	public static inline final GUEST_MODULE = "haxeon_guest";
 
+	@:processWide("the bytes of the runtimes shipped with the compiler, read once per path")
+	static final shippedRuntimes:Map<String, Bytes> = [];
+	@:processWide("guards shippedRuntimes")
+	static final shippedLock = new sys.thread.Mutex();
+
+	/**
+	 * A runtime shipped in the standard library at `standardLibrary` (`haxeon/wasm/NAME`; `stdlib` in the working directory when
+	 * null), which the native build's haxeon-wasm-runtime target builds. Read once.
+	 */
+	public static function shipped(standardLibrary:Null<String>, name:String):Bytes {
+		var path = haxe.io.Path.join([standardLibrary == null ? "stdlib" : standardLibrary, "haxeon", "wasm", name]);
+		shippedLock.acquire();
+		var known = shippedRuntimes.get(path);
+		shippedLock.release();
+		if (known != null)
+			return known;
+		if (!sys.FileSystem.exists(path))
+			throw new InternalError('The Wasm backend links $path, which is missing; build it with the haxeon-wasm-runtime target of the native build');
+		var bytes = sys.io.File.getBytes(path);
+		shippedLock.acquire();
+		shippedRuntimes.set(path, bytes);
+		shippedLock.release();
+		return bytes;
+	}
+
 	final bytes:Bytes;
 	var position = 0;
 

@@ -186,8 +186,10 @@ class HaxeonCli {
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
 				case "fmt": fmt(arguments);
-				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]),
-					(rule, files) -> runTool("LintMain", [rule].concat(files)));
+				case "lint":
+					var stdlib = HaxeonSdk.stdlib(haxeonHome());
+					LintCommand.run(arguments, stdlib,
+						(rule, files) -> runTool("LintMain", ['--stdlib=$stdlib', rule].concat(files)));
 				case "build": build(arguments, Build);
 				case "check": build(arguments, Check);
 				case "test": build(arguments, Test);
@@ -577,19 +579,18 @@ class HaxeonCli {
 	static function doctor(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected doctor argument "${arguments[0]}"');
-		var home = haxeonHome(), suffix = executableSuffix(), release = HaxeonSdk.isRelease(home);
-		var haxePath = Path.join([home, ".tools", "haxe", "haxe" + suffix]);
+		var home = haxeonHome(), suffix = executableSuffix(), source = HaxeonSdk.source(home);
 		var hashlinkPath = Path.join([HashLinkPath.directory(home), "hl" + suffix]);
-		var compilerPath = Path.join([home, "bootstrap", "compiler.hl"]);
-		var androidSdk = Path.join([home, ".tools", "android-sdk"]);
-		var compilerSource = Path.join([home, "src"]);
 		var missingRequired = false;
 
-		if (release)
-			Sys.println('ok: Haxeon release ${HaxeonSdk.releaseField(home, "version")} (${HaxeonSdk.releaseField(home, "platform")}, $home)');
+		if (source == null)
+			Sys.println('ok: Haxeon release ${HaxeonSdk.field(home, "version")} (${HaxeonSdk.field(home, "platform")}, $home)');
 		// A checkout builds the compiler from its sources with the pinned Haxe; a release ships it built.
-		if (!release || AotCompiler.program(home, compilerSource) == null)
-			missingRequired = reportPath("pinned Haxe compiler", haxePath, true) || missingRequired;
+		if (source != null)
+			missingRequired = reportPath("pinned Haxe compiler", Path.join([source, ".tools", "haxe", "haxe" + suffix]),
+				true) || missingRequired;
+		else if (AotCompiler.program(home) == null)
+			missingRequired = reportPath("compiler", AotCompiler.bytecode(home), true) || missingRequired;
 		missingRequired = reportPath("HashLink VM, with the Haxeon runtime", hashlinkPath, true) || missingRequired;
 		if (!missingRequired && !RuntimeLibrary.skipped()) {
 			var lacking = RuntimeLibrary.missing(home);
@@ -598,13 +599,13 @@ class HaxeonCli {
 				missingRequired = true;
 			}
 		}
-		if (!release)
-			reportPath("self-hosted compiler", compilerPath, false);
+		if (source != null)
+			reportPath("self-hosted compiler", Path.join([source, "bootstrap", "compiler.hl"]), false);
 		var aot = AotCompiler.executable(home);
-		if (FileSystem.exists(aot) && AotCompiler.current(home, compilerSource) == null)
+		if (FileSystem.exists(aot) && AotCompiler.current(home) == null)
 			Sys.println('stale: CLI and compiler built ahead of time ($aot), not built from these sources; the VM runs them. '
 				+ 'Rebuild it with "haxeon dev aot"');
-		else if (release && !FileSystem.exists(aot))
+		else if (source == null && !FileSystem.exists(aot))
 			// A release cannot build it: `haxeon dev aot` needs the sources and the native build, which only a checkout has.
 			Sys.println('not built: CLI and compiler built ahead of time ($aot); this release runs them on the VM from their '
 				+ 'bytecode, which works the same with a slower start');
@@ -612,18 +613,17 @@ class HaxeonCli {
 			reportPath("CLI and compiler built ahead of time", aot, false);
 		var bytecode = AotCompiler.bytecode(home);
 		if (FileSystem.exists(bytecode))
-			Sys.println(AotCompiler.currentBytecode(home, compilerSource) != null
+			Sys.println(AotCompiler.currentBytecode(home) != null
 				? 'ok: compiler bytecode, which the VM runs without the compiler built ahead of time ($bytecode)'
 				: 'stale: compiler bytecode ($bytecode), not built from these sources');
-		reportPath("Android SDK", androidSdk, false);
-		// A release does not ship android/, whose versions name the NDK.
-		if (!release) {
-			var ndk = androidVersion(home, "ndk");
+		// Android builds need a checkout: its android/ host project and the SDK and NDK under its .tools.
+		if (source != null) {
+			var androidSdk = androidSdkDirectory(source), ndk = androidVersion(source, "ndk");
+			reportPath("Android SDK", androidSdk, false);
 			reportPath('Android NDK $ndk', Path.join([androidSdk, "ndk", ndk]), false);
-		}
-		reportPath("Android platform tools (adb)", androidExecutable(home, "adb"), false);
-		if (!release)
+			reportPath("Android platform tools (adb)", androidExecutable(source, "adb"), false);
 			Sys.println("CMake and Ninja are only needed to rebuild the native runtime.");
+		}
 		if (missingRequired)
 			Sys.stderr().writeString("Run the repository's setup/bootstrap tools to install missing dependencies.\n");
 		return missingRequired ? 1 : 0;
@@ -650,9 +650,9 @@ class HaxeonCli {
 	static function devices(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected devices argument "${arguments[0]}"');
-		var home = haxeonHome();
-		configureAndroidEnvironment(home);
-		var adb = androidExecutable(home, "adb");
+		var source = HaxeonSdk.requireSource(haxeonHome(), "haxeon devices");
+		configureAndroidEnvironment(source);
+		var adb = androidExecutable(source, "adb");
 		if (!FileSystem.exists(adb))
 			throw new InternalError('Android adb is missing at $adb (install the Android platform tools under .tools/android-sdk)');
 		var result = capture(adb, ["devices", "-l"]);
@@ -814,16 +814,23 @@ class HaxeonCli {
 	 * times slower if this CLI contained them: each is its own HashLink build, from the tool cache (`haxeon dev tool-path`).
 	 */
 	static function runTool(main:String, arguments:Array<String>):Int
-		return new tools.dev.ToolArtifacts(haxeonHome()).run({main: main, classPaths: [], defines: []}, arguments);
+		return new tools.dev.ToolArtifacts(HaxeonSdk.requireSource(haxeonHome(), "This command")).run({
+			main: main,
+			classPaths: [],
+			defines: []
+		},
+			arguments);
 
 	/**
 	 * `haxeon lsp`: the language server, in the compiler built ahead of time or a release's compiler bytecode when it is current
 	 * (`build.AotCompiler.program`), else in its own bytecode build on the VM.
 	 */
 	static function languageServer(arguments:Array<String>):Int {
-		var home = haxeonHome(), program = AotCompiler.program(home, Path.join([home, "src"]));
+		var home = haxeonHome(),
+			program = AotCompiler.program(home),
+			named = ['--stdlib=${HaxeonSdk.stdlib(home)}'].concat(arguments);
 		return program == null ? runTool("LspMain",
-			arguments) : Sys.command(program.command[0], program.command.slice(1).concat(["lsp"]).concat(arguments));
+			named) : Sys.command(program.command[0], program.command.slice(1).concat(["lsp"]).concat(named));
 	}
 
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
@@ -1154,7 +1161,8 @@ class HaxeonCli {
 		if (options.buildModeExplicit && options.buildMode == "release")
 			throw new UsageError("The Android live-patch host requires development build mode");
 		// The NDK the project's native packages build with, and later Gradle and adb.
-		configureAndroidEnvironment(home);
+		var source = HaxeonSdk.requireSource(home, "Building for Android");
+		configureAndroidEnvironment(source);
 		// The module, its sidecars and the native libraries, as for any target; Gradle only packages them. A watch keeps the
 		// session, so its edits reach the compiler worker that built the module.
 		var module = HaxeonProjectBuild.androidModulePath(project, targetInfo),
@@ -1184,15 +1192,15 @@ class HaxeonCli {
 			"android",
 			"app-debug.apk"
 		]) : resolvePath(options.output, project.root);
-		var status = buildAndroid(home, project, androidOutput, gradleInputs);
+		var status = buildAndroid(source, project, androidOutput, gradleInputs);
 		if (status != 0 || !launch)
 			return status;
-		var launched = installAndLaunchAndroid(home, androidOutput, project.manifest.androidApplicationId,
+		var launched = installAndLaunchAndroid(source, androidOutput, project.manifest.androidApplicationId,
 			options.device);
 		if (launched != 0 || !options.watch)
 			return launched;
 		// Each saved edit is compiled against the baseline this build wrote and sent to the running app (AndroidWatch).
-		var adb = androidExecutable(home, "adb");
+		var adb = androidExecutable(source, "adb");
 		var device = selectAndroidDevice(adb, options.device);
 		return AndroidWatch.run(home, project, targetInfo, module, options.defines, options.jobs, options.selfHosted,
 			session, adb, device);
@@ -1381,19 +1389,21 @@ class HaxeonCli {
 	}
 
 	/**
-	 * Builds the live development host with Haxeon, as a project of its own under `out/live-host`. Under `--profile` it is
-	 * the instrumented flavor, so a capture shows the host's polling and patching beside the app's calls.
+	 * Builds the live development host (`tools.LiveHost`, from the compiler's sources) with Haxeon, as a project of its own under
+	 * the checkout's `out/live-host`. Under `--profile` it is the instrumented flavor, so a capture shows the host's polling and
+	 * patching beside the app's calls.
 	 */
 	static function buildLiveHost(home:String, jobs:Int, instrument:Bool, ?session:BuildSession,
 			?style:ReportStyle):String {
-		var root = Path.join([home, "out", "live-host"]),
+		var source = HaxeonSdk.requireSource(home, "Live patching (haxeon run --watch --live)"),
+			root = Path.join([source, "out", "live-host"]),
 			manifestPath = Path.join([root, "haxeon.json"]);
 		FileSystem.createDirectory(root);
 		var manifest = Json.stringify({
 			version: 1,
 			"package": {name: "haxeon-live-host"},
 			entry: "tools.LiveHost",
-			sourceRoots: [Path.join([home, "src"])],
+			sourceRoots: [Path.join([source, "src"])],
 			scopeSourceRoots: false,
 			target: "host",
 			outputDir: "build"
@@ -1474,12 +1484,12 @@ class HaxeonCli {
 	}
 
 	/** Has Gradle package the module and native libraries `gradleInputs` describes into the APK at `output`. */
-	static function buildAndroid(home:String, project:ResolvedProject, output:String, gradleInputs:String):Int {
-		var sdk = Path.join([home, ".tools", "android-sdk"]),
-			ndk = Path.join([sdk, "ndk", androidVersion(home, "ndk")]);
+	static function buildAndroid(source:String, project:ResolvedProject, output:String, gradleInputs:String):Int {
+		var sdk = androidSdkDirectory(source),
+			ndk = Path.join([sdk, "ndk", androidVersion(source, "ndk")]);
 		if (!FileSystem.exists(sdk) || !FileSystem.exists(ndk))
-			throw new InternalError('Android SDK/NDK are missing under ${Path.join([home, ".tools", "android-sdk"])}');
-		var androidDirectory = Path.join([home, "android"]),
+			throw new InternalError('Android SDK/NDK are missing under $sdk');
+		var androidDirectory = Path.join([source, "android"]),
 			wrapperJar = Path.join([androidDirectory, "gradle", "wrapper", "gradle-wrapper.jar"]);
 		if (!FileSystem.exists(wrapperJar))
 			throw new InternalError('Android Gradle wrapper is missing: $wrapperJar');
@@ -1508,10 +1518,10 @@ class HaxeonCli {
 		return 0;
 	}
 
-	static function installAndLaunchAndroid(home:String, apk:String, applicationId:String,
+	static function installAndLaunchAndroid(source:String, apk:String, applicationId:String,
 			requestedDevice:Null<String>):Int {
-		configureAndroidEnvironment(home);
-		var adb = androidExecutable(home, "adb");
+		configureAndroidEnvironment(source);
+		var adb = androidExecutable(source, "adb");
 		if (!FileSystem.exists(adb))
 			throw new InternalError('Android adb is missing at $adb');
 		var device = selectAndroidDevice(adb, requestedDevice);
@@ -1566,19 +1576,24 @@ class HaxeonCli {
 		return {status: status, output: stdout + stderr};
 	}
 
-	static function configureAndroidEnvironment(home:String):Void {
-		var sdk = Path.join([home, ".tools", "android-sdk"]);
+	/** The Android SDK and NDK a checkout's bootstrap installs (`.tools/android-sdk`). */
+	static function androidSdkDirectory(source:String):String
+		return Path.join([source, ".tools", "android-sdk"]);
+
+	/** The environment Android's tools need, from the checkout at `source`. */
+	static function configureAndroidEnvironment(source:String):Void {
+		var sdk = androidSdkDirectory(source);
 		Sys.putEnv("ANDROID_SDK_ROOT", sdk);
 		Sys.putEnv("ANDROID_HOME", sdk);
-		Sys.putEnv("ANDROID_NDK_ROOT", Path.join([sdk, "ndk", androidVersion(home, "ndk")]));
-		Sys.putEnv("ANDROID_AVD_HOME", Path.join([home, ".tools", "android-avd"]));
+		Sys.putEnv("ANDROID_NDK_ROOT", Path.join([sdk, "ndk", androidVersion(source, "ndk")]));
+		Sys.putEnv("ANDROID_AVD_HOME", Path.join([source, ".tools", "android-avd"]));
 		var paths = [
 			Path.join([sdk, "platform-tools"]),
 			Path.join([sdk, "emulator"]),
 			Path.join([sdk, "cmdline-tools", "latest", "bin"]),
-			Path.join([sdk, "build-tools", androidVersion(home, "build-tools")]),
-			Path.join([sdk, "cmake", androidVersion(home, "cmake"), "bin"]),
-			Path.join([home, ".tools", "gradle", "gradle-" + androidVersion(home, "gradle"), "bin"])
+			Path.join([sdk, "build-tools", androidVersion(source, "build-tools")]),
+			Path.join([sdk, "cmake", androidVersion(source, "cmake"), "bin"]),
+			Path.join([source, ".tools", "gradle", "gradle-" + androidVersion(source, "gradle"), "bin"])
 		];
 		var existing = Sys.getEnv("PATH");
 		if (existing != null && existing.length > 0)
@@ -1587,8 +1602,8 @@ class HaxeonCli {
 	}
 
 	/** An Android tool version from android/versions.txt, which scripts/android-env.sh reads too. */
-	static function androidVersion(home:String, tool:String):String {
-		for (line in File.getContent(Path.join([home, "android", "versions.txt"])).split("\n")) {
+	static function androidVersion(source:String, tool:String):String {
+		for (line in File.getContent(Path.join([source, "android", "versions.txt"])).split("\n")) {
 			var fields = line.split("=");
 			if (fields.length == 2 && fields[0] == tool && StringTools.trim(fields[1]) != "")
 				return StringTools.trim(fields[1]);
@@ -1596,11 +1611,9 @@ class HaxeonCli {
 		throw new InternalError('Missing Android $tool version in android/versions.txt');
 	}
 
-	static function androidExecutable(home:String, executable:String):String
+	static function androidExecutable(source:String, executable:String):String
 		return Path.join([
-			home,
-			".tools",
-			"android-sdk",
+			androidSdkDirectory(source),
 			"platform-tools",
 			executable + (Sys.systemName() == "Windows" ? ".exe" : "")
 		]);
@@ -2078,7 +2091,7 @@ class HaxeonCli {
 	}
 
 	static function configureRuntimeLibraryPath(home:String, ?extraDirectories:Array<String>):Void {
-		var directories = [Path.join([home, "out"]), HashLinkPath.directory(home)];
+		var directories = HashLinkPath.libraryPath(home);
 		if (extraDirectories != null)
 			directories = directories.concat(extraDirectories);
 		var variable = switch Sys.systemName() {
@@ -2101,11 +2114,12 @@ class HaxeonCli {
 		return value == null ? null : haxe.io.Bytes.ofString(value).toString();
 	}
 
+	/** Haxeon's home: the SDK the launcher runs from (`HaxeonSdk.current`). */
 	static function haxeonHome():String {
-		var home = Sys.getEnv("HAXEON_HOME");
-		if (home == null || home.length == 0)
-			throw new InternalError("HAXEON_HOME is not set; run the CLI through scripts/haxeon");
-		return FileSystem.fullPath(home);
+		var home = HaxeonSdk.current();
+		if (home == null)
+			throw new InternalError("HAXEON_SDK is not set; run the CLI through its launcher (bin/haxeon, scripts/haxeon in a checkout)");
+		return home;
 	}
 
 	/** The manifest `--project` names: the file, or the haxeon.toml or haxeon.json of the directory (PackageManifest.find). */
@@ -2176,9 +2190,11 @@ class HaxeonCli {
 	/** `haxeon version`: this CLI's version, the checkout's commit, which names the compiler, and the VM's version. */
 	static function version():Int {
 		var home = haxeonHome(),
-			released = HaxeonSdk.releaseField(home, "commit"),
-			commit = released != null ? {status: 0, output: released} : ProcessRunner.capture("git",
-				["-C", home, "rev-parse", "--short=12", "HEAD"]),
+			source = HaxeonSdk.source(home),
+			released = HaxeonSdk.field(home, "commit"),
+			commit = source == null ? {status: released == null ? 1 : 0,
+				output: released == null ? "" : released} : ProcessRunner.capture("git",
+				["-C", source, "rev-parse", "--short=12", "HEAD"]),
 			hashlink = ProcessRunner.capture(Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]),
 				["--version"]);
 		Sys.println('haxeon ${project.PackageCompatibility.CURRENT_HAXEON} (compiler '

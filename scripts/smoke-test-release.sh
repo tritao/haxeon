@@ -4,7 +4,8 @@
 # archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, and checks that
 # the compiles ran the compiler the archive is meant to run. On Linux it then creates the app template, which takes its UI package
 # from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain and GTK's
-# development files are needed) and runs each for a few frames, under xvfb-run when there is one:
+# development files are needed) and runs each for a few frames, under xvfb-run when there is one, then builds and runs a
+# program that uses the nativekit package from the same registry. Nothing may be written into the release's directory:
 #
 #   scripts/smoke-test-release.sh ARCHIVE --aot      the CLI and compiler built ahead of time (bin/haxeon-aot)
 #   scripts/smoke-test-release.sh ARCHIVE --no-aot   the compiler's bytecode on the VM (bin/haxeon-compiler.hl)
@@ -60,7 +61,7 @@ unpack() {
 
 # A user's environment: no checkout's variables, and a home of its own so caches and compiler sessions start empty.
 isolate() {
-	unset HAXEON_HOME HAXEON_SDK HAXEON_COMPILER_SOURCE HAXEON_COMPILER_SESSION_DIR \
+	unset HAXEON_SDK HAXEON_COMPILER_SOURCE HAXEON_COMPILER_SESSION_DIR \
 		HAXEON_ARTIFACT_CACHE HAXEON_SCRIPT_CACHE HAXEON_NATIVE_READY HAXEON_COMPILER_SERVER LD_LIBRARY_PATH DYLD_LIBRARY_PATH
 	export HOME=$1 USERPROFILE=$1 LOCALAPPDATA=$1/AppData/Local XDG_CACHE_HOME=$1/.cache
 	mkdir -p "$HOME" "$LOCALAPPDATA"
@@ -150,7 +151,22 @@ if [[ $(uname -s) == Linux ]]; then
 	"${headless[@]}" "$app/build/linux/app/hello-app" --frames=3 "--capture=$work/capture-release" ||
 		fail "the app compiled ahead of time"
 	[[ -f $work/capture-release/frame.png ]] || fail "the app compiled ahead of time wrote no frame.png"
+
+	# A program, not an app, with a native package from the release's registry: its CMake build runs in the shared native
+	# cache, which for a release is in the user's cache, with the SDK's CMake scripts and the Ninja on PATH.
+	echo "== a program with a native package (nativekit) from the release's registry"
+	native=$work/projects/native-program
+	mkdir -p "$native"
+	(cd "$native" && "$haxeon" init >/dev/null && "$haxeon" add nativekit >/dev/null) || fail "haxeon add nativekit"
+	printf 'function main():Int {\n\tSys.println("native program ok");\n\treturn 0;\n}\n' >"$native/src/Main.hx"
+	(cd "$native" && "$haxeon" build) || fail "haxeon build of a program with a native package"
+	# The native package's up-to-date check (CMake and Ninja) prints even under --quiet; the program's line is the last.
+	output=$(cd "$native" && "$haxeon" run --quiet) || fail "haxeon run of a program with a native package"
+	[[ $(tail -n 1 <<<"$output") == "native program ok" ]] || fail "the program with a native package printed: $output"
+	[[ -d $HOME/.haxeon/cache/native ]] || fail "the native package was not built in the user's cache"
 fi
+written=$(find "$root" -newer "$root/haxeon-sdk.toml" -type f | head -3)
+[[ -z $written ]] || fail "the release wrote into its own directory: $written"
 
 if [[ $expect_aot == 1 ]]; then
 	echo "== the same cold build on the VM (without bin/haxeon-aot)"

@@ -39,7 +39,7 @@ typedef TypedFinding = {
  * (`LintMain`), since the command line does not link the compiler.
  */
 class TypedLint {
-	final service = new LanguageService();
+	final service:LanguageService;
 	final workspace = new ProjectWorkspace();
 
 	/** The typed rules, by name. */
@@ -57,26 +57,32 @@ class TypedLint {
 
 	final reportedErrors:Map<String, Bool> = [];
 
-	function new(rule:String) {
+	function new(rule:String, stdlib:String) {
 		if (RULES.indexOf(rule) < 0)
 			throw new InternalError('Unknown typed lint rule "$rule"');
 		this.rule = rule;
+		service = new LanguageService(null, stdlib);
 	}
 
 	/**
 	 * Reports what `rule` finds in `paths` (relative ones against `base`), one line each as `path:line: ...` with the path as given,
-	 * and returns 1 when it found anything or a file's program did not type, else 0.
+	 * and returns 1 when it found anything or a file's program did not type, else 0. The programs are typed with the standard library
+	 * at `stdlib`.
 	 */
-	public static function run(rule:String, paths:Array<String>, base:String):Int {
-		var report = find(rule, paths, base);
+	public static function run(rule:String, paths:Array<String>, base:String, stdlib:String = "stdlib"):Int {
+		var report = find(rule, paths, base, stdlib);
 		for (line in report.lines)
 			Sys.println(line);
 		return report.lines.length > 0 || report.failed ? 1 : 0;
 	}
 
 	/** The lines `run` prints, in file order and then source order, and whether a file's program did not type. */
-	public static function find(rule:String, paths:Array<String>, base:String):{lines:Array<String>, failed:Bool} {
-		var lint = new TypedLint(rule), failed = false, lines:Array<String> = [];
+	public static function find(rule:String, paths:Array<String>, base:String,
+			stdlib:String = "stdlib"):{
+				lines:Array<String>,
+				failed:Bool
+			} {
+		var lint = new TypedLint(rule, stdlib), failed = false, lines:Array<String> = [];
 		var files = [for (path in paths) {
 			display:path,
 				absolute:Path.normalize(Path.isAbsolute(path) ? path : Path.join([base, path]))

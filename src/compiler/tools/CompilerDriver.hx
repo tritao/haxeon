@@ -59,7 +59,8 @@ class CompilerDriver {
 			wasmRuntimeNeutral: request.wasmRuntimeNeutral,
 			wasmLegacyExceptions: request.options.wasmLegacyExceptions,
 			checkReuse: request.options.checkReuse,
-			exports: request.exports
+			exports: request.exports,
+			standardLibrary: request.stdlib
 		} : null;
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
@@ -340,9 +341,11 @@ class CompilerDriver {
 				throw new InternalError("Compiled module has no source: " + name);
 			// The identity table's text is generated from every other module during the compile; its file is the input.
 			var path = physicalPaths.get(state.source.path);
-			if (path == null)
-				path = !haxe.io.Path.isAbsolute(state.source.path) && FileSystem.exists("stdlib/" + state.source.path)
-					? FileSystem.fullPath("stdlib/" + state.source.path) : state.source.path;
+			if (path == null) {
+				var standard = haxe.io.Path.join([request.stdlib, state.source.path]);
+				path = !haxe.io.Path.isAbsolute(state.source.path)
+					&& FileSystem.exists(standard) ? FileSystem.fullPath(standard) : state.source.path;
+			}
 			var text = state.loadedText;
 			rows.push([
 				name,

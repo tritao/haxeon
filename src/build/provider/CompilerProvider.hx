@@ -1,5 +1,7 @@
 package build.provider;
 
+import build.AotCompiler;
+import build.HaxeonSdk;
 import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
@@ -23,10 +25,15 @@ class CompilerProvider {
 			throw new InternalError("CompilerProvider requires a resolved project");
 		if (project.manifest.entry == null)
 			throw new InternalError('Root package "${project.rootPackage.name}" must declare an "entry" for a build');
+		// The compiler is built from the sources of the SDK's checkout (or `HAXEON_COMPILER_SOURCE`), with its pinned Haxe; a
+		// release has neither and runs the compiler it ships (`AotCompiler.program`).
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "",
+			home = context.compilerHome,
+			source = HaxeonSdk.source(home),
+			stdlib = HaxeonSdk.stdlib(home),
 			compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
 			compilerSourcePath = compilerSource == null
-				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
+				|| compilerSource == "" ? AotCompiler.sources(home) : compilerSource,
 			compilerInputs = CompilerInputs.of(project, context.layout),
 			sourcePaths = compilerInputs.sources,
 			// An Android module runs in the debug host, which patches it: it is always built live, with the baseline the patches
@@ -68,6 +75,9 @@ class CompilerProvider {
 		arguments.push("--sources-file=" + sourceManifest);
 		for (define in compilerInputs.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
+		// The committed bootstrap compiler predates the flag, and finds the standard library where it runs, in the checkout.
+		if (!context.selfHosted)
+			arguments.push("--stdlib=" + stdlib);
 		// The passes are the request's (`CompileOptions`): the manifest's `inline: false` turns inlining off.
 		if (!compilerInputs.inlineEnabled)
 			arguments.push("--no-inline");
@@ -89,26 +99,33 @@ class CompilerProvider {
 		}
 		var command:String,
 			argumentsWithLauncher:Array<String>,
-			environment:Map<String, String>;
+			environment:Map<String, String>,
+			// Where the compiler runs: the checkout for the bootstrap compiler, which reads `stdlib` there; else the SDK.
+			directory = home;
 		if (context.selfHosted) {
-			var artifact = haxe.io.Path.join([context.compilerHome, "bootstrap", "compiler.hl"]);
-			command = haxe.io.Path.join([build.HashLinkPath.directory(context.compilerHome), "hl" + suffix]);
+			var checkout = HaxeonSdk.requireSource(home, "--self-hosted"),
+				artifact = haxe.io.Path.join([checkout, "bootstrap", "compiler.hl"]);
+			command = build.HashLinkPath.executable(home);
 			argumentsWithLauncher = [artifact].concat(arguments);
 			inputs.push(command);
 			inputs.push(artifact);
-			environment = CompilerClient.runtimeLibraryEnvironment(context.compilerHome);
+			environment = CompilerClient.runtimeLibraryEnvironment(home);
+			directory = checkout;
 		} else {
-			command = haxe.io.Path.join([context.compilerHome, ".tools", "haxe", "haxe" + suffix]);
-			argumentsWithLauncher = build.CompilerSources.classPath(compilerSourcePath).concat([
-				"--run",
-				"compiler.tools.HaxeonCompiler"
-			]).concat(arguments);
+			// A release runs only what it ships; its action names the VM, which runs the shipped bytecode without the executable.
+			var prebuilt = source == null ? AotCompiler.program(home) : null;
+			command = source != null ? haxe.io.Path.join([source, ".tools", "haxe", "haxe" + suffix]) : prebuilt != null
+				? prebuilt.command[0] : build.HashLinkPath.executable(home);
+			argumentsWithLauncher = (compilerSourcePath == null
+				? [] : build.CompilerSources.classPath(compilerSourcePath)
+				.concat(["--run", "compiler.tools.HaxeonCompiler"])).concat(arguments);
 			inputs.push(command);
-			for (root in build.CompilerSources.roots(compilerSourcePath))
-				inputs.push(root);
+			if (compilerSourcePath != null)
+				for (root in build.CompilerSources.roots(compilerSourcePath))
+					inputs.push(root);
 			environment = new Map();
 		}
-		inputs.push(haxe.io.Path.join([context.compilerHome, "stdlib"]));
+		inputs.push(stdlib);
 		for (paths in [compilerInputs.sources, compilerInputs.ffiProjections, compilerInputs.ffiInterfaces])
 			for (path in paths)
 				inputs.push(path);
@@ -120,9 +137,8 @@ class CompilerProvider {
 				Directories.ensure(haxe.io.Path.directory(sourceManifest));
 				File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 				// Only a resident worker can keep what it compiles; with none there is nothing to warm.
-				return CompilerClient.run(command, compilerSourcePath, reported, context.compilerHome,
-					context.environment.buildRoot, project.root, () -> 0,
-					session, true);
+				return CompilerClient.run(command, compilerSourcePath, reported, home, context.environment.buildRoot,
+					project.root, () -> 0, session, true);
 			};
 		var invoke = function():Int {
 			var running = context.session;
@@ -130,9 +146,10 @@ class CompilerProvider {
 				running.liveCompiled = true;
 			Directories.ensure(haxe.io.Path.directory(sourceManifest));
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
-			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
-				environment) : CompilerClient.compile(command, compilerSourcePath, reported, context.compilerHome,
-				context.environment.buildRoot, project.root, context.session);
+			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, directory,
+				environment) : CompilerClient.compile(command, compilerSourcePath, reported, home,
+				context.environment.buildRoot,
+				project.root, context.session);
 		};
 		if (aheadOfTime && live)
 			throw new UsageError("A program compiled ahead of time cannot be patched live; build it in development mode");
@@ -155,6 +172,6 @@ class CompilerProvider {
 		}
 		return new ExecutionAction(actionId, dependencies, inputs, outputs,
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
-			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke), false);
+			Compiler(command, argumentsWithLauncher, directory, environment, invoke), false);
 	}
 }

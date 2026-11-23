@@ -28,9 +28,9 @@ class ProjectDiscovery {
 
 	/** What every `haxeon` command acquires packages with: the source cache, and the SDK's registry as the `haxeon` registry. */
 	public static function sourceAcquirer(offline:Bool = false):ProjectSourceAcquirer {
-		var home = Sys.getEnv("HAXEON_HOME");
+		var home = HaxeonSdk.current();
 		return new ProjectSourceAcquirer(SourceCache.root(), null, null, offline,
-			home == null || home == "" ? null : HaxeonSdk.registryRoot(home));
+			home == null ? null : HaxeonSdk.registryRoot(home));
 	}
 
 	public static function lockfilePath(manifestPath:String):String

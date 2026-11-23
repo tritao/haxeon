@@ -2,6 +2,7 @@ package build.lowering;
 
 import build.BuildEnvironment;
 import build.BuildSession;
+import build.HaxeonSdk;
 import build.TargetLayout;
 import project.ResolvedProject;
 
@@ -12,6 +13,7 @@ class LoweringContext {
 	public final cmakePreset:String;
 	public final project:Null<ResolvedProject>;
 	public final output:Null<String>;
+	/** Haxeon's home, the SDK the build uses (`HaxeonSdk`); by default the one the checkout being built stages. */
 	public final compilerHome:String;
 	public final extraDefines:Array<String>;
 	public final selfHosted:Bool;
@@ -62,7 +64,7 @@ class LoweringContext {
 		this.cmakePreset = cmakePreset == null ? Std.string(environment.profile) : cmakePreset;
 		this.project = project;
 		this.output = output;
-		this.compilerHome = compilerHome == null ? environment.projectRoot : compilerHome;
+		this.compilerHome = compilerHome == null ? HaxeonSdk.ofCheckout(environment.projectRoot) : compilerHome;
 		this.extraDefines = extraDefines == null ? [] : extraDefines.copy();
 		this.selfHosted = selfHosted == true;
 	}

@@ -55,16 +55,25 @@ class AotCompiler {
 		return bytecode(home) + ".sources";
 
 	/**
-	 * The executable when it was built from the compiler in `compilerSource` (a `src` directory, as `CompilerSources` takes) and
-	 * `home`'s standard library, else null: when it is missing, has no stamp, or is stale.
+	 * The compiler's sources an SDK was built from: the `src` directory of its checkout, as `CompilerSources` takes it, or null for
+	 * a release, which ships none.
 	 */
-	public static function current(home:String, compilerSource:String, ?digests:ContentDigestCache):Null<String> {
+	public static function sources(home:String):Null<String> {
+		var source = HaxeonSdk.source(home);
+		return source == null ? null : Path.join([source, "src"]);
+	}
+
+	/**
+	 * The executable when it was built from the compiler in `compilerSource` (a `src` directory, as `CompilerSources` takes; by
+	 * default the SDK's `sources`) and the SDK's standard library, else null: when it is missing, has no stamp, or is stale.
+	 */
+	public static function current(home:String, ?compilerSource:String, ?digests:ContentDigestCache):Null<String> {
 		var digest = new LazyDigest(home, compilerSource, digests);
 		return digest.matches(executable(home), stamp(home)) ? executable(home) : null;
 	}
 
 	/** The bytecode when it was built from those sources, else null. */
-	public static function currentBytecode(home:String, compilerSource:String,
+	public static function currentBytecode(home:String, ?compilerSource:String,
 			?digests:ContentDigestCache):Null<String> {
 		var digest = new LazyDigest(home, compilerSource, digests);
 		return digest.matches(bytecode(home), bytecodeStamp(home)) ? bytecode(home) : null;
@@ -75,7 +84,7 @@ class AotCompiler {
 	 * STATE`, `lsp`, or a compile's): the executable when it is current, else the VM with the bytecode when that is current, else
 	 * null. A stale executable is said once (`staleNotice`) when `announceStale` is on.
 	 */
-	public static function program(home:String, compilerSource:String,
+	public static function program(home:String, ?compilerSource:String,
 			?digests:ContentDigestCache):Null<CompilerProgram> {
 		var digest = new LazyDigest(home, compilerSource, digests), native = executable(home);
 		if (digest.matches(native, stamp(home)))
@@ -108,7 +117,7 @@ class AotCompiler {
 			digests = new ContentDigestCache();
 		var text = new StringBuf();
 		text.add('format $FORMAT\n');
-		var roots = CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]);
+		var roots = CompilerSources.roots(compilerSource).concat([HaxeonSdk.stdlib(home)]);
 		for (index in 0...roots.length) {
 			text.add('root $index\n');
 			digestTree(roots[index], "", text, digests);
@@ -135,13 +144,13 @@ class AotCompiler {
  */
 private class LazyDigest {
 	final home:String;
-	final compilerSource:String;
+	final compilerSource:Null<String>;
 	final digests:Null<ContentDigestCache>;
 	var digest:Null<String> = null;
 
-	public function new(home:String, compilerSource:String, digests:Null<ContentDigestCache>) {
+	public function new(home:String, compilerSource:Null<String>, digests:Null<ContentDigestCache>) {
 		this.home = home;
-		this.compilerSource = compilerSource;
+		this.compilerSource = compilerSource == null ? AotCompiler.sources(home) : compilerSource;
 		this.digests = digests;
 	}
 
@@ -150,9 +159,11 @@ private class LazyDigest {
 		try {
 			if (!FileSystem.exists(path) || !FileSystem.exists(stampPath))
 				return false;
-			if (digest == null)
-				digest = HaxeonSdk.isRelease(home) ? HaxeonSdk.releaseField(home,
-					HaxeonSdk.COMPILER_SOURCES) : AotCompiler.sourcesDigest(home, compilerSource, digests);
+			if (digest == null) {
+				var sources = compilerSource;
+				digest = sources == null ? HaxeonSdk.field(home,
+					HaxeonSdk.COMPILER_SOURCES) : AotCompiler.sourcesDigest(home, sources, digests);
+			}
 			return digest != null && StringTools.trim(File.getContent(stampPath)) == digest;
 		} catch (_:Dynamic) {
 			return false;

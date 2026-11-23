@@ -40,11 +40,11 @@ class CompilerExecutable {
 
 	/**
 	 * The CLI, when this executable is current; else the CLI's bytecode on the VM, as the launcher runs it without the executable,
-	 * so an edit to the CLI in a checkout never runs an older CLI. The launcher has set the environment the CLI reads (`HAXEON_HOME`).
+	 * so an edit to the CLI in a checkout never runs an older CLI. The launcher has set the environment the CLI reads (`HAXEON_SDK`).
 	 */
 	static function cli(arguments:Array<String>):Void {
-		var home = Sys.getEnv("HAXEON_HOME");
-		if (home != null && home != "" && AotCompiler.current(home, Path.join([home, "src"])) == null)
+		var home = build.HaxeonSdk.current();
+		if (home != null && AotCompiler.current(home) == null)
 			Sys.exit(Sys.command(HashLinkPath.executable(home),
 				[Path.join([HashLinkPath.directory(home), CLI_BYTECODE])].concat(arguments)));
 		HaxeonCli.run(arguments);

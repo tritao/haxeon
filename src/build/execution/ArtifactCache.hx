@@ -23,18 +23,8 @@ private typedef CachedManifest = {
 class ArtifactCache {
 	final cacheRoot:String;
 
-	public function new() {
-		var cacheOverride = ProcessRunner.environmentValue("HAXEON_ARTIFACT_CACHE");
-		if (cacheOverride != null && cacheOverride.length > 0)
-			cacheRoot = Path.normalize(cacheOverride);
-		else {
-			var home = Sys.systemName() == "Windows"
-				? ProcessRunner.environmentValue("USERPROFILE") : ProcessRunner.environmentValue("HOME");
-			if (home == null || home.length == 0)
-				home = Sys.getCwd();
-			cacheRoot = Path.join([home, ".haxeon", "cache", "artifacts"]);
-		}
-	}
+	public function new()
+		cacheRoot = build.UserCache.directory("artifacts", "HAXEON_ARTIFACT_CACHE");
 
 	public function restore(action:ExecutionAction, key:String):Bool {
 		if (!isShareable(action))

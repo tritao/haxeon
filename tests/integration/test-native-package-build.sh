@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-home=${HAXEON_HOME:-$repo_dir}
-haxe=${HAXEON_HAXE:-"$home/.tools/haxe/haxe"}
+sdk=${HAXEON_SDK:-$repo_dir/out/sdk}
+haxe=${HAXEON_HAXE:-"$repo_dir/.tools/haxe/haxe"}
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-native-package.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
@@ -15,7 +15,7 @@ fi
 cp -R "$repo_dir/tests/fixtures/build/native-package/." "$project_dir/"
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
+	HAXEON_SDK="$sdk" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 # Applies a sed expression to a file in place, in the form GNU and BSD sed both take.

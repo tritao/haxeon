@@ -325,6 +325,17 @@ foreach(_registry_manifest IN LISTS _registry_manifests)
 endforeach()
 file(CONFIGURE OUTPUT "${HAXEON_SDK_DIR}/registry/index.json" CONTENT "${_registry_index}\n")
 set(_sdk_lib "${HAXEON_SDK_DIR}/lib/${_sdk_target}")
+# The scripts native packages' CMake builds include or run (build.native.NativeCMakeProvider, NativeCache), from the SDK's
+# cmake/ in a checkout as in a release. Copied file by file, so the launcher's haxeon-command brings an edit to them along.
+set(_sdk_native_scripts)
+foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument haxeon-locked haxeon-publish haxeon-real-path)
+  add_custom_command(OUTPUT "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
+    COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/cmake/${_script}.cmake" "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
+    DEPENDS "${CMAKE_SOURCE_DIR}/cmake/${_script}.cmake"
+    VERBATIM)
+  list(APPEND _sdk_native_scripts "${HAXEON_SDK_DIR}/cmake/${_script}.cmake")
+endforeach()
 add_custom_target(haxeon-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}" "${HAXEON_SDK_DIR}/include" "${HAXEON_SDK_DIR}/src"
     "${HAXEON_SDK_DIR}/cmake"
@@ -337,7 +348,7 @@ add_custom_target(haxeon-sdk ALL
     "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${HAXEON_SDK_DIR}/src"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonConfig.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonApp.cmake" "${_sdk_generated}/HaxeonConfigVersion.cmake" "${HAXEON_SDK_DIR}/cmake"
-  DEPENDS hlvm hlvm_aot haxeon_app "${CMAKE_SOURCE_DIR}/native/app/haxeon_app.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
+  DEPENDS hlvm hlvm_aot haxeon_app ${_sdk_native_scripts} "${CMAKE_SOURCE_DIR}/native/app/haxeon_app.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
     "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonConfig.cmake"
     "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonApp.cmake"
   COMMENT "Staging the Haxeon SDK in ${HAXEON_SDK_DIR}"
@@ -439,7 +450,8 @@ add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} ${HAXEON_CL
   haxeon-native-tests)
 # What the haxeon launchers bring up to date before running it: the command and the CLI's bytecode.
 if(TARGET haxeon)
-  add_custom_target(haxeon-command DEPENDS "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon${CMAKE_EXECUTABLE_SUFFIX}" "${HAXEON_CLI_BYTECODE}")
+  add_custom_target(haxeon-command DEPENDS "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon${CMAKE_EXECUTABLE_SUFFIX}" "${HAXEON_CLI_BYTECODE}"
+    ${_sdk_native_scripts})
 endif()
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})

@@ -18,7 +18,7 @@ class FfiProvider {
 	public static function action(resolvedPackage:ResolvedPackage, ffi:ResolvedFfiImport, context:LoweringContext,
 			actionId:ActionId,
 			output:String):ExecutionAction {
-		// `haxeon ffi import`, from the compiler's own checkout, on every host.
+		// `haxeon ffi import`, the SDK's own, on every host.
 		var compiler = Path.join([
 			build.HashLinkPath.directory(context.compilerHome),
 			Sys.systemName() == "Windows" ? "haxeon.exe" : "haxeon"
@@ -35,8 +35,11 @@ class FfiProvider {
 			inputs = ffi.inputs(),
 			outputs = [output],
 			thunkSource = context.layout.ffiThunkSourcePath(resolvedPackage.name, ffi.config.name);
-		for (root in build.CompilerSources.roots(Path.join([context.compilerHome, "src"])))
-			inputs.push(root);
+		// The importer is the CLI, built from the compiler's sources in a checkout; a release's never changes.
+		var sources = build.AotCompiler.sources(context.compilerHome);
+		if (sources != null)
+			for (root in build.CompilerSources.roots(sources))
+				inputs.push(root);
 		if (ffi.config.cxxThunks) {
 			arguments.push("--library=" + context.layout.ffiNativeLibraryPath(resolvedPackage.name, ffi.config.name));
 			arguments.push("--cxx-thunks=" + thunkSource);

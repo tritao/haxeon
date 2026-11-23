@@ -209,7 +209,7 @@ class HaxeonBuild {
 	/** The test libraries the driver's programs load into the VM by name are in out/. */
 	static function configureRuntimeLibraryPath():Void {
 		var directories = [path(["out"])];
-		Sys.putEnv("HAXEON_SDK", HaxeonSdk.root(root()));
+		Sys.putEnv("HAXEON_SDK", HaxeonSdk.ofCheckout(root()));
 		var variable = Sys.systemName() == "Windows"
 			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
@@ -222,7 +222,7 @@ class HaxeonBuild {
 		return path([".tools", "haxe", "haxe" + executableSuffix()]);
 
 	static function hashlink():String
-		return HashLinkPath.executable(root());
+		return HashLinkPath.executable(HaxeonSdk.ofCheckout(root()));
 
 	static function executableSuffix():String
 		return Sys.systemName() == "Windows" ? ".exe" : "";

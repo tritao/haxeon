@@ -85,15 +85,23 @@ class CompilerSession {
 	public function writeHashLink(code:HlCode, path:String):Void
 		HlWriter.saveSegments(encodeHashLink(code), path);
 
-	/** Wasm guests import their host services through this stdlib interface. */
-	static function hostInterfaces(target:Null<BackendTarget>):{interfaces:Array<String>,
-		projections:Array<String>} return switch target {
-			case Wasm32 | WasmGc: {
-				interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"],
-				projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]
-			};
-			case _: {interfaces: [], projections: []};
+	/** Wasm guests import their host services through this interface of the standard library at `stdlib`. */
+	static function hostInterfaces(target:Null<BackendTarget>, stdlib:String):{
+		interfaces:Array<String>,
+		projections:Array<String>
+	} return switch target {
+		case Wasm32 | WasmGc: {
+			interfaces: [
+				Path.join([stdlib, "haxeon/wasm/HaxeonHost.hxi"]),
+				Path.join([stdlib, "haxeon/wasm/HaxeonCrypto.hxi"])
+			],
+			projections: [
+				Path.join([stdlib, "haxeon/wasm/HaxeonHost.hxmap"]),
+				Path.join([stdlib, "haxeon/wasm/HaxeonCrypto.hxmap"])
+			]
 		};
+		case _: {interfaces: [], projections: []};
+	};
 
 	/**
 	 * Stdlib modules a Wasm host calls into, compiled into every guest that shares linear memory with its host
@@ -101,8 +109,8 @@ class CompilerSession {
 	 */
 	static function hostSources(request:CompilerRequest):Array<String>
 		return switch BackendTargets.parse(request.target) {
-			case Wasm32: ["stdlib/haxeon/wasm/HostError.hx"];
-			case WasmGc if (request.importMemory == true): ["stdlib/haxeon/wasm/HostError.hx"];
+			case Wasm32: [Path.join([request.stdlib, "haxeon/wasm/HostError.hx"])];
+			case WasmGc if (request.importMemory == true): [Path.join([request.stdlib, "haxeon/wasm/HostError.hx"])];
 			case _: [];
 		};
 
@@ -118,7 +126,7 @@ class CompilerSession {
 		writtenBaseline = null;
 		// Every consumer of a source in this request sees the same bytes.
 		requestSources = [];
-		var host = hostInterfaces(BackendTargets.parse(request.target)),
+		var host = hostInterfaces(BackendTargets.parse(request.target), request.stdlib),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
 		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {
@@ -139,6 +147,7 @@ class CompilerSession {
 				// Another set of passes or checks is another session: caches (inlining, pipeline, lowering) hold their results.
 				options: request.options.key(),
 				roots: request.roots,
+				stdlib: request.stdlib,
 				packageRoots: request.packageRoots,
 				paths: request.paths,
 				interfaces: interfaces,
@@ -201,7 +210,7 @@ class CompilerSession {
 					compiler.addFfiInterface(source.path, source.text);
 				}
 			}
-			compiler.addStandardLibrarySourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot(request.stdlib);
 			for (root in request.roots)
 				compiler.addSourceRoot(root);
 			for (root in request.packageRoots)
@@ -222,9 +231,9 @@ class CompilerSession {
 		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged);
 		// Wasm guests always carry the stdlib modules their host calls into.
 		var hostModules = hostSources(request);
-		SourceManifestLoader.load(compiler, ["stdlib"], hostModules, null, readChanged);
+		SourceManifestLoader.load(compiler, [request.stdlib], hostModules, null, readChanged);
 		for (path in hostModules)
-			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, ["stdlib"])));
+			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, [request.stdlib])));
 		compiler.setExportedFunctions(request.exports);
 		return compiler;
 	}

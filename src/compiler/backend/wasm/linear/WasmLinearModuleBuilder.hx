@@ -458,7 +458,7 @@ class WasmLinearModuleBuilder {
 			linear.fuelChargeFunction = fuelChargeFunction;
 		}
 		linkRuntime();
-		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives,
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives, options.standardLibrary,
 			runtimeNeutral ? requiredFuelFunction() : null);
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
@@ -485,7 +485,8 @@ class WasmLinearModuleBuilder {
 		if (runtimeNeutral && options.wasmLinearRuntime != null)
 			throw new InternalError("--wasm-runtime-neutral does not accept a custom wasm32 runtime without fuel instrumentation");
 		var runtime = options.wasmLinearRuntime != null
-			? options.wasmLinearRuntime : (runtimeNeutral ? runtimeNeutralRuntime() : defaultRuntime());
+			? options.wasmLinearRuntime : WasmRuntimeLinker.shipped(options.standardLibrary,
+			runtimeNeutral ? "linear-runtime-neutral.wasm" : "linear-runtime.wasm");
 		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {
 			parameters: [],
 			results: []
@@ -504,33 +505,6 @@ class WasmLinearModuleBuilder {
 		linear.heapAllocFunction = required("haxeon_heap_alloc");
 		linear.heapSweepFunction = required("haxeon_heap_sweep");
 	}
-
-	@:processWide("the bytes of a runtime shipped with the compiler, read once")
-	static var cachedRuntime:Null<haxe.io.Bytes> = null;
-	@:processWide("the bytes of a runtime shipped with the compiler, read once")
-	static var cachedRuntimeNeutral:Null<haxe.io.Bytes> = null;
-
-	/** The committed runtime, found like the stdlib host interfaces: relative to the Haxeon root. */
-	static function defaultRuntime():haxe.io.Bytes {
-		if (cachedRuntime == null) {
-			if (!sys.FileSystem.exists(DEFAULT_RUNTIME))
-				throw new InternalError('The wasm32 backend links $DEFAULT_RUNTIME, which is missing; build it with the haxeon-wasm-runtime target of the native build');
-			cachedRuntime = sys.io.File.getBytes(DEFAULT_RUNTIME);
-		}
-		return cachedRuntime;
-	}
-
-	static function runtimeNeutralRuntime():haxe.io.Bytes {
-		if (cachedRuntimeNeutral == null) {
-			var path = "stdlib/haxeon/wasm/linear-runtime-neutral.wasm";
-			if (!sys.FileSystem.exists(path))
-				throw new InternalError('The runtime-neutral wasm32 runtime $path is missing; build it with the haxeon-wasm-runtime target of the native build');
-			cachedRuntimeNeutral = sys.io.File.getBytes(path);
-		}
-		return cachedRuntimeNeutral;
-	}
-
-	static inline final DEFAULT_RUNTIME = "stdlib/haxeon/wasm/linear-runtime.wasm";
 
 	function declareFunctions():Void {
 		methods = [];

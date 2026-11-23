@@ -47,11 +47,14 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       Fail on a test file under tests/ that no suite, test driver case or workflow runs (TestRegistration).
  */
 class DevCommand {
-	public static function run(arguments:Array<String>, home:String):Int {
+	/** Runs the command in `arguments` on the checkout the SDK at `sdk` was built from: every command but hl-stat needs one. */
+	public static function run(arguments:Array<String>, sdk:String):Int {
 		var command = arguments.length == 0 ? "" : arguments.shift();
+		if (command == "hl-stat")
+			return HlStatCommand.run(arguments);
+		var home = build.HaxeonSdk.requireSource(sdk, "haxeon dev");
 		return switch command {
 			case "tool-path": toolPath(arguments, home);
-			case "hl-stat": HlStatCommand.run(arguments);
 			case "tool-build-mode":
 				Sys.println(build.HaxeonBuild.TOOL_BUILD_MODE);
 				0;

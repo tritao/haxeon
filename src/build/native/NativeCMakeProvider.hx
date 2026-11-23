@@ -29,6 +29,7 @@ class NativeCMakeProvider {
 		// A shared tree is named and configured with real paths, so every route to a directory gives the same arguments.
 		var cached = !context.sharedNative && context.nativeCache != null,
 			home = cached ? NativeCache.canonical(context.compilerHome) : context.compilerHome,
+			scripts = build.HaxeonSdk.cmakeDirectory(home),
 			sourcePath = Path.normalize(Path.join([resolvedPackage.root, native.cmake.source])),
 			source = cached ? NativeCache.canonical(sourcePath) : sourcePath,
 			layout = context.layout,
@@ -78,7 +79,7 @@ class NativeCMakeProvider {
 			],
 			runDirectory = shared ? source : resolvedPackage.root,
 			publishedDirectory = layout.packageRoot(resolvedPackage.name),
-			publishScript = Path.join([home, "cmake", "haxeon-publish.cmake"]),
+			publishScript = Path.join([scripts, "haxeon-publish.cmake"]),
 			publishId =
 				new ActionId('native-cmake-publish:${resolvedPackage.name}:${context.environment.target.toString()}'),
 			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
@@ -136,14 +137,14 @@ class NativeCMakeProvider {
 			configureArguments.push("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + outputDirectory);
 		}
 		// haxeon-native.cmake keeps frame pointers off Windows, for the sampling profiler, and instruments when asked.
-		configureArguments.push("-DCMAKE_PROJECT_INCLUDE=" + Path.join([home, "cmake", "haxeon-native.cmake"]));
+		configureArguments.push("-DCMAKE_PROJECT_INCLUDE=" + Path.join([scripts, "haxeon-native.cmake"]));
 		for (file in ["haxeon-native.cmake", "haxeon-frame-pointers.cmake"])
-			cmakeInputs.push(Path.join([home, "cmake", file]));
+			cmakeInputs.push(Path.join([scripts, file]));
 		var instrumenting = instrumentArguments(context);
 		for (argument in instrumenting)
 			configureArguments.push(argument);
 		if (instrumenting.length > 0)
-			cmakeInputs.push(Path.join([context.compilerHome, "cmake", "haxeon-instrument.cmake"]));
+			cmakeInputs.push(Path.join([scripts, "haxeon-instrument.cmake"]));
 		// Builds in other worktrees and editors use the same shared trees. Each step holds the tree's lock only while it
 		// runs (an OS file lock, released when the process ends), so the Haxe compiles of different builds still overlap.
 		var lockFile = cached ? cacheTree + ".lock" : null,
@@ -155,7 +156,7 @@ class NativeCMakeProvider {
 					"-DHOLDER=haxeon build " + context.environment.projectRoot,
 				].concat(extra == null ? [] : extra).concat([
 					"-P",
-					Path.join([home, "cmake", "haxeon-locked.cmake"]),
+					Path.join([scripts, "haxeon-locked.cmake"]),
 					command
 				]).concat(arguments), runDirectory, compilerCache);
 			};
@@ -326,10 +327,14 @@ class NativeCMakeProvider {
 
 	static final ninjaVersions = new Map<String, String>();
 
-	/** The pinned Ninja under `.tools` when bootstrapped, otherwise whatever `ninja` resolves to on PATH. */
+	/**
+	 * The Ninja the bootstrap pins under the `.tools` of the SDK's checkout when there is one, otherwise whatever `ninja` resolves
+	 * to on PATH (always, for a release).
+	 */
 	public static function ninjaExecutable(home:String):String {
-		var pinned = Path.join([home, ".tools", "ninja", "ninja"]);
-		return sys.FileSystem.exists(pinned) ? pinned : "ninja";
+		var source = build.HaxeonSdk.source(home),
+			pinned = source == null ? null : Path.join([source, ".tools", "ninja", "ninja"]);
+		return pinned != null && sys.FileSystem.exists(pinned) ? pinned : "ninja";
 	}
 
 	/** Output of `ninja --version`, or null when the executable cannot run. */

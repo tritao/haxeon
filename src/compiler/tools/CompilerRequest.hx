@@ -93,6 +93,12 @@ typedef CompilerRequest = {
 	final ffiInterfaces:Array<String>;
 	final ffiProjections:Array<String>;
 	final roots:Array<String>;
+
+	/**
+	 * The standard library (`--stdlib=`, default `stdlib` in the working directory, where the checkout's scripts and tools run):
+	 * the CLI names its SDK's (`build.HaxeonSdk.stdlib`), so a compile does not depend on where it runs.
+	 */
+	final stdlib:String;
 	final packageRoots:Array<PackageSourceRoot>;
 	final paths:Array<String>;
 }

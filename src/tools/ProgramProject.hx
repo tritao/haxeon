@@ -36,7 +36,7 @@ class ProgramProject {
 	 * created and marked as used now. The cache's other programs that have not been used for `UNUSED_SECONDS` are removed.
 	 */
 	public static function directory(name:String, variable:String, key:String):String {
-		var root = cacheRoot(name, variable), directory = Path.join([root, key]);
+		var root = build.UserCache.directory(name, variable), directory = Path.join([root, key]);
 		// Parents too: the first program makes its cache.
 		if (!FileSystem.exists(directory))
 			FileSystem.createDirectory(directory);
@@ -65,15 +65,5 @@ class ProgramProject {
 					FileTree.remove(directory)
 				catch (_:Dynamic) {} // in use by another run, or already gone: the next run tries again
 		}
-	}
-
-	static function cacheRoot(name:String, variable:String):String {
-		var configured = Sys.getEnv(variable);
-		if (configured != null && configured != "")
-			return Path.normalize(configured);
-		var home = Sys.systemName() == "Windows" ? Sys.getEnv("USERPROFILE") : Sys.getEnv("HOME");
-		if (home == null || home == "")
-			home = Sys.getCwd();
-		return Path.join([home, ".haxeon", "cache", name]);
 	}
 }

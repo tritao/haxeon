@@ -7,16 +7,22 @@ import haxe.io.Eof;
 /** Standard Language Server Protocol entry point over stdio: `haxeon lsp`. */
 class LspMain {
 	static function main():Void
-		run([]);
+		run(Sys.args());
 
-	/** Serves one client on standard input and output until it exits. */
+	/**
+	 * Serves one client on standard input and output until it exits. `--stdlib=PATH` names the standard library, as `haxeon lsp`
+	 * does with its SDK's; without it, `stdlib` in the working directory.
+	 */
 	public static function run(arguments:Array<String>):Int {
-		if (arguments.length != 0)
-			throw new InternalError('Unexpected lsp argument "${arguments[0]}"');
-		compiler.service.LanguageService.useHaxeonRoot();
+		var stdlib = "stdlib";
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, "--stdlib=") && argument.length > "--stdlib=".length)
+				stdlib = argument.substr("--stdlib=".length);
+			else
+				throw new InternalError('Unexpected lsp argument "$argument"');
 		if (Sys.systemName() == "Windows")
 			binaryStdio();
-		var protocol = new LspProtocol(),
+		var protocol = new LspProtocol(new compiler.service.LanguageService(null, stdlib)),
 			input = Sys.stdin(),
 			output = Sys.stdout(),
 			outputMutex = new sys.thread.Mutex(),

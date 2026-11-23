@@ -16,7 +16,7 @@ private typedef CreateOptions = {
 
 /**
  * `haxeon create DIRECTORY [--template app|program] [--platforms LIST] [--org PREFIX]`: makes a project from a template in
- * `templates/` (templates/README.md), or, in a directory that has some of it, adds the files it lacks and leaves every file
+ * the SDK's templates (`HaxeonSdk.templates`, templates/README.md), or, in a directory that has some of it, adds the files it lacks and leaves every file
  * there as it is (docs/design/PROJECT_BUILDS.md).
  */
 class ProjectCreator {
@@ -24,7 +24,7 @@ class ProjectCreator {
 
 	public static function run(arguments:Array<String>, home:String):Int {
 		var options = parse(arguments),
-			templateDirectory = Path.join([home, "templates", options.template]);
+			templateDirectory = Path.join([build.HaxeonSdk.templates(home), options.template]);
 		if (!FileSystem.exists(templateDirectory))
 			throw new UsageError('This Haxeon has no "${options.template}" template ($templateDirectory)');
 		var target = FileSystem.absolutePath(options.directory),

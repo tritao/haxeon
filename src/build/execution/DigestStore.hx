@@ -75,15 +75,8 @@ class DigestStore {
 			store.save();
 	}
 
-	static function sharedPath():String {
-		var configured = ProcessRunner.environmentValue("HAXEON_DIGEST_STORE");
-		if (configured != null && configured.length > 0)
-			return configured;
-		var home = ProcessRunner.environmentValue(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME");
-		if (home == null || home.length == 0)
-			home = Sys.getCwd();
-		return Path.join([home, ".haxeon", "cache", "content-digests"]);
-	}
+	static function sharedPath():String
+		return build.UserCache.directory("content-digests", "HAXEON_DIGEST_STORE");
 
 	/**
 	 * The digest of the file at `key` (an absolute path) when its stat signature is `signature`, stored by a hash that began at

@@ -191,7 +191,7 @@ class WasmGcModuleBuilder {
 				if (reflection != null)
 					functions.set(native.name, reflection);
 			}
-		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives);
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives, options.standardLibrary);
 		// Reserved once every import exists and before the runtime helpers are lowered, so they all call it; its body
 		// needs every class's toString index and is defined later.
 		if (usedNatives.exists("__std_string"))

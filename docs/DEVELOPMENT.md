@@ -109,8 +109,9 @@ Say in the commit message what moved and why. A tolerance is changed by editing 
 
 Setup is two CMake invocations, wrapped by a script per shell. Everything after that is the `haxeon` command, spelled the
 same everywhere. It is a native executable the build puts beside `hl`: the same VM, running the CLI's bytecode, which the
-build compiles with the pinned Haxe and publishes next to it (`native/haxeon_main.c`). It belongs to the checkout it was built
-in, which it names in `HAXEON_HOME`, and needs no library path, so its directory can go on `PATH`.
+build compiles with the pinned Haxe and publishes next to it (`native/haxeon_main.c`). It belongs to the SDK the build stages in
+`out/sdk`, which it names in `HAXEON_SDK` and whose manifest names the checkout as its `source` (`build.HaxeonSdk`), and needs
+no library path, so its directory can go on `PATH`.
 
 `scripts/haxeon` (Unix) and `scripts\haxeon` (`haxeon.cmd`, `haxeon.ps1`; Windows) run it after bringing it and the CLI's
 bytecode up to date with `cmake --build <build> --target haxeon-command`, so an edit to the CLI is in the next command. That

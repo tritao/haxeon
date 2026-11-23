@@ -67,6 +67,12 @@ import sys.thread.Thread;
 #end
 
 class BuildSystemMain {
+	/** The SDK the builds lower against: the test driver's (`HAXEON_SDK`), else the checkout's. */
+	static function sdk():String {
+		var current = build.HaxeonSdk.current();
+		return current != null ? current : build.HaxeonSdk.ofCheckout(Sys.getCwd());
+	}
+
 	static function main():Void {
 		// testWatchBuildsSavesMadeDuringABuild launches this program as its watched app.
 		var args = Sys.args();
@@ -134,7 +140,7 @@ class BuildSystemMain {
 			for (shared in [false, true]) {
 				var target = Target.parse(triple),
 					environment = new BuildEnvironment(root, root + "/build", BuildProfile.Debug, target),
-					context = new LoweringContext(environment, null, project, null, root, null, false, shared),
+					context = new LoweringContext(environment, null, project, null, sdk(), null, false, shared),
 					artifact = new Artifact(new ArtifactId("aggregate", ArtifactKind.NativeSharedLibrary, target)),
 					lowered = build.native.NativeCMakeProvider.lowerPackage(project.rootPackage, [artifact], context),
 					action = lowered.actions[1],
@@ -300,7 +306,7 @@ class BuildSystemMain {
 			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug,
 				linux, info, instrument), home);
 		}
-		var home = Sys.getCwd(),
+		var home = sdk(),
 			clang = toolchain(true, scope, home),
 			gcc = toolchain(false, scope, home),
 			plain = toolchain(true, null, home),
@@ -874,7 +880,8 @@ class BuildSystemMain {
 		var root = temporaryDirectory("worker-memo"),
 			source = Path.join([root, "compiler"]),
 			home = Path.join([root, "home"]);
-		FileSystem.createDirectory(home);
+		FileSystem.createDirectory(Path.join([home, "stdlib"]));
+		File.saveContent(Path.join([home, build.HaxeonSdk.MANIFEST]), '[roots]\nstdlib = "stdlib"\n');
 		FileSystem.createDirectory(source);
 		File.saveContent(Path.join([source, "A.hx"]), "class A {}
 ");
@@ -1232,7 +1239,7 @@ class BuildSystemMain {
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
 				new LoweringContext(environment, null, project,
-				new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+				new TargetLayout(environment).hashLinkModulePath("main"), sdk())),
 			executionText = execution.toDebugString();
 		expect(plan.toExplainString().indexOf("reason: requested output") >= 0
 			&& plan.toExplainString().indexOf("detail library: foo") >= 0,
@@ -1268,7 +1275,7 @@ class BuildSystemMain {
 				new TargetLayout(environment).hashLinkModulePath("main"),
 				[for (action in execution.actions) action.id]),
 				tests = WorkspaceBuild.withTests(new LoweredWorkspace(environment, execution, [member],
-					execution.actions.length, new Map()), Sys.getCwd()),
+					execution.actions.length, new Map()), sdk()),
 				testAction = [
 					for (action in tests.actions)
 						if (StringTools.startsWith(action.id.key(), "test:")) action
@@ -1288,7 +1295,7 @@ class BuildSystemMain {
 			};
 		}, liveExecution = PlanLowerer.lower(plan,
 			new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"),
-			project.root, null, false, false, true));
+			sdk(), null, false, false, true));
 		expect(compilerArguments(execution).indexOf("--live") < 0,
 			"an ordinary build must not request live compiler history");
 		expect(compilerArguments(liveExecution).indexOf("--live") >= 0,
@@ -1380,12 +1387,12 @@ class BuildSystemMain {
 		expectThrows(() -> FfiImportManifest.parse("/tmp/direct.ffi.json",
 			'{"version":1,"name":"direct","language":"c++","profile":"direct","header":"fixture.hpp","library":"fixture","cxxThunks":true}'),
 			"direct C++ FFI profiles should reject generated thunks");
-		// The compiler home is the checkout: the FFI import runs its own `haxeon`, found through its HashLink path table.
+		// The compiler home is the checkout's SDK: the FFI import runs its own `haxeon`, in the SDK's bin.
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
 				new LoweringContext(environment, null, project,
-				new TargetLayout(environment).hashLinkModulePath("main"), Sys.getCwd())),
+				new TargetLayout(environment).hashLinkModulePath("main"), sdk())),
 			planText = plan.toDebugString(),
 			executionText = execution.toDebugString();
 		expect(planText.indexOf("app:FfiInterface") >= 0
@@ -1452,7 +1459,7 @@ class BuildSystemMain {
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			execution = PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, environment.target,
 				NativeArtifactDemand.Shared),
-				new LoweringContext(environment, null, project, hostLayout.hashLinkModulePath("main"), Sys.getCwd())),
+				new LoweringContext(environment, null, project, hostLayout.hashLinkModulePath("main"), sdk())),
 			arguments = switch compilerAction(execution).action {
 				case Compiler(_, arguments, _, _, _): arguments;
 				case _: [];
@@ -1478,7 +1485,7 @@ class BuildSystemMain {
 		function androidCompile(?baseline:String):ExecutionAction
 			return compilerAction(PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, androidTarget,
 				NativeArtifactDemand.Shared),
-				new LoweringContext(androidEnvironment, null, project, module, Sys.getCwd(), null, null, null, null,
+				new LoweringContext(androidEnvironment, null, project, module, sdk(), null, null, null, null,
 				null, null,
 				false, baseline)));
 		function compilerArguments(action:ExecutionAction):Array<String>

@@ -26,18 +26,15 @@ class CompilerClient {
 	 * compiler built ahead of time runs (`aot`, `build.AotCompiler`) has a version of its own, so a bytecode worker of the same
 	 * sources is not reused once the executable is installed.
 	 */
-	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String,
+	public static function workerVersion(command:String, compilerSource:Null<String>, home:String, buildRoot:String,
 			profilePort:Null<String>,
 			?session:build.BuildSession, aot:Bool = false):String {
 		// A request states its passes and checks (`CompileOptions`), so one worker serves every combination of them.
-		var identity = new ExecutionAction(new ActionId("compiler-session-v9"
-			+ (profilePort == null ? "" : ":profile:" + profilePort) + (aot ? ":aot" : "")), [],
-			build.CompilerSources.roots(compilerSource).concat([Path.join([
-				home,
-				"stdlib"
-			])]), [], "",
-			ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
-			new Map()));
+		var roots = compilerRoots(compilerSource),
+			identity = new ExecutionAction(new ActionId("compiler-session-v9"
+				+ (profilePort == null ? "" : ":profile:" + profilePort) + (aot ? ":aot" : "")), [],
+				roots.concat([build.HaxeonSdk.stdlib(home)]), [], "",
+				ExecutionAction.ActionKind.Process(command, roots, home, new Map()));
 		if (session == null)
 			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
 		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
@@ -48,7 +45,11 @@ class CompilerClient {
 		});
 	}
 
-	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String,
+	/**
+	 * Compiles `arguments` in the project's worker. `command` is the pinned Haxe that builds the compiler from `compilerSource`,
+	 * which is null for a release: it has only the compiler it ships (`build.AotCompiler.program`).
+	 */
+	public static function run(command:String, compilerSource:Null<String>, arguments:Array<String>, home:String,
 			buildRoot:String, projectRoot:String,
 			fallback:Void->Int, ?session:build.BuildSession, background:Bool = false):Int {
 		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
@@ -98,11 +99,10 @@ class CompilerClient {
 						throw new InternalError("Could not start compiler worker");
 				} else {
 					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
-						libraryPath = [
-							Path.join([home, "out"]),
-							build.HashLinkPath.directory(home),
-							ProcessRunner.environmentValue(libraryVariable)
-						].filter(value -> value != null && value.length > 0).join(":"),
+						libraryPath = build.HashLinkPath.libraryPath(home)
+							.concat([ProcessRunner.environmentValue(libraryVariable)])
+							.filter(value -> value != null && value.length > 0)
+							.join(":"),
 						launch = program.concat([statePath]).map(SysTools.quoteUnixArg).join(" ");
 					// The shell redirects its own three streams first, so neither the worker nor the subshell that
 					// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
@@ -245,8 +245,9 @@ class CompilerClient {
 	 * runs. Windows has no touch, so there an unused program is removed by age; the current version's program and any a
 	 * running worker uses are always kept.
 	 */
-	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String,
+	static function ensureArtifact(command:String, compilerSource:Null<String>, artifact:String, home:String,
 			mainClass:String):Void {
+		var sources = buildableSources(compilerSource, home);
 		#if (target.threaded && !eval)
 		artifactMutex.acquire();
 		#end
@@ -257,7 +258,7 @@ class CompilerClient {
 			} else {
 				// Build beside the target and rename, so another Haxeon process never sees a partial file.
 				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
-					compileStatus = ProcessRunner.run(command, build.CompilerSources.classPath(compilerSource).concat([
+					compileStatus = ProcessRunner.run(command, build.CompilerSources.classPath(sources).concat([
 						"-hl",
 						temporary,
 						"-main",
@@ -288,27 +289,37 @@ class CompilerClient {
 	 * compiler, else in the compiler interpreted by the pinned Haxe (`haxe`). The arguments are the compiler's own
 	 * (`CompilerArguments`).
 	 */
-	public static function compile(haxe:String, compilerSource:String, arguments:Array<String>, home:String,
+	public static function compile(haxe:String, compilerSource:Null<String>, arguments:Array<String>, home:String,
 			buildRoot:String,
 			projectRoot:String, ?session:build.BuildSession):Int
 		return run(haxe, compilerSource, arguments, home, buildRoot, projectRoot,
 			() -> runOneShot(haxe, compilerSource, arguments, home, buildRoot, runtimeLibraryEnvironment(home),
-			() -> ProcessRunner.run(haxe, build.CompilerSources.classPath(compilerSource).concat([
+			() -> ProcessRunner.run(haxe,
+			build.CompilerSources.classPath(buildableSources(compilerSource, home)).concat([
 				"--run",
 				"compiler.tools.HaxeonCompiler"
 			]).concat(arguments), home, new Map())), session);
 
+	/** The roots of the compiler's sources, none for a release. */
+	static function compilerRoots(compilerSource:Null<String>):Array<String>
+		return compilerSource == null ? [] : build.CompilerSources.roots(compilerSource);
+
+	/** The compiler's sources, to build it from; a release has none, so only the compiler it ships runs there. */
+	static function buildableSources(compilerSource:Null<String>, home:String):String {
+		if (compilerSource == null)
+			throw new InternalError('This Haxeon release has no current compiler to run (${build.AotCompiler.bytecode(home)}); '
+				+ "install the release again");
+		return compilerSource;
+	}
+
 	/** The environment a compiler run by HashLink needs to find its native libraries. */
-	public static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {
+	public static function runtimeLibraryEnvironment(home:String):Map<String, String> {
 		var variable = switch Sys.systemName() {
 			case "Windows": "PATH";
 			case "Mac": "DYLD_LIBRARY_PATH";
 			case _: "LD_LIBRARY_PATH";
 		};
-		var directories = [
-			haxe.io.Path.join([compilerHome, "out"]),
-			build.HashLinkPath.directory(compilerHome)
-		],
+		var directories = build.HashLinkPath.libraryPath(home),
 			existing = Sys.getEnv(variable);
 		if (existing != null && existing.length > 0)
 			directories.push(existing);
@@ -317,7 +328,7 @@ class CompilerClient {
 		return environment;
 	}
 
-	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String,
+	public static function runOneShot(command:String, compilerSource:Null<String>, arguments:Array<String>, home:String,
 			buildRoot:String,
 			environment:Map<String, String>, fallback:Void->Int):Int {
 		// The compiler built ahead of time, or a release's bytecode, when it is current, on every platform.
@@ -334,12 +345,8 @@ class CompilerClient {
 				throw new InternalError("missing " + hashlink);
 			var directory = preparedSessionDirectory(),
 				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [],
-					build.CompilerSources.roots(compilerSource).concat([Path.join([
-						home,
-						"stdlib"
-					])]), [], "",
-					ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
-					new Map()));
+					compilerRoots(compilerSource).concat([build.HaxeonSdk.stdlib(home)]), [], "",
+					ExecutionAction.ActionKind.Process(command, compilerRoots(compilerSource), home, new Map()));
 			artifact = Path.join([
 				directory,
 				ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []) + ".hl"
@@ -359,11 +366,10 @@ class CompilerClient {
 	**/
 	static function startWindowsWorker(home:String, launchArguments:Array<String>, logPath:String):Int {
 		var quote = (value:String) -> '"' + value + '"';
-		var path = [
-			Path.join([home, "out"]),
-			build.HashLinkPath.directory(home),
-			ProcessRunner.environmentValue("PATH")
-		].filter(value -> value != null && value.length > 0).join(";");
+		var path = build.HashLinkPath.libraryPath(home)
+			.concat([ProcessRunner.environmentValue("PATH")])
+			.filter(value -> value != null && value.length > 0)
+			.join(";");
 		var launch = launchArguments.map(quote);
 		var threshold = ProcessRunner.environmentValue("HL_GC_MARK_THRESHOLD");
 		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='

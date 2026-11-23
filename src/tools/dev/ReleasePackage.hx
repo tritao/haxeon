@@ -58,22 +58,23 @@ class ReleasePackage {
 		if (version == "" || ~/[\/\\\s]/.match(version))
 			throw new InternalError('Not a release version: "$version"');
 
-		var compilerSource = Path.join([home, "src"]),
-			native = AotCompiler.executable(home),
-			digest = AotCompiler.sourcesDigest(home, compilerSource),
+		var sdk = HaxeonSdk.ofCheckout(home),
+			compilerSource = AotCompiler.sources(sdk),
+			native = AotCompiler.executable(sdk),
+			digest = AotCompiler.sourcesDigest(sdk, compilerSource),
 			bytecode = new ToolArtifacts(home).resolve({main: "tools.CompilerExecutable", classPaths: [], defines: []});
 
-		if (FileSystem.exists(native) && AotCompiler.current(home, compilerSource) == null)
+		if (FileSystem.exists(native) && AotCompiler.current(sdk) == null)
 			throw new InternalError('$native is stale: rebuild it with "haxeon dev aot", or remove it to package without it');
 
 		var name = 'haxeon-$version-${platform()}', root = Path.join([output, name]);
 		var bin = Path.join([root, "bin"]);
 		cmake(home, ["-E", "rm", "-rf", root]);
 		cmake(home, ["-E", "make_directory", bin]);
-		var vm = HashLinkPath.directory(home), suffix = Sys.systemName() == "Windows" ? ".exe" : "";
+		var vm = HashLinkPath.directory(sdk), suffix = Sys.systemName() == "Windows" ? ".exe" : "";
 		var programs = ['hl$suffix', 'haxeon$suffix', "haxeon-cli.hl"];
 		if (FileSystem.exists(native))
-			programs = programs.concat([Path.withoutDirectory(native), Path.withoutDirectory(AotCompiler.stamp(home))]);
+			programs = programs.concat([Path.withoutDirectory(native), Path.withoutDirectory(AotCompiler.stamp(sdk))]);
 		// An MSVC build's debug information, which its stack traces read, is beside it.
 		var symbols = Path.withoutExtension(native) + ".pdb";
 		if (FileSystem.exists(native) && FileSystem.exists(symbols))
@@ -88,17 +89,18 @@ class ReleasePackage {
 			cmake(home, ["-E", "copy", path, bin]);
 		}
 		// Under the names `AotCompiler` looks for beside the release's VM.
-		var bytecodeName = Path.withoutDirectory(AotCompiler.bytecode(home));
+		var bytecodeName = Path.withoutDirectory(AotCompiler.bytecode(sdk));
 		cmake(home, ["-E", "copy", bytecode, Path.join([bin, bytecodeName])]);
-		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(home))]), digest + "\n");
-		cmake(home, ["-E", "copy_directory", Path.join([home, "stdlib"]), Path.join([root, "stdlib"])]);
-		cmake(home, ["-E", "copy_directory", Path.join([home, "templates"]), Path.join([root, "templates"])]);
-		publishRegistry(home, Path.join([root, "registry"]));
+		File.saveContent(Path.join([bin, Path.withoutDirectory(AotCompiler.bytecodeStamp(sdk))]), digest + "\n");
+		// The roots the checkout's SDK names, materialized in the release.
+		cmake(home, ["-E", "copy_directory", HaxeonSdk.stdlib(sdk), Path.join([root, "stdlib"])]);
+		cmake(home, ["-E", "copy_directory", HaxeonSdk.templates(sdk), Path.join([root, "templates"])]);
+		publishRegistry(sdk, Path.join([root, "registry"]));
 		// The rest of the SDK as the native build staged it; the manifest is the release's own, written last.
 		for (part in ["lib", "include", "src", "cmake"])
-			cmake(home, ["-E", "copy_directory", Path.join([HaxeonSdk.root(home), part]), Path.join([root, part])]);
+			cmake(home, ["-E", "copy_directory", Path.join([sdk, part]), Path.join([root, part])]);
 		// The stamps hold the digest of what the release holds: no source changed while it was made.
-		if (AotCompiler.sourcesDigest(home, compilerSource) != digest)
+		if (AotCompiler.sourcesDigest(sdk, compilerSource) != digest)
 			throw new InternalError("The compiler sources changed while the release was made; run it again");
 		for (file in ["LICENSE", "NOTICE", "README.md"])
 			if (FileSystem.exists(Path.join([home, file])))

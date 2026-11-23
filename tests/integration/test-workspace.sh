@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-home=${HAXEON_HOME:-$repo_dir}
-haxe=${HAXEON_HAXE:-"$home/.tools/haxe/haxe"}
+sdk=${HAXEON_SDK:-$repo_dir/out/sdk}
+haxe=${HAXEON_HAXE:-"$repo_dir/.tools/haxe/haxe"}
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-workspace.XXXXXX")
 source_cache=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-workspace-cache.XXXXXX")
 trap 'rm -rf -- "$project_dir" "$source_cache"' EXIT
@@ -20,7 +20,7 @@ printf '%s\n' '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots
 printf '%s\n' 'package app;' '' 'import foo.Foo;' '' 'function main():Int' '    return Foo.answer();' > "$project_dir/src/Main.hx"
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
+	HAXEON_SDK="$sdk" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 run_cli install --project "$project_dir/haxeon.json"

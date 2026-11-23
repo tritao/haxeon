@@ -1,6 +1,7 @@
 package tools.dev;
 
 import build.HashLinkPath;
+import build.HaxeonSdk;
 import build.execution.ContentDigest;
 import compiler.core.InternalError;
 import haxe.io.Bytes;
@@ -52,7 +53,7 @@ class ToolArtifacts {
 	 * returns its exit status: `haxeon dev run`, `haxeon lsp` and `haxeon ffi`.
 	 */
 	public function run(request:ToolRequest, arguments:Array<String>):Int
-		return Sys.command(HashLinkPath.executable(home), [resolve(request)].concat(arguments));
+		return Sys.command(HashLinkPath.executable(HaxeonSdk.ofCheckout(home)), [resolve(request)].concat(arguments));
 
 	public function resolve(request:ToolRequest):String {
 		validateMain(request.main);

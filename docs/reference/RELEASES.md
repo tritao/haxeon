@@ -37,10 +37,15 @@ Platforms:
 ## How an unpacked release finds itself
 
 `bin/haxeon` finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or `GetModuleFileNameW`, symbolic links resolved). The
-directory above `bin` is its SDK, which must hold `haxeon-sdk.toml`: that directory is `HAXEON_SDK` and, in a release,
-`HAXEON_HOME`; `bin` is the VM's directory (`build.HashLinkPath`) and `bin/haxeon-cli.hl` is the CLI. A
-checkout's `out/sdk/bin/haxeon` is found the same way; its manifest's `source` names the checkout, which is then `HAXEON_HOME`. A
-symbolic link to `bin/haxeon` from a directory on `PATH` works, and so does a checkout's `out/sdk/bin` on `PATH`.
+directory above `bin` is its SDK, Haxeon's home, which must hold `haxeon-sdk.toml`: the launcher names it in `HAXEON_SDK`, and
+the CLI finds everything else from it and its manifest (`build.HaxeonSdk`): `bin` is the VM's directory (`build.HashLinkPath`),
+`bin/haxeon-cli.hl` is the CLI, and the manifest's `[roots]` name the standard library, the templates and the registry. A
+checkout's `out/sdk/bin/haxeon` is found the same way; its manifest's `source` names the checkout, whose tools and sources the
+commands that need them read there (`HaxeonSdk.requireSource`). A symbolic link to `bin/haxeon` from a directory on `PATH`
+works, and so does a checkout's `out/sdk/bin` on `PATH`.
+
+A release never writes into its own directory: the shared trees of native packages' CMake builds, which a checkout keeps in
+`out/native-cache`, are under the user's cache (`~/.haxeon/cache/native`) for a release.
 
 The CLI runs the compiler as `build.AotCompiler.program` says: the executable when its stamp matches, else the bytecode on the
 VM when its stamp matches, else (in a checkout) bytecode it builds from the sources with the pinned Haxe. A checkout matches the
@@ -49,7 +54,8 @@ cannot change: it matches them against the digest its manifest records, so the p
 not ask for it.
 
 What a release does not do yet, as it needs a checkout's tools or sources: `haxeon dev`, `haxeon lint`, `haxeon ffi`,
-`--self-hosted` builds, native C packages (they compile against the VM's headers in `vendor/hashlink`) and Android builds.
+`--self-hosted` builds, live patching (`run --watch --live`, whose host is built from the compiler's sources) and Android
+builds. Native packages build against the SDK's `include/` and `cmake/`, as in a checkout.
 
 ## Making one
 

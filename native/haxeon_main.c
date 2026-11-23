@@ -2,8 +2,8 @@
  *
  * `hl module.hl` runs any module; `haxeon ...` runs the CLI's bytecode, haxeon-cli.hl beside this executable. The executable
  * is bin/haxeon in Haxeon's SDK (docs/design/SDK_LAYOUT.md), a checkout's out/sdk or an unpacked release, which it finds from
- * its own path: the SDK is bin/.., whose manifest haxeon-sdk.toml it must hold. It sets HAXEON_SDK to the SDK and
- * HAXEON_HOME to the manifest's `source`, the checkout the SDK was built from, or to the SDK when it has none (a release).
+ * its own path: the SDK is bin/.., whose manifest haxeon-sdk.toml it must hold. It sets HAXEON_SDK to the SDK, which is
+ * Haxeon's home; the CLI reads the rest from the manifest (build.HaxeonSdk).
  *
  * When Haxeon is built ahead of time (AOT_EXECUTABLE in the VM's directory, build.AotCompiler), the launcher runs the CLI in it
  * instead, `haxeon-aot cli ARGUMENTS`, which starts without the JIT. Whether that executable is current, built from these
@@ -17,27 +17,6 @@
 #define SDK_MANIFEST "haxeon-sdk.toml"
 #define CLI_BYTECODE "haxeon-cli.hl"
 #define AOT_EXECUTABLE "haxeon-aot"
-
-/* The manifest's top-level `source = "PATH"`, or NULL when it has none. The manifest is the SDK's own, which CMake or the release
- * packaging writes: one key per line, values quoted without escapes. */
-static char *manifest_source( FILE *manifest ) {
-	char line[4096], *start, *end;
-	if( manifest == NULL ) return NULL;
-	while( fgets(line,sizeof(line),manifest) != NULL ) {
-		if( line[0] == '[' ) break;
-		if( strncmp(line,"source",6) != 0 ) continue;
-		start = line + 6;
-		while( *start == ' ' || *start == '\t' ) start++;
-		if( *start++ != '=' ) continue;
-		while( *start == ' ' || *start == '\t' ) start++;
-		if( *start++ != '"' || (end = strchr(start,'"')) == NULL ) continue;
-		*end = 0;
-		fclose(manifest);
-		return strdup(start);
-	}
-	fclose(manifest);
-	return NULL;
-}
 
 #ifdef _WIN32
 #	include <windows.h>
@@ -116,18 +95,13 @@ static int run_ahead_of_time( const wchar_t *directory ) {
 }
 
 int wmain( int argc, wchar_t *argv[] ) {
-	wchar_t *bin = NULL, *sdk = sdk_root(&bin), *cli, *manifest;
+	wchar_t *bin = NULL, *sdk = sdk_root(&bin), *cli;
 	wchar_t **arguments = (wchar_t**)malloc(sizeof(wchar_t*) * (size_t)(argc + 2));
-	char *source;
 	if( sdk == NULL ) {
 		fwprintf(stderr,L"This haxeon is not in a Haxeon SDK: no " L"" SDK_MANIFEST L" beside its directory\n");
 		return 1;
 	}
-	manifest = join(sdk,L"" SDK_MANIFEST);
-	source = manifest == NULL ? NULL : manifest_source(_wfopen(manifest,L"r"));
 	_wputenv_s(L"HAXEON_SDK",sdk);
-	if( source != NULL ) _putenv_s("HAXEON_HOME",source);
-	else _wputenv_s(L"HAXEON_HOME",sdk);
 	cli = join(bin,L"" CLI_BYTECODE);
 	if( cli == NULL || arguments == NULL ) return 1;
 	{
@@ -214,17 +188,14 @@ static void run_ahead_of_time( const char *directory, int argc, char *argv[] ) {
 }
 
 int main( int argc, char *argv[] ) {
-	char *bin = NULL, *sdk = sdk_root(&bin), *manifest, *source;
+	char *bin = NULL, *sdk = sdk_root(&bin);
 	const char *cli;
 	char **arguments = (char**)malloc(sizeof(char*) * (size_t)(argc + 2));
 	if( sdk == NULL ) {
 		fprintf(stderr,"This haxeon is not in a Haxeon SDK: no " SDK_MANIFEST " beside its directory\n");
 		return 1;
 	}
-	manifest = join(sdk,SDK_MANIFEST);
-	source = manifest == NULL ? NULL : manifest_source(fopen(manifest,"r"));
 	setenv("HAXEON_SDK",sdk,1);
-	setenv("HAXEON_HOME",source != NULL ? source : sdk,1);
 	cli = join(bin,CLI_BYTECODE);
 	if( cli == NULL || arguments == NULL ) return 1;
 	/* The CLI colours diagnostics only for a terminal, which the VM cannot ask about. */

@@ -1,8 +1,8 @@
 # One SDK layout for releases and checkouts
 
 Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup), 2 (runners use `find_package(Haxeon)` and a data-only
-fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK) are
-built, with release builds through the runner; 4 (packages and the `haxeon` registry) is built, and a release's app template
+fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK,
+and Haxeon's home is the SDK everywhere) are built, with release builds through the runner; 4 (packages and the `haxeon` registry) is built, and a release's app template
 builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 and 6 are open. Reviewed independently before adoption; the five changes from
 that review are folded in below.
 
@@ -87,9 +87,8 @@ SDK it configured with changes.
   sources in the app's graph.
 - **Publishing in place:** `out/sdk/bin` becomes what running sessions execute, so it keeps the staging-then-rename publish
   (`cmake/haxeon-publish.cmake`).
-- **Checkout-only tools:** Ninja and ccache are looked up under the checkout's `.tools` (`NativeCMakeProvider.ninjaExecutable`);
-  a release finds them on `PATH` or ships them.
-- **Programs with native packages** compile against `vendor/hashlink` headers; they move to the SDK's `include/`.
+- **Checkout-only tools:** Ninja and ccache are looked up under the `.tools` of the SDK's `source` when it has one
+  (`NativeCMakeProvider.ninjaExecutable`, `NativeCompilerCache.executable`); a release finds them on `PATH`, or could ship them.
 
 ## Alternatives not taken
 
@@ -112,8 +111,14 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
    path table moves to `out/sdk/bin`, `hashlink-runtime` goes, and a release's root is its SDK, whose manifest replaces
    `haxeon-release.txt` (a release is an SDK without `source`). Announced to the other sessions: each worktree rebuilds
    once. The VM's static archives (`libhl.a`, the profiler hooks) are in `lib/<target>`; `HAXEON_HASHLINK_DIR` and
-   `HL_GC_TEST_LIBRARY_DIR` are gone. Built with one limit: `HAXEON_HOME` stays the checkout when there is one (the source
-   root), so the code and tests that read checkout files keep reading them there.
+   `HL_GC_TEST_LIBRARY_DIR` are gone. The launcher sets `HAXEON_SDK` alone: Haxeon's home is the SDK, everywhere.
+   `build.HaxeonSdk` is the one place that knows the layout: the manifest's `source` (`requireSource` for what needs a
+   checkout: `haxeon dev`, the pinned Haxe, the compiler's sources, Android, the live host), its `[roots]` (`stdlib`,
+   `templates`, `registryRoot`), and the SDK's own directories (`cmakeDirectory`, `includeDirectory`). The compiler, the
+   language server and the typed lint rules are given the standard library (`--stdlib=PATH`) instead of finding `stdlib` in
+   the working directory. Programs with native C sources compile against the SDK's `include/`, and the scripts CMake
+   packages' builds include (`haxeon-native.cmake`, `haxeon-locked.cmake`, ...) are in its `cmake/`. A release writes
+   nothing into its directory: the shared native trees a checkout keeps in `out/native-cache` are in the user's cache.
 4. **Packages:** versions, the `nativekit` package, publishing with rewritten dependencies, the SDK registry (generated in
    a checkout, unpacked in a release), the lockfile rule and `[patch.haxeon]`; the template uses `ui = "^0.3"`. Built as:
    - a package is published under its directory's name in `packages/` at Haxeon's version; its manifest's `publish` says what
@@ -127,8 +132,8 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
      source cache's for others;
    - the UI package depends on `nativekit` and takes NativeKit's headers from the graph's `nativekit` target. Programs that
      are not apps build `nativekit` and the UI package's own NativeKit in the shared native cache, so NativeKit builds twice
-     there; a program using native packages from a release's registry is not supported yet (the shared native cache reads
-     `cmake/` files from a checkout).
+     there. A program using native packages from a release's registry builds them in the shared native cache under the
+     user's cache, with the SDK's `cmake/` scripts (step 3); `scripts/smoke-test-release.sh` builds one with `nativekit`.
 5. **Release:** `haxeon dev package` becomes the install, the named roots materialized, and an archive; CI runs the template
    tests against the archive.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a

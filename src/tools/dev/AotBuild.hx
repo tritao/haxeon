@@ -35,19 +35,19 @@ class AotBuild {
 			classPaths: [],
 			defines: []
 		}),
-			sdk = build.HaxeonSdk.root(home),
+			sdk = build.HaxeonSdk.ofCheckout(home),
 			directory = Path.join([home, "out", "aot"]),
 			output = Path.join([directory, AotCompiler.NAME]),
 			suffix = Sys.systemName() == "Windows" ? ".exe" : "",
 			sourcesFile = Path.join([directory, "sources.txt"]),
-			compilerSource = Path.join([home, "src"]);
+			compilerSource = AotCompiler.sources(sdk);
 		FileSystem.createDirectory(directory);
 		var roots = ["src", "lib/haxeon-io", "stdlib"], sources = [];
 		for (root in roots)
 			collectSources(home, root, sources);
 		sources.sort((left, right) -> left < right ? -1 : (left > right ? 1 : 0));
 		File.saveContent(sourcesFile, sources.join("\n") + "\n");
-		var digest = AotCompiler.sourcesDigest(home, compilerSource),
+		var digest = AotCompiler.sourcesDigest(sdk, compilerSource),
 			arguments = [
 				compiler,
 				'--build-mode=${build.HaxeonBuild.TOOL_BUILD_MODE}',
@@ -56,8 +56,8 @@ class AotBuild {
 				"--target=hlc",
 				'--output=$output'
 			].concat([for (root in roots) '--root=$root']);
-		var status = ProcessRunner.run(HashLinkPath.executable(home), arguments, home,
-			CompilerClient.runtimeLibraryEnvironment(home));
+		var status = ProcessRunner.run(HashLinkPath.executable(sdk), arguments, home,
+			CompilerClient.runtimeLibraryEnvironment(sdk));
 		if (status != 0)
 			return status;
 		if (toolchain == null && msvcSdk(sdk))
@@ -70,8 +70,8 @@ class AotBuild {
 			binary,
 			"-G",
 			"Ninja",
-			'-DCMAKE_MAKE_PROGRAM=${build.native.NativeCMakeProvider.ninjaExecutable(home)}',
-			'-DHaxeon_DIR=${build.HaxeonSdk.cmakeDirectory(home)}',
+			'-DCMAKE_MAKE_PROGRAM=${build.native.NativeCMakeProvider.ninjaExecutable(sdk)}',
+			'-DHaxeon_DIR=${build.HaxeonSdk.cmakeDirectory(sdk)}',
 			'-DC_SOURCES=$output.c',
 			'-DOUTPUT=$output'
 		].concat(toolchain == null ? [] : ['-DCMAKE_C_COMPILER=$toolchain']), home, null);
@@ -80,13 +80,13 @@ class AotBuild {
 		if (status != 0)
 			return status;
 		// A source edited while it compiled would leave a stamp that the executable does not match.
-		if (AotCompiler.sourcesDigest(home, compilerSource) != digest) {
+		if (AotCompiler.sourcesDigest(sdk, compilerSource) != digest) {
 			Sys.stderr().writeString("The compiler sources changed during the build; run it again\n");
 			return 1;
 		}
 		// The stamp goes first and comes back last, so no moment pairs a new stamp with an old executable. A running worker keeps
 		// the executable it started from: it is replaced by rename (cmake/haxeon-replace.cmake).
-		var stamp = AotCompiler.stamp(home), published = AotCompiler.executable(home);
+		var stamp = AotCompiler.stamp(sdk), published = AotCompiler.executable(sdk);
 		if (FileSystem.exists(stamp))
 			FileSystem.deleteFile(stamp);
 		// With MSVC the stack traces read the PDB, which a release ships beside the executable.

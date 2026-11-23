@@ -17,7 +17,8 @@ class CompilerArguments {
 		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
 		"--ffi-projection", "--define", "--dump-function", "--session", "--verbosity", "--diagnostic-format", "--color",
-		"--diagnostic-directory", "--wasm-memory-base", "--wasm-memory-contract", "--export", "--null-safety"
+		"--diagnostic-directory", "--stdlib", "--wasm-memory-base", "--wasm-memory-contract", "--export",
+		"--null-safety"
 	];
 
 	public static function parse(arguments:Array<String>):CompilerRequest {
@@ -50,6 +51,7 @@ class CompilerArguments {
 			ffiInterfaces:Array<String> = [],
 			ffiProjections:Array<String> = [],
 			roots:Array<String> = [],
+			stdlib = "stdlib",
 			defines:Array<String> = [],
 			paths:Array<String> = [],
 			optionFlags:Array<String> = [],
@@ -92,6 +94,8 @@ class CompilerArguments {
 				entryIdOutput = value(argument, "--entry-id-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
+			else if (StringTools.startsWith(argument, "--stdlib="))
+				stdlib = value(argument, "--stdlib=");
 			else if (StringTools.startsWith(argument, "--sources-file=")) {
 				var manifest = File.getContent(value(argument, "--sources-file="));
 				for (path in manifest.split("\n")) {
@@ -250,6 +254,7 @@ class CompilerArguments {
 			ffiInterfaces: ffiInterfaces,
 			ffiProjections: ffiProjections,
 			roots: roots,
+			stdlib: stdlib,
 			packageRoots: packageRoots,
 			paths: paths
 		};

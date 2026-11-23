@@ -120,9 +120,10 @@ class DiagnosticPrinter {
 			physicalPaths = mapped;
 		}
 		var physical = mapped.get(projectPath);
-		if (physical == null)
-			physical = !Path.isAbsolute(projectPath) && FileSystem.exists("stdlib/" + projectPath) ? "stdlib/"
-				+ projectPath : projectPath;
+		if (physical == null) {
+			var standard = Path.join([request.stdlib, projectPath]);
+			physical = !Path.isAbsolute(projectPath) && FileSystem.exists(standard) ? standard : projectPath;
+		}
 		var directory = request.diagnosticDirectory;
 		if (directory == null || !FileSystem.exists(physical))
 			return physical;

@@ -81,7 +81,8 @@ class NullSafetySettingMain {
 			var plan:ExecutionPlan = PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build,
 				environment.target,
 				NativeArtifactDemand.Shared),
-				new LoweringContext(environment, null, project, output, Sys.getCwd(), null, selfHosted));
+				new LoweringContext(environment, null, project, output, build.HaxeonSdk.current(), null,
+				selfHosted));
 			for (action in plan.actions)
 				switch action.action {
 					case Compiler(_, arguments, _, _, _):

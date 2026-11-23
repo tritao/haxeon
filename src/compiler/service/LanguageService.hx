@@ -222,25 +222,15 @@ class LanguageService {
 	var editorDefines:Map<String, String> = [];
 
 	/**
-	 * Makes the Haxeon root the working directory, unless `stdlib` is already in it: the service resolves `stdlib` from there, and
-	 * a launcher (`haxeon lsp`, `haxeon lint`) need not run it from the root.
+	 * The standard library every configuration compiles with: the SDK's, which `haxeon lsp` and `haxeon lint` name
+	 * (`build.HaxeonSdk.stdlib`), or `stdlib` in the working directory, where the checkout's tests run.
 	 */
-	public static function useHaxeonRoot():Void {
-		if (sys.FileSystem.exists("stdlib"))
-			return;
-		var root = Sys.getEnv("HAXEON_ROOT");
-		// The haxeon command names the checkout it belongs to.
-		if (root == null || root.length == 0)
-			root = Sys.getEnv("HAXEON_HOME");
-		if (root == null || root.length == 0)
-			root = haxe.io.Path.directory(haxe.io.Path.directory(sys.FileSystem.absolutePath(Sys.programPath())));
-		if (sys.FileSystem.exists(haxe.io.Path.join([root, "stdlib"])))
-			Sys.setCwd(root);
-	}
+	final stdlib:String;
 
-	public function new(?identityState:haxe.io.Bytes) {
+	public function new(?identityState:haxe.io.Bytes, stdlib:String = "stdlib") {
+		this.stdlib = stdlib;
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
-		compiler.addStandardLibrarySourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot(stdlib);
 	}
 
 	public function update(path:String, source:String):ModuleState {
@@ -283,7 +273,7 @@ class LanguageService {
 			var selected = configurationCompilers.get(key);
 			if (selected == null) {
 				selected = new Compiler(compiler.exportIdentityState(), CompilerIntrinsics.configuration(), ffi);
-				selected.addStandardLibrarySourceRoot("stdlib");
+				selected.addStandardLibrarySourceRoot(stdlib);
 				for (path => source in editorSources)
 					selected.update(path, source);
 				configurationCompilers.set(key, selected);
