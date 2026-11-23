@@ -985,6 +985,12 @@ def measure_live_app(app, work, env, mode):
     the app and `mode` (the server program)."""
     project = live_project(work, app)
     app.prepare(project)
+    # The ui app's build is kept between runs, and with it the live history the last run's server recorded. A session that
+    # resumed it would patch on top of that run's edits (its moved signatures among them), so the timed session starts a new
+    # module, as a first run does; the growth session after it resumes this run's history.
+    history = os.path.join(project, "build", "host", "main.hl.live.state")
+    if os.path.exists(history):
+        os.remove(history)
     watch = LiveWatch(app, project, work, env)
     try:
         # The first build, the native build of the app's packages and the app's start.
