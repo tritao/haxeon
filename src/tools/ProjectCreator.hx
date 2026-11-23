@@ -66,9 +66,16 @@ class ProjectCreator {
 		Sys.println("Next:");
 		if (options.directory != ".")
 			Sys.println('  cd ${options.directory}');
-		Sys.println("  haxeon run");
-		if (options.template == "app")
-			Sys.println("  haxeon run --watch             (edit src/Main.hx while it runs)");
+		if (options.template == "console" || platforms.contains(AppRunner.hostPlatform())) {
+			Sys.println("  haxeon run");
+			if (options.template == "app")
+				Sys.println("  haxeon run --watch             (edit src/Main.hx while it runs)");
+		} else if (platforms.contains("android")) {
+			Sys.println("  haxeon build --target android");
+			Sys.println("  haxeon run --target android --watch");
+		} else if (platforms.contains("web")) {
+			Sys.println("  haxeon build --target wasm32");
+		}
 		return 0;
 	}
 
@@ -150,7 +157,13 @@ class ProjectCreator {
 				continue;
 			}
 			FileSystem.createDirectory(Path.directory(to));
-			File.saveContent(to, fill(File.getContent(from), values, shown));
+			if (Path.extension(name) == "jar")
+				File.copy(from, to);
+			else
+				File.saveContent(to, fill(File.getContent(from), values, shown));
+			if (shown == "android/gradlew" && Sys.systemName() != "Windows")
+				if (Sys.command("chmod", ["+x", to]) != 0)
+					throw new UsageError('Could not make $shown executable');
 			created.push(shown);
 		}
 	}

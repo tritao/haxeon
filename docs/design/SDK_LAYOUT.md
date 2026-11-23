@@ -3,8 +3,7 @@
 Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup), 2 (runners use `find_package(Haxeon)` and a data-only
 fragment) and 3 (the launcher finds its SDK from its own path, the VM is published in `out/sdk/bin`, a release is its SDK,
 and Haxeon's home is the SDK everywhere) are built, with release builds through the runner; 4 (packages and the `haxeon` registry) is built, and a release's app template
-builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 (a release is the install plus an archive) is built; 6 is
-open. Reviewed independently before adoption; the five changes from
+builds and runs from the archive (`scripts/smoke-test-release.sh`); 5 (a release is the install plus an archive) is built; 6 stages the Android host with an Android toolchain and stages the web loader on all hosts. Reviewed independently before adoption; the five changes from
 that review are folded in below.
 
 ## Problem
@@ -45,7 +44,7 @@ Libraries are per target from the start (`lib/linux-x86_64-gnu/`, later `lib/and
 but an app targets other platforms too. `HaxeonConfig.cmake` selects by `CMAKE_SYSTEM_NAME` and processor.
 
 **SDK root and source root are different things.** Much of what code reads from home today exists only in a checkout:
-`.tools/`, `src/`, `tests/`, `bootstrap/compiler.hl`, `vendor/hashlink`, `android/`. The manifest has an optional
+`.tools/`, `src/`, `tests/`, `bootstrap/compiler.hl`, `vendor/hashlink`, `native/android/`. The manifest has an optional
 `source = "<checkout>"`; `haxeon dev`, the pinned-Haxe rebuild of the compiler and the stale-compiler check ask whether there
 is a source root, one capability check instead of layout branches.
 
@@ -114,7 +113,7 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
    once. The VM's static archives (`libhl.a`, the profiler hooks) are in `lib/<target>`; `HAXEON_HASHLINK_DIR` and
    `HL_GC_TEST_LIBRARY_DIR` are gone. The launcher sets `HAXEON_SDK` alone: Haxeon's home is the SDK, everywhere.
    `build.HaxeonSdk` is the one place that knows the layout: the manifest's `source` (`requireSource` for what needs a
-   checkout: `haxeon dev`, the pinned Haxe, the compiler's sources, Android, the live host), its `[roots]` (`stdlib`,
+   checkout: `haxeon dev`, the pinned Haxe, the compiler's sources, the live host), its `[roots]` (`stdlib`,
    `templates`, `registryRoot`), and the SDK's own directories (`cmakeDirectory`, `includeDirectory`). The compiler, the
    language server and the typed lint rules are given the standard library (`--stdlib=PATH`) instead of finding `stdlib` in
    the working directory. Programs with native C sources compile against the SDK's `include/`, and the scripts CMake
@@ -150,7 +149,7 @@ The VM's directory is fixed, `out/sdk/bin` in a checkout and `bin` in a release:
      prebuilt and stamped with the sources' digest, which `AotCompiler.shipped` finds beside the VM: the compiler's bytecode,
      whose roles include the tools that carry the compiler (`haxeon lsp`, the typed lint rules, `haxeon ffi`), and the live
      development host in both flavors. So a release does everything a user does, live patching included; `haxeon dev`,
-     `--self-hosted` and `haxeon heap inspect` stay with a checkout, and Android waits for `platforms/android` (step 6);
+     `--self-hosted` and `haxeon heap inspect` stay with a checkout;
    - the release workflow smoke-tests each platform's archive (`scripts/smoke-test-release.sh`), the app template where it
      has a runner for the platform, and a program and the app patched under `run --watch`.
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a

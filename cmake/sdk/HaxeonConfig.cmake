@@ -12,6 +12,11 @@ cmake_minimum_required(VERSION 3.24)
 
 get_filename_component(HAXEON_SDK_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
+if(ANDROID)
+  include("${CMAKE_CURRENT_LIST_DIR}/HaxeonApp.cmake")
+  return()
+endif()
+
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _haxeon_arch)
 if(_haxeon_arch MATCHES "^(amd64|x86_64|x64)$")
   set(_haxeon_arch x86_64)

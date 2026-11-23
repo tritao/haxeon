@@ -39,6 +39,8 @@ class PackageResolver {
 			nameToRoot = new Map<String, String>(),
 			ordered:Array<ResolvedPackage> = [],
 			lockEntries:Array<PackageLockEntry> = [],
+			platform = requestedTarget.isWasm() ? "web" : Target.osName(requestedTarget.os),
+			compatibilities:Map<String, PackageCompatibility> = [],
 			repicked:Map<String, Bool> = [],
 			workspaceMembers:Map<String, {
 				root:String,
@@ -78,9 +80,8 @@ class PackageResolver {
 			var manifest = manifestValue != null ? manifestValue : PackageManifest.parse(resolvedManifest,
 				File.getContent(resolvedManifest)),
 				priorRoot = nameToRoot.get(manifest.packageName);
-			manifest.compatibility.validate(manifest.packageName, requestedTarget);
 			if (acquired.compatibility != null)
-				acquired.compatibility.validate(manifest.packageName, requestedTarget);
+				compatibilities.set(manifest.packageName, acquired.compatibility);
 			if (priorRoot != null && priorRoot != resolvedRoot)
 				throw new InternalError('Duplicate package name "${manifest.packageName}" in $priorRoot and $resolvedRoot');
 			nameToRoot.set(manifest.packageName, resolvedRoot);
@@ -134,7 +135,7 @@ class PackageResolver {
 
 			var dependencyNames = [for (name in manifest.dependencies.keys()) name];
 			dependencyNames.sort(Reflect.compare);
-			var resolvedDependencies:Array<String> = [];
+			var resolvedDependencies:Array<String> = [], lockedDependencies:Array<PackageId> = [];
 			for (dependencyName in dependencyNames) {
 				var dependency = manifest.dependencies.get(dependencyName);
 				if (dependency == null)
@@ -197,7 +198,9 @@ class PackageResolver {
 				var resolved = resolvePackage(acquiredDependency, requestedSource, null, null, prior);
 				if (resolved.name != dependencyName)
 					throw new InternalError('Package "${manifest.packageName}" declares dependency "$dependencyName" but its manifest in ${resolved.root} names package "${resolved.name}"');
-				resolvedDependencies.push(resolved.name);
+				lockedDependencies.push(resolved.id);
+				if (dependency.platforms.length == 0 || dependency.platforms.contains(platform))
+					resolvedDependencies.push(resolved.name);
 			}
 			active.remove(resolvedRoot);
 			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots,
@@ -212,7 +215,7 @@ class PackageResolver {
 			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource,
 				kept != null ? kept.resolvedRevision : acquired.resolvedRevision,
 				kept != null ? kept.checksum : acquired.checksum,
-				[for (dependencyName in resolvedDependencies) new PackageId(dependencyName)]));
+				lockedDependencies));
 			return resolvedPackage;
 		}
 
@@ -229,8 +232,25 @@ class PackageResolver {
 		var resolvedLockfile = new PackageLockfile(lockEntries);
 		if (locked)
 			lockfile.validateGraph(resolvedLockfile, repicked);
+		// Keep a single lock graph across platforms, but give each build only the packages it uses.
+		var all = new ResolvedPackageGraph(ordered), included:Map<String, Bool> = [];
+		function include(resolved:ResolvedPackage):Void {
+			if (included.exists(resolved.name))
+				return;
+			included.set(resolved.name, true);
+			resolved.manifest.compatibility.validate(resolved.name, requestedTarget);
+			var compatibility = compatibilities.get(resolved.name);
+			if (compatibility != null)
+				compatibility.validate(resolved.name, requestedTarget);
+			for (name in resolved.dependencies)
+				include(all.get(name));
+		}
+		include(rootPackage);
+		for (name in workspaceNames)
+			include(all.get(name));
 		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage,
-			new ResolvedPackageGraph(ordered), resolvedLockfile);
+			new ResolvedPackageGraph([for (resolved in ordered) if (included.exists(resolved.name)) resolved]),
+			resolvedLockfile);
 	}
 
 	static function canonicalExistingFile(path:String, message:String):String {

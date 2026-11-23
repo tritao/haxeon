@@ -193,8 +193,6 @@ class PackageManifest {
 	public final dependencies:Map<String, PackageDependency>;
 	public final native:Null<NativeManifest>;
 	public final ffi:Null<FfiManifest>;
-	public final androidApplicationId:String;
-	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
 	/** The instrumented build's scope; the defaults instrument everything. */
@@ -219,8 +217,7 @@ class PackageManifest {
 			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String,
 			defines:Array<String>, outputDir:String,
 			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>,
-			androidApplicationId:String,
-			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
+			compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
 			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
 			?app:AppManifest, ?packageVersion:String, ?publish:PublishManifest,
 			?patches:Map<String, Map<String, String>>) {
@@ -242,8 +239,6 @@ class PackageManifest {
 		this.dependencies = dependencies;
 		this.native = native;
 		this.ffi = ffi;
-		this.androidApplicationId = androidApplicationId;
-		this.androidAppLabel = androidAppLabel;
 		this.compatibility = compatibility;
 		this.instrument = instrument == null ? new InstrumentManifest() : instrument;
 		this.app = app;
@@ -252,7 +247,7 @@ class PackageManifest {
 		this.patches = patches == null ? [] : patches;
 	}
 
-	/** The manifest `haxeon init` writes and every lookup prefers. */
+	/** The manifest `haxeon create` writes and every lookup prefers. */
 	public static inline final TOML_NAME = "haxeon.toml";
 
 	/** The original manifest format, still read everywhere a TOML one is. */
@@ -303,10 +298,10 @@ class PackageManifest {
 		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
 		"target",
 		"defines", "inline", "nullSafety", "outputDir", "package", "app", "dependencies", "patch", "native", "ffi",
-		"android", "format", "compatibility", "publish", "instrument"
+		"format", "compatibility", "publish", "instrument"
 	];
 
-	/** A manifest's objects (`decode`, or made by `haxeon init`) as a haxeon.toml's text. */
+	/** A manifest's objects (`decode`, or made by `haxeon create`) as a haxeon.toml's text. */
 	public static function toToml(raw:Dynamic):String
 		return TomlPrinter.print(raw, FIELD_ORDER);
 
@@ -390,9 +385,15 @@ class PackageManifest {
 			var dependencyNames = Reflect.fields(rawDependencies);
 			dependencyNames.sort(Reflect.compare);
 			for (name in dependencyNames) {
-				var dependency:Dynamic = Reflect.field(rawDependencies, name);
-				dependencies.set(name, new PackageDependency(new PackageId(name),
-					PackageSourceCodec.parse(dependency, name, '$path dependency "$name"')));
+				var dependency:Dynamic = Reflect.field(rawDependencies, name),
+					dependencyPath = '$path dependency "$name"',
+					source = PackageSourceCodec.parse(dependency, name, dependencyPath),
+					platforms = Std.isOfType(dependency, String) ? [] : stringArray(dependency, "platforms",
+						dependencyPath, []);
+				for (platform in platforms)
+					if (!AppManifest.PLATFORMS.contains(platform))
+						throw new UsageError('$dependencyPath has an unknown platform "$platform"');
+				dependencies.set(name, new PackageDependency(new PackageId(name), source, platforms));
 			}
 		}
 		var nativeData:Dynamic = Reflect.field(raw, "native"),
@@ -454,20 +455,9 @@ class PackageManifest {
 				throw new InternalError('$path "ffi" requires "imports", "interfaces", or "projections"');
 			ffi = new FfiManifest(imports, interfaces, projections);
 		}
-		var android:Dynamic = Reflect.field(raw, "android"),
-			androidApplicationId = "org.haxeon.android",
-			androidAppLabel = "Haxeon";
-		if (android != null) {
-			if (!isObject(android))
-				throw new InternalError('$path "android" must be an object');
-			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
-			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
-			if (!isAndroidApplicationId(androidApplicationId))
-				throw new InternalError('$path "android.applicationId" must be a dotted Java package name, such as "org.example.game"');
-		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
-			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
+			outputDir, dependencies, native, ffi, compatibility, inlineEnabled,
 			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path),
 			packageData == null ? null : optionalNullableString(packageData, "version", '$path package'),
 			parsePublish(raw, path), parsePatches(raw, path));
@@ -556,7 +546,7 @@ class PackageManifest {
 			declared.set(dependency, new PackageDependency(new PackageId(dependency), source));
 		return new PackageManifest(1, name, entry, sources, sourceRoots, [], scopeSourceRoots, [], "host", defines,
 			"build",
-			declared, null, null, "org.haxeon.android", "Haxeon", new PackageCompatibility(), inlineEnabled,
+			declared, null, null, new PackageCompatibility(), inlineEnabled,
 			NullSafetyMode.Off,
 			nullSafetyRules == null ? [] : nullSafetyRules);
 	}

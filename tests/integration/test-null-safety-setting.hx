@@ -1,6 +1,6 @@
 #!/usr/bin/env haxeon
 /**
- * A project's `nullSafety` setting, end to end: `haxeon init` writes "strict"; a project that assigns null to a `String` fails to
+ * A project's `nullSafety` setting, end to end: `haxeon create` writes "strict"; a project that assigns null to a `String` fails to
  * build under "strict", builds with a warning under "warn", and builds clean when the setting is "off" or absent. A Haxe command
  * line's `--macro nullSafety(...)` checks as a project's setting does, and a command line without it is off.
  */
@@ -20,9 +20,9 @@ function main() {
 		Script.check("cmake", ["-E", "rm", "-rf", work]);
 	FileSystem.createDirectory(Path.join([work, "fresh"]));
 
-	var fresh = Path.join([work, "fresh"]), log = Path.join([work, "init.log"]);
-	expectStatus(haxeon(["init"], fresh, log), 0, log, "init");
-	expectText(Path.join([fresh, "haxeon.toml"]), 'nullSafety = "strict"', "the haxeon.toml init writes");
+	var fresh = Path.join([work, "fresh"]), log = Path.join([work, "create.log"]);
+	expectStatus(haxeon(["create", ".", "--template", "console"], fresh, log), 0, log, "create");
+	expectText(Path.join([fresh, "haxeon.toml"]), 'nullSafety = "strict"', "the haxeon.toml create writes");
 
 	var source = "function main():Int {\n\tvar s:String = null;\n\treturn 0;\n}\n";
 	for (setting in ["strict", "warn", "off", null]) {

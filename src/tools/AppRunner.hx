@@ -1,7 +1,7 @@
 package tools;
 
-import build.HaxeonSdk;
 import build.HaxeonProjectBuild;
+import build.HaxeonSdk;
 import build.Target;
 import build.execution.ProcessRunner;
 import build.native.MsvcEnvironment;
@@ -9,9 +9,7 @@ import build.native.NativeCMakeProvider;
 import build.native.NativeCompilerCache;
 import compiler.core.UsageError;
 import haxe.io.Path;
-import project.PackageManifest;
 import project.PackageManifest.AppManifest;
-import project.ResolvedPackage;
 import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;
@@ -36,8 +34,13 @@ class AppRunner {
 			throw new UsageError('This app does not build for $platform ([app].platforms is [${app.platforms.join(", ")}]); '
 				+ 'add it with: haxeon create . --platforms $platform');
 		var directory = Path.join([project.root, platform]);
-		if (!FileSystem.exists(Path.join([directory, "CMakeLists.txt"])))
-			throw new UsageError('This app has no $platform runner ($directory/CMakeLists.txt); restore it with: haxeon create .');
+		var entry = switch platform {
+			case "android": "settings.gradle";
+			case "web": "index.html";
+			case _: "CMakeLists.txt";
+		};
+		if (!FileSystem.exists(Path.join([directory, entry])))
+			throw new UsageError('This app has no $platform runner ($directory/$entry); restore it with: haxeon create .');
 		return directory;
 	}
 
@@ -62,13 +65,7 @@ class AppRunner {
 		if (app == null)
 			throw new UsageError("This project is not an app: it has no [app] section");
 		var runner = runnerDirectory(project, app, platform),
-			fragment = Path.join([
-				HaxeonProjectBuild.outputDirectory(project, false),
-				"generated",
-				platform,
-				"haxeon.cmake"
-			]);
-		writeIfChanged(fragment, fragmentText(project, app, home, module, aheadOfTime));
+			fragment = writeFragment(project, app, home, platform, module, aheadOfTime);
 		// The SDK's Windows libraries are MSVC's (HaxeonConfig.cmake selects lib/windows-ARCH-msvc), so the runner builds with
 		// MSVC, in its developer environment, whatever compiler comes first on PATH.
 		var msvc = platform == "windows";
@@ -100,6 +97,38 @@ class AppRunner {
 		return ProcessRunner.run("cmake", ["--build", binary], project.root, null, !quiet);
 	}
 
+	public static function writeFragment(project:ResolvedProject, app:AppManifest, home:String, platform:String,
+			module:String, aheadOfTime:Bool = false):String {
+		var fragment = Path.join([
+			HaxeonProjectBuild.outputDirectory(project, false),
+			"generated",
+			platform,
+			"haxeon.cmake"
+		]);
+		writeIfChanged(fragment, fragmentText(project, app, home, module, aheadOfTime));
+		return fragment;
+	}
+
+	public static function bundleWeb(project:ResolvedProject, app:AppManifest, home:String, target:Target,
+			module:String):String {
+		var platform = "web",
+			runner = runnerDirectory(project, app, platform),
+			targetName = target.toString(),
+			bundle = Path.join([buildDirectory(project, platform), targetName]);
+		writeFragment(project, app, home, platform, module);
+		FileSystem.createDirectory(bundle);
+		var status = ProcessRunner.run("cmake", ["-E", "copy_directory", runner, bundle], project.root, null);
+		if (status != 0)
+			throw new UsageError('Could not copy the web runner into $bundle');
+		File.copy(Path.join([home, "platforms", "web", "haxeon-host.js"]), Path.join([bundle, "haxeon-host.js"]));
+		var bundledModule = Path.join([bundle, "main.wasm"]);
+		if (module != bundledModule)
+			File.copy(module, bundledModule);
+		writeIfChanged(Path.join([bundle, "haxeon-build.js"]), 'export const target = "$targetName";\n'
+			+ 'export const module = new URL("./main.wasm", import.meta.url);\n');
+		return Path.join([bundle, "index.html"]);
+	}
+
 	static function buildDirectory(project:ResolvedProject, platform:String):String
 		return Path.join([HaxeonProjectBuild.outputDirectory(project, false), platform]);
 
@@ -121,7 +150,7 @@ class AppRunner {
 			'set(Haxeon_DIR ${quote(HaxeonSdk.cmakeDirectory(home))})'
 		];
 		var names:Array<String> = [];
-		for (resolved in nativeOrder(project)) {
+		for (resolved in project.packages.packages) {
 			var native = resolved.manifest.native;
 			if (native == null)
 				continue;
@@ -135,29 +164,6 @@ class AppRunner {
 		}
 		lines.push('set(HAXEON_PACKAGES ${names.join(" ")})');
 		return lines.join("\n") + "\n";
-	}
-
-	/** The project's packages with native code, each after the packages it depends on. */
-	static function nativeOrder(project:ResolvedProject):Array<ResolvedPackage> {
-		var order:Array<ResolvedPackage> = [], seen:Map<String, Bool> = [];
-		function visit(resolved:ResolvedPackage) {
-			if (seen.exists(resolved.name))
-				return;
-			seen.set(resolved.name, true);
-			var names = [for (name in resolved.dependencies) name];
-			names.sort(Reflect.compare);
-			for (name in names) {
-				var dependency = project.packages.get(name);
-				if (dependency != null)
-					visit(dependency);
-			}
-			order.push(resolved);
-		}
-		var names = [for (resolved in project.packages.packages) resolved.name];
-		names.sort(Reflect.compare);
-		for (name in names)
-			visit(project.packages.get(name));
-		return order;
 	}
 
 	static function quote(text:String):String

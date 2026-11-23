@@ -356,6 +356,8 @@ add_custom_target(haxeon-sdk ALL
   VERBATIM
 )
 
+include(cmake/haxeon-platforms.cmake)
+
 add_subdirectory(tests/native)
 
 # The wasm32 runtimes committed in stdlib/haxeon/wasm: haxeon-wasm-runtime and haxeon-wasm-runtime-check.

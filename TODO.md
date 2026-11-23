@@ -533,3 +533,11 @@ Waiting on the user:
   `haxeon heap`) rather than `haxeon dev`.
 - **A lint rule for shared mutable statics,** generalizing the compiler's
   `CompilerStaticsMain` check.
+
+## Web app native packages
+
+Add Emscripten support to web app runners. Use `emcmake` and the generated
+`haxeon.cmake` to build the dependency graph into a native host module. Bundle
+that module and connect its exports, memory contract and callback table through
+`haxeon-host.js` for both Wasm targets. Migrate the UI package's per-app web build
+example once the runner can build it.

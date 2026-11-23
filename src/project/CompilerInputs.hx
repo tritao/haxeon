@@ -167,5 +167,5 @@ class CompilerInputs {
 
 	/** The compiler's name for what a build target runs: Wasm modules for a Wasm target, HashLink code otherwise. */
 	public static function compilerTarget(target:Target):String
-		return target.isWasm() ? "wasm32" : "hl";
+		return target.isWasm() ? target.toString() : "hl";
 }

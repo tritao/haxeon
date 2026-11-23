@@ -17,7 +17,7 @@ Haxeon currently implements a growing subset of Haxe.
 | **Many targets** | Desktop and Android on HashLink, plus WebAssembly (`wasm32`, `wasm-gc`), all lowered from one IR |
 | **Native code, typed** | HXI bindings generated from C and C++ headers, fixed-layout records, raw pointers, and arenas |
 | **Always on** | Transactional hot patching: edits land in the running program, and a bad patch leaves it untouched |
-| **One CLI** | `haxeon` initializes, builds, runs, formats, and packages projects, including their native dependencies |
+| **One CLI** | `haxeon` creates, builds, runs, formats, and packages projects, including their native dependencies |
 
 ## 🔥 Always on
 
@@ -44,10 +44,12 @@ Ninja tools are installed locally by the setup scripts.
 cmake --preset release
 cmake --build --preset release   # HashLink VM and Haxeon runtime
 
-./scripts/haxeon init            # creates haxeon.toml and src/Main.hx
-./scripts/haxeon run             # build and launch
-./scripts/haxeon run --watch     # rebuild on edits: patch the running app, or relaunch it
-./scripts/haxeon --help          # every command; haxeon help build for one
+./scripts/haxeon create hello -t console
+export PATH="$PWD/out/sdk/bin:$PATH"
+cd hello
+haxeon run                       # build and launch
+haxeon run --watch               # rebuild on edits: patch the running app, or relaunch it
+haxeon --help                    # every command; haxeon help build for one
 ```
 
 `run --watch` keeps one process alive and applies patches between application
@@ -59,7 +61,7 @@ or with `--restart`; see [Project CLI](docs/reference/CLI.md).
 |---|---|
 | Linux, macOS (x86-64 and Apple Silicon), Windows | Supported host targets |
 | Android (`arm64-v8a`, `x86_64`) | Supported, with live patching |
-| WebAssembly (`wasm32`, `wasm-gc`) | Experimental, build-only |
+| WebAssembly (`wasm32`, `wasm-gc`) | Experimental browser bundles |
 
 ## 🧬 What Haxeon adds over Haxe
 
@@ -136,7 +138,8 @@ Wasm support is experimental and narrower than the desktop target:
   interfaces with 64-bit pointers are rejected for Wasm.
 - `wasm64` is rejected as a target until it is implemented. Threads and
   `sys.io.Process` are not available, and file access uses an in-memory store.
-- Wasm builds are build-only; `haxeon run` does not launch them.
+- For apps, `haxeon build --target wasm32` or `--target wasm-gc` bundles the app’s
+  page, module and SDK loader. Serve the bundle over HTTP to run it in a browser.
 
 See [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) for the host ABI and test
 commands.

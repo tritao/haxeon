@@ -19,7 +19,7 @@ private typedef CommandGroup = {
 class CliHelp {
 	static final BUILD_OPTIONS = [
 		"  --project PATH               The manifest to build, or its directory (default: this directory's haxeon.toml or haxeon.json)",
-		"  --target TARGET              host, android, wasm32 or OS-ARCH (default: the project's; see haxeon platforms)",
+		"  --target TARGET              host, android, wasm32, wasm-gc or OS-ARCH (default: the project's; see haxeon platforms)",
 		"  --build-mode MODE            development (default) or release",
 		"  --define NAME[=VALUE]        Add a conditional compilation define (repeatable)",
 		"  --output PATH                Write the module to PATH",
@@ -46,16 +46,6 @@ class CliHelp {
 						"  --org PREFIX                 The app identifier's prefix (default com.example)",
 						"",
 						"  Existing files are never overwritten."
-					]
-				},
-				{
-					name: "init",
-					summary: "Create haxeon.toml and src/Main.hx in this directory (to be replaced by create)",
-					details: [
-						"Usage: haxeon init [--entry Main] [--target host|wasm32|android]",
-						"",
-						"  --entry NAME                 The entry module (default Main)",
-						"  --target TARGET              host (default), wasm32 or android"
 					]
 				},
 				{
@@ -113,7 +103,7 @@ class CliHelp {
 						"  --compiler-only              Run only the Haxe compile",
 						"  --patchable                  With --compiler-only, build a module the next builds publish patches",
 						"                               of (.hlp and .live.* beside it), for a host that applies them itself",
-						"  --gradle-inputs FILE         Android: build what Gradle packages and describe it in FILE"
+						"  --gradle-inputs FILE         Android: prepare the Gradle runner and describe its inputs in FILE"
 					])
 				},
 				{

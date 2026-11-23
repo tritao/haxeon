@@ -20,7 +20,7 @@ cd my_app
 ```
 
 `haxeon create` makes a new directory from the app template: a window with a counter. It prints what it created and
-what to run next. It makes the app for Linux, macOS and Windows; `--platforms` narrows that.
+what to run next. It creates runners for Android, Linux, macOS, web and Windows. Use `--platforms` to choose a subset.
 
 ## What is in the project
 
@@ -28,8 +28,10 @@ what to run next. It makes the app for Linux, macOS and Windows; `--platforms` n
 my_app/
   haxeon.toml      the project's manifest
   src/Main.hx      the app's code
+  android/         the Gradle project, manifest and resources
   linux/           the Linux runner: the project that builds the app's executable
   macos/           the macOS runner, which builds the app as my_app.app
+  web/             the page that hosts the WebAssembly app
   windows/         the Windows runner, which builds my_app.exe
 ```
 
@@ -48,10 +50,10 @@ name = "my_app"
 name = "My App"
 id = "com.example.my_app"
 version = "1.0.0"
-platforms = ["linux", "macos", "windows"]
+platforms = ["android", "linux", "macos", "web", "windows"]
 
 [dependencies]
-ui = "^0.3"
+ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "windows"] }
 
 [compatibility]
 haxeon = "^0.3"
@@ -61,7 +63,7 @@ haxeon = "^0.3"
 - `nullSafety = "strict"` makes the compiler reject code that could use a `null` where a value is required.
 - The `[app]` section makes the project an app rather than a command-line program: its display name, its identifier
   (`--org` on `haxeon create` sets the part before the name), its version and the platforms it is built for.
-- `ui = "^0.3"` is the UI package. It comes with the release, so nothing is downloaded.
+- The desktop runners use the SDK’s UI package.
 
 [The manifest reference](../reference/MANIFEST.md) describes every field.
 
@@ -126,14 +128,11 @@ platform.
 
 - **Linux, macOS and Windows** build and run apps, each through its runner, as above. Console programs
   (`haxeon create my_tool --template console`) build and run there too.
-- **Android**: Haxeon builds Android apps (arm64-v8a and x86_64) and edits them live, but today only from a checkout of
-  the Haxeon repository, not from a release, and not yet through a runner in your project. See
-  [Android](../reference/ANDROID.md).
-- **The web**: Haxeon compiles to WebAssembly (`wasm32` and `wasm-gc`), but this is experimental: builds only, and no
-  runner for apps yet. See [WebAssembly](../reference/WASM_BACKEND.md).
+- **Android** uses the app's Gradle runner. Use `haxeon build --target android` to make a debug APK, or
+  `haxeon run --target android --watch` to edit live on a connected device. See [Android](../reference/ANDROID.md).
+- **The web** uses the page in `web/`. Use `haxeon build --target wasm32` or `--target wasm-gc` to make a bundle.
+  The template includes a managed entry point for Android and the web, and a UI counter on desktop.
 - **iOS** is planned.
-
-This guide will show each platform as its runner arrives.
 
 ## Next
 

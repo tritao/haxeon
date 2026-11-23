@@ -44,13 +44,6 @@ class HaxeonProjectBuild {
 			BuildProfile.Release,
 			target)).hashLinkModulePath("app");
 
-	/** The directory of an Android build's native libraries, one directory per ABI (`jniLibs/arm64-v8a`), as Gradle takes them. */
-	public static function androidNativeRoot(project:ResolvedProject, target:Target):String {
-		var environment = new BuildEnvironment(project.root, outputDirectory(project, false), BuildProfile.Release,
-			target);
-		return Path.join([environment.buildRoot, new TargetLayout(environment).targetDirectory(), "jniLibs"]);
-	}
-
 	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int,
 			planOnly:Bool, explain:Bool,
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, scope:BuildScope = Full,

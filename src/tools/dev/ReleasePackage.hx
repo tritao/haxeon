@@ -80,7 +80,7 @@ class ReleasePackage {
 		var name = 'haxeon-$version-${platform()}', root = Path.join([output, name]);
 		cmake(home, ["-E", "rm", "-rf", root]);
 		cmake(home, ["-E", "make_directory", root]);
-		// The install.
+		// Include the staged platform payloads with the host SDK files.
 		for (entry in FileSystem.readDirectory(sdk))
 			if (entry != HaxeonSdk.MANIFEST && entry != "registry")
 				cmake(home, [

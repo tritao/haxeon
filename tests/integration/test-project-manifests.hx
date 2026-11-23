@@ -1,7 +1,7 @@
 #!/usr/bin/env haxeon
 /**
- * Project manifests in TOML and JSON: `haxeon init` writes a haxeon.toml that builds and runs; `haxeon migrate --dry-run`
- * prints the TOML and changes nothing, `haxeon migrate` replaces haxeon.json with it (dependency, format and android sections
+ * Project manifests in TOML and JSON: `haxeon create` writes a haxeon.toml that builds and runs; `haxeon migrate --dry-run`
+ * prints the TOML and changes nothing, `haxeon migrate` replaces haxeon.json with it (dependency, format and dependency sections
  * included) and the project still builds; a directory with both files is a usage error naming both; `haxeon add` keeps a
  * haxeon.toml's comments, and `haxeon add NAME` writes the latest release of the haxeon registry as `NAME = "^VERSION"`. Each command has its own help.
  */
@@ -22,25 +22,23 @@ function main() {
 	for (directory in ["fresh", "app/src", "lib/src/greet"])
 		FileSystem.createDirectory(Path.join([work, directory]));
 
-	for (command in ["init", "migrate"]) {
+	for (command in ["create", "migrate"]) {
 		var help = Path.join([work, command + "-help.log"]);
 		expectStatus(haxeon([command, "--help"], work, help), 0, help, 'haxeon $command --help');
 		if (File.getContent(help).indexOf('Usage: haxeon $command') < 0)
 			Script.fail('FAIL: haxeon $command --help printed:\n${File.getContent(help)}');
 	}
 
-	// init writes TOML, which builds and runs.
-	var fresh = Path.join([work, "fresh"]), log = Path.join([work, "init.log"]);
-	expectStatus(haxeon(["init"], fresh, log), 0, log, "init");
+	// create writes TOML, which builds and runs.
+	var fresh = Path.join([work, "fresh"]), log = Path.join([work, "create.log"]);
+	expectStatus(haxeon(["create", ".", "--template", "console"], fresh, log), 0, log, "create");
 	if (!FileSystem.exists(Path.join([fresh, "haxeon.toml"])) || FileSystem.exists(Path.join([fresh, "haxeon.json"])))
-		Script.fail('FAIL: init did not write haxeon.toml alone');
+		Script.fail('FAIL: create did not write haxeon.toml alone');
 	write(fresh, "src/Main.hx", "function main():Int {\n\tSys.println(\"fresh ran\");\n\treturn 0;\n}\n");
 	log = Path.join([work, "fresh-run.log"]);
 	expectStatus(haxeon(["run"], fresh, log), 0, log, "running the fresh project");
 	expectText(log, "fresh ran", "the fresh project's output");
-	log = Path.join([work, "init-again.log"]);
-	expectStatus(haxeon(["init"], fresh, log), 1, log, "init over a project");
-	expectText(log, "haxeon.toml already exists", "init over a project");
+
 
 	// A JSON project with a path dependency on a JSON package, migrated.
 	var app = Path.join([work, "app"]), lib = Path.join([work, "lib"]);
@@ -48,8 +46,7 @@ function main() {
 	write(lib, "src/greet/Greeting.hx", "package greet;\n\nfunction text():String\n\treturn \"migrated ran\";\n");
 	var json = '{\n\t"version": 1,\n\t"package": {"name": "app"},\n\t"entry": "Main",\n\t"sourceRoots": ["src"],\n'
 		+ '\t"defines": ["app_define"],\n\t"dependencies": {"greet": {"path": "../lib"}},\n'
-		+ '\t"format": {"indent": "spaces", "indentWidth": 2},\n'
-		+ '\t"android": {"applicationId": "org.example.app", "label": "App \\"quoted\\""}\n}\n';
+		+ '\t"format": {"indent": "spaces", "indentWidth": 2}\n}\n';
 	write(app, "haxeon.json", json);
 	write(app, "src/Main.hx",
 		"function main():Int {\n\t#if app_define\n\tSys.println(greet.Greeting.text());\n\t#end\n\treturn 0;\n}\n");
@@ -62,7 +59,6 @@ function main() {
 		"[package]\nname = \"app\"",
 		"[dependencies]\ngreet = { path = \"../lib\" }",
 		"[format]\nindent = \"spaces\"\nindentWidth = 2",
-		"label = \"App \\\"quoted\\\"\""
 	])
 		expectText(log, line, "the migrated manifest");
 	if (File.getContent(Path.join([app, "haxeon.json"])) != json || FileSystem.exists(Path.join([app, "haxeon.toml"])))
@@ -125,7 +121,7 @@ function main() {
 	log = Path.join([work, "add-missing.log"]);
 	expectStatus(haxeon(["add", "missing"], app, log), 2, log, "add of a package the registry lacks");
 	expectText(log, 'The registry has no package "missing"', "the error for a package the registry lacks");
-	Sys.println("PASS: init writes TOML, migrate converts JSON, both manifests are refused, add keeps comments and adds registry packages");
+	Sys.println("PASS: create writes TOML, migrate converts JSON, both manifests are refused, add keeps comments and adds registry packages");
 }
 
 function haxeon(arguments:Array<String>, directory:String, log:String):Int

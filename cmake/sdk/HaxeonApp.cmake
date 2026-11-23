@@ -21,14 +21,16 @@
 # LIBRARY_DIRECTORY (app/ by default), and sets HAXEON_NATIVE_TARGETS in the caller to their targets. Packages' own tests stay
 # out of an app's build.
 function(haxeon_add_native_packages)
-  cmake_parse_arguments(PARSE_ARGV 0 NATIVE "" "LIBRARY_DIRECTORY" "")
+  cmake_parse_arguments(PARSE_ARGV 0 NATIVE "TOOLCHAIN_OUTPUT" "LIBRARY_DIRECTORY" "")
   if(NOT NATIVE_LIBRARY_DIRECTORY)
     set(NATIVE_LIBRARY_DIRECTORY "${CMAKE_BINARY_DIR}/app")
   endif()
   set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
   # Windows DLLs are runtime output, other shared libraries library output.
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${NATIVE_LIBRARY_DIRECTORY}")
-  set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${NATIVE_LIBRARY_DIRECTORY}")
+  if(NOT NATIVE_TOOLCHAIN_OUTPUT)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${NATIVE_LIBRARY_DIRECTORY}")
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${NATIVE_LIBRARY_DIRECTORY}")
+  endif()
   set(_targets)
   foreach(_package IN LISTS HAXEON_PACKAGES)
     add_subdirectory("${HAXEON_PACKAGE_${_package}_SOURCE}" "${CMAKE_BINARY_DIR}/packages/${_package}")
@@ -36,6 +38,10 @@ function(haxeon_add_native_packages)
   endforeach()
   set(HAXEON_NATIVE_TARGETS ${_targets} PARENT_SCOPE)
 endfunction()
+
+if(ANDROID)
+  return()
+endif()
 
 # The libraries come from HaxeonConfig.cmake (find_package(Haxeon)), which includes this file.
 if(NOT TARGET Haxeon::app)

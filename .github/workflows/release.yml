@@ -18,7 +18,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  android-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-host
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install the pinned Android toolchain
+        run: |
+          versions=native/android/versions.txt
+          sdkmanager --licenses < <(yes)
+          sdkmanager --install "platforms;android-36" "build-tools;$(sed -n 's/^build-tools=//p' "$versions")" \
+            "ndk;$(sed -n 's/^ndk=//p' "$versions")" "cmake;$(sed -n 's/^cmake=//p' "$versions")"
+      - name: Build the Android host AAR
+        run: |
+          cmake --preset release
+          cmake --build --preset release --target haxeon-android-sdk
+          unzip -Z1 out/sdk/platforms/android/haxeon-host.aar > aar-contents.txt
+          for abi in arm64-v8a x86_64; do
+            grep -Fx "jni/$abi/libhaxeon.so" aar-contents.txt
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-platform
+          path: out/sdk/platforms/android/haxeon-host.aar
+          if-no-files-found: error
+
   package:
+    needs: android-host
     name: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -82,6 +115,11 @@ jobs:
       - name: Build the compiler ahead of time
         if: matrix.aot
         run: ${{ steps.version.outputs.haxeon }} dev aot
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-platform
+          path: out/sdk/platforms/android
 
       - name: Package
         run: ${{ steps.version.outputs.haxeon }} dev package --version=${{ steps.version.outputs.version }} --output=out/release

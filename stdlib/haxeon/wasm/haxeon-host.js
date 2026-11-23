@@ -155,7 +155,7 @@ var HaxeonWasmHost = (() => {
     for (const entry of WebAssembly.Module.imports(module)) {
       if (entry.kind !== "function" || imports[entry.module]?.[entry.name]) continue;
       const table = imports[entry.module] ??= {};
-      const hosted = emscripten["_" + entry.name];
+      const hosted = emscripten?.["_" + entry.name];
       if (typeof hosted === "function" && !["haxeon_host", "std", "haxeon_runtime"].includes(entry.module)) {
         table[entry.name] = wrap ? wrap(entry.module, entry.name, hosted) : hosted;
         continue;
@@ -165,6 +165,7 @@ var HaxeonWasmHost = (() => {
     }
     const instance = await WebAssembly.instantiate(module, imports);
     exports = instance.exports;
+    memory ??= exports.memory;
     return {instance, exports, unavailable: [...unavailable].sort()};
   }
 

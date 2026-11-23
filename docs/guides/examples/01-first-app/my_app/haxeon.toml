@@ -10,10 +10,10 @@ name = "my_app"
 name = "My App"
 id = "com.example.my_app"
 version = "1.0.0"
-platforms = ["linux", "macos", "windows"]
+platforms = ["android", "linux", "macos", "web", "windows"]
 
 [dependencies]
-ui = "^0.3"
+ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "windows"] }
 
 [compatibility]
 haxeon = "^0.3"

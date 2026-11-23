@@ -13,7 +13,7 @@ version = "1.0.0"
 platforms = {{platforms}}
 
 [dependencies]
-ui = "^{{haxeon_version}}"
+ui = { registry = "haxeon", version = "^{{haxeon_version}}", platforms = ["linux", "macos", "windows"] }
 
 [compatibility]
 haxeon = "^{{haxeon_version}}"

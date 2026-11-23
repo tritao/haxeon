@@ -298,7 +298,7 @@ code it lets through is the code a build without it makes (a later step is to le
 - **Turning it on.** It is off unless something turns it on. `@:nullSafety(Mode)` on a class or abstract checks its members, on a
   field or method that member; `@:nullSafety` alone is `Loose`. A Haxe command line takes Haxe's own
   `--macro nullSafety("pack", Strict)` (`haxe.macro.Compiler.nullSafety(path, mode, recursive)`, recursive by default), and a
-  project its `nullSafety` setting ([MANIFEST.md](MANIFEST.md)), which applies to the package's own sources: `haxeon init` writes
+  project its `nullSafety` setting ([MANIFEST.md](MANIFEST.md)), which applies to the package's own sources: `haxeon create` writes
   `"strict"`, a project without the key is off, and `warn` checks as `Strict` but reports warnings (`W1003`), to migrate code.
   These combine as Haxe's metadata does: `Off` anywhere wins, `Strict` and `StrictThreaded` win over `Loose`, so a class cannot
   lower its package's mode. `@:nullSafety(Off)` on an expression or statement leaves it unchecked. The standard library is not

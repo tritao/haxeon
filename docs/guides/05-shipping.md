@@ -139,26 +139,26 @@ haxeon build --target android
 haxeon run --target android
 ```
 
-The APK is `build/android/app-debug.apk`; `run` installs it on a connected device or emulator and starts it, and
-`haxeon devices` lists them. What this needs and what it does not do yet:
+The APK is `build/android/app-debug.apk`. Use `haxeon devices` to list devices and emulators.
+Android packaging needs the Android SDK and an installed Haxeon SDK containing `platforms/android/haxeon-host.aar`.
+Use the NDK for apps with native packages. `haxeon doctor` reports the toolchain and host paths.
 
-- It runs from a Haxeon checkout, with the Android SDK and NDK under the checkout's `.tools/android-sdk`; `haxeon doctor`
-  reports whether they are there. A release archive does not build for Android yet.
-- The Android project is the checkout's (`android/`), not one of your app's, so the manifest and resources are not
-  yours to change. The package name and launcher label come from the `[android]` section (`applicationId`, `label`).
-- It makes debug APKs only. A signed release APK or an App Bundle for a store is not available yet.
-
-[ANDROID.md](../reference/ANDROID.md) has the details, including live editing on a device.
+Edit the Gradle project, manifest and resources in your app's `android/` directory. Set the package ID,
+launcher label and version in `[app]`. For signing or an App Bundle, prepare the inputs with
+`haxeon build --target android --gradle-inputs build/generated/android/inputs.properties` and configure those tasks in your Gradle project.
+See [Android](../reference/ANDROID.md) for installation and live editing.
 
 ## The web
 
-`haxeon build --target wasm32` compiles a program to a WebAssembly module, `build/wasm32/main.wasm`. `haxeon run` does
-not run it, and the page that loads it is yours to write, with the host script the SDK ships
-(`stdlib/haxeon/wasm/haxeon-host.js`).
+```sh
+haxeon build --target wasm32
+python3 -m http.server --directory build/web/wasm32 8000
+```
 
-An app that uses `ui`, or any package with C or C++ code, cannot be built for the web by `haxeon` yet: the build stops
-with `Package nativekit cannot be built for wasm32`, because Haxeon does not yet compile a package's native code with
-Emscripten. A web runner, with the app's own page, is planned.
+Open `http://localhost:8000/` to test the bundle. Ship that directory to a static web host that serves
+`.wasm` files as `application/wasm`. You can also build with `--target wasm-gc` and ship
+`build/web/wasm-gc/` for browsers with Wasm GC. The bundle contains your `web/` page and files, the
+compiled Wasm module, and the SDK's loader. Web app builds currently require managed packages.
 
 ## Checklist
 

@@ -13,7 +13,7 @@ while IFS='=' read -r android_key android_value; do
 		cmake) android_cmake="$android_value" ;;
 		gradle) android_gradle="$android_value" ;;
 	esac
-done < "$android_root/android/versions.txt"
+done < "$android_root/native/android/versions.txt"
 
 export ANDROID_SDK_ROOT="$android_root/.tools/android-sdk"
 export ANDROID_HOME="$ANDROID_SDK_ROOT"

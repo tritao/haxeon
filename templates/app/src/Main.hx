@@ -1,3 +1,7 @@
+#if (android || wasm)
+function main():Void
+	Sys.println("Hello from {{name}}");
+#else
 import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutFrame;
@@ -105,3 +109,4 @@ class Main {
 		if (app != null)
 			app.rebuild();
 }
+#end

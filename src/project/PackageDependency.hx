@@ -5,9 +5,12 @@ class PackageDependency {
 	public final id:PackageId;
 	public final source:PackageSource;
 
-	public function new(id:PackageId, source:PackageSource) {
+	public final platforms:Array<String>;
+
+	public function new(id:PackageId, source:PackageSource, ?platforms:Array<String>) {
 		this.id = id;
 		this.source = source;
+		this.platforms = platforms == null ? [] : platforms;
 	}
 
 	public function toString():String

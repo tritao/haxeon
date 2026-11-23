@@ -1,6 +1,6 @@
 # Project manifest
 
-A Haxeon project is the directory holding its manifest: `haxeon.toml`, which `haxeon init` writes, or `haxeon.json`, the
+A Haxeon project is the directory holding its manifest: `haxeon.toml`, which `haxeon create` writes, or `haxeon.json`, the
 original format, which every command still reads. Both hold the same settings under the same names, so one schema describes
 them: a TOML table is a JSON object, a TOML array a JSON array. A directory with both files is a usage error (exit status 2)
 that names both; nothing says which one is the project.
@@ -36,9 +36,6 @@ indent = "spaces"
 indentWidth = 2
 lineWidth = 100
 
-[android]
-applicationId = "org.example.game"
-label = "Game"
 ```
 
 The same project in JSON:
@@ -57,8 +54,7 @@ The same project in JSON:
     "ui": { "git": "https://example.org/ui.git", "rev": "v1.2.0" },
     "core": { "registry": "local", "version": "^1.0" }
   },
-  "format": { "indent": "spaces", "indentWidth": 2, "lineWidth": 100 },
-  "android": { "applicationId": "org.example.game", "label": "Game" }
+  "format": { "indent": "spaces", "indentWidth": 2, "lineWidth": 100 }
 }
 ```
 
@@ -97,7 +93,7 @@ Paths are relative to the manifest's directory.
 | `unscopedSourceRoots` | array of strings | `[]` | Roots (listed in `sourceRoots`) that may hold any package. |
 | `sources` | array of strings | `[]` | Compile exactly these files instead of every file under the roots. |
 | `workspace` | array of strings | `[]` | Member package directories ([CLI.md](CLI.md)). |
-| `target` | string | `"host"` | `host`, `android`, `wasm32` or `OS-ARCH`. |
+| `target` | string | `"host"` | `host`, `android`, `wasm32`, `wasm-gc` or `OS-ARCH`. |
 | `defines` | array of strings | `[]` | Conditional compilation defines, `NAME` or `NAME=VALUE`. |
 | `inline` | boolean | inlining on | `false` builds with `--no-inline`. |
 | `nullSafety` | string | `"off"` | `"strict"`, `"loose"`, `"off"` or `"warn"`: the null-safety checker's mode for this package (below). |
@@ -107,11 +103,14 @@ Paths are relative to the manifest's directory.
 | `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). A CMake project finds those of the packages it depends on: in an app's graph their targets, otherwise their build directories in `CMAKE_PREFIX_PATH`, for `find_package` of a config each leaves there. |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
 | `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program, which builds to a module the VM runs; an app builds through its runner projects ([CLI.md](CLI.md)). |
-| `android` | table | | `applicationId` and `label` of the Android app ([ANDROID.md](ANDROID.md)). |
 | `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([CLI.md](CLI.md)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |
 | `publish` | `false` or table | published whole | How the package is published into a registry: `false` keeps it out (of a checkout's `haxeon` registry as well); `exclude` lists files and directories left out (tests, vendored code that does not build), `vendor` maps a path in the published package to a directory outside it that is copied in (`{ nativekit = "../../vendor/nativekit" }`). |
 | `instrument` | table | everything | What `--profile=instrument` probes ([PROFILING.md](PROFILING.md)). |
+
+A dependency written as a source table can include `platforms = ["linux", "macos", "windows"]` to limit it to those builds.
+The lockfile records dependencies for all platforms. Android takes its application ID and launcher label from `[app].id`
+and `[app].name`.
 
 ### The `haxeon` registry
 
@@ -140,7 +139,7 @@ The directory's manifest must name the package as the dependency does (`ui`), as
 `nullSafety` turns on the null-safety checker for the package's own code, in one of Haxe's modes: `"strict"` or `"loose"`
 (`@:nullSafety(Strict)` and `@:nullSafety(Loose)`), or `"off"`, the default when the key is absent. `"warn"` checks as
 `"strict"` does and reports what it finds as warnings, so a project can see what is left to fix while it migrates; any other
-value is a manifest error. `haxeon init` writes `nullSafety = "strict"`, so a new project starts null safe.
+value is a manifest error. `haxeon create` writes `nullSafety = "strict"`, so a new project starts null safe.
 
 Each package uses its own setting: the root project's applies to its sources, each dependency's to its sources, and a Haxelib
 package without a Haxeon manifest is off. A package's setting reaches what its source roots hold: its package for a root that

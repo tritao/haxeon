@@ -40,10 +40,10 @@ function main() {
 	}
 
 	// An app for a platform whose runner the template does not have yet cannot be made.
-	log = Path.join([work, "create-android.log"]);
-	expectStatus(haxeon(["create", "w", "--platforms", "android"], work, log), 2, log,
+	log = Path.join([work, "create-ios.log"]);
+	expectStatus(haxeon(["create", "w", "--platforms", "ios"], work, log), 2, log,
 		"create an app without a runner");
-	expectText(log, "The app template has no android runner", "create an app without a runner");
+	expectText(log, "The app template has no ios runner", "create an app without a runner");
 
 	// app: an [app] section for every platform with a runner, built through this machine's, and a window that runs for a few frames and
 	// is captured.
@@ -55,10 +55,22 @@ function main() {
 		'name = "Hello App"',
 		'id = "org.example.hello_app"',
 		"[app]",
-		'platforms = ["linux", "macos", "windows"]'
+		'platforms = ["android", "linux", "macos", "web", "windows"]'
 	])
 		if (manifest.indexOf(text) < 0)
 			Script.fail('FAIL: the app manifest lacks $text:\n$manifest');
+	// Both web targets use the same page and the SDK loader.
+	for (target in ["wasm32", "wasm-gc"]) {
+		log = Path.join([work, target + ".log"]);
+		expectStatus(haxeon(["build", "--target", target], app, log), 0, log, 'building the $target web bundle');
+		var bundle = Path.join([app, "build", "web", target]);
+		for (file in ["index.html", "haxeon-host.js", "haxeon-build.js", "main.wasm"])
+			if (!FileSystem.exists(Path.join([bundle, file])))
+				Script.fail('FAIL: the web bundle lacks $file');
+	}
+	log = Path.join([work, "android-plan.log"]);
+	expectStatus(haxeon(["build", "--target", "android", "--plan"], app, log), 0, log, "planning the Android app");
+	expectText(log, "app.hl.hcs", "the Android build's live baseline");
 	var capture = Path.join([work, "capture"]);
 	log = Path.join([work, "run-app.log"]);
 	expectStatus(headless(Script.haxeon(), ["run", "--", "--frames=10", '--capture=$capture'], app, log), 0, log,

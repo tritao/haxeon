@@ -91,7 +91,13 @@ class RegistryPublisher {
 							throw new InternalError('Package "${packageName == null ? name : packageName}" cannot be published: its dependency '
 								+ '"$dependency" is the directory $directory, which is not a package of the registry');
 						var parts = target.version.split(".");
-						Reflect.setField(published, target.name, '^${parts[0]}.${parts.length > 1 ? parts[1] : "0"}');
+						var range = '^${parts[0]}.${parts.length > 1 ? parts[1] : "0"}',
+							platforms:Dynamic = Reflect.field(value, "platforms");
+						Reflect.setField(published, target.name, platforms == null ? range : {
+							registry: PackageSourceCodec.DEFAULT_REGISTRY,
+							version: range,
+							platforms: platforms
+						});
 					case _:
 						Reflect.setField(published, dependency, value);
 				}

@@ -6,7 +6,18 @@
  * On Windows both wmain and wWinMain are here, and the linker starts the one of the executable's subsystem: apps are Windows
  * programs (haxeon_add_app sets WIN32_EXECUTABLE), which open no console window from Explorer; programs that are not apps
  * are console programs. */
-#ifdef _WIN32
+#if defined(__ANDROID__)
+#include <jni.h>
+#include <android/asset_manager_jni.h>
+
+int haxeon_app_run(AAssetManager *assets);
+
+JNIEXPORT jint JNICALL
+Java_org_haxeon_android_MainActivity_nativeLoad(JNIEnv *env, jclass clazz, jobject assets) {
+    (void)clazz;
+    return haxeon_app_run(AAssetManager_fromJava(env, assets));
+}
+#elif defined(_WIN32)
 #	include <windows.h>
 #	include <stdio.h>
 #	include <stdlib.h>

@@ -33,6 +33,7 @@ import haxe.io.Path;
 import haxeon.io.FileTree;
 import project.PackageLockfile;
 import project.PackageManifest;
+import project.PackageManifest.AppManifest;
 import project.PackageResolver;
 import project.PackageSourceCodec;
 import project.PackageSourceTools;
@@ -76,10 +77,6 @@ private typedef BuildOptions = {
 
 	final compilerOnly:Bool;
 
-	/**
-	 * `--gradle-inputs FILE`, Android only: build what Gradle packages and describe it in FILE, without running Gradle. The
-	 * Android Gradle project passes it when Gradle runs on its own (docs/design/ANDROID_BUILD.md).
-	 */
 	final gradleInputs:Null<String>;
 
 	/**
@@ -185,7 +182,6 @@ class HaxeonCli {
 		try {
 			var status = switch command {
 				case "create": ProjectCreator.run(arguments, haxeonHome());
-				case "init": init(arguments);
 				case "migrate": migrate(arguments);
 				case "add": add(arguments);
 				case "install": install(arguments);
@@ -253,71 +249,6 @@ class HaxeonCli {
 	/** The target `--target` names; a name that is none is a usage error that lists the valid ones. */
 	static function parseTarget(value:String):Target
 		return try Target.parse(value) catch (error:haxe.Exception) throw new UsageError(error.message);
-
-	static function init(arguments:Array<String>):Int {
-		var entry = "Main", target = "host";
-		var index = 0;
-		while (index < arguments.length) {
-			var argument = arguments[index++];
-			if (argument == "--entry") {
-				if (index >= arguments.length)
-					throw new UsageError('Option "--entry" requires a value');
-				entry = arguments[index++];
-			} else if (argument == "--target") {
-				if (index >= arguments.length)
-					throw new UsageError('Option "--target" requires a value');
-				target = arguments[index++];
-			} else if (StringTools.startsWith(argument, "--entry="))
-				entry = argument.substr("--entry=".length);
-			else if (StringTools.startsWith(argument, "--target="))
-				target = argument.substr("--target=".length);
-			else
-				throw new UsageError('Unknown init option "$argument"');
-		}
-		if (entry.length == 0)
-			throw new UsageError('Option "--entry" requires a value');
-		parseTarget(target);
-
-		var projectDirectory = Sys.getCwd(),
-			existing = PackageManifest.find(projectDirectory),
-			configPath = Path.join([projectDirectory, PackageManifest.TOML_NAME]);
-		if (existing != null)
-			throw new InternalError('${Path.withoutDirectory(existing)} already exists in $projectDirectory');
-
-		var sourcePath = "src/" + entry.split(".").join("/") + ".hx";
-		var absoluteSource = resolvePath(sourcePath, projectDirectory);
-		ensureDirectory(Path.directory(absoluteSource));
-		if (!FileSystem.exists(absoluteSource)) {
-			var entryParts = entry.split("."),
-				packageName = entryParts.length > 1 ? entryParts.slice(0, entryParts.length - 1).join(".") : null;
-			var source = packageName == null ? "" : 'package $packageName;\n\n';
-			var mainSource = target == "android" ? "function main():Void {}\n" : "function main():Int return 0;\n";
-			File.saveContent(absoluteSource, source + mainSource);
-		}
-
-		var config:Dynamic = {
-			version: 1,
-			entry: entry,
-			sources: [sourcePath],
-			sourceRoots: ["src"],
-			target: target,
-			defines: [],
-			outputDir: "build",
-		};
-		var normalizedProjectDirectory = Path.normalize(FileSystem.fullPath(projectDirectory)),
-			packageName = Path.withoutDirectory(normalizedProjectDirectory);
-		if (packageName.length == 0)
-			throw new InternalError('Could not derive a package name from project directory $normalizedProjectDirectory');
-		Reflect.setField(config, "package", {name: packageName});
-		if (target == "android")
-			Reflect.setField(config, "android", {applicationId: "org.haxeon.android", label: "Haxeon"});
-		// A new project starts null safe; an existing one turns it on when it is ready (docs/reference/MANIFEST.md).
-		Reflect.setField(config, "nullSafety", "strict");
-		File.saveContent(configPath, PackageManifest.toToml(config));
-		Sys.println('Created ${PackageManifest.TOML_NAME} and $sourcePath');
-		Sys.println("haxeon init is to be replaced by haxeon create: haxeon create . --template console does this");
-		return 0;
-	}
 
 	/** `haxeon migrate [--project PATH] [--dry-run]`: the project's haxeon.json rewritten as the haxeon.toml that replaces it. */
 	static function migrate(arguments:Array<String>):Int {
@@ -636,13 +567,12 @@ class HaxeonCli {
 			for (command in ToolchainCheck.installCommands())
 				Sys.println('  $command');
 		}
-		// Android builds need a checkout: its android/ host project and the SDK and NDK under its .tools.
-		if (source != null) {
-			var androidSdk = androidSdkDirectory(source), ndk = androidVersion(source, "ndk");
-			reportPath("Android SDK", androidSdk, false);
+		var androidSdk = androidSdkDirectory(home), ndk = androidVersion(home, "ndk");
+		reportPath("Android SDK", androidSdk, false);
+		if (ndk != null)
 			reportPath('Android NDK $ndk', Path.join([androidSdk, "ndk", ndk]), false);
-			reportPath("Android platform tools (adb)", androidExecutable(source, "adb"), false);
-		}
+		reportPath("Android platform tools (adb)", androidExecutable(home, "adb"), false);
+		reportPath("Android host AAR", Path.join([home, "platforms", "android", "haxeon-host.aar"]), false);
 		if (missingRequired)
 			Sys.stderr().writeString(source != null
 				? "Run the repository's setup/bootstrap tools to install missing dependencies.\n"
@@ -662,7 +592,7 @@ class HaxeonCli {
 		Sys.println("Targets (--target, and \"target\" in haxeon.toml):");
 		Sys.println('  host     this machine (${Target.detectHost().toString()}): build and run HashLink bytecode (backend hl)');
 		Sys.println("  android  Android (android-arm64): build an APK, install and launch it on a device (backend hl)");
-		Sys.println("  wasm32   WebAssembly: build an experimental module; run is not wired up (backend wasm32)");
+		Sys.println("  wasm32, wasm-gc  WebAssembly: build a module or bundle a web app");
 		Sys.println("An explicit OS-ARCH[-ABI] (linux-x86_64, macos-arm64, windows-x86_64-msvc) names a host by its platform.");
 		Sys.println("Use \"haxeon devices\" to list connected Android devices.");
 		return 0;
@@ -671,11 +601,11 @@ class HaxeonCli {
 	static function devices(arguments:Array<String>):Int {
 		if (arguments.length != 0)
 			throw new UsageError('Unexpected devices argument "${arguments[0]}"');
-		var source = HaxeonSdk.requireSource(haxeonHome(), "haxeon devices");
-		configureAndroidEnvironment(source);
-		var adb = androidExecutable(source, "adb");
+		var home = haxeonHome();
+		configureAndroidEnvironment(home);
+		var adb = androidExecutable(home, "adb");
 		if (!FileSystem.exists(adb))
-			throw new InternalError('Android adb is missing at $adb (install the Android platform tools under .tools/android-sdk)');
+			throw new InternalError('Android adb is missing at $adb (install the Android platform tools and set ANDROID_HOME)');
 		var result = capture(adb, ["devices", "-l"]);
 		Sys.print(result.output);
 		return result.status;
@@ -928,7 +858,7 @@ class HaxeonCli {
 		if (command == Test && program == null)
 			projectConfigPath = testProject(projectConfigPath);
 		if (program == null && !FileSystem.exists(projectConfigPath))
-			throw new InternalError('Project file not found: $projectConfigPath (run "haxeon init" to create one)');
+			throw new InternalError('Project file not found: $projectConfigPath (run "haxeon create . --template console" to create one)');
 		var requestedTarget:Null<Target> = options.target == null ? null : parseTarget(options.target);
 		// A checkout whose compiler built ahead of time is stale says so once, unless the build prints no progress.
 		AotCompiler.announceStale = !options.quiet && !options.plan && options.verbosity.atLeast(Verbosity.Minimal);
@@ -943,7 +873,7 @@ class HaxeonCli {
 		if (command == Check)
 			return check(options, project, targetInfo, resolutionMs);
 		if (launch && targetInfo.isWasm())
-			throw new InternalError('The "$target" target can be built, but this CLI has no runner for it yet.');
+			throw new InternalError('Use "haxeon build --target $target" to build for WebAssembly.');
 		if (launch && targetInfo.equals(Target.detectHost()))
 			RuntimeLibrary.requireCurrent(haxeonHome());
 		if (options.plan && launch)
@@ -993,11 +923,10 @@ class HaxeonCli {
 		if (instrument)
 			Sys.putEnv("HL_PROF_BOUNDARY", ProfileCapture.boundaryConfiguration(project.manifest.instrument));
 
-		var home = haxeonHome();
+		var home = haxeonHome(), app = program == null ? project.manifest.app : null;
 		NativeTargetSupport.validate(project, targetInfo);
 		if (hostBuild) {
 			// An app builds through its runner project (docs/design/PROJECT_BUILDS.md); a script or another program as before.
-			var app = program == null ? project.manifest.app : null;
 			if (app != null && options.profile)
 				throw new UsageError("Profiling an app through its runner is not supported yet");
 			if (app != null && !options.plan && !options.compilerOnly)
@@ -1157,19 +1086,22 @@ class HaxeonCli {
 				scriptRun ? invokedFrom : project.root, launchEnvironment());
 			return command == Test ? testStatus(options, status) : status;
 		}
-		for (resolvedPackage in project.packages.packages)
-			if (resolvedPackage.nativeSources.length > 0 && !targetInfo.isAndroid())
-				throw new InternalError('Native C package "${resolvedPackage.name}" requires target "host" or an Android NDK provider; target "$target" is not supported yet');
 		if (targetInfo.isWasm()) {
-			// `haxeon run` has no Wasm runner (checked above), so this only builds.
+			var targetName = targetInfo.toString();
+			if (app != null && !options.compilerOnly) {
+				AppRunner.runnerDirectory(project, app, "web");
+				for (resolved in project.packages.packages)
+					if (resolved.manifest.native != null)
+						throw new UsageError('Web app runners cannot build native package "${resolved.name}" yet');
+			}
 			var output = options.output == null ? Path.join([
 				HaxeonProjectBuild.outputDirectory(project, false),
-				"wasm32",
+				targetName,
 				"main.wasm"
 			]) : resolvePath(options.output, project.root);
 			if (options.quiet)
 				BuildOutput.capture();
-			var started = announceBuild(options, project, "wasm32", options.buildMode);
+			var started = announceBuild(options, project, targetName, options.buildMode);
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, scope(options),
 				false,
@@ -1178,8 +1110,10 @@ class HaxeonCli {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
-			reportBuilt(options, output, buildStatus, started);
 			releaseQuietOutput(options, buildStatus != 0);
+			if (buildStatus == 0 && app != null && !options.plan && !options.compilerOnly)
+				output = AppRunner.bundleWeb(project, app, home, targetInfo, output);
+			reportBuilt(options, output, buildStatus, started);
 			return buildStatus;
 		}
 		if (!targetInfo.isAndroid())
@@ -1187,18 +1121,20 @@ class HaxeonCli {
 		// The Android debug host always accepts live patches.
 		if (options.buildModeExplicit && options.buildMode == "release")
 			throw new UsageError("The Android live-patch host requires development build mode");
-		// The NDK the project's native packages build with, and later Gradle and adb.
-		var source = HaxeonSdk.requireSource(home, "Building for Android");
-		configureAndroidEnvironment(source);
-		// The module, its sidecars and the native libraries, as for any target; Gradle only packages them. A watch keeps the
-		// session, so its edits reach the compiler worker that built the module.
+		if (app == null && !options.compilerOnly)
+			throw new UsageError("Packaging for Android requires an app with an Android runner");
+		var runner = app != null && !options.compilerOnly ? AppRunner.runnerDirectory(project, app, "android") : null,
+			applicationId = app == null ? null : app.id;
+		configureAndroidEnvironment(home);
+		// A watch keeps the session so edits reach the compiler worker that built the module.
 		var module = HaxeonProjectBuild.androidModulePath(project, targetInfo),
 			session = options.watch ? new BuildSession() : null;
 		if (options.quiet)
 			BuildOutput.capture();
 		var started = announceBuild(options, project, "android", "development");
 		var buildStatus = try HaxeonProjectBuild.build(project, home, module, options.defines, options.jobs,
-			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, scope(options),
+			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted,
+			options.compilerOnly ? scope(options) : BuildScope.Module,
 			false, false, session, true, targetInfo, null, options.style) catch (error:haxe.Exception) {
 				releaseQuietOutput(options, true);
 				throw error;
@@ -1208,10 +1144,9 @@ class HaxeonCli {
 		releaseQuietOutput(options, buildStatus != 0);
 		if (buildStatus != 0 || options.plan || options.compilerOnly)
 			return buildStatus;
-		var requested = options.gradleInputs,
-			gradleInputs = requested == null ? module + ".gradle.properties" : resolvePath(requested, Sys.getCwd());
-		writeGradleInputs(gradleInputs, module, HaxeonProjectBuild.androidNativeRoot(project, targetInfo));
-		// Gradle asked for these; it packages them itself.
+		var fragment = AppRunner.writeFragment(project, app, home, "android", module),
+			gradleInputs = writeGradleInputs(project, app, home, module, Path.directory(fragment),
+				options.gradleInputs);
 		if (options.gradleInputs != null)
 			return 0;
 		var androidOutput = options.output == null ? Path.join([
@@ -1219,15 +1154,15 @@ class HaxeonCli {
 			"android",
 			"app-debug.apk"
 		]) : resolvePath(options.output, project.root);
-		var status = buildAndroid(source, project, androidOutput, gradleInputs);
+		var status = buildAndroid(runner, androidOutput, gradleInputs, home);
 		if (status != 0 || !launch)
 			return status;
-		var launched = installAndLaunchAndroid(source, androidOutput, project.manifest.androidApplicationId,
+		var launched = installAndLaunchAndroid(home, androidOutput, applicationId,
 			options.device);
 		if (launched != 0 || !options.watch)
 			return launched;
 		// Each saved edit is compiled against the baseline this build wrote and sent to the running app (AndroidWatch).
-		var adb = androidExecutable(source, "adb");
+		var adb = androidExecutable(home, "adb");
 		var device = selectAndroidDevice(adb, options.device);
 		return AndroidWatch.run(home, project, targetInfo, module, options.defines, options.jobs, options.selfHosted,
 			session, adb, device);
@@ -1269,7 +1204,7 @@ class HaxeonCli {
 			throw new UsageError("haxeon check takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color and --diagnostic-format. See 'haxeon check --help'.");
 		NativeTargetSupport.validate(project, target);
 		var started = announceBuild(options, project,
-			target.isWasm() ? "wasm32" : (target.isAndroid() ? "android" : "host"),
+			target.isWasm() ? target.toString() : (target.isAndroid() ? "android" : "host"),
 			options.buildMode, true),
 			// Nothing is written there: it names the check's source list, beside the build's, in the build's directory.
 			output = Path.join([HaxeonProjectBuild.outputDirectory(project, false), "check", "main"]),
@@ -1294,7 +1229,7 @@ class HaxeonCli {
 		if (Path.withoutDirectory(Path.directory(manifestPath)) == "tests")
 			return manifestPath;
 		if (!FileSystem.exists(manifestPath))
-			throw new InternalError('Project file not found: $manifestPath (run "haxeon init" to create one)');
+			throw new InternalError('Project file not found: $manifestPath (run "haxeon create . --template console" to create one)');
 		throw new InternalError('No tests for $manifestPath: a project keeps them in a project of their own, ${Path.join([testsDirectory, PackageManifest.TOML_NAME])}');
 	}
 
@@ -1485,42 +1420,42 @@ class HaxeonCli {
 		return runtimeStatus == 0 && trace == null ? 1 : runtimeStatus;
 	}
 
-	/**
-	 * Describes what Gradle packages, as Java properties: the module and the sidecars the host loads (`app.hl`, `app.hli`,
-	 * `app.entry` in the APK) and the directory of the native libraries, one per ABI.
-	 */
-	static function writeGradleInputs(path:String, module:String, nativeRoot:String):Void {
+	static function writeGradleInputs(project:ResolvedProject, app:AppManifest, home:String,
+			module:String, generated:String, ?requested:String):String {
 		function property(key:String, value:String):String
-			return key + "=" + StringTools.replace(Path.normalize(value), "\\", "\\\\") + "\n";
+			return key + "=" + StringTools.replace(StringTools.replace(StringTools.replace(value, "\\", "\\\\"),
+				"\r", "\\r"), "\n", "\\n") + "\n";
+		var path = requested == null ? Path.join([generated, "inputs.properties"]) : requested,
+			assets = Path.join([generated, "assets"]);
+		ensureDirectory(assets);
+		for (suffix in ["", ".hli", ".entry", ".hcs"])
+			File.copy(module + suffix, Path.join([assets, suffix == "" ? "app.hl" : "app" + suffix]));
 		ensureDirectory(Path.directory(path));
-		File.saveContent(path, "# Written by haxeon build --target android; read by android/app/build.gradle.\n"
-			+ property("module", module)
-			+ property("identity", module + ".hli")
-			+ property("entry", module + ".entry")
-			+ property("nativeRoot", nativeRoot));
+		File.saveContent(path, property("generated", generated) + property("id", app.id) + property("name",
+			app.name) + property("version", app.version)
+			+ property("assets", assets)
+			+ property("host", Path.join([home, "platforms", "android", "haxeon-host.aar"]))
+			+ property("native",
+			Std.string(Lambda.exists(project.packages.packages, resolved -> resolved.manifest.native != null))));
+		return path;
 	}
 
-	/** Has Gradle package the module and native libraries `gradleInputs` describes into the APK at `output`. */
-	static function buildAndroid(source:String, project:ResolvedProject, output:String, gradleInputs:String):Int {
-		var sdk = androidSdkDirectory(source),
-			ndk = Path.join([sdk, "ndk", androidVersion(source, "ndk")]);
-		if (!FileSystem.exists(sdk) || !FileSystem.exists(ndk))
-			throw new InternalError('Android SDK/NDK are missing under $sdk');
-		var androidDirectory = Path.join([source, "android"]),
-			wrapperJar = Path.join([androidDirectory, "gradle", "wrapper", "gradle-wrapper.jar"]);
-		if (!FileSystem.exists(wrapperJar))
-			throw new InternalError('Android Gradle wrapper is missing: $wrapperJar');
-
+	static function buildAndroid(androidDirectory:String, output:String, gradleInputs:String, home:String):Int {
+		var sdk = androidSdkDirectory(home), host = Path.join([home, "platforms", "android", "haxeon-host.aar"]);
+		if (!FileSystem.exists(host))
+			throw new InternalError('Android host AAR is missing at $host; use an SDK built with the Android toolchain');
+		if (!FileSystem.exists(sdk))
+			throw new InternalError('Android SDK is missing under $sdk');
+		var wrapperJar = Path.join([androidDirectory, "gradle", "wrapper", "gradle-wrapper.jar"]);
 		var arguments = [
 			"-classpath",
 			wrapperJar,
 			"org.gradle.wrapper.GradleWrapperMain",
 			"-p",
 			androidDirectory,
+			"--max-workers=2",
 			"assembleDebug",
-			"-PhaxeonInputs=" + gradleInputs,
-			"-PhaxeonApplicationId=" + project.manifest.androidApplicationId,
-			"-PhaxeonAppLabel=" + project.manifest.androidAppLabel
+			"-PhaxeonInputs=" + gradleInputs
 		];
 		var status = ProcessRunner.run(javaExecutable(), arguments, Sys.getCwd(), new Map());
 		if (status != 0)
@@ -1535,10 +1470,10 @@ class HaxeonCli {
 		return 0;
 	}
 
-	static function installAndLaunchAndroid(source:String, apk:String, applicationId:String,
+	static function installAndLaunchAndroid(home:String, apk:String, applicationId:String,
 			requestedDevice:Null<String>):Int {
-		configureAndroidEnvironment(source);
-		var adb = androidExecutable(source, "adb");
+		configureAndroidEnvironment(home);
+		var adb = androidExecutable(home, "adb");
 		if (!FileSystem.exists(adb))
 			throw new InternalError('Android adb is missing at $adb');
 		var device = selectAndroidDevice(adb, requestedDevice);
@@ -1593,47 +1528,42 @@ class HaxeonCli {
 		return {status: status, output: stdout + stderr};
 	}
 
-	/** The Android SDK and NDK a checkout's bootstrap installs (`.tools/android-sdk`). */
-	static function androidSdkDirectory(source:String):String
-		return Path.join([source, ".tools", "android-sdk"]);
+	static function androidSdkDirectory(home:String):String {
+		for (variable in ["ANDROID_HOME", "ANDROID_SDK_ROOT"]) {
+			var configured = Sys.getEnv(variable);
+			if (configured != null && configured != "")
+				return FileSystem.absolutePath(configured);
+		}
+		var source = HaxeonSdk.source(home);
+		return Path.join([source == null ? home : source, ".tools", "android-sdk"]);
+	}
 
-	/** The environment Android's tools need, from the checkout at `source`. */
-	static function configureAndroidEnvironment(source:String):Void {
-		var sdk = androidSdkDirectory(source);
+	static function configureAndroidEnvironment(home:String):Void {
+		var sdk = androidSdkDirectory(home);
 		Sys.putEnv("ANDROID_SDK_ROOT", sdk);
 		Sys.putEnv("ANDROID_HOME", sdk);
-		Sys.putEnv("ANDROID_NDK_ROOT", Path.join([sdk, "ndk", androidVersion(source, "ndk")]));
-		Sys.putEnv("ANDROID_AVD_HOME", Path.join([source, ".tools", "android-avd"]));
-		var paths = [
-			Path.join([sdk, "platform-tools"]),
-			Path.join([sdk, "emulator"]),
-			Path.join([sdk, "cmdline-tools", "latest", "bin"]),
-			Path.join([sdk, "build-tools", androidVersion(source, "build-tools")]),
-			Path.join([sdk, "cmake", androidVersion(source, "cmake"), "bin"]),
-			Path.join([source, ".tools", "gradle", "gradle-" + androidVersion(source, "gradle"), "bin"])
-		];
-		var existing = Sys.getEnv("PATH");
-		if (existing != null && existing.length > 0)
-			paths.push(existing);
-		Sys.putEnv("PATH", paths.join(Sys.systemName() == "Windows" ? ";" : ":"));
+		var ndk = androidVersion(home, "ndk");
+		if (ndk != null)
+			Sys.putEnv("ANDROID_NDK_ROOT", Path.join([sdk, "ndk", ndk]));
+		var source = HaxeonSdk.source(home);
+		if (source != null && Sys.getEnv("ANDROID_AVD_HOME") == null)
+			Sys.putEnv("ANDROID_AVD_HOME", Path.join([source, ".tools", "android-avd"]));
 	}
 
-	/** An Android tool version from android/versions.txt, which scripts/android-env.sh reads too. */
-	static function androidVersion(source:String, tool:String):String {
-		for (line in File.getContent(Path.join([source, "android", "versions.txt"])).split("\n")) {
+	static function androidVersion(home:String, tool:String):Null<String> {
+		var versions = Path.join([home, "platforms", "android", "versions.txt"]);
+		if (!FileSystem.exists(versions))
+			return null;
+		for (line in File.getContent(versions).split("\n")) {
 			var fields = line.split("=");
-			if (fields.length == 2 && fields[0] == tool && StringTools.trim(fields[1]) != "")
+			if (fields.length == 2 && fields[0] == tool)
 				return StringTools.trim(fields[1]);
 		}
-		throw new InternalError('Missing Android $tool version in android/versions.txt');
+		return null;
 	}
 
-	static function androidExecutable(source:String, executable:String):String
-		return Path.join([
-			androidSdkDirectory(source),
-			"platform-tools",
-			executable + (Sys.systemName() == "Windows" ? ".exe" : "")
-		]);
+	static function androidExecutable(home:String, executable:String):String
+		return Path.join([androidSdkDirectory(home), "platform-tools", executable + executableSuffix()]);
 
 	static function javaExecutable():String {
 		var javaHome = Sys.getEnv("JAVA_HOME"),
@@ -1757,7 +1687,7 @@ class HaxeonCli {
 					case "--device":
 						device = value;
 					case "--gradle-inputs":
-						gradleInputs = value;
+						gradleInputs = resolvePath(value, Sys.getCwd());
 					case "--jobs":
 						var parsedJobs = Std.parseInt(value);
 						if (parsedJobs == null || parsedJobs < 1)

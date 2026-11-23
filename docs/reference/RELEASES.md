@@ -50,6 +50,9 @@ is in the archive, including the language server, `haxeon ffi`, the typed lint r
 patching (`run --watch`) works from a release, and an app's runner builds against the SDK's `include/` and
 `cmake/`.
 
+Release archives include the Android host AAR and web loader under `platforms/`.
+Android APK builds also need a local Android SDK. See [Android](ANDROID.md).
+
 ## What a release does not do
 
 These are for working on Haxeon itself, or need a checkout's tools:
@@ -57,5 +60,3 @@ These are for working on Haxeon itself, or need a checkout's tools:
 - `haxeon dev`, which says so and runs only from a checkout.
 - `--self-hosted` builds, which use the checkout's committed bootstrap compiler.
 - `haxeon heap inspect`, which runs HashLink's analyzer built from the checkout's sources.
-- Android builds (`--target android`, `haxeon devices`), which need a checkout's Android host and the Android SDK it
-  installs, until the archive ships the Android runner ([ANDROID.md](ANDROID.md)).

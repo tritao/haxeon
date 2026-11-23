@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{name}}</title>
+<canvas id="canvas" hidden></canvas>
+<pre id="output" role="status"></pre>
+<script src="haxeon-host.js"></script>
+<script type="module">
+    import { target, module } from "./haxeon-build.js";
+
+    const output = document.querySelector("#output");
+    const print = line => { output.textContent += line + "\n"; };
+    try {
+        const { exports } = await HaxeonWasmHost.instantiate(module, { print, printError: print });
+        exports.main();
+    } catch (error) {
+        if (!(error instanceof HaxeonWasmHost.HaxeonExit && error.code === 0))
+            print(`${target}: ${error.message}`);
+    }
+</script>
+</html>

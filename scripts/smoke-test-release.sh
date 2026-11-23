@@ -221,7 +221,17 @@ if [[ -d $root/templates/app/$platform ]]; then
 	echo "== haxeon create (app), build, run, and the same in release mode"
 	app=$work/projects/hello-app
 	(cd "$work/projects" && "$haxeon" create hello-app >/dev/null) || fail "haxeon create"
-	grep -q '^ui = "^' "$app/haxeon.toml" || fail "the app's manifest does not use the UI package from the haxeon registry"
+	grep -q '^ui = { registry = "haxeon", version = "^' "$app/haxeon.toml" || fail "the app's manifest does not use the UI package from the haxeon registry"
+	for target in wasm32 wasm-gc; do
+		(cd "$app" && "$haxeon" build --target "$target") || fail "web bundle for $target"
+		cmp "$app/build/web/$target/haxeon-host.js" "$root/platforms/web/haxeon-host.js" || fail "staged web loader"
+	done
+	if [[ -f $root/platforms/android/haxeon-host.aar ]]; then
+		(cd "$app" && "$haxeon" build --target android --gradle-inputs build/generated/android/inputs.properties) || fail "Android asset preparation"
+		grep -qE '^host=.*haxeon-host\.aar$' "$app/build/generated/android/inputs.properties" ||
+			fail "Android runner did not find the release host"
+	fi
+
 	(cd "$app" && "$haxeon" build) || fail "haxeon build of the app"
 	(cd "$app" && "${headless[@]}" "$haxeon" run -- --frames=3 "--capture=$work/capture") || fail "haxeon run of the app"
 	captured "$work/capture" || fail "the app captured no rendered frame"

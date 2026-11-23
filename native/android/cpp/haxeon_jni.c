@@ -102,11 +102,7 @@ static void report_exception(vdynamic *exception, const char *operation) {
     }
 }
 
-JNIEXPORT jint JNICALL
-Java_org_haxeon_android_MainActivity_nativeLoad(JNIEnv *env, jclass clazz, jobject asset_manager) {
-    (void)clazz;
-
-    AAssetManager *assets = AAssetManager_fromJava(env, asset_manager);
+int haxeon_app_run(AAssetManager *assets) {
     unsigned char *bytes = NULL, *identity = NULL;
     int size = 0, identity_size = 0, entry_id = -1;
     int stack_marker = 0;

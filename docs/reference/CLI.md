@@ -1,10 +1,9 @@
 # Project CLI and builds
 
-The project CLI creates projects from templates (`haxeon create`, below), each with a `haxeon.toml` manifest
-([MANIFEST.md](MANIFEST.md); `haxeon.json` works too), builds HashLink programs
-for the current desktop host, experimental Wasm32 modules, and Android APKs, and
-can launch host programs or install and launch an Android app. The same command
-is available on Unix-like systems and Windows:
+The project CLI creates projects with a `haxeon.toml` manifest
+([MANIFEST.md](MANIFEST.md)), builds desktop HashLink programs, Android APKs and
+experimental web bundles, and launches desktop and Android apps. It runs on
+Unix-like systems and Windows.
 
 Desktop and Wasm builds default to `development`, retaining metadata for
 debuggers and other development tools. Use `--build-mode release` when building
@@ -30,7 +29,6 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 ./scripts/haxeon create my_app
 ./scripts/haxeon create my_tool --template console
 ./scripts/haxeon create .
-./scripts/haxeon init
 ./scripts/haxeon migrate --dry-run
 ./scripts/haxeon migrate
 ./scripts/haxeon doctor
@@ -48,7 +46,7 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 ./scripts/haxeon build.hxml
 ./scripts/haxeon -cp src -main Main --hl bin/main.hl
 ./scripts/haxeon build --target wasm32
-./scripts/haxeon init --target android
+./scripts/haxeon create mobile_app --platforms android
 ./scripts/haxeon build --target android
 ./scripts/haxeon run --target android
 ./scripts/haxeon devices
@@ -77,9 +75,8 @@ bug in Haxeon. The compiler run directly takes each valued option as `--name=val
 `haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`: `--template app` (the default) is a window with a counter and an
 `[app]` section ([MANIFEST.md](MANIFEST.md)) that uses the UI package from the `haxeon` registry (`ui = "^0.3"`, with
 `compatibility.haxeon`), in a checkout and in a release alike; `--template console` (or `-t console`) a console program (no `[app]`). `--platforms` lists an app's
-platforms (by default every platform the template has a runner for: linux, macos and windows) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
-template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
-before; `create . --template console` replaces it.
+platforms (by default every platform the template has a runner for: android, linux, macos, web and windows) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
+template's files a project lacks and never overwrites one. Use `create . -t console` for a console program in the current directory.
 
 An app builds through its runner project, the CMake project for each platform that `haxeon create` writes beside the
 sources (`linux/`, `macos/`, `windows/`), which is the app's to change (the executable's name, the bundle's Info.plist, the
@@ -214,29 +211,9 @@ program does not type, and has no `--fix`. Haxeon's own sources keep to the
 subset: the compiler and its tools throw `CompileError` for a located compile
 error and `compiler.core.InternalError` for any other failure.
 
-On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
-creates `src/Main.hx` and a `haxeon.toml` like this:
-
-```toml
-version = 1
-entry = "Main"
-sources = ["src/Main.hx"]
-sourceRoots = ["src"]
-target = "host"
-defines = []
-outputDir = "build"
-
-[package]
-name = "my-app"
-```
-
-`haxeon init --target android` also adds Android settings to the manifest:
-
-```toml
-[android]
-applicationId = "org.haxeon.android"
-label = "Haxeon"
-```
+On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. Create a program
+with `haxeon create my_tool --template console`, or an Android app with
+`haxeon create my_app --platforms android`.
 
 A project may keep a `haxeon.json` instead, with the same keys ([MANIFEST.md](MANIFEST.md) lists them and shows both
 forms); every command reads either, and a directory with both is a usage error that names both. `haxeon migrate`
@@ -244,16 +221,14 @@ rewrites a project's `haxeon.json` as `haxeon.toml`: it checks that the TOML rea
 removes the JSON file. `haxeon migrate --dry-run` prints the TOML instead and changes nothing; `--project PATH` names
 another project.
 
-Paths in the project file are relative to that file. Host builds go to
-`build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`; Android
-builds go to `build/android/app-debug.apk`, packaged by Gradle from the module
-the build compiles to `build/android-arm64/app.hl` (see
-[ANDROID.md](ANDROID.md)). Android projects require a
-top-level `main():Void` entry function and an installed Android SDK/NDK. Use
-`--device SERIAL` with `run --target android` when more than one device is
-connected. Android builds use the pinned `vendor/libffi` submodule, which is
-initialized by `scripts/bootstrap-tools.sh` or with
-`git submodule update --init vendor/libffi`. Use
+Paths in the project file are relative to that file. Console host builds go to
+`build/host/main.hl`. Web app bundles go to `build/web/wasm32/` or
+`build/web/wasm-gc/`, ready to serve over HTTP. Console Wasm builds write just
+the module in `build/wasm32/` or `build/wasm-gc/`.
+Android builds package `build/android/app-debug.apk` through the app's Gradle
+runner. Use `--gradle-inputs FILE` to prepare a standalone Gradle build and
+`--device SERIAL` when running on one of several connected devices. See
+[Android](ANDROID.md) for prerequisites and live editing. Use
 `--project path/to/haxeon.toml` (or the project's directory) to select another project, repeat
 `--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
 running program after `--`:
@@ -563,14 +538,11 @@ is translated to a normal Haxeon manifest. Haxeon does not read global
 `haxelib dev` state or execute `extraParams`, macros, or HXML compiler settings;
 unsupported settings fail with an explicit import diagnostic.
 
-Android builds resolve the same package graph, compile `native.sources` with the
-Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
-under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
-rebuilt and repackaged when its C sources change; Haxe-only edits continue to
-use the Android HLB asset path.
+Android app runners build native CMake packages with Gradle's NDK toolchain once per ABI.
+The APK contains the resulting libraries, the generated Haxe assets and the SDK host.
 
 The `doctor` command checks Haxeon's own installation (the compiler, the HashLink runtime), the C and C++ toolchain
-that an app, a package with C or C++ code and a build ahead of time need, and in a checkout the Android SDK tools. It
+that an app, a package with C or C++ code and a build ahead of time need, and the Android SDK tools. It
 prints one `ok:` or `missing:` line for each. The toolchain is looked up as the builds find it: on Linux and macOS the
 C and C++ compilers (`CC` and `CXX`, else `cc` and `c++`, `gcc` and `g++` or `clang` and `clang++`), on macOS the Xcode
 command line tools first, on Windows MSVC through `vswhere` (Visual Studio or its Build Tools with the C++ tools); then
@@ -579,7 +551,7 @@ OpenGL and Fontconfig, which the UI package's window needs. When a tool is missi
 the toolchain on this system (`apt-get` on Debian and Ubuntu, `dnf` on Fedora, `xcode-select --install` and Homebrew on
 macOS, `winget` on Windows). It exits with 1 only when Haxeon's own installation is incomplete: a program builds without
 the toolchain. `platforms` lists the targets with the backend each builds, and `devices` reports connected
-Android devices. Wasm32 is build-only; host output runs through HashLink on the
+Android devices. Serve web bundles over HTTP to run them in a browser. Host output runs through HashLink on the
 current machine.
 
 ## Checking, testing and cleaning
@@ -673,7 +645,7 @@ the module, copied to the `--hl` path. A compilation's cache is removed after 30
 Two names describe a build, and Haxeon keeps them apart:
 
 - The **target** (`--target`, `target` in `haxeon.toml`, `compatibility.targets` and `native.targets`) says where the
-  program runs: `host` (this machine, the default), `android` (`android-arm64`), `wasm32`, or an explicit
+  program runs: `host` (this machine, the default), `android` (`android-arm64`), `wasm32`, `wasm-gc`, or an explicit
   `OS-ARCH[-ABI]` such as `linux-x86_64`, `macos-arm64` or `windows-x86_64-msvc`. Architectures are spelled `x86_64` and
   `arm64`; `aarch64`, `amd64` and `x64` are read too, and `wasm32-wasi` is `wasm32`. `haxeon platforms` lists them with this
   machine's name.
@@ -682,7 +654,7 @@ Two names describe a build, and Haxeon keeps them apart:
   with linear memory) or `wasm-gc` (WebAssembly GC). The compiler takes it as `--target=NAME`, which is Haxe's sense of
   "target"; the project build passes it.
 
-The target chooses the backend: `host`, `android` and the other native targets build `hl`, and `wasm32` builds `wasm32`.
+The target chooses the backend: `host`, `android` and the other native targets build `hl`, and each Wasm target selects its corresponding backend.
 An app's release build (`--build-mode=release`) builds `hlc`, which its runner compiles into the executable. Otherwise
 `hlc` and `wasm-gc` are reached by calling the compiler directly; `--target=hlc` writes the C to `OUTPUT.c/` and does
 not compile it. A CMake project builds it with the SDK's CMake package: after `find_package(Haxeon)`,

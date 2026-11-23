@@ -4,7 +4,7 @@ Status: steps 1 to 3 are built: `haxeon create` writes `linux/`, `macos/` or `wi
 and builds the runner with every native package in one graph, in development or release mode, and `haxeon run` (with `--watch`,
 patching or restarting) runs the app's executable; CI creates, builds and runs the app on Linux, macOS and Windows. The SDK the
 runner links is Haxeon's SDK ([SDK_LAYOUT.md](SDK_LAYOUT.md)), found with `find_package(Haxeon)`, and the app's packages come
-from the SDK's `haxeon` registry, so a created app builds from a release as from a checkout. Steps 4 to 6 are open. How an app is built for each platform: by platform projects the
+from the SDK's `haxeon` registry, so a created app builds from a release as from a checkout. Steps 4 and 5 have runners. Android packaging and device checks need a toolchain-equipped build. Web native packages and step 6 are open. How an app is built for each platform: by platform projects the
 app owns, which `haxeon` generates once and then drives, as Flutter does, instead of builds Haxeon runs out of sight. How apps consume Haxeon (the SDK, `find_package(Haxeon)`, the `haxeon` registry) is
 [SDK_LAYOUT.md](SDK_LAYOUT.md).
 
@@ -46,23 +46,22 @@ platforms = ["linux", "android", "web"]
 
 ## Creating projects
 
-`haxeon create` makes projects and fills in what an existing one lacks; it replaces `haxeon init`, which stays one release
-as an alias that names the new spelling.
+`haxeon create` makes projects and fills in missing files.
 
 ```sh
 haxeon create my_app                                  # a new directory, template app, every platform with a runner
 haxeon create my_app --platforms linux,android,web --org com.example
 haxeon create my_tool --template console
-haxeon create . --platforms android                   # add a platform's runner to the project here
+haxeon create android_app --platforms android         # create only the Android runner
 haxeon create .                                       # restore what is missing; never overwrite
 ```
 
 - Templates: `app` (the default: a window with a counter, `[app]`, the runners, a test), `console` (a console program,
-  today's `init`), `package` (a library with a `tests/` project), and `native-package` (a package wrapping a C library: a
+  a managed entry point), `package` (a library with a `tests/` project), and `native-package` (a package wrapping a C library: a
   CMake project, a header, bindings made by `haxeon ffi import`, and a test that calls into C).
 - `--org` gives the identifier's prefix (`com.example` and the name make `com.example.my_app`); `--platforms` lists the
   runners to write, by default every one the template has (a project made on one machine builds on the others as it
-  is, as Flutter's create does; Android and the web join the default when their runners land).
+  is, as Flutter's create does; Android and web are included).
 - In an existing project `create` adds the files and the `platforms` entries that are missing and leaves every existing
   file as it is; a runner that differs from its template is reported, not replaced.
 - It prints the next commands (`cd my_app`, `haxeon run`, `haxeon run --watch`).
@@ -170,14 +169,13 @@ desktop runners link the SDK's prebuilt `libhaxeon-app`. An AAR is how Android l
 host from sources on first use would ship its sources and make the first build need the NDK and take minutes. Native code builds through `externalNativeBuild` with the same
 generated `haxeon.cmake`, once per ABI, with the NDK's CMake toolchain. The module and its live-editing files
 (`app.hl`, `.hli`, `.entry`, `.hcs`) are generated assets. The Gradle project inside the Haxeon checkout becomes the
-template for this one, and `-PhaxeonProject` goes.
+app template. The SDK builds the host AAR from `native/android` when the Android toolchain is available.
 
 ## Web runner
 
-`web/` holds `index.html`: the page, its canvas and its fonts are the app's. The loader is one for both Wasm targets,
-the host `stdlib/haxeon/wasm/haxeon-host.js` already serves `wasm32` and `wasm-gc` guests alike; the SDK ships it in
-`platforms/web/` and the page loads it, with the target the build chose. The fragment for the web
-builds native packages with Emscripten's CMake toolchain (`emcmake`), and the loader instantiates the module with them.
+`web/` owns the page, canvas and fonts. Its build stages the page, module and the SDK's `platforms/web/haxeon-host.js`
+under `build/web/<target>/`. Both Wasm targets use the same host. Apps with native packages still need an Emscripten
+graph and host integration, tracked in [TODO.md](../../TODO.md).
 
 ## Runner versions
 
@@ -190,7 +188,7 @@ runner beside the old one (`linux.new/`) for the user to merge.
 ## What this replaces and what stays
 
 - Replaced for apps: the hidden per-package native builds, the AOT driver's compile and link, the shared Android Gradle
-  project, and the packages' own web scripts. Replaced for everyone: `haxeon init`, by `haxeon create`.
+  project, and the packages' own web scripts. Project creation uses `haxeon create`.
 - Not needed: a build-system feature for native packages to find each other through install prefixes; one CMake graph
   gives it.
 - Stays: the compiler, the compile server and live editing; the shared native cache for programs that are not apps;
@@ -204,7 +202,6 @@ runner beside the old one (`linux.new/`) for the user to merge.
    and with `haxeon build`, runs, and edits live.
 2. Release builds through the runner (`--target hlc` sources in CMake). Done.
 3. The Windows and macOS runners, checked by CI. Done.
-4. The Android runner per app, replacing the shared Gradle project.
-5. The web runner.
-6. Runner versions and `--fresh-runner`; the `package` and `native-package` templates; `[android]`'s app fields moved to
-   `[app]`.
+4. The Android runner per app, replacing the shared Gradle project. Implemented.
+5. The web runner for managed apps. Implemented.
+6. Runner versions and `--fresh-runner`; the `package` and `native-package` templates.
