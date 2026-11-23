@@ -32,6 +32,39 @@ makes from the same sources, and its work is proportional to the edit.
 A failed or rejected build leaves every cache as the last successful build left it: a build works on a copy of the
 `SessionState` it started from.
 
+## Typing: recorded reads
+
+A typed unit (a function body, a field initializer `Class.__init.x`, a shared unit: a specialization or an inline constant) is
+typed again exactly when something it read changed. The typer records what each unit reads; nothing is inferred from syntax,
+and no edge between declarations is kept by hand.
+
+- **Facts.** What a unit can read is a fact: an aspect of a declaration or of the program, by name
+  (`DeclarationFacts`). The aspects are a function's signature and its body, a type's shape (what a reference to it means:
+  kind, type parameters and constraints, base and interfaces, metadata, and for a value type its fields), a class's members,
+  a field's initializer, a callee's purity and never-returns answers, a source file's snapshot (a default argument copied
+  from it), and a unit (what a unit read, for the units whose result others take: an inferred declaration, a
+  specialization, an inline constant).
+- **Prints.** Each fact has a print, a digest of what a reader sees: made from the canonical declaration, where names are
+  resolved, with positions as lines. A body's print also takes the names its canonicalization resolved, so a declaration
+  added elsewhere that changes what a name means changes the print. A fact also names the facts its meaning goes through
+  (the shapes a signature names, the reads of an inferred declaration's unit), so a typedef edit reaches the readers of
+  every signature naming it without the signature's text changing.
+- **Revisions.** Every build has a revision. A fact keeps the revision its print last changed at; a unit keeps the
+  revision it was typed at and the facts it read. A unit is current while no fact it read, or that one of those names,
+  changed after it was typed: invalidation checks each unit's reads, memoized per fact for the build, and keeps no reverse
+  index to rebuild. Prints are made again only for the modules whose canonical declarations were made again.
+- **Where reads are recorded.** At the typer's lookups: the declaration tables (`DeclarationIndex`, the signature tables),
+  name resolution, the declaration types (`DeclarationTypes`), purity and never-returns answers, inline constants and
+  default arguments. A cached answer is recorded on every use, not only when it is computed. A read outside a unit (program
+  set-up) records nothing.
+- **Coarse rule, as reads.** An inferred declaration's signature names its own unit, so a reader is typed again when
+  anything the declaration read changed (`LAZY_DECLARATION_TYPING.md`, "Coarse rule first"). A caller of a generic
+  function reads the specialization's unit, so it is typed again, and requests the specialization again, when the generic
+  body or anything the specialization read changed.
+- **Soundness.** A missing read keeps a stale body: `--check-reuse` and the edit replay (`tests/integration/test-edit-replay.py`)
+  are the checks. A failed build may move a print, never a unit's record; prints only move forward, so the units typed
+  before it are typed again.
+
 ## Rules
 
 - A shared generated artifact's attributes are a function of its subject, never of the code that asked for it.
