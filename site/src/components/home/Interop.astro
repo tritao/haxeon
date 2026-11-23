@@ -1,5 +1,41 @@
 ---
+import { Code } from '@astrojs/starlight/components';
 import { docsUrl } from '../../../docs.mjs';
+const header = `typedef struct geo_point {
+  double x;
+  double y;
+} geo_point;
+
+/* The distance between two points. */
+double geo_distance(const geo_point *a,
+                    const geo_point *b);
+
+/* Moves point by (dx, dy) in place. */
+void geo_translate(geo_point *point,
+                   double dx, double dy);`;
+const binding = `interface Geometry @target("x86_64-linux-gnu") @library("geometry") {
+  extern fn geo_distance(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;
+  extern fn geo_translate(point: ptr<geo_point>, dx: f64, dy: f64) -> void;
+  struct geo_point @layout(16, 8) {
+    x: f64 @offset(0);
+    y: f64 @offset(8);
+  }
+}`;
+const code = `import Geometry;
+
+function main() {
+	var origin = new Point();
+	var corner = new Point();
+	corner.x = 3.0;
+	corner.y = 4.0;
+	var d = Geometry.distance(origin, corner);
+	Sys.println('distance: $d');
+
+	Geometry.translate(corner, 1.0, 1.0);
+	Sys.println('moved to: \${corner.x}, \${corner.y}');
+}`;
+const output = `distance: 5
+moved to: 4, 5`;
 ---
 
 <section id="interop">
@@ -12,54 +48,20 @@ import { docsUrl } from '../../../docs.mjs';
         library owns close exactly once.
       </p>
     </div>
-    <div class="trio">
+    <div class="trio" data-example="geometry">
       <div>
-        <h3>geometry.h</h3><div class="term">
-          <pre><code><span class="cl" style="--hang:4"><span class="k">typedef struct</span> geo_point &#123;</span>
-<span class="cl" style="--hang:6">	<span class="k">double</span> x;</span>
-<span class="cl" style="--hang:6">	<span class="k">double</span> y;</span>
-<span class="cl" style="--hang:4">&#125; geo_point;</span>
-<span class="cl" style="--hang:4"> </span>
-<span class="cl" style="--hang:4"><span class="c">/* The distance between two points. */</span></span>
-<span class="cl" style="--hang:4"><span class="k">double</span> geo_distance(<span class="k">const</span> geo_point *a,</span>
-<span class="cl" style="--hang:4">                    <span class="k">const</span> geo_point *b);</span>
-<span class="cl" style="--hang:4"> </span>
-<span class="cl" style="--hang:4"><span class="c">/* Moves point by (dx, dy) in place. */</span></span>
-<span class="cl" style="--hang:4"><span class="k">void</span> geo_translate(geo_point *point,</span>
-<span class="cl" style="--hang:4">                   <span class="k">double</span> dx, <span class="k">double</span> dy);</span></code></pre>
-        </div>
+        <h3>geometry.h</h3>
+        <div class="term"><Code code={header} lang="c" frame="none" /></div>
       </div>
       <div>
-        <h3>Generated geometry.hxi</h3><div class="term">
-          <pre><code><span class="k">interface</span> Geometry @target(<span class="s">"x86_64-linux-gnu"</span>) @library(<span class="s">"geometry"</span>) &#123;
-  <span class="k">extern fn</span> geo_distance(a: ptr&lt;const&lt;geo_point&gt;&gt;,
-                         b: ptr&lt;const&lt;geo_point&gt;&gt;) -> f64;
-  <span class="k">struct</span> geo_point @layout(16, 8) &#123;
-    x: f64 @offset(0);
-    y: f64 @offset(8);
-  &#125;
-&#125;</code></pre>
-        </div>
+        <h3>Generated geometry.hxi</h3>
+        <div class="term"><Code code={binding} lang="hxi" frame="none" /></div>
       </div>
       <div>
-        <h3>Main.hx</h3><div class="term">
-          <pre><code><span class="cl" style="--hang:4"><span class="k">import</span> Geometry;</span>
-<span class="cl" style="--hang:4"> </span>
-<span class="cl" style="--hang:4"><span class="k">function</span> main() &#123;</span>
-<span class="cl" style="--hang:6">	<span class="k">var</span> origin = <span class="k">new</span> Point();</span>
-<span class="cl" style="--hang:6">	<span class="k">var</span> corner = <span class="k">new</span> Point();</span>
-<span class="cl" style="--hang:6">	corner.x = 3.0;</span>
-<span class="cl" style="--hang:6">	corner.y = 4.0;</span>
-<span class="cl" style="--hang:6">	<span class="k">var</span> d = Geometry.distance(origin, corner);</span>
-<span class="cl" style="--hang:6">	Sys.println(<span class="s">'distance: $d'</span>);</span>
-<span class="cl" style="--hang:4"> </span>
-<span class="cl" style="--hang:6">	Geometry.translate(corner, 1.0, 1.0);</span>
-<span class="cl" style="--hang:6">	Sys.println(<span class="s">'moved to: $&#123;corner.x&#125;, $&#123;corner.y&#125;'</span>);</span>
-<span class="cl" style="--hang:4">&#125;</span></code></pre><pre
-            class="out"
-            aria-label="Output"><span class="p">$ haxeon run</span>
-distance: 5
-moved to: 4, 5</pre>
+        <h3>Main.hx</h3>
+        <div class="term">
+          <Code code={code} lang="haxe" frame="none" />
+          <pre class="out" aria-label="Program output"><span class="p" data-prompt>$ haxeon run{'\n'}</span>{output}</pre>
         </div>
       </div>
     </div>

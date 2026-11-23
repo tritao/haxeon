@@ -1,5 +1,5 @@
 ---
-import CodeLines from './CodeLines.astro';
+import { Code } from '@astrojs/starlight/components';
 
 interface Props {
   name: string;
@@ -9,13 +9,12 @@ interface Props {
 }
 
 const { name, code, output, command } = Astro.props;
-const lines = code.split('\n').map((text) => ({ text }));
 const prompt = `$ ${command}\n`;
 ---
 
 <div class="term" data-example={name}>
   {command && <div class="bar">{name}.hx</div>}
-  <pre aria-label="Haxeon source"><code><CodeLines lines={lines} /></code></pre>
+  <Code code={code} lang="haxe" frame="none" />
   <pre
     class="out"
     aria-label="Program output">{command && <span class="p" data-prompt>{prompt}</span>}{output}</pre>

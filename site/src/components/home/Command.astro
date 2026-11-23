@@ -1,4 +1,6 @@
 ---
+import { Code } from '@astrojs/starlight/components';
+
 interface Props {
   command: string;
 }
@@ -6,7 +8,7 @@ const { command } = Astro.props;
 ---
 
 <copy-command class="cmd sh">
-  <code>{command}</code>
+  <Code code={command} lang="bash" frame="none" hangingIndent={2} />
   <button type="button" class="copy" aria-label={`Copy ${command}`}>Copy</button>
   <span class="sr-only" role="status"></span>
 </copy-command>
@@ -14,8 +16,8 @@ const { command } = Astro.props;
 <script>
   class CopyCommand extends HTMLElement {
     connectedCallback() {
-      const code = this.querySelector('code')!;
-      const button = this.querySelector('button')!;
+      const code = this.querySelector('code .ec-line .code')!;
+      const button = this.querySelector<HTMLButtonElement>(':scope > .copy')!;
       const status = this.querySelector('[role="status"]')!;
       let timeout: ReturnType<typeof setTimeout>;
       button.addEventListener('click', async () => {

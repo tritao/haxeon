@@ -103,7 +103,7 @@ body {
 a {
   color: var(--indigo);
 }
-.wrap {
+div.wrap {
   max-width: 1200px;
   margin-inline: auto;
   padding-left: max(var(--space-4), env(safe-area-inset-left, 0px));
@@ -221,7 +221,7 @@ main > section + section {
 main > .hero {
   padding-block: 64px var(--space-8);
 }
-.hero .wrap {
+.hero div.wrap {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
   gap: var(--space-7);
@@ -259,7 +259,7 @@ main > .hero {
   font: 0.75rem var(--mono);
   color: var(--code-comment);
 }
-.term pre {
+.term .out {
   margin: 0;
   padding: var(--space-4) 18px;
   font-size: 0.86rem;
@@ -267,17 +267,6 @@ main > .hero {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   tab-size: 2;
-}
-.k {
-  color: var(--code-keyword);
-}
-.s {
-  color: var(--code-string);
-}
-.c {
-  color: var(--code-comment);
-}
-.term .out {
   border-top: 1px dashed #ffffff22;
   color: var(--code-fg);
 }
@@ -298,13 +287,13 @@ main > .hero {
 .demo > * {
   min-width: 0;
 }
-.demo .code {
+.demo .editor {
   background: var(--code-bg);
   color: var(--code-fg);
   display: flex;
   flex-direction: column;
 }
-.demo .code .bar {
+.demo .editor .bar {
   padding: 10px 14px;
   font: 0.75rem var(--mono);
   color: var(--code-comment);
@@ -314,29 +303,12 @@ main > .hero {
   gap: var(--space-2);
   flex-wrap: wrap;
 }
-.demo .code pre {
-  margin: 0;
-  padding: 14px 0;
-  font-size: 0.82rem;
-  line-height: 1.7;
-  flex: 1;
-  tab-size: 2;
+.demo .expressive-code {
+  --ec-codeFontSize: 0.82rem;
+  --ec-codeLineHt: 1.7;
+  --ec-codePadBlk: 14px;
 }
-.demo .code pre .cl {
-  display: block;
-  padding-right: 14px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.cl {
-  display: block;
-}
-.demo .code pre span.add {
-  background: color-mix(in srgb, var(--live) 22%, var(--code-bg));
-  box-shadow: inset 3px 0 0 var(--live);
-}
-.demo .code pre span.del {
-  color: var(--code-comment);
+.demo .ec-line.del .code {
   text-decoration: line-through;
 }
 .demo .app {
@@ -559,7 +531,10 @@ main > .hero {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
 }
-.trio .term pre {
+.trio .term {
+  --ec-codeFontSize: 0.78rem;
+}
+.trio .term .out {
   font-size: 0.78rem;
 }
 .trio h3 {
@@ -598,20 +573,27 @@ main > .hero {
   margin-top: var(--space-6);
 }
 .cmd.sh {
+  background: var(--code-bg);
   display: flex;
   align-items: center;
   gap: var(--space-2);
 }
-.cmd.sh code {
+.cmd.sh .expressive-code {
   flex: 1;
   min-width: 0;
-  font-size: inherit;
+  --ec-codePadBlk: 0;
+  --ec-codePadInl: 0;
+  --ec-codeFontSize: 0.82rem;
+  --ec-codeLineHt: normal;
 }
-.cmd.sh code::before {
+.cmd.sh .expressive-code pre {
+  background: transparent;
+}
+.cmd.sh .ec-line .code::before {
   content: '$ ';
-  color: var(--slate);
+  color: var(--code-comment);
 }
-.copy {
+.cmd.sh > .copy {
   flex: none;
   font: 600 0.72rem var(--mono);
   color: var(--slate);
@@ -622,16 +604,16 @@ main > .hero {
   cursor: pointer;
   opacity: 0;
 }
-.cmd.sh:hover .copy,
-.copy:focus-visible {
+.cmd.sh:hover > .copy,
+.cmd.sh > .copy:focus-visible {
   opacity: 1;
 }
 @media (hover: none) {
-  .copy {
+  .cmd.sh > .copy {
     opacity: 1;
   }
 }
-.copy.done {
+.cmd.sh > .copy.done {
   color: var(--live);
   border-color: var(--live);
 }
@@ -771,7 +753,7 @@ footer {
   color: var(--slate);
   font-size: 0.9rem;
 }
-footer .wrap {
+footer div.wrap {
   display: grid;
   grid-template-columns: 2fr 1fr 1fr 1fr;
   gap: 24px;
@@ -789,7 +771,7 @@ footer h2 {
 }
 
 @media (max-width: 900px) {
-  .hero .wrap,
+  .hero div.wrap,
   .demo,
   .show,
   .trio {
@@ -806,7 +788,7 @@ footer h2 {
   .start ol {
     grid-template-columns: 1fr;
   }
-  footer .wrap {
+  footer div.wrap {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -875,14 +857,6 @@ starlight-theme-select svg {
 .tabs {
   align-content: start;
 }
-.cl,
-.demo .code pre .cl {
-  padding-inline-start: calc(var(--hang) * 1ch);
-  text-indent: calc(var(--hang) * -1ch);
-}
-.demo .code pre .cl {
-  padding-inline-start: calc(var(--space-4) + var(--hang) * 1ch);
-}
 .tasks {
   display: grid;
   gap: var(--space-2);
@@ -946,11 +920,19 @@ footer a:hover {
   width: 100%;
   cursor: pointer;
 }
-/* Line spans carry their own breaks; plain blocks keep their whitespace. */
-.term pre > code:has(> .cl),
-.demo .code pre > code:has(> .cl) {
-  white-space: normal;
+.term,
+.demo {
+  --ec-codeFontSize: 0.86rem;
+  --ec-codeLineHt: 1.65;
+  --ec-codePadBlk: var(--space-4);
+  --ec-codePadInl: 18px;
 }
-.term pre .cl {
-  white-space: pre-wrap;
+.term .expressive-code pre,
+.demo .expressive-code pre,
+.cmd.sh .expressive-code pre {
+  border: 0;
+  border-radius: 0;
+}
+:is(.term, .demo, .cmd.sh) .expressive-code .copy {
+  display: none;
 }

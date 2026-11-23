@@ -147,7 +147,7 @@ projections = ["ffi/geometry.hxmap"]
 The build runs the import whenever the recipe or the headers change. The result is plain text, so you can read what the
 importer understood: it is at `build/host/native/geometry-demo/ffi/geometry/geometry.hxi`.
 
-```text
+```hxi
 interface Geometry @target("x86_64-linux-gnu") @library("geometry") {
 	extern fn geo_distance(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;
 	extern fn geo_path_add(path: geo_path, point: ptr<const<geo_point>>) -> void;

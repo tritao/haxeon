@@ -1,5 +1,5 @@
 ---
-import CodeLines from './CodeLines.astro';
+import { Code } from '@astrojs/starlight/components';
 
 const tasks = [
   { title: 'Buy milk', done: true },
@@ -23,20 +23,23 @@ const diff = [
 ---
 
 <live-edit-demo class="demo">
-  <div class="code">
+  <div class="editor">
     <div class="bar"><span>src/App.hx</span><span data-version>version 1</span></div>
     {
-      [1, 2].map((version) => (
-        <pre data-code={version} hidden={version !== 1}>
-          <code>
-            <CodeLines
-              lines={diff
-                .filter(([change]) => version === 2 || change !== 'add')
-                .map(([change, text]) => ({ text, change: version === 2 ? change : undefined }))}
+      [1, 2].map((version) => {
+        const lines = diff.filter(([change]) => version === 2 || change !== 'add');
+        return (
+          <div data-code={version} hidden={version !== 1}>
+            <Code
+              code={lines.map(([, text]) => text).join('\n')}
+              lang="haxe"
+              frame="none"
+              ins={version === 2 ? lines.flatMap(([change], i) => change === 'add' ? [i + 1] : []) : []}
+              del={version === 2 ? lines.flatMap(([change], i) => change === 'del' ? [i + 1] : []) : []}
             />
-          </code>
-        </pre>
-      ))
+          </div>
+        );
+      })
     }
   </div>
   <div class="app">

@@ -30,4 +30,7 @@ jobs:
       - run: nice -n 10 npm ci
       - run: nice -n 10 npm run build
       - run: nice -n 10 npm run check:links
+      - run: nice -n 10 scripts/build-native.sh
+        working-directory: .
+      - run: nice -n 10 npm run check:grammars
       - run: nice -n 10 npm run check:examples

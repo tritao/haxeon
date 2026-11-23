@@ -1,0 +1,115 @@
+{
+  "name": "hxi",
+  "scopeName": "source.haxeon.hxi",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#double-string"
+    },
+    {
+      "include": "#attributes"
+    },
+    {
+      "include": "#declaration-names"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.documentation.hxi",
+          "begin": "/\\*\\*(?!/)",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.block.hxi",
+          "begin": "/\\*",
+          "end": "\\*/"
+        },
+        {
+          "name": "comment.line.double-slash.hxi",
+          "match": "//.*"
+        }
+      ]
+    },
+    "double-string": {
+      "name": "string.quoted.double.hxi",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "name": "constant.character.escape.hxi",
+      "match": "\\\\."
+    },
+    "attributes": {
+      "name": "storage.type.annotation.hxi",
+      "match": "@\\s*[A-Za-z_]\\w*"
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "storage.type.hxi",
+          "match": "\\b(?:interface|opaque|type|handle|const|struct|enum|flags|callback|fn)\\b"
+        },
+        {
+          "name": "storage.modifier.hxi",
+          "match": "\\b(?:extern)\\b"
+        },
+        {
+          "name": "storage.type.qualifier.hxi",
+          "match": "\\b(?:ptr|nullable|array)\\b(?=\\s*<)"
+        }
+      ]
+    },
+    "declaration-names": {
+      "patterns": [
+        {
+          "name": "entity.name.type.hxi",
+          "match": "(?<=\\b(?:interface|opaque|type|handle|struct|enum|flags|callback))[ \\t]+[A-Za-z_]\\w*"
+        },
+        {
+          "name": "entity.name.function.hxi",
+          "match": "(?<=\\bfn)[ \\t]+[A-Za-z_]\\w*"
+        }
+      ]
+    },
+    "types": {
+      "name": "support.type.primitive.hxi",
+      "match": "\\b(?:void|i8|u8|i16|u16|i32|u32|i64|u64|bool32|isize|usize|f32|f64|utf8|c_char|c_schar|c_uchar|c_bool|c_short|c_ushort|c_int|c_uint|c_long|c_ulong|c_long_long|c_ulong_long|c_wchar|c_size)\\b"
+    },
+    "numbers": {
+      "name": "constant.numeric.hxi",
+      "match": "(?<!\\w)-?(?:0[xX][0-9A-Fa-f]+|[0-9]+)\\b"
+    },
+    "operators": {
+      "name": "keyword.operator.hxi",
+      "match": "->|<<|>>(?=\\s*-?\\d)|[=|]"
+    },
+    "punctuation": {
+      "name": "punctuation.separator.hxi",
+      "match": "[,:;(){}<>]"
+    }
+  }
+}

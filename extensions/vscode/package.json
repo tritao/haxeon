@@ -20,6 +20,11 @@
         "aliases": ["Haxe", "haxe"],
         "extensions": [".hx"],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "hxi",
+        "aliases": ["Haxeon Interface", "hxi"],
+        "extensions": [".hxi"]
       }
     ],
     "grammars": [
@@ -27,6 +32,11 @@
         "language": "haxe",
         "scopeName": "source.haxeon.hx",
         "path": "./syntaxes/haxe.tmLanguage.json"
+      },
+      {
+        "language": "hxi",
+        "scopeName": "source.haxeon.hxi",
+        "path": "./syntaxes/hxi.tmLanguage.json"
       }
     ],
     "commands": [

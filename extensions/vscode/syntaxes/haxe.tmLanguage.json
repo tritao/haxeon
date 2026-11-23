@@ -1,25 +1,56 @@
 {
-  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
-  "name": "Haxe",
+  "name": "haxe",
   "scopeName": "source.haxeon.hx",
   "patterns": [
-    {"include": "#comments"},
-    {"include": "#preprocessor"},
-    {"include": "#metadata"},
-    {"include": "#strings"},
-    {"include": "#numbers"},
-    {"include": "#declarations"},
-    {"include": "#keywords"},
-    {"include": "#constants"},
-    {"include": "#types"},
-    {"include": "#operators"}
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#directives"
+    },
+    {
+      "include": "#metadata"
+    },
+    {
+      "include": "#double-string"
+    },
+    {
+      "include": "#single-string"
+    },
+    {
+      "include": "#regex"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#properties"
+    },
+    {
+      "include": "#declaration-names"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#contextual-keywords"
+    },
+    {
+      "include": "#block"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    }
   ],
   "repository": {
     "comments": {
       "patterns": [
         {
           "name": "comment.block.documentation.haxe",
-          "begin": "/\\*\\*",
+          "begin": "/\\*\\*(?!/)",
           "end": "\\*/"
         },
         {
@@ -29,98 +60,221 @@
         },
         {
           "name": "comment.line.double-slash.haxe",
-          "begin": "//",
-          "end": "$"
+          "match": "//.*"
+        },
+        {
+          "name": "comment.line.shebang.haxe",
+          "match": "\\A#!.*"
         }
       ]
     },
-    "preprocessor": {
-      "name": "meta.preprocessor.haxe",
-      "match": "^\\s*(#(?:if|elseif|else|end|error|line))\\b.*$",
-      "captures": {"1": {"name": "keyword.control.directive.haxe"}}
+    "double-string": {
+      "name": "string.quoted.double.haxe",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "include": "#escape"
+        }
+      ]
+    },
+    "escape": {
+      "name": "constant.character.escape.haxe",
+      "match": "\\\\."
+    },
+    "directives": {
+      "name": "keyword.control.directive.haxe",
+      "match": "#(?:if|elseif|else|end|error)\\b"
     },
     "metadata": {
       "name": "storage.type.annotation.haxe",
-      "match": "@(?::)?[A-Za-z_][A-Za-z0-9_.]*"
+      "match": "@:\\s*[A-Za-z_]\\w*(?:\\s*\\.\\s*[A-Za-z_]\\w*)*"
     },
-    "strings": {
+    "single-string": {
+      "name": "string.quoted.single.haxe",
+      "begin": "'",
+      "end": "'",
       "patterns": [
         {
-          "name": "string.quoted.double.haxe",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {"name": "constant.character.escape.haxe", "match": "\\\\."},
-            {"name": "variable.other.readwrite.haxe", "match": "\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{"}
-          ]
+          "include": "#escape"
         },
         {
-          "name": "string.quoted.single.haxe",
-          "begin": "'",
-          "end": "'",
+          "name": "constant.character.escape.haxe",
+          "match": "\\$\\$"
+        },
+        {
+          "name": "meta.interpolation.haxe",
+          "begin": "\\$\\{",
+          "end": "\\}",
           "patterns": [
-            {"name": "constant.character.escape.haxe", "match": "\\\\."},
-            {"name": "variable.other.readwrite.haxe", "match": "\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{"}
+            {
+              "include": "$self"
+            }
+          ],
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.begin.haxe"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.section.interpolation.end.haxe"
+            }
+          }
+        },
+        {
+          "name": "variable.other.interpolation.haxe",
+          "match": "\\$[A-Za-z_]\\w*"
+        }
+      ]
+    },
+    "regex": {
+      "name": "string.regexp.haxe",
+      "begin": "~/",
+      "end": "/[A-Za-z_0-9]*",
+      "patterns": [
+        {
+          "include": "#escape"
+        },
+        {
+          "name": "constant.other.character-class.regexp.haxe",
+          "begin": "\\[",
+          "end": "\\]",
+          "patterns": [
+            {
+              "include": "#escape"
+            }
           ]
         }
       ]
     },
     "numbers": {
       "name": "constant.numeric.haxe",
-      "match": "\\b(?:0[xX][0-9A-Fa-f]+|0[bB][01]+|(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?)\\b"
-    },
-    "declarations": {
-      "patterns": [
-        {
-          "match": "\\b(class|interface|enum|abstract|typedef)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-          "captures": {
-            "1": {"name": "storage.type.haxe"},
-            "2": {"name": "entity.name.type.haxe"}
-          }
-        },
-        {
-          "match": "\\b(function)\\s+([A-Za-z_][A-Za-z0-9_]*)",
-          "captures": {
-            "1": {"name": "storage.type.function.haxe"},
-            "2": {"name": "entity.name.function.haxe"}
-          }
-        },
-        {
-          "match": "\\b(package|import|using)\\s+([A-Za-z_][A-Za-z0-9_.]*)",
-          "captures": {
-            "1": {"name": "keyword.control.import.haxe"},
-            "2": {"name": "entity.name.namespace.haxe"}
-          }
-        }
-      ]
+      "match": "\\b(?:0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*|[0-9](?:_?[0-9])*(?:\\.[0-9](?:_?[0-9])*)?(?:[eE][+-]?[0-9](?:_?[0-9])*)?)\\b"
     },
     "keywords": {
       "patterns": [
         {
           "name": "keyword.control.haxe",
-          "match": "\\b(?:break|case|catch|continue|default|do|else|for|if|return|switch|throw|try|while)\\b"
+          "match": "\\b(?:break|case|catch|continue|default|defer|do|else|for|if|return|switch|throw|try|while)\\b"
+        },
+        {
+          "name": "keyword.control.import.haxe",
+          "match": "\\b(?:import|package)\\b"
+        },
+        {
+          "name": "storage.type.haxe",
+          "match": "\\b(?:class|enum|function|interface|struct|typedef|var)\\b"
         },
         {
           "name": "storage.modifier.haxe",
-          "match": "\\b(?:extern|final|inline|macro|override|private|public|static|dynamic)\\b"
+          "match": "\\b(?:final|inline|private|public|static)\\b"
         },
         {
           "name": "keyword.other.haxe",
-          "match": "\\b(?:cast|extends|from|implements|in|is|new|operator|overload|this|to|untyped|var)\\b"
+          "match": "\\b(?:extends|implements|in|new|this)\\b"
+        },
+        {
+          "name": "constant.language.haxe",
+          "match": "\\b(?:false|true)\\b"
+        },
+        {
+          "name": "support.type.primitive.haxe",
+          "match": "\\b(?:Bool|Float|Int|String|Void)\\b"
         }
       ]
     },
-    "constants": {
-      "name": "constant.language.haxe",
-      "match": "\\b(?:true|false|null)\\b"
+    "contextual-keywords": {
+      "patterns": [
+        {
+          "name": "storage.type.haxe",
+          "match": "\\b(?:abstract)\\b"
+        },
+        {
+          "name": "storage.modifier.haxe",
+          "match": "\\b(?:extern|macro|override)\\b"
+        },
+        {
+          "name": "storage.modifier.haxe",
+          "match": "\\b(?:scoped)\\b(?=(?:\\s|/\\*.*?\\*/)+var\\b)"
+        },
+        {
+          "name": "keyword.control.import.haxe",
+          "match": "\\b(?:using)\\b(?=\\s+[A-Za-z_]\\w*)"
+        },
+        {
+          "name": "keyword.other.haxe",
+          "match": "\\b(?:as|from|to|cast)\\b"
+        },
+        {
+          "name": "keyword.other.haxe",
+          "match": "\\b(?:alignof|offsetof|sizeof|typeInfo)\\b(?=\\s*<)"
+        },
+        {
+          "name": "constant.language.haxe",
+          "match": "\\b(?:null)\\b"
+        }
+      ]
     },
-    "types": {
-      "name": "support.type.primitive.haxe",
-      "match": "\\b(?:Any|Array|Bool|Class|Date|Dynamic|Enum|Float|Int|Int64|Iterator|Map|Null|String|UInt|Void)\\b"
+    "properties": {
+      "name": "meta.property.haxe",
+      "begin": "(?<=\\bvar)[ \\t]+[A-Za-z_]\\w*\\s*\\(",
+      "end": "\\)",
+      "patterns": [
+        {
+          "name": "storage.modifier.haxe",
+          "match": "\\b(?:dynamic|get|never|set)\\b"
+        },
+        {
+          "include": "#keywords"
+        },
+        {
+          "include": "#contextual-keywords"
+        },
+        {
+          "include": "#comments"
+        }
+      ]
+    },
+    "declaration-names": {
+      "patterns": [
+        {
+          "name": "entity.name.type.haxe",
+          "match": "(?<=\\b(?:abstract|class|enum|interface|struct|typedef))[ \\t]+(?!abstract\\b)[A-Za-z_]\\w*"
+        },
+        {
+          "name": "entity.name.function.haxe",
+          "match": "(?<=\\bfunction)[ \\t]+(?!new\\b)[A-Za-z_]\\w*"
+        }
+      ]
+    },
+    "block": {
+      "name": "meta.block.haxe",
+      "begin": "\\{",
+      "end": "\\}",
+      "patterns": [
+        {
+          "include": "$self"
+        }
+      ],
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.block.begin.haxe"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.haxe"
+        }
+      }
+    },
+    "punctuation": {
+      "name": "punctuation.separator.haxe",
+      "match": "[,.():;\\[\\]]"
     },
     "operators": {
       "name": "keyword.operator.haxe",
-      "match": "(?:===|!==|>>>|>>|<<|=>|->|==|!=|<=|>=|&&|\\|\\||\\+\\+|--|\\+=|-=|\\*=|/=|%=|&=|\\|=|\\^=|\\?\\?|\\?\\.|[+*/%=&|^!<>?:~-])"
+      "match": "\\.\\.\\.|[+*/%=&|^!<>?~:-]+"
     }
   }
 }
