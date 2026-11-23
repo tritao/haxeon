@@ -9,8 +9,8 @@ In this guide you wrap a tiny C library and a small C++ class in a project and c
 project is in [examples/04-calling-c-and-cpp/geometry-demo](examples/04-calling-c-and-cpp/geometry-demo/). It builds
 and runs on Linux.
 
-You need a C and C++ compiler and CMake, as for any package with native code (`haxeon doctor` checks for them), and
-Clang as `clang` on `PATH` for the importer.
+You need the C and C++ toolchain and CMake that [Get started](00-get-started.md) installs (`haxeon doctor` checks them),
+and Clang as `clang` on `PATH` for the importer.
 
 ## The project
 

@@ -89,7 +89,8 @@ tar -xzf my_app-linux-x86_64.tar.gz
 ```
 
 The executable itself needs only the system's C library. The UI package's libraries use the desktop's own GTK 3, OpenGL
-and Fontconfig, which desktop Linux distributions install; on a minimal system, install those packages. Build on the
+and Fontconfig, which desktop Linux distributions install. The machine that builds the app needs their development
+files as well, which `haxeon doctor` checks ([Get started](00-get-started.md) installs them). Build on the
 oldest distribution you want to support: a program built against a newer C library than the one on the machine does
 not start there.
 
