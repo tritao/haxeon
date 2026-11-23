@@ -100,14 +100,13 @@ class WasmLinearDynamicArrays {
 		return result;
 	}
 
-	/** Emit every dynamic-view native the program declares. Concrete array natives must exist. */
-	public static function register(context:WasmLinearContext):Void {
-		if (!uses(context.program))
-			return;
-		var runtime = new WasmLinearDynamicArrays(context);
-		for (native in context.program.natives)
-			if (OPERATIONS.indexOf(native.name) >= 0 && !context.functions.exists(native.name))
-				context.functions.set(native.name, runtime.emit(native.name));
+	/** The dynamic-view operation `name`, or null when it is not one (WasmLinearRuntime.define). */
+	public static function define(context:WasmLinearContext, name:String):Null<Int> {
+		if (OPERATIONS.indexOf(name) < 0)
+			return null;
+		if (context.dynamicArrays == null)
+			context.dynamicArrays = new WasmLinearDynamicArrays(context);
+		return context.dynamicArrays.emit(name);
 	}
 
 	/** Element types that `__array_check_cast` and typed reference allocation receive as type values. */
@@ -164,12 +163,8 @@ class WasmLinearDynamicArrays {
 		return offset;
 	}
 
-	function concrete(name:String):Int {
-		var index = context.functions.get(name);
-		if (index == null)
-			throw new InternalError('Linear Wasm dynamic array runtime requires "$name"');
-		return index;
-	}
+	function concrete(name:String):Int
+		return context.runtimeFunction(name);
 
 	function helper(name:String, create:String->Int):Int {
 		var index = helpers.get(name);
@@ -283,18 +278,14 @@ class WasmLinearDynamicArrays {
 
 	// Runtime helper functions.
 
-	function stringConcat():Int {
-		var existing = context.functions.get("__string_concat");
-		return existing != null ? existing : helper("__haxeon_array_string_concat",
-			name -> WasmLinearRuntime.addStringConcat(module, name, context.allocatorFunction, string("null")));
-	}
+	function stringConcat():Int
+		return context.runtimeFunction("__string_concat");
 
 	function typeTest():Int
-		return helper("__haxeon_array_type_test", name -> WasmLinearRuntime.addTypeTest(module, name, program));
+		return context.runtimeFunction("__std_is_of_type");
 
 	function intToString():Int
-		return helper("__haxeon_array_i32_to_string",
-			name -> WasmLinearRuntime.addIntToString(module, name, context.allocatorFunction));
+		return context.runtimeFunction("__haxeon_i32_to_string");
 
 	/** Throw the message as a Haxe exception, or trap when the program cannot catch one. */
 	function fail():Int

@@ -24,7 +24,6 @@ import compiler.backend.wasm.WasmTarget.WasmTargetConfig;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.linear.WasmLinearAllocator;
-import compiler.backend.wasm.linear.WasmLinearArrays;
 import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearContext.WasmLinearContextState;
 import compiler.backend.wasm.linear.WasmLinearGc;
@@ -463,17 +462,15 @@ class WasmLinearModuleBuilder {
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
-		WasmLinearRuntime.register(linear);
 		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> {
 			return {
 				parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)],
 				results: WasmModuleSupport.resultTypes(fn.result)
 			};
 		});
+		// Lane storage comes first: the dynamic-view array runtime is built differently when it is linked.
 		WasmLinearValueArrays.register(linear, usedNatives);
-		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
-		WasmLinearArrays.registerNativeAllocators(linear);
-		WasmLinearDynamicArrays.register(linear);
+		WasmLinearRuntime.register(linear, usedNatives);
 		runtimeFunctionCount = module.functions.length;
 	}
 
@@ -537,21 +534,14 @@ class WasmLinearModuleBuilder {
 			var type:WasmFunctionType = {parameters: parameters, results: results};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
+		linear.functionsDeclared = true;
 		closureTypes = WasmModuleSupport.collectClosureTypes(module, program, scalarAbi);
-		var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
-		if (bytesDataPointer == null)
-			throw new InternalError("Linear Wasm bytes data pointer helper is missing");
-		var cstringCopy = functions.get("__haxeon_cstring_copy");
-		if (cstringCopy == null)
-			throw new InternalError("Linear Wasm C string copy helper is missing");
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
-			scalarAbi, functions, null, null,
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, linear, scalarAbi, null, null,
 			staticClosureDescriptors, closureAdapters);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null,
 			linearRepresentation, linearRepresentation, context -> {
-				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
-					scalarAbi, functions, context.irFunction,
-					context.allocateLocal, staticClosureDescriptors, closureAdapters);
+				var perFunction = new WasmLinearRepresentation(layout, allocator, linear, scalarAbi,
+					context.irFunction, context.allocateLocal, staticClosureDescriptors, closureAdapters);
 				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, perFunction, null);
 			});
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
@@ -572,7 +562,7 @@ class WasmLinearModuleBuilder {
 		module.exceptionTagType = exceptionTagType;
 		linear.exceptionTag = exceptionTag;
 		WasmLinearRuntime.finalizeDynamicString(linear);
-		WasmLinearGc.wrapRuntimeFunctions(linear, runtimeFunctionCount);
+		WasmLinearGc.wrapRuntimeFunctions(linear, [for (position in 0...runtimeFunctionCount) position]);
 		module.exportTable = module.tableMin != null;
 	}
 
@@ -590,6 +580,7 @@ class WasmLinearModuleBuilder {
 				staticDataAddresses,
 				runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue));
 		});
+		WasmLinearGc.wrapRuntimeFunctions(linear, linear.builtAfterDeclaration);
 		compiler.backend.wasm.WasmTypedInterfaceTables.lower(module, functions, tableSlots);
 		return metadata;
 	}

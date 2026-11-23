@@ -251,6 +251,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			}>
 		return WasmGcLocalCompaction.run(body, locals, parameters);
 
+	public function runtimeFunction(name:String):Int
+		return WasmModuleSupport.requiredFunctionIndex(gc.functions, name);
+
 	public function hasScalarCall(name:String):Bool
 		return plan.scalarSignatures.exists(name);
 

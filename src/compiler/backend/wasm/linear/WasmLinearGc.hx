@@ -25,9 +25,10 @@ class WasmLinearGc {
 		builder.emit(I32Load(WasmLayout.HEAP_STATE_HEAP_TOP));
 	}
 
-	public static function wrapRuntimeFunctions(context:WasmLinearContext, count:Int):Void {
+	/** Wraps the runtime functions at `positions` among the module's defined functions. */
+	public static function wrapRuntimeFunctions(context:WasmLinearContext, positions:Array<Int>):Void {
 		var module = context.module;
-		for (index in 0...count) {
+		for (index in positions) {
 			var fn = module.functions[index];
 			// The collector's own functions and the allocator hold no references; linked C functions are not rewritten.
 			if (fn.name == "__haxeon_gc_mark" || fn.name == "__haxeon_gc_trace" || fn.name == "__haxeon_gc_collect"

@@ -4,6 +4,8 @@ import compiler.backend.Backend.BackendOptions;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.core.InternalError;
+import compiler.ir.model.Ir.IrNative;
 import compiler.ir.model.Ir.IrProgram;
 
 /** Fully prepared module state used while generating Linear32 runtime functions. */
@@ -67,6 +69,20 @@ class WasmLinearContext {
 	public var pendingExceptionValue:Null<Int>;
 	public var fuelChargeFunction:Null<Int>;
 
+	/** The natives the program declares, by name, for the runtime functions built from them. */
+	public final natives:Map<String, IrNative> = [];
+
+	/** Set once the module's own functions are declared, so a runtime function that calls them can be completed. */
+	public var functionsDeclared = false;
+
+	/** Positions of the runtime functions built since `functionsDeclared`, which the module builder wraps for the collector. */
+	public final builtAfterDeclaration:Array<Int> = [];
+
+	/** The dynamic-view array runtime, made on its first operation. */
+	public var dynamicArrays:Null<WasmLinearDynamicArrays>;
+
+	var defining = 0;
+
 	public function new(module:WasmModule, program:IrProgram, layout:WasmLayout, options:BackendOptions,
 			state:WasmLinearContextState) {
 		this.module = module;
@@ -87,5 +103,29 @@ class WasmLinearContext {
 		reflectionTable = state.reflectionTable;
 		reflectionCount = state.reflectionCount;
 		reflectionBytes = state.reflectionBytes;
+		for (native in program.natives)
+			natives.set(native.name, native);
+	}
+
+	/**
+	 * The index of runtime function `name`, built with what it calls on the first request (WasmLinearRuntime.define).
+	 * The module builder requests the natives the program calls, and lowering and runtime functions request the ones
+	 * they call, so the module holds only the runtime it uses. A name the runtime does not define is an error.
+	 */
+	public function runtimeFunction(name:String):Int {
+		var index = functions.get(name);
+		if (index != null)
+			return index;
+		var first = module.functions.length;
+		defining++;
+		index = WasmLinearRuntime.define(this, name);
+		defining--;
+		if (index == null)
+			throw new InternalError('The wasm32 runtime has no function "$name"');
+		functions.set(name, index);
+		if (functionsDeclared && defining == 0)
+			for (position in first...module.functions.length)
+				builtAfterDeclaration.push(position);
+		return index;
 	}
 }

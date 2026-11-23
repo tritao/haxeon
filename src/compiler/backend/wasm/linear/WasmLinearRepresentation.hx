@@ -28,29 +28,24 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 class WasmLinearRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmInteropRepresentation implements WasmModelRepresentation {
 	final layout:WasmLayout;
 	final allocator:Int;
-	final bytesDataPointer:Int;
-	final cstringCopy:Int;
+	final runtime:WasmLinearContext;
 	final valueObjects:Map<String, Bool> = [];
 	final scalarAbi:Null<WasmScalarAbi>;
 	final scalarLocals:Null<WasmScalarLocals>;
 	final scalarResults:Map<Int, Array<Int>> = [];
 	final scalarResultTypes:Map<Int, Array<IrType>> = [];
 	final allocateLocal:Null<WasmValueType->Int>;
-	final functions:Null<Map<String, Int>>;
 
 	public final staticClosureDescriptors:Map<String, Int>;
 	public final closureAdapters:Null<WasmLinearClosureAdapters>;
 
-	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int,
-			?scalarAbi:WasmScalarAbi, ?functions:Map<String, Int>,
+	public function new(layout:WasmLayout, allocator:Int, runtime:WasmLinearContext, ?scalarAbi:WasmScalarAbi,
 			?fn:IrFunction, ?allocateLocal:WasmValueType->Int, ?staticClosureDescriptors:Map<String, Int>,
 			?closureAdapters:WasmLinearClosureAdapters) {
 		this.layout = layout;
 		this.allocator = allocator;
-		this.bytesDataPointer = bytesDataPointer;
-		this.cstringCopy = cstringCopy;
+		this.runtime = runtime;
 		this.scalarAbi = scalarAbi;
-		this.functions = functions;
 		this.staticClosureDescriptors = staticClosureDescriptors == null ? [] : staticClosureDescriptors;
 		this.closureAdapters = closureAdapters;
 		this.allocateLocal = allocateLocal;
@@ -296,6 +291,9 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return [LocalGet(objectLocal), load(field.type, field.offset), LocalSet(destination)];
 	}
 
+	public function runtimeFunction(name:String):Int
+		return runtime.runtimeFunction(name);
+
 	public function hasScalarCall(name:String):Bool
 		return scalarAbi != null && scalarAbi.signatures.exists(name);
 
@@ -531,7 +529,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (abi == null)
 			throw new InternalError("Missing scalar ABI");
 		var virtual = abi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
-		if (virtual == null || allocateLocal == null || functions == null)
+		if (virtual == null || allocateLocal == null)
 			throw new InternalError('Missing scalar virtual method "$method"');
 		var results:Array<Int> = [];
 		if (abi.isValue(virtual.signature.result)) {
@@ -546,7 +544,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		var body:Array<WasmInstruction> = [];
 		for (index in 0...virtual.targets.length) {
 			var target = virtual.targets[index],
-				functionIndex = functions.get(target.clone);
+				functionIndex = runtime.functions.get(target.clone);
 			if (functionIndex == null)
 				throw new InternalError('Missing scalar virtual target "${target.clone}"');
 			body.push(LocalGet(receiverLocal));
@@ -957,7 +955,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				case Bytes: true;
 				default: false;
 			}))
-				body.push(Call(cstringCopy));
+				body.push(Call(runtime.runtimeFunction("__haxeon_cstring_copy")));
 			if (outputLocal >= 0)
 				body.push(LocalSet(outputLocal));
 			return body;
@@ -1059,7 +1057,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		body.push(LocalGet(argumentLocal));
 		switch argument.type {
 			case Bytes, ManagedBytes:
-				body.push(Call(bytesDataPointer));
+				body.push(Call(runtime.runtimeFunction("__haxeon_bytes_data_pointer")));
 			case Abstract("realtime_bytes"):
 				body.push(I32Const(WasmLayout.STRING_DATA_OFFSET));
 				body.push(I32Add);

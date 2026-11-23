@@ -1849,13 +1849,15 @@ class WasmFunctionLower {
 						I32LtS,
 						If(null)
 					]);
-					// Dynamic iterators may walk storage of any element type; read it like Array<Dynamic>.
+					// Dynamic iterators may walk storage of any element type; read it like Array<Dynamic>. Without
+					// dynamic array views every array an iterator walks as Dynamic stores references.
 					var readAny = (switch (output.type) {
 						case Dyn:
 							true;
 						default:
 							false;
-					}) ? functions.get("__array_get_any") : null;
+					}) && WasmModuleSupport.declaresNative(context.program, "__array_get_any")
+						? context.representation.model.runtimeFunction("__array_get_any") : null;
 					iteratorBody = iteratorBody.concat(readAny != null ? [
 						LocalGet(iteratorLocal),
 						I32Load(arrayOffset),
@@ -2100,20 +2102,17 @@ class WasmFunctionLower {
 						if (!emitIfHandled(body, fallback)
 							&& !lowerInt64Native(body, output, name.name, arguments, values)) {
 							for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
-							var functionIndex = functions.get(name.name);
-							var mapParts = WasmModuleSupport.mapNativeParts(name.name);
+							var mapParts = WasmModuleSupport.mapNativeParts(name.name),
+								projectionIndex:Null<Int> = null;
 							if (mapParts != null && (switch (output.type) {
 								case Void:
 									false;
 								default:
 									true;
-							}) && (mapParts.operation == "keys" || mapParts.operation == "values")) {
-								var projectionIndex = functions.get(WasmGcMaps.projectionName(name.name, output.type));
-								if (projectionIndex != null) functionIndex = projectionIndex;
-							}
-							if (functionIndex == null)
-								throw new InternalError('Wasm call to unsupported native or missing function "$name"');
-							body.push(Call(functionIndex));
+							}) && (mapParts.operation == "keys" || mapParts.operation == "values"))
+								projectionIndex = functions.get(WasmGcMaps.projectionName(name.name, output.type));
+							body.push(Call(projectionIndex != null
+								? projectionIndex : context.representation.model.runtimeFunction(name.name)));
 							if ((switch (output.type) {
 								case Void:
 									false;
@@ -2174,8 +2173,7 @@ class WasmFunctionLower {
 					pointerLengthImportIndex,
 					pointerReleaseImportIndex);
 				if (emitIfHandled(body, represented)) {} else {
-					var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
-					if (bytesDataPointer == null) throw new InternalError("Wasm byte data pointer helper is missing");
+					var bytesDataPointer = context.representation.model.runtimeFunction("__haxeon_bytes_data_pointer");
 					for (argument in arguments) nativeArgument(body, argument, values, bytesDataPointer);
 					body.push(Call(importIndex));
 					if ((switch (output.type) {
