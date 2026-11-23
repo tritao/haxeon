@@ -1,5 +1,6 @@
 import audiolab.AudioLabEngine;
 import audiolab.AudioLabView;
+import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.Runtime;
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.SurfaceFrameSubscription;
@@ -7,15 +8,12 @@ import haxeon.platform.Window;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.ui.FontCollection;
-import haxeon.ui.FrameInfo;
-import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
 import haxeon.ui.core.FrameworkErrorView;
-import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.UiContext;
+import haxeon.ui.host.UiSurfaceBinding;
+import haxeon.ui.host.UiSurfaceFrame;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
 
 /** Desktop entry point for NativeKit Audio Lab. */
@@ -30,7 +28,7 @@ class Main {
 		var fonts:Null<FontCollection> = null;
 		var renderer:Null<Renderer> = null;
 		var context:Null<UiContext> = null;
-		var input:Null<NativeInputAdapter> = null;
+		var binding:Null<UiSurfaceBinding> = null;
 		var frameSubscription:Null<SurfaceFrameSubscription> = null;
 		var eventSubscription:Null<EventSubscription> = null;
 		var lab:Null<AudioLabEngine> = null;
@@ -41,24 +39,12 @@ class Main {
 			windowOptions.flags = WindowFlags.Resizable;
 			window = runtime.createWindow(windowOptions);
 
-			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
-			var surfaceOptions = new haxeon.platform.SurfaceOptions(INITIAL_WIDTH, INITIAL_HEIGHT);
-			var surfaceFlags = SurfaceFlags.Stencil;
-			if (graphicsApi == GraphicsApi.Opengl) {
-				surfaceFlags = SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil;
-				surfaceOptions.majorVersion = 3;
-				surfaceOptions.minorVersion = 3;
-			}
-			surfaceOptions.flags = surfaceFlags;
-			surfaceOptions.api = graphicsApi;
-			surface = window.createSurface(surfaceOptions);
+			surface = window.createSurface(SurfaceOptions.forGpu(INITIAL_WIDTH, INITIAL_HEIGHT, SurfaceFlags.Stencil));
 
 			fonts = FontCollection.create();
 			fonts.addSystemFallbacks();
 			renderer = Renderer.create();
 			context = new UiContext(null, fonts);
-			context.attachPlatformSurface(surface);
-			context.attachPlatformWindow(window.nativeHandle());
 
 			lab = new AudioLabEngine(true);
 			var view = new AudioLabView(lab);
@@ -70,11 +56,9 @@ class Main {
 			var logicalHeight = INITIAL_HEIGHT;
 			var previousFrameAt = Date.now().getTime();
 			var frameCount = 0;
-			var layoutFrame = new LayoutFrame(logicalWidth, logicalHeight);
-			var frameInfo = new FrameInfo(logicalWidth, logicalHeight, INITIAL_WIDTH, INITIAL_HEIGHT, 1.0);
+			var frame = new UiSurfaceFrame(nativeSurface, INITIAL_WIDTH, INITIAL_HEIGHT);
 			var errorView:Null<FrameworkErrorView> = null;
-			input = new NativeInputAdapter(context, new Handle(windowHandle.rawValue()));
-			input.attach(events);
+			binding = UiSurfaceBinding.attach(context, window, surface, events);
 			eventSubscription = events.listen(function(value) {
 				switch (value) {
 					case WindowClose(source) if (source.rawValue() == windowHandle.rawValue()):
@@ -82,7 +66,7 @@ class Main {
 					case WindowResize(source, width, height) if (source.rawValue() == windowHandle.rawValue()):
 						if (width > 0 && height > 0)
 							NativeKit.nk_surface_set_bounds_checked(nativeSurface, 0, 0, width, height);
-					case SurfaceResize(source, width, height, _, _) if (source.rawValue() == nativeSurface.rawValue()):
+					case SurfaceResize(source, width, height, _, _) if (surface.ownsEventSource(source)):
 						logicalWidth = width;
 						logicalHeight = height;
 					case _:
@@ -94,11 +78,10 @@ class Main {
 					return;
 				try {
 					if (errorView != null) {
-						layoutFrame.setViewport(logicalWidth, logicalHeight);
-						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
-							framebufferWidth / logicalWidth);
-						context.submit(errorView, layoutFrame);
-						context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
+						frame.configure(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
+							framebufferWidth / logicalWidth, 0.0);
+						context.submit(errorView, frame.layout);
+						frame.render(context, renderer);
 						if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
 							running = false;
 						return;
@@ -110,12 +93,10 @@ class Main {
 					var deltaSeconds = (now - previousFrameAt) / 1000.0;
 					previousFrameAt = now;
 					lab.advance(deltaSeconds);
-					layoutFrame.setViewport(logicalWidth, logicalHeight);
-					layoutFrame.deltaSeconds = deltaSeconds;
-					frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
-						framebufferWidth / logicalWidth);
-					context.submit(view, layoutFrame);
-					context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
+					frame.configure(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
+						framebufferWidth / logicalWidth, deltaSeconds);
+					context.submit(view, frame.layout);
+					frame.render(context, renderer);
 					if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
 						running = false;
 				} catch (error:Dynamic) {
@@ -124,11 +105,10 @@ class Main {
 					Sys.println('nativekit-audio-lab: frame ${frameCount} failed at stage ${stage}: ' + message);
 					errorView = new FrameworkErrorView(message, stage);
 					try {
-						layoutFrame.setViewport(logicalWidth, logicalHeight);
-						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
-							framebufferWidth / logicalWidth);
-						context.submit(errorView, layoutFrame);
-						context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
+						frame.configure(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
+							framebufferWidth / logicalWidth, 0.0);
+						context.submit(errorView, frame.layout);
+						frame.render(context, renderer);
 						if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
 							running = false;
 					} catch (fallbackError:Dynamic) {
@@ -144,20 +124,20 @@ class Main {
 				if (!events.poll())
 					events.wait(1.0 / 60.0);
 			}
-			disposeAll(input, frameSubscription, eventSubscription, context, renderer, fonts, lab, runtime);
+			disposeAll(binding, frameSubscription, eventSubscription, context, renderer, fonts, lab, runtime);
 			return 0;
 		} catch (error:Dynamic) {
 			Sys.println("nativekit-audio-lab: " + Std.string(error));
-			disposeAll(input, frameSubscription, eventSubscription, context, renderer, fonts, lab, runtime);
+			disposeAll(binding, frameSubscription, eventSubscription, context, renderer, fonts, lab, runtime);
 			return 20;
 		}
 	}
 
-	static function disposeAll(input:Null<NativeInputAdapter>, frameSubscription:Null<SurfaceFrameSubscription>,
+	static function disposeAll(binding:Null<UiSurfaceBinding>, frameSubscription:Null<SurfaceFrameSubscription>,
 			eventSubscription:Null<EventSubscription>, context:Null<UiContext>, renderer:Null<Renderer>,
 			fonts:Null<FontCollection>, lab:Null<AudioLabEngine>, runtime:Null<Runtime>):Void {
-		if (input != null)
-			input.detach();
+		if (binding != null)
+			binding.dispose();
 		if (frameSubscription != null)
 			frameSubscription.dispose();
 		if (eventSubscription != null)
