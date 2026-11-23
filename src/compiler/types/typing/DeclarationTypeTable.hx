@@ -204,6 +204,11 @@ class DeclarationTypeTable implements DeclarationTypes {
 			if (decl.methods != null)
 				for (method in decl.methods)
 					keys.set(method, decl.name + "." + method.name);
+		// A class's methods as its declaration holds them: a reader that found one there reads its signature through here.
+		for (decl in semantic.program.classes)
+			for (method in decl.methods)
+				if (!keys.exists(method))
+					keys.set(method, decl.name + "." + method.name);
 		// What the source leaves to a body: of a module function, a class's method or an abstract's, as the signature table holds
 		// it (which a reused semantic program gives the new bodies) and as the program declares it. An interface's method has no
 		// body to give it.
@@ -221,6 +226,19 @@ class DeclarationTypeTable implements DeclarationTypes {
 		for (decl in semantic.program.abstracts)
 			for (method in decl.methods)
 				markInferred(method, decl.name + "." + method.name);
+	}
+
+	/**
+	 * Records that the unit being typed read the signature of `fn`: a class's members name its methods but leave their signatures
+	 * to facts of their own, which the code that resolves a method's types reads here.
+	 */
+	inline function readSignatureOf(fn:AstFunction):Void {
+		var typingSession = session;
+		if (typingSession != null) {
+			var key = keys.get(fn);
+			if (key != null)
+				typingSession.readSignature(key);
+		}
 	}
 
 	/** Marks `fn` inferred when its source leaves a part of its signature (its result or an argument's type) to its body. */
@@ -467,6 +485,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 	 * coarse rule of slice 2 cannot tell which part of an inferred signature an edit changed.
 	 */
 	public function argumentTypes(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType> {
+		readSignatureOf(fn);
 		var key = inferredKeys.get(fn);
 		if (key == null)
 			return [
@@ -504,6 +523,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 	}
 
 	public function resultType(fn:AstFunction, ?substitutions:Map<String, CompilerType>):CompilerType {
+		readSignatureOf(fn);
 		var key = inferredKeys.get(fn);
 		if (key == null)
 			return declared.resultType(fn, substitutions);

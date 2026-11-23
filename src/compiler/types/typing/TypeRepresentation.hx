@@ -557,6 +557,9 @@ class TypeRepresentation {
 		for (method in owner.methods) {
 			if (method.isStatic || method.typeParameters != null
 				&& method.typeParameters.indexOf(parameter) >= 0) continue;
+			// The method's signature and body decide it.
+			session.readSignature(owner.name + "." + method.name);
+			session.readBody(owner.name + "." + method.name);
 			for (argument in method.arguments) if (enumContainsParameter(argument.type, parameter, seen)) found = true;
 			if (enumContainsParameter(method.result, parameter, seen)) found = true;
 			if (!found && compiler.types.analysis.GenericEnumUsage.uses(method,

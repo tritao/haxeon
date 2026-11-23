@@ -74,7 +74,8 @@ class MemberAccess {
 
 	static function member<V>(session:TypingSession, table:Map<String, Map<String, V>>, owner:String,
 			name:String):Null<V> {
-		session.readMembers(owner);
+		// A lookup of one member reads that member: its signature, which says whether it is there.
+		session.readSignature(owner + "." + name);
 		var members = table.get(owner);
 		return members == null ? null : members.get(name);
 	}
@@ -313,10 +314,11 @@ class MemberAccess {
 			return true;
 		for (method in declaration.methods) {
 			var name = method.name.indexOf(".") >= 0 ? method.name : caller + "." + method.name;
-			if (name == session.currentContext.sourceFunctionName
-				&& method.metadata != null
-				&& grants(method.metadata, "access", owner, owner + "." + member))
-				return true;
+			if (name == session.currentContext.sourceFunctionName) {
+				session.readSignature(name);
+				if (method.metadata != null && grants(method.metadata, "access", owner, owner + "." + member))
+					return true;
+			}
 		}
 		return false;
 	}

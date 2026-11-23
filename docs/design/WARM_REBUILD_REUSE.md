@@ -41,7 +41,7 @@ and no edge between declarations is kept by hand.
 - **Facts.** What a unit can read is a fact: an aspect of a declaration or of the program, by name
   (`DeclarationFacts`). The aspects are a function's signature and its body, a type's shape (what a reference to it means:
   kind, type parameters and constraints, base and interfaces, metadata, and for a value type its fields), a class's members
-  (an enum's constructors), one enum constructor (its index and parameters), a field's initializer, a callee's purity and
+  (its fields, and its methods by name and kind; an enum's constructors), one enum constructor (its index and parameters), a field's initializer, a callee's purity and
   never-returns answers, a source file's snapshot (a default argument copied from it), every declaration of a kind (for code
   that searches them all), and a unit (what a unit read, for the units whose result others take: an inferred declaration, a
   specialization, an inline constant).

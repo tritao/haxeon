@@ -198,15 +198,12 @@ class DeclarationPrints {
 			sameMembers = sameByName(left.fields, right.fields, field -> field.name,
 				(previous, current) -> CanonicalComparison.fieldList([previous], [current], PositionsCount.Ignored,
 				MEMBER_PARTS))
-				&& sameByName(left.methods, right.methods, method -> method.name,
-				(previous, current) -> CanonicalComparison.functions(previous, current, PositionsCount.Ignored,
-				SIGNATURE_PARTS));
+				&& sameByName(left.methods, right.methods, method -> method.name, sameMethodKind);
 		if (!sameMembers)
 			facts.changed(membersId);
 		var fields:Map<String, AstField> = left == null ? [] : [for (field in left.fields) field.name => field];
 		if (right != null) {
-			var named = right.interfaces.concat([for (field in right.fields) if (field.type != null) field.type])
-				.concat(signatureTypes(right.methods));
+			var named = right.interfaces.concat([for (field in right.fields) if (field.type != null) field.type]);
 			if (right.base != null)
 				named.push(right.base);
 			facts.setDependencies(shapeId,
@@ -274,6 +271,14 @@ class DeclarationPrints {
 			return false;
 		return left.file.slice(left.start, left.end) == right.file.slice(right.start, right.end);
 	}
+
+	/**
+	 * Whether two methods of a class are the same member: its name and kind. Their signatures are facts of their own
+	 * (`FactAspect.Signature`), so a reader that names one method does not depend on the others.
+	 */
+	static function sameMethodKind(left:AstFunction, right:AstFunction):Bool
+		return left.isStatic == right.isStatic && left.isPublic == right.isPublic && left.isOverride == right.isOverride
+			&& left.isExtern == right.isExtern;
 
 	/** Whether `left` and `right` hold the same members by name, each the same by `same`, in whatever order. */
 	static function sameByName<T>(left:Array<T>, right:Array<T>, name:T->String, same:(T, T) -> Bool):Bool {

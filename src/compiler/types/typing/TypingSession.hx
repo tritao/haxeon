@@ -55,8 +55,8 @@ class TypingSession {
 	var methodInfo:Map<String, SemanticMethodInfo> = [];
 
 	/**
-	 * `signatures` and `methodInfo` by owner, then member name, as the program bound last has them; a lookup of an owner reads its
-	 * members (`readMembers`).
+	 * `signatures` and `methodInfo` by owner, then member name, as the program bound last has them; a lookup of a member reads its
+	 * signature (`readSignature`).
 	 */
 	public var signaturesByOwner:Map<String, Map<String, AstFunction>> = [];
 
@@ -83,11 +83,18 @@ class TypingSession {
 		return declaration;
 	}
 
-	/** Records that the unit being typed read the members of `owner` (a lookup of `signaturesByOwner` or `methodsByOwner`). */
-	public function readMembers(owner:String):Void {
+	/** Records that the unit being typed read the signature of `name`, as a lookup of the signature table reads it. */
+	public function readSignature(name:String):Void {
 		var recorder = reads();
 		if (recorder != null)
-			recorder.read(FactAspect.Members, owner);
+			recorder.read(FactAspect.Signature, name);
+	}
+
+	/** Records that the unit being typed read the body of `name`. */
+	public function readBody(name:String):Void {
+		var recorder = reads();
+		if (recorder != null)
+			recorder.read(FactAspect.Body, name);
 	}
 
 	/** The program's static extensions (`StaticExtensions`), from the program bound last. */

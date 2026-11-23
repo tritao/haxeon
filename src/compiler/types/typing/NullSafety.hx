@@ -137,8 +137,10 @@ class NullSafety {
 				span: classDecl.span,
 				member: name -> {
 					for (method in classDecl.methods)
-						if (method.name == name)
+						if (method.name == name) {
+							session.readSignature(owner + "." + name);
 							return method.metadata == null ? [] : method.metadata;
+						}
 					for (field in classDecl.fields)
 						if (field.name == name)
 							return field.metadata;

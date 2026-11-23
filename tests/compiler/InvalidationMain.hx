@@ -70,6 +70,21 @@ class InvalidationMain {
 		expect(methodEdit.retyped.indexOf("main") >= 0, "a method's signature change did not retype its caller: "
 			+ methodEdit.retyped);
 
+		// A class's members name its methods; each method's signature is a fact of its own. A signature edit retypes the callers of
+		// that method, not the readers of the class's other members.
+		var members = new Compiler();
+		members.update("Box.hx",
+			"class Box { public function new() {} public function a():Int return 1; public function b():Int return 2; }");
+		members.update("UsesA.hx", "function useA(box:Box):Int return box.a();");
+		members.update("UsesB.hx", "function useB(box:Box):Int return box.b();");
+		members.update("Main.hx", "function main():Int return UsesA.useA(new Box()) + UsesB.useB(new Box());");
+		members.compile("Main");
+		members.update("Box.hx",
+			"class Box { public function new() {} public function a():Int return 1; public function b(?extra:Int = 0):Int return 2 + extra; }");
+		var memberEdit = members.compile("Main");
+		expect(memberEdit.retyped.indexOf("UsesB.useB") >= 0 && memberEdit.retyped.indexOf("UsesA.useA") < 0,
+			"a method's signature edit retyped readers of the class's other members: " + memberEdit.retyped);
+
 		// Same-named declarations in other packages are other facts: a change to one retypes none of the other's readers.
 		var collision = new Compiler();
 		collision.update("left/Box.hx", "package left; class Box { public function new() {} }");

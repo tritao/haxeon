@@ -14,7 +14,10 @@ enum abstract FactAspect(Int) to Int {
 	 */
 	var Shape = 2;
 
-	/** A class: its shape, its fields and its methods' signatures. An enum: its constructors and methods. */
+	/**
+	 * A class: its shape, its fields, and its methods by name and kind (their signatures are `Signature` facts of their own). An
+	 * enum: its constructors and methods.
+	 */
 	var Members = 3;
 
 	/** A field's initializer, with its position: inlined or copied by the units that read it. */
