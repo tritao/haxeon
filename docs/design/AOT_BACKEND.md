@@ -114,7 +114,8 @@ The sources go to `OUTPUT.c/`:
 - `image.c` (`HlcImage`): the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
   table (function pointers by slot), the generated functions by C name, the layouts to check, and the pointers the files
   name with their table positions (below). It is the one file that depends on table positions.
-- `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them.
+- `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them: `haxeon_app_run`,
+  which the SDK's entry points (`src/haxeon_app.c`, the same an app's development build starts from) call.
 
 Every C name is derived from what it names, never from a table position, so a file's text depends only on what it uses
 and an added class does not rewrite the files that do not use it (`HlcStableNames`):

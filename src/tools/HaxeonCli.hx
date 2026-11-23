@@ -303,7 +303,7 @@ class HaxeonCli {
 		Reflect.setField(config, "nullSafety", "strict");
 		File.saveContent(configPath, PackageManifest.toToml(config));
 		Sys.println('Created ${PackageManifest.TOML_NAME} and $sourcePath');
-		Sys.println("haxeon init is to be replaced by haxeon create: haxeon create . --template program does this");
+		Sys.println("haxeon init is to be replaced by haxeon create: haxeon create . --template console does this");
 		return 0;
 	}
 

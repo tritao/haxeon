@@ -2,7 +2,9 @@ package tools;
 
 import build.HaxeonSdk;
 import build.HaxeonProjectBuild;
+import build.Target;
 import build.execution.ProcessRunner;
+import build.native.MsvcEnvironment;
 import build.native.NativeCMakeProvider;
 import build.native.NativeCompilerCache;
 import compiler.core.UsageError;
@@ -39,13 +41,15 @@ class AppRunner {
 		return directory;
 	}
 
-	/** The executable the runner's build makes. */
-	public static function executable(project:ResolvedProject, platform:String):String
-		return Path.join([
-			buildDirectory(project, platform),
-			"app",
-			project.rootPackage.name + (Sys.systemName() == "Windows" ? ".exe" : "")
-		]);
+	/** The executable the runner's build makes: in a bundle on macOS (cmake/sdk/HaxeonApp.cmake). */
+	public static function executable(project:ResolvedProject, platform:String):String {
+		var directory = Path.join([buildDirectory(project, platform), "app"]), name = project.rootPackage.name;
+		return switch platform {
+			case "windows": Path.join([directory, name + ".exe"]);
+			case "macos": Path.join([directory, name + ".app", "Contents", "MacOS", name]);
+			case _: Path.join([directory, name]);
+		};
+	}
 
 	/**
 	 * Writes the fragment for `platform` and builds the runner: configured once, then built by CMake, which decides what is out of
@@ -65,6 +69,12 @@ class AppRunner {
 				"haxeon.cmake"
 			]);
 		writeIfChanged(fragment, fragmentText(project, app, home, module, aheadOfTime));
+		// The SDK's Windows libraries are MSVC's (HaxeonConfig.cmake selects lib/windows-ARCH-msvc), so the runner builds with
+		// MSVC, in its developer environment, whatever compiler comes first on PATH.
+		var msvc = platform == "windows";
+		if (msvc && !MsvcEnvironment.ensure(Target.detectHost().arch))
+			throw new UsageError("Building a Windows app needs MSVC: install Visual Studio's C++ tools");
+		var ninja = NativeCMakeProvider.ninjaExecutable(home);
 		var binary = buildDirectory(project, platform),
 			configure = !FileSystem.exists(Path.join([
 				binary,
@@ -79,9 +89,10 @@ class AppRunner {
 				"-G",
 				"Ninja",
 				"-DCMAKE_BUILD_TYPE=Release",
-				'-DCMAKE_MAKE_PROGRAM=${NativeCMakeProvider.ninjaExecutable(home)}',
 				'-DHAXEON_GENERATED_DIR=${Path.directory(fragment)}'
-			].concat(NativeCompilerCache.configureArguments(NativeCompilerCache.executable(home))),
+			].concat(Path.isAbsolute(ninja) ? ['-DCMAKE_MAKE_PROGRAM=$ninja'] : [])
+				.concat(msvc ? ["-DCMAKE_C_COMPILER=cl", "-DCMAKE_CXX_COMPILER=cl"] : [])
+				.concat(NativeCompilerCache.configureArguments(NativeCompilerCache.executable(home))),
 				project.root, null, !quiet);
 			if (status != 0)
 				return status;

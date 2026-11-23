@@ -42,7 +42,8 @@ jobs:
             platform: windows
             os: windows
             runs_on: windows-2022
-            timeout: 90
+            # With room for the project templates step, which builds the app's native packages twice.
+            timeout: 120
           - name: macos
             platform: macos
             os: macos
@@ -196,6 +197,13 @@ jobs:
         if: matrix.platform == 'windows'
         shell: pwsh
         run: ./tests/integration/test-haxeon-cli.ps1
+
+      # The project templates suite, which scripts/test.sh runs on the other platforms: the app through its Windows runner. It
+      # needs none of the steps above but the setup, so it reports even when one of them fails.
+      - name: Project templates
+        if: ${{ !cancelled() && matrix.platform == 'windows' }}
+        shell: pwsh
+        run: ./scripts/haxeon.ps1 tests/integration/test-project-templates.hx
 
       # The compiler's sources build themselves to a fixed point. Whether the checked-in bootstrap/compiler.hl is still that
       # fixed point (bootstrap-compiler.sh --self) is not gated: it holds only until the next compiler change, and refreshing

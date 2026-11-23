@@ -27,7 +27,7 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 
 ```sh
 ./scripts/haxeon create my_app
-./scripts/haxeon create my_tool --template program
+./scripts/haxeon create my_tool --template console
 ./scripts/haxeon create .
 ./scripts/haxeon init
 ./scripts/haxeon migrate --dry-run
@@ -75,17 +75,20 @@ bug in Haxeon. The compiler run directly takes each valued option as `--name=val
 
 `haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`: `--template app` (the default) is a window with a counter and an
 `[app]` section ([MANIFEST.md](MANIFEST.md)) that uses the UI package from the `haxeon` registry (`ui = "^0.3"`, with
-`compatibility.haxeon`), in a checkout and in a release alike; `--template program` a console program. `--platforms` lists an app's
-platforms (by default this machine's) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
+`compatibility.haxeon`), in a checkout and in a release alike; `--template console` a console program (no `[app]`). `--platforms` lists an app's
+platforms (by default every platform the template has a runner for: linux, macos and windows) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
 template's files a project lacks and never overwrites one. `haxeon init` writes a program into the current directory as
-before; `create . --template program` replaces it.
+before; `create . --template console` replaces it.
 
 An app builds through its runner project, the CMake project for each platform that `haxeon create` writes beside the
-sources (`linux/`), which is the app's to change (the executable's name, the desktop entry, packaging): on Linux, `haxeon build`
-compiles the module, writes `build/generated/linux/haxeon.cmake` and builds `linux/` with CMake into `build/linux/app/`,
-where the executable (named after the package), its module and its native packages' libraries sit together; `haxeon run`
-runs that executable, and `--watch`/`--live` run the module they rebuild in it. `cmake -S linux -B DIR && cmake --build DIR`
-builds the same app once a build has written the fragment. Building for a platform the app does not list, or without its
+sources (`linux/`, `macos/`, `windows/`), which is the app's to change (the executable's name, the bundle's Info.plist, the
+version resources, packaging; [PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)): `haxeon build` compiles the module,
+writes `build/generated/PLATFORM/haxeon.cmake` and builds this machine's runner with CMake into `build/PLATFORM/app/`,
+where the executable (named after the package), its module and its native packages' libraries sit together, or on macOS
+make the bundle `NAME.app`; on Windows it builds with MSVC, as a Windows program (no console window from Explorer).
+`haxeon run` runs that executable, and `--watch`/`--live` run the module they rebuild in it. `cmake -S linux -B DIR &&
+cmake --build DIR` (or `macos`, `windows`) builds the same app once a build has written the fragment. Building for a
+platform the app does not list, or without its
 runner, is a usage error that names `haxeon create .`.
 
 An app's window takes the host's standard flags after `--`, so a test or a script can run any app without code of its

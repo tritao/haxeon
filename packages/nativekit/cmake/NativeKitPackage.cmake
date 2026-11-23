@@ -49,12 +49,15 @@ function(nativekit_add_module module)
 endfunction()
 
 # Sends the libraries to where Haxeon loads the package's from (HAXEON_NATIVE_OUTPUT_DIR), over the runtime directory
-# NativeKit sets for itself on Windows.
+# NativeKit sets for itself on Windows. In an app's graph, which names its libraries' directory in
+# CMAKE_RUNTIME_OUTPUT_DIRECTORY (haxeon_add_native_packages), the Windows DLLs go there, beside the executable.
 function(nativekit_output_to_package)
     if(DEFINED HAXEON_NATIVE_OUTPUT_DIR)
         set_target_properties(${ARGN} PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
             RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
             ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")
+    elseif(WIN32 AND CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+        set_target_properties(${ARGN} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
     endif()
 endfunction()

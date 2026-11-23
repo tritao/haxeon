@@ -15,12 +15,12 @@ private typedef CreateOptions = {
 }
 
 /**
- * `haxeon create DIRECTORY [--template app|program] [--platforms LIST] [--org PREFIX]`: makes a project from a template in
+ * `haxeon create DIRECTORY [--template app|console] [--platforms LIST] [--org PREFIX]`: makes a project from a template in
  * the SDK's templates (`HaxeonSdk.templates`, templates/README.md), or, in a directory that has some of it, adds the files it lacks and leaves every file
  * there as it is (docs/design/PROJECT_BUILDS.md).
  */
 class ProjectCreator {
-	public static final TEMPLATES = ["app", "program"];
+	public static final TEMPLATES = ["app", "console"];
 
 	public static function run(arguments:Array<String>, home:String):Int {
 		var options = parse(arguments),
@@ -34,10 +34,11 @@ class ProjectCreator {
 		var existing = FileSystem.exists(target) ? PackageManifest.find(target) : null;
 		if (existing != null && options.platforms != null)
 			throw new UsageError('Adding platforms to an existing project is not supported yet; edit [app].platforms in $existing');
-		// An existing app keeps its platforms; a new one takes --platforms, or this machine's.
+		// An existing app keeps its platforms; a new one takes --platforms, or every platform the template has a runner for, so
+		// a project made on one machine builds on the others as it is.
 		var existingApp = existing == null ? null : PackageManifest.parse(existing, File.getContent(existing)).app,
 			platforms = existingApp != null ? existingApp.platforms : options.platforms == null
-				? [hostPlatform()] : options.platforms,
+				? runnerPlatforms(templateDirectory) : options.platforms,
 			values = [
 				"package" => packageName,
 				"name" => displayName(packageName),
@@ -51,9 +52,7 @@ class ProjectCreator {
 			for (platform in platforms)
 				if (!FileSystem.exists(Path.join([templateDirectory, platform])))
 					throw new UsageError('The app template has no $platform runner yet, so an app cannot build for $platform; it has: '
-						+ [for (name in AppManifest.PLATFORMS)
-						if (FileSystem.exists(Path.join([templateDirectory, name]))) name].join(", ")
-						+ (options.platforms == null ? ' (choose with --platforms)' : ''));
+						+ runnerPlatforms(templateDirectory).join(", "));
 		var created:Array<String> = [], kept:Array<String> = [];
 		copy(templateDirectory, target, "", values, created, kept, platforms);
 		var shown = options.directory == "." ? "this directory" : options.directory;
@@ -61,7 +60,7 @@ class ProjectCreator {
 			Sys.println('Nothing to add: $shown already has every file of the ${options.template} template');
 			return 0;
 		}
-		Sys.println('Created ${options.template == "app" ? "an app" : "a " + options.template} in $shown: ${created.join(", ")}');
+		Sys.println('Created ${options.template == "app" ? "an app" : "a console program"} in $shown: ${created.join(", ")}');
 		if (kept.length > 0)
 			Sys.println('Kept as they are: ${kept.join(", ")}');
 		Sys.println("Next:");
@@ -116,7 +115,7 @@ class ProjectCreator {
 		if (directory == null)
 			throw new UsageError("haxeon create needs a directory: haxeon create my_app, or haxeon create . for this one");
 		if (template != "app" && platforms != null)
-			throw new UsageError('Option "--platforms" is for apps; a ${template} has no platforms');
+			throw new UsageError('Option "--platforms" is for apps; a console program has no platforms');
 		return {
 			directory: directory,
 			template: template,
@@ -174,12 +173,18 @@ class ProjectCreator {
 		return result.toString();
 	}
 
-	static function hostPlatform():String
-		return switch Sys.systemName() {
-			case "Windows": "windows";
-			case "Mac": "macos";
-			case _: "linux";
-		};
+	/** The platforms whose runner directories `templateDirectory` has, by name. */
+	static function runnerPlatforms(templateDirectory:String):Array<String> {
+		var names = [
+			for (name in FileSystem.readDirectory(templateDirectory))
+				if (AppManifest.PLATFORMS.indexOf(name) >= 0 && FileSystem.isDirectory(Path.join([
+					templateDirectory,
+					name
+				]))) name
+		];
+		names.sort(Reflect.compare);
+		return names;
+	}
 
 	/** `my_app` and `my-app` as "My App". */
 	static function displayName(packageName:String):String
