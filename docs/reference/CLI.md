@@ -656,7 +656,8 @@ Two names describe a build, and Haxeon keeps them apart:
   "target"; the project build passes it.
 
 The target chooses the backend: `host`, `android` and the other native targets build `hl`, and `wasm32` builds `wasm32`.
-`hlc` and `wasm-gc` are reached by calling the compiler directly. Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
+An app's release build (`--build-mode=release`) builds `hlc`, which its runner compiles into the executable
+([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)). Otherwise `hlc` and `wasm-gc` are reached by calling the compiler directly. Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
 and a Haxe target name given to `--target` is refused with Haxeon's (`--target hl` says to use `host`).
 
 ## Language server and FFI tools

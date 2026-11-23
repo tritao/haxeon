@@ -283,8 +283,14 @@ class CompilerDriver {
 	static function writeC(owner:compiler.Compiler, result:CompileResult, request:CompilerRequest,
 			report:String->Void, preparedAt:Float):CompileResult {
 		var compiledAt = Sys.time() * 1000.0;
-		var files = BackendArtifacts.c(result.artifact).files, directory = request.output + ".c";
+		// The sources are written in place, under the published output's name rather than a request's staging one: only files
+		// whose text changed are written, so a C build (this one's or an app runner's) compiles only those again.
+		var published = request.publishedOutput == null ? request.output : request.publishedOutput;
+		var files = BackendArtifacts.c(result.artifact).files, directory = published + ".c";
 		var changed = HlcBuild.write(files, directory);
+		// What the program was compiled from, which a project build reads to know when to compile it again.
+		if (request.inputsOutput != null)
+			File.saveContent(request.inputsOutput, inputsReport(owner, result.moduleNames, request));
 		var writtenAt = Sys.time() * 1000.0;
 		var sdk = request.options.cSdk;
 		if (sdk != null) {

@@ -101,8 +101,12 @@ project only names it.
 
 - **Development builds** link the VM and load the module (`main.hl`) beside the executable. The live host is the same
   executable, so `haxeon run --watch --live` patches the running app as today.
-- **Release builds** compile the generated C of `--target hlc` with the VM library, through CMake and the user's toolchain.
-  That replaces the private driver's per-file compile and link for apps; the driver stays for `haxeon` itself and scripts.
+- **Release builds** (`haxeon build --build-mode=release`) compile the program ahead of time: the compiler writes its C at
+  `build/host/main.c/` (the build's `CModule` artifact), the fragment names that directory as `HAXEON_MODULE_C` instead of
+  `HAXEON_MODULE`, and `haxeon_add_app` compiles it with the SDK's `hlc_main.c` and links the VM without the JIT
+  (`Haxeon::aot`), through CMake and the user's toolchain, with the generated code's flags (`HlcBuild`). The compiler
+  rewrites only the C files whose text changed, so the runner recompiles only those. A release build cannot be watched or
+  patched live. The private driver's compile and link (`--c-sdk`) stays for `haxeon` itself and scripts.
 
 ## One native graph per app
 
@@ -156,7 +160,7 @@ runner beside the old one (`linux.new/`) for the user to merge.
 1. `haxeon create` with the `app` and `program` templates, the `[app]` section, the Linux runner and the generated
    fragment with native packages in one graph: `haxeon create hello` makes the counter app, which builds with `cmake` alone
    and with `haxeon build`, runs, and edits live.
-2. Release builds through the runner (`--target hlc` sources in CMake).
+2. Release builds through the runner (`--target hlc` sources in CMake). Done.
 3. The Windows and macOS runners, checked by CI.
 4. The Android runner per app, replacing the shared Gradle project.
 5. The web runner.
@@ -165,6 +169,5 @@ runner beside the old one (`linux.new/`) for the user to merge.
 
 ## Open
 
-- Where the runner's `main` lives in the SDK, and whether development and release use one `main` with a define.
 - Whether the Android host ships as an AAR in the release archive or is built from sources in the SDK on first use.
 - The web loader: one for `wasm32` and `wasm-gc`, or one per target.

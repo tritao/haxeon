@@ -102,7 +102,7 @@ Paths are relative to the manifest's directory.
 | `nullSafety` | string | `"off"` | `"strict"`, `"loose"`, `"off"` or `"warn"`: the null-safety checker's mode for this package (below). |
 | `outputDir` | string | `"build"` | Where builds go. |
 | `dependencies.NAME` | string or table | | One dependency. A version range alone (`ui = "^0.3"`) is a release of the `haxeon` registry, the same as `{ registry = "haxeon", version = "^0.3" }`. A table names its source: `path`, `workspace`, `git` + `rev`, `registry` + `version`, or `haxelib` + `version`. |
-| `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`, and `definitions`, CMake cache settings the project is built with wherever it builds: `definitions = { NK_BUILD_SHARED = "ON" }`). |
+| `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
 | `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program ([PROJECT_BUILDS.md](../design/PROJECT_BUILDS.md)). |
 | `android` | table | | `applicationId` and `label` of the Android app ([ANDROID.md](ANDROID.md)). |

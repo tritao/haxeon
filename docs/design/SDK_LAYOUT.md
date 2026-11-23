@@ -116,4 +116,4 @@ About ten files hard-code `out/cmake/release`; nearly everything else goes throu
 6. **Other targets:** `platforms/android` (the host AAR, per-ABI libraries) and `platforms/web` as their runners land; a
    network registry after that.
 
-Release builds through the runner (`PROJECT_BUILDS.md`, step 2) follow step 2 here, on the SDK's `Haxeon::aot` target.
+Release builds through the runner (`PROJECT_BUILDS.md`, step 2) are built, on the SDK's `Haxeon::aot` target.

@@ -137,11 +137,6 @@ class NativeCMakeProvider {
 		}
 		// haxeon-native.cmake keeps frame pointers off Windows, for the sampling profiler, and instruments when asked.
 		configureArguments.push("-DCMAKE_PROJECT_INCLUDE=" + Path.join([home, "cmake", "haxeon-native.cmake"]));
-		// The package's own settings (native.cmake.definitions), as an app's runner applies them too.
-		var definitionNames = [for (name in native.cmake.definitions.keys()) name];
-		definitionNames.sort(Reflect.compare);
-		for (name in definitionNames)
-			configureArguments.push('-D$name=${native.cmake.definitions.get(name)}');
 		for (file in ["haxeon-native.cmake", "haxeon-frame-pointers.cmake"])
 			cmakeInputs.push(Path.join([home, "cmake", file]));
 		var instrumenting = instrumentArguments(context);

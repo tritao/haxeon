@@ -1,5 +1,6 @@
 package build;
 
+import build.Artifact.ArtifactKind.CModule;
 import build.Artifact.ArtifactKind.Diagnostics;
 import build.Artifact.ArtifactKind.Executable;
 import build.Artifact.ArtifactKind.FfiInterface;
@@ -28,8 +29,9 @@ class BuildPlanner {
 		return new BuildPlan([id], [new Artifact(id, dependencies)]);
 	}
 
+	/** The plan of `project`'s build; with `aheadOfTime` a native target's program is C (`CModule`) rather than bytecode. */
 	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
-			nativeDemand:NativeArtifactDemand):BuildPlan {
+			nativeDemand:NativeArtifactDemand, aheadOfTime:Bool = false):BuildPlan {
 		NativeTargetSupport.validate(project, target);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
@@ -128,7 +130,7 @@ class BuildPlanner {
 				libraryRequirements.push(statik);
 		}
 		libraryRequirements = libraryRequirements.concat(ffiNativeLibraries);
-		var kind = target.isWasm() ? WasmModule : HashLinkModule;
+		var kind = target.isWasm() ? WasmModule : aheadOfTime ? CModule : HashLinkModule;
 		if (intent == Check)
 			kind = Diagnostics;
 		var moduleId = new ArtifactId(project.rootPackage.name, kind, target);

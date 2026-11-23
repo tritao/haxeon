@@ -69,6 +69,24 @@ function main() {
 			"building the runner with cmake alone");
 		if (!FileSystem.exists(Path.join([plain, "app", "hello-app"])))
 			Script.fail("FAIL: cmake alone did not make the app's executable");
+
+		// A release build compiles the program ahead of time into the runner's executable: no module beside it, and it runs.
+		log = Path.join([work, "release.log"]);
+		expectStatus(haxeon(["build", "--build-mode=release"], app, log), 0, log, "building the app in release mode");
+		if (FileSystem.exists(executable + ".hl"))
+			Script.fail("FAIL: the release build left a module beside the app compiled ahead of time");
+		var releaseCapture = Path.join([work, "capture-release"]);
+		log = Path.join([work, "run-release.log"]);
+		var releaseArguments = ["--frames=3", '--capture=$releaseCapture'];
+		status = Script.run("sh", ["-c", "command -v xvfb-run"], {log: Path.join([work, "xvfb.log"])}) == 0
+			? Script.run("xvfb-run", ["-a", executable].concat(releaseArguments), {log: log})
+			: Script.run(executable, releaseArguments, {log: log});
+		expectStatus(status, 0, log, "running the app compiled ahead of time");
+		if (!FileSystem.exists(Path.join([releaseCapture, "frame.png"])))
+			Script.fail('FAIL: the app compiled ahead of time wrote no frame.png; its log:\n${File.getContent(log)}');
+		log = Path.join([work, "release-watch.log"]);
+		expectStatus(haxeon(["run", "--build-mode=release", "--watch"], app, log), 2, log, "watching a release build");
+		expectText(log, "compiled ahead of time and cannot be watched", "watching a release build");
 	}
 
 	// create . puts back what is missing and leaves the rest.
@@ -90,7 +108,7 @@ function main() {
 		log = Path.join([work, "usage.log"]);
 		expectStatus(haxeon(bad, work, log), 2, log, bad.join(" "));
 	}
-	Sys.println("PASS: create makes a program and an app that build (through its runner) and run, restores missing files, and rejects bad options");
+	Sys.println("PASS: create makes a program and an app that build (through its runner, also ahead of time) and run, restores missing files, and rejects bad options");
 }
 
 function haxeon(arguments:Array<String>, directory:String, log:String):Int

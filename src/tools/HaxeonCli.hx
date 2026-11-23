@@ -974,9 +974,17 @@ class HaxeonCli {
 			if (app != null && !options.plan && !options.compilerOnly)
 				AppRunner.runnerDirectory(project, app, AppRunner.hostPlatform());
 			var appScope = app != null && !options.compilerOnly ? BuildScope.Module : scope(options);
+			// An app's release build is compiled ahead of time: its program is C, which the runner compiles into the executable
+			// (docs/design/PROJECT_BUILDS.md). A development build keeps the JIT, which --watch and --live patch.
+			var aheadOfTime = app != null && options.buildMode == "release";
+			if (aheadOfTime && (options.live || options.watch))
+				throw new UsageError("An app's release build is compiled ahead of time and cannot be watched or patched live; "
+					+ "use the development build mode");
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
+			// A program compiled ahead of time is C, written at `main.c/`.
 			var output = options.output == null
-				? Path.join([buildDirectory, "host", "main.hl"]) : resolvePath(options.output, project.root);
+				? Path.join([buildDirectory, "host", aheadOfTime ? "main" : "main.hl"]) : resolvePath(options.output,
+				project.root);
 			// A stamp left by an earlier compiler would pin the live host to that revision if this compiler (a bootstrap
 			// one, say) writes none; without a stamp the host reads the description every tick.
 			if (options.live && FileSystem.exists(output + ".live.stamp"))
@@ -990,12 +998,14 @@ class HaxeonCli {
 			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, appScope, options.live, instrument, session,
-				options.buildMode == "development", null, null, options.style) catch (error:haxe.Exception) {
+				options.buildMode == "development", null, null, options.style,
+				aheadOfTime) catch (error:haxe.Exception) {
 					releaseQuietOutput(options, true);
 					throw error;
 				}
 			if (app != null && buildStatus == 0 && !options.plan && !options.compilerOnly)
-				buildStatus = AppRunner.build(project, home, AppRunner.hostPlatform(), output, options.quiet);
+				buildStatus = AppRunner.build(project, home, AppRunner.hostPlatform(), output, aheadOfTime,
+					options.quiet);
 			var publishTo = program == null ? null : program.publishTo;
 			if (buildStatus == 0 && publishTo != null && !options.plan) {
 				ensureDirectory(Path.directory(publishTo));

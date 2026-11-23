@@ -9,6 +9,7 @@ import build.execution.CompilerClient;
 import build.execution.Directories;
 import compiler.CompileOptions;
 import compiler.core.InternalError;
+import compiler.core.UsageError;
 import project.CompilerInputs;
 import project.ResolvedProject;
 import sys.io.File;
@@ -17,7 +18,7 @@ import sys.io.File;
 class CompilerProvider {
 	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId,
 			dependencies:Array<ActionId>,
-			output:String):ExecutionAction {
+			output:String, aheadOfTime:Bool = false):ExecutionAction {
 		if (project == null)
 			throw new InternalError("CompilerProvider requires a resolved project");
 		if (project.manifest.entry == null)
@@ -33,11 +34,12 @@ class CompilerProvider {
 			android = context.environment.target.isAndroid(),
 			live = !context.checkOnly && (context.live || android),
 			arguments = [
-				"--target=" + compilerInputs.target,
-				"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
-				"--output=" + output,
-				"--entry=" + project.manifest.entry
-			],
+				// A program compiled ahead of time is C, which the app's runner compiles (`ArtifactKind.CModule`).
+					"--target=" + (aheadOfTime ? "hlc" : compilerInputs.target),
+					"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
+					"--output=" + output,
+					"--entry=" + project.manifest.entry
+				],
 			inputs:Array<String> = [];
 		// A check writes nothing, so it has no outputs and always runs; its compiler session makes a repeat cheap.
 		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
@@ -132,7 +134,9 @@ class CompilerProvider {
 				environment) : CompilerClient.compile(command, compilerSourcePath, reported, context.compilerHome,
 				context.environment.buildRoot, project.root, context.session);
 		};
-		var outputs = context.checkOnly ? [] : [
+		if (aheadOfTime && live)
+			throw new UsageError("A program compiled ahead of time cannot be patched live; build it in development mode");
+		var outputs = context.checkOnly ? [] : aheadOfTime ? [output + ".c/hlc.h", output + ".inputs.json"] : [
 			output,
 			output + ".inputs.json",
 			output + ".functions",
@@ -141,7 +145,7 @@ class CompilerProvider {
 			output + ".descriptors.json"
 		];
 		// A HashLink module also has its runtime identity and live description; a Wasm module has neither.
-		if (compilerInputs.target == "hl" && !context.checkOnly) {
+		if (compilerInputs.target == "hl" && !aheadOfTime && !context.checkOnly) {
 			outputs.push(output + ".hli");
 			outputs.push(output + ".live.json");
 		}
