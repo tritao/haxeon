@@ -946,8 +946,9 @@ footer a:hover {
   width: 100%;
   cursor: pointer;
 }
-.term pre > code,
-.demo .code pre > code {
+/* Line spans carry their own breaks; plain blocks keep their whitespace. */
+.term pre > code:has(> .cl),
+.demo .code pre > code:has(> .cl) {
   white-space: normal;
 }
 .term pre .cl {
