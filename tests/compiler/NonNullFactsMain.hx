@@ -1,4 +1,5 @@
 import compiler.ir.analysis.IrNonNullFacts;
+import compiler.ir.analysis.IrNonNullFields;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -156,6 +157,7 @@ class NonNullFactsMain {
 		checkSparseIdentities();
 		checkAllocationScaling();
 		checkProgramFacts();
+		checkInstanceAllocations();
 		Sys.println("PASS: non-null facts respect branches, loops, allocation and handlers");
 	}
 
@@ -251,5 +253,45 @@ class NonNullFactsMain {
 			expect(facts.has(fromField.block, fromField.index), "a value read from a non-null field needs no check");
 			expect(!facts.has(unknown.block, unknown.index), "a value read from another field is checked");
 		}
+	}
+
+	/**
+	 * A field every constructor sets is never null (`IrNonNullFields`), unless a native can make an object of any class without
+	 * its constructor (HashLink's `alloc_obj`, behind `Type.createEmptyInstance`): then no field is.
+	 */
+	static function checkInstanceAllocations():Void {
+		function program(allocates:Bool):IrProgram {
+			var made = new IrProgram("main");
+			made.objects.push({
+				name: "Holder",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				fields: [{name: "label", type: Bytes}],
+				methods: []
+			});
+			var b = new IrBuilder(), receiver = b.argument("this", Obj("Holder"));
+			b.fieldSet(receiver, "label", b.constString("set"));
+			b.returnValue(b.constVoid());
+			made.functions.push(new IrFunction("Holder.new", b.arguments, Void, b.blocks, Ordinary));
+			b = new IrBuilder();
+			var holder = b.newObject("Holder");
+			b.call("Holder.new", [holder], Void);
+			b.returnValue(b.constVoid());
+			made.functions.push(new IrFunction("main", b.arguments, Void, b.blocks, Ordinary));
+			if (allocates)
+				made.natives.push({
+					name: "allocObject",
+					library: "std",
+					symbol: "alloc_obj",
+					arguments: [TypeRef],
+					result: Dyn
+				});
+			return made;
+		}
+		expect(IrNonNullFields.of(program(false)).fieldsOf("Holder").exists("label"),
+			"a field the constructor sets is never null");
+		expect(!IrNonNullFields.of(program(true)).fieldsOf("Holder").exists("label"),
+			"no field is never null when a native makes objects without their constructor");
 	}
 }

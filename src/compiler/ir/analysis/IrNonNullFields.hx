@@ -186,7 +186,8 @@ class IrObjectInit {
  * drop the null check of a dereference of a value read from one (`IrNonNullFacts`).
  *
  * A field `C.f` holding a reference qualifies when:
- * - every object of `C` or a subclass is made in the program (`NewObject`), and no native makes one (no native returns one);
+ * - every object of `C` or a subclass is made in the program (`NewObject`), and no native makes one: none returns one, and
+ *   none makes an object of any class without its constructor (`INSTANCE_ALLOCATIONS`);
  * - each of them is given a non-null `f` before anything but its initialization sees it (`IrObjectInit`): the block that makes
  *   it, or the constructors it runs, set `f` before the object is read, passed on or stored; so `f` is never read null, not even
  *   from the constructor (a read in a constructor stops what counts as set before it);
@@ -302,6 +303,8 @@ class IrNonNullFields {
 		// Any field name written where its owner cannot be told, and the classes something other than the program makes.
 		var anyOwner:Map<String, Bool> = [], reflective:Map<String, Bool> = [], dynamicObjects:Map<String, Bool> = [];
 		for (native in program.natives) {
+			if (INSTANCE_ALLOCATIONS.exists(native.library + "." + native.symbol))
+				return;
 			if (REFLECTIVE_WRITES.exists(native.symbol))
 				reflective.set(native.name, true);
 			if (native.symbol == DYNAMIC_OBJECT)
@@ -582,6 +585,15 @@ class IrNonNullFields {
 			made.inits.push(initOf(body, 0, -1, receiver, receiverClass, true, receiver, keys));
 		return made.settled();
 	}
+
+	/**
+	 * The natives that make an object of a class without running its constructor, by library and symbol: HashLink's `alloc_obj`,
+	 * which `Type.createEmptyInstance` and an unserializer call, makes one of the class a type value names, with every field null.
+	 * With one in the program no field qualifies. A native that returns an object it makes is either declared here or has that
+	 * class as its result type; a copy of an object (`__reflect_copy`) needs neither, as it copies one something already saw.
+	 */
+	@:processWide("a constant table of the natives that make an object without its constructor, only ever read")
+	static final INSTANCE_ALLOCATIONS:Map<String, Bool> = ["std.alloc_obj" => true];
 
 	/** The symbol of the runtime native that makes a dynamic object, which no class's field is. */
 	static inline final DYNAMIC_OBJECT = "__reflect_dynamic_object";
