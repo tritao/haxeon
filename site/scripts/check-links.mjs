@@ -14,8 +14,8 @@ for await (const file of glob('**/*.html', { cwd: output })) {
       .map((_, el) => html(el).attr('id') ?? html(el).attr('name'))
       .get(),
   );
-  const links = html('[href], script[src], img[src], source[src]')
-    .map((_, el) => html(el).attr('href') ?? html(el).attr('src'))
+  const links = html('[href], script[src], img[src], source[src], iframe[src], [data-showcase-src]')
+    .map((_, el) => html(el).attr('href') ?? html(el).attr('src') ?? html(el).attr('data-showcase-src'))
     .get();
   pages.set(file.split('\\').join('/'), { ids, links });
 }

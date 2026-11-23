@@ -131,7 +131,9 @@ platform.
 - **Android** uses the app's Gradle runner. Use `haxeon build --target android` to make a debug APK, or
   `haxeon run --target android --watch` to edit live on a connected device. See [Android](../reference/ANDROID.md).
 - **The web** uses the page in `web/`. Use `haxeon build --target wasm32` or `--target wasm-gc` to make a bundle.
-  The template includes a managed entry point for Android and the web, and a UI counter on desktop.
+  Serve the output directory over HTTP and open its `index.html`. The web runner currently starts the
+  template's managed entry point. The toolkit's WebGL2 host runs the UI Showcase separately.
+  See [WebAssembly backend](../reference/WASM_BACKEND.md) for the two targets.
 - **iOS** is planned.
 
 ## Next

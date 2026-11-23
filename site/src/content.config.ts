@@ -35,14 +35,13 @@ const docs = defineCollection({
         execFileSync(
           haxe,
           [
-            '-cp',
-            fileURLToPath(new URL('../src/', docsRoot)),
+            'common.hxml',
             '-cp',
             dirname(cliPrinter),
             '--run',
             'PrintCliHelp',
           ],
-          { encoding: 'utf8' },
+          { cwd: fileURLToPath(new URL('../', docsRoot)), encoding: 'utf8' },
         );
       let cliHelp = printHelp();
       let cliMarkdown = readFileSync(cliDoc, 'utf8');

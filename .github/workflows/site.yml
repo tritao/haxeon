@@ -29,8 +29,11 @@ jobs:
           node-version-file: site/.nvmrc
           cache: npm
           cache-dependency-path: site/package-lock.json
+      - run: sudo apt-get install -y python3-fonttools
       - run: nice -n 10 npm ci
       - run: nice -n 10 npm run build
+      # The live UI Showcase on /ui/: Emscripten and the toolkit's Wasm build, so only here and in the deploy.
+      - run: nice -n 10 npm run build:showcase
       - run: nice -n 10 npm run check:commands
       - run: nice -n 10 npm run check:links
       - run: nice -n 10 scripts/build-native.sh

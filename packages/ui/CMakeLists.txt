@@ -536,6 +536,7 @@ if(NK_BUILD_EXAMPLES)
     if(EXISTS "${NKUI_HAXEON_HAXE_BIN}")
         file(GLOB_RECURSE NKUI_HAXEON_DEPS CONFIGURE_DEPENDS
             "${NKUI_HAXEON_DIR}/src/*.hx"
+            "${NKUI_HAXEON_DIR}/lib/haxeon-io/*.hx"
             "${NKUI_HAXEON_DIR}/stdlib/*.hx")
         add_custom_target(nativekit_ui_showcase
             COMMAND ${CMAKE_COMMAND} -E env
@@ -658,7 +659,8 @@ if(NK_BUILD_EXAMPLES)
                 "${CMAKE_CURRENT_SOURCE_DIR}/examples/ui_showcase/*.hx"
                 "${CMAKE_CURRENT_SOURCE_DIR}/haxe/haxeon/ui/*.hx"
                 "${CMAKE_CURRENT_SOURCE_DIR}/bindings/haxe/haxeon/ui/*.hx"
-                "${NKUI_HAXEON_DIR}/packages/platform/src/haxeon/platform/*.hx")
+                "${NKUI_HAXEON_DIR}/packages/platform/src/haxeon/platform/*.hx"
+                "${NKUI_HAXEON_DIR}/packages/editor/src/haxeon/editor/*.hx")
             set(NKUI_HAXEON_MEMORY_CONTRACT_VERSION 1)
             set(NKUI_HAXEON_WASM_PAGE_SIZE 65536)
             set(NKUI_HAXEON_HOST_HEAP_BASE 0)
@@ -711,7 +713,10 @@ if(NK_BUILD_EXAMPLES)
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-showcase.hxmap"
+                    "${NKUI_HAXEON_DIR}/common.hxml"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net.hxmap"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui.hxmap"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxmap"
                     ${NKUI_HAXEON_GUEST_HX_DEPS}

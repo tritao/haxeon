@@ -13,7 +13,10 @@ assert.ok(fences.length > 0, 'Expected shell fences in the Get started guide');
 const origin = 'http://localhost';
 const dist = fileURLToPath(new URL('../dist/', import.meta.url));
 const pagePath = '/guides/get-started/';
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await chromium.launch({
+  channel: 'chrome',
+  args: ['--enable-unsafe-swiftshader'],
+});
 try {
   const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
   // Serve built assets directly to the browser so this check needs neither a port nor external resources.
@@ -100,6 +103,40 @@ try {
     }
   }
   console.log(`Verified ${fences.length} Get started command strips in Chrome at desktop and mobile widths.`);
+
+  const showcaseRequests = [];
+  page.on('request', request => {
+    if (new URL(request.url()).pathname.startsWith('/ui/showcase/')) {
+      showcaseRequests.push(request.url());
+    }
+  });
+  for (const [size, width] of [['desktop', 1440], ['mobile', 390]]) {
+    await page.setViewportSize({ width, height: 900 });
+    showcaseRequests.length = 0;
+    assert.equal((await page.goto(origin + '/ui/')).status(), 200);
+    const start = page.getByRole('button', { name: 'Start live Showcase' });
+    await start.waitFor();
+    assert.deepEqual(showcaseRequests, [], 'Showcase requested assets before activation');
+    await start.click();
+    const frame = page.locator('iframe[title="Haxeon UI Showcase"]');
+    await frame.waitFor({ timeout: 60_000 });
+    await frame.scrollIntoViewIfNeeded();
+    const box = await frame.boundingBox();
+    assert.ok(box && box.x >= 0 && box.x + box.width <= width, 'Showcase fits the viewport');
+
+    assert.ok(await frame.contentFrame().locator("canvas").isVisible());
+    if (process.env.HAXEON_SCREENSHOT_DIR) {
+      await page.screenshot({ path: join(process.env.HAXEON_SCREENSHOT_DIR, `showcase-${size}.png`) });
+    }
+  }
+
+  // A load failure leaves the preview available and the user can retry.
+  await page.route('**/nativekit_ui_haxeon.wasm', route => route.abort());
+  await page.goto(origin + '/ui/');
+  await page.getByRole('button', { name: 'Start live Showcase' }).click();
+  await page.getByText('The Showcase could not load.').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Start live Showcase' }).isEnabled(), true);
+  console.log('Verified click-to-start Showcase rendering at desktop and mobile widths and recovery after a load failure.');
 } finally {
   await browser.close();
 }

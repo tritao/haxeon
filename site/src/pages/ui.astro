@@ -56,7 +56,7 @@ const platforms = [
   ['macOS', 'Desktop runner with Metal and live editing.', firstApp + '#other-platforms'],
   ['Windows', 'Desktop runner with Direct3D 11 and live editing.', firstApp + '#other-platforms'],
   ['Android', 'Apps get a Gradle runner from haxeon create: debug APKs, and live editing on a device (patches and reloads are checked on an emulator in CI). The UI toolkit is an opt-in library of the host, not yet in the app template.', docsUrl('reference/ANDROID.md')],
-  ['Web', 'Experimental. Apps get a page runner from haxeon create and build as WebAssembly; the toolkit runs in the WebGL2 Showcase host, not yet in the app template. No live editing in the browser yet.', showcase],
+  ['Web', 'Experimental. The live WebAssembly Showcase requires WebGL2. The generated app runner supports managed WebAssembly apps. Toolkit integration and live editing in that runner are pending.', showcase],
 ];
 ---
 
@@ -152,6 +152,12 @@ const platforms = [
           <h2>Widget gallery</h2>
           <p class="lede">Explore the controls and their states in the <a href={showcase}>UI Showcase</a>.</p>
         </div>
+        <div class="live-showcase">
+          <img src="/ui/showcase-dark.png" width="1280" height="900" loading="lazy" alt="Preview of the UI Showcase controls" />
+          <button class="btn primary" type="button" data-showcase-src="/ui/showcase/?embed" hidden>Start live Showcase</button>
+          <a href="/ui/showcase/" target="_blank" rel="noopener">Open Showcase in its own tab</a>
+          <p role="status" hidden></p>
+        </div>
         <div class="grid gallery">
           {['light', 'dark'].map((theme) => (
             <figure>
@@ -220,4 +226,60 @@ const platforms = [
   @media (max-width: 30rem) {
     .platforms div { grid-template-columns: minmax(0, 1fr); gap: var(--hx-space-1); }
   }
+</style>
+
+<script>
+  const start = document.querySelector<HTMLButtonElement>('[data-showcase-src]');
+  if (start) {
+    start.hidden = false;
+    start.addEventListener('click', () => {
+      const frame = document.createElement('iframe');
+      frame.title = 'Haxeon UI Showcase';
+      frame.src = start.dataset.showcaseSrc!;
+      const wrapper = start.parentElement!;
+      const status = wrapper.querySelector('[role="status"]') as HTMLElement;
+      status.hidden = false;
+      status.textContent = 'Loading the Showcase…';
+      start.disabled = true;
+
+      // Keep the catalog and workspace in view at narrow widths.
+      const resize = new ResizeObserver(([entry]) => {
+        const available = entry.contentRect.width;
+        const width = Math.max(700, available);
+        frame.style.width = `${width}px`;
+        frame.style.zoom = String(available / width);
+      });
+      resize.observe(wrapper);
+
+      function receive(event: MessageEvent) {
+        if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+        if (event.data === 'haxeon-showcase-ready') {
+          wrapper.dataset.running = '';
+          status.hidden = true;
+          start.hidden = true;
+        } else if (event.data === 'haxeon-showcase-failed') {
+          delete wrapper.dataset.running;
+          resize.disconnect();
+          frame.remove();
+          status.hidden = false;
+          status.textContent = 'The Showcase could not load.';
+          start.hidden = false;
+          start.disabled = false;
+          window.removeEventListener('message', receive);
+        }
+      }
+
+      window.addEventListener('message', receive);
+      wrapper.prepend(frame);
+    });
+  }
+</script>
+
+<style>
+  .live-showcase { position: relative; display: grid; justify-items: start; gap: 0.75rem; margin-bottom: 2rem; }
+  .live-showcase [hidden] { display: none; }
+  .live-showcase img, .live-showcase :global(iframe) { width: 100%; height: auto; }
+  .live-showcase :global(iframe) { aspect-ratio: 3 / 2; border: 0; min-height: 600px; }
+  .live-showcase:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
+  .live-showcase[data-running] img { display: none; }
 </style>

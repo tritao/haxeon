@@ -14,6 +14,12 @@ npm run check:links
 npm run check:examples
 ```
 
+`npm run build:showcase`, after `npm run build`, builds the live WebGL2 UI Showcase on /ui/ from
+source with CMake, Ninja, the pinned Emscripten toolchain and Python FontTools, into `dist/`. It
+installs Emscripten on its first run and reuses the build directory under `out/site-showcase`
+afterwards. CI and the deploy run it; without it /ui/ shows the Showcase's preview image. Use
+`npm run preview` after both to exercise the live Showcase.
+
 Open the URL printed by Astro. The production build is static HTML in `dist/`. Use
 `npm run preview` to serve it locally. Set `ASTRO_TELEMETRY_DISABLED=1` in environments with a
 read-only home directory.

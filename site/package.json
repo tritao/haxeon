@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "build:showcase": "bash scripts/build-showcase.sh",
     "preview": "astro preview",
     "check:commands": "node scripts/check-commands.mjs",
     "check:examples": "node scripts/check-examples.mjs",
