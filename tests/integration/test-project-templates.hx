@@ -29,8 +29,25 @@ function main() {
 	expectStatus(haxeon(["run"], tool, log), 0, log, "running the program");
 	expectText(log, "Hello from tool", "the program's output");
 
-	// app: an [app] section for this machine's platform, and a window that runs for a few frames and is captured.
+	for (bad in [
+		["create", "x", "--template", "web"],
+		["create", "y", "--platforms", "tv"],
+		["create", "z", "--template", "program", "--platforms", "linux"]
+	]) {
+		log = Path.join([work, "usage.log"]);
+		expectStatus(haxeon(bad, work, log), 2, log, bad.join(" "));
+	}
+
+	// app: an [app] section for this machine's platform, and a window that runs for a few frames and is captured. The template
+	// has a runner for Linux only so far; elsewhere create says so, and the rest of the app checks wait for that platform's runner.
 	log = Path.join([work, "create-app.log"]);
+	if (Sys.systemName() != "Linux") {
+		expectStatus(haxeon(["create", "hello-app", "--org", "org.example"], work, log), 2, log,
+			"create an app without a runner");
+		expectText(log, "The app template has no", "create an app without a runner");
+		Sys.println("PASS: create makes a program that builds and runs, rejects bad options, and refuses an app for a platform without a runner");
+		return;
+	}
 	expectStatus(haxeon(["create", "hello-app", "--org", "org.example"], work, log), 0, log, "create an app");
 	var app = Path.join([work, "hello-app"]),
 		manifest = File.getContent(Path.join([app, "haxeon.toml"]));
@@ -100,14 +117,6 @@ function main() {
 	if (File.getContent(Path.join([app, "haxeon.toml"])).indexOf("# edited") < 0)
 		Script.fail("FAIL: create . changed haxeon.toml");
 
-	for (bad in [
-		["create", "x", "--template", "web"],
-		["create", "y", "--platforms", "tv"],
-		["create", "z", "--template", "program", "--platforms", "linux"]
-	]) {
-		log = Path.join([work, "usage.log"]);
-		expectStatus(haxeon(bad, work, log), 2, log, bad.join(" "));
-	}
 	Sys.println("PASS: create makes a program and an app that build (through its runner, also ahead of time) and run, restores missing files, and rejects bad options");
 }
 

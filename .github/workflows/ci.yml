@@ -10,10 +10,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Pushes and pull requests share one group per ref and cancel what they supersede. Nightly and manual runs each get a group
-  # of their own (the run id) and are never cancelled, by a push or anything else.
+  # Pushes and pull requests share one group per ref and cancel what they supersede, except on main: pushes there come faster
+  # than a run finishes, and a run cancelled by the next push gives no verdict, so failures pile up unseen. Main's runs queue
+  # instead. Nightly and manual runs each get a group of their own (the run id) and are never cancelled.
   group: compiler-and-runtime-${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'push' }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
 
 jobs:
   platform:

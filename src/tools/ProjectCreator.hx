@@ -46,6 +46,14 @@ class ProjectCreator {
 				// The major and minor version the runner finds the SDK at (find_package(Haxeon 0.3)).
 				"haxeon_version" => project.PackageCompatibility.CURRENT_HAXEON.split(".").slice(0, 2).join(".")
 			];
+		// The template's runners are its platforms (docs/design/PROJECT_BUILDS.md): an app for one it has none for could not build.
+		if (existingApp == null && options.template == "app")
+			for (platform in platforms)
+				if (!FileSystem.exists(Path.join([templateDirectory, platform])))
+					throw new UsageError('The app template has no $platform runner yet, so an app cannot build for $platform; it has: '
+						+ [for (name in AppManifest.PLATFORMS)
+						if (FileSystem.exists(Path.join([templateDirectory, name]))) name].join(", ")
+						+ (options.platforms == null ? ' (choose with --platforms)' : ''));
 		var created:Array<String> = [], kept:Array<String> = [];
 		copy(templateDirectory, target, "", values, created, kept, platforms);
 		var shown = options.directory == "." ? "this directory" : options.directory;
