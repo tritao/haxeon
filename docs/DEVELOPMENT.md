@@ -70,12 +70,19 @@ and taken back six times, and an optional argument added to `InternalError`'s co
 gates allocated bytes and the functions retyped, artifacts invalidated and functions regenerated (the `HAXEON_EXPLAIN_INVALIDATION`
 counts); wall is printed. A heap census at the end of every build gives the session's live data after the last body edit and its
 growth over the last two, which stays near zero unless the session keeps something from every build. A second session of the
-server, without those reports, gates edit latency: main-thread `instructions:u` of a no-op rebuild (the floor every build pays),
-of the body edit and of the signature edit, from `perf stat --per-thread` attached to the server around each build, each build
-starting once the server has settled from the one before (skipped where perf is not available); per build it prints wall, the
-collections inside it and the server's peak resident set. When `haxeon-aot` is current (`haxeon dev aot`), a third session prints
-edit wall on the server built ahead of time, with the collector marking on its threads as a user's does, never compared; otherwise
-it is skipped and passes. This part adds about three minutes.
+server, without those reports, gates what an edit costs: main-thread `instructions:u` of a no-op rebuild (the floor every build
+pays), of the body edit and of the signature edit, from `perf stat --per-thread` attached to the server around each build, each
+build starting once the server has settled from the one before (skipped where perf is not available), and the collections inside
+a body edit and their milliseconds (`body_edit_collections`, `body_edit_collection_ms`, means of three, from the runtime's
+collection count and mark time), which the instructions leave out; per build it prints wall and the server's peak resident set.
+A third session prints edit wall on the server built ahead of time, with the collector marking on its threads as a user's does,
+never compared. The guard builds `haxeon-aot` for it and for the small project's aot mode when it is not current
+(`haxeon dev aot`), and removes it again at the end, so a checkout that had none current is left without one. This part adds
+about three minutes, and a stale `haxeon-aot` its build.
+
+`--quick` runs only that second session, without its signature edit: the cold build, the no-ops and the three body edits,
+compared on the same metrics and tolerances (the no-op and body-edit instructions, the body edit's collections). It takes a
+few minutes, and is the check for a change to the IR, the backends or the typer between full runs.
 
 The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
 no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
@@ -93,13 +100,18 @@ guards.
 Each metric is compared with `tests/perf/self-compile-baseline.json`, `tests/perf/incremental-baseline.json` or
 `tests/perf/small-project-baseline.json`, which hold its
 value and tolerance and why the tolerance is what it is. Above the tolerance the suite fails; below it the suite passes and asks
-for the baseline to be updated, so a gain is locked in. Moving `input_revision` (when the old sources no longer compile, or to
-follow the compiler's growth) re-baselines every metric in the same commit. A change that moves the values on purpose (a feature that costs memory, an optimization) updates the baseline in the same
-commit, from a quiet Linux x86-64 machine:
+for the baseline to be updated, so a gain is locked in. A baseline never moves up by itself: `--update` writes only the
+metrics that improved beyond their tolerance, so a metric that got worse within it stays where it was and a series of updates
+cannot ratchet it up. A cost taken on purpose (a feature that costs memory) is raised by name, with its reason, which the
+baseline keeps beside the value (`raise_reason`) until the metric improves again. Moving `input_revision` (when the old sources
+no longer compile, or to follow the compiler's growth) re-baselines in the same commit: `--update`, and `--raise` for each metric
+that went up, with the move as its reason. Measure from a quiet Linux x86-64 machine, and commit the baseline with the change:
 
 ```sh
-python3 scripts/perf-guard.py            # measure and compare
-python3 scripts/perf-guard.py --update   # write the measured values into the baselines; tolerances are kept
+python3 scripts/perf-guard.py                                   # measure and compare
+python3 scripts/perf-guard.py --quick                           # the edit-cost session alone, a few minutes
+python3 scripts/perf-guard.py --update                          # also write the metrics that improved; tolerances are kept
+python3 scripts/perf-guard.py --raise=server_live_bytes=REASON  # also write this higher value, with why
 ```
 
 The incremental edits are anchored on a line of `HaxeonCompiler.main` and on `InternalError`'s constructor (`BODY_EDIT` and
