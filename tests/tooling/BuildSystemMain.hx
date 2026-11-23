@@ -1780,7 +1780,7 @@ class BuildSystemMain {
 			project = resolver.resolve(manifest),
 			entry = project.lockfile.get("foo");
 		expect(project.packages.get("foo") != null && project.packages.get("bar") != null
-			&& project.packages.get("foo").root == FileSystem.fullPath(foo),
+			&& project.packages.get("foo").root == Path.normalize(FileSystem.fullPath(foo)),
 			"a live registry package should resolve from its directory under its registry name, with its path dependency");
 		expect(entry != null && entry.resolvedRevision == "0.3.0" && entry.checksum == null
 			&& entry.dependencies.length == 1 && entry.dependencies[0].name == "bar",
@@ -1854,7 +1854,8 @@ class BuildSystemMain {
 				app,
 				"haxeon.toml"
 			]));
-		expect(project.packages.get("foo") != null && project.packages.get("foo").root == FileSystem.fullPath(local),
+		expect(project.packages.get("foo") != null
+			&& project.packages.get("foo").root == Path.normalize(FileSystem.fullPath(local)),
 			"[patch.haxeon] should resolve the package from its directory");
 		FileTree.remove(root);
 	}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke test of a release archive (`haxeon dev package`, docs/DEVELOPMENT.md, Releases), as a user meets it: unpacked into a
 # directory of its own outside any checkout, with a home directory of its own so every cache starts cold, and nothing but the
-# archive's bin/haxeon. It runs --version, doctor, init + build + run + check of a new project and a script, checks that
+# archive's bin/haxeon. It runs --version, doctor, create (console) + build + run + check of a new project and a script, checks that
 # the compiles ran the compiler the archive is meant to run, and runs a program under `run --watch --live`, edits it and sees
 # the running program patched. Where the app template has a runner for this platform it then creates the app, which takes its
 # UI package from the release's haxeon registry, builds it through its runner in development and release mode (a C toolchain,
@@ -76,7 +76,7 @@ isolate() {
 project_round() {
 	local haxeon=$1/bin/haxeon$suffix project=$2
 	mkdir -p "$project"
-	(cd "$project" && "$haxeon" init >/dev/null) || fail "haxeon init"
+	(cd "$project" && "$haxeon" create . --template console >/dev/null) || fail "haxeon create"
 	printf 'function main():Int {\n\tSys.println("release smoke: " + [for (i in 1...4) i * i].join(","));\n\treturn 0;\n}\n' \
 		>"$project/src/Main.hx"
 	local started output
@@ -163,7 +163,7 @@ else
 	grep -q '^ok: compiler bytecode' <<<"$doctor" || fail "doctor does not report the compiler bytecode"
 fi
 
-echo "== haxeon init, build, run, check"
+echo "== haxeon create (console), build, run, check"
 project_round "$root" "$work/projects/hello"
 aot_seconds=$build_seconds
 check_compiler "$root" "$expect_aot"
@@ -192,7 +192,7 @@ fi
 echo "== haxeon run --watch --live: an edit patches the running program"
 live=$work/projects/live
 mkdir -p "$live"
-(cd "$live" && "$haxeon" init >/dev/null) || fail "haxeon init of the live program"
+(cd "$live" && "$haxeon" create . --template console >/dev/null) || fail "haxeon create of the live program"
 live_source one "$live"
 (cd "$live" && exec "$haxeon" run --watch --live) >"$work/live.log" 2>&1 &
 watch=$!
@@ -208,6 +208,12 @@ headless=()
 if command -v xvfb-run >/dev/null; then
 	headless=(xvfb-run -a)
 fi
+# What --capture=$1 wrote: the frames the app rendered, and on Linux the window's image, which ImageMagick's import takes from
+# the X server.
+captured() {
+	[[ -f $1/frame-metrics.json ]] && grep -Eq '"renderedFrames": *[1-9]' "$1/frame-metrics.json" &&
+		{ [[ $platform != linux ]] || [[ -f $1/frame.png ]]; }
+}
 # `haxeon create` makes an app only for a platform the template has a runner for.
 if [[ -d $root/templates/app/$platform ]]; then
 	# The app template from the release's templates, its UI package from the release's haxeon registry, built through its
@@ -218,7 +224,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	grep -q '^ui = "^' "$app/haxeon.toml" || fail "the app's manifest does not use the UI package from the haxeon registry"
 	(cd "$app" && "$haxeon" build) || fail "haxeon build of the app"
 	(cd "$app" && "${headless[@]}" "$haxeon" run -- --frames=3 "--capture=$work/capture") || fail "haxeon run of the app"
-	[[ -f $work/capture/frame.png ]] || fail "the app wrote no frame.png"
+	captured "$work/capture" || fail "the app captured no rendered frame"
 	(cd "$app" && "$haxeon" install >/dev/null) || fail "haxeon install of the app"
 	grep -q '"checksum"' "$app/haxeon.lock" || fail "the release wrote no checksums into the app's haxeon.lock"
 	(cd "$app" && "$haxeon" build --build-mode=release) || fail "haxeon build --build-mode=release of the app"
@@ -227,7 +233,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	executable=$(find "$app/build/$platform/app" -name "hello-app$suffix" -type f | head -1)
 	[[ -n $executable ]] || fail "the release build made no hello-app$suffix under $app/build/$platform/app"
 	"${headless[@]}" "$executable" --frames=3 "--capture=$work/capture-release" || fail "the app compiled ahead of time"
-	[[ -f $work/capture-release/frame.png ]] || fail "the app compiled ahead of time wrote no frame.png"
+	captured "$work/capture-release" || fail "the app compiled ahead of time captured no rendered frame"
 
 	# The live host in the app's runner. The app runs until its window closes, so the test stops it once a patch applied. An
 	# edit made before the watch took its first snapshot goes unseen, and one the host sees before it loaded the first module is
@@ -260,7 +266,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	echo "== a program with a native package (nativekit) from the release's registry"
 	native=$work/projects/native-program
 	mkdir -p "$native"
-	(cd "$native" && "$haxeon" init >/dev/null && "$haxeon" add nativekit >/dev/null) || fail "haxeon add nativekit"
+	(cd "$native" && "$haxeon" create . --template console >/dev/null && "$haxeon" add nativekit >/dev/null) || fail "haxeon add nativekit"
 	printf 'function main():Int {\n\tSys.println("native program ok");\n\treturn 0;\n}\n' >"$native/src/Main.hx"
 	(cd "$native" && "$haxeon" build) || fail "haxeon build of a program with a native package"
 	# The native package's up-to-date check (CMake and Ninja) prints even under --quiet; the program's line is the last.
@@ -273,7 +279,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	echo "== a program with a NativeKit module's package (filesystem) from the release's registry"
 	module=$work/projects/module-program
 	mkdir -p "$module"
-	(cd "$module" && "$haxeon" init >/dev/null && "$haxeon" add filesystem >/dev/null) || fail "haxeon add filesystem"
+	(cd "$module" && "$haxeon" create . --template console >/dev/null && "$haxeon" add filesystem >/dev/null) || fail "haxeon add filesystem"
 	printf 'function main():Int {\n\tvar root = new haxeon.filesystem.FileSystemRoot(Sys.getCwd());\n\tSys.println("module program ok " + (root.stat("").get_kind() == nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntryKind.Directory));\n\troot.close();\n\treturn 0;\n}\n' \
 		>"$module/src/Main.hx"
 	(cd "$module" && "$haxeon" build) || fail "haxeon build of a program with a NativeKit module's package"
