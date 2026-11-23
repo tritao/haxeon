@@ -309,12 +309,13 @@ class SemanticAssembly {
 			}
 			aliases.attach(plainSourceAliases);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
-			// Enum constructors imported through their enum type are expression
-			// aliases. Install them only after visible type aliases have been
-			// collected, so a class in the current/imported package keeps its
-			// name in type positions such as `new Tabs()`.
+			// Enum constructors imported through their enum type are expression aliases, so a type of the same name keeps it in
+			// type positions such as `new Tabs()`. In an expression an imported constructor comes before a type of the package or
+			// the program, as in Haxe (`Lambda(3)` with `import pack.Shape` is Shape's constructor, not the class `Lambda`); a
+			// type the module declares or imports by name keeps the name.
 			for (caseName => target in constructorTargets)
-				if (!ambiguousConstructors.exists(caseName) && !aliases.exists(caseName))
+				if (!ambiguousConstructors.exists(caseName) && !importedTypes.exists(caseName)
+					&& !aliases.setsOwn(caseName))
 					ModuleCanonicalizer.addExpressionAlias(aliases, caseName, target);
 			var aliasStart = typeAliases.length,
 				enumStart = enums.length,

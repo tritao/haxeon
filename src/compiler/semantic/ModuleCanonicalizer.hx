@@ -748,8 +748,18 @@ class ModuleCanonicalizer {
 	**/
 	static final EXPRESSION_ONLY_PREFIX = "#expression:";
 
+	/** The type a name an expression alias took resolved to (`addExpressionAlias`). */
+	static final SHADOWED_TYPE_PREFIX = "#shadowed-type:";
+
 	/** Aliases `name` to `target` in expressions, leaving type positions untouched. */
+	/**
+	 * `name` as `target` in expressions only. A type the name resolved to before (a type of the package or the program, which an
+	 * imported constructor comes before in an expression) is what it still resolves to in a type position.
+	 */
 	public static function addExpressionAlias(aliases:AliasTable, name:String, target:String):Void {
+		var shadowedType = aliases.get(name);
+		if (shadowedType != null)
+			aliases.set(SHADOWED_TYPE_PREFIX + name, shadowedType);
 		aliases.set(name, target);
 		aliases.set(EXPRESSION_ONLY_PREFIX + name, target);
 	}
@@ -758,8 +768,10 @@ class ModuleCanonicalizer {
 		if (aliases == null)
 			return name;
 		var availableAliases:AliasTable = aliases;
-		if (!availableAliases.exists(name) || availableAliases.exists(EXPRESSION_ONLY_PREFIX + name))
+		if (!availableAliases.exists(name))
 			return name;
+		if (availableAliases.exists(EXPRESSION_ONLY_PREFIX + name))
+			return availableAliases.get(SHADOWED_TYPE_PREFIX + name) ?? name;
 		return availableAliases.get(name);
 	}
 

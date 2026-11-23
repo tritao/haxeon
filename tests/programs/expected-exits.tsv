@@ -678,3 +678,4 @@ type-class-reflection	42
 enum-abstract-value-scope	42
 key-value-iteration	42
 generic-structure-member	42
+imported-constructor-shadows-type	42

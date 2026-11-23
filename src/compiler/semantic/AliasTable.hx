@@ -80,6 +80,10 @@ class AliasTable {
 			removed.remove(name);
 	}
 
+	/** Whether this table sets `name` itself (a module's own declaration, an import's marker), not through a layer or parent. */
+	public function setsOwn(name:String):Bool
+		return local.exists(name);
+
 	/** Hides `name` from this table, however it would otherwise resolve. */
 	public function remove(name:String):Void {
 		local.remove(name);
