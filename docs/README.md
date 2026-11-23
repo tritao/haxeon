@@ -5,20 +5,29 @@ Where a document lives says what kind it is:
 | Folder | Holds | Rule |
 |---|---|---|
 | top level | [ARCHITECTURE.md](ARCHITECTURE.md), [DEVELOPMENT.md](DEVELOPMENT.md) | Describe the tree as it is. |
+| [guides/](guides/) | Tutorials and how-tos for people building apps with Haxeon | Each guide's code is a project under `guides/examples/` that CI builds ([guides/README.md](guides/README.md)). |
 | [reference/](reference/) | How to use Haxeon: commands, the manifest, the language, the libraries | Kept in step with the code. |
 | [internals/](internals/) | Contracts the compiler and runtime implement: formats, protocols, ownership rules | Kept in step with the code. Not published on the site. |
 | [design/](design/) | Design notes, proposals and plans | Starts with a `Status:` line. |
 | [adr/](adr/) | Architecture decision records | Decisions and their status only. |
 | [reports/](reports/) | Dated measurements, experiments and reviews, named `YYYY-MM-topic.md` | Not edited after acceptance. Describes the tree at that date. |
 
-Reference pages are what the site publishes ([design/WEBSITE.md](design/WEBSITE.md)), so they must not link into
-`design/`, `reports/` or `internals/`. A page for people working on Haxeon itself goes in `internals/`.
+Guides and reference pages are what the site publishes ([design/WEBSITE.md](design/WEBSITE.md)), so they must not link into
+`design/`, `reports/` or `internals/` (the guides' check enforces it for guides). A page for people working on Haxeon
+itself goes in `internals/`.
 
 A plan that is superseded or finished, a log of finished work, and a report on an experiment that was dropped are
 deleted: git keeps them. What still matters moves first into the code's comments, a reference page or a design note.
 
 The project roadmap is [../ROADMAP.md](../ROADMAP.md). The UI package keeps its own documents in
 [../packages/ui/docs/](../packages/ui/docs/).
+
+## Guides
+
+Tutorials, in order ([guides/README.md](guides/README.md)):
+
+1. [Your first app](guides/01-first-app.md): create, run and change an app, then build it for shipping.
+2. [Live editing](guides/02-live-editing.md): what an edit to a running app can change, and how its state carries across.
 
 ## Reference
 

@@ -67,7 +67,8 @@ The table follows README.md; when a platform's status changes there, it changes 
   `JIT_NATIVE_PROPERTIES`, `HASHLINK_MODULE_RECLAMATION`, `GENERIC_SPECIALIZATION`), which the site does not publish.
 - **Generated where code is the source:** the CLI reference from `CliHelp`, one page per error code (`E1xxx`) with an
   example, the package and standard library API from doc comments, the compatibility table from the differential tests.
-- **Every code block is compiled in CI**, and run where the page shows its output.
+- **Every code block is compiled in CI**, and run where the page shows its output. A guide's code is an example project under
+  `docs/guides/examples/`, and its code blocks are excerpts of it (`docs/guides/README.md`).
 
 ## Native code
 

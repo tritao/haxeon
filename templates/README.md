@@ -16,3 +16,7 @@ runner project (docs/design/PROJECT_BUILDS.md), copied only for the platforms th
 `.template` loses that suffix when it is copied, so a template can hold a file the repository
 would otherwise treat as its own (a `haxeon.toml`). Each template is created, built and run by
 `tests/integration/test-project-templates.hx`.
+
+The guides start from the app template (docs/guides/01-first-app.md): their example projects under `docs/guides/examples/`
+are its output with the guides' changes, so a change to the template's `haxeon.toml` or `src/Main.hx` goes there too
+(`tests/integration/test-docs-guides.hx` checks the manifest).
