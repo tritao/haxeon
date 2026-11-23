@@ -81,6 +81,16 @@ class LoopBoundsMain {
 		expect(count("function resize(a:Array<Int>):Void { a.pop(); } function scan(a:Array<Int>):Int { resize(a); var sum=0; for(i in 0...a.length) sum+=a[i]; return sum; }",
 			"scan") == 1,
 			"a fresh length read after resizing still proves the loop access");
+		// A proof holds for one array value: an array read again from an element each time, which the loop replaces, is not it.
+		expect(count("function scan(arrs:Array<Array<Int>>):Int { var n = 0; for (i in 0...arrs[0].length) { arrs[0] = [7]; n += arrs[0][i]; } return n; }",
+			"scan") == 0,
+			"an inner array replaced through an element write and read again keeps its checks");
+		expect(count("function scan(arrs:Array<Array<Int>>):Int { var n = 0, i = 0; while (i < arrs[0].length) { arrs[0] = [7]; n += arrs[0][i]; i++; } return n; }",
+			"scan") == 0,
+			"a length tested on one read of an element does not prove an access through another");
+		expect(count("function scan(a:Array<Int>, alias:Array<Int>):Int { var n = 0; for (i in 0...a.length) { n += a[i]; alias.pop(); } return n; }",
+			"scan") == 0,
+			"an array shrunk through an alias in the loop keeps its checks");
 		var pure = '@:hlNative("haxeon_runtime", "__math_sqrt") extern function root(x:Float):Float; '
 			+ 'function scan(a:Array<Float>):Float { var n = 0.0; for (i in 0...a.length) n += root(a[i]); return n; }';
 		expect(count(pure, "scan") == 1, "known scalar math native cannot resize an array");
