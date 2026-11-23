@@ -11,6 +11,9 @@ import compiler.ir.passes.scalars.IrScalarWordBits;
 @:access(compiler.ir.model.IrBuilder)
 @:nullSafety(Strict)
 class IrEnumTagStorage {
+	/** What the names of the tag adapters start with (`adapterNames`). */
+	static inline final ADAPTER_PREFIX = "$enum-tag-";
+
 	public static function eligible(declaration:IrEnum):Bool {
 		for (constructor in declaration.cases)
 			if (constructor.params.length != 0)
@@ -26,7 +29,9 @@ class IrEnumTagStorage {
 			boxes:Map<String, String> = [],
 			unboxes:Map<String, String> = [];
 		for (fn in program.functions) {
-			occupied.set(fn.name, true);
+			// Every name `free` gives starts with the prefix, so only those can be taken.
+			if (StringTools.startsWith(fn.name, ADAPTER_PREFIX))
+				occupied.set(fn.name, true);
 			switch fn.kind {
 				case EnumTagAdapter(EnumTag(type), true):
 					boxes.set(type, fn.name);
@@ -39,9 +44,9 @@ class IrEnumTagStorage {
 		for (name in names) {
 			var box = boxes.get(name), unbox = unboxes.get(name);
 			if (box == null)
-				box = free(occupied, "$enum-tag-box:" + name);
+				box = free(occupied, ADAPTER_PREFIX + "box:" + name);
 			if (unbox == null)
-				unbox = free(occupied, "$enum-tag-unbox:" + name);
+				unbox = free(occupied, ADAPTER_PREFIX + "unbox:" + name);
 			result.set(name, {box: box, unbox: unbox});
 		}
 		return result;
