@@ -49,17 +49,23 @@ class CompilerServer {
 		var token = secureToken();
 		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);
-		listener.listen(8);
+		listener.listen(32);
 		var idleSeconds = idleTimeout();
 		// `idleSeconds` also tells clients how often to ping, and that this worker understands pings.
 		var descriptor = CompilerServerProtocol.encodeState({
 			port: listener.host().port,
 			token: token,
 			pid: processId(),
-			idleSeconds: idleSeconds
+			idleSeconds: idleSeconds,
+			canRetire: true
 		});
-		File.saveContent(statePath + "." + token + ".tmp", descriptor);
-		FileSystem.rename(statePath + "." + token + ".tmp", statePath);
+		var temporaryState = statePath + "." + token + ".tmp";
+		function publishState():Void {
+			File.saveContent(temporaryState, descriptor);
+			CompilerDriver.replaceFile(temporaryState, statePath);
+		}
+		publishState();
+		var shutdown:Null<Socket> = null, live = false;
 		try {
 			var running = true;
 			var idleDeadline = Sys.time() + idleSeconds;
@@ -74,13 +80,23 @@ class CompilerServer {
 						break;
 					continue;
 				}
-				var client = listener.accept(), answered = false;
+				var client = listener.accept(), answered = false, activity = false;
 				// The request being served, once its arguments parsed: its diagnostics are printed as it asks.
 				var request:Null<CompilerRequest> = null;
 				client.setTimeout(600);
 				try {
-					switch CompilerServerProtocol.readRequest(client.input, token) {
-						case Shutdown:
+					var incoming = CompilerServerProtocol.readRequest(client.input, token);
+					activity = true;
+					switch incoming {
+						case Retire if (live):
+							// A budget sweep must not shorten the idle window of a live editing session.
+							activity = false;
+							send(client, Status(1));
+							client.close();
+							answered = true;
+						case Shutdown | Retire:
+							shutdown = client;
+							answered = true;
 							running = false;
 						case Ping:
 							// A watch session is still running; the request only counts as activity. The pinger does not wait for
@@ -94,8 +110,9 @@ class CompilerServer {
 							send(client, Status(0));
 							client.close();
 							answered = true;
-							var started = Sys.time();
-							var retyped = compileConnected(null, CompilerArguments.parse(arguments), session);
+							var started = Sys.time(), parsed = CompilerArguments.parse(arguments);
+							live = live || parsed.live;
+							var retyped = compileConnected(null, parsed, session);
 							recordLiveState(session);
 							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, $retyped functions retyped');
 						case Compile(arguments):
@@ -105,6 +122,7 @@ class CompilerServer {
 							#end
 							var parsed = CompilerArguments.parse(arguments);
 							request = parsed;
+							live = live || parsed.live;
 							var retyped = compileConnected(client, parsed, session);
 							// The worker's costs, at `detailed`.
 							if (parsed.verbosity.atLeast(Verbosity.Detailed)) {
@@ -117,6 +135,10 @@ class CompilerServer {
 									Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, $retyped functions retyped'));
 							}
 					}
+					if (activity && running)
+						try
+							publishState()
+						catch (_:Dynamic) {}
 					if (!answered)
 						send(client, Status(0));
 				} catch (error:Dynamic) {
@@ -137,18 +159,26 @@ class CompilerServer {
 				}
 				if (!answered)
 					client.close();
-				idleDeadline = Sys.time() + idleSeconds;
+				if (activity)
+					idleDeadline = Sys.time() + idleSeconds;
 			}
 		} catch (error:Dynamic) {
 			Sys.stderr().writeString("Compiler server stopped: " + Std.string(error) + "\n");
 		}
 		recordLiveState(session);
-		listener.close();
-		// A concurrent startup may have published a replacement worker.
+		// Keep accepting connections in the kernel until the history is ready for a replacement.
+		// Remove the rendezvous before closing, so a new worker can only publish after this deletion.
 		try {
 			if (File.getContent(statePath) == descriptor)
 				FileSystem.deleteFile(statePath);
 		} catch (_:Dynamic) {}
+		listener.close();
+		if (shutdown != null) {
+			try
+				send(shutdown, Status(0))
+			catch (_:Dynamic) {}
+			shutdown.close();
+		}
 	}
 
 	/**

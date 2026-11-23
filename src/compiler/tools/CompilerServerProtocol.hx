@@ -24,6 +24,9 @@ typedef CompilerServerState = {
 	 * understands pings: it is 0 in the state of a server from before pings.
 	 */
 	final idleSeconds:Float;
+
+	/** The worker can reject retirement while it has a live patch baseline. */
+	final canRetire:Bool;
 }
 
 /** One request to a compile server. Each is sent on a connection of its own. */
@@ -40,7 +43,10 @@ enum CompilerServerRequest {
 	/** Counts as activity, so the server does not idle out. It is not answered. */
 	Ping;
 
-	/** Stops the server once the connection closes; answered with a status. */
+	/** Stops a batch worker. Live workers keep their patch baseline until their idle timeout. */
+	Retire;
+
+	/** Stops the server and records any outstanding live history before replying. */
 	Shutdown;
 }
 
@@ -69,7 +75,8 @@ class CompilerServerProtocol {
 			port: state.port,
 			token: state.token,
 			pid: state.pid,
-			idleSeconds: state.idleSeconds
+			idleSeconds: state.idleSeconds,
+			canRetire: state.canRetire
 		});
 
 	/** The state a rendezvous file holds, or null when it does not describe a server a client can reach. */
@@ -86,7 +93,8 @@ class CompilerServerProtocol {
 			port: port,
 			token: token,
 			pid: pid,
-			idleSeconds: idleSeconds
+			idleSeconds: idleSeconds,
+			canRetire: value.canRetire == true
 		};
 	}
 
@@ -95,6 +103,7 @@ class CompilerServerProtocol {
 			case Compile(arguments): {token: token, arguments: arguments};
 			case Background(arguments): {token: token, arguments: arguments, background: true};
 			case Ping: {token: token, ping: true};
+			case Retire: {token: token, retire: true};
 			case Shutdown: {token: token, shutdown: true};
 		}));
 		output.writeInt32(bytes.length);
@@ -110,6 +119,8 @@ class CompilerServerProtocol {
 		var value:Dynamic = Json.parse(input.readString(length));
 		if (value.token != token)
 			throw new InternalError("Invalid compiler session token");
+		if (value.retire == true)
+			return Retire;
 		if (value.shutdown == true)
 			return Shutdown;
 		if (value.ping == true)

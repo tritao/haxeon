@@ -318,8 +318,20 @@ class CompilerSession {
 			bytes = Bytes.alloc(key.length + state.length);
 		bytes.blit(0, key, 0, key.length);
 		bytes.blit(key.length, state, 0, state.length);
-		File.saveBytes(output + ".live.state.tmp", bytes);
-		CompilerDriver.replaceFile(output + ".live.state.tmp", output + ".live.state");
+		var temporary = output + ".live.state.tmp." + Std.string(Std.random(0x3fffffff));
+		try {
+			File.saveBytes(temporary, bytes);
+			// A different compiler can finish publishing while this one encodes its history.
+			if (File.getContent(output + ".live.full") != publication.marker) {
+				FileSystem.deleteFile(temporary);
+				return false;
+			}
+			CompilerDriver.replaceFile(temporary, output + ".live.state");
+		} catch (error:haxe.Exception) {
+			if (FileSystem.exists(temporary))
+				FileSystem.deleteFile(temporary);
+			throw error;
+		}
 		return true;
 	}
 

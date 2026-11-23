@@ -40,9 +40,10 @@ class CompilerProvider {
 			// are compiled against (`.hcs`) and the stable ID the host calls `main` by (`.entry`).
 			android = context.environment.target.isAndroid(),
 			live = !context.checkOnly && (context.live || android),
+			target = aheadOfTime ? "hlc" : compilerInputs.target,
 			arguments = [
 				// A program compiled ahead of time is C, which the app's runner compiles (`ArtifactKind.CModule`).
-					"--target=" + (aheadOfTime ? "hlc" : compilerInputs.target),
+					"--target=" + target,
 					"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
 					"--output=" + output,
 					"--entry=" + project.manifest.entry
@@ -138,7 +139,7 @@ class CompilerProvider {
 				File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 				// Only a resident worker can keep what it compiles; with none there is nothing to warm.
 				return CompilerClient.run(command, compilerSourcePath, reported, home, context.environment.buildRoot,
-					project.root, () -> 0, session, true);
+					project.root, output, target, () -> 0, session, true);
 			};
 		var invoke = function():Int {
 			var running = context.session;
@@ -149,7 +150,7 @@ class CompilerProvider {
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, directory,
 				environment) : CompilerClient.compile(command, compilerSourcePath, reported, home,
 				context.environment.buildRoot,
-				project.root, context.session);
+				project.root, output, target, context.session);
 		};
 		if (aheadOfTime && live)
 			throw new UsageError("A program compiled ahead of time cannot be patched live; build it in development mode");

@@ -70,6 +70,7 @@ wasm-runtime-boundaries          ci          -- bash tests/integration/test-wasm
 build-executor                   ci          -- bash tests/integration/test-build-executor.sh
 # The compile server: reuse, retirement limits, error recovery, sidecars, disconnect cancellation, restart and the one-shot fallback.
 compiler-server                  ci          -- bash tests/integration/test-compiler-server.sh
+live-session-isolation           ci          -- bash tests/integration/test-live-session-isolation.sh
 exception-stack                  ci          -- python3 tests/integration/test-exception-stack.py
 hlb-debug-sections               ci          -- bash tests/integration/test-hlb-debug-sections.sh
 hld3                             ci          -- bash tests/integration/test-hld3.sh
