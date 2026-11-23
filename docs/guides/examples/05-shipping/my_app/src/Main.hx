@@ -30,8 +30,10 @@ class App implements DesktopUiApplication {
 		style.padding = new Insets(24, 24, 24, 24);
 		style.childGap = 12;
 		return new Column("root", [
+			new KeyedView("title", new Text("My first app")),
 			new KeyedView("count", new Text('You clicked ${Main.count.value} times')),
-			new KeyedView("button", new Button("Click me", null, () -> Main.count.value = Main.count.value + 1))
+			new KeyedView("button", new Button("Click me", null, () -> Main.count.value = Main.count.value + 1)),
+			new KeyedView("reset", new Button("Reset", null, () -> Main.count.value = 0))
 		], style);
 	}
 
@@ -64,7 +66,7 @@ class Main {
 
 	static function options():DesktopUiHostOptions {
 		var options = new DesktopUiHostOptions();
-		options.title = "Hello";
+		options.title = "My App";
 		options.width = 480;
 		options.height = 320;
 		return options.withArguments(Sys.args());

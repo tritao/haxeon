@@ -8,12 +8,15 @@ Longer-term direction is in `ROADMAP.md`.
   sources and no `[native.cmake]` cannot join a runner's graph. Under
   `--watch`, an edit to native code needs a restart.
 - **Rough edges met writing the user guides** (`docs/guides/03` to `05`).
+  - `--capture` takes `frame.png` with `import -window TITLE`, which matches
+    names without case and can pick GTK's hidden 10x10 leader window, named
+    after the executable: an app whose title is its executable's name in
+    another case (`haxeon create hello` makes "Hello" in `hello`) gets no
+    `frame.png` ("Resource temporarily unavailable"). Capture by window id.
   - `--frames=N` counts drawn frames, and an idle window draws none, so an
     app run with a large N (`--frames=400`) never stops.
-  - `--quiet` still prints the FFI importer's `imported ...` lines and the
-    native CMake build's output (`ninja: no work to do.`, and on a first
-    build CMake's whole configure log, with a warning that
-    `HAXEON_NATIVE_OUTPUT_DIR` and `HAXEON_TARGET` were not used).
+  - A package's CMake configure prints a warning that `HAXEON_NATIVE_OUTPUT_DIR`
+    and `HAXEON_TARGET` were not used, when its project does not read them.
   - `haxeon ffi import --help`, or any unknown option, is an uncaught
     `InternalError` (exit 70) instead of a usage error with the options.
   - Naming an FFI record without importing its interface module

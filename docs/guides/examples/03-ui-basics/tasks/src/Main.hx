@@ -9,7 +9,7 @@ class Main {
 
 	static function options():DesktopUiHostOptions {
 		var options = new DesktopUiHostOptions();
-		options.title = "Tasks";
+		options.title = "Task List";
 		options.width = 720;
 		options.height = 480;
 		return options.withArguments(Sys.args());

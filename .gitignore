@@ -8,4 +8,4 @@ out/
 packages/ui/tests/*/build/
 
 # Build output of the guides' example projects (docs/guides/examples).
-docs/guides/examples/*/build/
+docs/guides/examples/**/build/

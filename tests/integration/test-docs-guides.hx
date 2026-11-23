@@ -124,6 +124,10 @@ function main() {
 				firstApp(root, project);
 			case "02-live-editing":
 				liveEditing(root, Path.join([guides, "examples", example.slug]), project);
+			case "03-ui-basics":
+				uiBasics(Path.join([guides, "examples", example.slug]), project);
+			case "05-shipping":
+				shipping(project);
 			case _:
 		}
 		built++;
@@ -148,6 +152,64 @@ function firstApp(root:String, project:String):Void {
 	if (!FileSystem.exists(executable) || FileSystem.exists(executable + ".hl"))
 		Script.fail('FAIL: the release build did not leave $executable alone, without a module beside it');
 	openWindow(project, [], "release", executable);
+}
+
+/**
+ * "UI basics": the reader's clicks and typing, played from the example's input/ scripts, change the app's state as the guide
+ * says. Each script `NAME.json` ends in the state the app reports (`diagnosticState`) listed for it here.
+ */
+function uiBasics(example:String, project:String):Void {
+	var expected:Map<String, String> = [
+		// Select the second task, type a title in the form and click Add: the new task is added and selected.
+			"add-task" => '{"tasks":4,"selected":3,"tab":"tasks","dark":false}',
+			// Tick Done, open the Settings tab and turn on the dark theme.
+			"dark-theme" => '{"tasks":3,"selected":0,"tab":"settings","dark":true}'
+		];
+	for (name => state in expected) {
+		var script = Path.join([example, "input", '$name.json']),
+			capture = Path.join([project, 'capture-$name']),
+			log = Path.join([project, '$name.log']),
+			command = [
+				Script.haxeon(),
+				"run",
+				"--",
+				"--capture-seconds=5",
+				'--capture=$capture',
+				'--input-script=$script'
+			];
+		var status = hasXvfb() ? Script.run("xvfb-run", ["-a"].concat(command),
+			{cwd: project, log: log}) : Script.run(command[0], command.slice(1), {
+				cwd: project,
+				log: log
+			});
+		expectStatus(status, 0, log, 'running the task list with input/$name.json');
+		var text = content(Path.join([capture, "app-state.json"])), wanted:Dynamic = haxe.Json.parse(state);
+		var reported:Dynamic = text == "" ? {} : haxe.Json.parse(text);
+		for (field in Reflect.fields(wanted))
+			if (Std.string(Reflect.field(reported, field)) != Std.string(Reflect.field(wanted, field)))
+				Script.fail('FAIL: after input/$name.json the task list reports $text, expected $state; its log:\n${content(log)}');
+	}
+}
+
+/**
+ * "Shipping": the release build is one executable with the packages' libraries beside it and no module, the directory the
+ * guide archives with tar runs from wherever it is unpacked, and a release build refuses to be watched.
+ */
+function shipping(project:String):Void {
+	var log = Path.join([project, "release.log"]);
+	expectStatus(haxeon(["build", "--build-mode=release"], project, log), 0, log, "haxeon build --build-mode=release");
+	var app = Path.join([project, "build", "linux", "app"]);
+	if (!FileSystem.exists(Path.join([app, "my_app"])) || FileSystem.exists(Path.join([app, "my_app.hl"])))
+		Script.fail('FAIL: the release build did not leave $app/my_app alone, without a module beside it');
+	var archive = Path.join([project, "my_app-linux-x86_64.tar.gz"]),
+		unpacked = Path.join([Path.directory(project), "unpacked"]);
+	Script.check("tar", ["-czf", archive, "-C", Path.join([project, "build", "linux"]), "app"]);
+	FileSystem.createDirectory(unpacked);
+	Script.check("tar", ["-xzf", archive, "-C", unpacked]);
+	openWindow(project, [], "unpacked", Path.join([unpacked, "app", "my_app"]));
+	log = Path.join([project, "release-watch.log"]);
+	expectStatus(haxeon(["run", "--build-mode=release", "--watch"], project, log), 2, log,
+		"haxeon run --build-mode=release --watch");
 }
 
 /**

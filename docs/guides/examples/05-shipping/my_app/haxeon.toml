@@ -4,11 +4,11 @@ sourceRoots = ["src"]
 nullSafety = "strict"
 
 [package]
-name = "hello"
+name = "my_app"
 
 [app]
-name = "Hello"
-id = "org.example.hello"
+name = "My App"
+id = "com.example.my_app"
 version = "1.0.0"
 platforms = ["linux"]
 

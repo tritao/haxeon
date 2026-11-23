@@ -4,7 +4,8 @@ In this guide you build a small task list with the `ui` package: a list of tasks
 form that adds a task, a second tab with settings, and a switch between a light and a dark theme. Along the way you
 meet layout, text, lists, forms, navigation and theming.
 
-The finished project is in [examples/03-ui-basics](examples/03-ui-basics/). It builds and runs on Linux.
+The finished project is in [examples/03-ui-basics/tasks](examples/03-ui-basics/tasks/), without its `linux/` runner, which
+`haxeon create .` adds. It builds and runs on Linux.
 
 ## Start from the app template
 
@@ -36,7 +37,7 @@ file, `src/App.hx`, and `src/Main.hx` keeps only the window:
 ```haxe
 static function options():DesktopUiHostOptions {
 	var options = new DesktopUiHostOptions();
-	options.title = "Tasks";
+	options.title = "Task List";
 	options.width = 720;
 	options.height = 480;
 	return options.withArguments(Sys.args());
@@ -313,4 +314,4 @@ the selection, the tab and the theme.
 - Change the code while the app runs: `haxeon run --watch --live` keeps the window open and applies your edits.
 - [Calling a C or C++ library](04-calling-c-and-cpp.md) from your app.
 - [Shipping](05-shipping.md) the app as an executable.
-- The UI package's own documentation: [packages/ui/README.md](../../packages/ui/README.md).
+- The UI package's own documentation: [packages/ui/README.md](https://github.com/tritao/haxeon/blob/main/packages/ui/README.md).

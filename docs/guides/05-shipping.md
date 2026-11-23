@@ -4,8 +4,9 @@ This guide turns an app into something you can give to someone else: a desktop e
 Android package, and a WebAssembly module. Desktop on Linux is the complete path today; the others are described as far
 as they go, with what is not ready yet said plainly.
 
-The example is the app `haxeon create` makes, in [examples/05-shipping](examples/05-shipping/). Every step below was run
-on Linux.
+The example is the app [Your first app](01-first-app.md) ends with, in
+[examples/05-shipping/my_app](examples/05-shipping/my_app/), without its `linux/` runner, which `haxeon create .` adds.
+Every step below was run on Linux.
 
 ## What each platform has today
 
@@ -23,8 +24,8 @@ platform's build reads them from here:
 
 ```toml
 [app]
-name = "Hello"
-id = "org.example.hello"
+name = "My App"
+id = "com.example.my_app"
 version = "1.0.0"
 platforms = ["linux"]
 ```
@@ -35,7 +36,7 @@ runner for. [MANIFEST.md](../reference/MANIFEST.md) lists the section's fields.
 ## Desktop: a development build and a release build
 
 A plain `haxeon build` makes a development build: the app's runner (`linux/`, a CMake project) links the HashLink VM
-into an executable, and the compiled program sits beside it as `hello.hl`, which the VM compiles to machine code as it
+into an executable, and the compiled program sits beside it as `my_app.hl`, which the VM compiles to machine code as it
 loads it. That is what `haxeon run --watch --live` patches while the app runs.
 
 To ship, build in release mode:
@@ -46,11 +47,11 @@ haxeon build --build-mode=release
 
 A release build compiles the program ahead of time. The compiler writes the program as C (`build/host/main.c/`), and
 the runner compiles that C with your C toolchain into the executable, with the VM's runtime linked in and no compiler at
-run time. Nothing loads a module, so there is no `hello.hl` beside it. The result is in `build/linux/app/`:
+run time. Nothing loads a module, so there is no `my_app.hl` beside it. The result is in `build/linux/app/`:
 
 ```text
 build/linux/app/
-  hello                       the app
+  my_app                      the app
   libnativekit.so ...         the native libraries of the packages the app uses, with their symbolic links
   libnativekit_gpu.so ...
   libnativekit_ui.so ...
@@ -59,7 +60,7 @@ build/linux/app/
 Run it there to check it:
 
 ```sh
-build/linux/app/hello
+build/linux/app/my_app
 ```
 
 or through `haxeon`, which builds first:
@@ -77,14 +78,14 @@ Distribute the whole `build/linux/app/` directory. The executable finds its libr
 that is, so the directory can be unpacked anywhere. Keep the symbolic links between the library files, as `tar` does:
 
 ```sh
-tar -czf hello-linux-x86_64.tar.gz -C build/linux app
+tar -czf my_app-linux-x86_64.tar.gz -C build/linux app
 ```
 
 On the other machine:
 
 ```sh
-tar -xzf hello-linux-x86_64.tar.gz
-./app/hello
+tar -xzf my_app-linux-x86_64.tar.gz
+./app/my_app
 ```
 
 The executable itself needs only the system's C library. The UI package's libraries use the desktop's own GTK 3, OpenGL
@@ -144,7 +145,7 @@ Emscripten. A web runner, with the app's own page, is planned.
 
 1. Set `name`, `id` and `version` in `[app]`.
 2. `haxeon build --build-mode=release`.
-3. Run `build/linux/app/hello` once from a copy of the directory somewhere else.
+3. Run `build/linux/app/my_app` once from a copy of the directory somewhere else.
 4. Archive `build/linux/app/` with `tar`.
 
 ## Next
