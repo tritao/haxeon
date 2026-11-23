@@ -751,13 +751,21 @@ class HlLower {
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
-		var cached = debugCache == null ? null : debugCache.identity(fn);
-		if (cached != null && cached.functionIndex == requireFunction(fn.name))
+		// A function keeps its identity while its index and stable id hold; a fresh layout can move either without the other.
+		var cached = debugCache == null ? null : debugCache.identity(fn), functionIndex = requireFunction(fn.name);
+		if (cached != null && cached.functionIndex == functionIndex
+			&& cached.stableId == stableIdOf(fn.name, functionIndex))
 			return cached;
 		var identity = functionIdentity(fn);
 		if (debugCache != null)
 			debugCache.rememberIdentity(fn, identity);
 		return identity;
+	}
+
+	/** The stable id function `name` is known by: its session's, else its index. */
+	function stableIdOf(name:String, functionIndex:Int):Int {
+		var ids = stableIds, id = ids == null ? null : ids.get(name);
+		return id == null ? functionIndex : id;
 	}
 
 	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
@@ -786,7 +794,7 @@ class HlLower {
 		}
 		var parts = fn.name.split(".");
 		return {
-			stableId: stableIds != null && stableIds.exists(fn.name) ? stableIds.get(fn.name) : functionIndex,
+			stableId: stableIdOf(fn.name, functionIndex),
 			functionIndex: functionIndex,
 			qualifiedName: fn.name,
 			displayName: parts[parts.length - 1],

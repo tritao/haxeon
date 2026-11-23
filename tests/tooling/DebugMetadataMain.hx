@@ -1,5 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Frontend;
+import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.core.Source.SourceFile;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlWriter;
@@ -163,6 +164,37 @@ class DebugMetadataMain {
 
 		testSourceSnapshots();
 		testShadowedScopes();
+		testIdentitiesFollowStableIds();
+	}
+
+	/**
+	 * A plain build assembles a fresh layout with the session's debug cache, which keeps each function's identity while the function
+	 * is the same IR object: a layout that gives it another stable id at the same index must not keep the earlier identity.
+	 */
+	static function testIdentitiesFollowStableIds():Void {
+		var compiler = new compiler.Compiler();
+		compiler.update("Main.hx",
+			"function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(20, 22); }");
+		var program = compiler.compile("Main").ir,
+			names = [for (fn in program.functions) fn.name];
+		function identities(stableIds:Null<Map<String, Int>>, debug:compiler.hl.lower.HlDebugMetadataCache):Bytes {
+			var assembler = new compiler.hl.incremental.HlModuleAssembler(stableIds, debug);
+			assembler.irVerified = true;
+			assembler.loweredCache = new compiler.hl.incremental.HlLoweredCache(debug);
+			var module = assembler.assemble(program, names, Patch).module;
+			for (section in module.debugSections)
+				if (section.kind == HlWriter.FUNCTION_IDENTITIES)
+					return section.payload.flatten();
+			throw "The module has no function identities";
+		}
+		var shared = new compiler.hl.lower.HlDebugMetadataCache();
+		identities(null, shared);
+		var moved = identities([for (index in 0...names.length) names[index] => 1000 + index], shared),
+			fresh = identities([for (index in 0...names.length) names[index] => 1000 + index],
+				new compiler.hl.lower.HlDebugMetadataCache());
+		if (moved.compare(fresh) != 0)
+			throw "A shared debug cache kept function identities whose stable ids moved";
+		Sys.println("PASS: function identities follow the stable ids of a fresh layout");
 	}
 
 	static function testSourceSnapshots():Void {

@@ -132,7 +132,34 @@ class HashLinkBackendSession implements BackendSession {
 		for (index in 0...functions.length)
 			if (HlWriter.encodeFunction(functions[index]).compare(HlWriter.encodeFunction(others[index])) != 0)
 				return 'function ${functions[index].functionIndex} differs';
-		return "module tables or debug sections differ";
+		return tableDifference(previous, fresh);
+	}
+
+	/** The first table entry, constant or debug section in which `previous` and `fresh` differ. */
+	static function tableDifference(previous:HlCode, fresh:HlCode):String {
+		var found = firstDifference("int", previous.ints, fresh.ints, Std.string);
+		found = found ?? firstDifference("float", previous.floats, fresh.floats, Std.string);
+		found = found ?? firstDifference("string", previous.strings, fresh.strings, value -> value);
+		found = found ?? firstDifference("type", previous.types, fresh.types, Std.string);
+		found = found ?? firstDifference("global", previous.globals, fresh.globals, Std.string);
+		found = found ?? firstDifference("native", previous.natives, fresh.natives, Std.string);
+		found = found ?? firstDifference("constant", previous.constants, fresh.constants, Std.string);
+		found = found ?? firstDifference("debug section", previous.debugSections, fresh.debugSections,
+			section -> section.kind + "/" + section.payload.length + "/"
+			+ build.execution.ContentDigest.makeHex(section.payload.flatten()));
+		found = found ?? (previous.entryPoint == fresh.entryPoint
+			? null : 'entry point ${previous.entryPoint} -> ${fresh.entryPoint}');
+		return found ?? "module tables or debug sections differ";
+	}
+
+	/** The first entry of `left` that `show` spells otherwise in `right`, or their counts when one is a prefix of the other. */
+	static function firstDifference<T>(what:String, left:Array<T>, right:Array<T>, show:T->String):Null<String> {
+		for (index in 0...(left.length < right.length ? left.length : right.length)) {
+			var a = show(left[index]), b = show(right[index]);
+			if (a != b)
+				return '$what $index: $a -> $b';
+		}
+		return left.length == right.length ? null : '$what count ${left.length} -> ${right.length}';
 	}
 
 	/** Assembles `ir`; the session keeps the candidate assembler, which the compiler adopts with the candidate. */
