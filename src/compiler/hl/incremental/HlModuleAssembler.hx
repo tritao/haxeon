@@ -495,6 +495,16 @@ class HlModuleAssembler {
 	}
 
 	/**
+	 * Lets the IR of function `name` go, keeping its signature (`HlFunctionCache.vacate`); its lowered code stays, since the
+	 * module this assembler writes has it in the slot.
+	 */
+	function vacate(name:String):Void {
+		var vacant = cache.vacate(name), lowered = published.entries.get(name);
+		if (vacant != null && lowered != null)
+			published.entries.set(name, lowered.from(vacant));
+	}
+
+	/**
 	 * Where `fn`'s code starts. A cached function is read from its body's rows: decoding its blocks would leave them cached on a
 	 * function no build lowers again.
 	 */
@@ -836,6 +846,11 @@ class HlModuleAssembler {
 					regenerate(name);
 			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true]));
 		}
+		// Once this patch applies, no closure the running module holds reaches a guard: the runtime refuses the patch while one
+		// does, and the new code calls none. So a guard keeps its slot, stable ID, signature and the code the module has in the
+		// slot, but not its IR.
+		for (guard in guards)
+			vacate(guard.name);
 		var publishedSlots = cache.slots.length;
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);

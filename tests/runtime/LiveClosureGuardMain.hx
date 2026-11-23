@@ -91,9 +91,35 @@ class LiveClosureGuardMain {
 	static function patchesDeletedHandlerNobodyStores():Void {
 		var session = start(handlers(["x -> x + 1", "x -> x * 10"], false));
 		expect(Runtime.callInt(session.live, session.mainId), 2 * 100 + 10, "the handlers before the edit");
+		var before = [for (fn in (session.build.ir:compiler.ir.model.Ir.IrProgram).functions) fn.name];
 		patch(session, handlers(["x -> x * 10"], false), "a handler nobody stores deleted");
 		expect(Runtime.callInt(session.live, session.mainId), 10, "the handlers after the edit");
+		keepsOnlyTheSlotsOfDropped(session);
 		Runtime.dispose(session.live);
+	}
+
+	/**
+	 * The lambdas the last patch retired keep their slots, but the compiler lets their IR go: nothing the running module holds
+	 * reaches them once the patch applied (`HlFunctionCache.vacate`). A deleted sibling is retired, as its name passes to the next.
+	 */
+	static function keepsOnlyTheSlotsOfDropped(session:{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
+	}):Void {
+		var cache = session.compiler.state.backend.hashLink().assembler.cache, dropped = 0;
+		for (name in cache.slots)
+			if (compiler.abi.RetiredName.is(name)) {
+				var blocks = cache.functions.get(name).blocks;
+				if (blocks.length != 1 || blocks[0].instructions.length != 1
+					|| !blocks[0].instructions[0].value.match(compiler.ir.model.Ir.IrInstruction.ConstNull(_))
+					|| !blocks[0].terminator.value.match(compiler.ir.model.Ir.IrTerminator.Throw(_)))
+					throw 'the compiler still keeps the IR of the dropped function $name';
+				dropped++;
+			}
+		if (dropped == 0)
+			throw "the edit retired no lambda";
 	}
 
 	/**

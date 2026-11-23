@@ -93,7 +93,10 @@ and no edge between declarations is kept by hand.
 - **Live builds are not pruned.** A live host can call any function by id, and a patch cannot add or drop functions and
   class-table entries. Pruning them needs a rule for host-called functions (the live protocol on the entry class: `start`,
   `tick`, `close`, `saveState`, `restoreState`, `liveRelease`, `liveRebuild`), keeping every constructor, every function the
-  running module holds, and each class's `__liveinit` with its class without making it a root.
+  running module holds, and each class's `__liveinit` with its class without making it a root. Functions a live build
+  drops are settled: they keep their slots, since a patch cannot remove one, but once the patch that guards them applies
+  no stored closure reaches them, so the session keeps their signatures and lowered code and not their IR (`LIVE_PATCHING.md`,
+  "What a patch can add"). Retired functions an adapter serves stay whole, since stored closures still call them.
 - **Pruning is per class, not per method.** A reachable class keeps all its methods, because its class table is built from
   the method list; a method can leave only once its slot is derived after pruning.
 - **A new constant or global relinks the functions after it.** The tables are dense and ordered by first use, so one entry

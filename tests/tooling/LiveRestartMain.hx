@@ -26,6 +26,7 @@ class LiveRestartMain {
 				+ value
 				+ ";\n"
 				+ "  @:keep public static function close():Int return 0;\n"
+				+ (value < 4 ? "  @:keep public static function extra(by:Int):Int return by * " + value + ";\n" : "")
 				+ "  @:keep public static function saveState():String return \"\";\n"
 				+ "  @:keep public static function restoreState(state:String):Void {}\n"
 				+ "  public static function main():Void {}\n"
@@ -79,7 +80,15 @@ class LiveRestartMain {
 			&& again.requiresReload == false,
 			"history recorded by a resumed session must resume again");
 		expect(resumed.recordLiveState(), "the resumed session must record its own publications");
-		next = again;
+		// That edit dropped `extra`, whose slot the history keeps without its code (`HlFunctionCache.vacate`): a session resuming
+		// it lowers the slot from what is left, and patches.
+		var vacated = build(new CompilerSession(), 5);
+		expect(vacated.moduleIdentity == first.moduleIdentity
+			&& vacated.revision == again.revision + 1
+			&& vacated.patchAvailable == true
+			&& vacated.requiresReload == false,
+			"history that keeps a dropped function's slot must resume and patch");
+		next = vacated;
 		// Another build of the compiler, at the same path (a compile server rebuilt in place), lowers the unchanged functions
 		// its history holds differently, so it starts a new module.
 		var rebuilt = build(new CompilerSession("another build of the compiler"), 4);
@@ -87,7 +96,7 @@ class LiveRestartMain {
 			"history recorded by another build of the compiler must not be resumed");
 		// A module the history does not describe (here, one whose marker names another revision) starts a new module.
 		File.saveContent(output + ".live.full", next.moduleIdentity + ":" + Std.string(next.revision + 7));
-		var stale = build(new CompilerSession(), 5);
+		var stale = build(new CompilerSession(), 6);
 		expect(stale.moduleIdentity != first.moduleIdentity, "history recorded for another module must not be resumed");
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);

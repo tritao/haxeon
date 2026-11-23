@@ -3,6 +3,8 @@ package compiler.hl.incremental;
 import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.model.Ir.IrType;
+import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrTypeIdentity;
 
@@ -215,6 +217,26 @@ class HlFunctionCache {
 		if (signature(fn) != signatureOf(name))
 			throw new InternalError('The new code of $name has another signature');
 		functions.set(name, fn);
+	}
+
+	/**
+	 * Keeps of function `name` only what its slot needs once no code the running module can call reaches it: its signature, with
+	 * its arguments' names, which an adapter matches (`HlModuleAssembler.signatureAdapter`), and a body that throws null. A
+	 * session resumed from this cache lowers that body for the slot, so it uses no native and no constant the running module may
+	 * lack. Returns that stand-in, or null when the cache has no code for `name`.
+	 */
+	public function vacate(name:String):Null<IrFunction> {
+		var fn = functions.get(name);
+		if (fn == null)
+			return null;
+		var builder = new IrBuilder();
+		for (argument in fn.arguments)
+			builder.argument(argument.name, argument.type);
+		builder.throwValue(builder.constNull(IrType.Dyn));
+		var vacant = new IrFunction(name, builder.arguments, fn.result, builder.blocks, fn.kind, null, false,
+			fn.retention);
+		functions.set(name, vacant);
+		return vacant;
 	}
 
 	/**

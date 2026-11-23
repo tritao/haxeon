@@ -27,7 +27,14 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 
 - **Functions**, after the module's last slot. A removed function keeps its
   slot and last body; the new code does not call it, and the patch applies only
-  when no stored closure still reaches it (see "Stored closures").
+  when no stored closure still reaches it (see "Stored closures"). So once the
+  patch applies nothing can call it, and the compiler keeps only what the slot
+  needs: its name, stable ID and signature, and the code the module file carries
+  in it. It lets the function's IR go (`HlFunctionCache.vacate`), so a session
+  whose edits drop functions, renamed lambdas among them, does not grow with them.
+  The IR left is a body that throws null, which a session resumed from the
+  recorded history lowers into the slot: it needs no native or constant the
+  running module may lack.
 - **Types** (HLP 11): function, abstract, reference, null and packed types, and
   object, struct and virtual types with their layout. So an edit that adds a
   class (plain, a subclass of a loaded class, or an implementation of a loaded
