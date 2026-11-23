@@ -161,7 +161,17 @@ class LintCommand {
 			tokens = new Lexer(file).tokenize(),
 			program = new Parser(tokens).parseProgram();
 		var members:Array<{offset:Int, metadata:Array<AstMetadata>}> = [];
-		var metadata:Array<AstMetadata> = [], start = -1;
+		var metadata:Array<AstMetadata> = [], start = -1, service = false;
+		for (declaration in program.interfaces)
+			if (declaration.name == name) {
+				compiler.syntax.RpcServiceDeclaration.validate(declaration, (message, _) -> {
+					throw new InternalError(message);
+				});
+				start = declaration.span.start;
+				service = true;
+				for (method in declaration.methods)
+					members.push({offset: method.span.start, metadata: method.metadata ?? []});
+			}
 		for (record in program.classes)
 			if (record.name == name && record.typeParameters.length == 0 && record.base == null
 				&& record.isExtern != true) {
@@ -189,7 +199,7 @@ class LintCommand {
 					default:
 				}
 		if (start < 0 || members.length == 0)
-			throw new InternalError('Type "$name" must be a nonempty concrete record or enum declared in "$path"');
+			throw new InternalError('Type "$name" must be a nonempty concrete record, enum, or RPC service interface declared in "$path"');
 
 		var numbered = 0;
 		for (member in members)
@@ -201,7 +211,7 @@ class LintCommand {
 		if (numbered != 0 && numbered != members.length)
 			throw new InternalError('Type "$name" mixes named and numbered members');
 
-		var edits:Map<Int, String> = [], marked = false;
+		var edits:Map<Int, String> = [], marked = service;
 		for (annotation in metadata)
 			if (annotation.name == "wire")
 				marked = true;
@@ -225,7 +235,7 @@ class LintCommand {
 					index++;
 				var field = index;
 				while (field > 0 && switch tokens[field - 1].kind {
-					case Question | Final | Var | Function: true;
+					case Question | Final | Var | Function | Public | Private | Inline | Static: true;
 					default: false;
 				})
 					field--;

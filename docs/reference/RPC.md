@@ -1,8 +1,65 @@
-# Typed RPC runtime
+# Typed RPC services
 
-`haxeon.rpc` supplies transport-independent RPC over the existing typed wire
-codecs. `RpcConnection` owns one established generation; `RpcHandshake`
-negotiates it and `RpcClient` manages cancellable connection attempts and reconnect.
+Declare a service as an interface and implement it as a normal Haxe class.
+Use `serve` and `of` on established `RpcConnection` instances. When using
+`RpcClient` for reconnect, use the connection supplied to its ready hook.
+
+```haxe
+typedef Query = { var name:String; }
+typedef Answer = { var text:String; }
+
+interface Greeter {
+    function greet(request:Query):Answer;
+}
+
+class MyGreeter implements Greeter {
+    public function new() {}
+    public function greet(request:Query):Answer
+        return {text: "Hello " + request.name};
+}
+
+// server and client are the two established connections.
+server.serve(Greeter, new MyGreeter());
+var greeter = client.of(Greeter, 1000);
+var requestId = greeter.greet({name: "Ada"},
+    answer -> Sys.println(answer.text),
+    error -> Sys.println(error.code));
+```
+
+A service declares its own instance methods on a nonempty, non-generic
+interface. Each method takes one required request parameter and returns a
+response value. Both types use the compiler's [MessagePack wire profile](MESSAGEPACK.md).
+The compiler generates typed dispatch and a stub whose methods take the
+request, an answer callback and an error callback. The stub captures its
+connection and timeout, which defaults to 1000 milliseconds. Calls return
+the request ID, which can be passed to `connection.cancel(requestId)`.
+Poll both connections to dispatch requests and deliver replies. Service
+implementations return their response synchronously and should avoid blocking
+the poll loop. The interface API currently supports request/response methods.
+Streaming and subscriptions can add new method forms in the future.
+
+The default wire identity is the qualified interface name followed by the
+method name, such as `Greeter.greet` or `example.Greeter.greet`. RPC protocol
+version 2 encodes each request's method selector as a tagged MessagePack
+value. The three forms are a low-level integer ID, a qualified method name,
+and an integer ID scoped to a qualified service name. A request is the
+MessagePack map `{4: [requestId, selector, timeoutMs, payload]}`. The
+selectors are `{1: [id]}`, `{2: [qualifiedMethodName]}`, and
+`{3: [qualifiedServiceName, id]}`, respectively. Carrying names directly
+avoids hash collisions. The handshake rejects peers with a
+different protocol version. The MessagePack codec version stays at 1.
+
+## Pin service method IDs
+
+Run `haxeon lint --fix --pin-wire Greeter src/Greeter.hx` to write
+consecutive `@:id(n)` annotations starting at 1, in declaration order.
+Rerunning the command preserves IDs. Every method of an interface must use
+the same identity mode, and pinned IDs must be positive and unique within
+that interface. A pinned stub sends a scoped ID, and a pinned server
+accepts both IDs and current qualified names. Upgrade servers before
+switching clients to IDs. Preserve IDs when reordering or renaming methods,
+keep retired IDs reserved, and give new methods fresh IDs. The qualified
+interface name remains part of the identity in both modes.
 
 ## Handshake and reconnect
 
@@ -47,9 +104,10 @@ A rejected server handshake sends Refused and waits for peer close or its origin
 bounded deadline before abrupt transport cleanup, preserving delivery of the
 accepted refusal. Handshake polling processes at most one send and one receive.
 
-## Methods and asynchronous responses
+## Low-level methods and asynchronous responses
 
-Give each method a permanent positive integer id. For wire types,
+For a hand-built protocol, give each low-level method a permanent positive
+integer ID. For wire types,
 `RpcMethod.wire(id)` uses the expected `RpcMethod<Request, Response>` type to
 generate MessagePack codecs for both types. The descriptor preserves both types
 through `call` and `register` without reflection or `Dynamic` in the codecs.
@@ -93,7 +151,7 @@ declaration that needs permanent member identities. This changes the payload
 encoding. Upgrade readers before sending numbered payloads. Pinned readers can
 still read existing name-keyed payloads, as described in the
 [MessagePack reference](MESSAGEPACK.md#data-that-must-last-pin-ids).
-The method ID passed to `RpcMethod.wire` is independent of member IDs.
+Method IDs are independent of request and response member IDs.
 
 ## Failure semantics
 

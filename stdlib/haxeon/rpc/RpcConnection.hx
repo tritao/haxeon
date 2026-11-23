@@ -1,6 +1,7 @@
 package haxeon.rpc;
 
 import haxe.io.Bytes;
+import haxeon.rpc.RpcMethod.RpcRoute;
 
 private typedef PendingCall = {
 	var deadline:Float;
@@ -19,7 +20,7 @@ class RpcConnection {
 	final maxMessageBytes:Int;
 	final maxCalls:Int;
 	final maxQueuedBytes:Int;
-	final handlers:Map<Int, (Bytes, RpcRequestState) -> Void> = [];
+	final handlers:Map<String, (Bytes, RpcRequestState) -> Void> = [];
 	final notifications:Map<Int, Bytes -> Void> = [];
 	var pending:Map<Int, PendingCall> = [];
 	var active:Map<Int, RpcRequestState> = [];
@@ -76,21 +77,29 @@ class RpcConnection {
 
 	public function register<Request, Response>(method:RpcMethod<Request, Response>,
 			handler:(Request, RpcContext<Response>) -> Void):Void {
-		if (handlers.exists(method.id))
-			throw "Duplicate RPC method id";
-		handlers.set(method.id, function(payload, state) {
-			var request:Request;
-			try
-				request = method.decodeRequest(payload)
-			catch (_:Dynamic) {
-				finish(state, Bytes.alloc(0), error("invalid_request", false));
-				return;
-			}
-			var context = new RpcContext(state, method.encodeResponse,
-				function(bytes, error) return finish(state, bytes, error));
-			handler(request, context);
-		});
+		installRoutes([@:privateAccess method.route(handler, finish)]);
 	}
+
+	/** Check every selector before publishing any route in a service. */
+	function installRoutes(routes:Array<RpcRoute>):Void {
+		var incoming:Map<String, (Bytes, RpcRequestState) -> Void> = [];
+		for (route in routes)
+			for (selector in route.selectors) {
+				var key = methodKey(selector);
+				if (handlers.exists(key) || incoming.exists(key))
+					throw "Duplicate RPC method";
+				incoming.set(key, route.handle);
+			}
+		for (key => handler in incoming)
+			handlers.set(key, handler);
+	}
+
+	static function methodKey(method:RpcMethodKey):String
+		return switch method {
+			case Id(id): 'id:$id';
+			case Name(name): 'name:$name';
+			case ServiceId(service, id): 'service:$service:$id';
+		};
 
 	public function onNotification<T>(id:Int, decode:Bytes->T, handler:T->Void):Void {
 		if (id <= 0 || notifications.exists(id))
@@ -129,7 +138,7 @@ class RpcConnection {
 		}
 		var id = nextId++;
 		var deadline = clock() + timeoutMs;
-		var bytes = RpcProtocol.encode(Request(id, method.id, timeoutMs, method.encodeRequest(request)),
+		var bytes = RpcProtocol.encode(Request(id, method.key, timeoutMs, method.encodeRequest(request)),
 			maxMessageBytes);
 		if (clock() >= deadline) {
 			failure(error("timeout", false));
@@ -358,7 +367,7 @@ class RpcConnection {
 					return;
 				}
 				lastRequestId = id;
-				var handler = handlers.get(method);
+				var handler = handlers.get(methodKey(method));
 				if (handler == null) {
 					enqueue(Failed(id, error("unknown_method", false)));
 					return;

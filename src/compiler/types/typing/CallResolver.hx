@@ -218,8 +218,14 @@ class CallResolver {
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, contextualGenericArguments:Bool = true,
 			?declaredReceiver:TypedExpression):TypedExpression {
 		try {
-			var call = typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
-				contextualGenericArguments);
+			var call = switch receiver.type {
+				case TInstance(NominalKind.Class, RpcServiceTyping.CONNECTION, _) if ((name == "serve" || name == "of")
+					&& !receiver.expression.match(TClassRef(_))):
+					RpcServiceTyping.typeCall(session, bodyTyper, receiver, name, arguments, span, scope);
+				default:
+					typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
+						contextualGenericArguments);
+			};
 			var declared = declaredReceiver == null ? receiver : declaredReceiver;
 			// The member's span is made only where the checker looks.
 			if (session.nullSafety.active())
@@ -2259,10 +2265,11 @@ class CallResolver {
 			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(keyed), [source]), resultType,
 				span);
 		}
-		if (name == "haxeon.rpc.RpcMethod.wire") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var owner = "haxeon.rpc.RpcMethod";
+		if (name == "haxeon.rpc.RpcMethod.wire" || name == "$rpc.method") {
+			var serviceMethod = name == "$rpc.method", count = serviceMethod ? 2 : 1;
+			if (arguments.length != count)
+				fail("E1008", 'Function "$name" expects $count argument(s), got ${arguments.length}', span);
+			var owner = RpcServiceTyping.METHOD;
 			switch expectedType {
 				case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
 					var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
@@ -2275,6 +2282,9 @@ class CallResolver {
 						constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
 							TFunction([TBytes], keyed, []), span));
 					}
+					var methodName = serviceMethod ? arguments[1] : NullLiteral(span);
+					constructorArguments.push(bodyTyper.coerceArgument(typeExpressionValue(methodName, scope),
+						TNullable(TString), name, 2));
 					var constructor = session.signatures.required(owner + ".new");
 					var typed = session.representation.adaptConstructorArguments(expectedType, owner, constructor,
 						constructorArguments);

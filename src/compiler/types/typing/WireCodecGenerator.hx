@@ -118,29 +118,12 @@ class WireCodecGenerator {
 		if (roots.length == 0)
 			return [];
 		roots.sort(function(left, right) return Reflect.compare(typeKey(left.type), typeKey(right.type)));
-		var reachable:Map<String, CompilerType> = [],
-			requests:Map<String, WireCodecRequest> = [],
-			rootKeys:Map<String, Bool> = [],
+		var reachable:Map<String, WireCodecRequest> = [],
 			visiting:Map<String, Bool> = [],
 			path:Array<String> = [];
-		for (request in roots) {
-			var key = typeKey(request.type);
-			requests.set(key, request);
-			rootKeys.set(key, true);
-			collectType(session, request.type, classesByName, enumsByName, reachable, visiting, path, request.span);
-		}
-		// The call site that happened to ask first would make a generated function's source span (and so its identity and
-		// debug mappings) depend on the order functions were typed in, which differs between a build that types everything
-		// and one that retypes only what changed. Diagnostics above keep the site; generated code gets a span of the type.
-		for (index in 0...roots.length) {
-			var request = roots[index];
-			roots[index] = {
-				type: request.type,
-				origin: request.origin,
-				span: canonicalSpan(session, request.type, classesByName, enumsByName)
-			};
-			requests.set(typeKey(request.type), roots[index]);
-		}
+		for (request in roots)
+			collectType(session, request.type, classesByName, enumsByName, reachable, visiting, path,
+				request.origin, request.span);
 		var keys = [for (key in reachable.keys()) key];
 		keys.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
@@ -148,13 +131,14 @@ class WireCodecGenerator {
 			needsStringComparator = false,
 			enumComparatorTypes:Map<String, CompilerType> = [];
 		for (key in keys) {
-			var type = reachable.get(key), request = requests.get(key);
-			if (request == null)
-				request = {
-					type: type,
-					origin: roots[0].origin,
-					span: canonicalSpan(session, type, classesByName, enumsByName)
-				};
+			var reached = reachable.get(key), root = requested.get(key), type = reached.type;
+			// Use a caller that reaches this codec so unrelated edits cannot retire it.
+			// A type's span keeps the generated function independent of which caller was typed first.
+			var request:WireCodecRequest = {
+				type: type,
+				origin: root == null ? reached.origin : root.origin,
+				span: canonicalSpan(session, type, classesByName, enumsByName)
+			};
 			if (switch type {
 				case TMap(TInt, _): true;
 				default: false;
@@ -176,7 +160,7 @@ class WireCodecGenerator {
 			}
 			result.push(valueEncoder(session, type, classesByName, enumsByName, request));
 			result.push(valueDecoder(session, type, classesByName, enumsByName, request));
-			if (rootKeys.exists(key)) {
+			if (root != null) {
 				result.push(encoder(type, request));
 				result.push(decoder(type, request));
 			}
@@ -393,7 +377,8 @@ class WireCodecGenerator {
 
 	function collectType(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>,
 			enums:Map<String, TypedEnum>,
-			reachable:Map<String, CompilerType>, visiting:Map<String, Bool>, path:Array<String>, span:SourceSpan):Void {
+			reachable:Map<String, WireCodecRequest>, visiting:Map<String, Bool>, path:Array<String>, origin:String,
+			span:SourceSpan):Void {
 		if (!isRequestType(session, type))
 			BodyTyper.fail("E1024", 'MessagePack does not support type "$type" in the current wire profile', span);
 		var key = typeKey(type);
@@ -411,22 +396,22 @@ class WireCodecGenerator {
 		path.push(key);
 		switch type {
 			case TAbstract(_, _, representation):
-				collectType(session, representation, classes, enums, reachable, visiting, path, span);
+				collectType(session, representation, classes, enums, reachable, visiting, path, origin, span);
 			case TAnonymous(_, _):
 				for (wireField in anonymousWireFields(session, type, span))
-					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path,
+					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path, origin,
 						wireField.field.span);
 			case TNullable(element):
-				collectType(session, element, classes, enums, reachable, visiting, path, span);
+				collectType(session, element, classes, enums, reachable, visiting, path, origin, span);
 			case TArray(element):
-				collectType(session, element, classes, enums, reachable, visiting, path, span);
+				collectType(session, element, classes, enums, reachable, visiting, path, origin, span);
 			case TMap(key, value):
 				switch key {
 					case TInstance(NominalKind.Enum, _, _):
-						collectType(session, key, classes, enums, reachable, visiting, path, span);
+						collectType(session, key, classes, enums, reachable, visiting, path, origin, span);
 					default:
 				}
-				collectType(session, value, classes, enums, reachable, visiting, path, span);
+				collectType(session, value, classes, enums, reachable, visiting, path, origin, span);
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = classes.get(name);
 				if (declaration == null)
@@ -442,7 +427,7 @@ class WireCodecGenerator {
 					BodyTyper.fail("E1024", 'MessagePack record "$name" must declare at least one instance field',
 						declaration.span);
 				for (wireField in fields)
-					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path,
+					collectType(session, wireField.field.type, classes, enums, reachable, visiting, path, origin,
 						wireField.field.span);
 			case TInstance(NominalKind.Enum, name, _):
 				validateWireMarker(session.enumDecls.get(name).metadata);
@@ -453,13 +438,13 @@ class WireCodecGenerator {
 						declaration.span);
 				for (wireCase in cases)
 					for (parameter in wireCase.caseDecl.params)
-						collectType(session, parameter, classes, enums, reachable, visiting, path,
+						collectType(session, parameter, classes, enums, reachable, visiting, path, origin,
 							wireCase.caseDecl.span);
 			default:
 		}
 		path.pop();
 		visiting.remove(key);
-		reachable.set(key, type);
+		reachable.set(key, {type: type, origin: origin, span: span});
 	}
 
 	function serializableFields(session:TypingSession, declaration:TypedClass):Array<WireField> {
@@ -514,7 +499,7 @@ class WireCodecGenerator {
 			default: throw new InternalError('No wire record fields for "$type"');
 		};
 
-	function memberId(metadata:Array<AstMetadata>, name:String, span:SourceSpan):Int {
+	public static function memberId(metadata:Array<AstMetadata>, name:String, span:SourceSpan):Int {
 		var id = 0;
 		for (annotation in metadata) {
 			if (annotation.name != "id")

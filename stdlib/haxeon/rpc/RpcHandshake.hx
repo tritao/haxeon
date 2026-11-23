@@ -34,7 +34,8 @@ class RpcHandshake {
 		this.authorize = authorize;
 		deadline = clock() + options.timeoutMs;
 		if (initiator)
-			outgoing = RpcProtocol.encode(Hello(options.protocol, options.codec, options.application, offered),
+			outgoing = RpcProtocol.encode(Hello(RpcProtocol.VERSION, RpcProtocol.CODEC_VERSION, options.application,
+				offered),
 				options.maxMessageBytes);
 	}
 
@@ -79,7 +80,8 @@ class RpcHandshake {
 	}
 
 	function negotiate(protocol:Int, codec:Int, application:String, capabilities:Array<String>):Bool {
-		var code:Null<String> = protocol != options.protocol ? "unsupported_protocol" : codec != options.codec
+		var code:Null<String> = protocol != RpcProtocol.VERSION ? "unsupported_protocol" : codec
+			!= RpcProtocol.CODEC_VERSION
 			? "unsupported_codec" : null;
 		if (code != null) {
 			if (initiator)
@@ -185,7 +187,8 @@ class RpcHandshake {
 					}
 				}
 				accepted = true;
-				outgoing = RpcProtocol.encode(Welcome(options.protocol, options.codec, options.application, negotiated),
+				outgoing = RpcProtocol.encode(Welcome(RpcProtocol.VERSION, RpcProtocol.CODEC_VERSION,
+					options.application, negotiated),
 					options.maxMessageBytes);
 			default:
 				fail("invalid_handshake");

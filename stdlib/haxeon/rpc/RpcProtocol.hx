@@ -5,7 +5,7 @@ import haxeon.wire.MessagePack;
 
 /** Framing/codec versions are independent of the application's version string. */
 class RpcProtocol {
-	public static inline final VERSION:Int = 1;
+	public static inline final VERSION:Int = 2;
 	public static inline final CODEC_VERSION:Int = 1;
 	public static inline final MAX_CAPABILITIES:Int = 64;
 
@@ -43,7 +43,13 @@ class RpcProtocol {
 					seen.set(capability, true);
 				}
 			case Request(id, method, timeoutMs, payload):
-				if (id <= 0 || method <= 0 || timeoutMs <= 0 || payload == null)
+				var valid = switch method {
+					case null: false;
+					case Id(id): id > 0;
+					case Name(name): name != null && name.length > 0;
+					case ServiceId(service, id): service != null && service.length > 0 && id > 0;
+				};
+				if (id <= 0 || !valid || timeoutMs <= 0 || payload == null)
 					throw "Invalid RPC request";
 			case Response(id, payload):
 				if (id <= 0 || payload == null)

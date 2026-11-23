@@ -44,7 +44,8 @@ The compiler also recognizes `MessagePack.encode(value)` and
 `MessagePack.decode(bytes)` (or their fully-qualified names). The compiler
 generates a codec for the concrete type of the value or the expected result,
 including the supported types it contains. This happens only for types reached
-from wire calls, including `JsonWire` and `RpcMethod.wire`:
+from wire calls, including `JsonWire`, `RpcMethod.wire`, and
+[typed RPC services](RPC.md):
 
 ```haxe
 import haxeon.wire.MessagePack;

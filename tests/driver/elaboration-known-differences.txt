@@ -12,6 +12,10 @@ typeinfo-generic	nested generic call: a callee specialized at the body's own par
 wasm-observable-tracking	nested generic call: a callee specialized at the body's own parameter (item 4)
 enum-concrete-payloads	lambda name: a lambda's name hashes its types (item 4)
 rpc-lifecycle	lambda name: a lambda's name hashes its types (item 4)
+rpc-service	lambda name: a lambda's name hashes its types (item 4)
+rpc-service-pinned	lambda name: a lambda's name hashes its types (item 4)
+rpc-wire-method	lambda name: a lambda's name hashes its types (item 4)
+rpc-wire-named-method	lambda name: a lambda's name hashes its types (item 4)
 comprehension-block-filter	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 lambda-count	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 structural-iteration	iteration argument: a specialization's concrete iteration argument meets the body's own element type
