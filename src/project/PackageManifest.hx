@@ -42,13 +42,20 @@ class NativeCMakeManifest {
 	/** Required runtime library names produced by an aggregate CMake target. */
 	public final libraries:Array<String>;
 
+	/**
+	 * CMake cache settings the package's project is built with (`definitions = { NK_BUILD_SHARED = "ON" }`), wherever it is built:
+	 * alone, or in an app's graph (docs/design/PROJECT_BUILDS.md).
+	 */
+	public final definitions:Map<String, String>;
+
 	public function new(source:String, target:String, ?inputs:Array<String>, ?library:String,
-			?libraries:Array<String>) {
+			?libraries:Array<String>, ?definitions:Map<String, String>) {
 		this.source = source;
 		this.target = target;
 		this.inputs = inputs == null ? [] : inputs.copy();
 		this.library = library;
 		this.libraries = library != null ? [library] : libraries == null ? [] : libraries.copy();
+		this.definitions = definitions == null ? [] : definitions.copy();
 	}
 }
 
@@ -397,7 +404,8 @@ class PackageManifest {
 				}
 				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),
 					requiredString(cmakeData, "target", '$path native.cmake'),
-					stringArray(cmakeData, "inputs", '$path native.cmake', []), library, libraries);
+					stringArray(cmakeData, "inputs", '$path native.cmake', []), library, libraries,
+					cmakeDefinitions(cmakeData, '$path native.cmake'));
 			}
 			if (nativeSources.length == 0 && cmake == null)
 				throw new InternalError('$path "native" requires "sources" or "cmake"');
@@ -438,6 +446,22 @@ class PackageManifest {
 			scopeSourceRoots, workspace, target, defines,
 			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
 			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path));
+	}
+
+	/** `native.cmake.definitions`: CMake cache variables and their values, both strings. */
+	static function cmakeDefinitions(cmake:Dynamic, path:String):Map<String, String> {
+		var raw:Dynamic = Reflect.field(cmake, "definitions"), definitions:Map<String, String> = [];
+		if (raw == null)
+			return definitions;
+		if (!isObject(raw))
+			throw new UsageError('$path "definitions" must be a table of CMake variables and values');
+		for (name in Reflect.fields(raw)) {
+			var value:Dynamic = Reflect.field(raw, name);
+			if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(name) || !Std.isOfType(value, String))
+				throw new UsageError('$path "definitions" maps CMake variable names to string values; "$name" does not');
+			definitions.set(name, value);
+		}
+		return definitions;
 	}
 
 	/** The `[app]` section: a name (the package's by default), a reverse-domain `id`, a `version`, an `icon` and the `platforms`. */

@@ -1,7 +1,8 @@
 # One SDK layout for releases and checkouts
 
-Status: agreed (2026-11-23); migration step 1 in progress. Reviewed independently before adoption; the five changes from that
-review are folded in below.
+Status: agreed (2026-11-23). Steps 1 (out/sdk staged, one SDK lookup, releases ship `sdk/`) and 2 (runners use
+`find_package(Haxeon)` and a data-only fragment) are built; 3 to 6 are open. Reviewed independently before adoption; the
+five changes from that review are folded in below.
 
 ## Problem
 

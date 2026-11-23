@@ -27,7 +27,10 @@
         "nativekit",
         "nativekit_gpu",
         "nativekit_ui"
-      ]
+      ],
+      "definitions": {
+        "NK_BUILD_SHARED": "ON"
+      }
     }
   },
   "ffi": {

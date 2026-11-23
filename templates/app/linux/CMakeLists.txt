@@ -12,4 +12,8 @@ set(HAXEON_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/generated/linux" 
   "The fragment haxeon build generates for this runner")
 include("${HAXEON_GENERATED_DIR}/haxeon.cmake")
 
-haxeon_add_app({{package}} MODULE "${HAXEON_MODULE}" NATIVE_TARGETS ${HAXEON_NATIVE_TARGETS})
+# The Haxeon this runner was written for: an SDK of another minor version reports that the runner needs updating
+# (docs/design/PROJECT_BUILDS.md, runner versions).
+find_package(Haxeon {{haxeon_version}} REQUIRED CONFIG)
+
+haxeon_add_app({{package}})

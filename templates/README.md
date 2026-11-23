@@ -9,6 +9,7 @@
 | `{{name}}` | the app's display name |
 | `{{id}}` | the app's reverse-domain identifier (`--org` and the package name) |
 | `{{platforms}}` | the app's platforms as a TOML array |
+| `{{haxeon_version}}` | Haxeon's major and minor version (`0.3`), which a runner finds the SDK at |
 | `{{haxeon}}` | the Haxeon installation's directory, for its packages until they come from the `haxeon` registry |
 
 A top-level directory named after a platform (`linux/`, later `windows/`, `macos/`, `android/`, `web/`) is that platform's

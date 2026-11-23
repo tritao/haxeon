@@ -53,7 +53,9 @@ class ProjectCreator {
 				"name" => displayName(packageName),
 				"id" => options.org + "." + identifierPart(packageName),
 				"platforms" => "[" + [for (platform in platforms) '"$platform"'].join(", ") + "]",
-				"haxeon" => Path.normalize(FileSystem.absolutePath(home))
+				"haxeon" => Path.normalize(FileSystem.absolutePath(home)),
+				// The major and minor version the runner finds the SDK at (find_package(Haxeon 0.3)).
+				"haxeon_version" => project.PackageCompatibility.CURRENT_HAXEON.split(".").slice(0, 2).join(".")
 			];
 		var created:Array<String> = [], kept:Array<String> = [];
 		copy(templateDirectory, target, "", values, created, kept, platforms);
