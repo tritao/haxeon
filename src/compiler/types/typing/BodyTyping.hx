@@ -103,6 +103,7 @@ interface BodyTyping {
 	function bindCell(binding:compiler.types.analysis.Scope.LocalBinding, type:CompilerType):Void;
 
 	// Switch rules, shared by statement switches and switch expressions.
+	function typePatternValue(value:AstExpression, scope:Scope, expected:CompilerType):TypedExpression;
 	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchCasePattern;
 	function rejectMatchPatternVariable(span:SourceSpan):Void;
 	function enterStructureSwitch(span:SourceSpan, columns:Array<String>):Void;

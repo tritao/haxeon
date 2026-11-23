@@ -352,6 +352,8 @@ in_background run_case switch-bool 0
 in_background run_case switch-nullable-enum-abstract 0
 # A lowercase name in a pattern captures even where a function or variable of that name is in scope.
 in_background run_case pattern-capture-shadows-name 0
+in_background run_error_case pattern-unknown-uppercase
+in_background run_error_case pattern-unknown-uppercase-nested
 # Haxe's Lambda over arrays and maps (stdlib/Lambda.hx).
 in_background run_case lambda-functions 0
 in_background run_case lambda-empty-literal 0

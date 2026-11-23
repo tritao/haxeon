@@ -39,7 +39,17 @@ class AliasTable {
 	var moduleFieldStorage:Null<Map<String, String>> = null;
 	var typeStatics:Null<Map<String, Bool>> = null;
 	var moduleMembers:Null<Map<String, Bool>> = null;
+	var patternConstants:Null<Map<String, Bool>> = null;
 	var namespaceUses:Null<Array<ModuleNamespaceUse>> = null;
+
+	/** The qualified constants whose bare imports can occur in a pattern. */
+	public function usePatternConstants(constants:Map<String, Bool>):Void
+		patternConstants = constants;
+
+	public function isPatternConstant(path:String):Bool {
+		var constants = nearest(table -> table.patternConstants);
+		return constants != null && constants.exists(path);
+	}
 
 	/** A table with no names that resolves through `parent`, if any, and that `set` and `remove` change without touching it. */
 	public function new(?parent:AliasTable) {

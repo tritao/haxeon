@@ -148,7 +148,8 @@ class StructurePatterns {
 	static function matchesNull(value:AstExpression):Bool
 		return switch value {
 			case NullLiteral(_): true;
-			case Variable(name, _): name.indexOf(".") < 0;
+			case Variable(name, span): name == "_"
+				|| compiler.syntax.AstPredicates.patternCaptureName(name, span) != null;
 			case Capture(_, inner, _): matchesNull(inner);
 			default: false;
 		};
@@ -230,7 +231,7 @@ class StructurePatterns {
 					collect(field.value, fieldPath, row, columns, false, fieldSpans);
 				}
 			case Capture(name, inner, span) if (isStructure(inner)):
-				set(path, Variable(name, span), row, columns);
+				set(path, Capture(name, Variable("_", span), span), row, columns);
 				collect(inner, path, row, columns, root, fieldSpans);
 			case Variable("_", _):
 			case Variable(_, _):

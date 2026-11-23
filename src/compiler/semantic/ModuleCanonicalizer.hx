@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.AstFunctions;
+import compiler.syntax.AstPredicates;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
@@ -514,19 +515,47 @@ class ModuleCanonicalizer {
 					valueName
 				]), span);
 			case Switch(expression, cases, defaultBranch, hasDefault, span):
-				Switch(canonicalExpression(expression, module, entry, locals, aliases), [for (switchCase in cases)
+				Switch(canonicalExpression(expression, module, entry, locals, aliases), [for (switchCase in cases) {
+					var patterns = [for (pattern in switchCase.patterns) canonicalExpression(pattern, module, entry,
+						locals, aliases)],
+						inner = caseLocals(patterns[0], locals, aliases);
 					{
-						patterns:[
-							for (pattern in switchCase.patterns) canonicalExpression(pattern, module, entry, locals,
-								aliases)
-						],
-							guard:canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
-							statements:canonicalBlock(switchCase.statements, module, entry, locals, aliases),
+						patterns:patterns,
+							guard:canonicalOptionalExpression(switchCase.guard, module, entry, inner, aliases),
+							statements:canonicalBlock(switchCase.statements, module, entry, inner, aliases),
 							span:switchCase.span
-					}], canonicalBlock(defaultBranch, module, entry, locals, aliases), hasDefault,
-						span);
+					}
+				}], canonicalBlock(defaultBranch, module, entry, locals, aliases), hasDefault,
+					span);
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
+
+	/** A case's guard and body see the bindings of its pattern before module or import names. */
+	static function caseLocals(pattern:AstExpression, locals:LocalScope, aliases:Null<AliasTable>):LocalScope {
+		var names:Array<Null<String>> = [];
+		function collect(value:AstExpression):Void {
+			switch value {
+				case Variable(name, span):
+					var capture = AstPredicates.patternCaptureName(name, span);
+					if (capture != null && (aliases == null || !aliases.isPatternConstant(name)))
+						names.push(capture);
+				case Capture(name, inner, _):
+					names.push(name);
+					collect(inner);
+				case Extractor(_, inner, _):
+					collect(inner);
+				case Call(_, arguments, _), ArrayLiteral(arguments, _):
+					for (argument in arguments)
+						collect(argument);
+				case ObjectLiteral(fields, _):
+					for (field in fields)
+						collect(field.value);
+				default:
+			}
+		}
+		collect(pattern);
+		return names.length == 0 ? locals : bindNames(locals, names);
+	}
 
 	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:LocalScope,
 			?aliases:AliasTable):AstExpression
@@ -620,15 +649,16 @@ class ModuleCanonicalizer {
 				CheckType(canonicalExpression(value, module, entry, locals, aliases), canonicalType(type, aliases), s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases),
-					[for (switchCase in cases)
-					{
-						patterns:[
-							for (pattern in switchCase.patterns) canonicalExpression(pattern, module, entry, locals,
-								aliases)
-						],
-							guard:canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
-							result:canonicalExpression(switchCase.result, module, entry, locals, aliases),
-							span:switchCase.span
+					[for (switchCase in cases) {
+						var patterns = [for (pattern in switchCase.patterns) canonicalExpression(pattern, module, entry,
+							locals, aliases)],
+							inner = caseLocals(patterns[0], locals, aliases);
+						{
+							patterns:patterns,
+								guard:canonicalOptionalExpression(switchCase.guard, module, entry, inner, aliases),
+								result:canonicalExpression(switchCase.result, module, entry, inner, aliases),
+								span:switchCase.span
+						}
 					}], canonicalOptionalExpression(fallback, module, entry, locals, aliases), s);
 			case ObjectLiteral(fields, s): ObjectLiteral([for (field in fields)
 				{

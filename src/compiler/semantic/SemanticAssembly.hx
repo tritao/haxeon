@@ -117,13 +117,16 @@ class SemanticAssembly {
 				dottedSourceAliases.set(sourceName, declarationName);
 			else
 				plainSourceAliases.set(sourceName, declarationName);
+		var patternConstants:Map<String, Bool> = [];
 		var aliasUniverse = [
 			for (sourceName => declarationName in sourceTypeAliases)
 				sourceName + "=" + declarationName
 		];
 		for (typeName => caseNames in enumCasesByType)
-			for (caseName in caseNames)
+			for (caseName in caseNames) {
 				aliasUniverse.push(typeName + "#" + caseName);
+				patternConstants.set(typeName + "." + caseName, true);
+			}
 		// Where each module-level variable is stored (ModuleFields): name resolution names it there. A module that adds or removes
 		// one changes the key, so the modules that resolve names are resolved again.
 		// One that shares its name with a static of the module's own class is that static when named through the imported class.
@@ -135,6 +138,14 @@ class SemanticAssembly {
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
+				for (decl in parsed.classes)
+					for (field in decl.fields)
+						if (field.isStatic && field.isInline) {
+							var path = ModuleCanonicalizer.qualifiedTypeName(parsed.packageName,
+								decl.name) + "." + field.name;
+							patternConstants.set(path, true);
+							aliasUniverse.push("inline " + path);
+						}
 				for (fn in parsed.functions)
 					moduleMembers.set(moduleName + "." + fn.name, true);
 				if (parsed.fields != null) {
@@ -145,6 +156,10 @@ class SemanticAssembly {
 					for (field in parsed.fields) {
 						var path = moduleName + "." + field.name;
 						moduleFieldStorage.set(path, ModuleFields.storageName(moduleName) + "." + field.name);
+						if (field.isInline) {
+							patternConstants.set(ModuleFields.storageName(moduleName) + "." + field.name, true);
+							aliasUniverse.push("inline " + path);
+						}
 						moduleMembers.set(path, true);
 						aliasUniverse.push("field " + path);
 						if (ownClass != null && declaresStatic(ownClass, field.name)) {
@@ -233,6 +248,7 @@ class SemanticAssembly {
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
 			aliases.useModuleFieldStorage(moduleFieldStorage, moduleTypeStatics, moduleMembers);
+			aliases.usePatternConstants(patternConstants);
 			var namespaceUses:Array<AliasTable.ModuleNamespaceUse> = [];
 			aliases.recordNamespaceUses(namespaceUses);
 			// An explicit import outranks a same-named type elsewhere in the

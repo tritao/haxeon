@@ -347,8 +347,6 @@ The Haxe code Haxeon rejects or runs differently is listed in
 - **Dynamic methods Haxe accepts and Haxeon does not:** `dynamic` methods of an
   interface, static dynamic methods of an abstract, and dynamic methods with their
   own type parameters.
-- **Switch patterns.** In a `switch` pattern, an upper-case capture name binds a variable (Haxe rejects it), and a
-  capture named like a module-level function resolves to the function.
 - **Generic owners specialized only from annotated members.** An owner whose
   member holds its parameter inside a structure is specialized (`3c1041b09`),
   but only when the member's type is written; one inferred from the body is not

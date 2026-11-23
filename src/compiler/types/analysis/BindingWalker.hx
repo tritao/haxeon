@@ -466,7 +466,9 @@ class BindingWalker implements AstChildVisitor {
 	function bindPattern(pattern:AstExpression, span:SourceSpan):Void {
 		switch pattern {
 			case Variable(name, variableSpan):
-				declare(name, variableSpan, Pattern);
+				var capture = compiler.syntax.AstPredicates.patternCaptureName(name, variableSpan);
+				if (capture != null)
+					declare(capture, variableSpan, Pattern);
 			case TemporaryVariable(local, variableSpan):
 				declare(local.name, variableSpan, Pattern);
 			case Capture(name, inner, captureSpan):

@@ -1124,7 +1124,7 @@ class BodyTyper implements BodyTyping {
 				bindings = enumPattern.bindings;
 				predicates = enumPattern.predicates;
 			} else if (!isCatchAll) {
-				typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType,
+				typedValue = coerce(typePatternValue(elementPattern, scope, elementType), elementType,
 					"array switch pattern", "E1019");
 				var literal = enumLiteral(typedValue);
 				if (literal != null)
@@ -1258,19 +1258,18 @@ class BodyTyper implements BodyTyping {
 					}
 					switch argument {
 						case Variable(binding, bindingSpan):
-							var constantName = enumAbstractPatternConstant(abstractName, binding),
-								owner = context.lexicalOwner,
-								staticField = owner == null ? null : findStaticFieldNullable(owner, binding),
-								inlineField = staticField == null
-									? null : inlineConstantResolver.resolve(staticField.owner, binding, bindingSpan);
-							if (binding == "_") {} else if (constantName != null
-								|| inlineField != null
-								|| patternConstructor(binding, bindingSpan, parameterType, scope) != null
-								|| binding.indexOf(".") >= 0) {
-								predicates.push(typeEnumPredicate(argument, parameterType, storageType, index,
-									constantName));
-							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType,
-								storageType, index));
+							var constantName = enumAbstractPatternConstant(abstractName, binding);
+							if (binding != "_") {
+								var capture = constantName == null
+									? patternBindingName(binding, bindingSpan, parameterType, scope) : null;
+								if (capture != null)
+									bindings.push(bindPatternName(capture, bindingSpan, scope, parameterType,
+										storageType,
+										index));
+								else
+									predicates.push(typeEnumPredicate(argument, parameterType, storageType, index,
+										constantName));
+							}
 						case TemporaryVariable(local, bindingSpan):
 							bindings.push(bindPatternName(local.name, bindingSpan, scope, parameterType, storageType,
 								index, local));
@@ -1347,7 +1346,7 @@ class BodyTyper implements BodyTyping {
 										switch field.value {
 											case Variable("_", _):
 											default:
-												var typed = coerce(typeExpression(field.value, new Scope(),
+												var typed = coerce(typePatternValue(field.value, new Scope(),
 													expectedField.type), expectedField.type,
 													"enum object payload pattern", "E1019");
 												if (constantPatternKey(typed) == null)
@@ -1394,11 +1393,16 @@ class BodyTyper implements BodyTyping {
 									for (arrayIndex in 0...values.length)
 										switch values[arrayIndex] {
 											case Variable("_", _):
-											// A name binds the element unless it names a constructor, which is matched.
-											case Variable(binding, bindingSpan) if (patternConstructor(binding,
-												bindingSpan, elementType, scope) == null):
+											case Variable(binding, bindingSpan):
+												var capture = patternBindingName(binding, bindingSpan, elementType,
+													scope);
+												if (capture == null) {
+													predicates.push(typeEnumPredicate(values[arrayIndex], elementType,
+														elementStorage, index, null, arrayIndex, storageType));
+													continue;
+												}
 												bindings.push({
-													name: declarePatternName(binding, elementType, bindingSpan,
+													name: declarePatternName(capture, elementType, bindingSpan,
 														scope).id,
 													type: elementType,
 													storageType: elementStorage,
@@ -1556,28 +1560,51 @@ class BodyTyper implements BodyTyping {
 	function switchSubjectBinding(value:AstExpression, expected:CompilerType, scope:Scope):Null<String> {
 		return switch value {
 			case Variable(name, span):
-				// A qualified name denotes a constant, never a new pattern binding.
-				if (name.indexOf(".") >= 0)
-					return null;
-				var owner = context.lexicalOwner;
-				if (owner != null && findStaticFieldNullable(owner, name) != null)
-					return null;
-				var info = patternConstructor(name, span, expected, scope);
-				// Enum abstracts are erased to their underlying type, so the
-				// subject cannot name its values; a bare value name of the subject's
-				// abstract, or one visible here, resolves as in any expression rather
-				// than binding the subject.
-				if (info == null && !scope.hasVisibleLocal(name)
-					&& (expectedEnumAbstractDeclaresValue(expected, name) || isEnumAbstractValueName(name, span)))
-					return null;
-				if (info != null) null;
-				else if (name == "_") null;
-				else
-					declarePatternName(name, expected, span, scope).id;
+				var capture = patternBindingName(name, span, expected, scope);
+				capture == null ? null : declarePatternName(capture, expected, span, scope).id;
 			// A temporary the typer put in the pattern binds, whatever its name.
 			case TemporaryVariable(local, span):
 				declarePatternName(local.name, expected, span, scope, local).id;
 			default: null;
+		}
+	}
+
+	/** Bare lowercase names bind unless the matcher finds a constructor or a compile-time constant. */
+	function patternBindingName(name:String, span:SourceSpan, expected:CompilerType, scope:Scope):Null<String> {
+		var capture = AstPredicates.patternCaptureName(name, span);
+		if (capture == null || patternConstructor(name, span, expected, scope) != null
+			|| expectedEnumAbstractDeclaresValue(expected, capture))
+			return null;
+		if (!scope.hasVisibleLocal(capture)) {
+			if (isEnumAbstractValueName(name, span))
+				return null;
+			var owner = context.lexicalOwner,
+				field = owner == null ? null : findStaticFieldNullable(owner, capture);
+			if (field != null && inlineConstantResolver.resolve(field.owner, capture, span) != null)
+				return null;
+			if (name != capture) {
+				var target = compiler.core.QualifiedName.parentOrEmpty(name);
+				if (inlineConstantResolver.resolve(target, compiler.core.QualifiedName.last(name), span) != null
+					|| enumAbstractPatternConstant(session.enumAbstractName(target), name) != null)
+					return null;
+			}
+		}
+		return capture;
+	}
+
+	public function typePatternValue(value:AstExpression, scope:Scope, expected:CompilerType):TypedExpression {
+		try
+			return typeExpression(value, scope, expected)
+		catch (error:CompileError) {
+			switch value {
+				case Variable(name,
+					span) if (name.indexOf(".") < 0 && AstPredicates.patternCaptureName(name, span) == null
+					&& error.diagnostic.message == 'Unknown variable "$name"'):
+					fail(error.diagnostic.code,
+						'Unknown identifier : $name, pattern variables must be lower-case or with `var ` prefix', span);
+				default:
+			}
+			throw error;
 		}
 	}
 
@@ -1687,7 +1714,7 @@ class BodyTyper implements BodyTyping {
 			case Variable(_, span) if (constantName != null): Variable(Std.string(constantName), span);
 			default: value;
 		};
-		var typed = coerce(typeExpression(resolvedValue, new Scope(), type), type, "enum payload pattern",
+		var typed = coerce(typePatternValue(resolvedValue, new Scope(), type), type, "enum payload pattern",
 			"E1019");
 		if (constantPatternKey(typed) == null)
 			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);

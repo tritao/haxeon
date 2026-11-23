@@ -429,6 +429,7 @@ optional-argument-forwarding
 optional-enum-parameter
 override-method
 package-stack-trace
+pattern-capture-names
 phi-parallel-moves
 postfix-increment
 prefix-increment

@@ -10,7 +10,7 @@ enum PayloadValue {
 function main():Int {
 	var item = PayloadValue.Item(PayloadKind.first, 42);
 	return switch item {
-		case PayloadValue.Item(first, Value): Value;
+		case PayloadValue.Item(first, value): value;
 		case PayloadValue.Item(second, _): 1;
 		default: 0;
 	};

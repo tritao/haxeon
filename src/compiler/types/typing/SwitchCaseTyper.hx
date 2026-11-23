@@ -134,7 +134,7 @@ class SwitchCaseTyper {
 			scope:Scope):TypedExpression {
 		var type = constantType == null
 			|| compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
-		return bodyTyper.coerce(bodyTyper.typeExpression(value, scope, type), type, "switch case", "E1019");
+		return bodyTyper.coerce(bodyTyper.typePatternValue(value, scope, type), type, "switch case", "E1019");
 	}
 
 	/**

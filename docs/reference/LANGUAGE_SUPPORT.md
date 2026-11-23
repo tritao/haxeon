@@ -102,8 +102,9 @@ The current subset includes:
   evaluated once, matches the pattern: nested patterns, constants, `_` and alternatives (`Circle(_) | Rect(1, _)`). As in
   Haxe, the pattern binds no names: a capture there (`shape`, `Circle(radius)`, `s = Circle(_)`) is `E1019`, "Pattern
   variables are not allowed in .match patterns".
-- A lowercase name in a pattern captures, as in Haxe, even where a function, local, static or field of that name is in
-  scope (`case Box(size):` beside a function `size`): inside the case the name is the captured value.
+- A bare lowercase capture shadows outer names in the case's guard and body, including locals, fields, module-level
+  functions and imported functions. Bare uppercase names resolve as references, such as enum constructors, enum abstract
+  values and static inline constants. An unknown uppercase name reports an error at the identifier.
 - Array iteration and comprehensions
 - Static initialization runs in Haxe's order: every class's `static function __init__()` first, then the static
   initializers, class by class, each class's in declaration order. Classes go module by module in path order, each
