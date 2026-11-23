@@ -516,6 +516,12 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			typedFunctions.push(codecs.get(name));
 		var adapterNames = [for (name in enumAdapters.keys()) name];
 		adapterNames.sort(Reflect.compare);
+		// An adapter the code typed again asked for again replaces the one carried from the previous program
+		// (`takeFromPrevious`), so the program lists it once, where a fresh build lists it.
+		var position = typedClasses.length;
+		while (position-- > 0)
+			if (enumAdapters.exists(typedClasses[position].name))
+				typedClasses.splice(position, 1);
 		for (name in adapterNames) {
 			var adapter = enumAdapters.get(name);
 			typedClasses.push(adapter);
