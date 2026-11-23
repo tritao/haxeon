@@ -51,13 +51,19 @@ class MessagePackReader {
 		return bufferedMarker == null && input.position == totalBytes;
 
 	/** Returns whether the next value is nil without consuming it. */
-	public function isNil():Bool {
-		if (bufferedMarker != null)
-			return bufferedMarker == 0xc0;
-		if (input.position >= totalBytes)
-			return false;
-		bufferedMarker = input.readByte();
-		return bufferedMarker == 0xc0;
+	public function isNil():Bool
+		return peekMarker() == 0xc0;
+
+	/** Returns whether the next value is a string without consuming it. */
+	public function isString():Bool {
+		var marker = peekMarker();
+		return (marker >= 0xa0 && marker <= 0xbf) || marker == 0xd9 || marker == 0xda || marker == 0xdb;
+	}
+
+	function peekMarker():Int {
+		if (bufferedMarker == null && input.position < totalBytes)
+			bufferedMarker = input.readByte();
+		return bufferedMarker ?? -1;
 	}
 
 	public function readNil():Void

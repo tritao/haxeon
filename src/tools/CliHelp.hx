@@ -214,7 +214,8 @@ class CliHelp {
 						"  --fix                        Remove unused imports and sort them",
 						"  --only RULE                  unused-imports, import-order; opt-in: unbound-local, module-namespace,",
 						"                               throw-non-exception",
-						"  --manifest FILE              A haxeon.toml or haxeon.json whose source roots resolve imports"
+						"  --manifest FILE              A haxeon.toml or haxeon.json whose source roots resolve imports",
+						"  --fix --pin-wire TYPE FILE   Add permanent wire IDs to one declaration"
 					]
 				}
 			]

@@ -55,8 +55,8 @@ generate MessagePack codecs for both types. The descriptor preserves both types
 through `call` and `register` without reflection or `Dynamic` in the codecs.
 
 ```haxe
-@:wire typedef Query = { @:id(1) var name:String; }
-@:wire typedef Answer = { @:id(1) var text:String; }
+typedef Query = { var name:String; }
+typedef Answer = { var text:String; }
 
 var method:RpcMethod<Query, Answer> = RpcMethod.wire(100);
 
@@ -68,6 +68,9 @@ client.call(method, {name: "workspace"}, 1000,
     function(answer) { Sys.println(answer.text); },
     function(error) { Sys.println(error.code); });
 ```
+
+Request and response schemas are inferred recursively. Fields and enum constructors
+use names by default.
 
 For custom codecs, pass the functions explicitly to
 `new RpcMethod<Query, Answer>(100, encodeQuery, decodeQuery, encodeAnswer, decodeAnswer)`.
@@ -81,6 +84,16 @@ cancellation, expiry or disconnect, including when a retained context outlives
 its connection. Check `isCancelled()` during asynchronous work. Request ids
 increase within a connection and cannot be reused; a duplicate incoming id closes
 that connection instead of executing the request again.
+
+## Data that must last: pin IDs
+
+For schemas that must survive member renames, run
+`haxeon lint --fix --pin-wire TYPE FILE` for each request, response, or nested
+declaration that needs permanent member identities. This changes the payload
+encoding. Upgrade readers before sending numbered payloads. Pinned readers can
+still read existing name-keyed payloads, as described in the
+[MessagePack reference](MESSAGEPACK.md#data-that-must-last-pin-ids).
+The method ID passed to `RpcMethod.wire` is independent of member IDs.
 
 ## Failure semantics
 

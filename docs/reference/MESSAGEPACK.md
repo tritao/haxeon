@@ -41,35 +41,40 @@ var decoded:CustomType = MessagePack.decodeWith(bytes, codec);
 apply the same one-value rule as generated codecs.
 
 The compiler also recognizes `MessagePack.encode(value)` and
-`MessagePack.decode(bytes)` (or their fully-qualified names). Mark a plain
-record with `@:wire` to have those calls lowered to type-specific functions:
+`MessagePack.decode(bytes)` (or their fully-qualified names). The compiler
+generates a codec for the concrete type of the value or the expected result,
+including the supported types it contains. This happens only for types reached
+from wire calls, including `JsonWire` and `RpcMethod.wire`:
 
 ```haxe
 import haxeon.wire.MessagePack;
 
-@:wire
 class User {
-	@:id(1)
 	public var id:Int;
-	@:id(2)
 	public var name:String;
+
+	public function new(id:Int, name:String) {
+		this.id = id;
+		this.name = name;
+	}
 }
 
-var bytes = MessagePack.encode(user);
+var bytes = MessagePack.encode(new User(7, "Ada"));
 var decoded:User = MessagePack.decode(bytes);
 ```
 
-The initial compiler profile supports non-generic, non-inheriting records with
-directly stored `Int`, `Int64`, `Float`, `Bool`, `String`, or `Bytes` fields, plus
-nullable versions of those types, arrays of supported values, and nested
-`@:wire` records. Fields may be `final` or mutable. Every instance field requires
-one positive, unique `@:id(n)` annotation. IDs are permanent schema identities: once an ID has been
-used for a field or enum constructor, it must never be reused for a different
-semantic member. Deleting a member reserves its old ID forever.
+The compiler supports non-generic, non-inheriting classes and structs,
+structural records, and enums. Fields must have direct storage and can use
+`Int`, `Int64`, `Float`, `Bool`, `String`, `Bytes`, supported abstracts,
+nullable values, arrays, maps, and other supported records and enums. Fields
+may be final or mutable. An unsupported member type is a compile error.
 
-Fields are encoded as an integer-keyed map sorted by ID and decoded by ID; this
-makes field renames and declaration reordering wire-compatible. Unknown fields
-are skipped. Missing integers, floats, and booleans receive `0`, `0.0`, and
+A record without IDs is a map keyed by field-name strings, ordered
+lexicographically by UTF-8 bytes. An enum without IDs is a one-entry map
+from the constructor name string to its array of arguments. Integer keys
+identify the original numbered shapes. Each declaration uses a single key
+mode. If any member has an ID, every member must have a positive, unique ID.
+Unknown record keys are skipped in either mode. Missing integers, floats, and booleans receive `0`, `0.0`, and
 `false`; missing strings receive their existing empty-string default, nullable
 values receive `null`, and missing arrays and maps receive empty collections.
 Missing non-null records and enums are errors unless the field has a supported
@@ -86,29 +91,50 @@ cycles.
 profile. String keys are encoded as UTF-8 and ordered by lexicographic
 comparison of those UTF-8 bytes; integer keys are encoded and sorted
 numerically. `Map<Enum, T>` is supported when every enum constructor is nullary
-and the enum is marked `@:wire`; enum keys are encoded as their stable
-constructor `@:id` integers and sorted by that ID. All three map forms produce
+and its codec is inferred along with the map. Enum keys use constructor names
+or explicit IDs, ordered by UTF-8 bytes or numeric ID, respectively. All three map forms produce
 deterministic output, while missing map fields receive an empty map.
-`@:wire` enums are encoded as a one-entry map from the stable constructor
-`@:id` to an array of constructor arguments. Unknown constructor IDs and
+Numbered enums encode a one-entry map from the stable constructor
+`@:id` to an array of constructor arguments. Unknown constructor names or IDs and
 malformed payloads are rejected. Adding an enum constructor is therefore not
 forward-compatible with older readers if the new value can reach them.
 Payload-bearing enums remain unsupported as map keys because their values are
 not unique by constructor index.
 
+## Data that must last: pin IDs
+
+```sh
+haxeon lint --fix --pin-wire User src/User.hx
+```
+
+The fix adds `@:wire` and writes consecutive `@:id(n)` annotations, starting at
+1, on instance fields or enum constructors in declaration order. Rerunning it
+preserves existing IDs. Run it separately for each nested declaration whose
+schema needs permanent member identities. The compiler only uses explicit
+IDs and never derives them from declaration order.
+
+Pinned types encode integer keys and also decode existing name-keyed data by
+matching the current field and constructor names, including enum map keys.
+Keep names in use by stored name-keyed data until those values have been
+rewritten with IDs. Numbered record fields are sorted by ID, which stays
+attached to the same semantic field through renames and reordering. Keep
+deleted IDs reserved and give new members fresh IDs.
+
+Structurally identical unannotated typedefs share a name-keyed schema. An
+explicit wire typedef (one with `@:wire` or member IDs) supplies the schema
+for its structure. Two explicit wire typedefs of the same structural type
+are ambiguous. Use nominal classes or structs when identical field shapes
+need distinct schemas.
+
 ## Compatibility rules
 
-Generated records and maps have deterministic output: record fields are sorted
-by positive `@:id`, string map keys by UTF-8 byte lexicographic order, integer
-keys numerically, and nullary enum keys by their stable constructor ID. The
-writer also selects the shortest legal integer, string, array, and map marker
-for each value. These rules are covered by exact byte-vector tests and are
-intended to remain stable across HashLink and Wasm backends.
+The writer selects the shortest legal integer, string, array, and map marker
+for each value. Exact byte-vector tests cover the stable numbered format.
 
 Decoding is permissive about field order and unknown record fields. Missing
 fields receive the documented defaults, or fail when a required record/enum
 field has no explicit default. If a map or record contains a duplicate
-key/field ID, the last occurrence wins. A top-level generated decode and
+key, the last occurrence wins. A top-level generated decode and
 `decodeWith` must consume exactly one value; trailing bytes are rejected. The
 low-level reader remains stream-oriented, so callers using it directly may
 decode multiple consecutive values.

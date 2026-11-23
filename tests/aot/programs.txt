@@ -468,6 +468,7 @@ reflect-string-fields
 reflect-typed-objects
 rpc-lifecycle
 rpc-wire-method
+rpc-wire-named-method
 same-package-module-type
 scalar-closure-boundaries
 scalar-closure-identity
@@ -650,6 +651,8 @@ wasm-scalar-closure-census
 wasm-type-id-collision
 while-arithmetic
 wire-final-record
+wire-named-record
+wire-pinned-record
 wire-nested-value
 xml-edit-errors
 xml-urdf

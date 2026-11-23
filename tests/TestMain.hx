@@ -1362,8 +1362,14 @@ class TestMain {
 		wireCollisionCompiler.update("Main.hx",
 			"import foo.Bar; function main():Int { var left:Bar = new Bar(); var right:foo_Bar = new foo_Bar(); return haxeon.wire.MessagePack.encode(left).length + haxeon.wire.MessagePack.encode(right).length; }");
 		wireCollisionCompiler.compile("Main");
-		expectCompileError('@:wire class MissingId { public var id:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new MissingId()).length; }',
-			'MessagePack record field "MissingId.id" requires @:id(n)');
+		expectCompileError('@:wire class MissingId { @:id(1) public var numbered:Int; public var id:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new MissingId()).length; }',
+			'Wire member "MissingId.id" needs @:id(n): cannot mix named and numbered members');
+		expectCompileError('typedef Mixed = { @:id(1) var first:Int; var second:Int; } function main():Int { var value:Mixed = {first: 1, second: 2}; return haxeon.wire.MessagePack.encode(value).length; }',
+			'Wire member "Mixed.second" needs @:id(n): cannot mix named and numbered members');
+		expectCompileError('typedef Bad = { var content:Dynamic; } function main():Int { var value:Bad = {content: null}; return haxeon.wire.MessagePack.encode(value).length; }',
+			'Wire record field "Bad.content" has unsupported type "TDynamic"');
+		expectCompileError('@:wire typedef First = { @:id(1) var value:Int; } @:wire typedef Second = { @:id(2) var value:Int; } function main():Int { var value:First = {value: 1}; return haxeon.wire.MessagePack.encode(value).length; }',
+			'Wire typedefs "First" and "Second" have the same structural type');
 		expectCompileError('@:wire class DuplicateId { @:id(1) public var left:Int; @:id(1) public var right:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new DuplicateId()).length; }',
 			'MessagePack record fields "DuplicateId.left" and "DuplicateId.right" use duplicate @:id(1)');
 		expectCompileError('@:wire class UnsupportedWireDefault { @:id(1) public var value:Int = 1 + 2; } function main():Int { return haxeon.wire.MessagePack.encode(new UnsupportedWireDefault()).length; }',
@@ -1376,8 +1382,8 @@ class TestMain {
 			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)');
 		expectCompileError('function main():Int { var values:Map<Bool, Int> = []; return haxeon.wire.MessagePack.encode(values).length; }',
 			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile');
-		expectCompileError('@:wire enum MissingEnumId { Value; } function main():Int { return haxeon.wire.MessagePack.encode(Value).length; }',
-			'MessagePack enum constructor "MissingEnumId.Value" requires @:id(n)');
+		expectCompileError('@:wire enum MissingEnumId { @:id(1) First; Value; } function main():Int { return haxeon.wire.MessagePack.encode(Value).length; }',
+			'Wire member "MissingEnumId.Value" needs @:id(n): cannot mix named and numbered members');
 		expectCompileError('@:wire enum DuplicateEnumId { @:id(1) Left; @:id(1) Right; } function main():Int { return haxeon.wire.MessagePack.encode(Left).length; }',
 			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',

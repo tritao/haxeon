@@ -8,6 +8,7 @@ import compiler.service.ImportOrder;
 import compiler.service.UnusedImports;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.service.UnusedImports.UnusedImport;
+import compiler.syntax.Ast.AstMetadata;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
@@ -56,12 +57,17 @@ class LintCommand {
 			index = 0,
 			checkUnused = true,
 			checkOrder = true,
-			typedRule:Null<String> = null;
+			typedRule:Null<String> = null,
+			pinWire:Null<String> = null;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--fix")
 				fix = true;
-			else if (argument == "--only") {
+			else if (argument == "--pin-wire") {
+				if (index >= arguments.length || pinWire != null)
+					throw new InternalError("Option --pin-wire requires one type name");
+				pinWire = arguments[index++];
+			} else if (argument == "--only") {
 				if (index >= arguments.length)
 					throw new InternalError('Option "--only" requires a rule: $RULES');
 				switch arguments[index++] {
@@ -85,6 +91,12 @@ class LintCommand {
 		}
 		if (paths.length == 0)
 			throw new InternalError("haxeon lint requires at least one file");
+		if (pinWire != null) {
+			if (!fix || paths.length != 1 || !checkUnused || !checkOrder || manifests.length != 0)
+				throw new InternalError("Usage: haxeon lint --fix --pin-wire TYPE FILE");
+			pinWireIds(SourceFiles.requireFile(paths[0]), pinWire);
+			return 0;
+		}
 		if (typedRule != null) {
 			if (fix)
 				throw new InternalError(switch typedRule {
@@ -142,6 +154,99 @@ class LintCommand {
 			}
 		}
 		return found > 0 && !fix ? 1 : 0;
+	}
+
+	static function pinWireIds(path:String, name:String):Void {
+		var file = new SourceFile(path, File.getContent(path)),
+			tokens = new Lexer(file).tokenize(),
+			program = new Parser(tokens).parseProgram();
+		var members:Array<{offset:Int, metadata:Array<AstMetadata>}> = [];
+		var metadata:Array<AstMetadata> = [], start = -1;
+		for (record in program.classes)
+			if (record.name == name && record.typeParameters.length == 0 && record.base == null
+				&& record.isExtern != true) {
+				start = record.span.start;
+				metadata = record.metadata;
+				for (field in record.fields)
+					if (!field.isStatic)
+						members.push({offset: (field.declarationSpan ?? field.span).start, metadata: field.metadata});
+			}
+		for (declaration in program.enums)
+			if (declaration.name == name && declaration.typeParameters.length == 0) {
+				start = declaration.span.start;
+				metadata = declaration.metadata;
+				for (constructor in declaration.cases)
+					members.push({offset: constructor.span.start, metadata: constructor.metadata});
+			}
+		for (alias in program.aliases)
+			if (alias.name == name && alias.typeParameters.length == 0)
+				switch alias.type {
+					case AnonymousType(fields):
+						start = alias.span.start;
+						metadata = alias.metadata;
+						for (field in fields)
+							members.push({offset: field.span.start, metadata: field.metadata});
+					default:
+				}
+		if (start < 0 || members.length == 0)
+			throw new InternalError('Type "$name" must be a nonempty concrete record or enum declared in "$path"');
+
+		var numbered = 0;
+		for (member in members)
+			for (annotation in member.metadata)
+				if (annotation.name == "id") {
+					numbered++;
+					break;
+				}
+		if (numbered != 0 && numbered != members.length)
+			throw new InternalError('Type "$name" mixes named and numbered members');
+
+		var edits:Map<Int, String> = [], marked = false;
+		for (annotation in metadata)
+			if (annotation.name == "wire")
+				marked = true;
+		if (!marked) {
+			for (index in 0...tokens.length)
+				if (tokens[index].offset == start) {
+					var declaration = index;
+					while (declaration > 0 && switch tokens[declaration - 1].kind {
+						case Private | Public: true;
+						default: false;
+					})
+						declaration--;
+					edits.set(tokens[declaration].offset, "@:wire ");
+					break;
+				}
+		}
+		if (numbered == 0) {
+			var index = 0;
+			for (memberIndex in 0...members.length) {
+				while (tokens[index].offset < members[memberIndex].offset)
+					index++;
+				var field = index;
+				while (field > 0 && switch tokens[field - 1].kind {
+					case Question | Final | Var | Function: true;
+					default: false;
+				})
+					field--;
+				edits.set(tokens[field].offset, '@:id(${memberIndex + 1}) ');
+			}
+		}
+		var offsets = [for (offset in edits.keys()) offset];
+		if (offsets.length == 0)
+			return;
+		offsets.sort(Reflect.compare);
+		var result = new StringBuf(), cursor = 0;
+		for (offset in offsets) {
+			result.add(file.slice(cursor, offset));
+			result.add(edits.get(offset));
+			cursor = offset;
+		}
+		result.add(file.slice(cursor, file.bytes.length));
+		var edited = result.toString(), config = new ProjectFormat().forFile(path);
+		if (Formatter.format(file.text, config) == file.text)
+			edited = Formatter.format(edited, config) ?? edited;
+		File.saveContent(path, edited);
 	}
 
 	/** The roots `path` resolves against: its package root, its project's source roots, then the shared ones. */

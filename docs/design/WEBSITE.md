@@ -94,7 +94,7 @@ here and on the site.
      **Build your first app**, **Get the demo source**.
   3. **The language:** a short tabbed tour, each tab a few lines of code that compile and run, with its output, Haxeon's
      own features first: value types (`struct` with generated equality and hashing), enums and pattern matching, null
-     safety, cleanup with `defer`, typed wire and RPC (one `@:wire` declaration gives MessagePack and JSON codecs generated without reflection, versioned by field IDs, with `haxeon.rpc` over them), zero-cost abstract types. Inference
+     safety, cleanup with `defer`, typed wire and RPC (calls infer MessagePack and JSON codecs, member names are the default keys, schemas can pin permanent IDs, and `haxeon.rpc` uses the same codecs), zero-cost abstract types. Inference
      shows in every sample rather than as a tab of its own: every competitor has it.
   4. **C and C++ interop:** a real header, the generated binding and the Haxeon call side by side, the result visible.
   5. **One codebase, three outputs:** one sample run on the JIT VM, built as a native executable and as WebAssembly, with
