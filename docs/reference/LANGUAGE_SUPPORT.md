@@ -417,3 +417,12 @@ the quoted tag as part of their ABI identity. These target declarations live
 under `stdlib/hl`; unsupported representation names are diagnosed rather than
 silently lowered as ordinary objects.
 
+
+## Compile-time text embedding
+
+`Embed.text("shaders/maze.vert.glsl")` produces a `String` constant containing a
+UTF-8 file. The argument must be a literal relative path, resolved from the
+source file that contains the call. A missing or unreadable file or invalid
+UTF-8 produces a diagnostic at the call site. The compiler records the file as
+a build input, so changing it invalidates the next build. The running program
+does not need the original file.

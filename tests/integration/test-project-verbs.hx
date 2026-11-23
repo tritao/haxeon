@@ -69,6 +69,7 @@ function main() {
 
 	expectStatus(haxeon(["build"], work, Path.join([work, "build.log"])), 0, Path.join([work, "build.log"]),
 		"the build");
+	verifyEmbeddedText(work);
 	log = Path.join([work, "clean.log"]);
 	expectStatus(haxeon(["clean"], work, log), 0, log, "clean");
 	for (removed in ["build", "tests/build"])
@@ -78,6 +79,29 @@ function main() {
 		if (!FileSystem.exists(Path.join([work, kept])))
 			Script.fail('FAIL: clean removed $kept');
 	Sys.println("PASS: check, test and clean work on a project");
+}
+
+function verifyEmbeddedText(work:String):Void {
+	var log = Path.join([work, "embed.log"]);
+	write(work, "src/Main.hx",
+		'class Main { static final text = Embed.text("message.txt"); static function main():Void Sys.println(text); }');
+	write(work, "src/message.txt", "first é");
+	expectStatus(haxeon(["run"], work, log), 0, log, "run with embedded text");
+	if (File.getContent(log).indexOf("first é") < 0)
+		Script.fail("FAIL: the first embedded message did not reach the program");
+	write(work, "src/message.txt", "second λ");
+	expectStatus(haxeon(["run"], work, log), 0, log, "run after editing only embedded text");
+	if (File.getContent(log).indexOf("second λ") < 0)
+		Script.fail("FAIL: changing the embedded file did not rebuild the program");
+
+	File.saveBytes(Path.join([work, "src/message.txt"]), haxe.io.Bytes.ofHex("eda080"));
+	expectStatus(haxeon(["check"], work, log), 1, log, "invalid embedded UTF-8");
+	if (File.getContent(log).indexOf("not valid UTF-8") < 0)
+		Script.fail("FAIL: the invalid UTF-8 diagnostic was missing");
+	FileSystem.deleteFile(Path.join([work, "src/message.txt"]));
+	expectStatus(haxeon(["check"], work, log), 1, log, "missing embedded file");
+	if (File.getContent(log).indexOf("Could not read embedded text") < 0)
+		Script.fail("FAIL: the missing embedded file diagnostic was missing");
 }
 
 function haxeon(arguments:Array<String>, directory:String, log:String):Int

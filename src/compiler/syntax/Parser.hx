@@ -169,6 +169,7 @@ class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
 
 	final tokens:TokenTable;
+	final embedded:Null<compiler.core.EmbeddedText>;
 
 	/** The source's tokens; ids from it on name `inserted` tokens. */
 	final tokenCount:Int;
@@ -206,8 +207,9 @@ class Parser {
 
 	var recoveryDiagnostics:Array<compiler.core.Diagnostic> = [];
 
-	public function new(tokens:ParserTokens) {
+	public function new(tokens:ParserTokens, ?embedded:compiler.core.EmbeddedText) {
 		this.tokens = tokens;
+		this.embedded = embedded;
 		tokenCount = this.tokens.length;
 	}
 
@@ -2458,6 +2460,8 @@ class Parser {
 				name.indexOf(".") < 0);
 			var expression:AstExpression = Variable(name, referenceSpan);
 			if (match(TokenKind.LeftParen)) {
+				if (name == "Embed.text" && embedded != null)
+					return parsePostfix(parseEmbeddedText(referenceSpan));
 				var arguments = StringTools.endsWith(name, ".match")
 					? parseMatchPattern(name) : parseCallArguments(name);
 				var close = consume(TokenKind.RightParen);
@@ -2951,6 +2955,21 @@ class Parser {
 			rewindLambdas(savedLambdas);
 			return null;
 		}
+	}
+
+	function parseEmbeddedText(start:SourceSpan):AstExpression {
+		var message = "Embed.text requires one literal path";
+		if (!match(TokenKind.StringLiteral))
+			throw new CompileError(new Diagnostic("E0002", message, start));
+		var argument = parseStringExpression(previous());
+		match(TokenKind.Comma);
+		if (!match(TokenKind.RightParen))
+			throw new CompileError(new Diagnostic("E0002", message, start));
+		var span = start.merge(spanOf(previous()));
+		return switch argument {
+			case StringLiteral(path, _): StringLiteral(embedded.read(path, span), span);
+			default: throw new CompileError(new Diagnostic("E0002", message, span));
+		};
 	}
 
 	function parsePostfix(expression:AstExpression):AstExpression {
@@ -3693,7 +3712,7 @@ class Parser {
 		// The expression's tokens, at their places in the outer file.
 		var interpolationFile = new compiler.core.Source.SourceFile(outer.file.path, source),
 			lexed = new Lexer(interpolationFile).tokenizeTable();
-		var parser = new Parser(lexed.moved(outer.file, outer.start + offset));
+		var parser = new Parser(lexed.moved(outer.file, outer.start + offset), embedded);
 		parser.lambdaMember = lambdaMember;
 		parser.lambdaCounts = lambdaCounts;
 		parser.lambdaUndo = lambdaUndo;

@@ -63,6 +63,7 @@ class ModuleAnalyzer {
 			var parsed = sourceParse(state);
 			lookupParses.remove(state.name);
 			state.conditionalDefines = parsed.defines;
+			state.embeddedInputs = parsed.embeddedInputs;
 			state.tokens = keepsTokens ? parsed.tokens : TokenTable.empty;
 			state.ast = parsed.ast;
 			declarationOwners.release(state.name);
@@ -413,7 +414,7 @@ class ModuleAnalyzer {
 
 	/**
 	 * Parses every module of `states` that has neither a syntax tree nor a parse of its current source, on `threads` threads, into
-	 * the cache `parse` reads first. Parsing a module reads only its own source and the defines, and the results are kept in the
+	 * the cache `parse` reads first. Parses read their own source and embedded assets, and the results are kept in the
 	 * modules' order, so the program is the same whatever the scheduling. A module whose parse fails is left to `parse`, which
 	 * parses it again and reports the error as it always does.
 	 */
@@ -439,11 +440,12 @@ class ModuleAnalyzer {
 		}
 	}
 
-	/** The parse of `state`'s current source, which reads nothing but the source and the defines. */
+	/** The parse of `state`'s current source, including any declared embedded inputs. */
 	function parseText(state:ModuleState):LookupParse {
 		var conditional = ConditionalCompilation.process(state.source, defines),
 			tokens = new Lexer(state.source, conditional.text).tokenizeTable(),
-			program = new Parser(tokens).parseProgram();
+			embedded = new compiler.core.EmbeddedText(),
+			program = new Parser(tokens, embedded).parseProgram();
 		if (program.packageName == null) {
 			var packageName = ModulePath.packageName(state.name);
 			if (packageName != null)
@@ -461,7 +463,7 @@ class ModuleAnalyzer {
 				};
 		}
 		program = ModuleFields.fold(AbstractStatics.fold(program), state.name);
-		return new LookupParse(state.source, conditional.defines, tokens, program);
+		return new LookupParse(state.source, conditional.defines, tokens, program, embedded.inputs());
 	}
 
 	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>,
@@ -670,10 +672,13 @@ private class LookupParse {
 	public final tokens:TokenTable;
 	public final ast:compiler.syntax.Ast.AstProgram;
 
-	public function new(source, defines, tokens, ast) {
+	public final embeddedInputs:Array<compiler.core.EmbeddedText.EmbeddedInput>;
+
+	public function new(source, defines, tokens, ast, embeddedInputs) {
 		this.source = source;
 		this.defines = defines;
 		this.tokens = tokens;
 		this.ast = ast;
+		this.embeddedInputs = embeddedInputs;
 	}
 }

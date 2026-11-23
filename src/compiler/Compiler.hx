@@ -459,6 +459,7 @@ class Compiler {
 	}
 
 	public function compact(entryModule:String):CompileResult {
+		refreshEmbeddedInputs();
 		var hashLink = state.backend.hashLink();
 		if (hashLink == null)
 			throw new InternalError("Compacting a module is a HashLink operation");
@@ -468,18 +469,18 @@ class Compiler {
 	}
 
 	/** An explicit module identity keeps a standalone file's directory out of its package. */
-	public function update(path:String, source:String, ?moduleName:String):ModuleState {
+	public function update(path:String, source:String, ?moduleName:String, ?physicalPath:String):ModuleState {
 		var name = moduleName == null ? ModulePath.fromFile(path) : moduleName;
 		var isStandardLibrarySource = false;
 		if (modules.exists(name)) {
 			var current:ModuleState = modules.get(name);
 			if (current.source.path == path) {
-				if (current.loadedText == source)
+				if (current.loadedText == source && current.source.physicalPath == (physicalPath ?? path))
 					return current;
 				isStandardLibrarySource = current.source.isStandardLibrarySource;
 			}
 		}
-		var file = new SourceFile(path, source, isStandardLibrarySource);
+		var file = new SourceFile(path, source, isStandardLibrarySource, physicalPath);
 		var state:ModuleState;
 		if (modules.exists(name)) {
 			state = modules.get(name);
@@ -498,7 +499,7 @@ class Compiler {
 		if (state == null)
 			throw new InternalError('Cannot refresh unloaded module "$name"');
 		if (state.loadedText != source) {
-			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource));
+			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource, state.source.physicalPath));
 			sourceGeneration++;
 		}
 	}
@@ -561,7 +562,7 @@ class Compiler {
 					}
 			if (affected)
 				module.render(new SourceFile(module.source.path, module.source.text,
-					module.source.isStandardLibrarySource));
+					module.source.isStandardLibrarySource, module.source.physicalPath));
 		}
 		sourceGeneration++;
 	}
@@ -570,8 +571,10 @@ class Compiler {
 	 * Update semantic state without assembling or publishing a runtime artifact. `requireEntry` fails it, as a build fails, when the
 	 * program has no executable entry point.
 	 */
-	public function analyze(entryModule:String, ?token:CancellationToken, requireEntry = false):AnalysisResult
+	public function analyze(entryModule:String, ?token:CancellationToken, requireEntry = false):AnalysisResult {
+		refreshEmbeddedInputs();
 		return new AnalysisTransaction(this, entryModule, token, requireEntry).run();
+	}
 
 	public function dependentModules(module:String):Array<String>
 		return graph.dependents(module);
@@ -615,7 +618,8 @@ class Compiler {
 		if (current != null && current.source.path == path && current.loadedText == source)
 			return candidate;
 		var file = new SourceFile(path, source,
-			current != null && current.source.path == path && current.source.isStandardLibrarySource);
+			current != null && current.source.path == path && current.source.isStandardLibrarySource,
+			current == null ? null : current.source.physicalPath);
 		if (current == null)
 			candidate.modules.set(name, new ModuleState(name, file));
 		else {
@@ -639,7 +643,22 @@ class Compiler {
 		return result;
 	}
 
+	function refreshEmbeddedInputs():Void {
+		for (module in modules) {
+			if (module.ast == null)
+				continue;
+			for (input in module.embeddedInputs)
+				if (compiler.core.EmbeddedText.changed(input)) {
+					module.render(new SourceFile(module.source.path, module.source.text,
+						module.source.isStandardLibrarySource, module.source.physicalPath));
+					sourceGeneration++;
+					break;
+				}
+		}
+	}
+
 	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
+		refreshEmbeddedInputs();
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
 		if (!publication.status().tracking
 			&& cached != null

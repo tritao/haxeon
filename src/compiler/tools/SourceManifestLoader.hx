@@ -25,8 +25,10 @@ class SourceManifestLoader {
 		for (path in ordered)
 			try {
 				var source = readSource == null ? File.getContent(path) : readSource(path);
-				if (source != null)
-					compiler.update(locate(path, resolvedRoots, resolvedPackages), source);
+				if (source != null) {
+					var physical = canonicalPath(path);
+					compiler.update(locate(path, physical, resolvedRoots, resolvedPackages), source, null, physical);
+				}
 			} catch (error:Dynamic) {
 				throw new InternalError("Could not load compiler source " + path + ": " + Std.string(error));
 			}
@@ -38,7 +40,7 @@ class SourceManifestLoader {
 	 * by absolute path under a relative root still resolves to its module.
 	 */
 	public static function projectPath(path:String, roots:Array<String>, ?packageRoots:Array<PackageSourceRoot>):String
-		return locate(path, resolve(roots),
+		return locate(path, canonicalPath(path), resolve(roots),
 			resolve(packageRoots == null ? [] : [for (root in packageRoots) root.path],
 			packageRoots == null ? [] : [for (root in packageRoots) root.packageName]));
 
@@ -67,8 +69,7 @@ class SourceManifestLoader {
 	static function packagedPath(relative:String, packagePrefix:String):String
 		return StringTools.startsWith(relative, packagePrefix) ? relative : packagePrefix + relative;
 
-	static function locate(path:String, roots:Array<ResolvedRoot>, packageRoots:Array<ResolvedRoot>):String {
-		var canonicalFile = canonicalPath(path);
+	static function locate(path:String, canonicalFile:String, roots:Array<ResolvedRoot>, packageRoots:Array<ResolvedRoot>):String {
 		for (root in packageRoots)
 			if (StringTools.startsWith(canonicalFile, root.prefix))
 				return packagedPath(canonicalFile.substring(root.prefix.length, canonicalFile.length),

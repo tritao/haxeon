@@ -46,7 +46,7 @@ class FileVersion {
 	 * `read(path)` from a moment the file's version held still across, trying `attempts` times; null when a write overlapped
 	 * every attempt. A missing file fails as `read` fails on it.
 	 */
-	public static function unchangedRead(path:String, read:String->String, attempts:Int):Null<String> {
+	public static function unchangedRead<T>(path:String, read:String->T, attempts:Int):Null<T> {
 		for (_ in 0...attempts) {
 			var before = of(path), text = read(path), after = of(path);
 			if (before != null && after != null && before.compare(after) == 0)

@@ -329,6 +329,10 @@ class CompilerDriver {
 				path,
 				build.execution.ContentDigest.makeHex(Bytes.ofString(text))
 			]);
+			var embedded = state.embeddedInputs.copy();
+			embedded.sort((left, right) -> Reflect.compare(left.path, right.path));
+			for (input in embedded)
+				rows.push([name + ":embed", input.path, input.digest]);
 		}
 		return Json.stringify(rows);
 	}

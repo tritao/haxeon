@@ -3,6 +3,7 @@ package compiler.core;
 /** Immutable source text and its diagnostic path for one compiler input. */
 class SourceFile {
 	public final path:String;
+	public final physicalPath:String;
 	public final text:String;
 	/** True only when the configured source loader resolved this file from its standard-library root. */
 	public final isStandardLibrarySource:Bool;
@@ -12,8 +13,9 @@ class SourceFile {
 	final hash:Int;
 	final secondHash:Int;
 
-	public function new(path:String, text:String, isStandardLibrarySource:Bool = false) {
+	public function new(path:String, text:String, isStandardLibrarySource:Bool = false, ?physicalPath:String) {
 		this.path = path;
+		this.physicalPath = physicalPath ?? path;
 		this.text = text;
 		this.isStandardLibrarySource = isStandardLibrarySource;
 		bytes = haxe.io.Bytes.ofString(text);
