@@ -3,7 +3,7 @@ package haxeon.ui.core;
 import haxeon.ui.style.StyleState;
 
 /** Persistent generic input flags, with native fields and reusable pending records. */
-class InteractionStateStore {
+class InteractionStateStore implements Disposable {
 	final values:Map<Int, InteractionChange> = new Map();
 	final pending:Array<InteractionChange> = [];
 	var pendingCount:Int = 0;

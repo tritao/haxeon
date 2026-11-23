@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** One processing node in a mixer bus's ordered effect chain. */
-class BusEffect {
+class BusEffect implements Disposable {
 	final value:BusEffectHandle;
 	final owned:OwnedBusEffectHandle;
 	var disposed:Bool = false;

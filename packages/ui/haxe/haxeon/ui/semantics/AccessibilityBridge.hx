@@ -10,7 +10,7 @@ import haxeon.ui.semantics.AccessibilityAction as UiAccessibilityAction;
 import nativekit.ffi.NativeKit;
 
 /** Projects Haxe semantics and resolved geometry into NativeKit's virtual tree. */
-class AccessibilityBridge {
+class AccessibilityBridge implements Disposable {
 	public var coordinateScale:Float = 1.0;
 	final surface:Surface;
 	var previousParents:Map<Int, Int>;

@@ -34,7 +34,7 @@ typedef DspRuntimeStatus = {
 }
 
 /** Immutable prepared native score. Dispose retires it; collection occurs off callback. */
-class DspTransport {
+class DspTransport implements Disposable {
 	final engine:DspEngine;
 	final id:Int64;
 	var disposed:Bool = false;

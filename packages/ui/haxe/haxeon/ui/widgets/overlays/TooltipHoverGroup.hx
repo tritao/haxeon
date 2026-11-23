@@ -4,7 +4,7 @@ import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationScheduler;
 
 /** Shared hover timing lets neighboring labels switch without restarting the delay. */
-class TooltipHoverGroup implements Animation {
+class TooltipHoverGroup implements Animation implements Disposable {
 	final scheduler:AnimationScheduler;
 	final changed:Null<String>->Void;
 	var hovered:Null<String>;

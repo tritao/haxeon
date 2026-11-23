@@ -15,7 +15,7 @@ import nativekit.ffi.NativeKitTypes.Handle;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
 
 /** Owns one graphics surface attached to a NativeKit window. */
-class Surface {
+class Surface implements Disposable {
 	final value:SurfaceHandle;
 	final ownsHandle:Bool;
 	var disposed:Bool = false;

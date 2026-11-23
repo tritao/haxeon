@@ -4,7 +4,7 @@ import haxeon.reactive.ReactiveDependencySet;
 import haxeon.reactive.ReactiveRuntime;
 
 /** Reusable tracked field and signal dependencies owned by a retained computation. */
-class Dependencies extends ReactiveDependencySet {
+class Dependencies extends ReactiveDependencySet implements Disposable {
 	var invalidationContext:Null<BuildContext>;
 	var invalidationBuild:Null<SelfUpdatingBuild>;
 

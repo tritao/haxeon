@@ -1,6 +1,6 @@
 package haxeon.platform;
 
-/** Structured binding or backend failure. Codes are scoped to domain. */
+/** Structured package failure. Codes are scoped to domain. */
 class PlatformError extends haxe.Exception {
 	public final domain:String;
 	public final code:Int;

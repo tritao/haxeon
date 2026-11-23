@@ -27,7 +27,7 @@ import haxeon.ui.TextStyle;
 	is shaped and differs, the groups after it move, and a change above `scrollAnchorY` is reported through
 	`takeScrollShift` so a view keeps its content in place. Wrapped text is shaped whole, since its rows depend on it.
 **/
-class TextEditorLayout {
+class TextEditorLayout implements Disposable {
 	static inline var paragraphsPerLayout:Int = 64;
 	static inline var maximumParagraphsPerLayout:Int = 128;
 	/** Explicit code editing policy, independent of wrapping and syntax highlighting. */
@@ -1129,7 +1129,7 @@ class TextEditorLayout {
 		return value < low ? low : (value > high ? high : value);
 }
 
-class TextEditorParagraphRecord {
+class TextEditorParagraphRecord implements Disposable {
 	public var start:Int;
 	public var end:Int;
 	public var text:String;

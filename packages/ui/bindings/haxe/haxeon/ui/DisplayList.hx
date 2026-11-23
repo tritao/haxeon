@@ -4,7 +4,7 @@ import NativeKitUI;
 import haxeon.ui.debug.RenderCost;
 
 /** Typed retained display list. Resources referenced by the list stay alive natively until it is cleared or replaced. */
-class DisplayList {
+class DisplayList implements Disposable {
 	var value:nkui_display_list;
 	var disposed:Bool;
 

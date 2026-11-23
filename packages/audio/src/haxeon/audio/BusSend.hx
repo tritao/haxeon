@@ -7,7 +7,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Independent post-fader route. Destroying either endpoint invalidates it. */
-class BusSend {
+class BusSend implements Disposable {
 	final value:BusSendHandle;
 	final owned:OwnedBusSendHandle;
 	var disposed:Bool = false;

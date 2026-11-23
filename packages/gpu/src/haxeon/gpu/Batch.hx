@@ -15,7 +15,7 @@ import haxeon.gpu.Enums.BatchPassKind;
 import nativekit.ffi.NativeKitGpu;
 
 /** Reusable sealed submission batch owned by one renderer. */
-class Batch {
+class Batch implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_batch;

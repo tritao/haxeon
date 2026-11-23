@@ -62,7 +62,7 @@ class EqualChild < T:Equatable > implements View {
 	}
 }
 
-private class EqualChildCache < T:Equatable > {
+private class EqualChildCache < T:Equatable > implements Disposable {
 	public var entry:Null<EqualChildEntry<T>>;
 	public function new() {}
 	public function dispose():Void {
@@ -71,7 +71,7 @@ private class EqualChildCache < T:Equatable > {
 	}
 }
 
-private class EqualChildEntry < T:Equatable > {
+private class EqualChildEntry < T:Equatable > implements Disposable {
 	public final input:T;
 	public final styleRevision:Int;
 	public final width:Float;

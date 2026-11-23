@@ -5,7 +5,7 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
 /** Typed renderer facade for retained UI display lists. */
-class Renderer {
+class Renderer implements Disposable {
 	var value:nkui_renderer;
 	var disposed:Bool;
 

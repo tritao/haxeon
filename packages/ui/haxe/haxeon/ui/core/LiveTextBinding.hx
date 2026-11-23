@@ -4,7 +4,7 @@ import haxeon.reactive.ReactiveDependencySet;
 import haxeon.reactive.ReactiveRuntime;
 
 /** Internal dependency owner for BoundText; mounted getters run after structural updates. */
-class LiveTextBinding extends ReactiveDependencySet {
+class LiveTextBinding extends ReactiveDependencySet implements Disposable {
 	final context:BuildContext;
 	var read:Void->String;
 	var node:Null<LiveTextNode>;

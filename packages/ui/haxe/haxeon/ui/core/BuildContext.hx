@@ -17,7 +17,7 @@ import haxeon.ui.theme.TextRole;
 import haxeon.ui.theme.Theme;
 
 /** Frame-local identity scopes backed by a persistent UiContext state store. */
-class BuildContext {
+class BuildContext implements Disposable {
 	public final stateStore:StateStore;
 	public var fonts(default, null):Null<FontCollection>;
 	public var platformSurface(default, null):Null<Surface>;

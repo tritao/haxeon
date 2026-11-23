@@ -9,7 +9,7 @@ import haxeon.ui.core.UiContext;
 import nativekit.ffi.NativeKitTypes;
 
 /** Connects a borrowed UI context and surface to the platform input pump. */
-class UiSurfaceBinding {
+class UiSurfaceBinding implements Disposable {
 	final context:UiContext;
 	final input:NativeInputAdapter;
 	final surface:Surface;

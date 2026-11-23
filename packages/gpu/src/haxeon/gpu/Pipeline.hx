@@ -15,7 +15,7 @@ import haxeon.gpu.Enums.IndexType;
 import haxeon.gpu.Enums.VertexFormat;
 
 /** Renderer-owned pipeline resource. */
-class Pipeline {
+class Pipeline implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_pipeline;

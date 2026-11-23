@@ -23,7 +23,7 @@ import haxeon.ui.semantics.SemanticsValueSource;
 import nativekit.ffi.NativeKitTypes.TextEditAction;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
-class TextEditorState implements SemanticsValueSource {
+class TextEditorState implements SemanticsValueSource implements Disposable {
 	static inline var caretBlinkHalfPeriod:Float = 0.5;
 	// Real width arrives during measurement. Avoid a one-pixel provisional
 	// layout that creates a visual line per character across large documents.

@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Reusable bus mix targets for mode changes and dialogue ducking. */
-class MixSnapshot {
+class MixSnapshot implements Disposable {
 	final value:MixSnapshotHandle;
 	final owned:OwnedMixSnapshotHandle;
 	var disposed:Bool = false;

@@ -4,7 +4,7 @@ import haxeon.platform.Surface;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameCallbackCallback;
 
 /** Registration token for one retained NativeKit frame callback. */
-class SurfaceFrameSubscription {
+class SurfaceFrameSubscription implements Disposable {
 	final surface:Surface;
 	final callback:SurfaceFrameCallbackCallback;
 	var disposed:Bool = false;

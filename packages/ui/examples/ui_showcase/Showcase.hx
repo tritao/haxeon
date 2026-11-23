@@ -44,7 +44,7 @@ import nativekit.ffi.NativeKitTypes;
  * needed to host the renderer; paths, paints, images, fonts, text layouts,
  * display lists, and renderer state stay behind their Haxe types.
  */
-class Showcase {
+class Showcase implements Disposable {
 	public static inline var LOGICAL_WIDTH:Float = 900.0;
 	public static inline var LOGICAL_HEIGHT:Float = 650.0;
 	static inline var HEADER_X:Float = 244.0;

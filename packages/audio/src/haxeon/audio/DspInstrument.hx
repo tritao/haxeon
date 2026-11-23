@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Engine-owned DSP instrument instance created from an immutable patch. */
-class DspInstrument {
+class DspInstrument implements Disposable {
 	final value:DspInstrumentHandle;
 	final owned:OwnedDspInstrumentHandle;
 	var disposed:Bool = false;

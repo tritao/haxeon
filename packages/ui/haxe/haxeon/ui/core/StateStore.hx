@@ -1,7 +1,7 @@
 package haxeon.ui.core;
 
 /** Haxe-owned per-widget state retained while views are rebuilt. */
-class StateStore {
+class StateStore implements Disposable {
 	final handles:Map<Int, State<Dynamic>> = new Map();
 	/** A native scope is its own lifetime record, rather than a signal-valued state wrapper. */
 	final scopes:Map<ScopeResourceId, RenderScope> = new Map();

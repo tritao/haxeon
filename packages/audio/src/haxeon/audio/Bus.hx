@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** A mixer bus that groups sounds under shared volume and transport controls. */
-class Bus {
+class Bus implements Disposable {
 	/** Passed as fade's starting volume to use the current fader volume. */
 	public static inline var CURRENT_VOLUME:Float = -1.0;
 

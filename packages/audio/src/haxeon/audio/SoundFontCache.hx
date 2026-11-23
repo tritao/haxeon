@@ -35,7 +35,7 @@ typedef SoundFontCacheStats = {
  * evicted, leased banks stay pinned. Concurrent requests for one canonical path share one load.
  * Close before NativeKit shutdown; outstanding leases remain usable until individually released.
  */
-class SoundFontCache {
+class SoundFontCache implements Disposable {
 	final condition = new Condition();
 	final entries:Map<String, CachedBank> = new Map();
 	final maxBanks:Int;
@@ -232,7 +232,7 @@ class SoundFontCache {
 /** Caller-owned pin. Dispose after consumers have finished creating instruments.
  * Native instruments retain samples independently after release. A lease has one owning thread.
  */
-class SoundFontLease {
+class SoundFontLease implements Disposable {
 	final cache:SoundFontCache;
 	final entry:CachedBank;
 	var disposed = false;

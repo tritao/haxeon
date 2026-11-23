@@ -68,7 +68,7 @@ class HighlightedText implements View {
 	}
 }
 
-private class SearchTextLayout {
+private class SearchTextLayout implements Disposable {
 	public final content:LayoutRenderableContent;
 	final layout:TextLayout;
 	final measurement:LayoutMeasuredContent;

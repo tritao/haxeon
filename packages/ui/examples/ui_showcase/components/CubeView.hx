@@ -70,7 +70,7 @@ class CubeView implements View {
 	}
 }
 
-private class CubeViewPainter {
+private class CubeViewPainter implements Disposable {
 	static inline var TwoPi:Float = 6.283185307179586;
 	final surface:GraphicsSurface;
 	final scheduler:AnimationScheduler;

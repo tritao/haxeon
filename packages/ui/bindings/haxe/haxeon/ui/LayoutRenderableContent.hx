@@ -15,7 +15,7 @@ typedef LayoutContentPaint = (canvas:Canvas, geometry:ResolvedLayoutItem) -> Voi
  * display list is regenerated when the provider version or resolved paint
  * geometry changes. Painters can use visibleLocalBounds() to cull their work.
  */
-class LayoutRenderableContent implements LayoutContent {
+class LayoutRenderableContent implements LayoutContent implements Disposable {
 	final measurement:LayoutContent;
 	final painter:LayoutContentPaint;
 	final canvas:Canvas;

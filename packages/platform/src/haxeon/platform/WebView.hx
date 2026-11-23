@@ -12,7 +12,7 @@ import nativekit.ffi.NativeKitTypes.WebViewHandle;
 import nativekit.ffi.NativeKitTypes.WebviewOptions as NativeWebViewOptions;
 
 /** Owns one native child WebView. */
-class WebView {
+class WebView implements Disposable {
 	final value:WebViewHandle;
 	var disposed:Bool = false;
 	var owner:Null<DisposalRegistration>;

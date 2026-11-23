@@ -6,7 +6,7 @@ import haxeon.ui.animation.AnimationHandle;
 import haxeon.ui.animation.AnimationScheduler;
 
 /** Keeps selection scrolling while a captured pointer remains near a viewport edge. */
-class SelectionDragController implements Animation {
+class SelectionDragController implements Animation implements Disposable {
 	var scheduler:AnimationScheduler;
 	var active:Void->Bool;
 	var geometry:Void->Null<ResolvedLayoutItem>;

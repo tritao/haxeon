@@ -10,7 +10,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Owns one immutable, band-limited native wavetable asset. */
-class DspWavetable {
+class DspWavetable implements Disposable {
 	static inline var MIN_SAMPLE_COUNT:Int = 32;
 	static inline var MAX_SAMPLE_COUNT:Int = 4096;
 

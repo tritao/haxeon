@@ -1,6 +1,7 @@
 package haxeon.ui.host;
 
 import haxeon.platform.DisposalRegistration;
+import haxe.Exception;
 import haxeon.platform.Surface;
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.Window;
@@ -13,7 +14,7 @@ import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
 import nativekit.ffi.NativeKitTypes.SurfaceFlags;
 
 /** Mounts an on-demand UI view on a surface within a managed desktop window. */
-class DesktopUiSurface {
+class DesktopUiSurface implements Disposable {
 	final surface:Surface;
 	var registration:DisposalRegistration;
 	var binding:UiSurfaceBinding;
@@ -23,7 +24,7 @@ class DesktopUiSurface {
 	var disposed = false;
 
 	public static function mount(window:Window, events:EventPump, width:Int, height:Int, view:View,
-			onError:Dynamic->Void):DesktopUiSurface {
+			onError:Exception->Void):DesktopUiSurface {
 		var mounted = new DesktopUiSurface(window, width, height);
 		var ready = false;
 		defer if (!ready) mounted.dispose();
@@ -37,7 +38,7 @@ class DesktopUiSurface {
 		registration = window.registerDependent(dispose);
 	}
 
-	function start(window:Window, events:EventPump, width:Int, height:Int, view:View, onError:Dynamic->Void):Void {
+	function start(window:Window, events:EventPump, width:Int, height:Int, view:View, onError:Exception->Void):Void {
 		fonts = FontCollection.create();
 		fonts.addSystemFallbacks();
 		renderer = Renderer.create();
@@ -58,7 +59,7 @@ class DesktopUiSurface {
 				frame.configure(width, height, framebufferWidth, framebufferHeight, framebufferWidth / width, delta);
 				context.submit(view, frame.layout);
 				frame.render(context, renderer);
-			} catch (error:Dynamic) {
+			} catch (error:Exception) {
 				onError(error);
 			}
 		});

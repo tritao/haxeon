@@ -3,7 +3,7 @@ package haxeon.ui.widgets.scroll;
 import haxeon.ui.animation.AnimationScheduler;
 
 /** Mount-owned binding; replacing or unmounting a viewport retires its animation. */
-class ScrollBinding {
+class ScrollBinding implements Disposable {
 	var controller:Null<ScrollController>;
 	public function new() {}
 	public function attach(value:ScrollController, scheduler:AnimationScheduler, changed:ScrollController->Void):Void {

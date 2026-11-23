@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Immutable reusable native DSP patch definition. */
-class DspPatch implements InstrumentDefinition {
+class DspPatch implements InstrumentDefinition implements Disposable {
 	final value:DspPatchHandle;
 	final owned:OwnedDspPatchHandle;
 	var disposed:Bool = false;

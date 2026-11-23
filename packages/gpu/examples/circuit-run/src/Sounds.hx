@@ -3,6 +3,7 @@ import haxeon.audio.Clip;
 import haxeon.audio.Mixer;
 import haxeon.audio.PcmFormat;
 import haxeon.audio.Voice;
+import haxeon.platform.PlatformError;
 
 enum SoundEffect {
 	Pickup;
@@ -10,7 +11,7 @@ enum SoundEffect {
 	Clear;
 }
 
-class Sounds {
+class Sounds implements Disposable {
 	static inline var sampleRate = 48000;
 	final voices:Map<SoundEffect, Voice> = new Map();
 	var started = false;
@@ -25,7 +26,7 @@ class Sounds {
 			voices.set(Caught, makeVoice([310, 185, 110], 0.095));
 			voices.set(Clear, makeVoice([520, 660, 790, 1040], 0.085));
 			available = true;
-		} catch (error:Dynamic) {
+		} catch (error:PlatformError) {
 			reportUnavailable(error);
 		}
 	}
@@ -39,7 +40,7 @@ class Sounds {
 				voice.rewind();
 				voice.start();
 			}
-		} catch (error:Dynamic) {
+		} catch (error:PlatformError) {
 			reportUnavailable(error);
 		}
 	}
@@ -52,7 +53,7 @@ class Sounds {
 			try {
 				for (voice in voices)
 					voice.stop();
-			} catch (error:Dynamic) {
+			} catch (error:PlatformError) {
 				reportUnavailable(error);
 			}
 		}
@@ -65,7 +66,7 @@ class Sounds {
 			Mixer.stopDevice();
 	}
 
-	function reportUnavailable(error:Dynamic):Void {
+	function reportUnavailable(error:PlatformError):Void {
 		available = false;
 		Sys.stderr().writeString("Circuit Run audio unavailable: " + Std.string(error) + "\n");
 	}
@@ -85,8 +86,7 @@ class Sounds {
 			}
 		}
 
-		var clip = Clip.fromPcm(pcm, sampleRate, 1, PcmFormat.Signed16LE);
-		defer clip.dispose();
+		scoped var clip = Clip.fromPcm(pcm, sampleRate, 1, PcmFormat.Signed16LE);
 		return clip.createVoice();
 	}
 }

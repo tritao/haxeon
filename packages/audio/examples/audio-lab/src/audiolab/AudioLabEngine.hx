@@ -9,7 +9,6 @@ import haxeon.audio.DspEngineOptions;
 import haxeon.audio.DspEnums.DspParameter;
 import haxeon.audio.DspEvent;
 import haxeon.audio.DspInstrument;
-import haxeon.audio.DspPatch;
 import haxeon.audio.DspPatchBuilder;
 import haxeon.audio.DspRenderTarget;
 import haxeon.audio.EffectParameter;
@@ -38,14 +37,13 @@ private class ActiveVoice {
 }
 
 /** Small stateful host used by the Audio Lab screens and diagnostics. */
-class AudioLabEngine {
+class AudioLabEngine implements Disposable {
 	public static inline var SAMPLE_RATE:Int = 48000;
 	public static inline var BLOCK_SIZE:Int = 256;
 	public static inline var CHANNELS:Int = 2;
 	public static inline var MAX_VOICES:Int = 32;
 
 	public final dsp:DspEngine;
-	public var patch(default, null):DspPatch;
 	public var instrument(default, null):DspInstrument;
 	public var preset(default, null):AudioLabPresetId;
 	public var filterCutoff(default, null):Float;
@@ -144,11 +142,9 @@ class AudioLabEngine {
 		if (liveInstrument != null) liveInstrument.dispose();
 		if (instrument != null)
 			instrument.dispose();
-		if (patch != null)
-			patch.dispose();
 		dsp.reset();
 		var builder:DspPatchBuilder = AudioLabPreset.build(next);
-		patch = builder.build();
+		scoped var patch = builder.build();
 		instrument = dsp.createInstrument(patch);
 		if (liveDsp != null) {
 			liveInstrument = liveDsp.createInstrument(patch);
@@ -158,7 +154,6 @@ class AudioLabEngine {
 			if (reverb != null) reverb.reset();
 			if (stereoDelay != null) stereoDelay.reset();
 		}
-		patch.dispose();
 		preset = next;
 		filterCutoff = builder.filter.cutoffHz;
 		appliedFilterCutoff = filterCutoff;
@@ -323,8 +318,6 @@ class AudioLabEngine {
 		if (delayBus != null) delayBus.dispose();
 		if (instrument != null)
 			instrument.dispose();
-		if (patch != null)
-			patch.dispose();
 		dsp.dispose();
 	}
 

@@ -80,7 +80,7 @@ import testing.ExplorerVisualCases;
 @:allow(testing.ExplorerFocusSequence)
 @:allow(components.ShowcaseKit)
 @:allow(shell.OverlayHost)
-class UiExplorer {
+class UiExplorer implements Disposable {
 	public static inline var TARGET_FPS:Float = 60.0;
 	public static inline var INITIAL_WIDTH:Int = 1320;
 	public static inline var INITIAL_HEIGHT:Int = 900;

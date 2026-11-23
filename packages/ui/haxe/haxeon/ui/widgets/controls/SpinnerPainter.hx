@@ -15,7 +15,7 @@ import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.RetainedAnimation;
 
 /** Owns the reusable resources and command encoding for a procedural spinner. */
-class SpinnerPainter {
+class SpinnerPainter implements Disposable {
 	static inline var TwoPi:Float = 6.283185307179586;
 
 	public var kind(default, null):SpinnerKind;

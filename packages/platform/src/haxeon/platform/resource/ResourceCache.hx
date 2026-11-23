@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitTypes.ResourceCacheHandle;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** Native URI cache for deduplicated, complete resource byte loads. */
-class ResourceCache {
+class ResourceCache implements Disposable {
 	final value:ResourceCacheHandle;
 	final owned:OwnedResourceCacheHandle;
 	var disposed:Bool = false;

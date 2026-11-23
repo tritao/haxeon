@@ -15,7 +15,7 @@ import nativekit.ffi.NativeKitTypes;
  * update() once per frame after polling Runtime.events so scheduled
  * transition and stop voices can be retired on the Haxe side.
  */
-class AudioTrackPlayer {
+class AudioTrackPlayer implements Disposable {
 	final events:EventPump;
 	final bus:Null<Bus>;
 	final subscription:EventSubscription;

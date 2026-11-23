@@ -10,7 +10,7 @@ import nativekit.ffi.NativeKitTypes.ResourceAssetLoadState;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** One independently owned view of complete bytes retained by a resource cache. */
-class ResourceAsset {
+class ResourceAsset implements Disposable {
 	final value:ResourceAssetHandle;
 	final owned:OwnedResourceAssetHandle;
 	var disposed:Bool = false;

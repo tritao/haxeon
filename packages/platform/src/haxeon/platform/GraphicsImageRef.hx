@@ -6,7 +6,7 @@ import nativekit.ffi.NativeKitTypes.GraphicsImage;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** An explicitly retained, backend-neutral sampled graphics image reference. */
-class GraphicsImageRef {
+class GraphicsImageRef implements Disposable {
 	private var value:GraphicsImage;
 	private var disposed:Bool;
 	public final width:Int;

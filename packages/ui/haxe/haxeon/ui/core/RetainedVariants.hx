@@ -85,7 +85,7 @@ class RetainedVariants implements View {
 	}
 }
 
-private class RetainedVariantsCache {
+private class RetainedVariantsCache implements Disposable {
 	final entries:Map<String, RetainedVariantEntry> = new Map();
 	final recent:Array<String> = [];
 	var capacity:Int;
@@ -146,7 +146,7 @@ private class RetainedVariantsCache {
 	}
 }
 
-private class RetainedVariantEntry {
+private class RetainedVariantEntry implements Disposable {
 	final keyA:Int;
 	final keyB:Int;
 	public final scope:String;

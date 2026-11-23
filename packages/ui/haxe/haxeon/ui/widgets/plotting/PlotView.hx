@@ -146,7 +146,7 @@ class PlotView implements View {
 		+ ":" + axisColor.green + ":" + axisColor.blue + ":" + axisColor.alpha + ":" + gridDivisions + ":" + padding;
 }
 
-private class PlotPaintWatch {
+private class PlotPaintWatch implements Disposable {
 	var model:PlotModel;
 	var node:Null<RenderNode>;
 	final effect:haxeon.reactive.Effect;

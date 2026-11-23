@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** One independent playback instance created from a reusable audio clip. */
-class Voice {
+class Voice implements Disposable {
 	/** Passed as fade's starting volume to use the current fader volume. */
 	public static inline var CURRENT_VOLUME:Float = -1.0;
 

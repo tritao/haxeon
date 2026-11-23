@@ -17,7 +17,7 @@ import nativekit.ffi.NativeKitTypes;
 	Registrations survive what invalidates them natively: after an overflow, or a removal or move at or above one,
 	the watch registers them again (not ready until that completes) and reports `Lost` for one that is gone.
 **/
-class FileWatch {
+class FileWatch implements Disposable {
 	static inline final CHANGE_HEADER_BYTES = 28;
 
 	final owned:OwnedFileWatch;

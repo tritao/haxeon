@@ -21,7 +21,7 @@ typedef SoundFontPresetInfo = {
  * SF2 modulators and region chorus/reverb sends are currently unsupported.
  * Instruments retain sample data after the bank handle is disposed.
  */
-class SoundFont {
+class SoundFont implements Disposable {
 	final owned:OwnedSoundFontHandle;
 	final value:SoundFontHandle;
 	var disposed:Bool = false;

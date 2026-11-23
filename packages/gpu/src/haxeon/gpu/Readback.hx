@@ -15,7 +15,7 @@ import haxeon.gpu.Enums.ReadbackState;
 import nativekit.ffi.NativeKitGpu;
 
 /** Owns one asynchronous image or buffer readback request. */
-class Readback {
+class Readback implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_readback;

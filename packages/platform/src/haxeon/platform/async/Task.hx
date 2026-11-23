@@ -8,7 +8,7 @@ import nativekit.ffi.NativeKitTypes.TaskHandle;
 import nativekit.ffi.NativeKitTypes.TaskState;
 
 /** Managed owner for a native task handle; it never supplies a worker callback. */
-class Task {
+class Task implements Disposable {
 	final value:TaskHandle;
 	var disposed:Bool = false;
 

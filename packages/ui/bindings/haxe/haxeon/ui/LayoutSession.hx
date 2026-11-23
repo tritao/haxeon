@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 
 /** Batched bridge from a Haxe-owned render tree to NativeKit layout/rendering. */
-class LayoutSession {
+class LayoutSession implements Disposable {
 	static final measureCost:Bool = Sys.getEnv("HAXEON_UI_LAYOUT_COST") == "1";
 	static final EmptyBytes:Bytes = Bytes.alloc(0);
 	var value:nkui_layout_session;

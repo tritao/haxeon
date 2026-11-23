@@ -10,7 +10,7 @@ import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.UiKey;
 
 /** Pointer gesture shared by model-backed trees; application policy owns mutations. */
-class TreeItemDrag implements haxeon.ui.animation.Animation {
+class TreeItemDrag implements haxeon.ui.animation.Animation implements Disposable {
 	var tree:Null<TreeView>;
 	var root:Null<RenderNode>;
 	var revision:Null<haxeon.ui.core.State<Int>>;

@@ -15,7 +15,7 @@ import haxe.io.Bytes;
 import haxeon.gpu.Enums.BufferUsage;
 
 /** Renderer-owned GPU buffer; its handle cannot be used after disposal. */
-class Buffer {
+class Buffer implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_buffer;

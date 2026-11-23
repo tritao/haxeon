@@ -52,7 +52,7 @@ class RetainedView implements View {
 	}
 }
 
-private class RetainedViewCache {
+private class RetainedViewCache implements Disposable {
 	public var entry(default, null):Null<RetainedViewEntry>;
 
 	public function new() entry = null;
@@ -78,7 +78,7 @@ private class RetainedViewCache {
 	}
 }
 
-private class RetainedViewEntry {
+private class RetainedViewEntry implements Disposable {
 	final keyA:Int;
 	final keyB:Int;
 	public var root(default, null):RenderNode;

@@ -18,7 +18,7 @@ import nativekit.ffi.NativeKitTypes;
  * is in use and must poll the event pump for completed voices to become
  * reusable.
  */
-class AudioCue {
+class AudioCue implements Disposable {
 	final variants:Array<Clip>;
 	final events:EventPump;
 	final bus:Null<Bus>;

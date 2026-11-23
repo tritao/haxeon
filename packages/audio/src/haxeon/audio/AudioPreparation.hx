@@ -24,7 +24,7 @@ private typedef PreparationResult<T> = {
  * ready() takes ownership when it returns successfully; discard() handles cancellation
  * and failed publication. Dispose joins the worker and discards unpublished values.
  */
-class AudioPreparation<T> {
+class AudioPreparation<T> implements Disposable {
 	final condition = new Condition();
 	final finished = new Lock();
 	final jobs:Array<PreparationJob<T>> = [];

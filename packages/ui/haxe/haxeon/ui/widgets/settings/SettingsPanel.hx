@@ -35,7 +35,7 @@ import haxeon.ui.widgets.text.Text;
  * selection and inspector state between frames. Every state change calls
  * onChanged so the host can rebuild.
  */
-class SettingsPanel implements View implements Observable {
+class SettingsPanel implements View implements Observable implements Disposable {
 	public final key:String;
 	public final catalog:SettingsCatalog;
 	public var filter(default, null):String;

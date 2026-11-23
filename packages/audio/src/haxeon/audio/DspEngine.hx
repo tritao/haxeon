@@ -12,7 +12,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Owns a standalone native DSP renderer and its instruments. */
-class DspEngine {
+class DspEngine implements Disposable {
 	final value:DspEngineHandle;
 	final owned:OwnedDspEngineHandle;
 	final instruments:Array<DspInstrument> = [];

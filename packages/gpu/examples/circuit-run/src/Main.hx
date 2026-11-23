@@ -30,10 +30,8 @@ class Main {
 	var accumulator = 0.0;
 
 	static function main():Void {
-		var runtime = Runtime.start();
-		defer runtime.dispose();
-		var sounds = new Sounds();
-		defer sounds.dispose();
+		scoped var runtime = Runtime.start();
+		scoped var sounds = new Sounds();
 		new Main(sounds).run(runtime);
 	}
 
@@ -48,7 +46,7 @@ class Main {
 		surface = Surface.create(window, CircuitRenderer.width, CircuitRenderer.height);
 		surface.setBounds(0, CircuitHud.height,
 			CircuitRenderer.width, CircuitRenderer.height);
-		runtime.events.listen(onPlatformEvent);
+		scoped var events = runtime.events.listen(onPlatformEvent);
 		var hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
 		hud = DesktopUiSurface.mount(window, runtime.events, CircuitRenderer.width, CircuitHud.height, hudView,
 			failFrame);
@@ -64,7 +62,7 @@ class Main {
 
 		renderer = new CircuitRenderer(surface);
 		snapshotPositions();
-		surface.onFrame(onFrame);
+		scoped var frames = surface.onFrame(onFrame);
 		while (running) {
 			if (!runtime.events.poll() && running && pendingSound == null)
 				runtime.events.wait(0.1);

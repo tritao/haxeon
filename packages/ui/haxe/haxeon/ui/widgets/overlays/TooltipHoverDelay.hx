@@ -3,7 +3,7 @@ package haxeon.ui.widgets.overlays;
 import haxeon.ui.animation.AnimationScheduler;
 import haxeon.ui.animation.DelayedAnimation;
 
-class TooltipHoverDelay implements DelayedAnimation {
+class TooltipHoverDelay implements DelayedAnimation implements Disposable {
 	final scheduler:AnimationScheduler;
 	final changed:Bool->Void;
 	var remaining:Float = 0;

@@ -9,7 +9,7 @@ import nativekit.ffi.NativeKitTypes.InitOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 /** Owns one initialized NativeKit generation and all windows created through it. */
-class Runtime {
+class Runtime implements Disposable {
 	final windows = new DisposalRegistry();
 	public final events:EventPump;
 	var disposed:Bool = false;

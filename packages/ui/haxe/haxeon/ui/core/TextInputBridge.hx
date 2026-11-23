@@ -13,7 +13,7 @@ import nativekit.ffi.NativeKitTypes.Result;
 import nativekit.ffi.NativeKitTypes.TextInputFlags;
 
 /** Synchronizes Haxe editor state with NativeKit's custom-surface IME API. */
-class TextInputBridge {
+class TextInputBridge implements Disposable {
 	/** Application layout to window logical coordinates for IME geometry. */
 	public var coordinateScale:Float = 1.0;
 	var surface:Null<Surface>;

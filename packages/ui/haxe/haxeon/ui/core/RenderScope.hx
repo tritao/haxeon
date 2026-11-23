@@ -5,7 +5,7 @@ import haxeon.ui.component.ScopeView;
 import haxeon.ui.style.ComputedStyle;
 
 /** A structural computation whose identity is its actual body root. */
-class RenderScope extends ReactiveDependencySet {
+class RenderScope extends ReactiveDependencySet implements Disposable {
 	public var root(default, null):RenderNode;
 
 	var boundary:ScopeRootBoundary;

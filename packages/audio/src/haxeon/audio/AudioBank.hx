@@ -18,7 +18,7 @@ import nativekit.ffi.NativeKitTypes;
  * created from an entry are independent caller-owned audio resources and may
  * outlive the bank entry because NativeKit audio retains its source bytes.
  */
-class AudioBank {
+class AudioBank implements Disposable {
 	final cache:ResourceCache;
 	final events:EventPump;
 	final entries:Array<AudioBankEntry> = [];

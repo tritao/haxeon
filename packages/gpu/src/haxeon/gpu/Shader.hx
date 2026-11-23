@@ -17,7 +17,7 @@ import haxeon.gpu.Enums.ShaderStage;
 import haxeon.gpu.Enums.UniformType;
 
 /** Renderer-owned shader resource. */
-class Shader {
+class Shader implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_shader;

@@ -1,16 +1,15 @@
 package haxeon.ui;
 
 import NativeKitUI.UiStatus;
+import haxeon.platform.PlatformError;
 
 /** Exception raised when a NativeKit UI operation returns an error. */
-class UiError extends haxe.Exception {
+class UiError extends PlatformError {
 	public final status:UiStatus;
-	public final operation:String;
 
 	public function new(status:UiStatus, operation:String) {
+		super("nativekit-ui", status.rawValue(), operation, null);
 		this.status = status;
-		this.operation = operation;
-		super('$operation failed with NativeKit UI status $status');
 	}
 }
 

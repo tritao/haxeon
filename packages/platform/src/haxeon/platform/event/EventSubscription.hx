@@ -4,7 +4,7 @@ import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
 
 /** One listener registration owned by a NativeKit event pump. */
-class EventSubscription {
+class EventSubscription implements Disposable {
 	final events:EventPump;
 	final listener:PlatformEvent->Void;
 	var disposed:Bool = false;

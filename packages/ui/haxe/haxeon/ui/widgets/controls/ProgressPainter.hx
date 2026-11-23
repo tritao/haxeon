@@ -12,7 +12,7 @@ import haxeon.ui.animation.Easing;
 import haxeon.ui.animation.LoopAnimation;
 
 /** Retained animation state and drawing for determinate and indeterminate progress. */
-class ProgressPainter {
+class ProgressPainter implements Disposable {
 	final scheduler:AnimationScheduler;
 	final tween:AnimationController;
 	final loop:LoopAnimation;

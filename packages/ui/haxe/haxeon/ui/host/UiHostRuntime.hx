@@ -13,7 +13,7 @@ import haxeon.ui.debug.AllocationProbe;
 import nativekit.ffi.NativeKitTypes;
 
 /** Shared application, input, frame, and disposal ownership used by host adapters. */
-class UiHostRuntime {
+class UiHostRuntime implements Disposable {
 	public final session:UiHostSession;
 	public var logicalWidth(get, never):Float;
 	public var logicalHeight(get, never):Float;

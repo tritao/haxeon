@@ -37,7 +37,7 @@ import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
 
 /** Owns the second native window used by the custom window-chrome showcase. */
-class WindowChromeDemo {
+class WindowChromeDemo implements Disposable {
 	var window:WindowHandle;
 	var surface:SurfaceHandle;
 	var nativeSurface:Null<PlatformSurface>;

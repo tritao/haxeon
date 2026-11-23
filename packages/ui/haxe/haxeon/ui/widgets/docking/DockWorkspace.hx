@@ -471,7 +471,7 @@ class DockWorkspace implements View {
 }
 
 /** One subscription pair per mounted workspace, independent of rebuilt View instances. */
-private class DockWorkspaceMount {
+private class DockWorkspaceMount implements Disposable {
 	public var model(default, null):DockWorkspaceModel;
 	public var interaction(default, null):DockWorkspaceInteraction;
 
@@ -630,7 +630,7 @@ private class DockPaneView implements View {
 	}
 }
 
-private class DockPanelCache {
+private class DockPanelCache implements Disposable {
 	final entries:Map<String, DockPanelCacheEntry>;
 	final maxEntries:Int;
 	final checkTopology:Bool;
@@ -729,7 +729,7 @@ private class DockPanelCache {
 	}
 }
 
-private class DockPanelCacheEntry {
+private class DockPanelCacheEntry implements Disposable {
 	final keyA:Int;
 	final keyB:Int;
 	public var root(default, null):RenderNode;

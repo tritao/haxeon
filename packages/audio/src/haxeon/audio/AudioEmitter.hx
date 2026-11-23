@@ -15,7 +15,7 @@ import nativekit.ffi.NativeKitTypes;
  * voice currently playing from this emitter; new voices inherit the latest
  * transform when play() is called.
  */
-class AudioEmitter {
+class AudioEmitter implements Disposable {
 	final cue:AudioCue;
 	final voices:Array<Voice> = [];
 	final subscription:EventSubscription;

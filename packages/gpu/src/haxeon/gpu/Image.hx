@@ -16,7 +16,7 @@ import haxe.io.Bytes;
 import haxeon.platform.GraphicsImageRef;
 
 /** Renderer-owned RGBA8 sampled image. */
-class Image {
+class Image implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_image;

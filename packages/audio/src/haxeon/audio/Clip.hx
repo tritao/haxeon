@@ -12,7 +12,7 @@ import nativekit.ffi.NativeKitAudioTypes;
 import nativekit.ffi.NativeKitTypes;
 
 /** Reusable audio source that can create multiple independent voices. */
-class Clip {
+class Clip implements Disposable {
 	final value:ClipHandle;
 	final owned:OwnedClipHandle;
 	var disposed:Bool = false;

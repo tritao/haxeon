@@ -28,7 +28,7 @@ class UiHostError {
 }
 
 /** Nonblocking handle for a hosted application's complete lifetime. */
-class UiHostSession {
+class UiHostSession implements Disposable {
 	public var state(default, null):UiHostLifecycle = UiHostLifecycle.Starting;
 	public var error(default, null):Null<UiHostError> = null;
 	public final cleanupErrors:Array<UiHostError> = [];

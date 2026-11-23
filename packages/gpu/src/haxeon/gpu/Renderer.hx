@@ -27,7 +27,7 @@ import haxeon.gpu.Pipeline.PipelineBuilder;
 import haxeon.gpu.Shader.ShaderBuilder;
 
 /** Owns one renderer and all resources created through it. */
-class Renderer {
+class Renderer implements Disposable {
 	final surface:Surface;
 	final resources = new haxeon.platform.internal.DisposalRegistry();
 	var value:nkgpu_renderer;

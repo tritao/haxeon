@@ -18,7 +18,7 @@ import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
 
 /** Owns a GPU-adapter surface associated with a NativeKit window. */
-class Surface {
+class Surface implements Disposable {
 	final window:Window;
 	final frameSource:PlatformSurface;
 	final registration:haxeon.platform.DisposalRegistration;

@@ -6,7 +6,7 @@ import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 
 /** UI-thread clipboard bridge with asynchronous paste completion routing. */
-class ClipboardService {
+class ClipboardService implements Disposable {
 	final pending:Map<String, String -> Void>;
 	var disposed:Bool;
 

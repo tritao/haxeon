@@ -988,7 +988,7 @@ private class TreeBranch extends TreeEntry {
 }
 
 /** One fade per tree, shared by all virtualized rows and stopped when the tree unmounts. */
-private class TreeGuideVisibility {
+private class TreeGuideVisibility implements Disposable {
 	public var root:Null<RenderNode>;
 	final animation:haxeon.ui.animation.AnimationController;
 	var target:Float = 0.0;

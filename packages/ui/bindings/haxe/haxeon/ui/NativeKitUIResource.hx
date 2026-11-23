@@ -3,7 +3,7 @@ package haxeon.ui;
 import NativeKitUI;
 
 /** Common lifetime implementation for typed UI resources. */
-class NativeKitUIResource {
+class NativeKitUIResource implements Disposable {
 	var value:nkui_resource;
 	var disposed:Bool;
 

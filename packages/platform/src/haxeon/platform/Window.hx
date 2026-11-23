@@ -17,7 +17,7 @@ import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecora
 import nativekit.ffi.NativeKitTypes.WindowHandle;
 
 /** Owns one NativeKit top-level window and resources created inside it. */
-class Window {
+class Window implements Disposable {
 	final value:WindowHandle;
 	final children = new DisposalRegistry();
 	var owner:Null<DisposalRegistration>;

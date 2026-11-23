@@ -12,7 +12,7 @@ import haxeon.gpu.Enums.TimestampState;
 import nativekit.ffi.NativeKitGpu;
 
 /** Owns one asynchronous GPU timestamp interval. */
-class Timestamp {
+class Timestamp implements Disposable {
 	final renderer:Renderer;
 	final registration:haxeon.platform.DisposalRegistration;
 	final value:nkgpu_timestamp;

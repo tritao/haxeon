@@ -41,7 +41,7 @@ import haxeon.ui.debug.UiStyleInvalidationMetrics;
 import haxeon.ui.debug.UiStyleInvalidationMetrics.UiStyleInvalidationFrame;
 
 /** Owns the frame-local render tree and the Haxe-side UI subsystems. */
-class UiContext {
+class UiContext implements Disposable {
 	final session:LayoutSession;
 	final layoutChanges:LayoutChanges = new LayoutChanges();
 	final comparisonFrame:UiStyleInvalidationFrame;
