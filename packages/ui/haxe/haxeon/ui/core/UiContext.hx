@@ -3,7 +3,7 @@ package haxeon.ui.core;
 import haxeon.ui.style.Density;
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.ui.debug.RenderCost;
-import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.Surface;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecorationRegion;
 import haxeon.ui.widgets.text.Text;
 import nativekit.ffi.NativeKitTypes;
@@ -16,7 +16,6 @@ import haxeon.ui.IntIndex;
 import haxeon.ui.Canvas;
 import haxeon.ui.DisplayList;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
@@ -149,7 +148,7 @@ class UiContext implements Disposable {
 	final resolvedById:IntIndex;
 
 	var accessibilityBridge:Null<AccessibilityBridge>;
-	var accessibilitySurface:Null<PlatformSurface>;
+	var accessibilitySurface:Null<Surface>;
 	var decorationWindow:Null<WindowHandle>;
 	var decorationCapabilityChecked:Bool;
 	var decorationAvailable:Bool;
@@ -283,14 +282,14 @@ class UiContext implements Disposable {
 	}
 
 	/** Attaches the host surface used by platform text-input synchronization. */
-	public function attachPlatformSurface(surface:PlatformSurface):Void {
+	public function attachPlatformSurface(surface:Surface):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed()) throw "UI context requires a live NativeKit surface";
 		buildContext.setPlatformSurface(surface);
 	}
 
 	/** Releases platform services for this surface when it is still attached. */
-	public function detachPlatformSurface(surface:PlatformSurface):Void {
+	public function detachPlatformSurface(surface:Surface):Void {
 		ensureLive();
 		buildContext.clearPlatformSurface(surface);
 	}
@@ -912,7 +911,7 @@ class UiContext implements Disposable {
 	public function getDiagnosticStage():Int return diagnosticStage;
 
 	/** Connects this frame's semantic projection to a NativeKit platform surface. */
-	public function updateAccessibility(surface:PlatformSurface):Void {
+	public function updateAccessibility(surface:Surface):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed()) throw "Accessibility projection requires a live NativeKit surface";
 		if (accessibilitySurface != surface) {

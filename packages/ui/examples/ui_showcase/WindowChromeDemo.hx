@@ -1,4 +1,4 @@
-import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
@@ -17,7 +17,6 @@ import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
 import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
@@ -40,7 +39,7 @@ import nativekit.ffi.NativeKitTypes;
 class WindowChromeDemo implements Disposable {
 	var window:WindowHandle;
 	var surface:SurfaceHandle;
-	var nativeSurface:Null<PlatformSurface>;
+	var nativeSurface:Null<Surface>;
 	var fonts:Null<FontCollection>;
 	var context:Null<UiContext>;
 	var renderer:Null<Renderer>;
@@ -116,7 +115,7 @@ class WindowChromeDemo implements Disposable {
 			"surface.create",
 			NativeKit.nk_last_error());
 		surface = createdSurface.out_surface.borrow();
-		nativeSurface = PlatformSurface.borrowNativeHandle(surface);
+		nativeSurface = Surface.borrowNativeHandle(surface);
 
 		fonts = FontCollection.create();
 		fonts.addSystemFallbacks();
@@ -217,13 +216,14 @@ class WindowChromeDemo implements Disposable {
 	}
 
 	function renderFrame(framebufferWidth:Int, framebufferHeight:Int):Void {
+		var target = nativeSurface;
 		if (!ready || disposed || context == null || renderer == null || frame == null
-			|| frameInfo == null || nativeSurface == null || framebufferWidth <= 0 || framebufferHeight <= 0) return;
+			|| frameInfo == null || target == null || framebufferWidth <= 0 || framebufferHeight <= 0) return;
 		frame.setViewport(width, height);
 		frame.deltaSeconds = 1.0 / 60.0;
 		frameInfo.set(width, height, framebufferWidth, framebufferHeight, scale);
 		context.submit(buildRoot(), frame);
-		context.render(renderer, Surface.fromNativeHandle(surface), frameInfo);
+		context.render(renderer, target, frameInfo);
 		renderedFrames++;
 		if (closeAfterFrames > 0 && renderedFrames >= closeAfterFrames && !closeRequested) {
 			closeRequested = true;

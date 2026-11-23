@@ -1,4 +1,4 @@
-package haxeon.gpu;
+package haxeon.platform;
 
 /** Monotonic callback time in seconds and the size of the framebuffer in pixels. */
 class FrameTick {

@@ -11,7 +11,6 @@ import haxeon.ui.LayoutSession;
 import haxeon.ui.Paint;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.PathBuilder;
-import haxeon.ui.Surface;
 
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;

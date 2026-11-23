@@ -45,7 +45,7 @@ class DesktopUiSurface implements Disposable {
 		context = new UiContext(null, fonts);
 		binding = UiSurfaceBinding.attach(context, window, surface, events, true);
 
-		var frame = new UiSurfaceFrame(surface.nativeHandle(), width, height);
+		var frame = new UiSurfaceFrame(surface, width, height);
 		var lastFrame = 0.0;
 		surface.setFrameMode(SurfaceFrameMode.OnDemand);
 		context.onAnimationFrameRequested = invalidate;

@@ -48,7 +48,7 @@ import nativekit.scene.Scene;
 import nativekit.scene.SceneView;
 import nativekit.scene.SceneRenderer;
 import haxeon.gpu.Renderer;
-import haxeon.gpu.Surface;
+import haxeon.gpu.SurfaceOptions as GpuSurfaceOptions;
 import haxe.io.Bytes;
 
 class Main {
@@ -165,7 +165,7 @@ class Main {
 		windowOptions.set_owner(WindowHandle.invalid());
 		windowOptions.set_kind(WindowKind.Normal);
 		var window = realRuntime.createWindowNative(windowOptions),
-			surface = Surface.create(window, 64, 64),
+			surface = window.createSurface(GpuSurfaceOptions.forGpu(64, 64)),
 			ready = false,
 			subscription = realRuntime.events.listen(function(value) switch value {
 				case SurfaceReady(source) if (source.rawValue() == surface.nativeHandle().rawValue()):
@@ -176,7 +176,7 @@ class Main {
 		while (!ready && Sys.time() < deadline)
 			realRuntime.events.poll();
 		if (!ready) return 18;
-		var renderer:Renderer = surface.createRenderer(),
+		var renderer:Renderer = Renderer.create(surface),
 			realSceneRenderer = SceneRenderer.create(renderer),
 			realExecution = realSceneRenderer.render(snapshot, view);
 		if (realExecution.get_result() != NativeKitGpu.GpuStatus.Ok

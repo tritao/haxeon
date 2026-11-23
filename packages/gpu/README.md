@@ -16,7 +16,10 @@ Generator source labels retain their original paths to preserve reviewed HXI con
 
 ## Frame callbacks
 
-`Surface.onFrame` delivers a `FrameTick` with monotonic callback time and
+Create a platform surface with `window.createSurface(SurfaceOptions.forGpu(width, height))`
+and pass it to `Renderer.create(surface)`.
+
+`haxeon.platform.Surface.onFrameTick` delivers a `FrameTick` with monotonic callback time and
 framebuffer dimensions in pixels. Registering a new handler replaces the
 previous one. Dispose the returned subscription to stop delivery early. Surface
 disposal also detaches the handler.
@@ -38,8 +41,8 @@ unavailable on the current backend.
 
 ## Examples
 
-[Circuit Run](examples/circuit-run/) is a Linux desktop maze-chase sample using
-NativeKit keyboard events and a single draw call per frame.
+[Circuit Run](examples/circuit-run/) is a Linux and WebGL2 maze-chase sample
+that submits a GPU maze and a retained UI HUD to one platform surface.
 
 ## License
 

@@ -24,7 +24,7 @@ import haxeon.ui.Path;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
+import haxeon.platform.Surface;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 
@@ -614,13 +614,12 @@ class Showcase implements Disposable {
 			replacedCaret.dispose();
 	}
 
-	public function render(surface:SurfaceHandle, logicalWidth:Float, logicalHeight:Float,
+	public function render(surface:Surface, logicalWidth:Float, logicalHeight:Float,
 			framebufferWidth:Int, framebufferHeight:Int, pixelScale:Float):Void {
 		frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
 			pixelScale);
-		var target = Surface.fromNativeHandle(surface);
-		renderer.renderFrame(list, target, frameInfo);
-		layoutSession.renderOverlay(renderer, target, frameInfo);
+		renderer.renderFrame(list, surface, frameInfo);
+		layoutSession.renderOverlay(renderer, surface, frameInfo);
 	}
 
 	public function printStats():Void {

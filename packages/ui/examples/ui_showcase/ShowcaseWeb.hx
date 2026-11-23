@@ -63,6 +63,7 @@ class ShowcaseWeb {
 	static var ready = false;
 	static var window:WindowHandle = WindowHandle.invalid();
 	static var surface:SurfaceHandle = SurfaceHandle.invalid();
+	static var renderSurface:Null<Surface>;
 	static var logicalWidth:Float = 1200.0;
 	static var logicalHeight:Float = 800.0;
 	static var framebufferWidth = 0;
@@ -159,6 +160,7 @@ class ShowcaseWeb {
 			if (createdSurface.status != Result.Ok)
 				return fail(12);
 			surface = createdSurface.out_surface.borrow();
+			renderSurface = Surface.borrowNativeHandle(surface);
 			var activePump = new EventPump();
 			events = activePump;
 			eventSubscription = activePump.listen(handleEvent);
@@ -222,7 +224,8 @@ class ShowcaseWeb {
 				graphics.setViewport(logicalWidth, logicalHeight);
 			}
 
-			if (running && ready && (graphics != null || explorer != null)) {
+			var target = renderSurface;
+			if (running && ready && target != null && (graphics != null || explorer != null)) {
 				failureStage = 2;
 				if (benchmarkScenario == 3)
 					if (graphics != null)
@@ -236,11 +239,11 @@ class ShowcaseWeb {
 					failureStage = 3;
 					graphics.encodeFrame(elapsed, logicalWidth, logicalHeight, framebufferWidth,
 						framebufferHeight, scale, false);
-					graphics.render(surface, logicalWidth, logicalHeight, framebufferWidth,
+					graphics.render(target, logicalWidth, logicalHeight, framebufferWidth,
 						framebufferHeight, scale);
 				} else if (explorer != null) {
 					failureStage = 100 + explorer.getDiagnosticStage();
-					explorer.render(surface, elapsed);
+					explorer.render(elapsed);
 				}
 				failureStage = 4;
 				if (NativeKit.nk_surface_present(surface) != Result.Ok)
@@ -308,6 +311,8 @@ class ShowcaseWeb {
 		if (explorer != null)
 			explorer.dispose();
 		explorer = null;
+		if (renderSurface != null) renderSurface.releaseBorrowed();
+		renderSurface = null;
 		if (surface.isValid())
 			NativeKit.nk_surface_destroy(surface);
 		surface = SurfaceHandle.invalid();
@@ -451,7 +456,10 @@ class ShowcaseWeb {
 			explorer = new UiExplorer(fonts, "WEBGL2 · WASM", function() {
 				openGraphicsRequested = true;
 			});
-			explorer.attachSurface(Surface.borrowNativeHandle(surface));
+			var target = renderSurface;
+			if (target == null)
+				throw "Create the showcase surface before attaching the explorer";
+			explorer.attachSurface(target);
 			explorer.setViewport(logicalWidth, logicalHeight, requestedWidth,
 				requestedHeight, scale);
 			if (requestedUiVisualCase >= 0 && !explorer.setVisualCase(requestedUiVisualCase))

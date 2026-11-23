@@ -68,6 +68,19 @@ class Surface implements Disposable {
 		return subscription;
 	}
 
+	/** Registers a frame callback with a monotonic timestamp and framebuffer dimensions. */
+	public function onFrameTick(handler:FrameTick->Void):SurfaceFrameSubscription {
+		if (handler == null)
+			throw BindingError.invalidArgument("Surface.onFrameTick", "Frame handler must not be null");
+		return onFrame(function(width, height) handler(new FrameTick(Sys.monotonicTime(), width, height)));
+	}
+
+	/** Sets the surface's bounds in logical window pixels. */
+	public function setBounds(x:Int, y:Int, width:Int, height:Int):Void {
+		ensureLive();
+		NativeKit.nk_surface_set_bounds_checked(value, x, y, width, height);
+	}
+
 	/** Acquires the surface target for render-executor submission. */
 	public function acquireFrame():SurfaceFrame {
 		ensureLive();
@@ -128,15 +141,11 @@ class Surface implements Disposable {
 		return dependents.register(release);
 	}
 
-	@:allow(haxeon.gpu.Surface)
-	function releaseDependents():Void
-		dependents.releaseAll();
-
 	public function dispose():Void {
 		if (disposed)
 			return;
 		clearFrameCallback();
-		releaseDependents();
+		dependents.releaseAll();
 		if (ownsHandle)
 			NativeKit.nk_surface_destroy_checked(value);
 		disposed = true;

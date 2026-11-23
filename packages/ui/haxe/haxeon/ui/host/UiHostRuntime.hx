@@ -1,6 +1,6 @@
 package haxeon.ui.host;
 
-import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.Surface;
 import haxeon.ui.style.Density;
 
 import NativeKitUI.UiStatus;
@@ -39,9 +39,9 @@ class UiHostRuntime implements Disposable {
 	final context:UiHostContext;
 	var application:Null<UiApplication> = null;
 	var binding:Null<UiSurfaceBinding> = null;
-	var nativeSurface:Null<PlatformSurface> = null;
+	var nativeSurface:Null<Surface> = null;
 	var renderer:Null<Renderer> = null;
-	final frame:UiSurfaceFrame;
+	var frame:Null<UiSurfaceFrame> = null;
 	final frameState:UiHostFrameState;
 	final zoomChanged:Null<Float->Void>;
 	var disposed:Bool = false;
@@ -59,7 +59,6 @@ class UiHostRuntime implements Disposable {
 		frameState = new UiHostFrameState(width, height);
 		context.onZoomChanged = applyZoom;
 		frameState.setZoom(context.zoom);
-		frame = new UiSurfaceFrame(surface, width, height);
 	}
 
 	function get_logicalWidth():Float return frameState.logicalWidth;
@@ -86,9 +85,11 @@ class UiHostRuntime implements Disposable {
 			} else {
 				application = created;
 				renderer = Renderer.create();
-				nativeSurface = PlatformSurface.borrowNativeHandle(surface);
+				var target = Surface.borrowNativeHandle(surface);
+				nativeSurface = target;
+				frame = new UiSurfaceFrame(target, frameState.framebufferWidth, frameState.framebufferHeight);
 				created.context().density = context.touchPrimary ? Density.Touch : Density.Pointer;
-				binding = UiSurfaceBinding.attachNative(created.context(), window, nativeSurface, context.events);
+				binding = UiSurfaceBinding.attachNative(created.context(), window, target, context.events);
 				binding.setCoordinateScale(context.zoom);
 				session.transition(UiHostLifecycle.Running);
 			}
@@ -115,8 +116,9 @@ class UiHostRuntime implements Disposable {
 
 	/** Renders at most once for the adapter's scheduling callback. */
 	public function render(timeSeconds:Float, repaintOnly:Bool = false):Bool {
+		var frame = this.frame;
 		if (disposed || session.state != UiHostLifecycle.Running || !frameState.canRender() || application == null
-			|| renderer == null)
+			|| renderer == null || frame == null)
 			return false;
 		var allocatedAt = AllocationProbe.now();
 		try {
@@ -239,6 +241,7 @@ class UiHostRuntime implements Disposable {
 			try ownedRenderer.dispose() catch (error:Dynamic) session.cleanupFailed("renderer-dispose", error);
 		var ownedSurface = nativeSurface;
 		nativeSurface = null;
+		frame = null;
 		if (ownedSurface != null)
 			try ownedSurface.releaseBorrowed() catch (error:Dynamic) session.cleanupFailed("surface-release", error);
 	}

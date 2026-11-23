@@ -3,6 +3,7 @@ package haxeon.ui;
 import haxeon.ui.debug.RenderCost;
 
 import NativeKitUI;
+import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.SurfaceFrameStep;
 import NativeKitUI.nkui_layout_measure_callbackCallback;

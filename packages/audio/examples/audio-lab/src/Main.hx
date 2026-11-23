@@ -55,7 +55,7 @@ class Main {
 		var logicalHeight = INITIAL_HEIGHT;
 		var previousFrameAt = Date.now().getTime();
 		var frameCount = 0;
-		var frame = new UiSurfaceFrame(nativeSurface, INITIAL_WIDTH, INITIAL_HEIGHT);
+		var frame = new UiSurfaceFrame(surface, INITIAL_WIDTH, INITIAL_HEIGHT);
 		var errorView:Null<FrameworkErrorView> = null;
 		scoped var binding = UiSurfaceBinding.attach(context, window, surface, events);
 		scoped var eventSubscription = events.listen(function(value) {
@@ -64,7 +64,7 @@ class Main {
 					running = false;
 				case WindowResize(source, width, height) if (source.rawValue() == windowHandle.rawValue()):
 					if (width > 0 && height > 0)
-						NativeKit.nk_surface_set_bounds_checked(nativeSurface, 0, 0, width, height);
+						surface.setBounds(0, 0, width, height);
 				case SurfaceResize(source, width, height, _, _) if (surface.ownsEventSource(source)):
 					logicalWidth = width;
 					logicalHeight = height;

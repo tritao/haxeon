@@ -1,6 +1,7 @@
 package haxeon.ui;
 
 import NativeKitUI;
+import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 import haxeon.platform.SurfaceFrameStep;
 import nativekit.ffi.NativeKit;

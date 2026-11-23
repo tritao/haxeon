@@ -1,4 +1,4 @@
-import haxeon.platform.Surface as PlatformSurface;
+import haxeon.platform.Surface;
 import haxeon.platform.WebView;
 import haxeon.platform.event.EventPump;
 import haxeon.ui.Renderer.RendererStats;
@@ -20,7 +20,6 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Renderer;
-import haxeon.ui.Surface;
 import haxeon.ui.TextWrap;
 import haxeon.ui.animation.AnimationController;
 import haxeon.ui.animation.SpringController;
@@ -109,7 +108,7 @@ class UiExplorer implements Disposable {
 	final demoLoadedImage:Image;
 	final demoPixelLinear:Image;
 	final demoPixelNearest:Image;
-	var nativeSurface:Null<PlatformSurface>;
+	var nativeSurface:Null<Surface>;
 	var nativeWindow:Null<Handle>;
 	var webView:Null<WebView>;
 	var webViewAttempted:Bool = false;
@@ -173,7 +172,8 @@ class UiExplorer implements Disposable {
 	}
 
 	/** Installs the native surface used by text editing, IME state, and accessibility. */
-	public function attachSurface(surface:PlatformSurface):Void {
+	/** Attaches the host-owned surface used by this explorer. */
+	public function attachSurface(surface:Surface):Void {
 		nativeSurface = surface;
 		context.attachPlatformSurface(surface);
 		if (supportsNativeAccessibility())
@@ -260,7 +260,10 @@ class UiExplorer implements Disposable {
 		return ExplorerVisualCases.apply(this, caseId);
 	}
 
-	public function render(surface:SurfaceHandle, timeSeconds:Float):Void {
+	public function render(timeSeconds:Float):Void {
+		var surface = nativeSurface;
+		if (surface == null)
+			throw "Attach a surface before rendering the explorer";
 		diagnosticStage = 1;
 		frame.setViewport(width, height);
 		frame.deltaSeconds = previousTime < 0.0 ? 1.0 / TARGET_FPS : Math.max(0.0,
@@ -286,7 +289,7 @@ class UiExplorer implements Disposable {
 		syncWebView();
 		diagnosticStage = 5;
 		try {
-			context.render(renderer, Surface.fromNativeHandle(surface), frameInfo);
+			context.render(renderer, surface, frameInfo);
 		} catch (error:Dynamic) {
 			diagnosticStage = 30 + context.getDiagnosticStage();
 			throw error;
@@ -329,10 +332,7 @@ class UiExplorer implements Disposable {
 		demoLoadedImage.dispose();
 		demoOverlayImage.dispose();
 		demoImage.dispose();
-		if (nativeSurface != null) {
-			nativeSurface.releaseBorrowed();
-			nativeSurface = null;
-		}
+		nativeSurface = null;
 		if (ownsFonts) fonts.dispose();
 	}
 

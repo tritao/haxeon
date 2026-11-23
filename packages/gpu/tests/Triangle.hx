@@ -25,7 +25,8 @@ import haxeon.gpu.RenderPassDesc;
 import haxeon.gpu.Renderer;
 import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
-import haxeon.gpu.Surface;
+import haxeon.gpu.SurfaceOptions as GpuSurfaceOptions;
+import haxeon.platform.Surface;
 import haxeon.gpu.Timestamp;
 import haxeon.platform.GraphicsImageRef;
 import haxeon.platform.Runtime;
@@ -53,9 +54,9 @@ class Triangle {
 		}
 		if (!caught) throw "GPU errors must expose their domain, status, and operation";
 		var argument = false;
-		try Surface.create(null, 0, 0) catch (error:haxeon.platform.BindingError) {
+		try GpuSurfaceOptions.forGpu(0, 0) catch (error:haxeon.platform.BindingError) {
 			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument
-				&& error.operation == "Surface.create";
+				&& error.operation == "SurfaceOptions.forGpu";
 		}
 		if (!argument) throw "GPU argument errors must use BindingError";
 	}
@@ -274,8 +275,8 @@ class Triangle {
 		var calls = 0;
 		var lastTime = 0.0;
 		var timing:haxeon.platform.SurfaceFrameTiming = null;
-		var first = surface.onFrame(function(_) { staleCalls++; });
-		var second = surface.onFrame(function(frame) {
+		var first = surface.onFrameTick(function(_) { staleCalls++; });
+		var second = surface.onFrameTick(function(frame) {
 			if (frame.timeSeconds < lastTime || frame.width <= 0 || frame.height <= 0)
 				throw "Invalid frame callback payload";
 			lastTime = frame.timeSeconds;
@@ -307,7 +308,7 @@ class Triangle {
 		pumpEvents(runtime, 0.1);
 		if (!second.isDisposed() || calls != idleCalls + 1)
 			throw "Disposed GPU frame subscription still received callbacks";
-		return surface.onFrame(function(_) {});
+		return surface.onFrameTick(function(_) {});
 	}
 
 	static function main():Int {
@@ -322,7 +323,7 @@ class Triangle {
 		windowOptions.set_owner(WindowHandle.invalid());
 		windowOptions.set_kind(WindowKind.Normal);
 		var window:Window = runtime.createWindowNative(windowOptions);
-		var surface = Surface.create(window, 800, 600);
+		var surface = window.createSurface(GpuSurfaceOptions.forGpu(800, 600));
 		var renderer:Null<Renderer> = null;
 		var buffer:Null<Buffer> = null;
 		var indexBuffer:Null<Buffer> = null;
@@ -356,7 +357,7 @@ class Triangle {
 		while (running) {
 			runtime.events.poll();
 			if (!ready && surfaceReady) {
-				renderer = surface.createRenderer();
+				renderer = Renderer.create(surface);
 				commandBuffer = renderer.commandBuffer(64);
 
 				buffer = createVertexBuffer(renderer);
@@ -366,7 +367,7 @@ class Triangle {
 					Wrap.Repeat, Wrap.Repeat);
 				shader = createShader(renderer);
 				pipeline = createPipeline(renderer, shader);
-				var peerRenderer = surface.createRenderer();
+				var peerRenderer = Renderer.create(surface);
 				var wrongShaderRendererRejected = false;
 				try Pipeline.begin(peerRenderer, shader, 28) catch (_:Dynamic) wrongShaderRendererRejected = true;
 				if (!wrongShaderRendererRejected)

@@ -209,7 +209,7 @@ class ShowcaseDesktop {
 					fonts.dispose();
 					throw error;
 				}
-				explorer.attachSurface(Surface.borrowNativeHandle(surface));
+				explorer.attachSurface(frameSurface);
 				explorer.attachWindow(window);
 				explorerInput = explorer.attachInput(activePump, new Handle(window.rawValue()));
 				if (uiVisualCase >= 0 && !explorer.setVisualCase(uiVisualCase))
@@ -231,7 +231,7 @@ class ShowcaseDesktop {
 					var activeGraphics = frameState.graphics;
 					activeGraphics.encodeFrame(elapsed, frameState.logicalWidth, frameState.logicalHeight,
 						framebufferWidth, framebufferHeight, frameState.scale, staticFrame);
-					activeGraphics.render(surface, frameState.logicalWidth, frameState.logicalHeight,
+					activeGraphics.render(frameSurface, frameState.logicalWidth, frameState.logicalHeight,
 						framebufferWidth, framebufferHeight, frameState.scale);
 				} else if (frameState.explorer != null) {
 					if (uiSmoke)
@@ -240,7 +240,7 @@ class ShowcaseDesktop {
 						frameState.explorer.setSmokeFrame(1);
 					frameState.explorer.setViewport(frameState.logicalWidth, frameState.logicalHeight,
 						framebufferWidth, framebufferHeight, frameState.scale);
-					frameState.explorer.render(surface, elapsed);
+					frameState.explorer.render(elapsed);
 				}
 				frameState.rendered++;
 				if (staticFrame || (uiVisualCase >= 0 && frameState.rendered >= uiVisualFrameLimit)
