@@ -1,5 +1,6 @@
 package compiler.ir.model;
 
+import compiler.core.InternalError;
 import sys.thread.Mutex;
 
 /**
@@ -15,11 +16,21 @@ class IrSymbol {
 	@:processWide("interned names: a name always denotes the same symbol, and the table only grows")
 	static final byName:Map<String, IrSymbol> = [];
 
-	@:processWide("interned names, by id: the table only grows")
-	static final byId:Array<IrSymbol> = [];
-
-	@:processWide("guards the interning tables, which the compile and census threads may both reach")
+	@:processWide("guards interning, which the compile and census threads may both do")
 	static final lock = new Mutex();
+
+	static inline final CHUNK_BITS = 12;
+	static inline final CHUNK_SIZE = 1 << CHUNK_BITS;
+
+	/**
+	 * The interned symbols by id, in chunks: the outer array is made at its full length and a chunk never moves once made, so
+	 * `at`, which every read of a body's names goes through, needs no lock. An id reaches a reader only after `of` stored it.
+	 */
+	@:processWide("interned names, by id: the chunks only fill")
+	static final chunks:Array<Null<Array<IrSymbol>>> = [for (_ in 0...1 << 14) null];
+
+	@:processWide("how many symbols are interned, written under the lock")
+	static var count = 0;
 
 	public final id:Int;
 	public final name:String;
@@ -34,9 +45,20 @@ class IrSymbol {
 		lock.acquire();
 		var symbol = byName.get(name);
 		if (symbol == null) {
-			symbol = new IrSymbol(byId.length, name);
-			byId.push(symbol);
+			var id = count, chunk = chunks[id >> CHUNK_BITS];
+			if (chunk == null) {
+				if (id >> CHUNK_BITS >= chunks.length) {
+					lock.release();
+					throw new InternalError('More than ${chunks.length * CHUNK_SIZE} IR symbols');
+				}
+				chunk = [];
+				chunk.resize(CHUNK_SIZE);
+				chunks[id >> CHUNK_BITS] = chunk;
+			}
+			symbol = new IrSymbol(id, name);
+			chunk[id & (CHUNK_SIZE - 1)] = symbol;
 			byName.set(name, symbol);
+			count = id + 1;
 		}
 		lock.release();
 		return symbol;
@@ -44,18 +66,10 @@ class IrSymbol {
 
 	/** The symbol with id `id`, which must be one `of` has given. */
 	public static function at(id:Int):IrSymbol {
-		lock.acquire();
-		var symbol = byId[id];
-		lock.release();
-		return symbol;
-	}
-
-	/** How many symbols exist: every id is below it, so it sizes a table indexed by id. */
-	public static function count():Int {
-		lock.acquire();
-		var result = byId.length;
-		lock.release();
-		return result;
+		var chunk = chunks[id >> CHUNK_BITS];
+		if (chunk == null)
+			throw new InternalError('No IR symbol $id');
+		return chunk[id & (CHUNK_SIZE - 1)];
 	}
 
 	public function toString():String
