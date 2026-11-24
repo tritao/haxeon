@@ -47,6 +47,112 @@ const view = source.replace(/^\t/gm, '');
     <section>
       <div class="wrap">
         <div class="head">
+          <h2>How it works</h2>
+          <p class="lede">You describe the window in Haxe. A native core lays it out, shapes its text and draws it on the GPU.</p>
+        </div>
+        <div class="split">
+          <Diagram spaced>
+            <svg class="drawing" viewBox="0 0 360 344" role="img" aria-labelledby="ui-design-title">
+              <title id="ui-design-title">Your views, in Haxe, feed the Haxe framework, which hands them to the native core for layout, text and the render plan; the GPU layer draws them through the platform graphics API.</title>
+              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
+              <rect class="box" x="55" y="156" width="250" height="54" rx="6" />
+              <rect class="box" x="55" y="242" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="306" width="250" height="36" rx="6" />
+              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 210v30m-4-5 4 5 4-5M180 278v26m-4-5 4 5 4-5" />
+              <text class="ttl" x="180" y="25" text-anchor="middle">Your views</text>
+              <text class="ttl" x="180" y="93" text-anchor="middle">Haxe framework</text>
+              <text x="180" y="113" text-anchor="middle">State · Events · Semantics</text>
+              <text class="ttl" x="180" y="179" text-anchor="middle">Native core</text>
+              <text x="180" y="199" text-anchor="middle">Layout · Text · Render plan</text>
+              <text class="ttl" x="180" y="265" text-anchor="middle"><a href="/gpu/"><tspan class="lnk">GPU layer</tspan></a></text>
+              <text class="ttl" x="180" y="329" text-anchor="middle">Platform graphics API</text>
+            </svg>
+          </Diagram>
+          <div class="stack">
+            <Card compact>
+              <h3>Views from state</h3>
+              <p>Your <code>view()</code> describes the window from your app’s state. Keys tell the UI which view is which from one frame to the next, and a <code>Signal</code> marks what changed, so you never update widgets by hand.</p>
+            </Card>
+            <Card compact>
+              <h3>A retained core underneath</h3>
+              <p>Haxe owns behaviour: state, focus, events, semantics and animation. The native core owns layout, text and drawing. It keeps a retained display list, compiles it into a render plan and repaints only what changed.</p>
+            </Card>
+            <Card compact>
+              <h3>One renderer everywhere</h3>
+              <p>The toolkit draws its own widgets, with text shaped by HarfBuzz, so a layout looks the same on every platform. It can own a window, or draw inside your <a href="/gpu/">GPU app</a> through a <code>UiOverlay</code>.</p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>What it does</h2>
+          <p class="lede">Everything an app needs, and the features that tools and editors are made of.</p>
+        </div>
+        <h3 class="group">For every app</h3>
+        <div class="grid three">
+          <Card compact>
+            <h3>Layout and text</h3>
+            <p>Rows, columns and scrolling, sized to <a href={basics + '#layout-and-text'}>grow, fit or stretch</a>. Multilingual text with bidirectional runs, wrapping, and editing with selection and IME composition.</p>
+          </Card>
+          <Card compact>
+            <h3>Widgets and data</h3>
+            <p>Buttons, toggles, sliders, text fields and selects, and large collections in virtualized <a href={basics + '#lists'}>lists</a>, trees and grids.</p>
+          </Card>
+          <Card compact>
+            <h3>Overlays and navigation</h3>
+            <p>Dialogs, menus, popups and tooltips over your content, and <a href={basics + '#navigation'}>tabs</a> and sidebars to move between views.</p>
+          </Card>
+          <Card compact>
+            <h3>Style and themes</h3>
+            <p>Light and dark <a href={basics + '#theming'}>themes</a> or your own tokens, with borders, backgrounds, blurs and colour effects.</p>
+          </Card>
+          <Card compact>
+            <h3>Input and motion</h3>
+            <p>Pointer and keyboard input with focus, <a href={repositorySource('packages/ui/haxe/haxeon/ui/gestures')}>gestures</a> from taps to pinches, and animation with tweens and springs.</p>
+          </Card>
+          <Card compact>
+            <h3>Accessibility</h3>
+            <p>Roles, labels, values and actions in a <a href={repositorySource('packages/ui/haxe/haxeon/ui/semantics')}>semantic tree</a>, and an audit that reports what is missing.</p>
+          </Card>
+        </div>
+        <h3 class="group">For tools and editors</h3>
+        <div class="grid three">
+          <Card compact>
+            <h3>Docking workspaces</h3>
+            <p>Panels that split, tab and dock, with <a href={repositorySource('packages/ui/haxe/haxeon/ui/docking')}>layouts</a> saved and restored between sessions.</p>
+          </Card>
+          <Card compact>
+            <h3>Property inspectors</h3>
+            <p>Typed editors for an object’s properties, with edits applied as <a href={packageDocs + '#property-inspectors-and-external-transactions'}>undoable transactions</a>.</p>
+          </Card>
+          <Card compact>
+            <h3>Commands and undo</h3>
+            <p>Menus, toolbars and a command palette share <a href={packageDocs + '#commands-shortcuts-and-edit-history'}>commands</a>, with scoped shortcuts and an edit history.</p>
+          </Card>
+          <Card compact>
+            <h3>Settings</h3>
+            <p>A registry of typed <a href={repositorySource('packages/ui/haxe/haxeon/ui/settings')}>settings</a>, stored for you, with rebindable keyboard shortcuts.</p>
+          </Card>
+          <Card compact>
+            <h3>Plots and viewports</h3>
+            <p>Plot series of data, and show your own GPU drawing in a <a href="/gpu/">viewport</a> that pans and zooms.</p>
+          </Card>
+          <Card compact>
+            <h3>Inspector and diagnostics</h3>
+            <p>Inspect any view’s layout, style and semantics while the app runs, with <a href={repositorySource('packages/ui/haxe/haxeon/ui/debug')}>frame metrics</a> and render costs.</p>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
           <h2>Your first view</h2>
           <p class="lede">A view is built from your app’s state. A <code>Signal</code> holds the count, and the window redraws when its value changes.</p>
         </div>
@@ -57,78 +163,6 @@ const view = source.replace(/^\t/gm, '');
           </figure>
         </div>
         <p class="note"><a href={firstApp + '#change-the-ui'}>Build it in Your first app</a></p>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head"><h2>Build the interface</h2></div>
-        <div class="grid three">
-          <Card compact>
-            <h3>Views and layout</h3>
-            <p>Compose keyed views into <a href={basics + '#layout-and-text'}>rows and columns</a>, rebuilt from your app’s state each frame.</p>
-          </Card>
-          <Card compact>
-            <h3>Text</h3>
-            <p>Shape <a href={packageDocs}>multilingual text</a> with bidirectional runs and line wrapping, and edit it with selection and IME composition.</p>
-          </Card>
-          <Card compact>
-            <h3>Widgets</h3>
-            <p>Build <a href={basics + '#forms'}>forms</a> from buttons, toggles, sliders and text fields, and show large collections in virtualized lists, trees and grids.</p>
-          </Card>
-          <Card compact>
-            <h3>Overlays and input</h3>
-            <p>Show dialogs, menus, popups and tooltips over your content. Route pointer and keyboard input, manage focus, and animate <a href={showcase}>taps and drags</a>.</p>
-          </Card>
-          <Card compact>
-            <h3>Theme and accessibility</h3>
-            <p>Switch between light and dark <a href={basics + '#theming'}>themes</a> or supply your own tokens, and expose roles, labels and actions in a semantic tree.</p>
-          </Card>
-          <Card compact>
-            <h3>Native services</h3>
-            <p>Open file dialogs, read the clipboard, add menus, tray icons and notifications, and embed a web view through the <a href={repositorySource('packages/platform/README.md')}><code>platform</code> package</a>.</p>
-          </Card>
-        </div>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>How it is built</h2>
-          <p class="lede">Your views describe the interface. The UI layer resolves layout, prepares text and builds a render plan, which the GPU layer submits through the platform’s graphics API.</p>
-        </div>
-        <div class="split">
-          <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 262" role="img" aria-labelledby="ui-pipeline-title">
-              <title id="ui-pipeline-title">Your views flow through UI layout, text and render planning, then the GPU layer and the platform graphics API.</title>
-              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
-              <rect class="box" x="55" y="156" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="224" width="250" height="36" rx="6" />
-              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 192v30m-4-5 4 5 4-5" />
-              <text class="ttl" x="180" y="25" text-anchor="middle">Your views</text>
-              <text class="ttl" x="180" y="93" text-anchor="middle">UI layer</text>
-              <text x="180" y="113" text-anchor="middle">Layout · Text · Render plan</text>
-              <text class="ttl" x="180" y="179" text-anchor="middle"><a href="/gpu/"><tspan class="lnk">GPU layer</tspan></a></text>
-              <text class="ttl" x="180" y="247" text-anchor="middle">Platform graphics API</text>
-            </svg>
-          </Diagram>
-          <div class="stack">
-            <Card compact>
-              <h3>Rebuilt from state, repainted where it changed</h3>
-              <p>Each frame builds the view tree from your state. The UI keeps what did not change and repaints only what did.</p>
-            </Card>
-            <Card compact>
-              <h3>Text shaped by the toolkit</h3>
-              <p>HarfBuzz shapes text, SheenBidi orders bidirectional runs and libunibreak finds line breaks, the same way on every platform.</p>
-            </Card>
-            <Card compact>
-              <h3>The same pixels everywhere</h3>
-              <p>The toolkit draws its own widgets instead of wrapping each platform’s, so a layout looks the same on Linux, macOS, Windows and the web.</p>
-            </Card>
-          </div>
-        </div>
       </div>
     </section>
 
@@ -166,6 +200,8 @@ const view = source.replace(/^\t/gm, '');
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
   .window img { max-width: 22rem; }
   .grid p, .stack p { margin: 0; }
+  .landing-content .group { margin: 0 0 var(--hx-space-4); color: var(--sl-color-gray-2); }
+  .grid + .group { margin-top: var(--hx-space-6); }
   .showcase-light, :global([data-theme='light']) .showcase-dark { display: none; }
   :global([data-theme='light']) .showcase-light { display: block; }
   .drawing .lnk { fill: var(--sl-color-text-accent); text-decoration: underline; }
