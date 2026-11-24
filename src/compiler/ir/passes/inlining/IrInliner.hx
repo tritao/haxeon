@@ -51,8 +51,45 @@ class IrInlinedForm {
 
 	public final body:Null<IrBody>;
 
-	public function new(body:Null<IrBody>)
+	/** Whether a caller may splice `body` (`IrInliner.spliceableForm`), worked out once for the form. */
+	public final splices:Bool;
+
+	public function new(body:Null<IrBody>) {
 		this.body = body;
+		splices = body != null && IrInliner.spliceableForm(body);
+	}
+}
+
+/** What an object fact's value was worked out from (`IrInlineCache.objectFacts`). */
+@:nullSafety(Strict)
+class IrObjectFact {
+	public final object:Null<IrObject>;
+	public final subclasses:Null<Array<String>>;
+	public final value:Int;
+
+	public function new(object:Null<IrObject>, subclasses:Null<Array<String>>, value:Int) {
+		this.object = object;
+		this.subclasses = subclasses;
+		this.value = value;
+	}
+
+	/** Whether `object` with `subclasses` is what this was worked out from, part by part. */
+	public function holds(object:Null<IrObject>, subclasses:Null<Array<String>>):Bool {
+		var known = this.object;
+		if (known == null || object == null)
+			return known == object;
+		if (!compiler.ir.model.IrDeclarationEquality.sameObject(known, object))
+			return false;
+		var before = this.subclasses;
+		if (before == null || subclasses == null)
+			return before == subclasses;
+		if (before.length != subclasses.length)
+			return false;
+		for (index in 0...before.length)
+			if (before[index] != subclasses[index])
+				return false;
+		return true;
+	}
 }
 
 /**
@@ -74,6 +111,14 @@ class IrInlineCache {
 
 	/** Functions the last run found unchanged except for where they sit in their file: lowered again, never patched. */
 	public var relocated:Array<String> = [];
+
+	/**
+	 * By object name, the object (null for one not in the program) and direct subclasses an object fact (`IrInliner.OBJECT`) last
+	 * worked its value out from, and that value: an object that compares the same part by part has it again, without its text.
+	 * Changed in place, and shared by the copies: a value is the number interned for the text of what it was worked out from, so
+	 * whichever build left it, it is right for that object.
+	 */
+	public var objectFacts:Map<String, IrObjectFact> = [];
 
 	/**
 	 * Code fingerprints of the positionally named functions (lambdas), by the function they were taken from: an unchanged
@@ -146,6 +191,7 @@ class IrInlineCache {
 		result.instrumented = instrumented;
 		result.positionalPrints = positionalPrints;
 		result.positionalNatives = positionalNatives;
+		result.objectFacts = objectFacts;
 		return result;
 	}
 }
@@ -222,6 +268,9 @@ class IrInliner implements IrFactSource {
 
 	/** By function id, whether it was inlined or its memo reused in this compile. */
 	final finished:Array<Bool> = [];
+
+	/** By function id once finished, whether a caller may splice its form (`splicesForm`): 0 until worked out, 1 yes, 2 no. */
+	final splices:Array<Int> = [];
 
 	/** By function id, the stage memo's entry when this compile reuses it: its inlined and its cleaned form are the entry's. */
 	final reused:Array<Null<IrStageEntry>> = [];
@@ -399,7 +448,7 @@ class IrInliner implements IrFactSource {
 		var named = [for (fn in byName) fn];
 		named.sort((left, right) -> Reflect.compare(left.name, right.name));
 		for (fn in named) {
-			var name = fn.name, symbol = IrSymbol.of(name);
+			var name = fn.name, symbol = fn.symbol;
 			while (idsBySymbol.length <= symbol.id)
 				idsBySymbol.push(-1);
 			idsBySymbol[symbol.id] = functions.length;
@@ -407,6 +456,7 @@ class IrInliner implements IrFactSource {
 			functions.push(fn);
 			done.push(null);
 			finished.push(false);
+			splices.push(0);
 			reused.push(null);
 			inputVersions.push(lineage != null && memos != null ? lineage.versionOf(fn) : 0);
 			if (lineage != null && memos != null)
@@ -828,8 +878,14 @@ class IrInliner implements IrFactSource {
 			throw new InternalError('The inliner read its fact $kind of $key without a memo');
 		if (kind == SETTINGS)
 			return table.intern(settings);
-		if (kind == OBJECT)
-			return table.intern(objectText(key));
+		if (kind == OBJECT) {
+			var object = objects.get(key), children = subclasses.get(key), known = cache.objectFacts.get(key);
+			if (known != null && known.holds(object, children))
+				return known.value;
+			var value = table.intern(objectText(key));
+			cache.objectFacts.set(key, new IrObjectFact(object, children, value));
+			return value;
+		}
 		var id = ids.get(key);
 		if (id == null)
 			throw new InternalError('The inliner read its fact $kind of "$key", which is not a function of the program');
@@ -858,11 +914,29 @@ class IrInliner implements IrFactSource {
 	function spliceable(id:Int):Int {
 		if (visiting[id])
 			return IrFacts.UNKNOWN;
-		var form = inlinedVersion(id);
-		if (form == null || !fits(form) || !isStraightLine(form) && !form.inlineHint)
+		inlinedVersion(id);
+		if (!splicesForm(id))
 			return 0;
 		return impure[id] ? IrFacts.UNKNOWN : outputVersions[id];
 	}
+
+	/** Whether a caller may splice the inlined form of function `id`, which is finished: the memo's answer for a reused form. */
+	function splicesForm(id:Int):Bool {
+		var known = splices[id];
+		if (known == 0) {
+			var form = done[id];
+			known = form != null && spliceableForm(form) ? 1 : 2;
+			splices[id] = known;
+		}
+		return known == 1;
+	}
+
+	/**
+	 * Whether a caller may splice `form`, an inlined form: it fits the budget, and is straight-line or marked inline (HashLink's
+	 * JIT keeps registers only inside a basic block, so a branching body costs more spliced in than called).
+	 */
+	public static function spliceableForm(form:IrBody):Bool
+		return fits(form) && (isStraightLine(form) || form.inlineHint);
 
 	/** Whether function `id` may be spliced at all, by its name and its source alone. */
 	function isCandidate(id:Int):Bool {
@@ -895,6 +969,7 @@ class IrInliner implements IrFactSource {
 		var form = kept == null ? null : kept.body;
 		done[id] = form;
 		finished[id] = true;
+		splices[id] = kept != null && kept.splices ? 1 : 2;
 		reused[id] = entry;
 		outputVersions[id] = entry.outputVersion;
 		sourceBodies[id] = form != null && form == cachedOriginal(id) ? form : null;
@@ -1075,11 +1150,7 @@ class IrInliner implements IrFactSource {
 		if (reader != null)
 			return reader.read(FORM, original.name) != 0 ? done[id] : null;
 		var candidate = inlinedVersion(id);
-		if (candidate == null || !fits(candidate))
-			return null;
-		// HashLink's JIT keeps registers only inside a basic block, so a branching body costs more spliced in than called;
-		// only a straight-line body, or one the author marked inline, is worth it.
-		return isStraightLine(candidate) || candidate.inlineHint ? candidate : null;
+		return candidate != null && splicesForm(id) ? candidate : null;
 	}
 
 	/**

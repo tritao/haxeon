@@ -119,6 +119,18 @@ class IrFunction {
 	 */
 	public var census = 0;
 
+	/** The symbol of its name (`IrSymbol.of`), looked up once. */
+	public var symbol(get, never):IrSymbol;
+
+	var knownSymbol:Null<IrSymbol> = null;
+
+	function get_symbol():IrSymbol {
+		var known = knownSymbol;
+		if (known == null)
+			knownSymbol = known = IrSymbol.of(name);
+		return known;
+	}
+
 	/** Its name's slot in a session's numbering (`IrFunctionSlots.of`), valid while that numbering is at `slotEpoch`. */
 	var slot = -1;
 
