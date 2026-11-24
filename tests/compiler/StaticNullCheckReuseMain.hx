@@ -162,6 +162,21 @@ class StaticNullCheckReuseMain {
 		}
 		expect(checks.join(",") == "__static$nonnull$S.src,__static$nonnull$S.dst",
 			"optional copies check source before destination");
+		// Names that come and go: the lineage frees the slots of names gone for a build, with their memo entries, and gives them
+		// to new names, whose builds must not read what the old names left.
+		var distinct = 0;
+		for (round in 0...8) {
+			var renamed = [
+				caller("__init", ['readA$round', 'readB$round']),
+				reader('readA$round', 'S.a$round', round),
+				reader('readB$round', 'S.b', 2),
+				reader('unreached$round', 'S.a$round', 3)
+			];
+			distinct += 5;
+			sameAsUncached(build(renamed), renamed);
+		}
+		expect(memos.lineage.slots.count < distinct, "the slots of names that are gone are given to new names");
+		sameAsUncached(build(sources), sources);
 		Sys.println("static null-check reuse OK");
 	}
 }

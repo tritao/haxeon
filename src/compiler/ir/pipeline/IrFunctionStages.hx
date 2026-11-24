@@ -58,25 +58,33 @@ class IrFunctionStages {
 				pass.transform(functions[index], summaries[index], reader);
 			}]);
 		}
-		var memos = lineage.memos, memo = memos.stage(name), facts = memos.facts;
+		var memos = lineage.memos, memo = memos.stage(name), facts = memos.facts, slots = lineage.slots;
 		// A stage may be given functions that something between it and the last settling made: the lineage takes them first, so
 		// a name's version is its function's.
 		lineage.settle(name + ":input", functions);
 		facts.begin();
+		// Each function's slot, remembered on the function, indexes the lineage and the memo: an unchanged function is not looked
+		// up by name.
 		var count = functions.length,
+			at:Array<Int> = [],
 			entries:Array<Null<IrStageEntry>> = [],
 			summaries:Array<Int> = [];
-		for (fn in functions) {
-			var version = lineage.version(fn.name), entry = memo.last(fn.name);
+		at.resize(count);
+		entries.resize(count);
+		summaries.resize(count);
+		for (index in 0...count) {
+			var fn = functions[index], slot = slots.of(fn), version = lineage.versionAt(slot), entry = memo.last(slot);
 			if (entry != null && (version == 0 || entry.input != version))
 				entry = null;
-			entries.push(entry);
-			summaries.push(entry != null ? entry.summary : pass.summarize(fn));
+			at[index] = slot;
+			entries[index] = entry;
+			summaries[index] = entry != null ? entry.summary : pass.summarize(fn);
 		}
 		pass.prepare(functions, summaries, new IrFunctionIndex(name, functions, lineage));
 		var reader = new IrFactReader(name, pass, facts), output:Array<IrFunction> = [];
+		output.resize(count);
 		for (index in 0...count) {
-			var fn = functions[index], entry = entries[index];
+			var fn = functions[index], slot = at[index], entry = entries[index];
 			if (entry != null && facts.hold(entry.facts, pass)) {
 				var requests = entry.requests;
 				if (requests != null)
@@ -86,9 +94,9 @@ class IrFunctionStages {
 					check(name, pass, reader, fn, entry);
 			} else {
 				reader.begin(false);
-				var input = lineage.version(fn.name),
+				var input = lineage.versionAt(slot),
 					made = pass.transform(fn, summaries[index], reader),
-					last = memo.last(fn.name),
+					last = memo.last(slot),
 					version = input;
 				if (made != fn && lineage.bodies) {
 					// Past the encode point what a memo keeps is frozen, so the stages after it edit copies; nothing is compared
@@ -107,9 +115,9 @@ class IrFunctionStages {
 				}
 				entry = new IrStageEntry(input, reader.recorded(), made, version, summaries[index], reader.requests());
 			}
-			memo.keep(fn.name, entry);
+			memo.keep(slot, entry);
 			lineage.set(entry.output, entry.outputVersion);
-			output.push(entry.output);
+			output[index] = entry.output;
 		}
 		var result = pass.finish(output);
 		lineage.settle(name, result);
@@ -138,7 +146,8 @@ class IrFunctionStages {
 			memo = memos.stage(stage + IrLineage.DERIVED),
 			facts = memos.facts,
 			reader = new IrFactReader(stage, pass, facts),
-			entry = memo.last(name);
+			slot = lineage.slots.named(name),
+			entry = memo.last(slot);
 		if (entry != null && input != 0 && entry.input == input && facts.hold(entry.facts, pass)) {
 			var requests = entry.requests;
 			if (requests != null)
@@ -164,7 +173,7 @@ class IrFunctionStages {
 			entry = new IrStageEntry(input, reader.recorded(), made, kept ? input : memos.versions.next(), 0,
 				reader.requests());
 		}
-		memo.keep(name, entry);
+		memo.keep(slot, entry);
 		lineage.set(entry.output, entry.outputVersion);
 		return entry.output;
 	}

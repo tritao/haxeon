@@ -229,6 +229,9 @@ class IrInliner implements IrFactSource {
 	/** By function id, the version of its source (`IrLineage.versionOf`), which the memo's entries are kept for; 0 for none. */
 	final inputVersions:Array<Int> = [];
 
+	/** By function id, its slot in the session (`IrLineage.slots`), which its memo entry is kept at; only with a memo. */
+	final slots:Array<Int> = [];
+
 	/**
 	 * By function id, the version of what the stage makes of it in this compile: the one a caller that splices its form reads
 	 * (`FORM`), and its entry's output version.
@@ -319,7 +322,7 @@ class IrInliner implements IrFactSource {
 	final settings:String;
 
 	/**
-	 * The session's memo of the stage (`IrStageMemos`): by function name, what the stage made of the function of an input version,
+	 * The session's memo of the stage (`IrStageMemos`): by function slot, what the stage made of the function of an input version,
 	 * the facts that rested on (`IrFacts`), and by output version the inlined form (`IrStageMemos.inlinedForms`). Null in a
 	 * compile without a lineage, which reuses nothing.
 	 */
@@ -406,6 +409,8 @@ class IrInliner implements IrFactSource {
 			finished.push(false);
 			reused.push(null);
 			inputVersions.push(lineage != null && memos != null ? lineage.versionOf(fn) : 0);
+			if (lineage != null && memos != null)
+				slots.push(lineage.slots.of(fn));
 			outputVersions.push(0);
 			readsOf.push(null);
 			sameAsLast.push(null);
@@ -442,7 +447,7 @@ class IrInliner implements IrFactSource {
 			labelComponents();
 	}
 
-	/** Labels each component by its first member by name, the member with the lowest number (`componentLabels`). */
+	/** Labels each component by the slot of its first member by name, the member with the lowest number (`componentLabels`). */
 	function labelComponents():Void {
 		var first:Array<Int> = [];
 		for (id in 0...functions.length) {
@@ -453,7 +458,7 @@ class IrInliner implements IrFactSource {
 				first[component] = id;
 		}
 		for (id in 0...functions.length)
-			componentLabels.push(IrSymbol.of(functions[first[components[id]]].name).id);
+			componentLabels.push(slots[first[components[id]]]);
 	}
 
 	/** What function `id`'s source calls: kept by its version in a session, so an unchanged source is not read again. */
@@ -874,7 +879,7 @@ class IrInliner implements IrFactSource {
 		var memo = this.memo, table = facts, forms = this.forms, input = inputVersions[id];
 		if (memo == null || table == null || forms == null || input == 0)
 			return null;
-		var entry = memo.last(functions[id].name);
+		var entry = memo.last(slots[id]);
 		if (entry == null || entry.input != input)
 			return null;
 		// Checking the facts can inline the callees they name; one that leads back here is not reused (`spliceable`).
@@ -903,7 +908,7 @@ class IrInliner implements IrFactSource {
 		var memo = this.memo, forms = this.forms, versions = this.versions, input = inputVersions[id];
 		if (memo == null || forms == null || versions == null)
 			return 0;
-		var last = unchanged && input != 0 ? memo.last(functions[id].name) : null;
+		var last = unchanged && input != 0 ? memo.last(slots[id]) : null;
 		if (last != null && last.input == input) {
 			var kept = forms.get(last.outputVersion);
 			if (kept != null && kept.body != null && kept.body == cachedOriginal(id)) {
@@ -930,7 +935,7 @@ class IrInliner implements IrFactSource {
 			entry = new IrStageEntry(inputVersions[id], reads, cleaned, outputVersions[id], 0, null);
 			forms.keep(outputVersions[id], inlined == null ? IrInlinedForm.NONE : new IrInlinedForm(inlined));
 		}
-		memo.keep(functions[id].name, entry);
+		memo.keep(slots[id], entry);
 	}
 
 	/** Function `id`'s inlined form, null when no caller may splice it (`IrInlinedForm`). */

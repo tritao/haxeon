@@ -2,6 +2,7 @@ package compiler.ir.reuse;
 
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrFunctionSlots;
 import compiler.ir.pipeline.IrFunctionPass.IrStageRequest;
 
 /** What one stage made of one function in a build, and what that rested on (`IrStageMemo`). */
@@ -40,13 +41,13 @@ class IrStageEntry {
 }
 
 /**
- * One assembly stage's memo in a session: by function name, what the stage made of the function when it last ran
- * (`IrStageEntry`). An entry reused is not written again; one the stage did not use in its last run is dropped as the next run
+ * One assembly stage's memo in a session: by function slot (`IrLineage.slots`), what the stage made of the function when it last
+ * ran (`IrStageEntry`). An entry reused is not written again; one the stage did not use in its last run is dropped as the next run
  * starts, so a function the program lost drops out one build later.
  */
 @:nullSafety(Strict)
 class IrStageMemo {
-	final entries:Map<String, IrStageEntry> = [];
+	final entries:Array<Null<IrStageEntry>> = [];
 
 	var count = 0;
 	var keptLastRun = 0;
@@ -67,29 +68,40 @@ class IrStageMemo {
 		build = forBuild;
 		keptLastRun = kept;
 		kept = 0;
-		if (count > keptLastRun) {
-			var stale = [for (name => entry in entries) if (entry.used < lastRun) name];
-			for (name in stale)
-				entries.remove(name);
-			count -= stale.length;
-		}
+		if (count > keptLastRun)
+			for (slot in 0...entries.length) {
+				var entry = entries[slot];
+				if (entry != null && entry.used < lastRun) {
+					entries[slot] = null;
+					count--;
+				}
+			}
 	}
 
-	/** The entry for `name` from an earlier run, or null. */
-	public inline function last(name:String):Null<IrStageEntry>
-		return entries.get(name);
+	/** The entry for the function of `slot` from an earlier run, or null. */
+	public inline function last(slot:Int):Null<IrStageEntry>
+		return slot < entries.length ? entries[slot] : null;
 
-	/** Records `entry` as this run's for `name`. */
-	public function keep(name:String, entry:IrStageEntry):Void {
-		var known = entries.get(name);
+	/** Records `entry` as this run's for the function of `slot`. */
+	public function keep(slot:Int, entry:IrStageEntry):Void {
+		var known = last(slot);
 		if (known == null)
 			count++;
 		if (known != entry)
-			entries.set(name, entry);
+			entries[slot] = entry;
 		entry.used = build;
 		kept++;
 	}
+
+	/** Forgets the entry of `slot`, whose name is gone (`IrLineage.sweep`). */
+	public function drop(slot:Int):Void {
+		if (last(slot) != null) {
+			entries[slot] = null;
+			count--;
+		}
+	}
 }
+
 /**
  * The per-function memos of the assembly stages in a session (docs/design/QUERY_ENGINE.md, the passes in pipeline order): one
  * `IrStageMemo` per stage, the facts they read (`IrFacts`) and the versions they key on (`IrFunctionVersions`). The copies of the
@@ -170,6 +182,12 @@ class IrStageMemos {
 			memo.begin(build);
 	}
 
+	/** Forgets the entries of `slots` in every stage's memo: their names are gone, and the slots are given to other names. */
+	public function dropSlots(slots:Array<Int>):Void
+		for (memo in stages)
+			for (slot in slots)
+				memo.drop(slot);
+
 	/** The memo of `stage`, started for this build. */
 	public function stage(name:String):IrStageMemo {
 		var memo = stages.get(name);
@@ -182,28 +200,11 @@ class IrStageMemos {
 	}
 }
 
-/** A function's place in the lineage: the function a name stands for in this build, and its version. */
-@:nullSafety(Strict)
-class IrLineageCell {
-	public var fn:IrFunction;
-	public var version:Int;
-	public var build:Int;
-
-	/** The last settling that found the name in the program (`IrLineage.settle`). */
-	public var seen = 0;
-
-	public function new(fn:IrFunction, version:Int, build:Int) {
-		this.fn = fn;
-		this.version = version;
-		this.build = build;
-	}
-}
-
 /**
  * The version of each function of the program under assembly, from the generator's (`ModuleState.irVersions`) through each stage
  * before the encode point: a function a stage leaves alone keeps its version, one it changes takes the version its memo has for
- * what it made, or a new one. The session keeps one (`IrStageMemos.lineage`), whose cells each build updates in place; a version
- * names one function object, so a cell left from another build is never wrong.
+ * what it made, or a new one. The session keeps one (`IrStageMemos.lineage`), whose cells, one per function slot (`slots`), each
+ * build updates in place; a version names one function object, so a cell left from another build is never wrong.
  */
 @:nullSafety(Strict)
 class IrLineage {
@@ -217,6 +218,9 @@ class IrLineage {
 	public static inline final INPUT = "assembly-input";
 
 	public final memos:IrStageMemos;
+
+	/** The slots of the function names, which the cells and the stage memos are indexed by. */
+	public final slots = new IrFunctionSlots();
 
 	/** `--check-reuse`: what a contribution memo reuses is computed again and compared. */
 	public var checks(default, null) = false;
@@ -232,7 +236,12 @@ class IrLineage {
 	public function enterBodies():Void
 		bodies = true;
 
-	final cells:Map<String, IrLineageCell> = [];
+	// The cells, by slot: the function the name stands for in build `cellBuilds`, its version, and the last settling that found
+	// the name in the program (`settle`).
+	final cellFunctions:Array<Null<IrFunction>> = [];
+	final cellVersions:Array<Int> = [];
+	final cellBuilds:Array<Int> = [];
+	final cellSeen:Array<Int> = [];
 	var cellCount = 0;
 
 	/** How many names stand for a function in this build. */
@@ -268,24 +277,36 @@ class IrLineage {
 		return lineage;
 	}
 
-	/** Drops the cells no function had in the last build. */
+	/** Frees the slots no function had in the last build, with their cells and their entries in the stage memos. */
 	function sweep():Void {
-		var stale = [for (name => cell in cells) if (cell.build < memos.build - 1) name];
-		for (name in stale)
-			cells.remove(name);
-		cellCount -= stale.length;
+		var stale:Array<Int> = [], before = memos.build - 1;
+		for (slot in 0...slots.count)
+			if (slots.used(slot) && (slot >= cellBuilds.length || cellBuilds[slot] < before)) {
+				stale.push(slot);
+				if (slot < cellFunctions.length && cellFunctions[slot] != null) {
+					cellFunctions[slot] = null;
+					cellBuilds[slot] = 0;
+					cellCount--;
+				}
+			}
+		memos.dropSlots(stale);
+		slots.free(stale);
 	}
+
+	/** The version of the function of `slot` as the stages stand; 0 when it has none. */
+	public inline function versionAt(slot:Int):Int
+		return slot < cellBuilds.length && cellBuilds[slot] == memos.build ? cellVersions[slot] : 0;
 
 	/** The version of `fn` when it is the function its name stands for in this build; 0 otherwise. */
 	public function versionOf(fn:IrFunction):Int {
-		var cell = cells.get(fn.name);
-		return cell != null && cell.fn == fn && cell.build == memos.build ? cell.version : 0;
+		var slot = slots.known(fn);
+		return slot >= 0 && slot < cellFunctions.length && cellFunctions[slot] == fn ? versionAt(slot) : 0;
 	}
 
 	/** The version of the function named `name` as the stages stand; 0 when it has none. */
 	public function version(name:String):Int {
-		var cell = cells.get(name);
-		return cell == null || cell.build != memos.build ? 0 : cell.version;
+		var slot = slots.knownNamed(name);
+		return slot < 0 ? 0 : versionAt(slot);
 	}
 
 	/**
@@ -293,9 +314,13 @@ class IrLineage {
 	 * (`IrFunctionIndex`). Within a stage that rewrites functions one by one, one it already rewrote is its rewritten form.
 	 */
 	public function named(name:String):Null<IrFunction> {
-		var cell = cells.get(name);
-		return cell == null || cell.build != memos.build ? null : cell.fn;
+		var slot = slots.knownNamed(name);
+		return slot < 0 || !standsAt(slot) ? null : cellFunctions[slot];
 	}
+
+	/** Whether a function stands for the name of `slot` in this build. */
+	inline function standsAt(slot:Int):Bool
+		return slot < cellBuilds.length && cellBuilds[slot] == memos.build;
 
 	/** `--check-reuse`: the names that stand for a function are those of `functions`, as `pass` indexes them through `named`. */
 	public function checkIndex(pass:String, functions:Array<IrFunction>):Void {
@@ -309,19 +334,20 @@ class IrLineage {
 	}
 
 	/** Records `version` as the version of `fn`. */
-	public function set(fn:IrFunction, version:Int):Void {
-		var cell = cells.get(fn.name);
-		if (cell == null) {
-			cells.set(fn.name, new IrLineageCell(fn, version, memos.build));
+	public function set(fn:IrFunction, version:Int):Void
+		setAt(slots.of(fn), fn, version);
+
+	function setAt(slot:Int, fn:IrFunction, version:Int):Void {
+		if (slot >= cellFunctions.length || cellFunctions[slot] == null) {
 			cellCount++;
 			live++;
-		} else {
-			if (cell.build != memos.build)
-				live++;
-			cell.fn = fn;
-			cell.version = version;
-			cell.build = memos.build;
-		}
+		} else if (cellBuilds[slot] != memos.build)
+			live++;
+		cellFunctions[slot] = fn;
+		cellVersions[slot] = version;
+		cellBuilds[slot] = memos.build;
+		if (slot >= cellSeen.length)
+			cellSeen[slot] = 0;
 	}
 
 	/**
@@ -330,40 +356,40 @@ class IrLineage {
 	 * is changed in place.
 	 */
 	public function settle(stage:String, functions:Array<IrFunction>):Void {
-		var memo:Null<IrStageMemo> = null, mark = ++settling;
+		var memo:Null<IrStageMemo> = null, mark = ++settling, build = memos.build;
 		for (index in 0...functions.length) {
-			var fn = functions[index], cell = cells.get(fn.name);
-			if (bodies) {
-				if (cell == null || cell.fn != fn || cell.build != memos.build) {
-					set(fn, memos.versions.next());
-					cell = cells.get(fn.name);
+			var fn = functions[index], slot = slots.of(fn);
+			if (slot >= cellFunctions.length || cellFunctions[slot] != fn || cellBuilds[slot] != build) {
+				if (bodies)
+					setAt(slot, fn, memos.versions.next());
+				else {
+					if (memo == null)
+						memo = memos.stage(stage);
+					functions[index] = settleAt(memo, slot, fn, versionAt(slot));
 				}
-			} else if (cell == null || cell.fn != fn || cell.build != memos.build) {
-				if (memo == null)
-					memo = memos.stage(stage);
-				functions[index] = settleOne(memo, fn, version(fn.name));
-				cell = cells.get(fn.name);
 			}
-			if (cell != null)
-				cell.seen = mark;
+			cellSeen[slot] = mark;
 		}
 		// A name the stage dropped stands for nothing from here on.
 		if (live > functions.length) {
-			for (cell in cells)
-				if (cell.build == memos.build && cell.seen != mark)
-					cell.build = 0;
+			for (slot in 0...cellFunctions.length)
+				if (cellBuilds[slot] == build && cellSeen[slot] != mark)
+					cellBuilds[slot] = 0;
 			live = functions.length;
 		}
 	}
 
 	/** `fn`, made from the function of version `input` (0 for none), settled with `memo` and recorded. */
-	public function settleOne(memo:IrStageMemo, fn:IrFunction, input:Int):IrFunction {
-		var entry = memo.last(fn.name);
+	public function settleOne(memo:IrStageMemo, fn:IrFunction, input:Int):IrFunction
+		return settleAt(memo, slots.of(fn), fn, input);
+
+	function settleAt(memo:IrStageMemo, slot:Int, fn:IrFunction, input:Int):IrFunction {
+		var entry = memo.last(slot);
 		if (entry == null || entry.input != input
 			|| !compiler.ir.codec.IrFunctionStateEquality.same(entry.output, fn))
 			entry = new IrStageEntry(input, NO_FACTS, fn, memos.versions.next(), 0, null);
-		memo.keep(fn.name, entry);
-		set(entry.output, entry.outputVersion);
+		memo.keep(slot, entry);
+		setAt(slot, entry.output, entry.outputVersion);
 		return entry.output;
 	}
 }

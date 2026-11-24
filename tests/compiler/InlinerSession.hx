@@ -29,7 +29,7 @@ class InlinerSession {
 
 	/** The stage memo's entry for `name`, as the last build left it. */
 	public function entry(name:String):Null<IrStageEntry>
-		return memos.stage("inliner").last(name);
+		return memos.stage("inliner").last(memos.lineage.slots.named(name));
 
 	/** A speculative build's session: a copy of the cache, the memos shared, as a candidate state shares them. */
 	public function copy():InlinerSession

@@ -5,6 +5,7 @@ import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.model.Ir;
+import compiler.ir.model.IrFunctionSlots.IrSlotEpoch;
 
 /** Source binding identity, lexical range, and SSA value after mutable stores vanish. */
 typedef IrDebugBinding = {
@@ -95,6 +96,7 @@ enum IrFunctionKind {
  * body replaces this one, which is not read again. A stage given a frozen body edits a copy.
  */
 @:allow(compiler.ir.model.IrBody)
+@:allow(compiler.ir.model.IrFunctionSlots)
 @:nullSafety(Strict)
 class IrFunction {
 	public final name:String;
@@ -116,6 +118,11 @@ class IrFunction {
 	 * counted, `CENSUS_READ` once its blocks or body were read since the census cleared it. Diagnostics only: nothing decides on it.
 	 */
 	public var census = 0;
+
+	/** Its name's slot in a session's numbering (`IrFunctionSlots.of`), valid while that numbering is at `slotEpoch`. */
+	var slot = -1;
+
+	var slotEpoch:Null<IrSlotEpoch> = null;
 
 	public static inline final CENSUS_INPUT = 1;
 	public static inline final CENSUS_READ = 2;
