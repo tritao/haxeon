@@ -351,13 +351,14 @@ const sample = record[0]
 
       function receive(event: MessageEvent) {
         if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
-        if (event.data === 'haxeon-circuit-run-ready') {
+        if (event.data?.type !== 'haxeon-app') return;
+        if (event.data.state === 'ready') {
           window.clearTimeout(timeout);
           wrapper.dataset.running = '';
           status.hidden = true;
           start.hidden = true;
           frame.contentDocument?.querySelector('canvas')?.focus();
-        } else if (event.data === 'haxeon-circuit-run-failed') {
+        } else if (event.data.state === 'failed') {
           failed();
         }
       }

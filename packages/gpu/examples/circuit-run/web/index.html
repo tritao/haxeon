@@ -15,17 +15,12 @@
     import { module } from "./haxeon-build.js";
     const canvas = document.querySelector("#canvas");
     const status = document.querySelector("#status");
-    // A page that embeds the game, such as the website, waits for these before revealing it.
-    const notifyParent = state => {
-        if (parent !== window) parent.postMessage("haxeon-circuit-run-" + state, location.origin);
-    };
     const fail = error => {
         status.hidden = false;
         status.textContent = error.message;
-        notifyParent("failed");
     };
     HaxeonWasmHost.mountApp(module, canvas, {
-        onPresented() { status.hidden = true; canvas.focus(); notifyParent("ready"); },
+        onPresented() { status.hidden = true; canvas.focus(); },
         onStopped() { status.hidden = false; status.textContent = "Circuit Run closed"; },
         onError: fail
     }).catch(fail);

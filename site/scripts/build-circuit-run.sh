@@ -3,14 +3,18 @@ set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 nativekit="$root/vendor/nativekit"
-build="$root/out/site-circuit-run"
+app="$root/packages/gpu/examples/circuit-run"
 destination="$root/site/dist/gpu/circuit-run"
 
-if [[ ! -f "$nativekit/.tools/emsdk/emsdk_env.sh" ]]; then
-    "$nativekit/tools/setup-web.sh"
+# The app links the SDK's WebGL2 host, which needs Emscripten to build.
+if [[ ! -f "$root/out/sdk/platforms/web/ui/nativekit_haxeon_memory_contract.json" ]]; then
+    if [[ ! -f "$nativekit/.tools/emsdk/emsdk_env.sh" ]]; then
+        "$nativekit/tools/setup-web.sh"
+    fi
+    "$root/scripts/build-web-sdk.sh"
 fi
-CIRCUIT_RUN_WEB_BUILD_DIR="$build" CMAKE_BUILD_PARALLEL_LEVEL="${BUILD_JOBS:-2}" \
-    "$root/packages/gpu/examples/circuit-run/web/build.sh"
+(cd "$app" && "$root/scripts/haxeon" build --target wasm32 --jobs "${BUILD_JOBS:-2}")
 
+rm -rf "$destination"
 mkdir -p "$destination"
-cp "$build"/{index.html,circuit_run.js,circuit_run.wasm,circuit_run.data,circuit_run_guest.wasm,haxeon-host.js,nativekit_haxeon_memory_contract.json} "$destination/"
+cp -R "$app/build/web/wasm32/." "$destination/"

@@ -206,6 +206,16 @@ var HaxeonWasmHost = (() => {
     return {instance, memory};
   }
 
+  /**
+   * Publishes the app's state ("ready", "stopped" or "failed") on the page's root element and, when the page is
+   * embedded, to a same-origin parent, so an embedding page can reveal or replace the app without app-specific code.
+   */
+  function announce(state) {
+    document.documentElement.dataset.haxeonApp = state;
+    if (window.parent !== window && location.origin !== "null")
+      window.parent.postMessage({type: "haxeon-app", state}, location.origin);
+  }
+
   /** Schedules the single platform loop registered by the guest's main. */
   function runApp(exports, {onPresented, onFrame, onStopped, onError} = {}) {
     const tick = exports["haxeon.platform.BrowserHost.tick"];
@@ -216,18 +226,21 @@ var HaxeonWasmHost = (() => {
       try {
         const status = tick();
         if (status === 2) {
+          announce("stopped");
           onStopped?.();
           return;
         }
         if (status === 1) {
           if (!presented) {
             presented = true;
+            announce("ready");
             onPresented?.();
           }
           onFrame?.(exports);
         }
         requestAnimationFrame(advance);
       } catch (error) {
+        announce("failed");
         if (onError) onError(error);
         else throw error;
       }
@@ -237,6 +250,15 @@ var HaxeonWasmHost = (() => {
 
   /** Loads the SDK's WebGL2 host and starts a managed app on its canvas. */
   async function mountApp(module, canvas, callbacks) {
+    try {
+      return await loadAndRun(module, canvas, callbacks);
+    } catch (error) {
+      announce("failed");
+      throw error;
+    }
+  }
+
+  async function loadAndRun(module, canvas, callbacks) {
     const hostUrl = new URL("./ui/nativekit_ui_haxeon.js", document.baseURI);
     let memory;
     const emscripten = await new Promise((resolve, reject) => {
