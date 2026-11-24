@@ -145,8 +145,18 @@ function firstApp(root:String, project:String):Void {
 	if (hasXvfb()) {
 		var executable = appFiles(Path.join([project, "build", PLATFORM, "app"])).executable;
 		log = Path.join([project, "idle-frames.log"]);
-		expectStatus(Script.run("xvfb-run", ["-a", "timeout", "20", executable, "--frames=10"],
-			{cwd: project, log: log}), 0, log, "running an idle window for ten frames without capture");
+		var idle = Script.run("xvfb-run", ["-a", "timeout", "20", executable, "--frames=10"], {cwd: project, log: log});
+		// A hang leaves an empty log, so the log becomes a second run under gdb showing where each thread waits.
+		if (idle == 124 && Script.run("sh", ["-c", "command -v gdb >/dev/null"]) == 0)
+			Script.run("xvfb-run", [
+				"-a", "timeout", "-s", "INT", "20", "gdb", "-batch", "-ex",
+				"handle SIGSEGV SIGBUS SIGFPE SIGPIPE nostop noprint pass",
+				"-ex", "run", "-ex", "thread apply all bt", "--args", executable, "--frames=10"
+			], {
+				cwd: project,
+				log: log
+			});
+		expectStatus(idle, 0, log, "running an idle window for ten frames without capture");
 
 		if (Script.run("sh", ["-c", "command -v xmessage && command -v xwininfo"], {log: log}) == 0) {
 			log = Path.join([project, "capture-window.log"]);
