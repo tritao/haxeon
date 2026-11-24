@@ -12,9 +12,9 @@ const gpuDocs = repositorySource('packages/gpu/README.md');
 const circuit = 'packages/gpu/examples/circuit-run/';
 const backends: { platform: string; api: string; status: Status; compute: string; timestamps: string }[] = [
   { platform: 'Linux', api: 'OpenGL 3.3 core', status: 'Supported', compute: 'GL 4.3+ drivers', timestamps: 'Yes' },
-  { platform: 'Web', api: 'WebGL2', status: 'Experimental', compute: 'No', timestamps: 'No' },
-  { platform: 'macOS', api: 'Metal', status: 'Experimental', compute: 'Yes', timestamps: 'Depends on GPU' },
-  { platform: 'Windows', api: 'Direct3D 11', status: 'Experimental', compute: 'Yes', timestamps: 'Yes' },
+  { platform: 'Web', api: 'WebGL2', status: 'Supported', compute: 'No', timestamps: 'No' },
+  { platform: 'macOS', api: 'Metal', status: 'Supported', compute: 'Yes', timestamps: 'Depends on GPU' },
+  { platform: 'Windows', api: 'Direct3D 11', status: 'Supported', compute: 'Yes', timestamps: 'Yes' },
   { platform: 'Web', api: 'WebGPU', status: 'Planned', compute: '–', timestamps: '–' },
   { platform: 'Linux, Windows', api: 'Vulkan', status: 'Planned', compute: '–', timestamps: '–' },
 ];
@@ -71,8 +71,8 @@ const sample = record[0]
         <div class="head">
           <h1 id="_top" tabindex="-1">A portable GPU layer, built in.</h1>
           <p class="lede">Add your own drawing to an app: charts, maps, editor viewports, games and compute work. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
-          <ul class="chips" aria-label="Graphics backends">
-            {available.map(({ api, status }) => <li><StatusBadge status={status}>{api} · {status}</StatusBadge></li>)}
+          <ul class="chips" aria-label="Supported graphics backends">
+            {available.map(({ api, status }) => <li><StatusBadge status={status}>{api}</StatusBadge></li>)}
           </ul>
           <p>The GPU package is not a game engine. It has no scene graph, asset pipeline or physics.</p>
           <div class="ctas">
