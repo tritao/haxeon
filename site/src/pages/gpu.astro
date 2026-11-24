@@ -7,6 +7,7 @@ import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleMain from '../../../packages/gpu/examples/triangle/src/Main.hx?raw';
 import triangleShader from '../../../packages/gpu/examples/triangle/src/shaders/Triangle.glsl?raw';
 import particlesMain from '../../../packages/gpu/examples/particles/src/Main.hx?raw';
+import particlesShader from '../../../packages/gpu/examples/particles/src/shaders/Particles.glsl?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
@@ -31,6 +32,8 @@ const method = (source: string, name: string) => {
 const ready = method(triangleMain, 'ready');
 const frame = method(triangleMain, 'frame');
 const computeFrame = method(particlesMain, 'frame');
+const computeStage = particlesShader.match(/^@cs step_cs\n[\s\S]*?^@end$/m);
+if (!computeStage) throw new Error('Missing the compute stage in the Particles shader');
 
 // The build generates shaders.Triangle; scripts/build-gpu-modules.sh copies it here before the site builds.
 const generatedModules = import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true });
@@ -203,10 +206,18 @@ const appLines = triangleMain.trimEnd().split('\n').length;
           <h2>Compute</h2>
           <p class="lede">The Particles example moves 8,192 particles with a compute shader, then draws them from the same storage buffer. Nothing goes back to the CPU.</p>
         </div>
-        <div class="grid first-frame">
+        <div class="grid compute-intro">
           <figure>
             <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
           </figure>
+          <ol class="steps">
+            <li><h3>Step</h3><p>A compute shader moves each particle in a storage buffer and relaunches the ones that fall below the window.</p></li>
+            <li><h3>Draw</h3><p>The vertex shader reads the same buffer and places one small quad per particle. There is no vertex buffer.</p></li>
+            <li><h3>Submit</h3><p>One batch holds a compute pass and then the window pass. Nothing comes back to the CPU.</p></li>
+          </ol>
+        </div>
+        <div class="grid first-frame compute-code">
+          <CodeCard code={computeStage[0]} lang="sokol-shdc" title="Compute stage · src/shaders/Particles.glsl" />
           <CodeCard code={computeFrame} lang="haxe" title="Each frame · src/Main.hx" />
         </div>
         <p class="note"><a href={repositorySource(particles + 'src/shaders/Particles.glsl')}>Read the shaders</a> · <a href={repositorySource(particles + 'README.md')}>Run it</a></p>
@@ -298,6 +309,24 @@ const appLines = triangleMain.trimEnd().split('\n').length;
   .shader-flow span { padding: 4px 10px; border: 1px solid var(--sl-color-gray-5); border-radius: var(--hx-radius-s); background: var(--sl-color-bg-sidebar); }
   .nowrap { white-space: nowrap; }
   .first-frame { align-items: start; }
+  .compute-intro { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: center; }
+  .compute-code { margin-top: var(--hx-space-5); }
+  .steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; gap: var(--hx-space-5); }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); column-gap: var(--hx-space-3); margin: 0; }
+  .steps li::before {
+    content: counter(step);
+    grid-row: span 2;
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--hx-radius-pill);
+    background: var(--sl-color-accent-low);
+    color: var(--sl-color-white);
+    font: 600 1rem var(--sl-font-mono);
+  }
+  .steps h3 { margin: 0 0 var(--hx-space-1); }
+  .steps p { margin: 0; color: var(--sl-color-gray-2); }
   .stack { display: grid; gap: var(--hx-space-5); align-content: start; }
   .api-name { display: block; font-weight: 400; font-size: 0.85rem; color: var(--sl-color-gray-3); }
   .api { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: stretch; }
