@@ -501,14 +501,15 @@ typer's drain order) and 5 (live pruning).
   collections are a small part (about 4% of its instructions). The edit adds
   a function (the constructor's nullable-scalar adapter), so the dense
   function, string and type indices after it move and about 2,800 functions
-  are relinked and encoded again (see "A new constant or global relinks the
-  functions after it" in WARM_REBUILD_REUSE.md). Per function, load/store
-  forwarding's field dataflow is the inliner's largest part.
-- **Whole-program link and walk in every build.** Linking asks every
-  function's requests of fresh tables (`HlRequestAnswers`, mostly
-  `internTypeByKey`) and the plain build walks reachability again
-  (`HlPlainBuild.reachable`, unlike the IR stages' kept walks): about 8% and
-  5% of a body edit's samples.
+  are relinked and encoded again, against fresh tables (see "A new constant,
+  global or function relinks the functions after it" in WARM_REBUILD_REUSE.md,
+  which says why this stays). Per function, load/store forwarding's field
+  dataflow is the inliner's largest part.
+- **What a kept build still does per function:** `HlLoweringView.holds`
+  checks every kept function's facts (about 1% of a body edit), and the
+  metadata tables are interned afresh and compared with the kept ones
+  (`HlLinkRecord.fits`). A change to a String constant's literal also asks
+  every String constant again.
 - **The body edit outside IR assembly:** whole-program purity inference (the
   recorded reads give the exact "declarations unchanged" signal a
   per-function memo needs), IR generation, the ABI description, generated

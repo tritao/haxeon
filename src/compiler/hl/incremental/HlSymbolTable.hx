@@ -28,6 +28,15 @@ typedef HlNamedSlots = {
 	final slots:Array<HlNamedIndex>;
 }
 
+/** How many entries each table has. */
+typedef HlTableLengths = {
+	final ints:Int;
+	final floats:Int;
+	final strings:Int;
+	final types:Int;
+	final globals:Int;
+}
+
 /** Complete persistable state of the HashLink symbol tables. */
 typedef HlSymbolState = {
 	final ints:Array<Int>;
@@ -75,7 +84,19 @@ class HlSymbolTable {
 	/** The literal globals in index order, so a build reads only these and a patch only the ones past the published globals. */
 	var stringConstants:Array<{global:Int, value:String}> = [];
 
-	var shared = false;
+	/**
+	 * The groups of tables this table shares with a fork (`fork`): a group is copied before its first change, so changing one
+	 * table copies only its own.
+	 */
+	var shared = 0;
+
+	static inline final INTS = 1;
+	static inline final FLOATS = 2;
+	static inline final STRINGS = 4;
+	static inline final TYPES = 8;
+	static inline final GLOBALS = 16;
+	static inline final OBJECTS = 32;
+	static inline final ALL = 63;
 
 	public function new() {}
 
@@ -117,34 +138,202 @@ class HlSymbolTable {
 		result.objectMethodIndices = objectMethodIndices;
 		result.interfaceMethodIndices = interfaceMethodIndices;
 		result.pendingTypes = pendingTypes;
-		shared = true;
-		result.shared = true;
+		shared = ALL;
+		result.shared = ALL;
 		return result;
 	}
 
-	function ensureWritable():Void {
-		if (!shared)
+	/**
+	 * Makes this table a fork of `other` (see `fork`), dropping what it held: a build that keeps the last build's tables
+	 * (`HlLinkRecord`) works on them without changing them for the tables that hold them.
+	 */
+	public function shareFrom(other:HlSymbolTable):Void {
+		var forked = other.fork();
+		ints = forked.ints;
+		strings = forked.strings;
+		floats = forked.floats;
+		types = forked.types;
+		globals = forked.globals;
+		intIndices = forked.intIndices;
+		stringIndices = forked.stringIndices;
+		floatIndices = forked.floatIndices;
+		typeIndices = forked.typeIndices;
+		typeIndex = new IrTypeMap();
+		globalIndices = forked.globalIndices;
+		stringConstants = forked.stringConstants;
+		objectIndices = forked.objectIndices;
+		objectMethodIndices = forked.objectMethodIndices;
+		interfaceMethodIndices = forked.interfaceMethodIndices;
+		pendingTypes = forked.pendingTypes;
+		pendingEnumCaseCounts.clear();
+		shared = ALL;
+	}
+
+	/** Empties the table, as a new one is. */
+	public function clear():Void
+		shareFrom(new HlSymbolTable());
+
+	/**
+	 * Puts the leaf entry at `from` of `table` (`HlRequestKeys.INTS`, `FLOATS`, `STRINGS`, or `GLOBALS` for a String constant's
+	 * global) at `to` instead of the entry there, which no longer exists; `from` is left for `truncate`. The entries are leaves:
+	 * no other entry refers to them (`HlLinkRecord`).
+	 */
+	public function replaceLeaf(table:Int, from:Int, to:Int):Void {
+		writable(switch table {
+			case HlRequestKeys.INTS: INTS;
+			case HlRequestKeys.FLOATS: FLOATS;
+			case HlRequestKeys.STRINGS: STRINGS;
+			default: GLOBALS;
+		});
+		switch table {
+			case HlRequestKeys.INTS:
+				intIndices.remove(ints[to]);
+				ints[to] = ints[from];
+				intIndices.set(ints[to], to);
+			case HlRequestKeys.FLOATS:
+				floatIndices.remove(floatKey(floats[to]));
+				floats[to] = floats[from];
+				floatIndices.set(floatKey(floats[to]), to);
+			case HlRequestKeys.STRINGS:
+				stringIndices.remove(strings[to]);
+				strings[to] = strings[from];
+				stringIndices.set(strings[to], to);
+			case HlRequestKeys.GLOBALS:
+				var removed = stringConstantAt(to), moved = stringConstantAt(from);
+				if (removed < 0 || moved < 0)
+					throw new InternalError('global $to or $from holds no String constant');
+				var value = stringConstants[moved].value;
+				globalIndices.remove(STRING_CONSTANT_PREFIX + stringConstants[removed].value);
+				globalIndices.set(STRING_CONSTANT_PREFIX + value, to);
+				globals[to] = globals[from];
+				stringConstants[removed] = {global: to, value: value};
+			default:
+				throw new InternalError('table $table has no leaf entries');
+		}
+	}
+
+	/** Drops the entries past these lengths, which `replaceLeaf` moved elsewhere (their keys name their new places). */
+	public function truncate(lengths:HlTableLengths):Void {
+		if (ints.length > lengths.ints) {
+			writable(INTS);
+			ints.resize(lengths.ints);
+		}
+		if (floats.length > lengths.floats) {
+			writable(FLOATS);
+			floats.resize(lengths.floats);
+		}
+		if (strings.length > lengths.strings) {
+			writable(STRINGS);
+			strings.resize(lengths.strings);
+		}
+		if (types.length > lengths.types) {
+			writable(TYPES);
+			types.resize(lengths.types);
+		}
+		if (globals.length > lengths.globals) {
+			writable(GLOBALS);
+			globals.resize(lengths.globals);
+			while (stringConstants.length > 0 && stringConstants[stringConstants.length - 1].global >= lengths.globals)
+				stringConstants.pop();
+		}
+	}
+
+	public function lengths():HlTableLengths
+		return {
+			ints: ints.length,
+			floats: floats.length,
+			strings: strings.length,
+			types: types.length,
+			globals: globals.length
+		};
+
+	/** Whether a type names string `index` (as its name or a field's), so that string is not a leaf. */
+	public function typesName(index:Int):Bool {
+		for (type in types)
+			switch type {
+				case Abstract(name) if (name == index):
+					return true;
+				case Object(name, _, _, fields, methods, _) | Structure(name, _, fields, methods, _):
+					if (name == index)
+						return true;
+					for (field in fields)
+						if (field.name == index)
+							return true;
+					for (method in methods)
+						if (method.name == index)
+							return true;
+				case Virtual(name, fields):
+					if (name == index)
+						return true;
+					for (field in fields)
+						if (field.name == index)
+							return true;
+				case Enum(name, _, constructors):
+					if (name == index)
+						return true;
+					for (constructor in constructors)
+						if (constructor.name == index)
+							return true;
+				default:
+			}
+		return false;
+	}
+
+	/** The position in `stringConstants` of the one of global `global`, or -1. */
+	function stringConstantAt(global:Int):Int {
+		var low = 0, high = stringConstants.length - 1;
+		while (low <= high) {
+			var middle = (low + high) >> 1, at = stringConstants[middle].global;
+			if (at == global)
+				return middle;
+			if (at < global)
+				low = middle + 1;
+			else
+				high = middle - 1;
+		}
+		return -1;
+	}
+
+	function ensureWritable():Void
+		writable(ALL);
+
+	/** Copies the groups of `groups` this table shares, so changing them leaves the tables it shares them with as they are. */
+	function writable(groups:Int):Void {
+		var copied = shared & groups;
+		if (copied == 0)
 			return;
-		ints = ints.copy();
-		strings = strings.copy();
-		floats = floats.copy();
-		types = types.copy();
-		globals = globals.copy();
-		intIndices = [for (key => value in intIndices) key => value];
-		stringIndices = [for (key => value in stringIndices) key => value];
-		floatIndices = [for (key => value in floatIndices) key => value];
-		typeIndices = [for (key => value in typeIndices) key => value];
-		globalIndices = [for (key => value in globalIndices) key => value];
-		stringConstants = stringConstants.copy();
-		objectIndices = [for (key => value in objectIndices) key => value];
-		var objectMethods:Map<String, Map<String, Int>> = [],
-			interfaceMethods:Map<String, Map<String, Int>> = [];
-		copyNestedMap(objectMethodIndices, objectMethods);
-		copyNestedMap(interfaceMethodIndices, interfaceMethods);
-		objectMethodIndices = objectMethods;
-		interfaceMethodIndices = interfaceMethods;
-		pendingTypes = [for (key => value in pendingTypes) key => value];
-		shared = false;
+		if (copied & INTS != 0) {
+			ints = ints.copy();
+			intIndices = [for (key => value in intIndices) key => value];
+		}
+		if (copied & FLOATS != 0) {
+			floats = floats.copy();
+			floatIndices = [for (key => value in floatIndices) key => value];
+		}
+		if (copied & STRINGS != 0) {
+			strings = strings.copy();
+			stringIndices = [for (key => value in stringIndices) key => value];
+		}
+		if (copied & TYPES != 0) {
+			types = types.copy();
+			typeIndices = [for (key => value in typeIndices) key => value];
+			pendingTypes = [for (key => value in pendingTypes) key => value];
+		}
+		if (copied & GLOBALS != 0) {
+			globals = globals.copy();
+			globalIndices = [for (key => value in globalIndices) key => value];
+			stringConstants = stringConstants.copy();
+		}
+		if (copied & OBJECTS != 0) {
+			objectIndices = [for (key => value in objectIndices) key => value];
+			var objectMethods:Map<String, Map<String, Int>> = [],
+				interfaceMethods:Map<String, Map<String, Int>> = [];
+			copyNestedMap(objectMethodIndices, objectMethods);
+			copyNestedMap(interfaceMethodIndices, interfaceMethods);
+			objectMethodIndices = objectMethods;
+			interfaceMethodIndices = interfaceMethods;
+		}
+		shared &= ~copied;
 	}
 
 	public function exportState():HlSymbolState
@@ -246,7 +435,7 @@ class HlSymbolTable {
 	public function internInt(value:Int):Int {
 		if (intIndices.exists(value))
 			return intIndices.get(value);
-		ensureWritable();
+		writable(INTS);
 		var index = ints.length;
 		ints.push(value);
 		intIndices.set(value, index);
@@ -256,7 +445,7 @@ class HlSymbolTable {
 	public function internString(value:String):Int {
 		if (stringIndices.exists(value))
 			return stringIndices.get(value);
-		ensureWritable();
+		writable(STRINGS);
 		var index = strings.length;
 		strings.push(value);
 		stringIndices.set(value, index);
@@ -272,7 +461,7 @@ class HlSymbolTable {
 		var key = floatKey(value);
 		if (floatIndices.exists(key))
 			return floatIndices.get(key);
-		ensureWritable();
+		writable(FLOATS);
 		var index = floats.length;
 		floats.push(value);
 		floatIndices.set(key, index);
@@ -297,7 +486,7 @@ class HlSymbolTable {
 		var key = "ref:" + typeKey;
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
-		ensureWritable();
+		writable(TYPES);
 		var parameter = internType(type), index = types.length;
 		types.push(HlTypeDef.Parameterized(HlType.Ref, parameter));
 		typeIndices.set(key, index);
@@ -308,7 +497,7 @@ class HlSymbolTable {
 	public function internScalarEnumTag(name:String):Void {
 		var key = typeKey(EnumTag(name));
 		if (typeIndices.exists(key)) return;
-		ensureWritable();
+		writable(TYPES);
 		typeIndices.set(key, internType(I32));
 	}
 
@@ -331,7 +520,7 @@ class HlSymbolTable {
 	function internTypeByKey(type:IrType, key:String):Int {
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
-		ensureWritable();
+		writable(TYPES);
 		switch type {
 			case Abstract(_) if (compiler.ir.passes.scalars.IrHlScalarRef.element(type) != null):
 				var index = internReference(compiler.ir.passes.scalars.IrHlScalarRef.element(type));
@@ -443,6 +632,7 @@ class HlSymbolTable {
 		var key = 'runtime-header:' + Std.string(kind);
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
+		writable(TYPES);
 		var fields:Array<HlObjectField> = switch kind {
 			case BytesHeader: [
 				{name: internString("data"), type: internType(RawPtr)},
@@ -760,6 +950,7 @@ class HlSymbolTable {
 				var parameter = internType(type), key = 'packed:obj:$name';
 				if (typeIndices.exists(key)) typeIndices.get(key);
 				else {
+					writable(TYPES);
 					var index = types.length;
 					types.push(Parameterized(HlType.Packed, parameter));
 					typeIndices.set(key, index);
@@ -788,6 +979,7 @@ class HlSymbolTable {
 		var typeKey = 'native-storage:$key';
 		if (typeIndices.exists(typeKey))
 			return typeIndices.get(typeKey);
+		writable(TYPES);
 		var index = types.length;
 		types.push(HlTypeDef.Simple(type));
 		typeIndices.set(typeKey, index);
@@ -817,7 +1009,7 @@ class HlSymbolTable {
 	function reserveType(key:String):Int {
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
-		ensureWritable();
+		writable(TYPES);
 		var index = types.length;
 		types.push(HlTypeDef.Simple(HlType.Void));
 		typeIndices.set(key, index);
@@ -828,7 +1020,7 @@ class HlSymbolTable {
 	public function internGlobal(name:String, type:IrType):Int {
 		if (globalIndices.exists(name))
 			return globalIndices.get(name);
-		ensureWritable();
+		writable(GLOBALS);
 		var index = globals.length;
 		// HFUN globals are raw-function slots: the VM initializes them with a code pointer, not a closure.
 		// Data globals hold nullable closure references. HNULL retains the signature without adding a box.

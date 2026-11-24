@@ -35,6 +35,9 @@ class HlLoweredCache {
 	/** Each function's form with its runtime calls through helpers, while its IR is the same object (`IrSharedRuntimeCalls`). */
 	public var sharedCalls = new compiler.hl.IrSharedRuntimeCalls.IrSharedCallsMemo();
 
+	/** The tables the entries were linked into, with what made them, for the next build to keep (`HlLinkRecord`). */
+	public var tables:Null<HlLinkRecord> = null;
+
 	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";
 
@@ -56,6 +59,7 @@ class HlLoweredCache {
 		result.entriesShared = true;
 		result.sharedCalls = sharedCalls.copy();
 		result.environment = environment;
+		result.tables = tables;
 		return result;
 	}
 
@@ -73,6 +77,7 @@ class HlLoweredCache {
 		if (environment == next)
 			return;
 		entries = [];
+		tables = null;
 		environment = next;
 	}
 }

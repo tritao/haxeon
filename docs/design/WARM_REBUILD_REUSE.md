@@ -21,13 +21,18 @@ makes from the same sources, and its work is proportional to the edit.
 - **Whole-program walks:** the reachability walks of a plain build keep their result with what they read
   (`IrWalkRecord`): copies of the program's tables, its functions, and the summary of each function a walk reached. A
   build reuses the result while the tables are the same and each changed function declares the same and, when it was
-  reached, has a summary with the same edges; any other change walks again.
+  reached, has a summary with the same edges; any other change walks again. The HashLink plain build's own walk and
+  table trim keep theirs the same way (`HlReachRecord`), with the trim summary of each reached function.
   The enum escape reaches keep theirs the same way (`IrReachRecord`), with the closures and map stores they were given
   and each answer about a supported callable.
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
 - **Lowering (HashLink):** a function is lowered with relocations instead of table indices (`HlLoweredFunction`); a link step
   assigns the indices in the order a cold lowering would, so cold and warm output are equal by construction.
-  `HlLoweredCache` keeps the last plain build's lowered functions by name. What lowering reads about other entities goes
+  `HlLoweredCache` keeps the last plain build's lowered functions by name. A build whose metadata tables and function
+  layout are the last build's keeps the last build's tables as well (`HlLinkRecord`): a function kept at its position
+  asks nothing, and what a changed function first asks must be what it first asked last build, except that a String,
+  integer, float or String constant only it asked for, which no other entry names, may give way to a new one at the same
+  index; anything else lowers again with fresh tables. What lowering reads about other entities goes
   through `HlLoweringView`, which records each answer, and a changed answer lowers the function again. A live build keeps
   its append-only tables and trusts every lowered function it is not told to regenerate.
 - **Verification:** a function stays verified while it and what the verifier read about the rest of the program
@@ -105,10 +110,16 @@ and no edge between declarations is kept by hand.
   "What a patch can add"). Retired functions an adapter serves stay whole, since stored closures still call them.
 - **Pruning is per class, not per method.** A reachable class keeps all its methods, because its class table is built from
   the method list; a method can leave only once its slot is derived after pruning.
-- **A new constant or global relinks the functions after it.** The tables are dense and ordered by first use, so one entry
-  early in lowering order shifts the indices of later functions, which are relinked and encoded again. Patching the cached
-  encoding at its index operands would skip relowering and validation; HashLink's variable-length indices still force
-  encoding a function whose length changes.
+- **A new constant, global or function relinks the functions after it.** The tables and the function layout are dense
+  and ordered by first use, so one entry early in lowering order shifts the indices of later functions, which are
+  relinked and encoded again, and the build asks every request of fresh tables (`HlLinkRecord` keeps the tables only
+  when nothing moves). This is the cost of output equal to a cold build: an index a cold build gives depends on
+  everything before it, so no stable assignment for kept functions can match it, and the shifted functions' code does
+  change. What can shrink is the cost per shifted function: patching the cached encoding at its index operands (a
+  relocation list per encoded function) would skip the rewrite (`HlLink.rewrite`) and the encode, but HashLink's
+  variable-length indices still force encoding a function whose operand widths change, and the validator and the debug
+  sections read the rewritten `HlFunction`. Not done: it is a writer and encoding-cache change for a constant factor on
+  one kind of edit.
 - **Positions are absolute.** IR provenance and debug locations carry byte offsets in the file, so a comment at the top of
   a file lowers every function after it again. Positions relative to the declaration, made absolute when the debug section
   is encoded, would confine an edit to its function; it changes the IR codec, `HlLower`, the debug section and the patch

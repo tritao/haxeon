@@ -97,6 +97,15 @@ class HlLower {
 	/** `allocateTemporary`, made once: the scalar locals of each function take their registers through it. */
 	final allocateRegister:IrType->Int;
 
+	/** Whether this lowering may keep the last build's tables (`HlLinkRecord`); off when lowering again after they did not fit. */
+	final keepTables:Bool;
+
+	/** The checks of the last build's tables, when this lowering keeps them. */
+	var keeping:Null<compiler.hl.incremental.HlLinkRecord.HlKeptTables> = null;
+
+	/** The answers linking gives the requests in this build's tables. */
+	var answers:Null<compiler.hl.incremental.HlRequestAnswers> = null;
+
 	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
 	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
 
@@ -184,7 +193,15 @@ class HlLower {
 				fieldReserve,
 				developmentMetadata, recordLowering,
 				loweredCache, trustCache, frozen, checkReuse),
-			code = lowerer.lowerProgram(program);
+			kept:Null<HlCode> = try lowerer.lowerProgram(program) catch (_:HlKeptTablesStale) null;
+		var code:HlCode = if (kept != null) kept else {
+			// The last build's tables did not fit what this one asks: lower with fresh ones.
+			symbols.clear();
+			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
+				fieldReserve,
+				developmentMetadata, recordLowering, loweredCache, trustCache, frozen, checkReuse, false);
+			lowerer.lowerProgram(program);
+		}
 		return {
 			code: code,
 			lowered: lowerer.lowered,
@@ -234,8 +251,9 @@ class HlLower {
 			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
 			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false,
-			?frozen:String->Bool, checkReuse:Bool = false) {
+			?frozen:String->Bool, checkReuse:Bool = false, keepTables:Bool = true) {
 		this.frozen = frozen;
+		this.keepTables = keepTables;
 		this.symbols = symbols;
 		arrayBounds = new HlArrayBounds(compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives));
 		// A compile that checks its reuse lowers with requests recorded so the link step can be checked against this very lowering.
@@ -545,9 +563,22 @@ class HlLower {
 		PeakProbe.mark("lower-metadata-done");
 		var allocationAfterMetadata = AllocationMeter.sample();
 		var environment = checkingLinks ? symbols.copy() : null;
-		var answers = new compiler.hl.incremental.HlRequestAnswers(requestKeys, symbols, functionIndices);
-		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
-		for (fn in program.functions) {
+		// A plain build keeps the last build's tables when its metadata and function layout are theirs (`HlLinkRecord`).
+		var recordsTables = loweredCache != null && recordLowering && !trustCache,
+			slots = recordsTables ? slotNames() : null,
+			last = recordsTables && keepTables && loweredCache != null ? loweredCache.tables : null,
+			now = recordsTables ? compiler.hl.incremental.HlLinkRecord.HlTableArrays.of(symbols) : null,
+			record = last != null && slots != null && now != null && last.fits(now, slots) ? last : null,
+			metadata = record != null ? record.metadata : now;
+		if (record != null) {
+			keeping = new compiler.hl.incremental.HlLinkRecord.HlKeptTables(record, requestKeys);
+			symbols.shareFrom(record.tables);
+		}
+		answers = new compiler.hl.incremental.HlRequestAnswers(requestKeys, symbols, functionIndices);
+		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [],
+			order:Array<compiler.hl.incremental.HlLoweredFunction> = [];
+		for (position in 0...program.functions.length) {
+			var fn = program.functions[position];
 			var kept = trustCache && !regenerated.exists(fn.name)
 				&& loweredCache != null ? loweredCache.entries.get(fn.name) : null;
 			if (kept != null) {
@@ -562,18 +593,41 @@ class HlLower {
 				var entry = loweredCache == null || trustCache ? null : loweredCache.entries.get(fn.name);
 				if (entry != null
 					&& (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
-					var linked = compiler.hl.incremental.HlLink.link(entry, answers, functionIndices, view);
-					if (linked.fn != null) {
-						code.functions.push(linked.fn);
+					var found:compiler.hl.incremental.HlLoweredFunction = entry;
+					// In kept tables, the function the last build had at this position asks nothing: its requests have their answers.
+					if (record != null && position < record.functions.length && found == record.functions[position]
+						&& view.holds(found.facts) == null) {
+						var same = found.source == fn ? found : found.from(fn);
+						code.functions.push(found.fn);
+						entries.set(fn.name, same);
+						order.push(same);
+						this.lowered.set(fn.name, found);
+						reusedFunctions++;
+						continue;
+					}
+					var current = answers;
+					if (current == null)
+						throw new InternalError("HashLink lowering: linking without answers");
+					var linked = compiler.hl.incremental.HlLink.link(found, current, functionIndices, view);
+					var linkedFn = linked.fn;
+					if (linkedFn != null) {
 						// A function whose indices moved is kept with this build's, so the cache holds the module's code rather than a
 						// second copy of it, and the next build that gives it the same indices keeps it as it is.
 						var rebased = linked.rebased;
 						if (rebased != null) {
 							movedFunctions++;
-							entry = rebased;
+							found = rebased;
 						}
-						entries.set(fn.name, entry.source == fn ? entry : entry.from(fn));
-						this.lowered.set(fn.name, entry);
+						if (record != null) {
+							var settled = settleKept(position, found, linkedFn);
+							found = settled.entry;
+							linkedFn = settled.fn;
+						}
+						code.functions.push(linkedFn);
+						var same = found.source == fn ? found : found.from(fn);
+						entries.set(fn.name, same);
+						order.push(same);
+						this.lowered.set(fn.name, found);
 						reusedFunctions++;
 						continue;
 					}
@@ -586,8 +640,8 @@ class HlLower {
 						view.beginFunction();
 					}
 					var lowered = lowerFunction(loweringBody(fn));
-					code.functions.push(lowered);
 					if (trustCache) {
+						code.functions.push(lowered);
 						entries.set(fn.name,
 							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []));
 					} else {
@@ -596,10 +650,17 @@ class HlLower {
 						if (keys != null) {
 							var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, keys,
 								recordedAnswers, view.endFunction());
+							recordedKeys = null;
+							if (record != null) {
+								var settled = settleKept(position, entry, lowered);
+								entry = settled.entry;
+								lowered = settled.fn;
+							}
 							this.lowered.set(fn.name, entry);
 							entries.set(fn.name, entry);
-							recordedKeys = null;
+							order.push(entry);
 						}
+						code.functions.push(lowered);
 					}
 				} catch (error:InternalError) {
 					throw new InternalError('HashLink lowering failed for ${fn.name}: ${error.message}', error.span);
@@ -608,8 +669,6 @@ class HlLower {
 				}
 			}
 		}
-		if (loweredCache != null)
-			loweredCache.entries = entries;
 		if (skippedKept.length > 0) {
 			// Once per process, a few names: a test driver reads a child's stderr after it exits, and a line per build fills the pipe.
 			skippedKeptTotal += skippedKept.length;
@@ -621,6 +680,61 @@ class HlLower {
 		}
 		if (environment != null && reusedFunctions == 0)
 			verifyLinking(program, environment);
+		// The String constants' globals each hold the literal's String: its data, its length and its hash, which a string map
+		// computes and keeps on first use. They come after every function, so they are the last requests (see `HlLinkRecord`).
+		var constantKeys:Array<Int> = [], constantAnswers:Array<Int> = [];
+		if (record != null && symbols.stringConstantGlobals() == record.tables.stringConstantGlobals()) {
+			code.constants = record.constants;
+			constantKeys = record.constantKeys;
+			constantAnswers = record.constantAnswers;
+		} else {
+			if (recordsTables) {
+				recordedKeys = constantKeys;
+				recordedAnswers = constantAnswers;
+				requestKeys.startFunction();
+			}
+			for (literal in symbols.stringConstantGlobals())
+				code.constants.push({
+					global: literal.global,
+					fields: [
+						internString(literal.value),
+						internInt(HlSymbolTable.utf16Length(literal.value)),
+						internInt(0)
+					]
+				});
+			recordedKeys = null;
+			if (record != null) {
+				var moves = settleTables(program.functions.length, constantKeys, constantAnswers);
+				if (moves.length > 0) {
+					for (index in 0...constantKeys.length)
+						constantAnswers[index] = movedIndex(moves,
+							requestKeys.table(constantKeys[index]), constantAnswers[index]);
+					code.constants = [for (constant in code.constants) {
+						global:constant.global,
+							fields:[
+								movedIndex(moves, compiler.hl.incremental.HlRequestKeys.STRINGS, constant.fields[0]),
+								movedIndex(moves, compiler.hl.incremental.HlRequestKeys.INTS, constant.fields[1]),
+								movedIndex(moves, compiler.hl.incremental.HlRequestKeys.INTS, constant.fields[2])
+							]
+					}];
+				}
+			}
+		}
+		if (record != null && !sameLengths(symbols.lengths(), record.lengths))
+			throw new HlKeptTablesStale();
+		var cache = loweredCache;
+		if (cache != null) {
+			cache.entries = entries;
+			if (recordsTables && metadata != null && slots != null)
+				{
+				var next = new compiler.hl.incremental.HlLinkRecord(metadata, slots, order, constantKeys,
+					constantAnswers,
+					code.constants, symbols);
+				if (record != null && keeping != null)
+					next.inherit(record, keeping.changes);
+				cache.tables = next;
+			}
+		}
 		var functionsDoneAt = Sys.time() * 1000.0;
 		PeakProbe.mark("lower-functions-done");
 		var allocationAfterFunctions = AllocationMeter.sample();
@@ -654,16 +768,6 @@ class HlLower {
 		var allocationAfterDebug = AllocationMeter.sample();
 
 		code.entryPoint = requireFunction(program.entryPoint);
-		for (literal in symbols.stringConstantGlobals())
-			code.constants.push({
-				global: literal.global,
-				// The String's fields: its data, its length and its hash, which a string map computes and keeps on first use.
-				fields: [
-					symbols.internString(literal.value),
-					symbols.internInt(HlSymbolTable.utf16Length(literal.value)),
-					symbols.internInt(0)
-				]
-			});
 		code.ints = symbols.ints;
 		code.floats = symbols.floats;
 		code.strings = symbols.strings;
@@ -684,6 +788,77 @@ class HlLower {
 		functionsMs = functionsDoneAt - metadataDoneAt;
 		debugMs = debugDoneAt - functionsDoneAt;
 		finalizationMs = finalizedAt - debugDoneAt;
+	}
+
+	/**
+	 * In kept tables (`HlLinkRecord`), the function at `position` as `entry` with its code `fn`, after checking what it first asked:
+	 * a new leaf it added takes the index of the one it replaces, and the function is linked again to use it.
+	 */
+	function settleKept(position:Int, entry:compiler.hl.incremental.HlLoweredFunction,
+			fn:HlFunction):{
+				entry:compiler.hl.incremental.HlLoweredFunction,
+				fn:HlFunction
+			} {
+		var keeping = this.keeping;
+		if (keeping == null || position >= keeping.record.functions.length
+			|| keeping.record.functions[position].name != entry.name)
+			throw new HlKeptTablesStale();
+		if (settleTables(position, entry.keys, entry.answers).length == 0)
+			return {entry: entry, fn: fn};
+		var answers = this.answers;
+		if (answers == null)
+			throw new InternalError("HashLink lowering: kept tables without answers");
+		var linked = compiler.hl.incremental.HlLink.link(entry, answers, functionIndices, view), linkedFn = linked.fn;
+		if (linkedFn == null)
+			throw new HlKeptTablesStale();
+		movedFunctions++;
+		return {entry: linked.rebased ?? entry, fn: linkedFn};
+	}
+
+	/** Checks the requests of `position` in kept tables and moves the leaves it replaced into place; the moves it made. */
+	function settleTables(position:Int, keys:Array<Int>,
+			answers:Array<Int>):Array<compiler.hl.incremental.HlLinkRecord.HlLeafMove> {
+		var keeping = this.keeping;
+		if (keeping == null)
+			throw new HlKeptTablesStale();
+		var moves = keeping.check(position, keys, answers);
+		if (moves == null)
+			throw new HlKeptTablesStale();
+		if (moves.length == 0)
+			return moves;
+		var lengths = symbols.lengths(), kept = keeping.record.lengths;
+		if (lengths.ints - kept.ints + lengths.floats - kept.floats + lengths.strings - kept.strings + lengths.types
+			- kept.types + lengths.globals - kept.globals != moves.length)
+			throw new HlKeptTablesStale();
+		for (move in moves)
+			symbols.replaceLeaf(move.table, move.from, move.to);
+		symbols.truncate(kept);
+		// The moved requests were answered at their old places.
+		this.answers = new compiler.hl.incremental.HlRequestAnswers(requestKeys, symbols, functionIndices);
+		return moves;
+	}
+
+	static function movedIndex(moves:Array<compiler.hl.incremental.HlLinkRecord.HlLeafMove>, table:Int, index:Int):Int {
+		for (move in moves)
+			if (move.table == table && move.from == index)
+				return move.to;
+		return index;
+	}
+
+	static function sameLengths(left:compiler.hl.incremental.HlSymbolTable.HlTableLengths,
+			right:compiler.hl.incremental.HlSymbolTable.HlTableLengths):Bool
+		return left.ints == right.ints && left.floats == right.floats && left.strings == right.strings
+			&& left.types == right.types && left.globals == right.globals;
+
+	/** The function layout as the name in each slot. */
+	function slotNames():Array<String> {
+		var names:Array<String> = [];
+		for (name => index in functionIndices) {
+			while (names.length <= index)
+				names.push("");
+			names[index] = name;
+		}
+		return names;
 	}
 
 	/**
@@ -3133,4 +3308,9 @@ class HlLower {
 private typedef ValueArrayView = {
 	final array:Int;
 	final strideBytes:Int;
+}
+
+/** The last build's tables do not fit what this build asks (`HlLinkRecord`): it lowers again with fresh ones. */
+private class HlKeptTablesStale {
+	public function new() {}
 }
