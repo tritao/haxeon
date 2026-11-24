@@ -12,16 +12,13 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ProfileFrame;
 import haxeon.ProfileNativeTrace;
 import haxeon.ProfileSpan;
-import hl.Gc;
 
 import haxe.Json;
 import haxe.io.Bytes;
 import haxeon.ui.FontCollection;
-import haxeon.ui.Renderer;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
-import sys.FileSystem;
 import sys.io.File;
 
 /** Owns the complete NativeKit desktop lifecycle for one UIKit application. */
@@ -51,25 +48,7 @@ class DesktopUiHost {
 		var fonts:Null<FontCollection> = null;
 		var runtime:Null<UiHostRuntime> = null;
 		var session:Null<UiHostSession> = null;
-		var eventHistory:Array<String> = [];
-		var frameHistory:Array<Dynamic> = [];
-		var pendingPresentation:Array<{timing:haxeon.platform.SurfaceFrameTiming, record:Dynamic}> = [];
-		var allocationCensusStarted = false;
-		var callbackSeconds = 0.0;
-		var loopTiming = {
-			loops: 0,
-			waits: 0,
-			pollSeconds: 0.0,
-			backgroundSeconds: 0.0,
-			waitSeconds: 0.0,
-			pollFrameSeconds: 0.0,
-			waitFrameSeconds: 0.0,
-			pollFrames: 0,
-			waitFrames: 0
-		};
-		var eventCounts:Map<String, Int> = new Map();
-		var frameRequestCounts:Map<String, Int> = new Map();
-		var captureState = {startedAt: -1.0, readyFrames: 0};
+		var recorder = new DesktopFrameRecorder(options);
 		var frameGc = FrameGcScheduler.fromEnvironment();
 		// A profiler frame runs from one rendered frame to the next, or until the host goes idle.
 		var profileFrameOpen = false;
@@ -256,7 +235,7 @@ class DesktopUiHost {
 			if (options.recordPath != null) {
 				var path:String = cast options.recordPath;
 				var slash = path.lastIndexOf("/");
-				if (slash > 0) createDirectories(path.substr(0, slash));
+				if (slash > 0) DesktopFrameRecorder.createDirectories(path.substr(0, slash));
 				recordPath = path;
 				Sys.println("recording Materia events in " + path);
 				File.saveContent(path, Json.stringify({
@@ -278,44 +257,13 @@ class DesktopUiHost {
 			var framePending = false;
 			var frameRequested = false;
 			var repaintOnlyRequested = false;
-			var frameRequestedAt = -1.0;
 			var nextCaretFrameAt = -1.0;
-			// When animations are only counting down a delay, no frames run until this time.
 			var nextAnimationFrameAt = -1.0;
-			var frameRequestReason = "none";
-			var frameRequestSerial = 0;
-			var inputRequestedAt = -1.0;
-			var lastInputDeliveredAt = -1.0;
-			var inputRequestCount = 0;
-			var pointerRequestedAt = -1.0;
-			var latestPointerAt = -1.0;
-			var pointerMoveCount = 0;
-			var inputDispatchSeconds = 0.0;
-			if (options.captureDirectory != null)
-				inputTraceSubscription = pump.listen(function(value) {
-					switch value {
-						case PointerMove(source, _, _) if (source.rawValue() == window.rawValue()):
-							latestPointerAt = Sys.time();
-							if (pointerRequestedAt < 0) pointerRequestedAt = latestPointerAt;
-							pointerMoveCount++;
-						case TextInput(source, _) if (source.rawValue() == window.rawValue()):
-							lastInputDeliveredAt = Sys.time();
-							if (inputRequestedAt < 0.0) inputRequestedAt = lastInputDeliveredAt;
-							inputRequestCount++;
-						case _:
-					}
-				});
-			var incrementCount = function(counts:Map<String, Int>, key:String):Void {
-				var previous = counts.get(key);
-				counts.set(key, previous == null ? 1 : previous + 1);
-			};
+			inputTraceSubscription = recorder.attach(pump, window);
 			var scheduleFrameWithReason = function(reason:String):Void {
 				repaintOnlyRequested = (!frameRequested || repaintOnlyRequested) && reason == "text-caret";
 				frameRequested = true;
-				frameRequestedAt = Sys.time();
-				frameRequestReason = reason;
-				frameRequestSerial++;
-				incrementCount(frameRequestCounts, reason);
+				recorder.request(reason);
 			};
 			// GTK's paint phase needs the successor armed before control returns.
 			// Its backend pump yields after delivery; other desktop pumps may drain
@@ -381,13 +329,7 @@ class DesktopUiHost {
 			};
 			eventSubscription = pump.listen(function(value) {
 				var eventName = eventKind(value);
-				if (eventName == "TextInput" && lastInputDeliveredAt >= 0.0)
-					inputDispatchSeconds += Sys.time() - lastInputDeliveredAt;
-				incrementCount(eventCounts, eventName);
-				if (options.eventHistoryLimit > 0) {
-					eventHistory.push(Std.string(value));
-					while (eventHistory.length > options.eventHistoryLimit) eventHistory.shift();
-				}
+				recorder.event(value, eventName);
 				switch (value) {
 					case WindowClose(source) if (source.rawValue() == window.rawValue()):
 						hostContext.requestClose();
@@ -424,14 +366,11 @@ class DesktopUiHost {
 						liveRuntime.setSurfaceReady(size.out_width > 0 && size.out_height > 0);
 						if (frameSubscription == null)
 							frameSubscription = borrowedSurface.onFrame(function(width, height) {
-								var callbackAt = options.captureDirectory == null ? 0.0 : Sys.monotonicTime();
+								var callbackAt = recorder.callbackTime();
 								try {
 									framePending = false;
 									if (!active || !surfaceAvailable || !frameRequested) return;
-									var requestedAt = frameRequestedAt;
 									var repaintOnly = repaintOnlyRequested;
-									var requestReason = frameRequestReason;
-									var requestSerial = frameRequestSerial;
 									// Keep delivered text input even if caret/API requests coalesce.
 									var scriptedFrameCount = scriptedCount;
 									var scriptedFrameAt = scriptedAt;
@@ -441,168 +380,46 @@ class DesktopUiHost {
 									scriptedAt = -1.0;
 									scriptedDeliveredAt = -1.0;
 									scriptedDispatch = 0.0;
-									var pointerFirstAt = pointerRequestedAt,
-										pointerLatestAt = latestPointerAt,
-										pointerCount = pointerMoveCount;
-									pointerRequestedAt = -1.0;
-									latestPointerAt = -1.0;
-									pointerMoveCount = 0;
-									var textInputRequestedAt = inputRequestedAt;
-									var textInputCount = inputRequestCount;
-									var textInputDispatchSeconds = inputDispatchSeconds;
-									inputRequestedAt = -1.0;
-									inputRequestCount = 0;
-									inputDispatchSeconds = 0.0;
 									frameRequested = false;
 									liveRuntime.resize(liveRuntime.logicalWidth, liveRuntime.logicalHeight, width,
 										height);
 									// macOS reports SurfaceReady before its Metal layer has a size, so the ready
 									// event's framebuffer query can be 0x0. The first frame carries the real size.
 									liveRuntime.setSurfaceReady(width > 0 && height > 0);
-									var presentation = options.captureDirectory == null ? null : borrowedSurface.captureFrameTiming(callbackAt);
-									var frameStartedAt = Sys.time();
-									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
-									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
-									liveRuntime.measureFrameTimings = options.captureDirectory != null;
+									recorder.begin(borrowedSurface, callbackAt, scriptedFrameCount, scriptedFrameAt,
+										scriptedFrameDeliveredAt, scriptedFrameDispatch);
+									liveRuntime.measureFrameTimings = recorder.enabled;
 									ProfileFrame.mark();
 									profileFrameOpen = true;
 									var rendered = false;
-									var collectionStartedAt = 0.0;
 									{
 										ProfileSpan.begin("ui.frame");
 										defer ProfileSpan.end("ui.frame");
 										frameGc.beginFrame();
 										rendered = liveRuntime.render(Sys.time(), repaintOnly);
-										if (rendered && presentation != null)
-											presentation.markSubmitted();
-										collectionStartedAt = options.captureDirectory == null ? 0.0 : Sys.time();
+										recorder.submitted(rendered);
 										{
 											ProfileSpan.begin("ui.frame.gc");
 											defer ProfileSpan.end("ui.frame.gc");
 											frameGc.endFrame();
 										}
 									}
-									var collectionSeconds = options.captureDirectory == null
-										? 0.0 : Sys.time() - collectionStartedAt;
-									if (options.captureDirectory != null) callbackSeconds += Sys.time()
-										- frameStartedAt;
+									recorder.endRender();
 									if (!rendered) return;
 									var frameRendered = options.onFrameRendered;
 									if (frameRendered != null) frameRendered();
-									var frameFinishedAt = options.captureDirectory == null ? 0.0 : Sys.time();
+									var frameFinishedAt = recorder.finishedAt();
 									var renderedApp = liveRuntime.app();
 									nextCaretFrameAt = renderedApp != null
 										? renderedApp.context().textInput.takeCaretFrameAt() : -1.0;
 									var animationWait = renderedApp != null
 										? renderedApp.context().animationWaitSeconds() : -1.0;
 									nextAnimationFrameAt = animationWait >= 0.0 ? Sys.time() + animationWait : -1.0;
-									var readyCheck = options.captureReady;
-									var captureReady = readyCheck == null || readyCheck();
-									if (captureReady) {
-										captureState.readyFrames++;
-										if (script != null) script.start(Sys.time());
-									}
-									if (options.captureSeconds > 0.0 && captureState.startedAt < 0.0 && captureReady) {
-										captureState.startedAt = frameStartedAt;
-									}
-									if (!allocationCensusStarted && options.captureDirectory != null
-										&& captureState.startedAt >= 0.0 && frameStartedAt - captureState.startedAt
-										>= 4.0 && Sys.getEnv("MATERIA_CAPTURE_ALLOCATIONS") == "1") {
-										allocationCensusStarted = true;
-										Gc.censusReset();
-										Gc.censusStart(65536);
-									}
-									if (options.captureDirectory != null) {
-										var metrics = liveRuntime.app() == null
-											? null : liveRuntime.app().context().frameMetrics;
-										var displayedAt:Null<Float> = null;
-										var record = {
-											frame: liveRuntime.rendered,
-											pointerMoveCount: pointerCount,
-											pointerToPaintSeconds: pointerFirstAt < 0
-												? null : frameFinishedAt - pointerFirstAt,
-											latestPointerToPaintSeconds: pointerLatestAt < 0
-												? null : frameFinishedAt - pointerLatestAt,
-											hoverPaintUpdatedNodes: metrics == null
-												? 0 : metrics.hoverPaintUpdatedNodes,
-											reusedSubmission: metrics == null ? false : metrics.reusedSubmission,
-											repaintOnly: repaintOnly,
-											allocatedBytes: liveRuntime.lastFrameAllocatedBytes,
-											prepareSeconds: liveRuntime.lastPrepareSeconds,
-											applicationSubmitSeconds: liveRuntime.lastApplicationSubmitSeconds,
-											contextRenderSeconds: liveRuntime.lastContextRenderSeconds,
-											prepareAllocatedBytes: liveRuntime.lastPrepareAllocatedBytes,
-											submitAllocatedBytes: liveRuntime.lastSubmitAllocatedBytes,
-											startedAtSeconds: frameStartedAt,
-											presentationFrameId: presentation == null || presentation.frameId == null
-												? null : Std.string(presentation.frameId),
-											callbackMonotonicSeconds: presentation == null ? null : presentation.callbackSeconds,
-											submittedMonotonicSeconds: presentation == null ? null : presentation.submittedSeconds,
-											presentedMonotonicSeconds: displayedAt,
-											requestReason: requestReason,
-											requestSerial: requestSerial,
-											scriptedInputCount: scriptedFrameCount,
-											scriptedInputRequestAgeSeconds: scriptedFrameAt < 0
-												? null : frameStartedAt - scriptedFrameAt,
-											scriptedInputDeliveryAgeSeconds: scriptedFrameDeliveredAt < 0
-												? null : frameStartedAt - scriptedFrameDeliveredAt,
-											scriptedInputDispatchSeconds: scriptedFrameDispatch,
-											textInputCount: textInputCount,
-											textInputRequestAgeSeconds: textInputRequestedAt < 0.0
-												? null : frameStartedAt - textInputRequestedAt,
-											textInputDispatchSeconds: textInputDispatchSeconds,
-											requestAgeSeconds: requestedAt < 0.0 ? null : frameStartedAt - requestedAt,
-											frameSeconds: frameFinishedAt - frameStartedAt,
-											paintSeconds: liveRuntime.lastPaintSeconds,
-											bookkeepingSeconds: 0.0,
-											gcSeconds: 0.0,
-											gcCollectionsTotal: 0.0,
-											gcSecondsTotal: 0.0,
-											frameGcSeconds: collectionSeconds,
-											gcCollections: 0.0,
-											gcLastPauseSeconds: hl.Gc.lastPauseMicros() / 1000000.0,
-											submitSeconds: metrics == null ? null : metrics.submitSeconds,
-											styleResolutions: metrics == null ? null : metrics.styleResolutions,
-											styleCacheHits: metrics == null ? null : metrics.styleCacheHits,
-											styleCacheMisses: metrics == null ? null : metrics.styleCacheMisses,
-											styleChangedNodes: metrics == null ? null : metrics.styleChangedNodes,
-											viewSeconds: metrics == null ? null : metrics.viewSeconds,
-											treeAndStyleSeconds: metrics == null ? null : metrics.treeAndStyleSeconds,
-											nativeLayoutSeconds: metrics == null ? null : metrics.nativeLayoutSeconds,
-											reconcileSeconds: metrics == null ? null : metrics.reconcileSeconds,
-											renderSeconds: metrics == null ? null : metrics.renderSeconds,
-											customPaintSeconds: metrics == null ? null : metrics.customPaintSeconds,
-											nativeRenderSeconds: metrics == null ? null : metrics.nativeRenderSeconds,
-											nodeCount: metrics == null ? null : metrics.nodeCount
-										};
-										var pendingIndex = pendingPresentation.length - 1;
-										while (pendingIndex >= 0) {
-											var pending = pendingPresentation[pendingIndex];
-											var presented = pending.timing.presentationSeconds();
-											if (presented != null) {
-												pending.record.presentedMonotonicSeconds = presented;
-												pendingPresentation.splice(pendingIndex, 1);
-											}
-											pendingIndex--;
-										}
-										if (presentation != null && presentation.frameId != null) {
-											if (pendingPresentation.length >= 8)
-												pendingPresentation.shift();
-											pendingPresentation.push({timing: presentation, record: record});
-										}
-										frameHistory.push(record);
-										record.bookkeepingSeconds = Sys.time() - frameFinishedAt;
-										record.gcCollectionsTotal = Gc.collections();
-										record.gcSecondsTotal = Gc.markMicros() / 1000000.0;
-										record.gcCollections = record.gcCollectionsTotal - gcCountBefore;
-										record.gcSeconds = record.gcSecondsTotal - gcMicrosBefore / 1000000.0;
-									}
+									if (recorder.ready() && script != null) script.start(Sys.time());
+									recorder.finishFrame(liveRuntime, repaintOnly, frameFinishedAt);
 									if (session.state == UiHostLifecycle.Failed) active = false;
-									if (options.captureDirectory != null && options.frameLimit > 0
-										&& captureState.readyFrames >= options.frameLimit) {
-										writeDiagnostics(options, cast liveRuntime.app(),
-											cast liveRuntime.frameRenderer(), liveRuntime,
-											eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
+									if (recorder.reachedFrameLimit()) {
+										recorder.write(liveRuntime);
 										session.stop();
 									}
 									var continueFrames = options.continuousFrames;
@@ -610,9 +427,9 @@ class DesktopUiHost {
 									var wantsContinuousFrames = !needsAnimationFrame && continueFrames != null
 										&& continueFrames();
 									if (active && session.state == UiHostLifecycle.Running
-										&& (options.captureDirectory != null && options.frameLimit > 0
+										&& (recorder.needsFrames()
 										|| needsAnimationFrame || wantsContinuousFrames)) {
-										if (options.captureDirectory != null && options.frameLimit > 0)
+										if (recorder.needsFrames())
 											scheduleFrameWithReason("capture");
 										else if (needsAnimationFrame)
 											scheduleFrameWithReason("animation");
@@ -673,14 +490,8 @@ class DesktopUiHost {
 				return delivered;
 			};
 			var eventLoop = new EventLoop(pump);
-			var measureLoop = false;
-			var pollStarted = 0.0;
 			var framesBeforePoll = 0;
-			var callbackBeforePoll = 0.0;
 			var hadEvent = false;
-			var waitStarted = 0.0;
-			var callbackBeforeWait = 0.0;
-			var framesBeforeWait = 0;
 			var profilingPoll = false;
 			var finishPoll = function(polled:Bool):Null<Float> {
 				if (profilingPoll) {
@@ -691,22 +502,13 @@ class DesktopUiHost {
 				if (drainScriptedInput()) hadEvent = true;
 				// Surface callbacks run directly in the backend pump, without a queued event.
 				var hadFrame = liveRuntime.rendered != framesBeforePoll;
-				var backgroundStarted = measureLoop ? Sys.time() : 0.0;
-				if (measureLoop) {
-					loopTiming.loops++;
-					loopTiming.pollSeconds += backgroundStarted - pollStarted;
-					loopTiming.pollFrameSeconds += callbackSeconds - callbackBeforePoll;
-					loopTiming.pollFrames += liveRuntime.rendered - framesBeforePoll;
-				}
+				recorder.endPoll(liveRuntime.rendered);
 				var backgroundPoll:Null<Void->Void> = hostContext.onPoll;
 				if (active && backgroundPoll != null) backgroundPoll();
-				if (measureLoop) loopTiming.backgroundSeconds += Sys.time() - backgroundStarted;
+				recorder.endBackground();
 				if (session.state == UiHostLifecycle.Failed) throw session.error;
-				if (active && captureState.startedAt >= 0.0 && options.captureSeconds > 0.0
-					&& Sys.time() - captureState.startedAt >= options.captureSeconds
-					&& (script == null || script.complete && scriptedCount == 0)) {
-					writeDiagnostics(options, cast liveRuntime.app(), cast liveRuntime.frameRenderer(), liveRuntime,
-						eventHistory, frameHistory, eventCounts, frameRequestCounts, loopTiming);
+				if (active && recorder.elapsed() && (script == null || script.complete && scriptedCount == 0)) {
+					recorder.write(liveRuntime);
 					session.stop();
 				}
 				if (active && surfaceAvailable && nextCaretFrameAt >= 0.0 && Sys.time() >= nextCaretFrameAt) {
@@ -727,9 +529,7 @@ class DesktopUiHost {
 					}
 				}
 				if (!active || hadEvent || hadFrame) return null;
-				waitStarted = measureLoop ? Sys.time() : 0.0;
-				callbackBeforeWait = callbackSeconds;
-				framesBeforeWait = liveRuntime.rendered;
+				recorder.beginWait(liveRuntime.rendered);
 				var waitSeconds = 1.0 / options.targetFps;
 				var scriptDeadline = script == null ? null : script.secondsUntilNext(Sys.time());
 				if (scriptDeadline != null) waitSeconds = Math.min(waitSeconds, scriptDeadline);
@@ -740,10 +540,8 @@ class DesktopUiHost {
 			step = function() {
 				if (!active) return false;
 				try {
-					measureLoop = options.captureDirectory != null && captureState.startedAt >= 0.0;
-					pollStarted = measureLoop ? Sys.time() : 0.0;
 					framesBeforePoll = liveRuntime.rendered;
-					callbackBeforePoll = callbackSeconds;
+					recorder.beginPoll(framesBeforePoll);
 					// Native polling can render, so deliver already-due scripted input first.
 					hadEvent = drainScriptedInput();
 					ProfileSpan.begin("ui.events");
@@ -753,12 +551,7 @@ class DesktopUiHost {
 						ProfileSpan.end("ui.events");
 					}
 					var waited = eventLoop.step(finishPoll);
-					if (waited && measureLoop) {
-						loopTiming.waits++;
-						loopTiming.waitSeconds += Sys.time() - waitStarted;
-						loopTiming.waitFrameSeconds += callbackSeconds - callbackBeforeWait;
-						loopTiming.waitFrames += liveRuntime.rendered - framesBeforeWait;
-					}
+					if (waited) recorder.endWait(liveRuntime.rendered);
 					if (session.state == UiHostLifecycle.Failed) throw session.error;
 				} catch (error:Dynamic) {
 					recordFailure("desktop-host", error);
@@ -790,6 +583,7 @@ class DesktopUiHost {
 		}
 
 		var finish = function() {
+			recorder.stopCensus();
 			var ownedRecordSubscription = recordSubscription;
 			recordSubscription = null;
 			if (ownedRecordSubscription != null)
@@ -857,78 +651,6 @@ class DesktopUiHost {
 		return new DesktopUiHostSession(step, finish);
 	}
 
-	/** Capture JSON names a function instead of failing on it (views may keep callbacks in inspected state). */
-	static function noFunctions(_:Dynamic, value:Dynamic):Dynamic
-		return Reflect.isFunction(value) ? "<function>" : value;
-
-	static function writeDiagnostics(options:DesktopUiHostOptions,
-			application:DesktopUiApplication, renderer:Renderer, state:UiHostRuntime,
-			events:Array<String>, frames:Array<Dynamic>, eventCounts:Map<String, Int>,
-			frameRequestCounts:Map<String, Int>, loopTiming:Dynamic):Void {
-		var directory:String = cast options.captureDirectory;
-		createDirectories(directory);
-		if (Sys.getEnv("MATERIA_CAPTURE_ALLOCATIONS") == "1") {
-			Gc.censusStop();
-			Gc.censusDump(directory + "/allocations.json");
-		}
-		File.saveContent(directory + "/ui-tree.txt", application.context().dumpTree() + "\n");
-		File.saveContent(directory + "/layout.json",
-			Json.stringify(application.context().inspect(), noFunctions, "  ") + "\n");
-		File.saveContent(directory + "/app-state.json",
-			Json.stringify(application.diagnosticState(), noFunctions, "  ") + "\n");
-		var metrics = application.context().frameMetrics;
-		var stats = renderer.stats();
-		var frameData:Dynamic = {
-			logicalWidth: state.logicalWidth,
-			logicalHeight: state.logicalHeight,
-			framebufferWidth: state.framebufferWidth,
-			framebufferHeight: state.framebufferHeight,
-			pixelScale: state.scale,
-			renderedFrames: state.rendered,
-			ui: metrics == null ? null : {
-				frameNumber: metrics.frameNumber, nodeCount: metrics.nodeCount,
-				submitSeconds: metrics.submitSeconds, renderSeconds: metrics.renderSeconds,
-				totalSeconds: metrics.totalSeconds, paintedNodes: metrics.paintedNodes,
-				paintSkippedNodes: metrics.paintSkippedNodes, emptyPaintNodes: metrics.emptyPaintNodes,
-				nativeLayoutSubmitted: metrics.nativeLayoutSubmitted,
-				nativeLayoutReused: metrics.nativeLayoutReused
-			},
-			renderer: {
-				pathPreparations: Std.string(stats.pathPreparations),
-				pathCacheHits: Std.string(stats.pathCacheHits),
-				pathCacheMisses: Std.string(stats.pathCacheMisses),
-				rasterCacheHits: Std.string(stats.rasterCacheHits),
-				rasterCacheMisses: Std.string(stats.rasterCacheMisses)
-			},
-			scheduling: {
-				eventCounts: countsObject(eventCounts),
-				frameRequestCounts: countsObject(frameRequestCounts),
-				hostLoop: loopTiming
-			}
-		};
-		File.saveContent(directory + "/frame-metrics.json",
-			Json.stringify(frameData, null, "  ") + "\n");
-		File.saveContent(directory + "/events.jsonl",
-			[for (event in events) Json.stringify({event: event})].join("\n") + "\n");
-		File.saveContent(directory + "/frame-timeline.jsonl",
-			[for (frame in frames) Json.stringify(frame)].join("\n") + "\n");
-		var screenshot = directory + "/frame.png";
-		var screenshotResult = Sys.command("import", ["-window", options.title, screenshot]);
-		if (screenshotResult != 0)
-			File.saveContent(directory + "/screenshot-error.txt",
-				"ImageMagick import could not capture the application window (exit " + screenshotResult + ").\n");
-		Sys.println("diagnostics captured in " + directory);
-	}
-
-	static function countsObject(counts:Map<String, Int>):Dynamic {
-		var result:Dynamic = {};
-		for (key in counts.keys()) {
-			var value = counts.get(key);
-			Reflect.setField(result, key, value == null ? 0 : value);
-		}
-		return result;
-	}
-
 	static function eventKind(value:PlatformEvent):String {
 		return switch (value) {
 			case WindowClose(_): "WindowClose";
@@ -974,10 +696,4 @@ class DesktopUiHost {
 		};
 	}
 
-	static function createDirectories(path:String):Void {
-		if (path == null || path.length == 0 || FileSystem.exists(path)) return;
-		var slash = path.lastIndexOf("/");
-		if (slash > 0) createDirectories(path.substr(0, slash));
-		if (!FileSystem.exists(path)) FileSystem.createDirectory(path);
-	}
 }

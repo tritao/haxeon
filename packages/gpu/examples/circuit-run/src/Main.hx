@@ -4,6 +4,7 @@ import haxeon.platform.Surface;
 import haxeon.platform.App;
 import haxeon.platform.AppLoop;
 import haxeon.platform.FrameTick;
+import haxeon.platform.FrameRecorder;
 import haxeon.platform.SurfaceFrame;
 import haxeon.ui.FontCollection;
 import haxeon.ui.FrameInfo;
@@ -104,7 +105,10 @@ class Main implements App {
 		var app = new Main(runtime, sounds);
 		defer app.dispose();
 		app.start();
-		runtime.run(app.surface, app);
+		var recorder = Sys.getEnv("CIRCUIT_RUN_TIMING") == "1" ? new FrameRecorder(
+			function(timing) Sys.println('frame ${timing.frameId} callback=${timing.callbackSeconds} submitted=${timing.submittedSeconds}'),
+			function(timing, seconds) Sys.println('frame ${timing.frameId} presented=${seconds}')) : null;
+		runtime.run(app.surface, app, recorder);
 	}
 	#end
 

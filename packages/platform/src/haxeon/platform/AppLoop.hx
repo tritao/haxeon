@@ -10,20 +10,23 @@ class AppLoop implements Disposable {
 	final loop:EventLoop;
 	final surface:Surface;
 	final app:App;
+	final recorder:Null<FrameRecorder>;
 	final readySubscription:EventSubscription;
 	final completionSubscription:EventSubscription;
 	var frameSubscription:Null<SurfaceFrameSubscription>;
 	var pending:Null<Int64>;
+	var submittedTiming:Null<SurfaceFrameTiming>;
 	var frameRan = false;
 	var stopped = false;
 	var disposed = false;
 	var failure:Dynamic;
 
 	@:allow(haxeon.platform.Runtime)
-	private function new(events:EventPump, surface:Surface, app:App) {
+	private function new(events:EventPump, surface:Surface, app:App, recorder:Null<FrameRecorder>) {
 		loop = new EventLoop(events);
 		this.surface = surface;
 		this.app = app;
+		this.recorder = recorder;
 		readySubscription = surface.onReady(startFrames);
 		try {
 			completionSubscription = surface.onFrameComplete(function(token, result) {
@@ -55,6 +58,12 @@ class AppLoop implements Disposable {
 				stopped = stopped || app.shouldQuit();
 				return wait && !hadEvent && !frameRan && (!stopped || pending != null) ? 0.1 : null;
 			});
+			if (recorder != null) {
+				var timing = submittedTiming;
+				submittedTiming = null;
+				if (timing != null) recorder.track(timing);
+				recorder.collect();
+			}
 			if (frameRan) {
 				frameRan = false;
 				if (failure == null)
@@ -88,12 +97,17 @@ class AppLoop implements Disposable {
 		try {
 			if (app.shouldQuit())
 				return;
+			var timing = recorder == null ? null : recorder.begin(surface, tick.timeSeconds);
 			var frame = surface.acquireFrame();
 			defer {
 				if (frame.wasSubmitted())
 					pending = frame.token();
 				else if (!frame.isFinished())
 					frame.cancel();
+				if (timing != null && (frame.wasSubmitted() || frame.wasPresented())) {
+					timing.markSubmitted();
+					submittedTiming = timing;
+				}
 			}
 			frameRan = true;
 			app.frame(tick, frame);

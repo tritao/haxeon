@@ -28,6 +28,7 @@ import haxeon.gpu.Shader;
 import haxeon.gpu.SurfaceOptions as GpuSurfaceOptions;
 import haxeon.platform.Surface;
 import haxeon.platform.App;
+import haxeon.platform.FrameRecorder;
 import haxeon.platform.FrameTick;
 import haxeon.platform.SurfaceFrame;
 import haxeon.gpu.Timestamp;
@@ -547,8 +548,15 @@ class Triangle {
 		scoped var loopWindow = runtime.createWindowNative(windowOptions);
 		var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
 		var app = new TriangleLoopApp(loopSurface);
-		runtime.run(loopSurface, app);
+		var recorded = 0;
+		runtime.run(loopSurface, app, new FrameRecorder(function(timing) {
+			if (timing.submittedSeconds == null || timing.submittedSeconds < timing.callbackSeconds)
+				throw "Frame recorder returned out-of-order timestamps";
+			recorded++;
+		}));
 		app.verify();
+		if (recorded != 1)
+			throw "Frame recorder must report the submitted frame and skip the canceled frame";
 		runtime.dispose();
 
 		Sys.println("draws_per_frame=400");

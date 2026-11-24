@@ -19,6 +19,7 @@ class SurfaceFrame {
 	final target:SurfaceFrameTarget;
 	var finished:Bool = false;
 	var submitted:Bool = false;
+	var presented:Bool = false;
 
 	@:allow(haxeon.platform.Surface)
 	function new(surface:Surface, value:SurfaceFrameHandle, target:SurfaceFrameTarget) {
@@ -34,6 +35,7 @@ class SurfaceFrame {
 		if (status != Result.ErrorWrongThread) finished = true;
 		if (status != Result.Ok)
 			throw new NativeKitError(status, "surfaceFrame.present", NativeKit.nk_last_error());
+		presented = true;
 	}
 
 	/** Cancels the frame and releases its platform transaction. */
@@ -51,6 +53,10 @@ class SurfaceFrame {
 	@:allow(haxeon.platform.AppLoop)
 	function wasSubmitted():Bool
 		return submitted;
+
+	@:allow(haxeon.platform.AppLoop)
+	function wasPresented():Bool
+		return presented;
 
 	/** Identifies this transaction in SurfaceFrameComplete events, including after submission. */
 	public function token():haxe.Int64

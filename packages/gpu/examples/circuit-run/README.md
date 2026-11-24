@@ -34,6 +34,8 @@ the checkout's Haxeon compiler and HashLink runtime. See the
 The game advances in fixed 120 Hz steps and accepts buffered turns at tile
 centers. NativeKit schedules rendering through the window's frame clock. Each
 frame submits a sealed maze batch and the retained HUD on the same surface.
+Set `CIRCUIT_RUN_TIMING=1` when launching the desktop build to print frame
+submission timestamps and any presentation feedback the backend supplies.
 
 For WebGL2, build the browser host with the NativeKit Emscripten SDK and serve
 the output over HTTP.

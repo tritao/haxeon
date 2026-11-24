@@ -45,16 +45,16 @@ class Runtime implements Disposable {
 	}
 
 	/** Starts before SurfaceReady is dispatched. A browser host drives the returned loop with tick(). */
-	public function startApp(surface:Surface, app:App):AppLoop {
+	public function startApp(surface:Surface, app:App, ?recorder:FrameRecorder):AppLoop {
 		ensureLive();
 		if (surface == null || app == null || !surface.usesEventPump(events))
 			throw BindingError.invalidArgument("Runtime.startApp", "An app and a surface using this runtime's event pump are required");
-		return new AppLoop(events, surface, app);
+		return new AppLoop(events, surface, app, recorder);
 	}
 
 	/** Drives an app until it quits and any queued frame has completed. */
-	public function run(surface:Surface, app:App):Void {
-		scoped var loop = startApp(surface, app);
+	public function run(surface:Surface, app:App, ?recorder:FrameRecorder):Void {
+		scoped var loop = startApp(surface, app, recorder);
 		loop.run();
 	}
 
