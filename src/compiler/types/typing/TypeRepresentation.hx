@@ -858,7 +858,11 @@ class TypeRepresentation {
 	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>,
 			arguments:Array<TypedExpression>,
 			argumentTypesOf:GenericArgumentTypesResolver, ?receiver:AstType):GenericCallRepresentationResult {
-		var representation = genericFunction(fn, semanticSubstitutions, receiver),
+		// A generic call inside a local closure uses the types its shared body can pass.
+		var localRepresentation = session.currentContext.localTypeRepresentation,
+			physicalSubstitutions = localRepresentation == null ? semanticSubstitutions
+				: [for (parameter => type in semanticSubstitutions) parameter => localRepresentation(type)],
+			representation = genericFunction(fn, physicalSubstitutions, receiver),
 			argumentTypes = argumentTypesOf(fn, representation.substitutions),
 			result:TypeRepresentationResult = {
 				semantic: session.declarations.types.resultType(fn, semanticSubstitutions),

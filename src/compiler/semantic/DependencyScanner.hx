@@ -28,8 +28,14 @@ class DependencyScanner {
 				scanExpression(e, dependencies, typeParameters);
 			case VarDeclaration(_, type, e, _), TemporaryDeclaration(_, type, e, _):
 				// A type written only in the annotation still has to be loaded.
-				if (type != null)
-					scanAnnotation(type, dependencies, typeParameters);
+				if (type != null) {
+					var parameters = switch e {
+						case Lambda(_, _, _, _, _, _, generic) if (generic != null):
+							typeParameters == null ? generic.parameters : typeParameters.concat(generic.parameters);
+						default: typeParameters;
+					};
+					scanAnnotation(type, dependencies, parameters);
+				}
 				scanExpression(e, dependencies, typeParameters);
 			case Assignment(_, e, _), TemporaryAssignment(_, e, _), DeclaredAssignment(_, _, e, _), Return(e, _),
 				Throw(e, _):
@@ -226,7 +232,13 @@ class DependencyScanner {
 					default: scanType(root, dependencies, typeParameters);
 				}
 			case NewMap(_, _, _):
-			case Lambda(arguments, statements, _, _):
+			case Lambda(arguments, statements, _, _, _, _, generic):
+				if (generic != null) {
+					typeParameters = typeParameters == null
+						? generic.parameters : typeParameters.concat(generic.parameters);
+					for (constraint in generic.constraints)
+						scanAnnotation(constraint.type, dependencies, typeParameters);
+				}
 				// Local functions and anonymous functions are lambdas; modules
 				// referenced only inside their bodies are dependencies too.
 				for (argument in arguments)

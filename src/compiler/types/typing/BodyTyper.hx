@@ -3,6 +3,8 @@ package compiler.types.typing;
 import compiler.core.InternalError;
 import compiler.runtime.RuntimeType;
 import compiler.semantic.AbstractStatics;
+import compiler.syntax.Ast.AstArgument;
+import compiler.types.TypeRelations;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
 
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -92,7 +94,7 @@ class BodyTyper implements BodyTyping {
 		this.callResolver = new CallResolver(session, genericInstantiation, this);
 		this.expressionTyper = new ExpressionTyper(session, conversionResolver, callResolver, closureTyper,
 			anonymousTypeRegistry, this);
-		this.statementTyper = new StatementTyper(session, this);
+		this.statementTyper = new StatementTyper(session, this, closureTyper);
 	}
 
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
@@ -126,7 +128,7 @@ class BodyTyper implements BodyTyping {
 				violation.method.span);
 	}
 
-	static function hasFunctionMetadata(fn:compiler.syntax.Ast.AstFunction, name:String):Bool {
+	static function hasFunctionMetadata(fn:AstFunction, name:String):Bool {
 		if (fn.metadata != null)
 			for (entry in fn.metadata)
 				if (entry.name == name)
@@ -559,7 +561,7 @@ class BodyTyper implements BodyTyping {
 	 * Ends a body's type variables (`Monomorphs`): one nothing filled is Dynamic (or an error, for a `new Map()`), and every
 	 * one is replaced by its type in the body's statements, its lambdas and their cache entries, and its closure cells, so none leaves the typer.
 	 */
-	function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement> {
+	public function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement> {
 		var map = settleFrame(frame);
 		return map == null ? statements : map.statements(statements);
 	}
@@ -568,7 +570,7 @@ class BodyTyper implements BodyTyping {
 	 * A function or lambda may not name two parameters alike. Haxe lets the last one win; that is almost always a mistake,
 	 * so Haxeon reports it, as Rust does.
 	 */
-	public static function rejectDuplicateParameters(arguments:Array<compiler.syntax.Ast.AstArgument>):Void {
+	public static function rejectDuplicateParameters(arguments:Array<AstArgument>):Void {
 		var seen:Map<String, Bool> = [];
 		for (argument in arguments) {
 			if (argument.name == "_")
@@ -708,7 +710,7 @@ class BodyTyper implements BodyTyping {
 			case TInstance(NominalKind.Class, name, _): session.classDecls.exists(name)
 				&& !session.relations.isValueClass(type);
 			case TFunction(_, _, _), TAbstract(_, _, _), TDynamic, TNativeAbstract(_): false;
-			default: compiler.types.TypeRelations.isReference(type);
+			default: TypeRelations.isReference(type);
 		};
 
 	function valueCapture(type:CompilerType):Bool
@@ -1870,7 +1872,8 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, ?bound:compiler.types.analysis.Scope.LocalBinding):TypedExpression {
+			expectedType:Null<CompilerType>, ?bound:compiler.types.analysis.Scope.LocalBinding,
+			rawGeneric:Bool = false):TypedExpression {
 		var referenceName = name, referenceSpan = span;
 		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
 		var sourceName = span.isBareReference ? span.referenceName : null,
@@ -1939,7 +1942,8 @@ class BodyTyper implements BodyTyping {
 						value = session.representation.boundaryCast(value, representation);
 					default:
 				}
-			value;
+			var generic = called == null ? null : called.generic;
+			generic == null || rawGeneric ? value : callResolver.instantiateLocalValue(generic, value, expectedType);
 		} else {
 			var owner = context.lexicalOwner;
 			if (owner != null && name.indexOf(".") < 0) {
@@ -2713,7 +2717,7 @@ class BodyTyper implements BodyTyping {
 	 * `fn`'s argument types through the declaration query, in `substitutions` or, when none are given, the current body's: the
 	 * callee-facing view, where `?x:T` and `x:T = null` are `Null<T>`.
 	 */
-	public function argumentTypesOf(fn:compiler.syntax.Ast.AstFunction,
+	public function argumentTypesOf(fn:AstFunction,
 			?substitutions:Map<String, CompilerType>):Array<CompilerType>
 		return session.declarations.types.argumentTypes(fn,
 			substitutions == null ? context.typeSubstitutions : substitutions);
@@ -2722,10 +2726,10 @@ class BodyTyper implements BodyTyping {
 	public function defaultValueType(value:AstExpression):Null<CompilerType>
 		return knownExpressionType(value);
 
-	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
+	static function isPosInfosParameter(argument:AstArgument):Bool
 		return CallResolver.isPosInfosParameter(argument);
 
-	public function typeDefaultExpression(argument:compiler.syntax.Ast.AstArgument, expected:CompilerType,
+	public function typeDefaultExpression(argument:AstArgument, expected:CompilerType,
 			declarationName:String):TypedExpression {
 		var expression = argument.defaultValue;
 		if (expression == null)

@@ -1,5 +1,9 @@
 package compiler.types.typing;
 
+import compiler.semantic.LambdaName;
+import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstLocalGenerics;
 import compiler.types.NominalInheritance;
 import compiler.types.analysis.BindingWalker;
 
@@ -42,9 +46,12 @@ class StatementTyper {
 	final session:TypingSession;
 	final bodyTyper:BodyTyping;
 
-	public function new(session:TypingSession, bodyTyper:BodyTyping) {
+	final closureTyper:ClosureTyper;
+
+	public function new(session:TypingSession, bodyTyper:BodyTyping, closureTyper:ClosureTyper) {
 		this.session = session;
 		this.bodyTyper = bodyTyper;
+		this.closureTyper = closureTyper;
 	}
 
 	function alwaysExits(statements:Array<TypedStatement>):Bool
@@ -96,7 +103,7 @@ class StatementTyper {
 	 * (`CallResolver.typeInlineCall`); as in Haxe, it cannot be assigned (`typeAssignment`).
 	 */
 	function declareInlineFunction(name:String, declared:Null<AstType>,
-			arguments:Array<compiler.syntax.Ast.AstArgument>,
+			arguments:Array<AstArgument>,
 			body:Array<AstStatement>, lambdaSpan:SourceSpan, span:SourceSpan, scope:Scope,
 			temporary:Null<compiler.syntax.Ast.TemporaryLocal>):Array<TypedStatement> {
 		scope.define(name, TDynamic, span, true, null, false, {arguments: arguments,
@@ -146,7 +153,7 @@ class StatementTyper {
 	 * types, as a declared result would give them, and a type variable for the result, which typing the body fills, as
 	 * Haxe binds the name before typing the body. Null where no body is being typed.
 	 */
-	function selfReferenceType(name:String, arguments:Array<compiler.syntax.Ast.AstArgument>,
+	function selfReferenceType(name:String, arguments:Array<AstArgument>,
 			span:SourceSpan):Null<CompilerType> {
 		var context = session.currentContext, parameters:Array<CompilerType> = [];
 		for (argument in arguments) {
@@ -168,6 +175,33 @@ class StatementTyper {
 		]));
 	}
 
+	function declareGenericFunction(name:String, declared:Null<AstType>,
+			arguments:Array<AstArgument>,
+			body:Array<AstStatement>, identity:String, generic:AstLocalGenerics,
+			lambdaSpan:SourceSpan, span:SourceSpan, scope:Scope, isInline:Bool):Array<TypedStatement> {
+		var context = session.currentContext,
+			resultSyntax = switch declared {
+				case FunctionType(_, result, _): result;
+				default: InferredType;
+			},
+				signature:AstFunction = {
+					name: name, isStatic: false, isInline: isInline, arguments: arguments, result: resultSyntax,
+					statements: body,
+					typeParameters: generic.parameters, typeConstraints: generic.constraints, span: span
+				},
+				local = new LocalGenericFunction(session, signature,
+				LambdaName.of(context.name, identity));
+		var binding = scope.define(name, TArray(TDynamic), span, true, null, false, {
+			arguments: arguments, body: body, outerLocals: scope.visibleLocalNames(), declaredIn: scope, generic: local
+		});
+		var closure = closureTyper.typeLambda(arguments, body, identity, lambdaSpan, scope, local.semantic, false,
+			context, local);
+		var declarationScope = scope.captureSnapshot(span);
+		return local.initialize(binding.id, closure, (substitutions, type, key) -> session.withLexicalContext(context,
+			() -> closureTyper.typeLambda(arguments, body, LambdaName.specialization(identity, key), lambdaSpan,
+			declarationScope, type, false, context, null, substitutions)));
+	}
+
 	/** A `var` declaration, or the declaration of `temporary`, a local the typer introduced under `name`. */
 	function typeLocalDeclaration(name:String, declared:Null<AstType>, initializer:AstExpression, span:SourceSpan,
 			scope:Scope, statements:Array<AstStatement>, statementIndex:Int,
@@ -177,6 +211,9 @@ class StatementTyper {
 		// A lambda with a declared result type is bound through a typed local; look through that wrapper.
 		var lambda = initializer;
 		switch initializer {
+			case Lambda(arguments, body, identity, lambdaSpan, isInline, _, generic) if (generic != null):
+				return declareGenericFunction(name, declared, arguments, body, identity, generic, lambdaSpan, span,
+					scope, isInline == true);
 			case BlockExpression(wrapper, Variable(_, _), _) if (wrapper.length == 1):
 				switch wrapper[0] {
 					case VarDeclaration(_, _, wrapped, _): lambda = wrapped;
@@ -511,6 +548,8 @@ class StatementTyper {
 				fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 			if (binding != null && binding.localFunction != null && binding.localFunction.isInline == true)
 				fail("E1007", "Cannot set inline closure", span);
+			if (binding != null && binding.localFunction != null && binding.localFunction.generic != null)
+				fail("E1007", 'Cannot access function $name for writing', span);
 			if (binding == null) {
 				var thisType = scope.receiverType(),
 					owner = session.currentContext.lexicalOwner;

@@ -1,5 +1,7 @@
 package compiler.semantic;
 
+import compiler.core.TextDigest;
+
 /**
  * The names of the functions a lambda is compiled to: `$lambda:<enclosing>:<identity>`, where `<enclosing>` is the name of the
  * function or lambda it is written in and `<identity>` the one the parser gave it, `<member>#<anchor>#<ordinal>` (see
@@ -49,10 +51,18 @@ class LambdaName {
 	 * is a sibling group of its own and the positional ordinal stays a plain number.
 	 */
 	public static function variant(identity:String, ordinal:Int):String {
+		return suffix(identity, "~" + ordinal);
+	}
+
+	/** A closure retained across an edit must keep a name with the same calling convention. */
+	public static function specialization(identity:String, key:String):String
+		return suffix(identity, "~" + TextDigest.sha256(key).substr(0, 32));
+
+	static function suffix(identity:String, suffix:String):String {
 		var position = identity.lastIndexOf("#");
 		// An identity without an ordinal (none is built today) keeps all of itself rather than losing its last character.
-		return position < 0 ? identity + "~" + ordinal : identity.substring(0,
-			position) + "~" + ordinal + identity.substring(position);
+		return position < 0 ? identity + suffix : identity.substring(0,
+			position) + suffix + identity.substring(position);
 	}
 
 	public static inline function is(name:String):Bool

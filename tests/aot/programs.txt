@@ -315,6 +315,7 @@ loadstore-object-alias
 local-function
 local-function-defaults
 local-function-recursion
+local-generic-function
 local-inference-reach
 local-inference-type-variables
 local-inline-function-allocations

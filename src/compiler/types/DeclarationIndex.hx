@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.syntax.Ast.AstTypeConstraint;
 import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
 import compiler.syntax.Ast;
@@ -226,8 +227,8 @@ class DeclarationIndex {
 		DeclarationFacts.KIND_CLASSES);
 	public final symbols:Map<String, DeclarationSymbol> = [];
 
-	final typeConstraints:Map<String, Array<compiler.syntax.Ast.AstTypeConstraint>> = [];
-	final typeParametersByOwner:Map<String, Array<String>> = [];
+	final typeConstraints:Map<String, Array<AstTypeConstraint>> = [];
+	final typeParametersByOwner:Map<String, Map<String, CompilerType>> = [];
 
 	public final inheritance:NominalInheritance;
 	public final conversions:AbstractConversionGraph;
@@ -400,11 +401,7 @@ class DeclarationIndex {
 				if (visiting.indexOf(key) >= 0) false;
 				else {
 					var constraints = typeConstraints.get(key),
-						parameters = typeParametersByOwner.get(ownerName),
-						substitutions:Map<String, CompilerType> = [];
-					if (parameters != null)
-						for (name in parameters)
-							substitutions.set(name, TTypeParameter(owner, name));
+						substitutions = typeParametersByOwner.get(ownerName) ?? [];
 					var found = false;
 					if (constraints != null)
 						for (constraint in constraints) {
@@ -440,11 +437,7 @@ class DeclarationIndex {
 					return;
 				visiting.push(key);
 				var constraints = typeConstraints.get(key),
-					parameters = typeParametersByOwner.get(ownerName),
-					substitutions:Map<String, CompilerType> = [];
-				if (parameters != null)
-					for (name in parameters)
-						substitutions.set(name, TTypeParameter(owner, name));
+					substitutions = typeParametersByOwner.get(ownerName) ?? [];
 				if (constraints != null)
 					for (constraint in constraints) {
 						var bound = resolve(constraint.type, constraint.span, substitutions);
@@ -489,17 +482,30 @@ class DeclarationIndex {
 			indexTypeParameters(fn.name, fn.typeParameters == null ? [] : fn.typeParameters, fn.typeConstraints);
 	}
 
+	public function indexLocalTypeParameters(owner:String, substitutions:Map<String, CompilerType>,
+			constraints:Array<AstTypeConstraint>):Void {
+		if (constraints.length == 0 || typeParametersByOwner.exists(owner))
+			return;
+		typeParametersByOwner.set(owner, substitutions);
+		indexConstraints(owner, constraints);
+	}
+
 	function indexTypeParameters(owner:String, parameters:Array<String>,
-			constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>):Void {
-		typeParametersByOwner.set(owner, parameters);
-		if (constraints != null)
-			for (constraint in constraints) {
-				var key = '$owner:${constraint.parameter}',
-					entries = typeConstraints.get(key);
-				if (entries == null)
-					typeConstraints.set(key, entries = []);
-				entries.push(constraint);
-			}
+			constraints:Null<Array<AstTypeConstraint>>):Void {
+		if (constraints != null && constraints.length > 0) {
+			typeParametersByOwner.set(owner, [for (name in parameters) name => TTypeParameter(owner, name)]);
+			indexConstraints(owner, constraints);
+		}
+	}
+
+	function indexConstraints(owner:String, constraints:Array<AstTypeConstraint>):Void {
+		for (constraint in constraints) {
+			var key = '$owner:${constraint.parameter}',
+				entries = typeConstraints.get(key);
+			if (entries == null)
+				typeConstraints.set(key, entries = []);
+			entries.push(constraint);
+		}
 	}
 
 	function resolveInner(type:AstType, span:SourceSpan, resolving:Null<Map<String, Bool>>,
@@ -605,7 +611,7 @@ class DeclarationIndex {
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
 					var declaration:{
 						typeParameters:Array<String>,
-						typeConstraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+						typeConstraints:Null<Array<AstTypeConstraint>>,
 						kind:NominalKind
 					};
 					if (classes.exists(name)) {
@@ -692,7 +698,7 @@ class DeclarationIndex {
 			target.push(field);
 	}
 
-	function validateTypeArguments(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+	function validateTypeArguments(name:String, constraints:Null<Array<AstTypeConstraint>>,
 			substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
 		if (constraints == null)

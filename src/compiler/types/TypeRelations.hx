@@ -491,7 +491,7 @@ class TypeRelations {
 		expected = Monomorphs.follow(expected);
 		switch actual {
 			case TTypeParameter(_, _):
-				return declarations.typeParameterSatisfies(actual, expected);
+				return equals(actual, expected) || declarations.typeParameterSatisfies(actual, expected);
 			case _:
 		}
 		var valueCapability = switch expected {

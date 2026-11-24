@@ -31,6 +31,8 @@ typedef LocalFunction = {
 
 	/** An inline function's span, which a call of it from its own body is in. */
 	final ?span:SourceSpan;
+
+	final ?generic:compiler.types.typing.LocalGenericFunction;
 }
 
 /** A local as the typer knows it: its name, declaration, binding id and the facts recorded about it. */
@@ -270,6 +272,22 @@ class Scope {
 			result.push(value);
 		}
 		return result;
+	}
+
+	/** The bindings and capture state at the declaration of a deferred closure variant. */
+	public function captureSnapshot(span:SourceSpan):Scope {
+		var snapshot = new Scope();
+		for (value in visibleValues()) {
+			var copy = if (isCaptured(value))
+				snapshot.defineCapture(value.source, typeOf(value), span, isCellCaptured(value), cellClassOf(value),
+				value.id, declaredTypeOf(value), value.localFunction, value.declaration, value.temporary)
+				else snapshot.define(value.source, declaredTypeOf(value), span, isAssignedBinding(value), value.id,
+				value.receiver, value.localFunction, value.declaration, value.temporary);
+			copy.keyPathConstant = value.keyPathConstant;
+			if (!isCaptured(value))
+				snapshot.refineBinding(copy, typeOf(value));
+		}
+		return snapshot;
 	}
 
 	/** The receiver's type here, or null outside a method. */

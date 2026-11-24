@@ -1,6 +1,8 @@
 package compiler.types.typing;
 
+import compiler.syntax.Ast.AstArgument;
 import compiler.types.typing.NullSafety.NullSafetyUse;
+import compiler.types.typing.MonomorphFrames.MonomorphFrame;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.syntax.Ast.AstExpression;
@@ -40,6 +42,7 @@ interface BodyTyping {
 			?use:NullSafetyUse):TypedExpression;
 	function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement>;
+	function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement>;
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;
 	function functionResultType(fn:AstFunction, span:SourceSpan):CompilerType;
 	function dynamicIndex(index:TypedExpression):TypedExpression;
@@ -48,7 +51,7 @@ interface BodyTyping {
 
 	// Expression forms BodyTyper owns.
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
-			?bound:compiler.types.analysis.Scope.LocalBinding):TypedExpression;
+			?bound:compiler.types.analysis.Scope.LocalBinding, rawGeneric:Bool = false):TypedExpression;
 
 	function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
 			scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>;
@@ -75,7 +78,7 @@ interface BodyTyping {
 	function stringifyMap(value:TypedExpression):Null<TypedExpression>;
 	function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation, arguments:Array<TypedExpression>,
 			span:compiler.core.Source.SourceSpan):TypedExpression;
-	function typeDefaultExpression(argument:compiler.syntax.Ast.AstArgument, expected:CompilerType,
+	function typeDefaultExpression(argument:AstArgument, expected:CompilerType,
 			declarationName:String):TypedExpression;
 	function posInfosExpression(span:SourceSpan):AstExpression;
 	function typeInlineInitializer(field:compiler.syntax.Ast.AstField, owner:String, expected:Null<CompilerType>,

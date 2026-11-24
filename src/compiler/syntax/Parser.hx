@@ -1,5 +1,6 @@
 package compiler.syntax;
 
+import compiler.syntax.Ast.AstTypeConstraint;
 import compiler.core.Diagnostic;
 import compiler.core.InternalError;
 import compiler.syntax.Ast.AstExpression;
@@ -478,7 +479,7 @@ class Parser {
 	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			isEnum:Bool = false):AstAbstract {
 		var name = textOf(consume(TokenKind.Identifier)),
-			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
@@ -631,7 +632,7 @@ class Parser {
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool,
 			metadata:Array<compiler.syntax.Ast.AstMetadata>):AstTypeAlias {
 		var name = textOf(consume(TokenKind.Identifier)),
-			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.Assign);
 		var type = parseType(), end = spanOf(previous());
@@ -655,7 +656,7 @@ class Parser {
 
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
 		var name = textOf(consume(TokenKind.Identifier)),
-			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			cases = [],
 			conformances = [],
@@ -919,7 +920,7 @@ class Parser {
 			isExtern:Bool,
 			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>,
 			isOverride:Bool, isDynamic:Bool):AstFunction {
-		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+		var typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var arguments:Array<AstArgument> = [];
@@ -1030,7 +1031,7 @@ class Parser {
 		}
 	}
 
-	function parseTypeParameters(?constraints:Array<compiler.syntax.Ast.AstTypeConstraint>):Array<String> {
+	function parseTypeParameters(?constraints:Array<AstTypeConstraint>):Array<String> {
 		var result = [];
 		if (!match(TokenKind.Less))
 			return result;
@@ -1072,7 +1073,7 @@ class Parser {
 			isStruct:Bool = false):AstClass {
 		var start = spanOf(consume(isStruct ? TokenKind.Struct : TokenKind.Class)),
 			name = textOf(consume(TokenKind.Identifier)),
-			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			base:Null<AstType> = null,
 			interfaces = [];
@@ -1408,7 +1409,7 @@ class Parser {
 	function parseInterface():AstInterface {
 		var start = spanOf(consume(TokenKind.Interface)),
 			name = textOf(consume(TokenKind.Identifier)),
-			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			bases = [];
 		if (match(TokenKind.Extends)) {
@@ -1446,7 +1447,7 @@ class Parser {
 			}
 			var methodStart = spanOf(consume(TokenKind.Function)),
 				methodName = textOf(consume(TokenKind.Identifier));
-			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
+			var typeConstraints:Array<AstTypeConstraint> = [],
 				typeParameters = parseTypeParameters(typeConstraints);
 			consume(TokenKind.LeftParen);
 			var arguments:Array<AstArgument> = [];
@@ -1537,7 +1538,9 @@ class Parser {
 			advance();
 		if (match(TokenKind.Function)) {
 			var start = inlined ? spanOf(ahead(-2)) : spanOf(previous()),
-				name = textOf(consume(TokenKind.Identifier));
+				name = textOf(consume(TokenKind.Identifier)),
+				constraints:Array<AstTypeConstraint> = [],
+				parameters = parseTypeParameters(constraints);
 			// A local function is anchored at its name.
 			lambdaPath.push(name);
 			var identity = openLambda();
@@ -1567,7 +1570,8 @@ class Parser {
 				span = start.merge(end),
 				declared = result == null ? null : localFunctionType(arguments, result);
 			closeLambda();
-			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined, true), span);
+			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined, true,
+				parameters.length == 0 ? null : {parameters: parameters, constraints: constraints}), span);
 		}
 		if (match(TokenKind.Defer)) {
 			var start = spanOf(previous());

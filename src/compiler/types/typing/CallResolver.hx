@@ -1494,6 +1494,68 @@ class CallResolver {
 		return new TypedExpression(TClosureCall(typedCallee, typedArguments), functionType.result, span);
 	}
 
+	public function instantiateLocalValue(local:LocalGenericFunction, value:TypedExpression,
+			expected:Null<CompilerType>):TypedExpression {
+		if (local.signature.isInline == true)
+			fail("E1007", "Cannot create closure on inline closure", value.span);
+		var substitutions = local.enclosing.copy();
+		if (expected != null)
+			genericInstantiation.inferFromType(local.semantic, expected, local.parameters, substitutions, value.span);
+		var type = localInstantiation(local, substitutions, value.span);
+		return local.value(session, value, substitutions, type);
+	}
+
+	function localInstantiation(local:LocalGenericFunction, substitutions:Map<String, CompilerType>,
+			span:SourceSpan):CompilerType {
+		genericInstantiation.settleNullArguments(substitutions);
+		for (parameter in local.parameters)
+			if (!substitutions.exists(parameter))
+				substitutions.set(parameter,
+					LocalGenericFunction.variable(session, 'type parameter "$parameter"', span));
+		for (constraint in local.signature.typeConstraints ?? []) {
+			var actual = requiredMapValue(substitutions, constraint.parameter),
+				bound = session.declarations.resolve(constraint.type, constraint.span, substitutions);
+			session.monomorphs.whenKnown(TFunction([actual], bound, []),
+				() -> genericInstantiation.checkConstraint(constraint, substitutions, span));
+		}
+		return local.instantiate(substitutions, session.relations);
+	}
+
+	function typeLocalGenericCall(local:LocalGenericFunction, callee:TypedExpression,
+			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expected:Null<CompilerType>):TypedExpression {
+		var name = local.signature.name, preset = local.enclosing.copy(), declaration = local.signature.span;
+		if (local.signature.isInline == true && span.file == declaration.file
+			&& span.start >= declaration.start && span.end <= declaration.end)
+			fail("E1007", "Inline function cannot be recursive", declaration);
+		switch local.semantic {
+			case TFunction(_, result, _) if (expected != null && !expected.match(TVoid)):
+				genericInstantiation.inferFromType(result, expected, local.parameters, preset, span);
+			default:
+		}
+		var declared = local.signature.arguments,
+			count = declared.length,
+			rest = count > 0 && RestArguments.isRest(declared[count - 1].type),
+			required = FunctionTypes.requiredCount(FunctionTypes.ofArguments(declared), rest ? count - 1 : count);
+		if (arguments.length < required || arguments.length > count && !rest)
+			fail("E1008", 'Incorrect number of arguments to "$name"', span);
+		var prepared = typeGenericCallArguments(local.signature, arguments, scope, span, null, preset),
+			type = localInstantiation(local, prepared.substitutions, span);
+		return switch type {
+			case TFunction(parameters, result, _):
+				var typed = coerceArguments(prepared.arguments, parameters, name),
+					variant = local.value(session, callee, prepared.substitutions, type);
+				for (index in typed.length...parameters.length)
+					typed.push(bodyTyper.coerceArgument(new TypedExpression(TNullLiteral, TNull, span),
+						parameters[index], name, index + 1));
+				invalidateClosureWrites(Variable(name, span), name, scope);
+				scope.invalidateAllExpressions();
+				new TypedExpression(TClosureCall(variant, typed), result, span);
+			default:
+				throw new InternalError("Generic local without a function type");
+		};
+	}
+
 	/** A call of the local inline function `local`: its body, where the call is (`LocalInlineFunctions.call`). */
 	function typeInlineCall(name:String, local:compiler.types.analysis.Scope.LocalFunction,
 			arguments:Array<AstExpression>,
@@ -1827,6 +1889,10 @@ class CallResolver {
 		if (calleeLocal != null) {
 			// A local function runs a known body, so a call through it only clears facts when that body might.
 			var local = calleeLocal.localFunction;
+			if (local != null && local.generic != null) {
+				var callee = bodyTyper.typeVariableExpression(name, span, scope, null, calleeLocal, true);
+				return typeLocalGenericCall(local.generic, callee, arguments, span, scope, expectedType);
+			}
 			if (local != null && local.isInline == true)
 				return typeInlineCall(name, local, arguments, span, scope, expectedType);
 			return typeClosureCall(Variable(name, span), arguments, span, scope, name,

@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.syntax.Ast.AstTypeConstraint;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.AstFunctions;
 import compiler.syntax.AstPredicates;
@@ -336,9 +337,9 @@ class ModuleCanonicalizer {
 			canonicalType(method.result, aliases, parameters), [], method.span);
 	}
 
-	static function canonicalConstraints(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+	static function canonicalConstraints(constraints:Null<Array<AstTypeConstraint>>,
 			aliases:AliasTable,
-			typeParameters:Array<String>):Null<Array<compiler.syntax.Ast.AstTypeConstraint>>
+			typeParameters:Array<String>):Null<Array<AstTypeConstraint>>
 		return constraints == null ? null : [for (constraint in constraints)
 			{
 				parameter:constraint.parameter,
@@ -458,9 +459,13 @@ class ModuleCanonicalizer {
 				span): AnnotatedStatement(metadata, canonicalStatement(inner, module, entry, locals, aliases), span);
 			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
-			case VarDeclaration(n, t, e,
-				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases),
-				canonicalExpression(e, module, entry, locals, aliases), span);
+			case VarDeclaration(n, t, e, span):
+				var parameters = switch e {
+					case Lambda(_, _, _, _, _, _, generic) if (generic != null): generic.parameters;
+					default: null;
+				};
+				VarDeclaration(n, t == null ? null : canonicalType(t, aliases, parameters),
+					canonicalExpression(e, module, entry, locals, aliases), span);
 			case ScopedDeclaration(n, t, e, span):
 				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases),
 					canonicalExpression(e, module, entry, locals, aliases), span);
@@ -740,7 +745,12 @@ class ModuleCanonicalizer {
 				canonicalExpression(offset, module, entry, locals, aliases), s);
 			case PostfixIncrement(target, delta,
 				s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
-			case Lambda(arguments, body, identity, s, isInline, isNamed):
+			case Lambda(arguments, body, identity, s, isInline, isNamed, generic):
+				if (generic != null && aliases != null) {
+					aliases = copyAliases(aliases);
+					for (parameter in generic.parameters)
+						aliases.set(parameter, parameter);
+				}
 				Lambda([for (argument in arguments)
 					{
 						name:argument.name,
@@ -752,7 +762,11 @@ class ModuleCanonicalizer {
 							aliases)
 					}],
 						canonicalBlock(body, module, entry, locals, aliases,
-						[for (argument in arguments) argument.name]), identity, s, isInline, isNamed);
+						[for (argument in arguments) argument.name]), identity, s, isInline, isNamed,
+						generic == null ? null : {
+							parameters: generic.parameters,
+							constraints: canonicalConstraints(generic.constraints, aliases, generic.parameters)
+						});
 		}
 
 	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String,

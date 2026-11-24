@@ -1,5 +1,7 @@
 package compiler.types.typing;
 
+import compiler.semantic.LambdaName;
+import compiler.syntax.Ast.AstArgument;
 import compiler.core.Diagnostic;
 import compiler.core.InternalError;
 import compiler.semantic.GenericSpecializationRegistry;
@@ -77,7 +79,7 @@ class TypingSession {
 	public function enumConstructorDeclaration(enumName:String, caseName:String):compiler.syntax.Ast.AstEnum {
 		var declaration = enumDecls.header(enumName), recorder = reads();
 		if (declaration == null)
-			throw new compiler.core.InternalError('Missing enum "$enumName"');
+			throw new InternalError('Missing enum "$enumName"');
 		if (recorder != null)
 			recorder.read(FactAspect.Case, enumName + "." + caseName);
 		return declaration;
@@ -794,7 +796,7 @@ class TypingSession {
 		return bodyIsPure(local.arguments, local.body, local.outerLocals, owner);
 
 	/** Whether running these statements can change state flow facts describe; `outerLocals` are locals it may freely write. */
-	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>,
+	public function bodyIsPure(arguments:Array<AstArgument>,
 			body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
 			owner:Null<String>, ?privateMaps:Array<String>):Bool {
 		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(localPurityInference(),
@@ -943,7 +945,7 @@ class TypingSession {
 
 	function enter(name:String, typeSubstitutions:Null<Map<String, CompilerType>>, ownerOverride:Null<String>,
 			sourceFunctionName:Null<String>, unit:Bool):TypingContext {
-		var isLambda = compiler.semantic.LambdaName.is(name),
+		var isLambda = LambdaName.is(name),
 			owner = codeOwner(ownerOverride != null ? ownerOverride : isLambda
 				? currentContext.lexicalOwner : parentPath(name)),
 			source = sourceFunctionName != null ? sourceFunctionName : isLambda
@@ -970,9 +972,23 @@ class TypingSession {
 	/** Records a warning on the body being typed: the innermost one that is not a lambda, since a lambda is part of its function. */
 	public function warn(diagnostic:Diagnostic):Void {
 		var index = bodyContexts.length - 1;
-		while (index > 0 && compiler.semantic.LambdaName.is(bodyContexts[index].name))
+		while (index > 0 && LambdaName.is(bodyContexts[index].name))
 			index--;
 		bodyContexts[index].warnings.push(diagnostic);
+	}
+
+	public function withLexicalContext<T>(context:TypingContext, run:() -> T):T {
+		var depth = bodyContexts.length;
+		if (currentContext != context)
+			bodyContexts.push(context);
+		try {
+			var result = run();
+			bodyContexts.resize(depth);
+			return result;
+		} catch (error:haxe.Exception) {
+			bodyContexts.resize(depth);
+			throw error;
+		}
 	}
 
 	public function leaveBody(body:TypingContext):Void {

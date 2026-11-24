@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.semantic.LambdaName;
 import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Diagnostic;
@@ -60,10 +61,16 @@ class ClosureTyper {
 	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan,
 			scope:Scope,
 			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool,
-			outerContext:TypingContext):TypedExpression {
+			outerContext:TypingContext, ?generic:LocalGenericFunction,
+			?variantSubstitutions:Map<String, CompilerType>):TypedExpression {
+		var lambdaSubstitutions = variantSubstitutions
+			?? (generic == null ? outerContext.typeSubstitutions : generic.own);
+		var elaborationMark = generic == null ? null : session.closureConversion.mark();
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
 		if (span.generatedReason != null)
 			lambdaKey += ':${span.end}:${span.generatedReason}';
+		if (variantSubstitutions != null)
+			lambdaKey += ':$identity';
 		var expectedFunction = expectedFunctionType(expectedType),
 			inferContextualResult = expectedFunction != null && (switch (expectedFunction.result) {
 				case TDynamic: true;
@@ -81,8 +88,10 @@ class ClosureTyper {
 			var argumentType = (switch (argument.type) {
 				case InferredType: true;
 				default: false;
-			}) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : bodyTyper.lowerType(argument.type,
-				argument.span);
+			}) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : generic == null
+				&& variantSubstitutions == null
+				? bodyTyper.lowerType(argument.type, argument.span)
+				: session.declarations.resolve(argument.type, argument.span, lambdaSubstitutions);
 			if (argumentType != null
 				&& (switch (argument.type) {
 					case InferredType: false;
@@ -205,11 +214,11 @@ class ClosureTyper {
 			[for (name in freeNames) if (pathConstants.exists(name)) name + "=" + pathConstants.get(name)].join(",");
 		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",")
 			+ "|" + constantIdentity;
-		if (session.counters.lambdaCache.exists(variantKey))
+		if (generic == null && variantSubstitutions == null && session.counters.lambdaCache.exists(variantKey))
 			return session.counters.lambdaCache.get(variantKey);
 		var variant = session.counters.nextLambdaVariant(lambdaKey);
 		if (variant > 0)
-			identity = compiler.semantic.LambdaName.variant(identity, variant);
+			identity = LambdaName.variant(identity, variant);
 		var typedBodyScope = new Scope(), parameters:Array<LocalBinding> = [];
 		for (i in 0...lambdaArguments.length) {
 			var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
@@ -243,11 +252,17 @@ class ClosureTyper {
 		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
 		// function with a new environment type: closures made before the edit keep the code that reads their environment.
-		var capturedIdentity = compiler.semantic.LambdaName.withCaptures(identity, [for (capture in captures)
+		var capturedIdentity = LambdaName.withCaptures(identity, [for (capture in captures)
 			capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
-		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, capturedIdentity),
-			lambdaContext = session.enterBody(lambdaName, outerContext.typeSubstitutions, null),
-			context = session.currentContext;
+		var lambdaName = LambdaName.of(outerContext.name, capturedIdentity),
+			lambdaContext = session.enterBody(lambdaName, lambdaSubstitutions, null),
+			context = session.currentContext,
+			elaboration = generic == null ? null : new GenericElaboration([generic.owner], generic.erased, bodyTyper),
+			enclosingRepresentation = outerContext.localTypeRepresentation;
+		context.localTypeRepresentation = elaboration == null ? enclosingRepresentation : type -> {
+			var erased = elaboration.type(type);
+			return enclosingRepresentation == null ? erased : enclosingRepresentation(erased);
+		};
 		if (session.immediateLambda != span)
 			context.nullSafetyClosure = true;
 		session.immediateLambda = null;
@@ -295,6 +310,8 @@ class ClosureTyper {
 				ExceptionEdge);
 		for (i in 0...arguments.length)
 			bodyTyper.bindCell(parameters[i], lambdaArguments[i].type);
+		var variantFrame = variantSubstitutions == null && generic == null ? null
+			: session.monomorphs.begin(session.closureConversion.mark());
 		var typedBody = bodyTyper.typeStatements(body, typedBodyScope, expectedFunction == null
 			|| inferContextualResult ? null : expectedFunction.result),
 			inferredResult:CompilerType;
@@ -311,21 +328,24 @@ class ClosureTyper {
 			else
 				compiler.types.Monomorphs.unify(inferredResult, variable);
 		}
+		if (variantFrame != null) {
+			typedBody = bodyTyper.settleMonomorphs(variantFrame, typedBody);
+			inferredResult = session.monomorphs.settled(inferredResult);
+		}
 		context.expectedReturnType = inferredResult;
-		var lambdaCells = copyMap(context.storage.cells),
-			lambdaCellTypes = copyMap(context.storage.types),
-			lambdaCellKinds = copyMap(context.storage.kinds);
-		session.leaveBody(lambdaContext);
 		if ((switch (inferredResult) {
 			case TVoid: false;
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(typedBody,
 			function(type, cases) return bodyTyper.exhaustiveSwitch(type, cases)))
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
-		var environment:Null<String> = null;
+		var lambdaCells = copyMap(context.storage.cells),
+			lambdaCellTypes = copyMap(context.storage.types),
+			lambdaCellKinds = copyMap(context.storage.kinds),
+			environment:Null<String> = null;
 		if (captures.length > 0)
-			environment = compiler.semantic.LambdaName.ENVIRONMENT_PREFIX
-				+ '${session.currentContext.name}:$capturedIdentity';
+			environment = LambdaName.ENVIRONMENT_PREFIX
+				+ '${outerContext.name}:$capturedIdentity';
 		if (environment != null)
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({
@@ -352,8 +372,16 @@ class ClosureTyper {
 			TFunction([for (argument in lambdaArguments) argument.type], inferredResult,
 			FunctionTypes.ofArguments(arguments)),
 			span);
-		session.counters.lambdaCache.set(variantKey, lambdaResult);
-		session.monomorphs.recordLambda(variantKey);
+		if (generic != null && elaboration != null && elaborationMark != null) {
+			generic.finish(inferredResult, elaboration);
+			session.closureConversion.mapTypesSince(elaborationMark, elaboration);
+			lambdaResult = elaboration.expression(lambdaResult);
+		}
+		session.leaveBody(lambdaContext);
+		if (generic == null && variantSubstitutions == null) {
+			session.counters.lambdaCache.set(variantKey, lambdaResult);
+			session.monomorphs.recordLambda(variantKey);
+		}
 		return lambdaResult;
 	}
 

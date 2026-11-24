@@ -1,5 +1,6 @@
 package compiler.types.analysis;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
@@ -27,7 +28,8 @@ class LocalInlineFunctions {
 	/** Whether the lambda a local function is initialized with is inline and is replaced by its body at each call. */
 	public static function expands(lambda:AstExpression):Bool
 		return switch lambda {
-			case Lambda(arguments, body, _, span, true): plainArguments(arguments) && inlineBody(body, span) != null;
+			case Lambda(arguments, body, _, span, true, _, null): plainArguments(arguments)
+				&& inlineBody(body, span) != null;
 			default: false;
 		};
 
@@ -44,7 +46,7 @@ class LocalInlineFunctions {
 			values:Array<AstExpression>, span:SourceSpan):AstExpression {
 		var inlined = inlineBody(body, span);
 		if (inlined == null)
-			throw new compiler.core.InternalError("A local inline function that does not expand was called inline",
+			throw new InternalError("A local inline function that does not expand was called inline",
 				span);
 		var statements:Array<AstStatement> = [];
 		for (index in 0...arguments.length) {

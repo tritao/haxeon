@@ -47,3 +47,7 @@ typedef Observed = {q:Array<Float>, dq:Array<Float>,
 angularVelocity:Array<Float>, down:Array<Float>,
 /** Seconds on the gait clock. */
 gaitTime:Float};
+function local() {
+  function label < T:Labelled > (value:T):String return value.label();
+  function nested < T:Iterable<Int> > (value:T):T return value;
+}

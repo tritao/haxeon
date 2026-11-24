@@ -17,6 +17,7 @@ class TypingContext {
 	public var name(get, never):String;
 	public var lexicalOwner(get, never):Null<String>;
 	public final typeSubstitutions:Map<String, CompilerType>;
+	public var localTypeRepresentation:Null<CompilerType->CompilerType> = null;
 
 	/**
 	 * Warnings raised while typing this body and the lambdas written in it. They are kept with what the body becomes (a

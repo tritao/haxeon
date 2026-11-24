@@ -348,7 +348,7 @@ enum AstExpression {
 	 * holds is not in scope in its own initializer.
 	 */
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan,
-		?isInline:Bool, ?isNamed:Bool);
+		?isInline:Bool, ?isNamed:Bool, ?generic:AstLocalGenerics);
 }
 
 /** Compile-time query over a fixed native ABI layout. */
@@ -457,6 +457,11 @@ typedef AstFunction = {
 	final result:AstType;
 	final statements:Array<AstStatement>;
 	final span:SourceSpan;
+}
+
+typedef AstLocalGenerics = {
+	final parameters:Array<String>;
+	final constraints:Array<AstTypeConstraint>;
 }
 
 /** Upper bound attached to a generic function or method parameter. */

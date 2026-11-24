@@ -59,7 +59,7 @@ class GenericElaboration extends TypedTypeMap {
 	}
 
 	/** `type` with each type parameter of `owners` replaced by its representation in `substitutions`. */
-	static function substitute(type:CompilerType, owners:Array<String>,
+	public static function substitute(type:CompilerType, owners:Array<String>,
 			substitutions:Map<String, CompilerType>):CompilerType
 		return new ParameterSubstitution(owners, substitutions).within(type);
 }
@@ -86,6 +86,8 @@ private class ParameterSubstitution {
 		function each(types:Array<CompilerType>):Array<CompilerType>
 			return [for (part in types) within(part)];
 		return switch type {
+			case TMonomorph(_) if (!compiler.types.Monomorphs.isUnbound(type)):
+				within(compiler.types.Monomorphs.follow(type));
 			case TTypeParameter(owner, name) if (owners.indexOf(owner) >= 0):
 				var replacement = substitutions.get(name);
 				replacement == null ? type : replacement;

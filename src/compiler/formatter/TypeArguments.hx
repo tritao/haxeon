@@ -42,6 +42,7 @@ class TypeArguments {
 
 	static function scan(tokens:Array<FormatToken>, syntax:Array<Int>, start:Int, opens:Map<Int, Int>,
 			closes:Map<Int, Int>, splits:Array<Int>):Void {
+		var declaration = start >= 2 && kindAt(tokens, syntax, start - 2) == TokenKind.Function;
 		var open:Array<Int> = [], hasContent:Array<Bool> = [], found:Array<{open:Int, close:Int}> = [], groups = 0;
 		for (position in start...syntax.length) {
 			var kind = kindAt(tokens, syntax, position);
@@ -78,6 +79,7 @@ class TypeArguments {
 					TokenKind.TypeString, TokenKind.Void, TokenKind.Comma,
 					TokenKind.Dot, TokenKind.StringLiteral:
 					hasContent[hasContent.length - 1] = true;
+				case TokenKind.Colon if (declaration && open.length == 1):
 				case TokenKind.Question, TokenKind.Colon:
 					// Only inside a structure or function type: `{?a:Int}`, `(?Int) -> Void`.
 					if (groups == 0)

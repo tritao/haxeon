@@ -582,13 +582,16 @@ class CanonicalComparison {
 						&& span(l1, r1);
 					default: false;
 				};
-			case Lambda(l0, l1, l2, l3, l4, l5): switch right {
-					case Lambda(r0, r1, r2, r3, r4, r5): array(l0, r0, astArgument)
+			case Lambda(l0, l1, l2, l3, l4, l5, lg): switch right {
+					case Lambda(r0, r1, r2, r3, r4, r5, rg): array(l0, r0, astArgument)
 						&& array(l1, r1, astStatement)
 						&& l2 == r2
 						&& span(l3, r3)
 						&& l4 == r4
-						&& l5 == r5;
+						&& l5 == r5
+						&& (lg == null ? rg == null : rg != null
+						&& array(lg.parameters, rg.parameters, (l, r) -> l == r)
+						&& array(lg.constraints, rg.constraints, astTypeConstraint));
 					default: false;
 				};
 		};

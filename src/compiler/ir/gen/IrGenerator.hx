@@ -2860,7 +2860,11 @@ class IrGenerator {
 					default: false;
 				}))) builder.floatToFloat(source,
 					target);
-				else throw new InternalError('Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}');
+				else {
+					var span = expression.span, position = span.file.lineColumnAt(span.start);
+					throw new InternalError('Unsupported cast from ${source.type} to $target at ${span.file.path}:${position.line}:${position.column}',
+						span);
+				}
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',

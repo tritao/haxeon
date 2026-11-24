@@ -65,6 +65,9 @@ class AnonymousTypeRegistry {
 	}
 
 	public function register(type:CompilerType):Void {
+		var representation = session.currentContext.localTypeRepresentation;
+		if (representation != null)
+			type = representation(type);
 		// A type variable already filled is replaced by its type, so a structure is registered under its final name.
 		if (compiler.types.Monomorphs.contains(type) && !compiler.types.Monomorphs.containsUnbound(type))
 			type = compiler.types.Monomorphs.resolve(type);

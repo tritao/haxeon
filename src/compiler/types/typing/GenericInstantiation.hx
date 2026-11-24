@@ -1,5 +1,7 @@
 package compiler.types.typing;
 
+import compiler.syntax.Ast.AstTypeConstraint;
+import compiler.syntax.Ast.AstArgument;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
@@ -29,22 +31,6 @@ class GenericInstantiation {
 	public function new(session:TypingSession, bodyTyper:BodyTyping) {
 		this.session = session;
 		this.bodyTyper = bodyTyper;
-	}
-
-	public function validateConstraints(fn:AstFunction, substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
-		var constraints = fn.typeConstraints;
-		if (constraints != null)
-			for (constraint in constraints) {
-				var actual = requiredMapValue(substitutions, constraint.parameter),
-					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
-				if (!session.relations.satisfiesConstraint(actual, expected)) {
-					var detail = session.relations.constraintFailure(actual, expected);
-					fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
-						'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"'
-						+ (detail == null ? "" : ': $detail'),
-						span);
-				}
-			}
 	}
 
 	public function specialize(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
@@ -198,6 +184,24 @@ class GenericInstantiation {
 		return session.representation.boundaryCast(call, result);
 	}
 
+	public function validateConstraints(fn:AstFunction, substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
+		if (fn.typeConstraints != null)
+			for (constraint in fn.typeConstraints)
+				checkConstraint(constraint, substitutions, span);
+	}
+
+	public function checkConstraint(constraint:AstTypeConstraint,
+			substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
+		var actual = Monomorphs.resolve(requiredMapValue(substitutions, constraint.parameter)),
+			expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
+		if (!session.relations.satisfiesConstraint(actual, expected)) {
+			var detail = session.relations.constraintFailure(actual, expected);
+			fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
+				'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"'
+				+ (detail == null ? "" : ': $detail'), span);
+		}
+	}
+
 	/**
 	 * A specialization is named and typed after its type arguments when the call is typed, so they must be known then. One that is
 	 * an empty type variable only an argument's own value carries (`Lambda.empty([])`, whose element type nothing else can fix) is
@@ -331,7 +335,7 @@ class GenericInstantiation {
 	 * parameters), from the annotation.
 	 */
 	public function inferArgumentTypeParameters(fn:Null<AstFunction>, index:Int,
-			argument:compiler.syntax.Ast.AstArgument,
+			argument:AstArgument,
 			actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
 		if (fn == null || !AstFunctions.isInferred(argument.type)) {
@@ -344,7 +348,7 @@ class GenericInstantiation {
 	}
 
 	/** The type argument `index` of `fn` expects once `substitutions` binds every type parameter it mentions. */
-	public function expectedArgumentType(fn:Null<AstFunction>, index:Int, argument:compiler.syntax.Ast.AstArgument,
+	public function expectedArgumentType(fn:Null<AstFunction>, index:Int, argument:AstArgument,
 			substitutions:Map<String, CompilerType>):CompilerType {
 		if (fn == null || !AstFunctions.isInferred(argument.type))
 			return session.declarations.resolve(argument.type, argument.span, substitutions);
@@ -358,7 +362,7 @@ class GenericInstantiation {
 	}
 
 	/** `inferTypeParameters` for a pattern that is a resolved type, whose type parameters are `TTypeParameter`s. */
-	function inferFromType(pattern:CompilerType, actual:CompilerType, parameters:Array<String>,
+	public function inferFromType(pattern:CompilerType, actual:CompilerType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
 		function each(patterns:Array<CompilerType>, actuals:Array<CompilerType>):Void
 			if (patterns.length == actuals.length)
