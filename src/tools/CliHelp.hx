@@ -347,7 +347,11 @@ class CliHelp {
 	public static function command(name:String):Null<String> {
 		var words = name.split(" ");
 		if (words[0] == "dev")
-			return words.length <= 2 ? tools.dev.DevCommand.help(words[1]) : null;
+			return switch words.length {
+				case 1: tools.dev.DevCommand.help();
+				case 2: tools.dev.DevCommand.help(words[1]);
+				default: null;
+			}
 		if (words.length == 2) {
 			if (words[0] == "workspace" && WORKSPACE_COMMANDS.indexOf(words[1]) >= 0)
 				return StringTools.replace(command("workspace"), WORKSPACE_COMMANDS.join("|"), words[1]);
