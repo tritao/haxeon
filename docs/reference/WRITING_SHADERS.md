@@ -74,7 +74,7 @@ control.
 Generation reuses each unchanged module. The cache covers its source,
 transitive includes, variant settings, and the verified shader compiler.
 Only the active target's compiled shader source reaches the Haxe module.
-Released SDKs include the pinned shader compiler. A source checkout
+Released SDKs include NativeKit’s shader driver and the pinned shader compiler. A source checkout
 can reuse a verified cached compiler or download it on first use.
 Standalone NativeKit shader regeneration can also validate the
 generated GLSL with its separately pinned validator.

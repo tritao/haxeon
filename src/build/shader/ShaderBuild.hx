@@ -1,8 +1,6 @@
 package build.shader;
 
 import build.execution.Directories;
-import build.Target.TargetOs;
-import build.Target.TargetArch;
 import build.execution.ProcessRunner;
 import compiler.core.UsageError;
 import haxe.Json;
@@ -10,18 +8,8 @@ import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
-import build.shader.ShaderReflection.rows;
 
 class ShaderBuild {
-	static final pins = [
-		"linux" => "2554534631a7c7c6c2261dc6d20a603cdabf0cc1390e293f5ca06d345bb48c13",
-		"linux_arm64" => "da5e56ec9dc736b9fb7b43c881b2fe5616b2dd4beef7518dcfb5d60deb0eb50c",
-		"osx" => "8d8b74e0f612f556a0f57ea5a49c1c64bf990eed518001db626332a9ef887afc",
-		"osx_arm64" => "54b98765886f4abd3bb86ffcf8c75c5073073a7fb009e7f693fb2f4d9ce3baa6",
-		"win32" => "10bd643a869cbacff606c28aa44f79a55ad545981c907889b6fb28bc8977b380"
-	];
-	static inline final REVISION = "4f5b2796806875dcf0a5a5dfa9f9dab462726a5e";
-
 	public static function run(args:Array<String>, home:String):Int {
 		if (args.length != 6)
 			throw new UsageError("Invalid shader build request");
@@ -40,14 +28,15 @@ class ShaderBuild {
 		var names = [for (name in sources.keys()) name], paths = [], dependencies:Map<String, Bool> = [];
 		names.sort(Reflect.compare);
 		if (names.length > 0) {
+			var driver = HashLinkPath.executable(home, "nkgpu-shaders");
 			var compiler = pinnedCompiler(home);
-			var identity = [digest(compiler), digest(HashLinkPath.executable(home, "haxeon"))];
+			var identity = [digest(driver), digest(compiler), digest(HashLinkPath.executable(home, "haxeon"))];
 			var bytecode = Path.join([HashLinkPath.directory(home), "haxeon-cli.hl"]);
 			if (FileSystem.exists(bytecode))
 				identity.push(digest(bytecode));
 			for (name in names) {
 				var source = sources.get(name), path = Path.join([output, name.split(".").join("/") + ".hx"]);
-				var emitted = generate(compiler, source, name, path, target, Reflect.field(variants, name),
+				var emitted = generate(driver, compiler, source, name, path, target, Reflect.field(variants, name),
 					identity, project, style, Path.join([output, ".shader-cache"]));
 				if (emitted == null)
 					return 1;
@@ -91,16 +80,11 @@ class ShaderBuild {
 		}
 	}
 
-	static function generate(compiler:String, source:String, name:String, output:String, target:String,
+	static function generate(driver:String, compiler:String, source:String, name:String, output:String, target:String,
 			spec:Dynamic, identity:Array<String>, project:String, style:String, cacheRoot:String):Null<Array<String>> {
-		var variants = spec == null ? ["default"] : Reflect.fields(spec);
-		variants.sort(Reflect.compare);
-		var defines = [for (variant in variants) spec == null ? [] : (cast Reflect.field(spec, variant):Array<String>)];
-		var key = Json.stringify([identity, source, target, variants, defines]),
-			record = Path.join([
-				cacheRoot,
-				name + ".json"
-			]);
+		var settings = spec == null ? '{"default":[]}' : Json.stringify(spec);
+		var key = Json.stringify([identity, source, target, settings]);
+		var record = Path.join([cacheRoot, name + ".json"]);
 		var old:Dynamic = try Json.parse(File.getContent(record)) catch (_:Dynamic) null;
 		var previous:Array<String> = old == null ? [] : old.dependencies;
 		if (previous != null && previous.indexOf(source) >= 0 && FileSystem.exists(output)
@@ -113,90 +97,44 @@ class ShaderBuild {
 				if (!before.exists(path) && FileSystem.exists(path))
 					before.set(path, digest(path));
 		Directories.ensure(directory);
-		var dependencies:Map<String, Bool> = [source => true], compiled:Array<ShaderModule.ShaderVariant> = [];
-		var succeeded = true;
 		try {
-			for (index => variant in variants) {
-				var prefix = Path.join([directory, "shader" + index]), depfile = prefix + ".d";
-				var slangs = StringTools.startsWith(target, "glsl") ? target : target + ":glsl410";
-				var arguments = [
-					"-i",
-					source,
-					"-o",
-					prefix,
-					"-l",
-					slangs,
-					"-f",
-					"bare_yaml",
-					"--no-log-cmdline",
-					"--save-intermediate-spirv",
-					"--dependency-file=" + depfile
-				];
-				if (defines[index].length > 0)
-					arguments.push("--defines=" + defines[index].join(":"));
-				var result = ProcessRunner.capture(compiler, arguments);
-				diagnostics(result.output, project, style);
-				if (result.status != 0) {
-					succeeded = false;
-					break;
-				}
-				var deps = File.getContent(depfile).split("\r\n").join("\n");
-				deps = deps.substr(deps.indexOf(": ") + 2);
-				for (entry in deps.split("\\\n")) {
-					var path = StringTools.trim(entry);
-					if (path != "")
-						dependencies.set(Path.normalize(FileSystem.fullPath(path)), true);
-				}
-				var reflected = ShaderReflection.read(prefix + "_reflection.yaml"),
-					canonical = StringTools.startsWith(target, "glsl") ? target : "glsl410";
-				var byTarget:Map<String, Array<Dynamic>> = [];
-				for (row in rows(reflected, "shaders"))
-					byTarget.set(row.slang, rows(row, "programs"));
-				var programs = byTarget.get(target);
-				if (target != canonical) {
-					var names:Map<String, Map<Int, String>> = [];
-					for (program in byTarget.get(canonical)) {
-						var slots:Map<Int, String> = [];
-						for (attr in rows(program, "attrs"))
-							slots.set(attr.slot, attr.glsl_name);
-						names.set(program.name, slots);
-					}
-					for (program in programs)
-						for (attr in rows(program, "attrs"))
-							attr.glsl_name = names.get(program.name).get(attr.slot);
-				}
-				var members:Map<String, Array<Dynamic>> = [],
-					stem = Path.withoutDirectory(prefix) + "_" + canonical + "_";
-				for (entry in FileSystem.readDirectory(directory))
-					if (StringTools.startsWith(entry, stem) && Path.extension(entry) == "spv")
-						for (block => fields in ShaderReflection.uniformMembers(Path.join([directory, entry]))) {
-							if (members.exists(block) && Json.stringify(members.get(block)) != Json.stringify(fields))
-								throw "Ambiguous shader uniform block " + block;
-							members.set(block, fields);
-						}
-				compiled.push({name: variant, programs: programs, members: members});
+			var result = ProcessRunner.capture(driver, [
+				"--source",
+				source,
+				"--output",
+				directory,
+				"--target",
+				target,
+				"--variants",
+				settings,
+				"--shdc",
+				compiler
+			]);
+			diagnostics(result.output, project, style);
+			if (result.status != 0) {
+				removeWork(directory);
+				return null;
 			}
-			if (succeeded) {
-				var text = ShaderModule.generate(name, target, compiled),
-					files = [for (path in dependencies.keys()) path];
-				files.sort(Reflect.compare);
-				var signature = fingerprint(key, files);
-				for (path in files) {
-					var original = before.get(path);
-					if ((original != null && original != digest(path))
-						|| (original == null && FileSystem.stat(path).mtime.getTime() > started))
-						throw "Shader inputs changed during generation. Run the build again.";
-				}
-				publish(output, text);
-				publish(record,
-					Json.stringify({dependencies: files, signature: signature, output: Sha256.encode(text)}));
+			var files = [for (path in File.getContent(Path.join([directory, "dependencies"])).split("\n")) if (path
+				!= "") path];
+			files.sort(Reflect.compare);
+			var text = ShaderModule.generate(name, target,
+				ShaderSchema.read(Path.join([directory, "reflection.json"]), target));
+			var signature = fingerprint(key, files);
+			for (path in files) {
+				var original = before.get(path);
+				if ((original != null && original != digest(path))
+					|| (original == null && FileSystem.stat(path).mtime.getTime() > started))
+					throw new UsageError("Shader inputs changed during generation. Run the build again.");
 			}
+			publish(output, text);
+			publish(record, Json.stringify({dependencies: files, signature: signature, output: Sha256.encode(text)}));
+			removeWork(directory);
+			return files;
 		} catch (error:haxe.Exception) {
 			removeWork(directory);
 			throw new UsageError(source + ": " + error.message);
 		}
-		removeWork(directory);
-		return succeeded ? [for (path in dependencies.keys()) path] : null;
 	}
 
 	static function diagnostics(text:String, project:String, style:String):Void {
@@ -239,62 +177,11 @@ class ShaderBuild {
 	}
 
 	public static function pinnedCompiler(home:String):String {
-		var host = Target.detectHost(), folder = switch {
-			os:host.os, arch:host.arch
-		}
-		{
-			case {
-				os:Linux, arch:X64
-			}
-			: "linux";
-			case {
-				os:Linux, arch:Arm64
-			}
-			: "linux_arm64";
-			case {
-				os:MacOS, arch:X64
-			}
-			: "osx";
-			case {
-				os:MacOS, arch:Arm64
-			}
-			: "osx_arm64";
-			case {
-				os:Windows, arch:X64
-			}
-			: "win32";
-			case _: throw new UsageError("No pinned shader compiler for " + host);
-		};
-		var installed = HashLinkPath.executable(home, "sokol-shdc"), configured = Sys.getEnv("SOKOL_SHDC");
-		var user = Sys.getEnv(folder == "win32" ? "USERPROFILE" : "HOME");
-		var cached = Path.join([
-			user == null ? home : user,
-			".cache",
-			"nativekit",
-			REVISION,
-			folder,
-			Path.withoutDirectory(installed)
-		]);
-		var path = configured != null
-			&& configured != "" ? configured : FileSystem.exists(installed) ? installed : cached;
-		if (!FileSystem.exists(path) && path == cached) {
-			Directories.ensure(Path.directory(path));
-			var tmp = unique(path);
-			var url =
-				'https://raw.githubusercontent.com/floooh/sokol-tools-bin/$REVISION/bin/$folder/${Path.withoutDirectory(path)}';
-			var status = Sys.command("curl", ["-fsSL", "--max-time", "60", url, "-o", tmp]);
-			if (status != 0 || !FileSystem.exists(tmp) || digest(tmp) != pins.get(folder)) {
-				if (FileSystem.exists(tmp))
-					FileSystem.deleteFile(tmp);
-				throw new UsageError("Could not download and verify the pinned shader compiler");
-			}
-			if (folder != "win32" && Sys.command("chmod", ["755", tmp]) != 0)
-				throw new UsageError("Could not set shader compiler permissions");
-			FileSystem.rename(tmp, path);
-		}
-		if (!FileSystem.exists(path) || digest(path) != pins.get(folder))
-			throw new UsageError("SHA-256 mismatch or missing shader compiler: " + path);
-		return Path.normalize(FileSystem.fullPath(path));
+		var driver = HashLinkPath.executable(home, "nkgpu-shaders");
+		var result = ProcessRunner.capture(driver, ["--print-compiler"]);
+		if (result.status != 0)
+			throw new UsageError(StringTools.trim(result.output));
+		return Path.normalize(StringTools.trim(result.output));
 	}
 
 	static function fingerprint(key:String, files:Array<String>):Null<String> {

@@ -77,9 +77,9 @@ selects the target. Haxe also gets checked native uniform layouts with
 module-prefixed record names so shaders can reuse names such as `vs_params`.
 
 Circuit Run has one authored shader and imports `shaders.Maze` from the build.
-The SDK CLI runs the per-target generator for app builds and the watch loop.
-Releases carry the verified shader compiler. Standalone C regeneration still
-uses NativeKit’s Python driver.
+The SDK CLI invokes NativeKit's `nkgpu-shaders` for app builds and the watch
+loop. Releases carry the driver and the verified shader compiler. The SDK
+generates the Haxe modules from NativeKit reflection JSON.
 See [Writing shaders](../reference/WRITING_SHADERS.md) for paths and examples.
 
 ### End state
@@ -174,7 +174,7 @@ running anything clever:
    lines in `packages/gpu/tools/check-shaders.sh`. Run it on Windows and macOS
    (D3D11 and Metal), which its GLSL-only shaders never supported.
 6. **Docs.** The "Writing shaders" guide and the template shader.
-7. **Later.** The native driver binary in the SDK, `bare_json` upstream,
+7. **Later.** `bare_json` upstream,
    shader hot reload in `haxeon dev`, precompiled DXBC and metallib once
    Windows and macOS CI hosts exist.
 

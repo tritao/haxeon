@@ -338,6 +338,16 @@ foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument h
     VERBATIM)
   list(APPEND _sdk_native_scripts "${HAXEON_SDK_DIR}/cmake/${_script}.cmake")
 endforeach()
+if(EXISTS "${CMAKE_SOURCE_DIR}/vendor/nativekit/modules/gpu/tools/CMakeLists.txt" AND NOT CMAKE_CROSSCOMPILING)
+  add_subdirectory(vendor/nativekit/modules/gpu/tools shader-tools)
+  set(_shader_tool "${HAXEON_HASHLINK_OUTPUT_DIR}/nkgpu-shaders${CMAKE_EXECUTABLE_SUFFIX}")
+  add_custom_command(OUTPUT "${_shader_tool}"
+    COMMAND "${CMAKE_COMMAND}" "-DFROM=$<TARGET_FILE:nkgpu-shaders>" "-DTO=${_shader_tool}"
+      -P "${CMAKE_SOURCE_DIR}/cmake/haxeon-replace.cmake"
+    DEPENDS nkgpu-shaders "${CMAKE_SOURCE_DIR}/cmake/haxeon-replace.cmake"
+    VERBATIM)
+endif()
+
 add_custom_target(haxeon-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}" "${HAXEON_SDK_DIR}/include" "${HAXEON_SDK_DIR}/src"
     "${HAXEON_SDK_DIR}/cmake"
@@ -356,6 +366,11 @@ add_custom_target(haxeon-sdk ALL
   COMMENT "Staging the Haxeon SDK in ${HAXEON_SDK_DIR}"
   VERBATIM
 )
+
+if(TARGET nkgpu-shaders)
+  add_custom_target(haxeon-shader-tool DEPENDS "${_shader_tool}")
+  add_dependencies(haxeon-sdk haxeon-shader-tool)
+endif()
 
 include(cmake/haxeon-platforms.cmake)
 
@@ -455,7 +470,7 @@ add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} ${HAXEON_CL
 # What the haxeon launchers bring up to date before running it: the command and the CLI's bytecode.
 if(TARGET haxeon)
   add_custom_target(haxeon-command DEPENDS "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon${CMAKE_EXECUTABLE_SUFFIX}" "${HAXEON_CLI_BYTECODE}"
-    ${_sdk_native_scripts})
+    ${_sdk_native_scripts} ${_shader_tool})
 endif()
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})

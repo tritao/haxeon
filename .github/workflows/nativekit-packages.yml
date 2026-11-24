@@ -36,7 +36,7 @@ jobs:
       - name: Build the pinned GLSL validator
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build python3-yaml
+          sudo apt-get install -y ninja-build
           revision=1062752a891c95b2bfeed9e356562d88f9df84ac
           mkdir -p "$RUNNER_TEMP/glslang"
           archive="$RUNNER_TEMP/glslang.tar.gz"
@@ -49,8 +49,9 @@ jobs:
           ln -s "$RUNNER_TEMP/glslang-build/StandAlone/glslang" "$RUNNER_TEMP/glslangValidator"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           echo "NATIVEKIT_GLSLANG_SHA256=$(sha256sum "$RUNNER_TEMP/glslangValidator" | cut -d' ' -f1)" >> "$GITHUB_ENV"
-      - run: ./packages/ui/tools/check-shaders.sh
-      - run: ./packages/gpu/tools/check-shaders.sh
+      - run: ./packages/ui/tools/check-shaders.sh --validator glslangValidator
+      - run: ./packages/gpu/tools/check-shaders.sh --validator glslangValidator
+      - run: ctest --test-dir out/nativekit-shaders --output-on-failure
 
   ui:
     runs-on: ubuntu-latest

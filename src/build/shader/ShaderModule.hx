@@ -1,14 +1,11 @@
 package build.shader;
 
 import haxe.Json;
-import sys.io.File;
-import build.shader.ShaderReflection.rows;
-
-typedef ShaderVariant = {
-	final name:String;
-	final programs:Array<Dynamic>;
-	final members:Map<String, Array<Dynamic>>;
-}
+import build.shader.ShaderSchema.Attribute;
+import build.shader.ShaderSchema.Member;
+import build.shader.ShaderSchema.Program;
+import build.shader.ShaderSchema.ShaderImage;
+import compiler.core.UsageError;
 
 class ShaderModule {
 	static final targets = [
@@ -31,46 +28,43 @@ class ShaderModule {
 	];
 	static final images = ["2d" => "TwoD", "array" => "Array", "cube" => "Cube", "cube_array" => "CubeArray"];
 
-	public static function generate(module:String, target:String, variants:Array<ShaderVariant>):String {
-		var parts = module.split("."), name = parts.pop(), first:Array<Dynamic> = null;
-		var definitions = [], declarations = [], programs:Map<String, Array<{variant:String, program:Dynamic}>> = [];
+	public static function generate(module:String, target:String, entries:Array<Program>):String {
+		var parts = module.split("."), name = parts.pop(), first:Array<Attribute> = null;
+		var definitions = [], declarations = [], programs:Map<String, Array<{variant:String, program:Program}>> = [];
 		var blocks:Map<String, String> = [];
-		for (variant in variants)
-			for (program in variant.programs) {
-				var attrs = rows(program, "attrs");
-				attrs.sort((a, b) -> a.slot - b.slot);
-				if (first == null)
-					first = attrs;
-				else if (Json.stringify(first) != Json.stringify(attrs))
-					throw "Programs in a module require one vertex interface";
-				for (block in rows(program, "uniform_blocks")) {
-					var fields = variant.members.get(block.struct_name);
-					if (fields == null)
-						throw 'Missing shader layout for ${block.struct_name}';
-					var record = name + pascal(block.struct_name);
-					var definition = uniformRecord(record, block.size, fields);
-					if (blocks.exists(record)) {
-						if (blocks.get(record) != definition)
-							throw 'Conflicting layouts for ${block.struct_name}';
-					} else {
-						blocks.set(record, definition);
-						definitions.push(definition);
-						declarations.push('public static final ${camel(block.struct_name)} = new ShaderUniformBlock<$record>(${block.slot}, ShaderStage.${pascal(block.stage)}, sizeof<$record>());');
-					}
+		for (program in entries) {
+			var attrs = program.attributes;
+			attrs.sort((a, b) -> a.slot - b.slot);
+			if (first == null)
+				first = attrs;
+			else if (Json.stringify(first) != Json.stringify(attrs))
+				throw new UsageError("Programs in a module require one vertex interface");
+			for (block in program.blocks) {
+				var fields = block.members;
+				var record = name + pascal(block.name);
+				var definition = uniformRecord(record, block.size, fields);
+				if (blocks.exists(record)) {
+					if (blocks.get(record) != definition)
+						throw new UsageError('Conflicting layouts for ${block.name}');
+				} else {
+					blocks.set(record, definition);
+					definitions.push(definition);
+					declarations.push('public static final ${camel(block.name)} = new ShaderUniformBlock<$record>(${block.slot}, ShaderStage.${pascal(block.stage)}, sizeof<$record>());');
 				}
-				var items = programs.get(program.name);
-				if (items == null) {
-					items = [];
-					programs.set(program.name, items);
-				}
-				items.push({variant: variant.name, program: program});
 			}
+			var items = programs.get(program.name);
+			if (items == null) {
+				items = [];
+				programs.set(program.name, items);
+			}
+			items.push({variant: program.variant, program: program});
+		}
 		if (first == null)
-			throw "Shader has no programs";
+			throw new UsageError("Shader has no programs");
 		if (first.length > 0) {
 			var offset = 0, fields = [], attributes = [];
 			for (attr in first) {
-				var field = camel(attr.glsl_name);
+				var field = camel(attr.name);
 				fields.push('${field}Offset: $offset');
 				attributes.push('{slot: ${attr.slot}, bufferIndex: 0, offset: $offset, format: VertexFormat.${types.get(attr.type)}}');
 				offset += 4 * components(attr.type);
@@ -99,49 +93,38 @@ class ShaderModule {
 		return 'package ${parts.join(".")};\n\nimport haxeon.gpu.Enums;\nimport haxeon.gpu.Renderer;\nimport haxeon.gpu.Shader;\nimport haxeon.gpu.ShaderProgram;\nimport haxeon.gpu.ShaderUniformBlock;\nimport haxeon.gpu.VertexLayout;\n\n${definitions.join("\n")}\nclass $name {\n\t${declarations.join("\n\t")}\n}\n';
 	}
 
-	static function descriptor(program:Dynamic, target:String):String {
-		var attrs = [for (attr in rows(program, "attrs"))
-			'{slot: ${attr.slot}, name: ${Json.stringify(attr.glsl_name)}, semantic: ${Json.stringify(attr.hlsl_sem_name ?? "")}, semanticIndex: ${attr.hlsl_sem_index ?? 0}}'];
+	static function descriptor(program:Program, target:String):String {
+		var attrs = [for (attr in program.attributes)
+			'{slot: ${attr.slot}, name: ${Json.stringify(attr.name)}, semantic: ${Json.stringify(attr.semantic)}, semanticIndex: ${attr.semanticIndex}}'];
 		var blocks:Array<String> = [], uniforms:Array<String> = [], textures:Array<String> = [];
-		for (block in rows(program, "uniform_blocks")) {
+		for (block in program.blocks) {
 			blocks.push('{slot: ${block.slot}, stage: ShaderStage.${pascal(block.stage)}, size: ${block.size}}');
-			for (index => member in rows(block, "glsl_uniforms"))
-				uniforms.push('{block: ${block.slot}, member: $index, name: ${Json.stringify(member.glsl_name)}, type: UniformType.${types.get(member.type)}, count: ${member.array_count}}');
+			for (index => member in block.uniforms)
+				uniforms.push('{block: ${block.slot}, member: $index, name: ${Json.stringify(member.name)}, type: UniformType.${types.get(member.type)}, count: ${member.arrayCount}}');
 		}
-		var views:Map<Int, Dynamic> = [];
-		for (view in rows(program, "views")) {
-			if (view.texture == null)
-				throw "Unsupported shader table resource";
-			views.set(view.texture.slot, view.texture);
+		var views:Map<Int, ShaderImage> = [];
+		for (image in program.images)
+			views.set(image.slot, image);
+		for (pair in program.pairs) {
+			var image = views.get(pair.image);
+			if (image == null || image.sampleType != "float" || image.multisampled || !images.exists(image.type))
+				throw new UsageError("Unsupported shader texture type");
+			textures.push('{view: ${image.slot}, sampler: ${pair.sampler}, stage: ShaderStage.${pascal(image.stage)}, type: ImageType.${images.get(image.type)}, name: ${Json.stringify(pair.name)}}');
 		}
-		for (pair in rows(program, "texture_sampler_pairs")) {
-			var image:Dynamic = views.get(pair.view_slot);
-			if (image == null || image.sample_type != "float" || image.multisampled == true
-				|| !images.exists(image.type))
-				throw "Unsupported shader texture type";
-			textures.push('{view: ${image.slot}, sampler: ${pair.sampler_slot}, stage: ShaderStage.${pascal(image.stage)}, type: ImageType.${images.get(image.type)}, name: ${Json.stringify(pair.glsl_name ?? pair.name)}}');
-		}
-		var vertex = shaderSource(program.vertex_func, target), fragment = shaderSource(program.fragment_func, target);
+		var vertex = Json.stringify(program.vertex), fragment = Json.stringify(program.fragment);
 		return 'new ShaderProgram([${attrs.join(", ")}], [{\n\t\ttarget: ShaderTarget.${targets.get(target)},\n\t\tvertex: $vertex,\n\t\tfragment: $fragment,\n\t\tblocks: [${blocks.join(", ")}],\n\t\tuniforms: [${uniforms.join(", ")}],\n\t\ttextures: [${textures.join(", ")}]\n\t}])';
 	}
 
-	static function shaderSource(stage:Dynamic, target:String):String {
-		var entry = StringTools.startsWith(target, "metal_") ? "main0" : "main";
-		if (stage == null || stage.is_binary == true || stage.entry_point != entry)
-			throw "Expected a shader stage with entry point " + entry;
-		return Json.stringify(File.getContent(stage.path));
-	}
-
-	static function uniformRecord(name:String, size:Int, fields:Array<Dynamic>):String {
+	static function uniformRecord(name:String, size:Int, fields:Array<Member>):String {
 		var declarations = [], assertions = [Std.string(size)], cursor = 0;
 		for (field in fields) {
 			var member = camel(field.name), width = components(field.type);
 			var scalar = StringTools.startsWith(field.type, "i") ? "Int" : "Float32";
 			var stride:Int = field.arrayStride ?? width * 4;
-			for (index in 0...cast(field.arrayCount, Int)) {
+			for (index in 0...field.arrayCount) {
 				var offset:Int = field.offset + index * stride;
 				if (offset < cursor || (offset - cursor) % 4 != 0)
-					throw "Invalid offset in " + name;
+					throw new UsageError("Invalid offset in " + name);
 				while (cursor < offset) {
 					declarations.push('private var pad$cursor:Int;');
 					cursor += 4;
@@ -155,7 +138,7 @@ class ShaderModule {
 			}
 		}
 		if (cursor > size || (size - cursor) % 4 != 0)
-			throw "Invalid size in " + name;
+			throw new UsageError("Invalid size in " + name);
 		while (cursor < size) {
 			declarations.push('private var pad$cursor:Int;');
 			cursor += 4;
@@ -170,12 +153,12 @@ class ShaderModule {
 			case "vec3" | "ivec3": 3;
 			case "vec4" | "ivec4": 4;
 			case "mat4": 16;
-			case _: throw "Unsupported shader type " + kind;
+			case _: throw new UsageError("Unsupported shader type " + kind);
 		};
 
 	static function pascal(name:String):String {
 		if (name == null || !~/^[A-Za-z][A-Za-z0-9_]*$/.match(name))
-			throw 'Invalid shader identifier "$name"';
+			throw new UsageError('Invalid shader identifier "$name"');
 		return [for (part in name.split("_")) if (part != "") part.charAt(0).toUpperCase() + part.substr(1)].join("");
 	}
 

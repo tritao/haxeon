@@ -104,6 +104,12 @@ class ReleasePackage {
 			Path.join([bin, Path.withoutDirectory(HashLinkPath.executable(sdk, "sokol-shdc"))])
 		]);
 
+		cmake(home, [
+			"-E",
+			"copy",
+			Path.join([home, "vendor", "nativekit", "LICENSE"]),
+			Path.join([root, "LICENSE-nkgpu-shaders.txt"])
+		]);
 		for (entry in FileSystem.readDirectory(bin))
 			if (PUBLISHING_LEFTOVER.match(entry))
 				FileSystem.deleteFile(Path.join([bin, entry]));
