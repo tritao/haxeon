@@ -14,7 +14,7 @@ export function docsSlug(path) {
     .replace(/^guides\/\d+-/, 'guides/')
     .replaceAll('_', '-')
     .toLowerCase()
-    .replace(/^guides\/readme$/, 'guides')
+    .replace(/^(guides|reference)\/readme$/, '$1')
     .replace(/\/index$/, '');
 }
 
@@ -35,44 +35,77 @@ export function repositorySource(path) {
   return `${projectRepo}/tree/${encodeURIComponent(sourceRef)}/${path}`;
 }
 
+// A group lists its pages, or a directory whose unlisted pages follow, or nested groups.
 const groups = [
   ['Start here', ['guides/00-get-started.md', 'guides/01-first-app.md']],
   ['Learn the language', 'learn/'],
   ['Build guides', ['guides/README.md'], 'guides/'],
   [
-    'Runtime and targets',
-    [
-      'guides/02-live-editing.md',
-      'reference/LIVE_PATCHING.md',
-      'reference/ANDROID.md',
-      'reference/WASM_BACKEND.md',
-      'reference/PROFILING.md',
-    ],
-  ],
-  [
     'C and C++ interop',
     ['guides/04-calling-c-and-cpp.md', 'reference/C_HEADER_FFI.md', 'reference/NATIVE_MEMORY.md'],
   ],
-  ['Reference', 'reference/'],
+  [
+    'Reference',
+    [
+      ['Overview', ['reference/README.md']],
+      [
+        'Language',
+        [
+          'reference/LANGUAGE_SUPPORT.md',
+          'reference/ITERATION.md',
+          'reference/STRUCTURAL_EQUALITY.md',
+          'reference/SCOPED_CLEANUP.md',
+          'reference/KEY_PATHS.md',
+        ],
+      ],
+      ['Tools', ['reference/CLI.md', 'reference/MANIFEST.md', 'reference/RELEASES.md', 'reference/PROFILING.md']],
+      [
+        'Libraries',
+        [
+          'reference/ASYNC.md',
+          'reference/JSON_WIRE.md',
+          'reference/MESSAGEPACK.md',
+          'reference/RPC.md',
+          'reference/WRITING_SHADERS.md',
+        ],
+      ],
+      ['Platforms and runtime', ['reference/LIVE_PATCHING.md', 'reference/ANDROID.md', 'reference/WASM_BACKEND.md']],
+      // A reference page not placed above still gets published.
+      ['Other', [], 'reference/'],
+    ],
+  ],
   ['Coming from', 'coming-from/'],
 ];
 
-const explicitPages = new Set(groups.flatMap(([, pages]) => (Array.isArray(pages) ? pages : [])));
+const isNested = (pages) => Array.isArray(pages) && Array.isArray(pages[0]);
+const listed = (entries) =>
+  entries.flatMap(([, pages]) => (isNested(pages) ? listed(pages) : Array.isArray(pages) ? pages : []));
+const explicitPages = new Set(listed(groups));
 
-export const sidebar = groups.flatMap(([label, pages, directory]) => {
-  if (pages === 'learn/' || pages === 'coming-from/') {
-    // Starlight orders these sections by the authors' sidebar metadata.
-    return [...publishedDocs].some((path) => path.startsWith(pages))
-      ? [{ label, items: [{ autogenerate: { directory: '../docs/' + pages.slice(0, -1) } }] }]
-      : [];
-  }
-  const prefix = typeof pages === 'string' ? pages : directory;
-  const paths = [
-    ...(Array.isArray(pages) ? pages : []),
-    ...[...publishedDocs].filter((path) => prefix && path.startsWith(prefix) && !explicitPages.has(path)),
-  ];
-  return [{ label, items: paths.map((path) => ({ slug: docsSlug(path) })) }];
-});
+function sidebarGroups(entries) {
+  return entries.flatMap(([label, pages, directory]) => {
+    if (isNested(pages)) {
+      const items = sidebarGroups(pages);
+      // The overview page stands as the first link rather than a group of one.
+      if (items[0]?.label === 'Overview') items.splice(0, 1, ...items[0].items);
+      return [{ label, items }];
+    }
+    if (pages === 'learn/' || pages === 'coming-from/') {
+      // Starlight orders these sections by the authors' sidebar metadata.
+      return [...publishedDocs].some((path) => path.startsWith(pages))
+        ? [{ label, items: [{ autogenerate: { directory: '../docs/' + pages.slice(0, -1) } }] }]
+        : [];
+    }
+    const prefix = typeof pages === 'string' ? pages : directory;
+    const paths = [
+      ...(Array.isArray(pages) ? pages : []),
+      ...[...publishedDocs].filter((path) => prefix && path.startsWith(prefix) && !explicitPages.has(path)),
+    ];
+    return paths.length ? [{ label, items: paths.map((path) => ({ slug: docsSlug(path) })) }] : [];
+  });
+}
+
+export const sidebar = sidebarGroups(groups);
 
 export function repositoryLinks() {
   return (tree, file) => {

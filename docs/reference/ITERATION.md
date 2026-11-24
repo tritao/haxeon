@@ -47,7 +47,6 @@ Map iteration keeps the existing snapshot behavior: value iteration materializes
 the values before entering the body. This change does not replace that snapshot
 with a live cursor. Key/value loops retain the existing array/map paths.
 
-The structural iteration regression checks clean and incremental HashLink,
-Wasm32, and Wasm GC execution, malformed protocol diagnostics, and allocation-free
-IR for a concrete iterator loop and a generic array loop. Run it with
-`tests/integration/test-structural-iteration-wasm.sh`.
+Structural iteration works on HashLink, Wasm32 and Wasm GC. Malformed iterator protocols
+produce compile errors. A concrete iterator loop and a generic array loop can run without
+allocating an iterator adapter.

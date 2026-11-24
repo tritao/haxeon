@@ -106,8 +106,7 @@ and no edge between declarations is kept by hand.
   `tick`, `close`, `saveState`, `restoreState`, `liveRelease`, `liveRebuild`), keeping every constructor, every function the
   running module holds, and each class's `__liveinit` with its class without making it a root. Functions a live build
   drops are settled: they keep their slots, since a patch cannot remove one, but once the patch that guards them applies
-  no stored closure reaches them, so the session keeps their signatures and lowered code and not their IR (`LIVE_PATCHING.md`,
-  "What a patch can add"). Retired functions an adapter serves stay whole, since stored closures still call them.
+  no stored closure reaches them, so the session keeps their signatures and lowered code and not their IR ([live patching internals](../internals/LIVE_PATCHING.md#what-a-patch-can-add)). Retired functions an adapter serves stay whole, since stored closures still call them.
 - **Pruning is per class, not per method.** A reachable class keeps all its methods, because its class table is built from
   the method list; a method can leave only once its slot is derived after pruning.
 - **A new constant, global or function relinks the functions after it.** The tables and the function layout are dense

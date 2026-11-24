@@ -1,144 +1,36 @@
-# Haxeon WebAssembly backend
-
-The Wasm backend lowers canonical Haxeon SSA IR. It does not lower from
-HashLink registers or put Wasm locals, linear-memory offsets, or table slots
-into the language IR.
-
-```text
-frontend / typer
-      |
-      v
-canonical Haxeon IR
-      |
-      +-- SSA interpreter
-      +-- HashLink backend
-      `-- Wasm backend
-            |
-            +-- CFG analysis / region structuring
-            +-- phi edge lowering / value placement
-            +-- linear or GC representation
-            +-- target Wasm instruction model
-            `-- binary encoder
-```
+# WebAssembly
 
 ## Executable targets
 
-Haxeon currently emits two executable Wasm targets:
+- `wasm32` stores managed values in WebAssembly linear memory and exports `main` and `memory` by default.
+- `wasm-gc` (also spelled `wasmgc`) uses the engine's WebAssembly GC. It exports `main` and only needs
+  linear memory when native bindings require it.
 
-- `wasm32` uses linear memory. Managed references are 32-bit pointers, and
-  `WasmLayout` owns object, array, enum, closure, string, and byte offsets.
-- `wasm-gc` (also spelled `wasmgc`) uses native WebAssembly GC references,
-  structs, and arrays. `WasmGcTypePlan` reserves nominal and recursive type
-  groups before function lowering; it does not use `WasmLayout` for managed
-  objects.
+Build either target from your project directory.
 
-Both targets share canonical IR, CFG lowering, arithmetic, calls, exceptions,
-and the target-independent development function and patch metadata. The GC target uses the
-engine's tracing collector for managed references and emits no Haxeon
-mark/sweep collector or shadow-root stack. Its ordinary modules need no linear
-memory. Linear memory can still be added for raw-memory FFI operations.
+```sh
+haxeon build --target wasm32
+haxeon build --target wasm-gc
+```
 
-The GC type plan covers the currently supported object and inheritance,
-enum, array, map, iterator, closure, dynamic-value, string, and byte layouts.
-The supported IR subset is still growing; unsupported operations and native
-signatures fail explicitly during compilation. `tests/wasm/test-wasm-parity.sh`
-compiles shared language fixtures for both targets and checks their results.
+For an app with a `web/` runner, serve `build/web/wasm32/` or `build/web/wasm-gc/` over HTTP and open
+its `index.html`. The Wasm GC bundle needs a browser with WebAssembly GC support. See
+[Shipping](../guides/05-shipping.md#the-web) for the bundle layout and native package limits. For a standalone module, provide the imports it
+requires and call its exported `main`. The [Haxe migration example](../coming-from/haxe.md) shows a module
+run from Node.
+
+Use `--build-mode release` to omit development patch metadata from a distributed build.
+Both targets define `wasm` for conditional compilation. Wasm32 also defines `wasm32` and
+Wasm GC defines `wasmgc`.
+
+Both targets support objects and inheritance, enums, arrays, maps, iterators, closures, dynamic values,
+strings, bytes and exceptions. Unsupported operations and native signatures produce a compile error.
 
 String storage remains UTF-8 for ABI transfers. `String.length`, `charCodeAt`,
 `charAt` and `substring` use UTF-16 coordinates on both targets, matching
 HashLink. Substrings selecting a surrogate half retain it through WTF-8
 storage. `haxe.io.Bytes` still counts bytes. The Wasm regular-expression engine
 uses UTF-16 match positions and consumes whole Unicode scalars.
-
-## Wasm32 linear memory and collector
-
-Wasm32 modules export `main` and `memory` by default. The runtime uses a
-non-moving mark/sweep collector with precise static and shadow-frame roots.
-Each aligned heap block has an inline 16-byte header containing its physical
-size, state and trace flags, payload-owner pointer, and auxiliary link. For
-reference-bearing array or map storage, the link identifies the owner while
-the block is allocated; for free blocks it links the free list. Marking
-resolves a pointer directly to its header. Sweeping walks the heap, merges
-adjacent dead blocks, and rebuilds the free list without an out-of-line
-allocation metadata table.
-
-Generated functions publish dense snapshots of live references at allocation
-and call safepoints. Their shadow frames restore the root chain during tagged
-exception unwinding. The reserved root area is bounds-checked and traps on
-exhaustion. The collector traces known layouts precisely: declared object
-fields, active enum payloads, live array elements, map keys and values, closure
-receivers, iterator arrays, and the owner retained by a `Bytes.view`. It uses
-conservative word scanning only for opaque layouts. Marking is iterative; its
-temporary work queue grows linear memory only when required. Normal
-allocations collect according to a byte budget, retry the free list, then grow
-memory. Reused blocks are zero-filled. `--wasm-gc-stress` collects before each
-allocation for collector tests.
-
-`--wasm-memory-stats` adds exports for heap, root-stack, allocation, and
-collection counters. The legacy `metadata_base` and `metadata_top` exports
-remain temporarily available and report an empty region. Run
-`haxeon benchmarks/wasm32-gc/benchmark.hx [samples]` for a non-gating comparison of stress
-and budgeted collection, including deep and wide graph tracing.
-
-## Wasm GC references and linear memory
-
-`wasm-gc` relies on Wasm references to keep managed parameters, locals, globals,
-and object fields alive. It does not create `__haxeon_alloc`, collector helper
-functions, a linear managed object heap, root-stack globals, or
-`haxeon.gc.roots` metadata. Its nominal type planner preserves the Haxe object
-and enum relationships needed by generated code while Haxe runtime type IDs
-remain available for reflection and dispatch.
-
-An ordinary Wasm-GC module exports `main` and does not export linear memory.
-The current FFI boundary can add memory when needed: scalar C-native values use
-typed Wasm imports, while HXI scalar `@out`/`@inout` slots and declared byte
-slices are copied through guest scratch memory. Returned native byte pointers
-also require guest memory. Other aggregate and raw-memory ABI forms remain
-unsupported. A GC module that needs this bridge may import host-owned memory
-with `--wasm-import-memory --wasm-memory-contract=<path>`; the contract is
-embedded in the same custom section used by Wasm32. Allocator statistics remain
-Wasm32-only.
-
-Wasm32 uses the same `--wasm-import-memory --wasm-memory-contract=<path>`
-interface for host-owned memory. The JSON contract is validated at compile
-time and copied into the `haxeon.memory.contract` custom section. Hosts should
-compare that section with their own contract before calling the guest.
-
-For hosts using pthreads or AudioWorklets, add `--wasm-shared-memory`.
-This requires imported memory and a bounded memory contract. Both backends
-encode a shared import with an explicit maximum matching the contract size;
-the browser rejects incompatible sharing or maximum limits at link time.
-The Haxe guest still runs on one thread: this option permits shared native
-host memory, and does not make Haxe objects or its collector thread safe.
-
-Builds default to development metadata; use `--build-mode release` for packaged
-or distributed modules (the direct compiler uses `--build-mode=release`).
-Development builds emit `haxeon.patch` and `haxeon.patch.slots` custom sections
-with stable function identities, semantic signatures, and table slots. Release
-builds omit those sections. Wasm32 development builds include `haxeon.gc.roots`;
-release builds retain it for the runtime-neutral profile, whose host contract
-requires it. Root maps used to generate the collector's stack frames are still
-computed for all Wasm32 builds. `WasmBackend.compilePatchBase` and
-`WasmBackend.compilePatch` always produce development metadata: the latter
-validates replacement artifacts against the semantic ABI and returns a
-filtered manifest for atomic host publication.
-Wasm32 uses linear-memory closure environments; Wasm GC stores closure
-environments in GC-managed structs. Both retain the current function-table
-dispatch model.
-
-Wasm exception tags carry the backend's managed exception representation:
-linear pointers for Wasm32 and GC references for Wasm GC. Exception-bearing
-functions currently use the explicit CFG dispatcher so handler state and
-rethrow behavior remain correct. Ordinary reducible scalar CFGs use structured
-lowering, with the dispatcher retained as a correctness fallback.
-
-The backend normally rewrites structured catches to the standardized
-`try_table` encoding. Some browsers that support Wasm GC still gate that
-encoding (and its `exnref` references) behind an experimental runtime flag.
-Compile with `--wasm-legacy-exceptions` to retain the legacy `try`/`catch`
-encoding for those runtimes; the NativeKit GC web showcase selects this
-compatibility mode by default. Without the flag the standardized encoding is
-emitted.
 
 ## Standard library on Wasm
 
@@ -181,7 +73,7 @@ export argument is a Wasm32 C ABI scalar or an address in linear memory.
 Neither backend's value layout crosses the boundary, so one host serves both
 the wasm32 and wasm-gc targets.
 
-- `stdlib/haxeon/wasm/HaxeonHost.hxi` declares the host services (`print`,
+- `HaxeonHost` declares the host services (`print`,
   `write_output`, `flush_output`, `date_now`, `date_timezone_offset`, `callback_create`,
   `callback_close`). The compiler registers it for Wasm targets; `trace`
   (which prints Haxe's `File.hx:line: message` lines), `Sys.print`, `Sys.stdout()`,
@@ -191,10 +83,10 @@ the wasm32 and wasm-gc targets.
 - The scalar `std` (`sys_time`, `sys_exit`, …) and `haxeon_runtime` math
   imports remain.
 - C functions bound through HXI follow the Wasm32 C ABI as clang and
-  Emscripten implement it (`WasmCAbi`): a record holding a single scalar
+  Emscripten implement it: a record holding a single scalar
   travels as that scalar, other records by address, a record result through
   a leading result address, and C floats as `f32`. Wasm32 passes addresses of
-  its own data; Wasm GC copies records and strings through scratch memory.
+  its own data; Wasm GC uses scratch memory for supported transfers, including strings and byte slices.
 - Native callbacks: each HXI callback type gets an `@:expose`d entry function
   taking a closure id and the C arguments. `haxeon.wasm.Callbacks` keeps the
   closures and asks the host for a function-table entry through
@@ -204,7 +96,7 @@ the wasm32 and wasm-gc targets.
 - Functions declared `@:keep` survive dead-code elimination; `@:expose`
   functions are also exported under their names.
 
-`stdlib/haxeon/wasm/haxeon-host.js` is the host side for a guest that shares
+`haxeon-host.js` is the host side for a guest that shares
 memory with an Emscripten module: it checks the memory contracts, implements
 the services above, and forwards the guest's other imports to the Emscripten
 module's C exports. Its optional `print` and `printError` callbacks receive
@@ -212,86 +104,25 @@ stdout and stderr lines respectively; defaults are `console.log` and
 `console.error`. The streams buffer separately, and `flush()` emits pending
 text without requiring a newline.
 
-## Runtime-neutral profile
+### Host-owned memory
 
-`--target=wasm32 --wasm-runtime-neutral` selects an opt-in profile for hosts
-without Wasm exception handling that meter execution (for example a WAMR
-host). It does not change default `wasm32` or `wasm-gc` output.
+Both targets can share host-owned linear memory. Compare the guest's `haxeon.memory.contract` custom
+section with the host's memory contract before calling the guest. The host memory must match the
+module's sharing mode and limits. Shared memory can be used by native code such as pthreads or
+AudioWorklets. Haxe code still runs on one thread.
 
-- The module carries a versioned `haxeon.runtime.profile` custom section
-  (`WasmRuntimeNeutralProfile`) and keeps `haxeon.gc.roots`. It has no Wasm
-  exception-handling tag section.
-- Exceptions use the `pending-global-v1` protocol: a throw sets a pending flag
-  and a rooted payload global, calls check it before using their results, and
-  handlers receive and clear it. An exception nothing handles traps with
-  `unreachable` at the exported boundary. Runtime bounds failures use the same
-  state.
-- Fuel: the module imports `haxeon_host.fuel_charge: () -> i32`. The host
-  consumes one unit and returns 1, or returns 0 on exhaustion or interruption,
-  and the guest then traps with `unreachable` outside Haxe exception dispatch.
-  Generated functions charge at entry and at loop back-edges. The linked C heap
-  and crypto runtime charge at function entry and inside their loops.
-- The start function runs during instantiation and is charged too, so a host
-  needs a separate initialization budget.
+### Runtime-neutral profile
 
-`tests/wasm/test-wasm-backend.sh` checks the import signature, the profile and
-root sections, the absence of the tag section, throw, catch and rethrow, and
-fuel traps at entry, back-edge and start. Only Node execution is tested here.
-WAMR AOT has not been run against this output, and exception propagation
-through a host callback that re-enters Wasm is untested.
+The optional Wasm32 runtime-neutral profile is for hosts that meter execution without WebAssembly
+exception handling. The host supplies `haxeon_host.fuel_charge: () -> i32` and returns 1 to
+continue or 0 to stop execution. Instantiation runs the module's start function and needs a budget
+of its own. Fuel exhaustion and uncaught guest exceptions trap at the host boundary. This profile is
+a direct compiler option. The project CLI does not expose it.
 
-## Building and testing
+## Limits
 
-Bootstrap the pinned local compiler tools once:
-
-```sh
-./scripts/bootstrap-tools.sh
-```
-
-Run the focused backend tests and Wasm32/GC parity suite:
-
-```sh
-./tests/wasm/test-wasm-backend.sh
-./tests/wasm/test-wasm-parity.sh
-```
-
-The command-line compiler accepts `--target=wasm32` and `--target=wasm-gc`:
-
-```sh
-.tools/haxe/haxe --cwd . common.hxml --run compiler.tools.HaxeonCompiler \
-  --target=wasm-gc --output=out/main.wasm --entry=add \
-  --root=stdlib --root=tests/programs tests/programs/add.hx
-```
-
-The driver supplies `haxeon` and `target=<target>` to every build. `wasm32`
-adds `wasm` and `wasm32`; `wasm-gc` adds `wasm` and `wasmgc`. The HashLink
-target adds `hl`, `sys`, `target.sys` and `target.threaded`. Project defines
-can be added with repeated `--define=NAME` or `--define=NAME=value` options.
-Target defines are reserved and applied after project defines so the selected
-backend stays authoritative.
-
-The same compile can publish the verified target-neutral IR container with
-`--ir-output=out/main.hir`. HIR is versioned, preserves SSA value identity,
-CFG edges, semantic runtime declarations, and typed native contracts, and can
-be decoded independently before Wasm or HashLink lowering.
-
-## Architectural invariants
-
-- Haxeon IR owns semantic types and operations.
-- Backend lowering owns physical representations.
-- Wasm encoding owns binary sections and opcodes.
-- Wasm32 root maps come from SSA reference types and liveness, not native-stack
-  scans; generated shadow frames form the runtime root chain.
-- Runtime ABI decisions use semantic declarations, not byte offsets.
-- Patch decisions use `RuntimeAbi`, not Wasm code offsets.
-- CFG normalization is explicit; the dispatcher is a correctness fallback
-  for CFGs the region builder cannot structure.
-
-## Deliberate boundaries
-
-`wasm64` is not implemented: the compiler and the CLI reject it as an argument
-error until the backend supports it.
-Wasm-GC support is a real executable target, but the GC-compatible IR and FFI
-subsets are still narrower than the complete Wasm32 backend. Unsupported
-operations fail at the Wasm backend boundary instead of receiving guessed
-representations.
+- `wasm64` is unsupported. Both targets reject HXI interfaces with 64-bit pointers.
+- Wasm GC supports a smaller set of native signatures than Wasm32. It supports scalar C imports
+  and copies HXI scalar out parameters and declared byte slices through guest memory. Other
+  aggregate and raw-memory API forms can be rejected.
+- File operations use in-memory storage. External processes and concurrent Haxe threads are unavailable.

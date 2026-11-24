@@ -5,7 +5,7 @@ Where a document lives says what kind it is:
 | Folder | Holds | Rule |
 |---|---|---|
 | top level | [ARCHITECTURE.md](ARCHITECTURE.md), [DEVELOPMENT.md](DEVELOPMENT.md) | Describe the tree as it is. |
-| [guides/](guides/) | Tutorials and how-tos for people building apps with Haxeon | Each guide's code is a project under `guides/examples/` that CI builds ([guides/README.md](guides/README.md)). |
+| [guides/](guides/) | Tutorials and how-tos for people building apps with Haxeon | Each guide's code is a project under `guides/examples/` that CI builds ([DEVELOPMENT.md](DEVELOPMENT.md#writing-pages-with-examples)). |
 | [learn/](learn/README.md) | A short tour of the language | Each topic has a program that CI builds and runs. |
 | [coming-from/](coming-from/README.md) | Comparisons and migration from Flutter, .NET, Go and Haxe | CI builds and runs the migration examples. |
 | [reference/](reference/) | How to use Haxeon: commands, the manifest, the language, the libraries | Kept in step with the code. |
@@ -34,37 +34,7 @@ Haxeon and the C and C++ toolchain:
 
 ## Reference
 
-Using Haxeon:
-
-- [CLI.md](reference/CLI.md): project CLI, manifests, dependencies, builds.
-- [MANIFEST.md](reference/MANIFEST.md): the project manifest, `haxeon.toml` or `haxeon.json`.
-- [RELEASES.md](reference/RELEASES.md): the release archives: what one holds and how to install it.
-- [LANGUAGE_SUPPORT.md](reference/LANGUAGE_SUPPORT.md): the supported Haxe subset and what is not yet supported.
-- [LIVE_PATCHING.md](reference/LIVE_PATCHING.md): how patching works and the reload rules.
-- [WASM_BACKEND.md](reference/WASM_BACKEND.md): the Wasm32 and Wasm GC targets, host ABI and runtime-neutral profile.
-- [ANDROID.md](reference/ANDROID.md): the Android host.
-- [PROFILING.md](reference/PROFILING.md): profiling a program or an app.
-
-Language:
-
-- [ITERATION.md](reference/ITERATION.md): iterators and iterable parameters.
-- [STRUCTURAL_EQUALITY.md](reference/STRUCTURAL_EQUALITY.md): declared value equality and `Hashable`.
-- [KEY_PATHS.md](reference/KEY_PATHS.md): compiler-checked references to stored fields.
-- [SCOPED_CLEANUP.md](reference/SCOPED_CLEANUP.md): `scoped` variables.
-- [NATIVE_MEMORY.md](reference/NATIVE_MEMORY.md): native values and memory.
-- [WRITING_SHADERS.md](reference/WRITING_SHADERS.md): shader modules, vertex layouts, and build integration.
-- [C_HEADER_FFI.md](reference/C_HEADER_FFI.md): importing C and C++ headers.
-
-Libraries:
-
-- [MESSAGEPACK.md](reference/MESSAGEPACK.md): the `haxeon.wire` MessagePack layer and descriptor sidecars.
-- [JSON_WIRE.md](reference/JSON_WIRE.md): the generated JSON codec.
-- [RPC.md](reference/RPC.md): the typed RPC runtime.
-- [UTEST_UPSTREAM_COMPATIBILITY.md](reference/UTEST_UPSTREAM_COMPATIBILITY.md): upstream utest against Haxeon.
-
-Formats and runtime contracts:
-
-- [PATCH_TRANSACTIONS.md](reference/PATCH_TRANSACTIONS.md): the HashLink patch transaction.
+See the [Reference index](reference/README.md) for language features, tools, libraries, targets and interop.
 
 ## Internals
 
@@ -78,11 +48,18 @@ The compiler:
 
 HashLink formats and runtime contracts:
 
+- [LIVE_PATCHING.md](internals/LIVE_PATCHING.md): the compiler and runtime contracts for live patching.
+- [PATCH_TRANSACTIONS.md](internals/PATCH_TRANSACTIONS.md): the HashLink patch transaction.
 - [HLB_DEBUG_SECTIONS.md](internals/HLB_DEBUG_SECTIONS.md): debug sections in HLB modules.
 - [HLD3_DEBUG_PROTOCOL.md](internals/HLD3_DEBUG_PROTOCOL.md): the debugger handshake extension for patches.
 - [METADATA_OWNERSHIP.md](internals/METADATA_OWNERSHIP.md): who owns runtime metadata across reloads.
 - [HASHLINK_MODULE_RECLAMATION.md](internals/HASHLINK_MODULE_RECLAMATION.md): unloading a whole module.
 - [JIT_NATIVE_PROPERTIES.md](internals/JIT_NATIVE_PROPERTIES.md): no-return natives and JIT intrinsics.
+
+Other runtimes and compatibility:
+
+- [WASM_BACKEND.md](internals/WASM_BACKEND.md): Wasm lowering, memory, runtime profiles and backend tests.
+- [UTEST_UPSTREAM_COMPATIBILITY.md](internals/UTEST_UPSTREAM_COMPATIBILITY.md): the upstream utest baseline.
 
 ## Design
 

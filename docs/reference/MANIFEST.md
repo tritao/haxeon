@@ -105,7 +105,7 @@ Paths are relative to the manifest's directory.
 | `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program, which builds to a module the VM runs; an app builds through its runner projects ([CLI.md](CLI.md)). |
 | `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([CLI.md](CLI.md)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |
-| `publish` | `false` or table | published whole | How the package is published into a registry: `false` keeps it out (of a checkout's `haxeon` registry as well); `exclude` lists files and directories left out (tests, vendored code that does not build), `vendor` maps a path in the published package to a directory outside it that is copied in (`{ nativekit = "../../vendor/nativekit" }`). |
+| `publish` | `false` or table | published whole | How the package is published into a registry: `false` keeps it out of the registry; `exclude` lists files and directories left out (tests, vendored code that does not build), `vendor` maps a path in the published package to a directory outside it that is copied in (`{ nativekit = "../../shared/nativekit" }`). |
 | `instrument` | table | everything | What `--profile=instrument` probes ([PROFILING.md](PROFILING.md)). |
 
 A dependency written as a source table can include `platforms = ["linux", "macos", "windows"]` to limit it to those builds.
@@ -116,10 +116,8 @@ and `[app].name`.
 
 A dependency written as a version range alone (`ui = "^0.3"`) comes from the `haxeon` registry, which is part of Haxeon's SDK
 (the `registry/` directory of a release, [RELEASES.md](RELEASES.md)): the first-party packages (`ui`, `platform`, `gpu`, `editor`, `audio`, `animation`,
-`nativekit`, `agentkit`, ...), versioned with Haxeon. A release holds them unpacked; a checkout resolves each from its directory
-in `packages/`, so an edit shows on the next build. Packages the SDK's registry lacks come from the source cache's `haxeon` index.
-`haxeon.lock` is the same with either: a release writes and checks each package's checksum; a checkout keeps a lockfile entry
-whose version is in range as it is and checks nothing. A locked version an upgrade removed is picked again within the range,
+`nativekit`, `agentkit`, ...), versioned with Haxeon. The SDK ships them unpacked. Packages the SDK's registry lacks come from the source cache's `haxeon` index.
+The release CLI writes and checks each package's checksum in `haxeon.lock`. A locked version an upgrade removed is picked again within the range,
 except with `haxeon install --locked`.
 
 `[patch.haxeon]` points a package at a directory of your own, to change it without editing the dependencies that name it:

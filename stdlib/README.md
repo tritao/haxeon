@@ -75,4 +75,4 @@ surface includes construction with inferred or explicit element types, `add`,
 `iterator`, direct iteration, and `length`.
 
 The pinned upstream source and module-by-module analysis baseline are documented
-in [Upstream utest compatibility](../docs/reference/UTEST_UPSTREAM_COMPATIBILITY.md).
+in [Upstream utest compatibility](../docs/internals/UTEST_UPSTREAM_COMPATIBILITY.md).

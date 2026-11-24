@@ -11,6 +11,38 @@
 `scripts/test.sh` with no arguments runs everything CI runs, which is slow. While working on a change, run the suite or the
 single test it touches (see Tests) and leave the full run to CI. On Windows, see [Native build](#native-build).
 
+## Writing pages with examples
+
+CI builds the example projects for the guides, the language tour and the migration pages.
+
+- Name a guide `NN-slug.md` in reading order. Name a language or migration page `slug.md`. Put a page's code in
+  `examples/<page>/` beside it, using the filename without `.md` as `<page>`. The directory holds one or more Haxeon
+  projects, each with a `haxeon.toml`, and any other files needed to follow the page, such as step-by-step edits.
+- Every ` ```haxe ` and ` ```toml ` block on the page must appear in a file under `examples/<page>/`, line for line. The
+  check ignores the block's common indentation, so a method can be shown without the indentation of its class, and
+  trailing spaces. A line that holds only `// ...` (in Haxe) or `# ...` (in TOML) stands for lines left out: the parts
+  around it must appear in the same file, in that order.
+- A ` ```text title="Output" ` block is what a program prints: it must appear in that project's `expected-output.txt`,
+  and the check runs the program and compares what it prints with that file.
+- Commands go in ` ```sh ` blocks (` ```powershell ` for Windows only) and other output in ` ```text ` blocks; neither
+  is checked against the examples, so keep them to what the reader types and sees.
+- For code in another language, label the block with that language, such as `dart`, `csharp` or `go`.
+- Published pages link to guides, language pages, migration pages, reference pages and their examples, or to full URLs.
+  Keep links to design notes, reports, internals and decision records in repository documentation.
+- An app is kept without its runner directories (`linux/` and the others): the check adds them with `haxeon create .`, so
+  an example always has the runner the current template writes.
+
+`tests/integration/test-docs-guides.hx` checks snippets and published links, then copies each example project out of the tree
+and builds it with the checkout's `haxeon`. It runs a program and compares its output when the project has an
+`expected-output.txt`, and opens an app for a few frames (under `xvfb-run` on Linux when it is installed). A guide that
+needs more, such as the live edits of [Live editing](guides/02-live-editing.md), gets its own function there. Run it from the
+repository root:
+
+```sh
+scripts/haxeon tests/integration/test-docs-guides.hx               # check the pages, then build and run every example
+scripts/haxeon tests/integration/test-docs-guides.hx --no-build    # check the pages only
+```
+
 ## Tests
 
 Every suite is one line of `tests/suites.txt`, in the order it runs, with its groups and how it is scheduled (the file's header

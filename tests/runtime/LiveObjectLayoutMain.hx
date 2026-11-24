@@ -307,7 +307,7 @@ class LiveObjectLayoutMain {
 			Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.finish")),
 			0);
 		// A thread stopped inside old code finishes it after the commit: a construction it was in the middle of makes an object
-		// without the added field, one per patch at most for this worker (see LIVE_PATCHING.md, "Threads").
+		// without the added field, one per patch at most for this worker (see docs/internals/LIVE_PATCHING.md, "Threads").
 		if (unsetMade > 5)
 			throw '$unsetMade objects made while the patches applied lack the added field; at most one per patch may';
 		Runtime.dispose(live);

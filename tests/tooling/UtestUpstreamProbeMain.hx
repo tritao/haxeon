@@ -7,7 +7,7 @@ import sys.io.File;
 
 /**
  * Reports the first Haxeon analysis blocker for every pinned upstream utest module, from the checkout's root:
- * `haxeon dev run --cp tests/tooling UtestUpstreamProbeMain` (docs/reference/UTEST_UPSTREAM_COMPATIBILITY.md).
+ * `haxeon dev run --cp tests/tooling UtestUpstreamProbeMain` (docs/internals/UTEST_UPSTREAM_COMPATIBILITY.md).
  */
 class UtestUpstreamProbeMain {
 	static final upstreamRoot = "vendor/utest/src";

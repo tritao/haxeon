@@ -10,9 +10,7 @@ haxeon devices
 haxeon run --target android --device SERIAL
 ```
 
-Set `ANDROID_HOME` to the Android SDK. In a checkout, Haxeon also looks in
-`.tools/android-sdk`. Run `haxeon doctor` to check the SDK, NDK, adb, and
-Haxeon host AAR. For a checkout, see `docs/design/ANDROID_BUILD.md` for the Android toolchain and host build.
+Set `ANDROID_HOME` to the Android SDK. Run `haxeon doctor` to check the SDK, NDK, adb and Haxeon host AAR.
 
 The app owns `android/`, including the Gradle project, manifest and resources.
 Set the application ID, launcher label and version using `id`, `name` and
@@ -41,25 +39,3 @@ Rebuild the APK after changes to the Android runner or its native packages.
 `haxeon build --target android --plan` prints the module build and its live
 metadata without invoking Gradle. `--compiler-only` builds just the module and
 its sidecars. See [Live patching](LIVE_PATCHING.md) for the runtime model.
-
-## Checking on CI
-
-The **Android app on emulator** job creates an app with the Android runner,
-builds its debug APK, and checks that the Android host draws a frame. It then
-checks that the device applies a body patch and a structural reload in the same
-app process. The job runs the check outside the standard test suites because it
-needs a booted Android device.
-
-To run the same check from a checkout, set `ANDROID_HOME` to the toolchain SDK
-or source `scripts/android-env.sh` for a checkout-local SDK, and install the
-pinned toolchain into it with `cmake -P cmake/haxeon-android-toolchain.cmake`. Build and stage
-Haxeon, then run the check with a booted, unlocked device or emulator visible
-in `adb devices`.
-
-```sh
-scripts/build-native.sh
-tests/integration/test-android-app.sh
-```
-
-Set `ANDROID_SERIAL` if more than one device is online. The script removes
-its temporary app and stops its watch session when it exits.

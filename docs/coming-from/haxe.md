@@ -51,7 +51,7 @@ operation named in its scope. Wasm GC is untested here.
 
 | Library or framework | Host JIT | Native AOT | Wasm32 | Scope |
 |---|---|---|---|---|
-| `utest.Dispatcher`, upstream `2.0.0-alpha` at `a055e05e` | Tested | Tested | Tested | Add one `Int` handler and dispatch 7. This covers the dispatcher module. The [upstream utest analysis probe](../reference/UTEST_UPSTREAM_COMPATIBILITY.md) gives a separate view of the full test framework. |
+| `utest.Dispatcher`, upstream `2.0.0-alpha` at `a055e05e` | Tested | Tested | Tested | Add one `Int` handler and dispatch 7. This covers the dispatcher module. |
 | Lime and OpenFL | Untested | Untested | Untested | Port or verify the Lime platform layer and runner before testing OpenFL content. |
 | HaxeFlixel | Untested | Untested | Untested | Its OpenFL and Lime dependencies need to work on your chosen output. |
 | Heaps with HashLink or HTML5 | Untested | Untested | Untested | Verify the renderer, shader tooling and native dependencies for your backend. |
@@ -71,7 +71,7 @@ An edit to the native runner or a compiler upgrade requires restarting the corre
 
 For desktop app releases, the runner builds a native executable. A Wasm module needs an engine and a host that supplies
 its imports. A browser UI runner and web packaging of app dependencies with C or C++ code are still missing from the
-project CLI. [Build targets](../reference/CLI.md#targets-and-backends) · [Shipping](../guides/05-shipping.md) · [Wasm backend](../reference/WASM_BACKEND.md)
+project CLI. [Build targets](../reference/CLI.md#targets-and-backends) · [Shipping](../guides/05-shipping.md) · [WebAssembly](../reference/WASM_BACKEND.md)
 
 ## Move a small program
 
@@ -141,20 +141,12 @@ haxeon build --target wasm32
 node run-wasm.cjs
 ```
 
-For this console program, AOT uses the compiler and SDK CMake integration directly. The following commands use a
-prepared Linux checkout. Set `repo` to its absolute path and run these from the copied example.
+The project CLI builds native executables ahead of time for desktop apps with a runner.
+This console project has no runner, so its native AOT build requires the direct compiler and
+SDK CMake integration. See [Shipping](../guides/05-shipping.md#desktop-a-development-build-and-a-release-build)
+for the desktop app release workflow.
 
-```sh
-compiler=$("$repo/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)
-"$repo/out/sdk/bin/hl" "$compiler" --target=hlc --build-mode=release --output="$PWD/duration" \
-  --entry=Main --root=src --stdlib="$repo/stdlib" --define=verbose src/Main.hx src/Duration.hx
-cmake -S "$repo/cmake/aot" -B aot -G Ninja -DHaxeon_DIR="$repo/out/sdk/cmake" \
-  -DC_SOURCES="$PWD/duration.c" -DOUTPUT="$PWD/duration"
-cmake --build aot
-./duration
-```
-
-Each run prints the same two lines.
+The JIT and Wasm runs print the same two lines.
 
 ```text title="Output"
 Duration:

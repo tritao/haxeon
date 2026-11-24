@@ -136,7 +136,7 @@ record projections is still future work.
 
 ## HashLink Strings
 
-On HashLink, a Haxeon `String` is the VM's `vstring` (`vendor/hashlink/src/hl.h`): its UTF-16 data, its length in code
+On HashLink, a Haxeon `String` is the VM's `vstring`: its UTF-16 data, its length in code
 units, and a third field without a name holding the hash string maps use, 0 until a map first computes it. Natives see
 the same `_STRING` type as stock HashLink; signatures name only the data and the length, so a library built for stock
 Haxe output loads unchanged, and a stock Haxe program, whose `String` has two fields, runs on the fork and is hashed on
@@ -145,9 +145,8 @@ every lookup instead.
 - A String's text never changes once it is visible, so the cached hash stays right. A native that builds a String fills
   its data before any map sees it, and never writes into a String it did not just allocate.
 - A field without a name has storage but no lookup entry, so reflection and dynamic access see only `bytes` and
-  `length`, as on stock HashLink (`tests/programs/reflect-string-fields.hx`).
-- String maps take the String itself (`hl_hbget_s`, `hl_hbexists_s`, `hl_hbset_s`, `hl_hbremove_s`);
-  `tests/native/string_map_hash.c` checks both String shapes.
+  `length`, as on stock HashLink.
+- String maps take the String itself (`hl_hbget_s`, `hl_hbexists_s`, `hl_hbset_s`, `hl_hbremove_s`).
 - String constants list all three fields, the hash as 0; the loader also zeroes a constant object before filling it.
 
 ## Deliberate exclusions

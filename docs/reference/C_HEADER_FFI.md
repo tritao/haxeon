@@ -7,7 +7,7 @@ the generated artifact is still ordinary HXI, so the existing native ABI
 classifier and runtime handle the call:
 
 ```sh
-scripts/haxeon ffi import \
+haxeon ffi import \
   --language=c++ \
   --std=c++20 \
   --target=x86_64-linux-gnu \
@@ -47,7 +47,7 @@ Throwing scalar and pointer functions or methods can be bound through a
 generated C++ catch thunk:
 
 ```sh
-scripts/haxeon ffi import \
+haxeon ffi import \
   --language=c++ \
   --target=x86_64-linux-gnu \
   --library=/path/to/library-with-thunks.so \
@@ -85,7 +85,7 @@ pointer, exposes `fromNative()` and `nativeHandle()`, and projects supported
 instance and static methods while retaining the HXI module as the ABI source:
 
 ```sh
-scripts/haxeon ffi import \
+haxeon ffi import \
   --language=c++ \
   --target=x86_64-linux-gnu \
   --library=nativekit \
@@ -95,16 +95,18 @@ scripts/haxeon ffi import \
   /path/to/library/include/library.hpp
 ```
 
-Add the projection directory as a source root when compiling the application,
-alongside the generated HXI interface:
+Add the generated Haxe directory to your project's source roots and list the HXI interface
+in `haxeon.toml`. Keep any existing source roots and interface files.
 
-```sh
-haxeon-compiler \
-  --root=generated/nativekit-cxx \
-  --ffi-interface=generated/library.hxi \
-  --entry=app.Main \
-  sources.manifest
+```toml
+entry = "app.Main"
+sourceRoots = ["src", "generated/nativekit-cxx"]
+
+[ffi]
+interfaces = ["generated/library.hxi"]
 ```
+
+Then run `haxeon build`.
 
 The generated `DisplayList.hx`-style modules are intentionally thin. Without
 `--cxx-lifetimes`, they expose borrowed `fromNative()` wrappers and do not
@@ -211,28 +213,8 @@ For an HXI interface that calls an ordinary CMake shared library directly,
 declare `native.cmake.library` with that target's library name. Haxeon places
 the resulting library on the dependent program's runtime search path.
 
-NativeKit integration currently uses its stable public C ABI through the C
-importer. Its `nkui::DisplayList` implementation is an internal C++ class:
-its methods are not `noexcept`, and the shared UI library hides its C++ symbols.
-It therefore must not be presented as a direct call into the shipped shared
-library. An opt-in audit checks the real header and NativeKit compilation
-database and asserts the expected actionable diagnostics. It also builds the
-actual `display_list.cpp` beside a test-only factory and Haxeon's generated
-thunks, then executes `reset()` and `size()` through the generated projection.
-That positive path verifies the importer and thunk ABI against NativeKit's real
-C++ implementation without changing NativeKit's production exports. It is kept
-out of the default test suite because NativeKit is an external, optional
-dependency:
-
-```sh
-NATIVEKIT_ROOT=/path/to/nativekit \
-NATIVEKIT_BUILD_DIR=/path/to/nativekit/build-ui-integrated \
-tests/integration/test-nativekit-cxx-profile.sh
-```
-
-The existing C API remains the correct production binding for the current
-NativeKit build. A future NativeKit release can promote the source-level test
-to a shared-library test once it exports an intentional C++ surface.
+Use NativeKit's public C ABI for bindings to its shipped libraries. The UI library
+hides the C++ symbols for its internal `nkui::DisplayList` class.
 
 Use repeatable `--define=<name[=value]>` options for explicit preprocessor
 definitions. `--compile-commands=<path>` accepts a Clang
@@ -244,7 +226,7 @@ Haxeon can use Clang to turn the ABI-visible subset of a C header into a
 deterministic raw HXI description:
 
 ```sh
-scripts/haxeon ffi import \
+haxeon ffi import \
   --target=x86_64-linux-gnu \
   --library=nativekit \
   --include=/path/to/library/include \
@@ -312,7 +294,7 @@ An interface may compose declarations from an already registered interface with
 repeatable `--depends` options:
 
 ```sh
-scripts/haxeon ffi import \
+haxeon ffi import \
   --target=x86_64-linux-gnu \
   --library=nativekit_ui \
   --interface=NativeKitUI \
@@ -337,7 +319,7 @@ artifact with `--dependency-hxi` so the standalone audit can validate external
 type references:
 
 ```sh
-scripts/haxeon ffi audit \
+haxeon ffi audit \
   --target=x86_64-linux-gnu \
   --target=x86_64-w64-windows-gnu \
   --depends=NativeKit \
@@ -346,22 +328,23 @@ scripts/haxeon ffi audit \
   /path/to/nativekit_ui_import.h
 ```
 
-Pass one or more generated interfaces to the compiler with repeatable options:
+List generated interfaces and optional projection maps in `haxeon.toml`, then run
+`haxeon build`. See the [manifest reference](MANIFEST.md#settings) for other project settings.
 
-```sh
-haxeon-compiler \
-  --ffi-interface=generated/nativekit.hxi \
-  --ffi-projection=generated/nativekit.hxmap \
-  --entry=app.Main \
-  sources.manifest
+```toml
+entry = "app.Main"
+
+[ffi]
+interfaces = ["generated/nativekit.hxi"]
+projections = ["generated/nativekit.hxmap"]
 ```
 
 Interfaces are parsed and registered before source loading. Their names must be
 unique, and the registered set becomes immutable after the first compilation,
 matching the existing native-table stability rule for live modules.
 
-Projection manifests are optional Haxe-only JSON files selected with
-`--ffi-projection`. They are layered on top of generated HXI and never change
+Projection manifests are optional Haxe-only JSON files listed in
+`ffi.projections`. They are layered on top of generated HXI and never change
 native symbols, layouts, or pointer contracts. A reusable profile can strip a
 library prefix and apply C naming transforms, while explicit maps handle
 library-specific exceptions:
@@ -622,7 +605,7 @@ argument is its array's length, arrays sharing a count must have equal
 lengths, and a span whose owner is closed is refused. This passes memory one
 native library owns to another without marshalling it through Haxe.
 
-Use `scripts/haxeon ffi audit` to import one public header for multiple targets
+Use `haxeon ffi audit` to import one public header for multiple targets
 and compare its normalized declarations and layouts. The `portable-abi64`
 profile additionally rejects ABI-dependent public scalars such as `long`,
 `size_t`, `wchar_t`, and C `bool`. Audits run Clang in freestanding mode, so
@@ -630,7 +613,7 @@ headers limited to the portable C ABI can be checked for Apple and Windows
 targets without installing their platform SDKs:
 
 ```bash
-scripts/haxeon ffi audit header.h \
+haxeon ffi audit header.h \
   --target=x86_64-linux-gnu \
   --target=x86_64-w64-windows-gnu \
   --target=arm64-apple-darwin \

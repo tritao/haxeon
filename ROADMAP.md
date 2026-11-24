@@ -33,7 +33,7 @@ slots, statics with a stable `__init`, closures with shared capture cells, array
 with payloads, enum abstracts, abstracts with operators, properties, typedefs (generic and cross-module), imports
 (wildcard and `as` namespaces), pattern matching (nested, alternatives with guards, arrays, captures), exceptions with
 typed catch filters, dynamic objects and reflection, structs with `Equatable`/`Hashable`, key paths, and scoped cleanup.
-What the Wasm backends cover is in [docs/reference/WASM_BACKEND.md](docs/reference/WASM_BACKEND.md).
+See [WebAssembly](docs/reference/WASM_BACKEND.md) for supported features and target limits.
 
 - [ ] The Haxe compatibility gaps in [LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported): `using` static
   extensions, indexing `Dynamic` values, structure and extractor patterns, rest parameters, and pattern captures that

@@ -1,9 +1,6 @@
 # Key paths
 
-Status: specification with a partial implementation (2026-11-05). The nullable
-escaped-value allocation requirement below remains blocked on callable ABI work.
-Key paths are
-compiler-checked references to stored fields, independent of UI concepts.
+Key paths are compiler-checked references to stored fields.
 
 ## Types and formation
 
@@ -132,7 +129,9 @@ immutable concatenation descriptor once at composition, with equality and
 hashing based on the flattened declaration sequence. All dispatch functions
 and their environments are created with the descriptor. Neither `get` nor
 `set` allocates a descriptor, closure, prepared writer, box or other temporary
-object on any target, including when the path escapes and inlining is disabled.
+object for supported value types on HashLink, Wasm32 and Wasm GC, including when the path
+escapes and inlining is disabled. Not yet implemented: an escaped path whose final value
+type is `Null<S>` still allocates on each call. Final nullable fields work; nullable intermediate fields are rejected.
 Target-specific typed access functions handle references, struct copies and
 tracking; no runtime name lookup or portable byte offsets are used.
 
@@ -152,12 +151,6 @@ a writable descriptor to `KeyPath` keeps the descriptor and grants no setter
 through that readable type. Descriptors and hashes are process-local and are
 not stable serialized identifiers.
 
-Allocation censuses must cover escaped `get` and `set` on class roots and on
-struct roots in writable places: 1,024 calls allocate zero objects on HashLink,
-Wasm32 and Wasm GC, with inlining enabled and disabled. Descriptor construction
-and unknown-path composition happen before the measured call loop; the loop
-must retain runtime path selection so these tests exercise escaped dispatch.
-
 ## Diff integration
 
 `Diff.bit(\T.field)` accepts a single stored-field path rooted at a `Diffable`
@@ -171,29 +164,7 @@ backing, such as `@:isVar`; this does not make that property a usable key-path
 value or bypass its accessor. Properties without stored backing are rejected.
 The previous field-name form has been removed and its callers ported.
 
-## Implementation checkpoint and backend dependency
+## Current limits
 
-Formation, capabilities, direct reads/writes, escaped typed dispatch, composition,
-identity equality/hash, display and `Diff.bit` are implemented. Constant path
-arguments remain constants in generic specializations independently of inlining.
-The scalar-value allocation censuses exercise known/generic paths and escaped
-class, local struct, static struct and composed nested-struct dispatch on all
-three targets with inlining on and off, at 1,024 calls with zero allocations.
-Nested mutation of tracked Observable structs remains an explicit `E1027` error.
-
-**The full allocation contract is not yet implemented.** Escaped paths with
-`Null<S>` as their final value type use the existing boxed callable ABI. In
-`tests/programs/key-path-nullable.hx`, after `NullableKeyPath.prepare()`, calling
-`NullableKeyPath.perform(1024)` on Wasm32 with inlining disabled and allocation
-counting enabled returns 1024 but allocates 2048 objects. Final nullable fields
-remain functionally supported; nullable intermediates remain rejected.
-
-The shared HashLink scalar-closure planner and Wasm scalar callable planner
-explicitly exclude layouts containing presence lanes (`IrScalarClosures.scalarizable`
-and `WasmScalarAbi.scalarizable`). Meeting the specification requires those ABIs
-to carry nullable presence and payload lanes across typed indirect calls,
-including forwarding/composed accessors and nullable struct arguments/results.
-This is a backend dependency, not a reason to weaken the allocation contract or
-introduce a per-call writer. Implementation stops at this checkpoint under the
-parallel-work boundary; that ABI work and its allocation regressions must land
-before key paths can be marked complete.
+Escaped key paths to nullable values do not yet support allocation-free calls.
+Nested mutation of tracked Observable structs reports `E1027`.

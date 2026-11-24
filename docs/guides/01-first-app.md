@@ -136,9 +136,7 @@ platform.
   Serve `build/web/wasm32/` (or `build/web/wasm-gc/`) over HTTP and open its `index.html` in a browser with WebGL2.
   The page runs the same counter in `src/Main.hx` using the WebGL2 host and fonts from the SDK.
   Edit `web/` to change the runner. Live editing is available through the desktop runners.
-  When building the SDK from source, install Emscripten with `vendor/nativekit/tools/setup-web.sh`
-  before running `scripts/build-native.sh` to include the browser UI host.
-  See [WebAssembly backend](../reference/WASM_BACKEND.md) for the two targets.
+  See [WebAssembly](../reference/WASM_BACKEND.md) for the two targets.
 - **iOS** is planned.
 
 ## Next

@@ -8,7 +8,7 @@
 | Standard library and `sys` | See the supported operations below and the [standard library gaps](#not-yet-supported). Compile the modules you use for the intended output. |
 | Metadata and macros | Supported metadata includes `@:nullSafety`, `@:allow` and `@:hlNative`. See [Haxe command lines](CLI.md#haxe-command-lines) for the supported `nullSafety` option and macro restrictions. |
 | Conditional compilation | Use `#if` with a define passed as `-D` or through the project's [`defines` setting](MANIFEST.md#settings). Check the branch for each target. |
-| Platform APIs and externs | Check target-specific imports against the output you build. See [HashLink bindings](#source-declared-hashlink-bindings), [C header import](#c-header-import) and the [Wasm backend](WASM_BACKEND.md). |
+| Platform APIs and externs | Check target-specific imports against the output you build. See [HashLink bindings](#source-declared-hashlink-bindings), [C header import](#c-header-import) and [WebAssembly](WASM_BACKEND.md). |
 
 ## Supported language features
 
@@ -349,20 +349,15 @@ Where Haxeon differs from Haxe's checker:
 
 ## Not yet supported
 
-Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
-HashLink):
-
 - An arrow lambda's rest parameter (`(...values:Int) -> values.length`), which Haxe also rejects.
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
-  lowered as views of one object, so the narrower value is the same object;
-  the differential case `anonymous-width-subtyping` records it. The same holds for an object literal once it has met one
+  lowered as views of one object, so the narrower value is the same object. The same holds for an object literal once it has met one
   structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
-  after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
-  as in Haxe (`structure-open-literal`).
+  after a narrower use. A literal that meets one structure gains its optional fields,
+  as in Haxe.
 - A class or interface instance where a structure is expected (`var shape:{function area():Int;} = new Rectangle();`)
-  is a type mismatch. It waits for the same views; the differential case
-  `structure-from-class` records it.
+  is a type mismatch.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API on a class or enum held as a value (`typeof`, `getClass`,
   `getSuperClass`, `resolveClass`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
@@ -374,9 +369,9 @@ HashLink):
 - A generic call whose type argument is a type variable something after the call still fixes (`var values = [];
   Lambda.count(values); values.push(1);`): `E1003`. Haxeon names and types a generic call's specialization when it types the
   call, so it cannot follow a variable fixed later; one that only the argument's own value carries (`Lambda.empty([])`) is
-  Dynamic, as in Haxe. The differential case `lambda-unfixed-before-call` records it.
+  Dynamic, as in Haxe.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
-  Reported on 2026-11-17 (not verified on current main).
+  Haxeon support for this case is unverified.
 
 Stricter than Haxe:
 

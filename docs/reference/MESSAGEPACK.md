@@ -242,15 +242,3 @@ Current artifacts use JSON envelope format 4 with descriptor version 5.
 whose source facts are unknown. The hash check proves the fields agree with the
 compiler's hash algorithm. It does not authenticate the producer, and the facts
 describe source declarations, not a loaded binary.
-`tests/integration/test-type-descriptor-artifact.sh` covers the artifact.
-
-## Interoperability checks
-
-The canonical MessagePack values live in
-`tests/fixtures/messagepack-vectors.tsv`; the framed envelope cases live in
-`tests/fixtures/messagepack-frame-vectors.tsv`. The
-`messagepack-interop` program decodes and re-encodes the canonical bytes with
-the Haxe reader and writer. `tests/integration/test-messagepack-interop.sh` additionally
-uses Python's `msgpack` package to decode every canonical value, produce
-compatible encodings, and validate framed payloads. The Python portion is
-optional for local runs and is installed in the Ubuntu CI jobs.

@@ -42,7 +42,6 @@ shows a `live.patch` (or `live.reload`) slice at the patch, a "module loaded" or
 so samples before and after a patch are attributed to the code that actually ran.
 A live module calls each function through a small entry stub; a sample that
 stops in one shows as `<function> [entry]` in `[hashlink-jit-entries m<module>]`.
-In exosuit, `python scripts/run.py [--watch|--live] --profile` forwards the flag.
 
 ## What a trace contains
 
@@ -181,21 +180,8 @@ keeps its tid. A Windows thread description longer than 127 bytes is cut at a
 whole character, and on macOS a thread that names itself also gets the system
 name.
 
-To check a trace without opening the UI, `scripts/check-pftrace.py` runs
-queries through Perfetto's `trace_processor_shell` (download it from the
-Perfetto releases):
-
-```sh
-python3 scripts/check-pftrace.py --tp trace_processor_shell \
-  --expect-process Main --expect-thread main --expect-slice ui.frame \
-  --expect-counter ui.frame.allocated_bytes --min-samples 1000 \
-  build/host/profile/profile-<timestamp>/profile.pftrace
-```
-
-On Windows x64, add `--expect-mixed` to require stacks that pass from Haxe
-through native code and back into Haxe. The check matches `.dll` and `.exe`
-mappings, so it does not apply to Linux; `tests/integration/test-profiler-mixed-stack.sh`
-covers the Linux x86-64 stacks.
+Stack samples can include calls from Haxe into native code and back into Haxe
+on Windows x64 and Linux x86-64.
 
 ## Instrumentation
 
@@ -226,7 +212,7 @@ The manifest's `instrument` section (`haxeon.toml`, or `"instrument"` in a `haxe
 ```toml
 [instrument]
 haxe = { include = ["*"], exclude = ["Math", "haxe.ds.*"] }
-native = { include = ["**"], exclude = ["vendor/harfbuzz/**"] }
+native = { include = ["**"], exclude = ["**/harfbuzz/**"] }
 ```
 
 Haxe patterns match qualified function names; `*` matches any run of
@@ -355,24 +341,12 @@ Applications can mark a measured operation with `haxeon.ProfileSpan.begin(name)`
 and `haxeon.ProfileSpan.end(name)`. Markers use the same clock and thread IDs as
 the stack samples. Names may be UTF-8 text. A span records its name at `begin`;
 `end` closes the innermost open span on the thread, so keep begin and end
-calls properly nested. After exporting the capture, `scripts/hlprof-spans.py`
-lists the slowest spans and the sampled leaf functions inside each one:
+calls properly nested. Export the capture with the SDK's `hlprof-live`, then open it in Perfetto
+to view spans alongside stack samples.
 
 ```sh
-.tools/hashlink/hlprof-live export --format perfetto \
-  --output out/editor.perfetto.json out/editor.hlpc
-python3 scripts/hlprof-spans.py --min-ms 20 --top 20 \
-  --output out/span-spikes.json out/editor.perfetto.json
+hlprof-live export --format perfetto --output editor.perfetto.json editor.hlpc
 ```
-
-`hlprof-spans.py` matches each span end to its begin by name. A span's end
-record carries no name, so the script currently stops with a "mismatched span"
-error on exports of these captures.
-
-The report includes sample counts and incomplete span counts when capture ends
-before the final marker is drained. A span with few samples needs further
-investigation; sampling alone cannot prove whether its thread was descheduled
-or blocked.
 
 ## hlprof-live
 

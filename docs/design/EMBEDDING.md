@@ -39,9 +39,9 @@ marked *published* or *estimate*. The load average was about 7 throughout, so ti
 | HashLink VM with JIT | `vendor/hashlink`, `out/sdk/bin/hl` | 1.85 MB of text with the JIT, statically linked: 1.9 MB stripped. |
 | HashLink without JIT | `libhl-aot.a` (2.6 MB archive) | Used by `--target=hlc`. A hello-world AOT executable is 1.65 MB stripped (AOT_BACKEND.md, milestone 4). |
 | Runtime module load | `hl_runtime_module_load`, `hl_runtime_module_apply_hlp`, `hl_runtime_module_call_*` (`hlmodule.h`) | Loads several HLB modules into one VM, patches them atomically, unloads them (`runtime.RuntimeDomain`, `LoadedPlugin`). |
-| Live patching | `--live`, HLP ([LIVE_PATCHING.md](../reference/LIVE_PATCHING.md)) | Function-level patches with stable IDs, added types, signature adapters and guards for stored closures. |
+| Live patching | `--live`, HLP ([LIVE_PATCHING.md](../internals/LIVE_PATCHING.md)) | Function-level patches with stable IDs, added types, signature adapters and guards for stored closures. |
 | AOT C backend | `--target=hlc` ([AOT_BACKEND.md](AOT_BACKEND.md)) | All 645 test programs pass. The output links against `libhl`. |
-| Wasm backends | `--target=wasm32`, `--target=wasm-gc` ([WASM_BACKEND.md](../reference/WASM_BACKEND.md)) | Both are executable targets. wasm-gc is tested on Wasmtime 47 (`tests/wasm/test-wasm-gc-wasmtime.sh`). |
+| Wasm backends | `--target=wasm32`, `--target=wasm-gc` ([targets](../reference/WASM_BACKEND.md), [backend internals](../internals/WASM_BACKEND.md)) | Both are executable targets. wasm-gc is tested on Wasmtime 47 (`tests/wasm/test-wasm-gc-wasmtime.sh`). |
 | Runtime-neutral profile | `--wasm-runtime-neutral` (wasm32 only) | Needs no Wasm exceptions and charges fuel through an import (`haxeon_host.fuel_charge`). Only tested on Node so far. |
 | Wasm host ABI | `stdlib/haxeon/wasm/HaxeonHost.hxi` | Only C-ABI scalars and linear-memory addresses cross the boundary, so one host serves both Wasm targets. |
 | HXI | `--ffi-interface=FILE.hxi`, `haxeon ffi import` ([C_HEADER_FFI.md](../reference/C_HEADER_FFI.md)) | Describes a C API. Wasm imports it by `@library` name; HashLink resolves it as natives. |
@@ -378,7 +378,7 @@ The rules are the same for both routes; only route B enforces them against hosti
   - `print` and output go to the game's log;
   - `date_now` and `sys_time` are denied in deterministic mode, which uses game time from the API instead;
   - `sys_exit` traps;
-  - `sys.io.File` already runs on an in-memory store inside the guest (WASM_BACKEND.md), so it never reaches the
+  - `sys.io.File` already runs on an in-memory store inside the guest ([WebAssembly](../reference/WASM_BACKEND.md#standard-library-on-wasm)), so it never reaches the
     disk.
 
 **Memory.**
@@ -391,7 +391,7 @@ The rules are the same for both routes; only route B enforces them against hosti
 **Time.**
 
 - Every call into a script carries a fuel budget: per frame for `update`, and a separate one for instantiation,
-  because the start function runs then (WASM_BACKEND.md).
+  because the start function runs then ([runtime-neutral profile](../internals/WASM_BACKEND.md#runtime-neutral-profile)).
 - The instrumentation moves into the guest. A mutable global counter is decremented by each block's cost at function
   entry and at loop back-edges, and the host is called only when the counter goes negative. That replaces the
   host call per charge (11× on nbody) with a load, a subtract and a branch.

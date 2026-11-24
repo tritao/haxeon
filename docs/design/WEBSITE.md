@@ -154,7 +154,7 @@ ahead of time, WebAssembly, packaging), C and C++ interop, Reference.
 - **Generated where code is the source:** the CLI reference from `CliHelp`, one page per error code (`E1xxx`) with an
   example, the package and standard library API from doc comments, the compatibility table from the differential tests.
 - **Every code block is compiled in CI**, and run where the page shows its output. A guide's code is an example project under
-  `docs/guides/examples/`, and its code blocks are excerpts of it (`docs/guides/README.md`).
+  `docs/guides/examples/`, and its code blocks are excerpts of it (`docs/DEVELOPMENT.md`).
 
 ## Native code
 

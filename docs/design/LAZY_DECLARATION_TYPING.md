@@ -413,7 +413,7 @@ runtime ABI, which does not know whether a type was written or inferred:
 - a changed instance field type reloads (`object_field_type_changed`), and so does a changed static type
   (`GlobalLayoutChanged`).
 
-`LIVE_PATCHING.md` gains one sentence: an edit to an unannotated body can change its declaration's type, with the
+[Live patching internals](../internals/LIVE_PATCHING.md#changed-signatures) gains one sentence: an edit to an unannotated body can change its declaration's type, with the
 consequences of a signature change.
 
 ## Performance

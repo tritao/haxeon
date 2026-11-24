@@ -1,7 +1,7 @@
 #!/usr/bin/env haxeon
 /**
  * Check published links and match the guides, language tour and migration pages to their examples, as described in
- * docs/guides/README.md. Build copies of each project and check its output or open its app for a few frames.
+ * docs/DEVELOPMENT.md. Build copies of each project and check its output or open its app for a few frames.
  * `--no-build` checks the pages only.
  */
 import haxe.io.Path;
@@ -49,7 +49,7 @@ function main() {
 			if (section == "reference")
 				continue;
 			if (section == "guides" && name != "README.md" && !~/^[0-9][0-9]-[a-z0-9-]+\.md$/.match(name)) {
-				failures.push('$shown: a guide is named NN-slug.md (docs/guides/README.md)');
+				failures.push('$shown: a guide is named NN-slug.md (docs/DEVELOPMENT.md)');
 				continue;
 			}
 			var example = Path.join([directory, "examples", Path.withoutExtension(name)]),

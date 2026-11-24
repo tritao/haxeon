@@ -75,9 +75,6 @@ Generation reuses each unchanged module. The cache covers its source,
 transitive includes, variant settings, and the verified shader compiler.
 Only the active target's compiled shader source reaches the Haxe module.
 Released SDKs include NativeKit’s shader driver and the pinned shader compiler.
-On first use in a source checkout, the driver downloads the pinned compiler
-with `curl` if it cannot reuse a verified cached copy. NativeKit’s CI validates
-the generated GLSL for its shader fixtures. App builds skip that validation.
 
 For source-defined variants, add define sets keyed by Haxe module in
 `haxeon.json`:

@@ -141,8 +141,8 @@ Wasm support is experimental and narrower than the desktop target:
 - For apps, `haxeon build --target wasm32` or `--target wasm-gc` bundles the app’s
   page, module and SDK loader. Serve the bundle over HTTP to run it in a browser.
 
-See [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) for the host ABI and test
-commands.
+See [WebAssembly](docs/reference/WASM_BACKEND.md) for the host ABI and
+[WebAssembly backend internals](docs/internals/WASM_BACKEND.md#building-and-testing) for backend tests.
 
 ## ⚖️ How it compares
 
@@ -174,8 +174,8 @@ of a language that targets many platforms.
 | Iterators, iterable parameters, and allocation behavior | [`docs/reference/ITERATION.md`](docs/reference/ITERATION.md) |
 | How patching works, reload rules, artifact builds | [`docs/reference/LIVE_PATCHING.md`](docs/reference/LIVE_PATCHING.md) |
 | Compiler pipeline, SSA IR, HLB/HLI/HLP formats | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| Patch transactions in depth | [`docs/reference/PATCH_TRANSACTIONS.md`](docs/reference/PATCH_TRANSACTIONS.md) |
-| WebAssembly backend | [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) |
+| Patch transactions in depth | [`docs/internals/PATCH_TRANSACTIONS.md`](docs/internals/PATCH_TRANSACTIONS.md) |
+| WebAssembly targets and host ABI | [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) |
 | Android host | [`docs/reference/ANDROID.md`](docs/reference/ANDROID.md) |
 | Building, testing, bootstrapping, formatting | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
 | Profiling a program or an app | [`docs/reference/PROFILING.md`](docs/reference/PROFILING.md) |

@@ -1,6 +1,6 @@
 # Scoped cleanup
 
-Status: scoped cleanup is implemented. It does not introduce ownership or move-only values.
+Scoped cleanup runs cleanup code when a scope exits.
 
 ## Syntax and registration
 

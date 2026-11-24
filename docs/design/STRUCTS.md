@@ -1519,7 +1519,7 @@ headers in, and a build check reports headers that are out of date.
   on Wasm GC than classes do.
 - **Live patching.** A change to a struct's layout is a structural type
   change, so it remains a reload boundary until the runtime has a non-moving
-  type arena ([live patching](../reference/LIVE_PATCHING.md)). Migrating stored data
+  type arena ([live patching](../internals/LIVE_PATCHING.md#design-reserved-slots)). Migrating stored data
   across a layout change is a host concern (for example a Beartooth world).
   It needs the old and new descriptors, which reflection provides.
 

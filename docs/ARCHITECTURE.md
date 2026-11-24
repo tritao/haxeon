@@ -63,7 +63,7 @@ parallel-copy snapshots, emits real `OLabel` block markers, and leaves no SSA
 constructs in the serialized bytecode module or patch.
 
 The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
-see [`reference/WASM_BACKEND.md`](reference/WASM_BACKEND.md) for the representation
+see [`internals/WASM_BACKEND.md`](internals/WASM_BACKEND.md) for the representation
 boundary, linear-memory and collector contracts, GC target, and test commands.
 
 ## Compiler packages and layering

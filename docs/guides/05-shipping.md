@@ -15,8 +15,8 @@ The example is the app [Your first app](01-first-app.md) ends with, in
 | Linux | An executable compiled ahead of time, with its libraries in one directory. |
 | macOS | An app bundle (`my_app.app`) compiled ahead of time, with its libraries inside it. Not signed or notarized yet. |
 | Windows | An `.exe` compiled ahead of time, with its DLLs in one directory. No installer yet. |
-| Android | A debug APK, built from a Haxeon checkout. |
-| Web | A `.wasm` module of a program that has no native packages. Apps that use `ui` cannot be built for the web yet. |
+| Android | A debug APK. See [Android](../reference/ANDROID.md) for prerequisites. |
+| Web | A bundle with a `.wasm` module, the app’s web runner and the SDK loader. |
 
 ## The app's identity
 
@@ -158,7 +158,9 @@ python3 -m http.server --directory build/web/wasm32 8000
 Open `http://localhost:8000/` to test the bundle. Ship that directory to a static web host that serves
 `.wasm` files as `application/wasm`. You can also build with `--target wasm-gc` and ship
 `build/web/wasm-gc/` for browsers with Wasm GC. The bundle contains your `web/` page and files, the
-compiled Wasm module, and the SDK's loader. Web app builds currently require managed packages.
+compiled Wasm module, and the SDK's loader. An app that uses NativeKit's supported UI or audio
+packages needs an SDK with the WebGL2 host. The build adds that host to the bundle. Other native
+packages are rejected by the web runner.
 
 ## Checklist
 
