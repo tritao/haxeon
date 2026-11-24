@@ -15,11 +15,11 @@ class DspLfoOptions {
 	@:allow(haxeon.audio.DspPatchBuilder)
 	private function nativeValue():NativeDspLfoOptions {
 		var result = new NativeDspLfoOptions();
-		result.set_struct_size(NativeDspLfoOptions.size());
-		result.set_waveform(waveform);
-		result.set_mode(mode);
-		result.set_rate_hz(rateHz);
-		result.set_phase(phase);
+		result.struct_size = NativeDspLfoOptions.byteSize();
+		result.waveform = waveform;
+		result.mode = mode;
+		result.rate_hz = rateHz;
+		result.phase = phase;
 		return result;
 	}
 }

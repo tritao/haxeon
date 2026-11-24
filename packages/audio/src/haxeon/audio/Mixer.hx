@@ -62,7 +62,7 @@ class Mixer {
 	/** Cumulative independent atomic samples for the current engine lifetime. */
 	public static function diagnostics():AudioDiagnostics {
 		var value = new NativeAudioDiagnostics();
-		value.set_struct_size(NativeAudioDiagnostics.size());
+		value.struct_size = NativeAudioDiagnostics.byteSize();
 		var result = NativeKitAudio.nk_audio_get_diagnostics(value);
 		AudioResult.check(result.status, "audio.diagnostics.read");
 		return new AudioDiagnostics(result.out_diagnostics);

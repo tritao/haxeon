@@ -44,17 +44,17 @@ class AnimationInstance {
 	public function setIk(chain:Int, start:Int, mid:Int, end:Int, target:Array<Float>, pole:Array<Float>,
 			weight:Float = 1.0, soften:Float = 1.0, keepEnd:Float = 0.0):Void {
 		var ik = new ak_two_bone_ik();
-		ik.set_struct_size(ak_two_bone_ik.size());
-		ik.set_start_joint(start);
-		ik.set_mid_joint(mid);
-		ik.set_end_joint(end);
+		ik.struct_size = ak_two_bone_ik.byteSize();
+		ik.start_joint = start;
+		ik.mid_joint = mid;
+		ik.end_joint = end;
 		for (axis in 0...3) {
 			ik.set_target(axis, target[axis]);
 			ik.set_pole(axis, pole[axis]);
 		}
-		ik.set_weight(weight);
-		ik.set_soften(soften);
-		ik.set_keep_end_rotation(keepEnd);
+		ik.weight = weight;
+		ik.soften = soften;
+		ik.keep_end_rotation = keepEnd;
 		AnimationAsset.check(AnimKitNative.ak_instance_set_ik(handle(), chain, ik), "instance.ik");
 	}
 
@@ -149,7 +149,7 @@ class AnimationInstance {
 	/** Deformed bounds as [minX, minY, minZ, maxX, maxY, maxZ]. */
 	public function bounds():Array<Float> {
 		var value = new ak_bounds();
-		value.set_struct_size(ak_bounds.size());
+		value.struct_size = ak_bounds.byteSize();
 		AnimationAsset.check(AnimKitNative.ak_instance_get_bounds(handle(), value), "instance.bounds");
 		return [
 			value.get_minimum(0),

@@ -1,7 +1,7 @@
 interface Wasm32ValueRecords @target("portable-abi32") @library("wasm32_value_records") {
 	struct point @layout(8, 4) {
-		x: i32 @offset(0);
-		y: i32 @offset(4);
+		size: i32 @offset(0);
+		array: i32 @offset(4);
 	}
 	struct gapped @layout(12, 4) {
 		tag: i8 @offset(0);

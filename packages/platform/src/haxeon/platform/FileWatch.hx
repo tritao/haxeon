@@ -38,7 +38,7 @@ class FileWatch implements Disposable {
 		if (listener == null)
 			throw BindingError.invalidArgument("FileWatch.create", "File watch listeners cannot be null");
 		var options = new FileWatchOptions();
-		options.set_struct_size(FileWatchOptions.size());
+		options.struct_size = FileWatchOptions.byteSize();
 		return new FileWatch(NativeKit.nk_file_watch_create_checked(options), events, listener);
 	}
 
@@ -197,16 +197,16 @@ class FileWatch implements Disposable {
 		var path = pathIn(data, false);
 		if (path == null)
 			return null;
-		return new FileWatchChange(header.get_change_type(), header.get_item_kind(), path, pathIn(data, true),
-			!(header.get_flags() & FileEventFlags.RescanRequired).isEmpty());
+		return new FileWatchChange(header.change_type, header.item_kind, path, pathIn(data, true),
+			!(header.flags & FileEventFlags.RescanRequired).isEmpty());
 	}
 
 	static function pathIn(data:Bytes, old:Bool):Null<String> {
 		if (data == null || data.length < CHANGE_HEADER_BYTES)
 			return null;
 		var header:FileChangedEvent = data;
-		var offset = old ? header.get_old_path_offset() : header.get_path_offset();
-		var length = old ? header.get_old_path_length() : header.get_path_length();
+		var offset = old ? header.old_path_offset : header.path_offset;
+		var length = old ? header.old_path_length : header.path_length;
 		if (offset < CHANGE_HEADER_BYTES || length < 0 || offset + length > data.length)
 			return null;
 		return data.getString(offset, length);

@@ -54,19 +54,19 @@ class RenderPassDesc {
 	@:allow(haxeon.gpu.Batch)
 	function nativeValue():nkgpu_render_pass_desc {
 		var value = new nkgpu_render_pass_desc();
-		value.set_struct_size(nkgpu_render_pass_desc.size());
-		value.set_color_count(colors.length);
+		value.struct_size = nkgpu_render_pass_desc.byteSize();
+		value.color_count = colors.length;
 		for (index in 0...colors.length) {
 			var source = colors[index];
 			var attachment = new nkgpu_color_attachment();
-			attachment.set_image(source.image.nativeHandle());
-			attachment.set_resolve_image(source.resolveImage == null
-				? nkgpu_image.invalid() : source.resolveImage.nativeHandle());
+			attachment.image = source.image.nativeHandle();
+			attachment.resolve_image = source.resolveImage == null
+				? nkgpu_image.invalid() : source.resolveImage.nativeHandle();
 			attachment.set_action(source.action.nativeValue());
 			value.set_colors(index, attachment);
 		}
 		if (depthStencil != null) {
-			value.set_depth_stencil(depthStencil.nativeHandle());
+			value.depth_stencil = depthStencil.nativeHandle();
 			value.set_depth_stencil_action(depthStencilAction.nativeValue());
 		}
 		return value;

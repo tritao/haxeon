@@ -71,30 +71,30 @@ class BrowserUiHost {
 	function initialize():Void {
 		try {
 			var init = new InitOptions();
-			init.set_api_version(NativeKit.nk_api_version());
-			init.set_event_queue_capacity(options.eventQueueCapacity);
+			init.api_version = NativeKit.nk_api_version();
+			init.event_queue_capacity = options.eventQueueCapacity;
 			if (NativeKit.nk_init(init) != Result.Ok)
 				throw "NativeKit initialization failed: " + NativeKit.nk_last_error();
 			initialized = true;
 
 			var windowOptions = new NativeWindowOptions();
-			windowOptions.set_width(options.width);
-			windowOptions.set_height(options.height);
-			windowOptions.set_title(options.title);
-			windowOptions.set_flags(WindowFlags.Resizable);
-			windowOptions.set_owner(WindowHandle.invalid());
-			windowOptions.set_kind(WindowKind.Normal);
+			windowOptions.width = options.width;
+			windowOptions.height = options.height;
+			windowOptions.title = options.title;
+			windowOptions.flags = WindowFlags.Resizable;
+			windowOptions.owner = WindowHandle.invalid();
+			windowOptions.kind = WindowKind.Normal;
 			var createdWindow = NativeKit.nk_window_create(windowOptions);
 			if (createdWindow.status != Result.Ok) throw "Browser window creation failed";
 			window = createdWindow.out_window.borrow();
 			NativeKitUIBrowser.nkui_browser_pointer_events(window.rawValue(), 1);
 
 			var surfaceOptions = new NativeSurfaceOptions();
-			surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil);
-			surfaceOptions.set_api(GraphicsApi.OpenglEs);
-			surfaceOptions.set_major_version(3);
-			surfaceOptions.set_width(options.width);
-			surfaceOptions.set_height(options.height);
+			surfaceOptions.flags = SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil;
+			surfaceOptions.api = GraphicsApi.OpenglEs;
+			surfaceOptions.major_version = 3;
+			surfaceOptions.width = options.width;
+			surfaceOptions.height = options.height;
 			var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue()), surfaceOptions);
 			if (createdSurface.status != Result.Ok) throw "Browser surface creation failed";
 			surface = createdSurface.out_surface.borrow();
@@ -122,11 +122,11 @@ class BrowserUiHost {
 		loaded = new Map();
 		for (font in fontAssets) {
 			var resource = new ResourceValue();
-			resource.set_struct_size(ResourceValue.size());
-			resource.set_flags(ResourceFlags.Readable);
-			resource.set_uri(font.uri);
-			resource.set_mime_type("font/ttf");
-			resource.set_display_name(font.name);
+			resource.struct_size = ResourceValue.byteSize();
+			resource.flags = ResourceFlags.Readable;
+			resource.uri = font.uri;
+			resource.mime_type = "font/ttf";
+			resource.display_name = font.name;
 			var request = NativeKit.nk_resource_load_async_checked(resource);
 			pending.add(Std.string(request), font);
 			pendingCount++;

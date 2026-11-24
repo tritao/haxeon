@@ -78,8 +78,8 @@ class DspPatchBuilder {
 		if (oscillators.length > NativeKitAudioConstants.NK_AUDIO_DSP_MAX_OSCILLATORS)
 			throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch oscillator limit exceeded");
 		var options = new NativeDspPatchOptions();
-		options.set_struct_size(NativeDspPatchOptions.size());
-		options.set_oscillator_count(oscillators.length);
+		options.struct_size = NativeDspPatchOptions.byteSize();
+		options.oscillator_count = oscillators.length;
 		for (index in 0...oscillators.length) {
 			if (oscillators[index] == null)
 				throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch oscillators must not be null");
@@ -88,25 +88,25 @@ class DspPatchBuilder {
 		options.set_noise(noise.nativeValue());
 		options.set_envelope(envelope.nativeValue());
 		options.set_filter(filter.nativeValue());
-		options.set_gain(gain);
+		options.gain = gain;
 		options.set_lfo(lfo.nativeValue());
 		for (index in 0...routes.length)
 			options.set_routes(index, routes[index].nativeValue());
-		options.set_route_count(routes.length);
+		options.route_count = routes.length;
 		var voice = new NativeDspVoiceOptions();
-		voice.set_struct_size(NativeDspVoiceOptions.size());
-		voice.set_unison_count(unison.count);
-		voice.set_unison_detune_cents(unison.detuneCents);
-		voice.set_unison_stereo_spread(unison.stereoSpread);
+		voice.struct_size = NativeDspVoiceOptions.byteSize();
+		voice.unison_count = unison.count;
+		voice.unison_detune_cents = unison.detuneCents;
+		voice.unison_stereo_spread = unison.stereoSpread;
 		voice.set_filter_envelope(filterEnvelope.nativeValue());
-		voice.set_filter_envelope_amount_semitones(filterEnvelopeAmountSemitones);
-		voice.set_filter_drive(filter.drive);
-		voice.set_monophonic(articulation.monophonic ? 1 : 0);
-		voice.set_legato(articulation.legato ? 1 : 0);
-		voice.set_glide_seconds(articulation.glideSeconds);
-		voice.set_accent_gain(articulation.accentGain);
-		voice.set_accent_filter_semitones(articulation.accentFilterSemitones);
-		voice.set_accent_velocity_threshold(articulation.accentVelocityThreshold);
+		voice.filter_envelope_amount_semitones = filterEnvelopeAmountSemitones;
+		voice.filter_drive = filter.drive;
+		voice.monophonic = articulation.monophonic ? 1 : 0;
+		voice.legato = articulation.legato ? 1 : 0;
+		voice.glide_seconds = articulation.glideSeconds;
+		voice.accent_gain = articulation.accentGain;
+		voice.accent_filter_semitones = articulation.accentFilterSemitones;
+		voice.accent_velocity_threshold = articulation.accentVelocityThreshold;
 		if (additionalLfos.length >= NativeKitAudioConstants.NK_AUDIO_DSP_MAX_LFOS)
 			throw BindingError.invalidArgument("DspPatchBuilder.build", "DSP patch LFO limit exceeded");
 		for (index in 0...additionalLfos.length) {
@@ -114,7 +114,7 @@ class DspPatchBuilder {
 				"DSP LFO must not be null");
 			voice.set_additional_lfos(index, additionalLfos[index].nativeValue());
 		}
-		voice.set_additional_lfo_count(additionalLfos.length);
+		voice.additional_lfo_count = additionalLfos.length;
 		if (source != null) {
 			var made = NativeKitAudio.nk_audio_dsp_patch_create_source_extended(options, voice, source.nativeValue(),
 				source.samples);

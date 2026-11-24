@@ -17,11 +17,11 @@ class MessageDialogOptions {
 
 	public function nativeValue():NativeMessageDialogOptions {
 		var value = new NativeMessageDialogOptions();
-		value.set_struct_size(NativeMessageDialogOptions.size());
-		value.set_message(message);
-		value.set_title(title);
-		value.set_kind(kind);
-		value.set_buttons(buttons);
+		value.struct_size = NativeMessageDialogOptions.byteSize();
+		value.message = message;
+		value.title = title;
+		value.kind = kind;
+		value.buttons = buttons;
 		return value;
 	}
 }

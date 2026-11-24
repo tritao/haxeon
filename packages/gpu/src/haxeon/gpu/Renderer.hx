@@ -191,12 +191,12 @@ class Renderer implements Disposable {
 			|| destinationOffset < 0)
 			throw BindingError.invalidArgument("Renderer.copyBuffer", "GPU buffer-copy arguments are invalid");
 		var desc = new nkgpu_buffer_copy_desc();
-		desc.set_struct_size(nkgpu_buffer_copy_desc.size());
-		desc.set_source(source.nativeHandle());
-		desc.set_source_offset(sourceOffset);
-		desc.set_destination(destination.nativeHandle());
-		desc.set_destination_offset(destinationOffset);
-		desc.set_byteSize(size);
+		desc.struct_size = nkgpu_buffer_copy_desc.byteSize();
+		desc.source = source.nativeHandle();
+		desc.source_offset = sourceOffset;
+		desc.destination = destination.nativeHandle();
+		desc.destination_offset = destinationOffset;
+		desc.size = size;
 		GpuResult.check(NativeKitGpu.nkgpu_buffer_copy(value, desc), "renderer.copyBuffer");
 	}
 
@@ -210,19 +210,19 @@ class Renderer implements Disposable {
 			|| sourceX < 0 || sourceY < 0 || destinationX < 0 || destinationY < 0)
 			throw BindingError.invalidArgument("Renderer.copyImage", "GPU image-copy arguments are invalid");
 		var desc = new nkgpu_image_copy_desc();
-		desc.set_struct_size(nkgpu_image_copy_desc.size());
-		desc.set_source(source.nativeHandle());
-		desc.set_source_mip(0);
-		desc.set_source_layer(0);
-		desc.set_source_x(sourceX);
-		desc.set_source_y(sourceY);
-		desc.set_destination(destination.nativeHandle());
-		desc.set_destination_mip(0);
-		desc.set_destination_layer(0);
-		desc.set_destination_x(destinationX);
-		desc.set_destination_y(destinationY);
-		desc.set_width(width);
-		desc.set_height(height);
+		desc.struct_size = nkgpu_image_copy_desc.byteSize();
+		desc.source = source.nativeHandle();
+		desc.source_mip = 0;
+		desc.source_layer = 0;
+		desc.source_x = sourceX;
+		desc.source_y = sourceY;
+		desc.destination = destination.nativeHandle();
+		desc.destination_mip = 0;
+		desc.destination_layer = 0;
+		desc.destination_x = destinationX;
+		desc.destination_y = destinationY;
+		desc.width = width;
+		desc.height = height;
 		GpuResult.check(NativeKitGpu.nkgpu_image_copy(value, desc), "renderer.copyImage");
 	}
 
@@ -237,17 +237,17 @@ class Renderer implements Disposable {
 			|| rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 || mipLevel < 0 || layer < 0)
 			throw BindingError.invalidArgument("Renderer.bufferToImage", "GPU buffer-to-image arguments are invalid");
 		var desc = new nkgpu_buffer_image_copy_desc();
-		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
-		desc.set_buffer(source.nativeHandle());
-		desc.set_buffer_offset(bufferOffset);
-		desc.set_row_pitch(rowPitch);
-		desc.set_image(destination.nativeHandle());
-		desc.set_mip_level(mipLevel);
-		desc.set_layer(layer);
-		desc.set_x(x);
-		desc.set_y(y);
-		desc.set_width(width);
-		desc.set_height(height);
+		desc.struct_size = nkgpu_buffer_image_copy_desc.byteSize();
+		desc.buffer = source.nativeHandle();
+		desc.buffer_offset = bufferOffset;
+		desc.row_pitch = rowPitch;
+		desc.image = destination.nativeHandle();
+		desc.mip_level = mipLevel;
+		desc.layer = layer;
+		desc.x = x;
+		desc.y = y;
+		desc.width = width;
+		desc.height = height;
 		GpuResult.check(NativeKitGpu.nkgpu_buffer_to_image(value, desc), "renderer.bufferToImage");
 	}
 
@@ -262,17 +262,17 @@ class Renderer implements Disposable {
 			|| rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 || mipLevel < 0 || layer < 0)
 			throw BindingError.invalidArgument("Renderer.imageToBuffer", "GPU image-to-buffer arguments are invalid");
 		var desc = new nkgpu_buffer_image_copy_desc();
-		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
-		desc.set_buffer(destination.nativeHandle());
-		desc.set_buffer_offset(bufferOffset);
-		desc.set_row_pitch(rowPitch);
-		desc.set_image(source.nativeHandle());
-		desc.set_mip_level(mipLevel);
-		desc.set_layer(layer);
-		desc.set_x(x);
-		desc.set_y(y);
-		desc.set_width(width);
-		desc.set_height(height);
+		desc.struct_size = nkgpu_buffer_image_copy_desc.byteSize();
+		desc.buffer = destination.nativeHandle();
+		desc.buffer_offset = bufferOffset;
+		desc.row_pitch = rowPitch;
+		desc.image = source.nativeHandle();
+		desc.mip_level = mipLevel;
+		desc.layer = layer;
+		desc.x = x;
+		desc.y = y;
+		desc.width = width;
+		desc.height = height;
 		GpuResult.check(NativeKitGpu.nkgpu_image_to_buffer(value, desc), "renderer.imageToBuffer");
 	}
 

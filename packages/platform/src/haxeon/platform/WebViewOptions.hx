@@ -19,13 +19,13 @@ class WebViewOptions {
 
 	public function nativeValue():NativeWebViewOptions {
 		var value = new NativeWebViewOptions();
-		value.set_struct_size(NativeWebViewOptions.size());
-		value.set_width(width);
-		value.set_height(height);
-		value.set_x(x);
-		value.set_y(y);
-		value.set_flags(flags);
-		value.set_initial_url(initialUrl);
+		value.struct_size = NativeWebViewOptions.byteSize();
+		value.width = width;
+		value.height = height;
+		value.x = x;
+		value.y = y;
+		value.flags = flags;
+		value.initial_url = initialUrl;
 		return value;
 	}
 }

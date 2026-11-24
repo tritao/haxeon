@@ -27,10 +27,10 @@ class DspFilterOptions {
 	@:allow(haxeon.audio.DspPatchBuilder)
 	private function nativeValue():NativeDspFilterOptions {
 		var result = new NativeDspFilterOptions();
-		result.set_struct_size(NativeDspFilterOptions.size());
-		result.set_type(type);
-		result.set_cutoff_hz(cutoffHz);
-		result.set_resonance(resonance);
+		result.struct_size = NativeDspFilterOptions.byteSize();
+		result.type = type;
+		result.cutoff_hz = cutoffHz;
+		result.resonance = resonance;
 		return result;
 	}
 }

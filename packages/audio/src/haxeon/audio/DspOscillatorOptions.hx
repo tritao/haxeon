@@ -20,12 +20,12 @@ class DspOscillatorOptions {
 	@:allow(haxeon.audio.DspPatchBuilder)
 	private function nativeValue():NativeDspOscillatorOptions {
 		var result = new NativeDspOscillatorOptions();
-		result.set_struct_size(NativeDspOscillatorOptions.size());
-		result.set_waveform(waveform);
-		result.set_level(level);
-		result.set_wavetable(wavetable == null ? DspWavetableHandle.invalid() : wavetable.nativeHandle());
-		result.set_detune_cents(detuneCents);
-		result.set_phase(phase);
+		result.struct_size = NativeDspOscillatorOptions.byteSize();
+		result.waveform = waveform;
+		result.level = level;
+		result.wavetable = wavetable == null ? DspWavetableHandle.invalid() : wavetable.nativeHandle();
+		result.detune_cents = detuneCents;
+		result.phase = phase;
 		return result;
 	}
 }

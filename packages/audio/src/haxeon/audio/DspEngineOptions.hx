@@ -15,11 +15,11 @@ class DspEngineOptions {
 	@:allow(haxeon.audio.DspEngine)
 	private function nativeValue():NativeDspEngineOptions {
 		var result = new NativeDspEngineOptions();
-		result.set_struct_size(NativeDspEngineOptions.size());
-		result.set_sample_rate(sampleRate);
-		result.set_channels(channels);
-		result.set_block_size(blockSize);
-		result.set_max_voices(maxVoices);
+		result.struct_size = NativeDspEngineOptions.byteSize();
+		result.sample_rate = sampleRate;
+		result.channels = channels;
+		result.block_size = blockSize;
+		result.max_voices = maxVoices;
 		return result;
 	}
 }

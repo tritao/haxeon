@@ -27,11 +27,11 @@ class Resource {
 	/** Returns the ABI value for a synchronous NativeKit call. */
 	public function nativeValue():ResourceValue {
 		var value = new ResourceValue();
-		value.set_struct_size(ResourceValue.size());
-		value.set_flags(flags);
-		value.set_uri(uri);
-		value.set_mime_type(mimeType);
-		value.set_display_name(displayName);
+		value.struct_size = ResourceValue.byteSize();
+		value.flags = flags;
+		value.uri = uri;
+		value.mime_type = mimeType;
+		value.display_name = displayName;
 		return value;
 	}
 

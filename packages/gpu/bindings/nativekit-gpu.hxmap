@@ -10,12 +10,6 @@
 	"dependencyTypeModules": {
 		"NativeKit": "nativekit.ffi.NativeKitTypes"
 	},
-	"fieldNames": {
-		"nkgpu_buffer_desc": {"size": "byteSize"},
-		"nkgpu_buffer_copy_desc": {"size": "byteSize"},
-		"nkgpu_buffer_readback_desc": {"size": "byteSize"},
-		"nkgpu_readback_info": {"size": "byteSize"}
-	},
 	"enumNames": {
 		"nk_graphics_api": "NativeKitTypes.GraphicsApi",
 		"nkgpu_result": "GpuStatus",

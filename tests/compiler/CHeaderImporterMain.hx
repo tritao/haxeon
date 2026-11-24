@@ -156,8 +156,15 @@ class CHeaderImporterMain {
 		expect(projected.indexOf("class Ownedsample_owned_handle") >= 0
 			&& projected.indexOf("Sample.sample_owned_handle_destroy(__value)") >= 0,
 			"C handle lifecycle annotations should produce a managed owned value handle");
-		expect(projected.indexOf("static inline function size():Int return 32") >= 0,
-			"projected structures should expose their generated ABI size");
+		expect(projected.indexOf("static inline function byteSize():Int return 32") >= 0,
+			"projected structures should expose their ABI size");
+		var dimensions = ~/abstract sample_dimensions[^\n]*\n([\s\S]*?)\n\}/;
+		expect(dimensions.match(projected)
+			&& dimensions.matched(1).indexOf("var size(get, set):Int") >= 0
+			&& dimensions.matched(1).indexOf("var array(get, set):Int") >= 0
+			&& dimensions.matched(1).indexOf("static inline function byteSize():Int return 8") >= 0
+			&& dimensions.matched(1).indexOf("static function arrayOf(values:Array<sample_dimensions>)") >= 0,
+			"C records should expose size and array properties alongside the generated helpers");
 		expect(projected.indexOf("function set_title(value:Null<String>)") >= 0
 			&& projected.indexOf("structSetUtf8") >= 0,
 			"UTF-8 structure fields should project managed accessors");

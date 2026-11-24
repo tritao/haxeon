@@ -21,13 +21,13 @@ class WindowOptions {
 
 	public function nativeValue():NativeWindowOptions {
 		var value = new NativeWindowOptions();
-		value.set_struct_size(NativeWindowOptions.size());
-		value.set_width(width);
-		value.set_height(height);
-		value.set_title(title);
-		value.set_flags(flags);
-		value.set_kind(kind);
-		if (owner != null) value.set_owner(owner.nativeHandle());
+		value.struct_size = NativeWindowOptions.byteSize();
+		value.width = width;
+		value.height = height;
+		value.title = title;
+		value.flags = flags;
+		value.kind = kind;
+		if (owner != null) value.owner = owner.nativeHandle();
 		return value;
 	}
 }

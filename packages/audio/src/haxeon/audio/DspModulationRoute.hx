@@ -55,13 +55,13 @@ class DspModulationRoute {
 	@:allow(haxeon.audio.DspPatchBuilder)
 	private function nativeValue():NativeDspModulationRouteOptions {
 		var result = new NativeDspModulationRouteOptions();
-		result.set_struct_size(NativeDspModulationRouteOptions.size());
-		result.set_source(source);
-		result.set_destination(destination);
-		result.set_polarity(polarity);
-		result.set_amount(amount);
-		result.set_oscillator_index(oscillatorIndex);
-		result.set_source_oscillator_index(sourceOscillatorIndex);
+		result.struct_size = NativeDspModulationRouteOptions.byteSize();
+		result.source = source;
+		result.destination = destination;
+		result.polarity = polarity;
+		result.amount = amount;
+		result.oscillator_index = oscillatorIndex;
+		result.source_oscillator_index = sourceOscillatorIndex;
 		return result;
 	}
 }

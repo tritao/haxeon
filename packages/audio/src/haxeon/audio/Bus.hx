@@ -26,11 +26,11 @@ class Bus implements Disposable {
 
 	public static function create(?parent:Bus):Bus {
 		var options = new NativeBusOptions();
-		options.set_struct_size(NativeBusOptions.size());
+		options.struct_size = NativeBusOptions.byteSize();
 		var parentHandle = BusHandle.invalid();
 		if (parent != null)
 			parentHandle = parent.nativeHandle();
-		options.set_parent(parentHandle);
+		options.parent = parentHandle;
 		var made = NativeKitAudio.nk_audio_bus_create(options);
 		AudioResult.check(made.status, "audio.bus.create");
 		return new Bus(made.out_bus);

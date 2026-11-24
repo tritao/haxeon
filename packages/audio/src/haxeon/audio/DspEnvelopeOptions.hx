@@ -16,11 +16,11 @@ class DspEnvelopeOptions {
 	@:allow(haxeon.audio.SampleInstrument)
 	private function nativeValue():NativeDspEnvelopeOptions {
 		var result = new NativeDspEnvelopeOptions();
-		result.set_struct_size(NativeDspEnvelopeOptions.size());
-		result.set_attack_seconds(attackSeconds);
-		result.set_decay_seconds(decaySeconds);
-		result.set_sustain_level(sustainLevel);
-		result.set_release_seconds(releaseSeconds);
+		result.struct_size = NativeDspEnvelopeOptions.byteSize();
+		result.attack_seconds = attackSeconds;
+		result.decay_seconds = decaySeconds;
+		result.sustain_level = sustainLevel;
+		result.release_seconds = releaseSeconds;
 		return result;
 	}
 }

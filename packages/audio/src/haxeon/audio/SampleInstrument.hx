@@ -19,13 +19,13 @@ class SampleInstrument implements InstrumentDefinition {
 		this.samples = samples.copy();
 		var env = envelope == null ? new DspEnvelopeOptions() : envelope;
 		options = new NativeDspSampleOptions();
-		options.set_struct_size(NativeDspSampleOptions.size());
-		options.set_sample_rate(sampleRate);
-		options.set_channels(channels);
-		options.set_root_note(rootNote);
-		options.set_gain(gain);
-		options.set_loop_start_frame(loopStartFrame);
-		options.set_loop_end_frame(loopEndFrame);
+		options.struct_size = NativeDspSampleOptions.byteSize();
+		options.sample_rate = sampleRate;
+		options.channels = channels;
+		options.root_note = rootNote;
+		options.gain = gain;
+		options.loop_start_frame = loopStartFrame;
+		options.loop_end_frame = loopEndFrame;
 		options.set_envelope(env.nativeValue());
 	}
 	public function createInstrument(engine:DspEngine):DspInstrument {

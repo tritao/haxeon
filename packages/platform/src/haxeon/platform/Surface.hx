@@ -135,7 +135,7 @@ class Surface implements Disposable {
 	public function acquireFrame():SurfaceFrame {
 		ensureLive();
 		var target = new SurfaceFrameTarget();
-		target.set_struct_size(SurfaceFrameTarget.size());
+		target.struct_size = SurfaceFrameTarget.byteSize();
 		var acquired = NativeKit.nk_surface_acquire_frame(value, target);
 		if (acquired.status != Result.Ok)
 			throw new NativeKitError(acquired.status, "surface.acquireFrame", NativeKit.nk_last_error());

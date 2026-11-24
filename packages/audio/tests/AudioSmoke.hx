@@ -135,7 +135,8 @@ class AudioSmoke {
 				|| resource.displayName != "smoke.wav")
 				throw "Haxe resource descriptor did not retain metadata";
 			var nativeResource = resource.nativeValue();
-			if (nativeResource.get_struct_size() != ResourceValue.size() || nativeResource.get_flags() != resource.flags
+			if (nativeResource.get_struct_size() != ResourceValue.byteSize()
+				|| nativeResource.get_flags() != resource.flags
 				|| nativeResource.get_uri() != resource.uri || nativeResource.get_mime_type() != resource.mimeType
 				|| nativeResource.get_display_name() != resource.displayName)
 				throw "Haxe resource descriptor did not build its ABI value";

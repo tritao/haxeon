@@ -70,10 +70,10 @@ class AccessibilityBridge implements Disposable {
 		}
 
 		var update = new AccessibilityUpdate();
-		update.set_struct_size(AccessibilityUpdate.size());
-		update.set_flags(AccessibilityUpdateFlags.Focus);
+		update.struct_size = AccessibilityUpdate.byteSize();
+		update.flags = AccessibilityUpdateFlags.Focus;
 		update.set_nodes(nodes);
-		update.set_node_count(nodes.length);
+		update.node_count = nodes.length;
 		var removedBytes = haxe.io.Bytes.alloc(removed.length * 4);
 		for (index in 0...removed.length) {
 			var offset = index * 4;
@@ -83,15 +83,15 @@ class AccessibilityBridge implements Disposable {
 			removedBytes.set(offset + 2, (id >>> 16) & 0xff);
 			removedBytes.set(offset + 3, (id >>> 24) & 0xff);
 		}
-		update.set_removed_node_count(0);
+		update.removed_node_count = 0;
 		var focusTarget = NativeKitConstants.NK_ACCESSIBILITY_ROOT;
 		for (item in snapshot)
 			if (item.id == focus && !item.states.contains(AccessibilityState.Disabled)) {
 				focusTarget = item.id;
 				break;
 			}
-		update.set_focus(focusTarget);
-		update.set_reserved(0);
+		update.focus = focusTarget;
+		update.reserved = 0;
 		return new AccessibilityUpdateBatch(update, removedBytes, removed.length);
 	}
 
@@ -117,37 +117,37 @@ class AccessibilityBridge implements Disposable {
 	static function toNativeNode(item:AccessibilitySnapshotNode, coordinateScale:Float = 1.0):AccessibilityNode {
 		var value = item.semantics;
 		var node = new AccessibilityNode();
-		node.set_struct_size(AccessibilityNode.size());
-		node.set_id(item.id);
-		node.set_parent_id(item.parentId);
-		node.set_child_index(item.childIndex);
-		node.set_role(item.role);
-		node.set_states(item.states);
-		node.set_actions(item.actions);
-		node.set_reserved0(0);
-		node.set_x(item.bounds.x * coordinateScale);
-		node.set_y(item.bounds.y * coordinateScale);
-		node.set_width(item.bounds.width * coordinateScale);
-		node.set_height(item.bounds.height * coordinateScale);
-		node.set_label(value.label);
-		node.set_value(value.value);
-		node.set_numeric_value(value.numericValue);
-		node.set_numeric_minimum(value.numericMinimum);
-		node.set_numeric_maximum(value.numericMaximum);
-		node.set_text_start(value.textStart);
-		node.set_document_length(value.documentLength);
-		node.set_selection_start(value.selectionStart);
-		node.set_selection_end(value.selectionEnd);
-		node.set_set_size(item.setSize);
-		node.set_position_in_set(item.positionInSet);
-		node.set_row_count(item.rowCount);
-		node.set_column_count(item.columnCount);
-		node.set_row_index(item.rowIndex);
-		node.set_column_index(item.columnIndex);
-		node.set_row_span(item.rowSpan);
-		node.set_column_span(item.columnSpan);
-		node.set_hierarchy_level(item.hierarchyLevel);
-		node.set_orientation(item.orientation);
+		node.struct_size = AccessibilityNode.byteSize();
+		node.id = item.id;
+		node.parent_id = item.parentId;
+		node.child_index = item.childIndex;
+		node.role = item.role;
+		node.states = item.states;
+		node.actions = item.actions;
+		node.reserved0 = 0;
+		node.x = item.bounds.x * coordinateScale;
+		node.y = item.bounds.y * coordinateScale;
+		node.width = item.bounds.width * coordinateScale;
+		node.height = item.bounds.height * coordinateScale;
+		node.label = value.label;
+		node.value = value.value;
+		node.numeric_value = value.numericValue;
+		node.numeric_minimum = value.numericMinimum;
+		node.numeric_maximum = value.numericMaximum;
+		node.text_start = value.textStart;
+		node.document_length = value.documentLength;
+		node.selection_start = value.selectionStart;
+		node.selection_end = value.selectionEnd;
+		node.set_size = item.setSize;
+		node.position_in_set = item.positionInSet;
+		node.row_count = item.rowCount;
+		node.column_count = item.columnCount;
+		node.row_index = item.rowIndex;
+		node.column_index = item.columnIndex;
+		node.row_span = item.rowSpan;
+		node.column_span = item.columnSpan;
+		node.hierarchy_level = item.hierarchyLevel;
+		node.orientation = item.orientation;
 		return node;
 	}
 

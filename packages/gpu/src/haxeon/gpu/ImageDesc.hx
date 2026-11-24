@@ -38,18 +38,18 @@ class ImageDesc {
 	@:allow(haxeon.gpu.Image)
 	function nativeValue():nkgpu_image_desc {
 		var value = new nkgpu_image_desc();
-		value.set_struct_size(nkgpu_image_desc.size());
-		value.set_width(width);
-		value.set_height(height);
-		value.set_format(format);
-		value.set_usage(usage);
-		value.set_mip_count(mipCount);
-		value.set_sample_count(sampleCount);
-		value.set_layer_count(layerCount);
-		value.set_data_size(0);
-		value.set_row_pitch(rowPitch);
-		value.set_dynamic_update(dynamicUpdate ? 1 : 0);
-		value.set_type(type);
+		value.struct_size = nkgpu_image_desc.byteSize();
+		value.width = width;
+		value.height = height;
+		value.format = format;
+		value.usage = usage;
+		value.mip_count = mipCount;
+		value.sample_count = sampleCount;
+		value.layer_count = layerCount;
+		value.data_size = 0;
+		value.row_pitch = rowPitch;
+		value.dynamic_update = dynamicUpdate ? 1 : 0;
+		value.type = type;
 		return value;
 	}
 }

@@ -35,14 +35,14 @@ class Readback implements Disposable {
 		var renderer = image.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_image_readback_desc();
-		desc.set_struct_size(nkgpu_image_readback_desc.size());
-		desc.set_image(image.nativeHandle());
-		desc.set_mip_level(mipLevel);
-		desc.set_layer(layer);
-		desc.set_x(x);
-		desc.set_y(y);
-		desc.set_width(width);
-		desc.set_height(height);
+		desc.struct_size = nkgpu_image_readback_desc.byteSize();
+		desc.image = image.nativeHandle();
+		desc.mip_level = mipLevel;
+		desc.layer = layer;
+		desc.x = x;
+		desc.y = y;
+		desc.width = width;
+		desc.height = height;
 		var made = NativeKitGpu.nkgpu_readback_begin_image(renderer.nativeHandle(), desc);
 		GpuResult.check(made.status, "readback.begin");
 		return new Readback(renderer, made.out_readback);
@@ -55,10 +55,10 @@ class Readback implements Disposable {
 		var renderer = buffer.rendererOwner();
 		renderer.ensureResourceOperation();
 		var desc = new nkgpu_buffer_readback_desc();
-		desc.set_struct_size(nkgpu_buffer_readback_desc.size());
-		desc.set_buffer(buffer.nativeHandle());
-		desc.set_offset(offset);
-		desc.set_byteSize(size);
+		desc.struct_size = nkgpu_buffer_readback_desc.byteSize();
+		desc.buffer = buffer.nativeHandle();
+		desc.offset = offset;
+		desc.size = size;
 		var made = NativeKitGpu.nkgpu_readback_begin_buffer(renderer.nativeHandle(), desc);
 		GpuResult.check(made.status, "readback.beginBuffer");
 		return new Readback(renderer, made.out_readback);
@@ -125,6 +125,6 @@ class ReadbackInfo {
 
 	@:allow(haxeon.gpu.Readback)
 	static function fromNative(value:nkgpu_readback_info):ReadbackInfo
-		return new ReadbackInfo(value.get_state(), value.get_byteSize(), value.get_row_pitch(),
-			value.get_width(), value.get_height());
+		return new ReadbackInfo(value.state, value.size, value.row_pitch,
+			value.width, value.height);
 }

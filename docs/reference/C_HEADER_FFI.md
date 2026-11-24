@@ -514,6 +514,9 @@ HXI structures with explicit `@layout(size, align)` and field `@offset(...)`
 metadata project to typed Haxe abstracts backed by managed bytes. Constructing
 the abstract zero-initializes exactly the declared size. Use Haxe properties
 such as `point.x = 3.0` and `point.x` to write and read scalar fields.
+Each record provides `Record.byteSize()` for its ABI size in bytes and
+`Record.arrayOf(values)` to copy an array of records into contiguous storage.
+C scalar fields named `size` and `array` keep those names as properties.
 A scalar field name that conflicts with a Haxe keyword or generated record helper
 gets the `__hxi_field_` prefix. Const-qualified scalar fields are read-only.
 The same properties are generated for C++ records lowered as fixed-layout

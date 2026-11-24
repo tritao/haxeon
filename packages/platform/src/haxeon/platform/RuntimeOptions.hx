@@ -12,11 +12,11 @@ class RuntimeOptions {
 
 	public function nativeValue():InitOptions {
 		var value = new InitOptions();
-		value.set_struct_size(InitOptions.size());
-		value.set_event_queue_capacity(eventQueueCapacity);
-		value.set_application_id(applicationId);
-		value.set_application_name(applicationName);
-		value.set_api_version(nativekit.ffi.NativeKit.nk_api_version());
+		value.struct_size = InitOptions.byteSize();
+		value.event_queue_capacity = eventQueueCapacity;
+		value.application_id = applicationId;
+		value.application_name = applicationName;
+		value.api_version = nativekit.ffi.NativeKit.nk_api_version();
 		return value;
 	}
 }

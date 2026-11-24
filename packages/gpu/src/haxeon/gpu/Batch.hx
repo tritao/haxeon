@@ -130,11 +130,11 @@ class Batch implements Disposable {
 		if (kind == BatchPassKind.Window && (width <= 0 || height <= 0))
 			throw BindingError.invalidArgument("Batch.appendPass", "GPU batch window-pass dimensions must be positive");
 		var pass = new nkgpu_batch_pass();
-		pass.set_struct_size(nkgpu_batch_pass.size());
-		pass.set_kind(kind);
-		pass.set_clear(clear ? 1 : 0);
-		pass.set_width(width);
-		pass.set_height(height);
+		pass.struct_size = nkgpu_batch_pass.byteSize();
+		pass.kind = kind;
+		pass.clear = clear ? 1 : 0;
+		pass.width = width;
+		pass.height = height;
 		GpuResult.check(NativeKitGpu.nkgpu_batch_append_pass(value, pass), "batch.appendPass");
 	}
 

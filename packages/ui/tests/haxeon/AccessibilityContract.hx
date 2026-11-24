@@ -81,7 +81,7 @@ class AccessibilityContract {
 		var parents:Map<Int, Int> = new Map();
 		for (item in tabsSnapshot) parents.set(item.id, item.parentId);
 		var atomic = AccessibilityBridge.buildUpdate(tabsSnapshot, new Map(), secondTabNode.id.value);
-		if (atomic.nativeUpdate.get_struct_size() != AccessibilityUpdate.size()
+		if (atomic.nativeUpdate.get_struct_size() != AccessibilityUpdate.byteSize()
 			|| atomic.nativeUpdate.get_node_count() != tabsSnapshot.length
 			|| atomic.removedNodeCount != 0 || atomic.nativeUpdate.get_focus() != secondTabNode.id.value
 			|| !atomic.nativeUpdate.get_flags().contains(AccessibilityUpdateFlags.Focus)) return 4;
@@ -94,7 +94,8 @@ class AccessibilityContract {
 			|| allRemoved.nativeUpdate.get_focus() != NativeKitConstants.NK_ACCESSIBILITY_ROOT) return 5;
 		var nativeNodes = AccessibilityBridge.buildNodes(tabsSnapshot);
 		var firstNativeRole = nativeNodes[0].get_role();
-		if (nativeNodes.length != tabsSnapshot.length || nativeNodes[0].get_struct_size() != AccessibilityNode.size()
+		if (nativeNodes.length != tabsSnapshot.length
+			|| nativeNodes[0].get_struct_size() != AccessibilityNode.byteSize()
 			|| firstNativeRole != nativekit.ffi.NativeKitTypes.NativeAccessibilityRole.TabList) return 6;
 
 		var dismissals = 0;

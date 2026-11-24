@@ -2,18 +2,21 @@ import Wasm32ValueRecords;
 
 function main():Int {
 	var output = Wasm32ValueRecords.write();
-	if (output.x != 17 || output.y != 25)
+	if (output.size != 17 || output.array != 25)
 		return 0;
 	var value = new point();
-	value.x = 20;
-	value.y = 22;
+	value.size = 20;
+	value.array = 22;
 	if (Wasm32ValueRecords.read(value) != 42 || Wasm32ValueRecords.sum(value) != 42)
 		return 0;
+	var packed = point.arrayOf([value, output]);
+	if (point.byteSize() != 8 || packed.size != 20 || packed.array != 22)
+		return 0;
 	var updated = Wasm32ValueRecords.update(value);
-	if (updated.x != 21 || updated.y != 24)
+	if (updated.size != 21 || updated.array != 24)
 		return 0;
 	var made = Wasm32ValueRecords.make(20);
-	if (made.x != 20 || made.y != 22 || Wasm32ValueRecords.sum(made) != 42)
+	if (made.size != 20 || made.array != 22 || Wasm32ValueRecords.sum(made) != 42)
 		return 0;
 	var gappedValue = Wasm32ValueRecords.makeGapped(39);
 	if (gappedValue.tag != 3 || gappedValue.value != 39 || Wasm32ValueRecords.sumGapped(gappedValue) != 42)

@@ -172,18 +172,18 @@ class NativeKitLifetimeTests {
 		// Managed descriptors own ABI initialization and retain managed values.
 		var init = new RuntimeOptions();
 		init.applicationName = "managed";
-		if (init.nativeValue().get_struct_size() != InitOptions.size()) return false;
+		if (init.nativeValue().get_struct_size() != InitOptions.byteSize()) return false;
 		var window = new WindowOptions(640, 480);
 		window.title = "managed";
 		if (window.nativeValue().get_width() != 640 || window.nativeValue().get_title() != "managed") return false;
 		var surface = new SurfaceOptions(640, 480);
-		if (surface.nativeValue().get_struct_size() != NativeSurfaceOptions.size()) return false;
+		if (surface.nativeValue().get_struct_size() != NativeSurfaceOptions.byteSize()) return false;
 		var webview = new WebViewOptions(640, 480);
 		webview.initialUrl = "about:blank";
 		if (webview.nativeValue().get_initial_url() != "about:blank") return false;
 		var dialog = new FileDialogOptions();
 		dialog.filters = [new FileDialogFilter("Images", "*.png;*.jpg")];
-		if (dialog.nativeValue().get_struct_size() != NativeFileDialogOptions.size()) return false;
+		if (dialog.nativeValue().get_struct_size() != NativeFileDialogOptions.byteSize()) return false;
 		if (new MessageDialogOptions("hello").nativeValue().get_message() != "hello") return false;
 
 		// Retain a tracked future until runtime shutdown; it must settle and detach.

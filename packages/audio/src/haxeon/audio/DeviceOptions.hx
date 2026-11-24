@@ -30,14 +30,14 @@ class DeviceOptions {
 	@:allow(haxeon.audio.Mixer)
 	private function nativeValue():NativeDeviceOptions {
 		var result = new NativeDeviceOptions();
-		result.set_struct_size(NativeDeviceOptions.size());
-		result.set_playback_device_index(playbackDeviceIndex);
-		result.set_sample_rate(sampleRate);
-		result.set_channels(channels);
-		result.set_period_size_in_frames(periodSizeInFrames);
-		result.set_period_size_in_milliseconds(periodSizeInMilliseconds);
-		result.set_no_auto_start(noAutoStart);
-		result.set_resource_loading(resourceLoading);
+		result.struct_size = NativeDeviceOptions.byteSize();
+		result.playback_device_index = playbackDeviceIndex;
+		result.sample_rate = sampleRate;
+		result.channels = channels;
+		result.period_size_in_frames = periodSizeInFrames;
+		result.period_size_in_milliseconds = periodSizeInMilliseconds;
+		result.no_auto_start = noAutoStart;
+		result.resource_loading = resourceLoading;
 		return result;
 	}
 }

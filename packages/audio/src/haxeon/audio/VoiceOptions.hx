@@ -15,7 +15,7 @@ class VoiceOptions {
 	@:allow(haxeon.audio.Voice)
 	private function nativeValue():NativeVoiceOptions {
 		var result = new NativeVoiceOptions();
-		result.set_struct_size(NativeVoiceOptions.size());
+		result.struct_size = NativeVoiceOptions.byteSize();
 		var flags = VoiceLoadFlags.empty();
 		if (looping)
 			flags = flags | VoiceLoadFlags.Looping;
@@ -23,7 +23,7 @@ class VoiceOptions {
 			flags = flags | VoiceLoadFlags.Streaming;
 		if (asynchronous)
 			flags = flags | VoiceLoadFlags.Asynchronous;
-		result.set_flags(flags);
+		result.flags = flags;
 		return result;
 	}
 }

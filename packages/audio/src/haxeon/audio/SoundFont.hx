@@ -52,11 +52,11 @@ class SoundFont implements Disposable {
 		var output:Array<SoundFontPresetInfo> = [];
 		for (i in 0...result.out_count) {
 			var info = new NativeSoundFontPresetInfo();
-			info.set_struct_size(NativeSoundFontPresetInfo.size());
+			info.struct_size = NativeSoundFontPresetInfo.byteSize();
 			var details = NativeKitAudio.nk_audio_soundfont_get_preset_info(value, i, info);
 			AudioResult.check(details.status, "audio.soundfont.presetInfo");
 			info = details.out_info;
-			output.push({index: i, bank: info.get_bank(), program: info.get_program(), name: info.get_name()});
+			output.push({index: i, bank: info.bank, program: info.program, name: info.name});
 		}
 		return output;
 	}

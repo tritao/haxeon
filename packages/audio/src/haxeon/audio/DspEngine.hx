@@ -75,10 +75,10 @@ class DspEngine implements Disposable {
 	public function setVoicePolicy(tailVoices:Int = 8, fadeFrames:Int = 240):Void {
 		ensureLive();
 		var policy = new NativeDspVoicePolicyOptions();
-		policy.set_struct_size(NativeDspVoicePolicyOptions.size());
-		policy.set_steal_enabled(1);
-		policy.set_tail_voices(tailVoices);
-		policy.set_fade_frames(fadeFrames);
+		policy.struct_size = NativeDspVoicePolicyOptions.byteSize();
+		policy.steal_enabled = 1;
+		policy.tail_voices = tailVoices;
+		policy.fade_frames = fadeFrames;
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_set_voice_policy(value, policy),
 			"audio.dsp.engine.voicePolicy");
 	}
@@ -98,12 +98,12 @@ class DspEngine implements Disposable {
 		if (instrument == null) throw BindingError.invalidArgument("DspEngine.tryNoteOn",
 			"DSP note instrument must not be null");
 		var options = new NativeDspNoteOptions();
-		options.set_struct_size(NativeDspNoteOptions.size());
-		options.set_note(note);
-		options.set_velocity(velocity);
-		options.set_start_frame(startFrame);
-		options.set_hold_frames(holdFrames);
-		options.set_priority(priority);
+		options.struct_size = NativeDspNoteOptions.byteSize();
+		options.note = note;
+		options.velocity = velocity;
+		options.start_frame = startFrame;
+		options.hold_frames = holdFrames;
+		options.priority = priority;
 		var result = NativeKitAudio.nk_audio_dsp_engine_note_on(value, instrument.nativeHandle(), options);
 		if (result.status == Result.ErrorQueueFull) return null;
 		AudioResult.check(result.status, "audio.dsp.engine.noteOn");
@@ -121,22 +121,22 @@ class DspEngine implements Disposable {
 		var bars:Array<Float> = [];
 		for (section in sections) {
 			var prepared = new NativeDspTransportSection();
-			prepared.set_length_frames(section.lengthFrames);
-			prepared.set_event_offset(nativeEvents.length);
-			prepared.set_event_count(section.events.length);
-			prepared.set_bar_offset(bars.length);
-			prepared.set_bar_count(section.bars.length);
+			prepared.length_frames = section.lengthFrames;
+			prepared.event_offset = nativeEvents.length;
+			prepared.event_count = section.events.length;
+			prepared.bar_offset = bars.length;
+			prepared.bar_count = section.bars.length;
 			nativeSections.push(prepared);
 			for (event in section.events) {
 				var item = new NativeDspTransportEvent();
-				item.set_frame(event.frame);
-				item.set_kind(event.kind);
-				item.set_note_id(event.noteId);
-				item.set_instrument(event.instrument == null
-					? DspInstrumentHandle.invalid() : event.instrument.nativeHandle());
-				item.set_note(event.note);
-				item.set_velocity(event.velocity);
-				item.set_bpm(event.bpm);
+				item.frame = event.frame;
+				item.kind = event.kind;
+				item.note_id = event.noteId;
+				item.instrument = event.instrument == null
+					? DspInstrumentHandle.invalid() : event.instrument.nativeHandle();
+				item.note = event.note;
+				item.velocity = event.velocity;
+				item.bpm = event.bpm;
 				nativeEvents.push(item);
 			}
 			for (bar in section.bars) bars.push(bar);
@@ -164,20 +164,20 @@ class DspEngine implements Disposable {
 	public function runtimeStatus():DspRuntimeStatus {
 		ensureLive();
 		var status = new NativeDspRuntimeStatus();
-		status.set_struct_size(NativeDspRuntimeStatus.size());
+		status.struct_size = NativeDspRuntimeStatus.byteSize();
 		var result = NativeKitAudio.nk_audio_dsp_engine_get_runtime_status(value, status);
 		AudioResult.check(result.status, "audio.dsp.runtime.status");
 		status = result.out_status;
 		return {
-			playing: status.get_playing() != 0,
-			section: status.get_section(),
-			frame: status.get_frame(),
-			loops: status.get_loops(),
-			bpm: status.get_bpm(),
-			stolenVoices: status.get_stolen_voices(),
-			droppedNotes: status.get_dropped_notes(),
-			retiredResources: status.get_retired_resources(),
-			clockDiscontinuities: status.get_clock_discontinuities()
+			playing: status.playing != 0,
+			section: status.section,
+			frame: status.frame,
+			loops: status.loops,
+			bpm: status.bpm,
+			stolenVoices: status.stolen_voices,
+			droppedNotes: status.dropped_notes,
+			retiredResources: status.retired_resources,
+			clockDiscontinuities: status.clock_discontinuities
 		};
 	}
 	/** Last completed block's occupied note slots and stealing tails, including releases. */

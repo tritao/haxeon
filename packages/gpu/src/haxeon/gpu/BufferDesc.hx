@@ -23,12 +23,12 @@ class BufferDesc {
 	@:allow(haxeon.gpu.Buffer)
 	function nativeValue():nkgpu_buffer_desc {
 		var value = new nkgpu_buffer_desc();
-		value.set_struct_size(nkgpu_buffer_desc.size());
-		value.set_byteSize(size);
-		value.set_usage(usage);
-		value.set_data_size(0);
-		value.set_dynamic_update(dynamicUpdate ? 1 : 0);
-		value.set_stream(stream ? 1 : 0);
+		value.struct_size = nkgpu_buffer_desc.byteSize();
+		value.size = size;
+		value.usage = usage;
+		value.data_size = 0;
+		value.dynamic_update = dynamicUpdate ? 1 : 0;
+		value.stream = stream ? 1 : 0;
 		return value;
 	}
 }

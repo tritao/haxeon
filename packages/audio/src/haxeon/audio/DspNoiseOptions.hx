@@ -12,8 +12,8 @@ class DspNoiseOptions {
 	@:allow(haxeon.audio.DspPatchBuilder)
 	private function nativeValue():NativeDspNoiseOptions {
 		var result = new NativeDspNoiseOptions();
-		result.set_struct_size(NativeDspNoiseOptions.size());
-		result.set_level(level);
+		result.struct_size = NativeDspNoiseOptions.byteSize();
+		result.level = level;
 		return result;
 	}
 }

@@ -83,6 +83,11 @@ typedef struct sample_options {
     uint64_t reserved[2];
 } sample_options;
 
+typedef struct sample_dimensions {
+    uint32_t size;
+    uint32_t array;
+} sample_dimensions;
+
 typedef struct sample_event {
     const void *data HXI_BORROWED HXI_LENGTH_FIELD(data_size);
     uint64_t data_size;

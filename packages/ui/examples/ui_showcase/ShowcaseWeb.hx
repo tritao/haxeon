@@ -429,7 +429,7 @@ class ShowcaseWeb {
 		pendingWebFontCount = 0;
 		for (font in webFontSpecs()) {
 			var resource = new ResourceValue();
-			resource.set_struct_size(ResourceValue.size());
+			resource.set_struct_size(ResourceValue.byteSize());
 			resource.set_flags(ResourceFlags.Readable);
 			resource.set_uri(font.uri);
 			resource.set_mime_type("font/ttf");

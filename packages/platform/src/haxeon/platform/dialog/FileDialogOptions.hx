@@ -16,11 +16,11 @@ class FileDialogOptions {
 
 	public function nativeValue():NativeFileDialogOptions {
 		var value = new NativeFileDialogOptions();
-		value.set_struct_size(NativeFileDialogOptions.size());
-		value.set_title(title);
-		value.set_initial_path(initialPath);
-		value.set_suggested_name(suggestedName);
-		value.set_flags(flags);
+		value.struct_size = NativeFileDialogOptions.byteSize();
+		value.title = title;
+		value.initial_path = initialPath;
+		value.suggested_name = suggestedName;
+		value.flags = flags;
 		value.set_filters([for (filter in filters) filter.nativeValue()]);
 		return value;
 	}

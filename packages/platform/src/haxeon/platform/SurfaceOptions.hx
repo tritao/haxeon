@@ -24,16 +24,16 @@ class SurfaceOptions {
 
 	public function nativeValue():NativeSurfaceOptions {
 		var value = new NativeSurfaceOptions();
-		value.set_struct_size(NativeSurfaceOptions.size());
-		value.set_width(width);
-		value.set_height(height);
-		value.set_x(x);
-		value.set_y(y);
-		value.set_flags(flags);
-		value.set_api(api);
-		value.set_major_version(majorVersion);
-		value.set_minor_version(minorVersion);
-		if (shareSurface != null) value.set_share_surface(shareSurface.nativeHandle());
+		value.struct_size = NativeSurfaceOptions.byteSize();
+		value.width = width;
+		value.height = height;
+		value.x = x;
+		value.y = y;
+		value.flags = flags;
+		value.api = api;
+		value.major_version = majorVersion;
+		value.minor_version = minorVersion;
+		if (shareSurface != null) value.share_surface = shareSurface.nativeHandle();
 		return value;
 	}
 }

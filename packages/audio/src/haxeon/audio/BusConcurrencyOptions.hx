@@ -23,19 +23,19 @@ class BusConcurrencyOptions {
 			throw BindingError.invalidArgument("BusConcurrencyOptions.nativeValue",
 				"Audio bus maxVoices must be non-negative");
 		var result = new NativeBusConcurrencyOptions();
-		result.set_struct_size(NativeBusConcurrencyOptions.size());
-		result.set_max_voices(maxVoices);
-		result.set_steal_policy(stealPolicy);
-		result.set_virtualize(virtualize);
+		result.struct_size = NativeBusConcurrencyOptions.byteSize();
+		result.max_voices = maxVoices;
+		result.steal_policy = stealPolicy;
+		result.virtualize = virtualize;
 		return result;
 	}
 
 	@:allow(haxeon.audio.Bus)
 	private static function fromNative(value:NativeBusConcurrencyOptions):BusConcurrencyOptions {
 		var result = new BusConcurrencyOptions();
-		result.maxVoices = value.get_max_voices();
-		result.stealPolicy = value.get_steal_policy();
-		result.virtualize = value.get_virtualize();
+		result.maxVoices = value.max_voices;
+		result.stealPolicy = value.steal_policy;
+		result.virtualize = value.virtualize;
 		return result;
 	}
 }

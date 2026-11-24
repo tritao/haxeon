@@ -100,7 +100,7 @@ function main():Int {
  var batch = new Batch();
  batch.set_points(0,source);
  batch.set_points(1,point(7,9));
- var packed:haxe.io.Bytes = Point.array([source,point(7,9)]);
+ var packed:haxe.io.Bytes = Point.arrayOf([source,point(7,9)]);
  var attached = Point.__hxi_attach(packed);
  var retained = mixed();
  source.set_x(999);

@@ -38,8 +38,8 @@ class Timestamp implements Disposable {
 			throw BindingError.invalidArgument("Timestamp.beginNamed", "GPU timestamp label must not be null");
 		renderer.ensureFrame();
 		var desc = new nkgpu_timestamp_desc();
-		desc.set_struct_size(nkgpu_timestamp_desc.size());
-		desc.set_label(label);
+		desc.struct_size = nkgpu_timestamp_desc.byteSize();
+		desc.label = label;
 		var made = NativeKitGpu.nkgpu_timestamp_begin_desc(renderer.nativeHandle(), desc);
 		GpuResult.check(made.status, "timestamp.beginNamed");
 		return new Timestamp(renderer, made.out_timestamp);
@@ -105,5 +105,5 @@ class TimestampInfo {
 
 	@:allow(haxeon.gpu.Timestamp)
 	static function fromNative(value:nkgpu_timestamp_info):TimestampInfo
-		return new TimestampInfo(value.get_state(), value.get_nanoseconds());
+		return new TimestampInfo(value.state, value.nanoseconds);
 }

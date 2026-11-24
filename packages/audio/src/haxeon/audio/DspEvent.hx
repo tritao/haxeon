@@ -128,22 +128,22 @@ class DspEvent {
 	@:allow(haxeon.audio.DspEngine)
 	private function nativeValue():NativeDspEvent {
 		var result = new NativeDspEvent();
-		result.set_struct_size(NativeDspEvent.size());
-		result.set_kind(kind);
-		result.set_frame_offset(frameOffset);
-		result.set_instrument(instrument == null ? DspInstrumentHandle.invalid() : instrument.nativeHandle());
-		result.set_voice_id(voiceId);
-		result.set_note(note);
-		result.set_velocity(velocity);
+		result.struct_size = NativeDspEvent.byteSize();
+		result.kind = kind;
+		result.frame_offset = frameOffset;
+		result.instrument = instrument == null ? DspInstrumentHandle.invalid() : instrument.nativeHandle();
+		result.voice_id = voiceId;
+		result.note = note;
+		result.velocity = velocity;
 		// Each kind reads only its own parameter field; the other stays zero.
 		if (parameterValue != null)
-			result.set_parameter(parameterValue);
+			result.parameter = parameterValue;
 		if (oscillatorParameterValue != null)
-			result.set_oscillator_parameter(oscillatorParameterValue);
-		result.set_oscillator_index(oscillatorIndex);
-		result.set_value(value);
-		result.set_end_value(endValue);
-		result.set_duration_frames(durationFrames);
+			result.oscillator_parameter = oscillatorParameterValue;
+		result.oscillator_index = oscillatorIndex;
+		result.value = value;
+		result.end_value = endValue;
+		result.duration_frames = durationFrames;
 		return result;
 	}
 }

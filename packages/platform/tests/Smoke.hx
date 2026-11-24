@@ -179,7 +179,7 @@ class Smoke {
 		textState.cursorHeight = 7;
 		var nativeText = textState.nativeValue();
 		textState.text = "changed";
-		if (nativeText.get_text() != "olá 👋" || nativeText.get_struct_size() != NativeTextInputState.size()
+		if (nativeText.get_text() != "olá 👋" || nativeText.get_struct_size() != NativeTextInputState.byteSize()
 			|| nativeText.get_text_start() != 20 || nativeText.get_document_length() != 200
 			|| nativeText.get_selection_start() != 23 || nativeText.get_selection_end() != 25
 			|| nativeText.get_composition_start() != 21 || nativeText.get_composition_end() != 24

@@ -71,48 +71,48 @@ class AnimationAsset {
 		this.owner = owner;
 		var handle = owner.borrow();
 		var info = new ak_asset_info();
-		info.set_struct_size(ak_asset_info.size());
+		info.struct_size = ak_asset_info.byteSize();
 		check(AnimKitNative.ak_asset_get_info(handle, info), "asset.info");
-		imageCount = info.get_image_count();
-		for (joint in 0...info.get_joint_count()) {
+		imageCount = info.image_count;
+		for (joint in 0...info.joint_count) {
 			jointNames.push(AnimKitNative.ak_asset_joint_name(handle, joint));
 			jointParents.push(AnimKitNative.ak_asset_joint_parent(handle, joint));
 		}
-		for (clip in 0...info.get_clip_count()) {
+		for (clip in 0...info.clip_count) {
 			clipNames.push(AnimKitNative.ak_asset_clip_name(handle, clip));
 			clipDurations.push(AnimKitNative.ak_asset_clip_duration(handle, clip));
 		}
-		for (index in 0...info.get_primitive_count()) {
+		for (index in 0...info.primitive_count) {
 			var value = new ak_primitive_info();
-			value.set_struct_size(ak_primitive_info.size());
+			value.struct_size = ak_primitive_info.byteSize();
 			check(AnimKitNative.ak_asset_get_primitive(handle, index, value), "asset.primitive");
 			primitives.push({
 				name: AnimKitNative.ak_asset_primitive_name(handle, index),
-				vertexCount: value.get_vertex_count(),
-				indexCount: value.get_index_count(),
-				material: value.get_material(),
-				skinned: value.get_skinned() != 0,
-				hasTexcoords: value.get_has_texcoords() != 0,
-				joint: value.get_joint()
+				vertexCount: value.vertex_count,
+				indexCount: value.index_count,
+				material: value.material,
+				skinned: value.skinned != 0,
+				hasTexcoords: value.has_texcoords != 0,
+				joint: value.joint
 			});
 		}
-		for (index in 0...info.get_material_count()) {
+		for (index in 0...info.material_count) {
 			var value = new ak_material_info();
-			value.set_struct_size(ak_material_info.size());
+			value.struct_size = ak_material_info.byteSize();
 			check(AnimKitNative.ak_asset_get_material(handle, index, value), "asset.material");
 			materials.push({
 				name: AnimKitNative.ak_asset_material_name(handle, index),
 				baseColor: [for (i in 0...4) value.get_base_color(i)],
-				metallic: value.get_metallic(),
-				roughness: value.get_roughness(),
+				metallic: value.metallic,
+				roughness: value.roughness,
 				emissive: [for (i in 0...3) value.get_emissive(i)],
-				alphaMode: value.get_alpha_mode(),
-				alphaCutoff: value.get_alpha_cutoff(),
-				doubleSided: value.get_double_sided() != 0,
-				baseColorImage: value.get_base_color_image()
+				alphaMode: value.alpha_mode,
+				alphaCutoff: value.alpha_cutoff,
+				doubleSided: value.double_sided != 0,
+				baseColorImage: value.base_color_image
 			});
 		}
-		for (index in 0...info.get_warning_count())
+		for (index in 0...info.warning_count)
 			warnings.push(AnimKitNative.ak_asset_warning(handle, index));
 	}
 
@@ -205,10 +205,10 @@ class AnimationAsset {
 	}
 
 	public function imageWidth(image:Int):Int
-		return imageInfo(image).get_width();
+		return imageInfo(image).width;
 
 	public function imageHeight(image:Int):Int
-		return imageInfo(image).get_height();
+		return imageInfo(image).height;
 
 	/** Decoded RGBA8 pixels, top row first. */
 	public function readImage(image:Int):Bytes {
@@ -234,7 +234,7 @@ class AnimationAsset {
 
 	function imageInfo(image:Int):ak_image_info {
 		var info = new ak_image_info();
-		info.set_struct_size(ak_image_info.size());
+		info.struct_size = ak_image_info.byteSize();
 		check(AnimKitNative.ak_asset_get_image(handle(), image, info), "asset.image");
 		return info;
 	}

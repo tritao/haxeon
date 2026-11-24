@@ -24,21 +24,21 @@ class TransportInterop {
 			throw BindingError.invalidArgument("TransportInterop.options",
 				"NativeKit transport host must not be empty");
 		var value = new TransportOptions();
-		value.set_struct_size(TransportOptions.size());
-		value.set_kind(TransportKind.Tcp);
-		value.set_flags(TransportFlags.NoDelay);
-		value.set_host(host);
-		value.set_port(port);
-		value.set_timeout_ms(5000);
-		value.set_backlog(8);
-		value.set_receive_buffer_size(Int64.ofInt(4 * 1024 * 1024));
-		value.set_send_buffer_size(Int64.ofInt(4 * 1024 * 1024));
+		value.struct_size = TransportOptions.byteSize();
+		value.kind = TransportKind.Tcp;
+		value.flags = TransportFlags.NoDelay;
+		value.host = host;
+		value.port = port;
+		value.timeout_ms = 5000;
+		value.backlog = 8;
+		value.receive_buffer_size = Int64.ofInt(4 * 1024 * 1024);
+		value.send_buffer_size = Int64.ofInt(4 * 1024 * 1024);
 		return value;
 	}
 
 	public static function listen(port:Int, ?host:String = "127.0.0.1"):OwnedListenerHandle {
 		var value = options(port, host);
-		value.set_flags(TransportFlags.ReuseAddress);
+		value.flags = TransportFlags.ReuseAddress;
 		var result = NativeKit.nk_transport_listen(value);
 		if (result.status != Result.Ok)
 			throw new NativeKitError(result.status, "TransportInterop.listen", NativeKit.nk_last_error());
@@ -59,11 +59,11 @@ class TransportInterop {
 		if (!Math.isFinite(timeout) || timeout < 0.001 || timeout > 2147483.0)
 			throw BindingError.invalidArgument("TransportInterop.websocket", "Invalid WebSocket timeout");
 		var value = options(port, host);
-		value.set_kind(TransportKind.Websocket);
-		value.set_flags(TransportFlags.Messages | TransportFlags.Text
-			| (secure ? TransportFlags.Secure : TransportFlags.empty()));
-		value.set_path(path);
-		value.set_timeout_ms(Std.int(timeout * 1000));
+		value.kind = TransportKind.Websocket;
+		value.flags = TransportFlags.Messages | TransportFlags.Text
+			| (secure ? TransportFlags.Secure : TransportFlags.empty());
+		value.path = path;
+		value.timeout_ms = Std.int(timeout * 1000);
 		var result = NativeKit.nk_transport_connect(value);
 		if (result.status != Result.Ok)
 			throw new NativeKitError(result.status, "TransportInterop.websocket", NativeKit.nk_last_error());

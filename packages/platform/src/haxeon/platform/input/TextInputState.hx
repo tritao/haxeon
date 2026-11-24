@@ -33,22 +33,22 @@ class TextInputState {
 	/** Creates ABI storage for the duration of a platform call. */
 	public function nativeValue():NativeTextInputState {
 		var value = new NativeTextInputState();
-		value.set_struct_size(NativeTextInputState.size());
-		value.set_text(text);
-		value.set_text_start(textStart);
-		value.set_document_length(documentLength);
-		value.set_selection_start(selectionStart);
-		value.set_selection_end(selectionEnd);
-		value.set_composition_start(compositionStart == null
-			? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionStart);
-		value.set_composition_end(compositionEnd == null ? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionEnd);
-		value.set_input_type(inputType);
-		value.set_flags(flags);
-		value.set_action(action);
-		value.set_cursor_x(cursorX);
-		value.set_cursor_y(cursorY);
-		value.set_cursor_width(cursorWidth);
-		value.set_cursor_height(cursorHeight);
+		value.struct_size = NativeTextInputState.byteSize();
+		value.text = text;
+		value.text_start = textStart;
+		value.document_length = documentLength;
+		value.selection_start = selectionStart;
+		value.selection_end = selectionEnd;
+		value.composition_start = compositionStart == null
+			? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionStart;
+		value.composition_end = compositionEnd == null ? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionEnd;
+		value.input_type = inputType;
+		value.flags = flags;
+		value.action = action;
+		value.cursor_x = cursorX;
+		value.cursor_y = cursorY;
+		value.cursor_width = cursorWidth;
+		value.cursor_height = cursorHeight;
 		return value;
 	}
 }

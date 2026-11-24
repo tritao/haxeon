@@ -1012,13 +1012,19 @@ class HxiParserMain {
 			'interface nested @target("x86_64-linux-gnu") @library("nested") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct box @layout(16, 4) { start: point @offset(0); end: point @offset(8); } }');
 		var nestedSource = HxiProjection.source(nested);
 		var readOnly = parseValidated("readonly.hxi",
-			'interface readonly @target("x86_64-linux-gnu") @library("readonly") { type fixed = const<i32>; struct sample @layout(8, 4) { value: fixed @offset(0); size: i32 @offset(4); } }');
+			'interface readonly @target("x86_64-linux-gnu") @library("readonly") { type fixed = const<i32>; struct sample @layout(20, 4) { value: fixed @offset(0); size: i32 @offset(4); array: i32 @offset(8); byteSize: i32 @offset(12); arrayOf: i32 @offset(16); } }');
 		var readOnlySource = HxiProjection.source(readOnly);
 		expect(readOnlySource.indexOf("var value(get, never):Int") >= 0
 			&& readOnlySource.indexOf("function get_value():Int") >= 0
-			&& readOnlySource.indexOf("function set_value(value:Int)") < 0
-			&& readOnlySource.indexOf("var __hxi_field_size(get, set):Int") >= 0,
+			&& readOnlySource.indexOf("function set_value(value:Int)") < 0,
 			"const scalar fields should project a read-only property");
+		expect(readOnlySource.indexOf("var size(get, set):Int") >= 0
+			&& readOnlySource.indexOf("var array(get, set):Int") >= 0
+			&& readOnlySource.indexOf("static inline function byteSize():Int return 20") >= 0
+			&& readOnlySource.indexOf("static function arrayOf(values:Array<sample>)") >= 0
+			&& readOnlySource.indexOf("var __hxi_field_byteSize(get, set):Int") >= 0
+			&& readOnlySource.indexOf("var __hxi_field_arrayOf(get, set):Int") >= 0,
+			"record helpers should reserve their own names and preserve size and array as properties");
 		expect(nestedSource.indexOf("function get_start():point") >= 0
 			&& nestedSource.indexOf("__hxi_struct_copy") >= 0,
 			"nested fixed-layout structs should project typed copy accessors");
@@ -1057,8 +1063,9 @@ class HxiParserMain {
 		var borrowedArray = parseValidated("borrowed-array.hxi",
 			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct item @layout(8, 8) { name: utf8 @offset(0); } struct holder @layout(16, 8) { items: ptr<const<item>> @offset(0) @borrowed @length_field("count"); count: u32 @offset(8); } }');
 		var borrowedArraySource = HxiProjection.source(borrowedArray);
-		expect(borrowedArraySource.indexOf("static function array(values:Array<item>)") >= 0
+		expect(borrowedArraySource.indexOf("static function arrayOf(values:Array<item>)") >= 0
 			&& borrowedArraySource.indexOf("function set_items(values:Array<item>)") >= 0
+			&& borrowedArraySource.indexOf("item.arrayOf(values)") >= 0
 			&& borrowedArraySource.indexOf("__hxi_struct_set_borrowed_bytes(this, 0, bytes)") >= 0
 			&& borrowedArraySource.indexOf("__hxi_struct_get_roots(this)[1] = bytes") >= 0
 			&& borrowedArraySource.indexOf("__hxi_struct_setI32(this, 8, values.length)") >= 0,
@@ -1079,6 +1086,7 @@ class HxiParserMain {
 			&& inputArraySource.indexOf("function bytes(data:haxe.io.Bytes):Int") >= 0
 			&& inputArraySource.indexOf("function bytes_slice(data:haxe.io.Bytes, offset:Int, length:Int):Int") >= 0
 			&& inputArraySource.indexOf("haxe.io.Bytes.view(data, offset, length)") >= 0
+			&& inputArraySource.indexOf("item.arrayOf(items)") >= 0
 			&& inputArraySource.indexOf("items.length") >= 0,
 			"input arrays should hide count parameters and project managed Haxe arrays");
 		expectError('interface bad @target("x86_64-linux-gnu") { struct holder @layout(16, 8) { data: ptr<u8> @offset(0) @length_field("size"); size: u64 @offset(8); } }',
