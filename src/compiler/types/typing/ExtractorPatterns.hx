@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstObjectField;
@@ -240,7 +241,7 @@ class ExtractorPatterns {
 			return;
 		for (value in values)
 			if (extractorOf(value) != null)
-				throw new CompileError(new Diagnostic("E1019",
+				throw new CompileError(new Diagnostic(DiagnosticCode.PATTERN_OR_DEFER,
 					"An extractor cannot read a whole tuple, which is no value: extract from an element (`case [_.length => 2, _]:`)",
 					patternSpan(value)));
 	}

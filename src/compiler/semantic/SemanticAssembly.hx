@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.QualifiedName;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstClass;
@@ -1061,7 +1062,8 @@ class SemanticAssembly {
 		for (metadata in classDecl.metadata)
 			if (metadata.name == "discoverMethods") {
 				if (metadata.arguments.length == 0)
-					throw new CompileError(new Diagnostic("E1024", "@:discoverMethods requires at least one prefix",
+					throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						"@:discoverMethods requires at least one prefix",
 						metadata.span));
 				var prefixes:Array<String> = [];
 				for (argument in metadata.arguments)
@@ -1069,7 +1071,7 @@ class SemanticAssembly {
 						case AstExpression.StringLiteral(value, _):
 							prefixes.push(value);
 						default:
-							throw new CompileError(new Diagnostic("E1024",
+							throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 								"@:discoverMethods prefixes must be string literals", metadata.span));
 					}
 				return prefixes;
@@ -1090,13 +1092,13 @@ class SemanticAssembly {
 			if (!discovered)
 				continue;
 			if (method.isStatic || method.arguments.length != 0)
-				throw new CompileError(new Diagnostic("E1024",
+				throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 					'Discovered method "$className.${method.name}" must be a parameterless instance method',
 					method.span));
 			switch method.result {
 				case AstType.VoidType, AstType.InferredType:
 				default:
-					throw new CompileError(new Diagnostic("E1024",
+					throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 						'Discovered method "$className.${method.name}" must return Void', method.span));
 			}
 			var receiver = AstExpression.Variable("this", method.span);

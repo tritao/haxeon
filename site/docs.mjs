@@ -77,7 +77,10 @@ const groups = [
           'reference/KEY_PATHS.md',
         ],
       ],
-      ['Tools', [cliOverview, ...cliGroupPages, 'reference/MANIFEST.md', 'reference/RELEASES.md', 'reference/PROFILING.md']],
+      [
+        'Tools',
+        [cliOverview, ...cliGroupPages, 'reference/ERRORS.md', 'reference/MANIFEST.md', 'reference/RELEASES.md', 'reference/PROFILING.md'],
+      ],
       [
         'Libraries',
         [

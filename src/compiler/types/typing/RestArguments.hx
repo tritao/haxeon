@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
@@ -67,7 +68,7 @@ class RestArguments {
 		for (argument in arguments)
 			switch argument {
 				case Spread(_, span):
-					throw new CompileError(new Diagnostic("E1008",
+					throw new CompileError(new Diagnostic(DiagnosticCode.CALL_FORM,
 						"A spread `...values` passes a rest argument, as a call's last argument", span));
 				default:
 			}

@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.DiagnosticCode;
 import haxe.Int64;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -645,5 +646,5 @@ class HxiParser {
 
 	@:noReturn
 	static function fail(message:String, span:SourceSpan):Dynamic
-		throw new CompileError(new Diagnostic("E3001", message, span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.HXI_ERROR, message, span));
 }

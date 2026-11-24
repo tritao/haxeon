@@ -13,6 +13,7 @@ Look up Haxeon language features, commands, libraries and target behavior.
 ## Tools
 
 - [CLI](CLI.md) lists the commands for creating, building and running projects.
+- [Error codes](ERRORS.md) explains diagnostic messages and lists the compiler codes.
 - [Manifest](MANIFEST.md) describes the settings in `haxeon.toml` and `haxeon.json`.
 - [Releases](RELEASES.md) explains how to install a release and what it contains.
 - [Profiling](PROFILING.md) explains how to record and read profiles.

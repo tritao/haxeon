@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.modules.ModuleState;
 import compiler.syntax.Ast.AstExpression;
@@ -133,7 +134,8 @@ class StaticExtensionTable {
 						for (argument in entry.arguments) {
 							var path = expressionPath(argument);
 							if (path == null)
-								throw new CompileError(new Diagnostic("E1020", "dot path expected", entry.span));
+								throw new CompileError(new Diagnostic(DiagnosticCode.LOOKUP_OR_DECLARATION,
+									"dot path expected", entry.span));
 							owners = resolve(states, path, ast.packageName, entry.span).concat(owners);
 						}
 				if (owners.length > 0) {
@@ -170,7 +172,7 @@ class StaticExtensionTable {
 		if (module == null)
 			module = states.get(modulePath);
 		if (module == null || module.ast == null)
-			throw new CompileError(new Diagnostic("E2001", 'Type not found : $path', span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.MISSING_MODULE, 'Type not found : $path', span));
 		var ast = module.parsedAst(), owners:Array<ResolvedOwner> = [];
 		for (declaration in declarationsOf(ast))
 			if (subType == null ? !declaration.isPrivate : declaration.name == subType) {
@@ -181,7 +183,8 @@ class StaticExtensionTable {
 				}
 			}
 		if (subType != null && owners.length == 0 && !declares(ast, subType))
-			throw new CompileError(new Diagnostic("E2001", 'Module $modulePath does not define type $subType', span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.MISSING_MODULE,
+				'Module $modulePath does not define type $subType', span));
 		if (subType == null && ast.functions.length > 0)
 			owners.push({
 				owner: {name: module.name, kind: ModuleFunctions},

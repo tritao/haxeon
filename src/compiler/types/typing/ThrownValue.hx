@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.runtime.RuntimeType;
 import compiler.semantic.SemanticSignature;
@@ -25,7 +26,7 @@ class ThrownValue {
 				thrown: SemanticSignature.display(Monomorphs.follow(value.type))
 			});
 		return TypeRelations.equals(value.type, TNull) ? bodyTyper.coerce(value, TDynamic, "thrown value",
-			"E1021") : value;
+			DiagnosticCode.COVERAGE_THROW_OR_EXTERN) : value;
 	}
 
 	/**

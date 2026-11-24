@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -54,7 +55,8 @@ class FlagsGenerator {
 					return code;
 				default:
 			}
-		throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E1002",
+		throw new compiler.core.Diagnostic
+			.CompileError(new compiler.core.Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 			"Flags requires compile-time Int constants", value.span));
 	}
 
@@ -65,17 +67,19 @@ class FlagsGenerator {
 		if (!conforms(session, declaration))
 			return;
 		if (!compiler.types.TypeRelations.equals(typer.lowerType(declaration.underlying, declaration.span), TInt))
-			BodyTyper.fail("E1025", "Flags requires an Int enum abstract", declaration.span);
+			BodyTyper.fail(DiagnosticCode.CONFORMANCE, "Flags requires an Int enum abstract", declaration.span);
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
-			BodyTyper.fail("E1025", "Flags enum abstracts cannot declare implicit from/to conversions",
+			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+				"Flags enum abstracts cannot declare implicit from/to conversions",
 				declaration.span);
 		if (RawRepresentableGenerator.conforms(session, declaration))
-			BodyTyper.fail("E1025", "Flags already defines raw conversion; declare Flags without RawRepresentable",
+			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+				"Flags already defines raw conversion; declare Flags without RawRepresentable",
 				declaration.span);
 		var mask = 0;
 		for (value in declaration.values) {
 			if (isMember(value.name, true) || isMember(value.name, false))
-				BodyTyper.fail("E1000",
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
 					'Constant "${declaration.name}.${value.name}" conflicts with a synthesized Flags member',
 					value.span);
 			var bits = code(typer, declaration, value);
@@ -84,7 +88,7 @@ class FlagsGenerator {
 		}
 		for (value in declaration.values)
 			if ((code(typer, declaration, value) & ~mask) != 0)
-				BodyTyper.fail("E1025",
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 					'Flags constant "${declaration.name}.${value.name}" contains bits without a declared single-bit constant',
 					value.span);
 		session.flagsMasks.set(declaration.name, mask);

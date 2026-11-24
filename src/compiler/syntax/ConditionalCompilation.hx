@@ -2,6 +2,7 @@ package compiler.syntax;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceFile;
 
 typedef ConditionalSource = {
@@ -216,7 +217,7 @@ class ConditionalCompilation {
 
 	@:noReturn
 	static function fail(file:SourceFile, offset:Int, message:String):Dynamic
-		throw new CompileError(new Diagnostic("E0002", message, file.span(offset, offset)));
+		throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, file.span(offset, offset)));
 }
 
 private class DefineExpression {
@@ -393,6 +394,6 @@ private class DefineExpression {
 
 	function fail(message:String):Dynamic {
 		var offset = baseOffset + haxe.io.Bytes.ofString(expression.substring(0, position)).length;
-		throw new CompileError(new Diagnostic("E0002", message, file.span(offset, offset)));
+		throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, file.span(offset, offset)));
 	}
 }

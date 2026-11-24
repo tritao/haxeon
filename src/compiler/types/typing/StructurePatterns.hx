@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
@@ -223,7 +224,7 @@ class StructurePatterns {
 				for (field in fields) {
 					var fieldPath = path == "" ? field.name : path + "." + field.name;
 					if (row.exists(fieldPath))
-						throw new CompileError(new Diagnostic("E1019",
+						throw new CompileError(new Diagnostic(DiagnosticCode.PATTERN_OR_DEFER,
 							'Duplicate field "${field.name}" in structure pattern',
 							field.span));
 					if (!fieldSpans.exists(fieldPath))
@@ -238,7 +239,7 @@ class StructurePatterns {
 				set(path, pattern, row, columns);
 			default:
 				if (root)
-					throw new CompileError(new Diagnostic("E1019",
+					throw new CompileError(new Diagnostic(DiagnosticCode.PATTERN_OR_DEFER,
 						"A switch with structure patterns matches structures, captures, _ or null in each case",
 						patternSpan(pattern)));
 				set(path, pattern, row, columns);

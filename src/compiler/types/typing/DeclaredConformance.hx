@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.core.Source.SourceSpan;
@@ -126,19 +127,20 @@ class DeclaredConformance {
 			if (runtime != RuntimeType.OBJECT_MAP)
 				requestHashableMapKey(session, knownKey, span);
 			if (runtime == null)
-				BodyTyper.fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				BodyTyper.fail(DiagnosticCode.RUNTIME_SUPPORT,
+					"This map key/value type has no compiler-owned runtime ABI", span);
 		});
 
 	/** Map operations need the same generated equality/hash helpers as ordinary value operations. */
 	public static function requestHashableMapKey(session:TypingSession, type:CompilerType, span:SourceSpan):Void {
 		switch type {
 			case TAbstract(_, _, _) if (!supportsHash(session, type)):
-				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, "Hashable"), span);
 			default:
 		}
 		if (session.isPayloadEnumKey(type)) {
 			if (!has(session, type, "Hashable"))
-				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, "Hashable"), span);
 			HashGenerator.request(session, type, session.currentContext.name, span);
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
 			return;
@@ -149,7 +151,7 @@ class DeclaredConformance {
 				if (usesEquality(session, type))
 					ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
 			} else
-				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, capabilityError(session, type, "Hashable"), span);
 		}
 	}
 }

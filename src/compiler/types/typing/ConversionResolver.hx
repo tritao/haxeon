@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.runtime.RuntimeType;
 import compiler.types.Monomorphs;
@@ -56,20 +57,20 @@ class ConversionResolver {
 		return switch value.type {
 			case TNullable(element) if (TypeRelations.hasNullDefault(element)): bodyTyper.coerce(value, element,
 				"operand",
-				"E1010", use);
+				DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, use);
 			default: value;
 		};
 
 	/** `value ?? default`: a nullable scalar read as its element type, null giving the type's Haxe default. Evaluates `value` once. */
 	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String, position:Int,
-			code:String):TypedExpression {
+			code:DiagnosticCode):TypedExpression {
 		warnNullDefault(value, expected);
 		return readWithDefault(value, expected, context, position, code);
 	}
 
 	/** `value`, a nullable number, read as `expected`, with null read as the type's default (0, 0.0, false). */
 	function readWithDefault(value:TypedExpression, expected:CompilerType, context:String, position:Int,
-			code:String):TypedExpression {
+			code:DiagnosticCode):TypedExpression {
 		var element = switch value.type {
 			case TNullable(inner): inner;
 			default: value.type;
@@ -111,7 +112,7 @@ class ConversionResolver {
 				edits: [{span: span, replacement: '(${span.file.slice(span.start, span.end)} ?? $defaultText)'}]
 			}
 		] else [];
-		session.warn(new Diagnostic("W1001",
+		session.warn(new Diagnostic(DiagnosticCode.NULL_DEFAULT,
 			'${SemanticSignature.display(value.type)} is read as ${SemanticSignature.display(expected)}, so null becomes $defaultText; write "?? $defaultText" if that is meant',
 			span, Warning, fixes));
 	}
@@ -120,9 +121,9 @@ class ConversionResolver {
 	 * `value` as an `expected`, `context` naming it in a mismatch. `use` is where the value meets the type, for the null-safety
 	 * checker (`NullSafety.checkConversion`), which checks after the conversion has filled the type variables on either side.
 	 */
-	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009",
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:DiagnosticCode,
 			?use:NullSafetyUse):TypedExpression {
-		var converted = convert(value, expected, context, 0, code);
+		var converted = convert(value, expected, context, 0, code == null ? DiagnosticCode.VALUE_CONVERSION : code);
 		if (use != null)
 			session.nullSafety.checkConversion(value, expected, use);
 		return converted;
@@ -134,7 +135,7 @@ class ConversionResolver {
 	 */
 	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
 			?use:NullSafetyUse):TypedExpression {
-		var converted = convert(value, expected, callee, position, "E1009");
+		var converted = convert(value, expected, callee, position, DiagnosticCode.VALUE_CONVERSION);
 		// The use is made only where the checker looks: a call coerces every argument of every body.
 		if (session.nullSafety.active())
 			session.nullSafety.checkConversion(value, expected, use == null ? Argument(callee, position) : use);
@@ -146,7 +147,7 @@ class ConversionResolver {
 		return position == 0 ? context : 'argument $position to "$context"';
 
 	function convert(value:TypedExpression, expected:CompilerType, context:String, position:Int,
-			code:String):TypedExpression {
+			code:DiagnosticCode):TypedExpression {
 		// Where a value meets the type it must have, an empty type variable on either side takes the other's type.
 		if (session.monomorphs.active()) {
 			Monomorphs.unify(value.type, expected);
@@ -393,7 +394,7 @@ class ConversionResolver {
 			throw new InternalError("Expected anonymous conversion target");
 		// Cyclic Dynamic input cannot be copied without an identity table, so a target that contains itself is rejected.
 		if (containsItself(target, []))
-			fail("E1016",
+			fail(DiagnosticCode.RUNTIME_SUPPORT,
 				"Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly",
 				value.span);
 		var origin = session.currentContext.name;
@@ -596,7 +597,7 @@ class ConversionResolver {
 
 	/** `value` as an `expected` by an abstract's implicit conversion: the route `AbstractConversionGraph.route` finds. */
 	function abstractCast(value:TypedExpression, expected:CompilerType, context:String, position:Int,
-			code:String):TypedExpression {
+			code:DiagnosticCode):TypedExpression {
 		var route = session.declarations.conversions.route(value.type, expected);
 		return switch route {
 			case FromFunction(name, argument):
@@ -738,7 +739,7 @@ class ConversionResolver {
 		// A null passed to or returned by the adapted function reads as the number's default, as on Haxe's HashLink target,
 		// without W1001: no expression here takes the `??` it suggests.
 		if (session.relations.conversion(value.type, target).match(UnwrapNullableDefault))
-			return readWithDefault(value, target, "function value", 0, "E1002");
+			return readWithDefault(value, target, "function value", 0, DiagnosticCode.ASSIGNMENT_OR_BINDING);
 		if ((switch (value.type) {
 			case TInt: true;
 			default: false;
@@ -786,6 +787,6 @@ class ConversionResolver {
 		};
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

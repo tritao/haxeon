@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.NativeLayout;
 import compiler.syntax.Ast.AstFunction;
@@ -28,7 +29,7 @@ class ExternTyper {
 			allowStubBody:Bool = false):TypedNative {
 		// A function `@:hlNative` binds keeps its body, which is only checked (`AstFunctions.bindingNative`).
 		if (fn.statements.length != 0 && !allowStubBody && !compiler.syntax.AstFunctions.hasMetadata(fn, "hlNative"))
-			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
+			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null,
 			cBinding:Null<compiler.syntax.Ast.AstMetadata> = null;
 		var metadata = fn.metadata;
@@ -36,29 +37,35 @@ class ExternTyper {
 			for (entry in metadata)
 				if (entry.name == "hlNative") {
 					if (binding != null)
-						fail("E1021", 'Extern function "${fn.name}" has duplicate @:hlNative metadata', entry.span);
+						fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+							'Extern function "${fn.name}" has duplicate @:hlNative metadata', entry.span);
 					binding = entry;
 				} else if (entry.name == "cNative") {
 					if (cBinding != null)
-						fail("E1021", 'Extern function "${fn.name}" has duplicate @:cNative metadata', entry.span);
+						fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+							'Extern function "${fn.name}" has duplicate @:cNative metadata', entry.span);
 					cBinding = entry;
 				}
 		if (binding != null && cBinding != null)
-			fail("E1021", 'Extern function "${fn.name}" cannot combine @:hlNative and @:cNative', fn.span);
+			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+				'Extern function "${fn.name}" cannot combine @:hlNative and @:cNative', fn.span);
 		if (binding == null && cBinding == null && defaultLibrary == null)
-			fail("E1021", 'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
+			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+				'Extern function "${fn.name}" requires @:hlNative(library, symbol)', fn.span);
 		var library = defaultLibrary, symbol = fn.name;
 		var convention = NativeConvention.HashLinkNative;
 		if (binding != null) {
 			if (binding.arguments.length != 2)
-				fail("E1021", "@:hlNative requires a library and symbol string", binding.span);
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, "@:hlNative requires a library and symbol string",
+					binding.span);
 			var values = metadataStrings(binding, "@:hlNative arguments must be string literals");
 			library = values[0];
 			symbol = values[1];
 		}
 		if (cBinding != null) {
 			if (cBinding.arguments.length != 3)
-				fail("E1021", "@:cNative requires library, symbol, and ABI signature strings", cBinding.span);
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+					"@:cNative requires library, symbol, and ABI signature strings", cBinding.span);
 			var values = metadataStrings(cBinding, "@:cNative arguments must be string literals");
 			library = values[0];
 			symbol = values[1];
@@ -69,11 +76,13 @@ class ExternTyper {
 			arguments.unshift(receiverType);
 		for (argument in arguments)
 			if (NativeLayout.containsNativeLayoutType(argument))
-				fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
+				fail(DiagnosticCode.NATIVE_OR_CATCH,
+					'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
 		// An extern function has no body, so its result is always written: it does not need DeclarationIndex.resultType.
 		var result = resultOverride == null ? lowerType(fn.result, fn.span) : resultOverride;
 		if (NativeLayout.containsNativeLayoutType(result))
-			fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH,
+				'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
 		return {
 			name: externalName == null ? fn.name : externalName,
 			library: library,
@@ -90,13 +99,15 @@ class ExternTyper {
 			for (entry in metadata)
 				if (entry.name == "hlNative") {
 					if (binding != null)
-						fail("E1021", 'Extern declaration "$owner" has duplicate @:hlNative metadata', entry.span);
+						fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+							'Extern declaration "$owner" has duplicate @:hlNative metadata', entry.span);
 					binding = entry;
 				}
 		if (binding == null)
 			return null;
 		if (binding.arguments.length != 1)
-			fail("E1021", "Declaration @:hlNative requires one library string", binding.span);
+			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, "Declaration @:hlNative requires one library string",
+				binding.span);
 		return metadataStrings(binding, "Declaration @:hlNative library must be a string literal")[0];
 	}
 
@@ -107,12 +118,12 @@ class ExternTyper {
 				case StringLiteral(value, _):
 					values.push(value);
 				default:
-					fail("E1021", message, metadata.span);
+					fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, message, metadata.span);
 			}
 		return values;
 	}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.syntax.Ast.AstArgument;
 import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
@@ -31,7 +32,7 @@ interface BodyTyping {
 	// Expressions, statements and types.
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
 			inferDynamicLambdaResult:Bool = false):TypedExpression;
-	function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:String,
+	function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:DiagnosticCode,
 			?use:NullSafetyUse):TypedExpression;
 
 	/**

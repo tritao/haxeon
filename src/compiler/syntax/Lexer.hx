@@ -3,6 +3,7 @@ package compiler.syntax;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Diagnostic.DiagnosticSeverity;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceFile;
 import compiler.syntax.Token.TokenKind;
 
@@ -66,7 +67,8 @@ class Lexer {
 						&& !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
 						position++;
 					if (position + 1 >= source.length)
-						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment",
+						throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
+							"Unterminated block comment",
 							file.span(commentStart, position),
 							DiagnosticSeverity.Error, [
 								{
@@ -103,7 +105,8 @@ class Lexer {
 					}
 				}
 				if (!closed)
-					throw new CompileError(new Diagnostic("E0001", "Unterminated regular expression literal",
+					throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
+						"Unterminated regular expression literal",
 						file.span(start, position)));
 				while (position < source.length && isIdentifierPart(source.get(position)))
 					position++;
@@ -115,7 +118,7 @@ class Lexer {
 				position++;
 				var closed = scanString(quote);
 				if (!closed)
-					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal",
+					throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR, "Unterminated string literal",
 						file.span(start, position), DiagnosticSeverity.Error, [
 							{
 								id: "close-string-literal",
@@ -158,7 +161,8 @@ class Lexer {
 					scanNumericDigits(start, false, false);
 				} else if (position + 1 < source.length && source.get(position) == ".".code
 					&& source.get(position + 1) == "_".code) {
-					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits",
+					throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
+						"Numeric separator must appear between digits",
 						file.span(start, position + 2)));
 				}
 				if (position < source.length
@@ -177,7 +181,8 @@ class Lexer {
 				var end = position + utf8Width(code);
 				if (end > source.length)
 					end = source.length;
-				throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${text(position, end)}"',
+				throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
+					'Unexpected character "${text(position, end)}"',
 					file.span(position, end)));
 			}
 			position++;
@@ -280,7 +285,7 @@ class Lexer {
 						position++;
 						TokenKind.PercentAssign;
 					} else TokenKind.Percent;
-				default: throw new CompileError(new Diagnostic("E0001",
+				default: throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
 					'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
 			}
 			tokens.add(kind, operatorText(start, position), start, position);
@@ -465,7 +470,8 @@ class Lexer {
 				var nextIsDigit = position + 1 < source.length
 					&& (hexadecimal ? isHexDigit(source.get(position + 1)) : isDigit(source.get(position + 1)));
 				if (!previousDigit || !nextIsDigit)
-					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits",
+					throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
+						"Numeric separator must appear between digits",
 						file.span(start, position + 1)));
 				previousDigit = false;
 				position++;
@@ -473,7 +479,7 @@ class Lexer {
 				break;
 		}
 		if (requireDigit && count == 0)
-			throw new CompileError(new Diagnostic("E0001",
+			throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR,
 				hexadecimal ? "Hexadecimal literal requires at least one digit"
 				: "Exponent requires at least one digit", file.span(start, position)));
 	}

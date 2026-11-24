@@ -2,6 +2,7 @@ package compiler.types.analysis;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.syntax.Ast.AstCatch;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
@@ -33,11 +34,12 @@ class AbstractConstructorNormalizer {
 	public static function constructorError(error:CompileError, constructorName:String):CompileError {
 		var diagnostic = error.diagnostic, message = diagnostic.message;
 		if (StringTools.startsWith(message, 'Type mismatch for local "' + RESULT_PREFIX))
-			return new CompileError(new Diagnostic("E1003", 'Type mismatch for abstract constructor "$constructorName"',
+			return new CompileError(new Diagnostic(DiagnosticCode.TYPE_CONSTRAINT,
+				'Type mismatch for abstract constructor "$constructorName"',
 				diagnostic.span));
 		if (StringTools.startsWith(message, 'Local "' + RESULT_PREFIX)
 			&& message.indexOf("may be used before assignment") >= 0)
-			return new CompileError(new Diagnostic("E1023",
+			return new CompileError(new Diagnostic(DiagnosticCode.DEFINITE_ASSIGNMENT,
 				'Abstract constructor "$constructorName" does not initialize this on every path', diagnostic.span));
 		return error;
 	}
@@ -47,7 +49,7 @@ class AbstractConstructorNormalizer {
 			case AnnotatedStatement(metadata, inner, span): AnnotatedStatement(metadata,
 				rewriteStatement(inner, resultName), span);
 			case Assignment("this", expression, span): Assignment(resultName, expression, span);
-			case Return(_, span): throw new CompileError(new Diagnostic("E1003",
+			case Return(_, span): throw new CompileError(new Diagnostic(DiagnosticCode.TYPE_CONSTRAINT,
 				"Abstract constructors cannot return a value", span));
 			case ReturnVoid(span): Return(Variable(resultName, span), span);
 			case If(predicate, yes, no, span):

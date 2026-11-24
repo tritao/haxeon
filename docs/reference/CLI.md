@@ -89,6 +89,7 @@ line each that tools and tests read instead, `Main.hx:2:14: E1002: ...`, with th
 under its source root. That is the compiler's own default (`--diagnostic-format=`,
 `--color=` and `--diagnostic-directory=` select the full format there); the language
 server reports diagnostics through the protocol, unchanged.
+See the [error code reference](ERRORS.md) for what each code means and how to fix it.
 
 ## Exit codes
 

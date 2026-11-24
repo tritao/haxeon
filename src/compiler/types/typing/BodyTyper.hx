@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.runtime.RuntimeType;
 import compiler.semantic.AbstractStatics;
@@ -125,7 +126,7 @@ class BodyTyper implements BodyTyping {
 			compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls.withoutReads(),
 			session.interfaceDecls.withoutReads());
 		if (violation != null)
-			fail("E1006",
+			fail(DiagnosticCode.FUNCTION_COMPLETION,
 				'Method ${violation.method.name} overrides or implements @:noReturn ${violation.base} and must be declared @:noReturn too',
 				violation.method.span);
 	}
@@ -247,7 +248,7 @@ class BodyTyper implements BodyTyping {
 		for (index in 0...fn.arguments.length) {
 			var argumentValueType = argumentTypes[index];
 			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(argumentValueType))
-				fail("E1022",
+				fail(DiagnosticCode.NATIVE_OR_CATCH,
 					'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet',
 					fn.arguments[index].span);
 		}
@@ -255,7 +256,8 @@ class BodyTyper implements BodyTyping {
 			fn.span) : session.declarations.types.resultType(declaration, substitutions);
 		fn = DefaultArguments.withFunctionPrologue(fn, argumentTypes, session.relations);
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
-			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH,
+				'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		if (functionContext == null)
 			functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
 				specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
@@ -328,25 +330,28 @@ class BodyTyper implements BodyTyping {
 			inference.settle(signature);
 			for (index in 0...arguments.length)
 				if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(arguments[index].type))
-					fail("E1022",
+					fail(DiagnosticCode.NATIVE_OR_CATCH,
 						'Native layout type "${arguments[index].type}" cannot be passed or stored as a Haxe runtime value yet',
 						fn.span);
 			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
-				fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
+				fail(DiagnosticCode.NATIVE_OR_CATCH,
+					'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		}
 		var statements = inference == null ? settleMonomorphs(monomorphs, typedStatements) : typedStatements;
 		if (compiler.types.analysis.NoReturnDeclarations.has(fn)) {
 			if (compiler.types.analysis.AstScan.returns(fn.statements))
-				fail("E1006", 'Function ${fn.name} is declared @:noReturn but returns', fn.span);
+				fail(DiagnosticCode.FUNCTION_COMPLETION, 'Function ${fn.name} is declared @:noReturn but returns',
+					fn.span);
 			if (!ControlFlow.alwaysExits(statements, function(type, cases) return this.exhaustiveSwitch(type, cases)))
-				fail("E1006", 'Function ${fn.name} is declared @:noReturn but can finish without throwing', fn.span);
+				fail(DiagnosticCode.FUNCTION_COMPLETION,
+					'Function ${fn.name} is declared @:noReturn but can finish without throwing', fn.span);
 		}
 		if ((switch (result) {
 			case TVoid: false;
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(statements,
 			function(type, cases) return this.exhaustiveSwitch(type, cases)))
-			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
+			fail(DiagnosticCode.FUNCTION_COMPLETION, 'Function ${fn.name} does not return on every path', fn.span);
 		// Typed with its own type parameters, the body is made into the code of the representation asked for, in its context.
 		if (elaboration != null) {
 			statements = elaboration.statements(statements);
@@ -467,7 +472,7 @@ class BodyTyper implements BodyTyping {
 				compiler.types.Monomorphs.close(result, TVoid);
 			var unfixed = compiler.types.Monomorphs.firstUnfixed(result);
 			if (unfixed != null)
-				fail("E1002",
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					'Cannot infer the return type of function "$name": nothing in its body fixes ${unfixed.origin}; annotate it',
 					fn.span);
 		}
@@ -477,7 +482,7 @@ class BodyTyper implements BodyTyping {
 				continue;
 			var unfixed = compiler.types.Monomorphs.firstUnfixed(argumentTypes[index]);
 			if (unfixed != null)
-				fail("E1002",
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					'Cannot infer the type of argument "${argument.name}" of function "$name": nothing in its body fixes '
 					+ (unfixed.origin == argumentOrigin(argument.name, name) ? "it" : unfixed.origin) + "; annotate it",
 					argument.span);
@@ -578,7 +583,8 @@ class BodyTyper implements BodyTyping {
 			if (argument.name == "_")
 				continue;
 			if (seen.exists(argument.name))
-				fail("E1001", 'Duplicate parameter "${argument.name}"', argument.span);
+				fail(DiagnosticCode.DUPLICATE_PARAMETER_OR_FIELD, 'Duplicate parameter "${argument.name}"',
+					argument.span);
 			seen.set(argument.name, true);
 		}
 	}
@@ -600,7 +606,7 @@ class BodyTyper implements BodyTyping {
 		context.resolution = session.syntaxResolutions.ofInitializer(field);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
 		try
-			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002",
+			typed = coerce(typeExpression(expression, scope, type), type, label, DiagnosticCode.ASSIGNMENT_OR_BINDING,
 				FieldInitializer(field.name, field.declarationSpan == null ? field.span : field.declarationSpan))
 		catch (error:haxe.Exception) {
 			session.monomorphs.discard(frame);
@@ -634,16 +640,16 @@ class BodyTyper implements BodyTyping {
 			provisional(self);
 			var value = typeExpression(expression, scope, null);
 			if (TypeRelations.equals(value.type, TNull))
-				fail("E1002",
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					'Cannot infer the type of $field: nothing in its initializer fixes the type of its null value; annotate the field\'s type',
 					span);
 			compiler.types.Monomorphs.unify(self, value.type);
 			var unfixed = compiler.types.Monomorphs.firstUnfixed(value.type);
 			if (unfixed != null)
-				fail("E1002",
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					'Cannot infer the type of $field: nothing in its initializer fixes ${unfixed.origin}; annotate the field\'s type',
 					span);
-			typed = coerce(value, value.type, isStatic ? 'static $field' : field, "E1002");
+			typed = coerce(value, value.type, isStatic ? 'static $field' : field, DiagnosticCode.ASSIGNMENT_OR_BINDING);
 		} catch (error:haxe.Exception) {
 			session.monomorphs.discard(frame);
 			throw error;
@@ -679,7 +685,8 @@ class BodyTyper implements BodyTyping {
 		// The literals' structures close once their fields' type variables are settled: each is named after its final fields.
 		session.monomorphs.closeFrame(frame);
 		if (unfixed != null)
-			fail("E1003", 'Cannot infer ${unfixed.origin}: nothing after it fixes it; give it a type', unfixed.span);
+			fail(DiagnosticCode.TYPE_CONSTRAINT,
+				'Cannot infer ${unfixed.origin}: nothing after it fixes it; give it a type', unfixed.span);
 		for (check in frame.deferred)
 			check();
 		var map = new compiler.types.TypedTypeMap(frame.literals.length == 0
@@ -730,9 +737,10 @@ class BodyTyper implements BodyTyping {
 				case AnnotatedStatement(_, inner, _):
 					validateDeferredControl([inner], loopDepth);
 				case Return(_, span), ReturnVoid(span):
-					fail("E1019", "Cannot return from a deferred statement", span);
+					fail(DiagnosticCode.PATTERN_OR_DEFER, "Cannot return from a deferred statement", span);
 				case Break(span), Continue(span) if (loopDepth == 0):
-					fail("E1019", "Cannot leave a deferred statement with break or continue", span);
+					fail(DiagnosticCode.PATTERN_OR_DEFER, "Cannot leave a deferred statement with break or continue",
+						span);
 				case If(_, yes, no, _):
 					validateDeferredControl(yes, loopDepth);
 					validateDeferredControl(no, loopDepth);
@@ -787,7 +795,7 @@ class BodyTyper implements BodyTyping {
 				if (isNoReturnPlaceholder(output, statements[statementIndex]))
 					continue;
 				// Every statement after it is unreachable too: the first is reported.
-				var unreachable = new Diagnostic("E1012", "Unreachable statement",
+				var unreachable = new Diagnostic(DiagnosticCode.UNREACHABLE_STATEMENT, "Unreachable statement",
 					statementSpan(statements[statementIndex]));
 				throw failed == null ? new CompileError(unreachable) : new CompileError(failed[0],
 					failed.slice(1).concat([unreachable]));
@@ -929,7 +937,8 @@ class BodyTyper implements BodyTyping {
 					};
 					var contract = lowerType(NamedType("Disposable"), span);
 					if (!satisfiesDisposable(element, contract))
-						fail("E1002", 'Scoped binding "$name" requires Disposable conformance', span);
+						fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+							'Scoped binding "$name" requires Disposable conformance', span);
 					bound.scoped = true;
 					context.scopedBindings.set(bound.id, name);
 					// The cleanup reads the binding this statement declares, by its declaration.
@@ -1129,7 +1138,7 @@ class BodyTyper implements BodyTyping {
 				predicates = enumPattern.predicates;
 			} else if (!isCatchAll) {
 				typedValue = coerce(typePatternValue(elementPattern, scope, elementType), elementType,
-					"array switch pattern", "E1019");
+					"array switch pattern", DiagnosticCode.PATTERN_OR_DEFER);
 				var literal = enumLiteral(typedValue);
 				if (literal != null)
 					constructorIndex = literal.index;
@@ -1143,7 +1152,7 @@ class BodyTyper implements BodyTyping {
 						default: false;
 					});
 					if (needsConformance && !DeclaredConformance.supportsEquality(session, elementType))
-						fail("E1025",
+						fail(DiagnosticCode.CONFORMANCE,
 							'Type "${compiler.semantic.SemanticSignature.display(elementType)}" does not conform to Equatable',
 							typedValue.span);
 					if (DeclaredConformance.usesEquality(session, elementType)) {
@@ -1178,14 +1187,15 @@ class BodyTyper implements BodyTyping {
 			case Variable("_", _):
 			case ArrayLiteral(values, span):
 				if (values.length != elementTypes.length)
-					fail("E1019",
+					fail(DiagnosticCode.PATTERN_OR_DEFER,
 						'Tuple pattern has ${values.length} elements, but the switch subject has ${elementTypes.length}',
 						span);
 				arrayPattern = typeArrayPatternElements(values, elementTypes, scope);
 			case Variable(_, span), Capture(_, _, span):
-				fail("E1019", "Cannot bind matched tuple to variable, use _ instead", span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER, "Cannot bind matched tuple to variable, use _ instead", span);
 			default:
-				fail("E1019", 'Tuple switch case must be _ or an array pattern of ${elementTypes.length} elements',
+				fail(DiagnosticCode.PATTERN_OR_DEFER,
+					'Tuple switch case must be _ or an array pattern of ${elementTypes.length} elements',
 					caseSpan);
 		}
 		return {
@@ -1238,7 +1248,8 @@ class BodyTyper implements BodyTyping {
 				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
 				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
-					fail("E1019", 'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
+					fail(DiagnosticCode.PATTERN_OR_DEFER,
+						'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
 				var bindings:Array<TypedSwitchBinding> = [],
 					predicates:Array<TypedSwitchPredicate> = [];
 				for (index in 0...arguments.length) {
@@ -1345,16 +1356,17 @@ class BodyTyper implements BodyTyping {
 									for (field in fields) {
 										var expectedField = ExpressionTyper.anonymousField(expectedFields, field.name);
 										if (expectedField == null)
-											fail("E1019", 'Unknown anonymous field "${field.name}" in enum pattern',
+											fail(DiagnosticCode.PATTERN_OR_DEFER,
+												'Unknown anonymous field "${field.name}" in enum pattern',
 												field.span);
 										switch field.value {
 											case Variable("_", _):
 											default:
 												var typed = coerce(typePatternValue(field.value, new Scope(),
 													expectedField.type), expectedField.type,
-													"enum object payload pattern", "E1019");
+													"enum object payload pattern", DiagnosticCode.PATTERN_OR_DEFER);
 												if (constantPatternKey(typed) == null)
-													fail("E1019",
+													fail(DiagnosticCode.PATTERN_OR_DEFER,
 														"Enum object payload patterns must be constants or '_'",
 														patternSpan);
 												predicates.push({
@@ -1375,7 +1387,8 @@ class BodyTyper implements BodyTyping {
 										}
 									}
 								default:
-									fail("E1019", "Anonymous object payload patterns require an anonymous value",
+									fail(DiagnosticCode.PATTERN_OR_DEFER,
+										"Anonymous object payload patterns require an anonymous value",
 										patternSpan);
 							}
 						case ArrayLiteral(values, patternSpan):
@@ -1431,7 +1444,8 @@ class BodyTyper implements BodyTyping {
 													storageType));
 										}
 								default:
-									fail("E1019", "Array payload pattern requires an Array value", patternSpan);
+									fail(DiagnosticCode.PATTERN_OR_DEFER,
+										"Array payload pattern requires an Array value", patternSpan);
 							}
 						default:
 							predicates.push(typeEnumPredicate(argument, parameterType, storageType, index, null));
@@ -1478,7 +1492,7 @@ class BodyTyper implements BodyTyping {
 			?temporary:compiler.syntax.Ast.TemporaryLocal):compiler.types.analysis.Scope.LocalBinding {
 		rejectMatchPatternVariable(span);
 		if (scope.definesHere(name))
-			fail("E1019", 'Variable $name is bound multiple times', span);
+			fail(DiagnosticCode.PATTERN_OR_DEFER, 'Variable $name is bound multiple times', span);
 		var binding = scope.define(name, type, span, true, null, false, null, null, temporary);
 		var recorded = patternNames;
 		if (recorded != null)
@@ -1506,7 +1520,7 @@ class BodyTyper implements BodyTyping {
 	public function rejectMatchPatternVariable(span:SourceSpan):Void {
 		for (pattern in context.postfixMatchPatterns)
 			if (pattern.file == span.file && pattern.start <= span.start && span.end <= pattern.end)
-				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER, "Pattern variables are not allowed in .match patterns", span);
 	}
 
 
@@ -1550,7 +1564,8 @@ class BodyTyper implements BodyTyping {
 		return switch value {
 			case Capture(name, pattern, span):
 				switch pattern {
-					case Capture(_, _, innerSpan): fail("E1019", "A case value can be captured by only one name",
+					case Capture(_, _, innerSpan): fail(DiagnosticCode.PATTERN_OR_DEFER,
+						"A case value can be captured by only one name",
 						innerSpan);
 					default:
 				}
@@ -1644,11 +1659,11 @@ class BodyTyper implements BodyTyping {
 				expectedName = compiler.semantic.SemanticSignature.display(expected),
 				constructorName = lastPathSegment(name);
 			if (!isAssignable(found, expected))
-				fail("E1019",
+				fail(DiagnosticCode.PATTERN_OR_DEFER,
 					'$foundName should be $expectedName: the case pattern names constructor "$constructorName" of $foundName, but the value matched is $expectedName',
 					span);
 			// Haxe matches a constructor against a Dynamic value too; here only a value known to be of an enum can be matched.
-			fail("E1019",
+			fail(DiagnosticCode.PATTERN_OR_DEFER,
 				'Constructor "$constructorName" of $foundName cannot be matched against a value of type $expectedName; give the matched value its enum type',
 				span);
 		}
@@ -1710,7 +1725,7 @@ class BodyTyper implements BodyTyping {
 							arrayIndex: arrayIndex
 						};
 					default:
-						fail("E1019", "Array payload pattern requires an Array value", span);
+						fail(DiagnosticCode.PATTERN_OR_DEFER, "Array payload pattern requires an Array value", span);
 				}
 			default:
 		}
@@ -1719,9 +1734,10 @@ class BodyTyper implements BodyTyping {
 			default: value;
 		};
 		var typed = coerce(typePatternValue(resolvedValue, new Scope(), type), type, "enum payload pattern",
-			"E1019");
+			DiagnosticCode.PATTERN_OR_DEFER);
 		if (constantPatternKey(typed) == null)
-			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);
+			fail(DiagnosticCode.PATTERN_OR_DEFER, "Enum switch payload patterns must be constants, local names, or '_'",
+				typed.span);
 		return {
 			value: typed,
 			arrayLength: -1,
@@ -1898,7 +1914,8 @@ class BodyTyper implements BodyTyping {
 		span = referencePrefixSpan(name, span);
 		// Haxe checks an instance field's typed initializer for `this`, which a member read through it is too.
 		if (name == "this" && context.memberInitializer)
-			fail("E1005", "Cannot access this or other member field in variable initialization", span);
+			fail(DiagnosticCode.NAME_OR_MEMBER, "Cannot access this or other member field in variable initialization",
+				span);
 		var binding = bound != null ? bound : referenceBinding(referenceName, referenceSpan, name, scope);
 		var type = binding == null ? null : scope.typeOf(binding);
 		// A local whose type a use has since fixed reads as that type.
@@ -1907,13 +1924,13 @@ class BodyTyper implements BodyTyping {
 		return if (binding != null && type != null) {
 			var called = binding.localFunction;
 			if (called != null && called.isInline == true)
-				fail("E1007", "Cannot create closure on inline closure", span);
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER, "Cannot create closure on inline closure", span);
 			if (!scope.privateMapUseIsKnownFor(binding, name, span))
-				fail("E9001",
+				fail(DiagnosticCode.INTERNAL_ANALYSIS,
 					'Internal compiler error: "$name" was analysed as a map nothing else can reach, but this use was not seen by that analysis',
 					span);
 			if (!scope.isAssignedBinding(binding))
-				fail("E1023", 'Local "$name" may be used before assignment', span);
+				fail(DiagnosticCode.DEFINITE_ASSIGNMENT, 'Local "$name" may be used before assignment', span);
 			var pathConstant = binding.keyPathConstant;
 			if (pathConstant != null)
 				return new TypedExpression(TCall(pathConstant, []), type, span);
@@ -2064,11 +2081,13 @@ class BodyTyper implements BodyTyping {
 								return EnumAbstractValues.typed(this, unqualifiedAbstract, value, span);
 					var thisType = scope.receiverType();
 					if (thisType == null)
-						throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+						throw new CompileError(Diagnostic.unresolved(DiagnosticCode.NAME_OR_MEMBER,
+							UnresolvedNameKind.WantedVariable, name,
 							span));
 					var field = findFieldType(thisType, name);
 					if (field == null)
-						throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+						throw new CompileError(Diagnostic.unresolved(DiagnosticCode.NAME_OR_MEMBER,
+							UnresolvedNameKind.WantedVariable, name,
 							span));
 					typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 				} else {
@@ -2096,9 +2115,9 @@ class BodyTyper implements BodyTyping {
 							if (enumDecl.cases[i].name == enumCaseName)
 								index = i;
 						if (index < 0)
-							fail("E1005", 'Unknown enum case "$name"', span);
+							fail(DiagnosticCode.NAME_OR_MEMBER, 'Unknown enum case "$name"', span);
 						if (enumDecl.cases[index].params.length > 0)
-							fail("E1008", 'Enum case "$name" requires constructor arguments', span);
+							fail(DiagnosticCode.CALL_FORM, 'Enum case "$name" requires constructor arguments', span);
 						var literalType:CompilerType = isEnumAlias ? qualifiedEnum : enumLiteralType(enumDecl,
 							expectedType,
 							span);
@@ -2201,7 +2220,8 @@ class BodyTyper implements BodyTyping {
 							return (switch (expectedResult) {
 								case TDynamic: true;
 								default: false;
-							}) ? value : coerce(value, expectedType, "annotated lambda", "E1003");
+							}) ? value : coerce(value, expectedType, "annotated lambda",
+								DiagnosticCode.TYPE_CONSTRAINT);
 						default:
 					}
 				default:
@@ -2259,7 +2279,7 @@ class BodyTyper implements BodyTyping {
 			case TNever: false;
 			default: true;
 		}))
-			typedResult = coerce(typedResult, expectedType, "block expression", "E1003");
+			typedResult = coerce(typedResult, expectedType, "block expression", DiagnosticCode.TYPE_CONSTRAINT);
 		if ((switch (typedResult.type) {
 			case TNever: false;
 			default: true;
@@ -2342,7 +2362,7 @@ class BodyTyper implements BodyTyping {
 			case TField(_, _):
 				var access = unwrappedCast(object), described = describeAccess(access);
 				if (described != null && !scope.accessWasCleared(access))
-					fail("E1005",
+					fail(DiagnosticCode.NAME_OR_MEMBER,
 						'Field "$name" requires an object: "$described" may be null. Check it first ("if (value != null) ...").',
 						span);
 				described == null ? null
@@ -2351,7 +2371,7 @@ class BodyTyper implements BodyTyping {
 				null;
 		};
 		if (reason != null)
-			fail("E1005",
+			fail(DiagnosticCode.NAME_OR_MEMBER,
 				'Field "$name" requires an object: $reason. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.',
 				span);
 	}
@@ -2422,7 +2442,7 @@ class BodyTyper implements BodyTyping {
 		try {
 			var value = typeExpression(expression, new Scope(), expected);
 			initializer = coerce(value, expected == null ? value.type : expected, 'inline field "$owner.$name"',
-				"E1002");
+				DiagnosticCode.ASSIGNMENT_OR_BINDING);
 		} catch (error:haxe.Exception) {
 			leaveBody(body);
 			throw error;
@@ -2496,14 +2516,14 @@ class BodyTyper implements BodyTyping {
 		}
 		switch typedObject.type {
 			case TNullable(_):
-				fail("E1005", 'Field "$name" requires an object', span);
+				fail(DiagnosticCode.NAME_OR_MEMBER, 'Field "$name" requires an object', span);
 			default:
 		}
 		if (name == "ref") {
 			var pointee = rawPointerPointeeType(typedObject.type);
 			if (pointee != null) {
 				if (flatRawPointerPointee(typedObject.type) == null && !ExpressionTyper.deferredLayout(pointee))
-					fail("E1022",
+					fail(DiagnosticCode.NATIVE_OR_CATCH,
 						'RawPtr.ref requires a Flat struct pointee; "$pointee" has no writable Flat field layout',
 						span);
 				return new TypedExpression(TCall("$rawptr.ref.flat", [typedObject]), pointee, span);
@@ -2545,7 +2565,8 @@ class BodyTyper implements BodyTyping {
 				case TStringLiteral(value) if (value.length == 1):
 					return new TypedExpression(TIntLiteral(value.charCodeAt(0)), TInt, span);
 				case TStringLiteral(_):
-					fail("E1007", "String literal .code requires exactly one character", span);
+					fail(DiagnosticCode.DECLARATION_OR_MODIFIER, "String literal .code requires exactly one character",
+						span);
 				default:
 			}
 		var platformField = PlatformAbi.field(typedObject.type, name);
@@ -2592,7 +2613,8 @@ class BodyTyper implements BodyTyping {
 					&& !session.isReadOnlyReceiver(methodKey))
 					ValuePlaceRules.rejectObservableMutation(session, typedObject, span);
 				if (isGeneric(method))
-					fail("E1007", "Generic instance method values are not supported yet", span);
+					fail(DiagnosticCode.DECLARATION_OR_MODIFIER, "Generic instance method values are not supported yet",
+						span);
 				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type,
 					resolvedMethodInfo.owner)),
 					arguments = session.declarations.types.argumentTypes(method, substitutions),
@@ -2670,7 +2692,7 @@ class BodyTyper implements BodyTyping {
 		var result = findStaticFieldNullable(className, name);
 		if (result != null)
 			return result;
-		throw new CompileError(new Diagnostic("E1005",
+		throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER,
 			'Unknown static field "${AbstractStatics.displayOwner(className)}.$name"', span));
 	}
 
@@ -2688,7 +2710,7 @@ class BodyTyper implements BodyTyping {
 			return;
 		for (field in classDecl.fields)
 			if (field.isStatic && field.isInline && field.name == name)
-				fail("E1002", 'Cannot assign to inline field "$owner.$name"', span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Cannot assign to inline field "$owner.$name"', span);
 	}
 
 	public function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
@@ -2808,10 +2830,11 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
-	public function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:String,
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:DiagnosticCode,
 			?use:NullSafetyUse):TypedExpression {
 		rejectScopedDynamic(value, expected);
-		return conversionResolver.coerce(value, expected, context, code == null ? "E1009" : code, use);
+		return conversionResolver.coerce(value, expected, context,
+			code == null ? DiagnosticCode.VALUE_CONVERSION : code, use);
 	}
 
 	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
@@ -2827,7 +2850,8 @@ class BodyTyper implements BodyTyping {
 		})) {
 			var name = scopedSource(value);
 			if (name != null)
-				fail("E1002", 'Scoped binding "$name" cannot be converted to Dynamic', value.span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Scoped binding "$name" cannot be converted to Dynamic',
+					value.span);
 		}
 
 	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
@@ -2944,7 +2968,7 @@ class BodyTyper implements BodyTyping {
 				}
 		if (declaredBy.length > 1) {
 			declaredBy.sort(Reflect.compare);
-			fail("E1005",
+			fail(DiagnosticCode.NAME_OR_MEMBER,
 				'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}'
 				+ '. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
 				span);
@@ -2961,7 +2985,7 @@ class BodyTyper implements BodyTyping {
 				if (enumCase.name != name || enumCase.params.length != 0)
 					continue;
 				if (enumName != null)
-					fail("E1005", 'Ambiguous enum value "$name"', span);
+					fail(DiagnosticCode.NAME_OR_MEMBER, 'Ambiguous enum value "$name"', span);
 				enumName = entry.name;
 				index = candidateIndex;
 			}
@@ -3052,7 +3076,8 @@ class BodyTyper implements BodyTyping {
 		if (interfaceProperty != null) {
 			var setter = InterfaceProperties.accessor(session, interfaceProperty, false, span),
 				type = InterfaceProperties.typeOf(session, object.type, interfaceProperty),
-				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002",
+				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"',
+					DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					Assignment(span));
 			if (assigned != null)
 				value = assigned.bind(value, value.type);
@@ -3067,7 +3092,8 @@ class BodyTyper implements BodyTyping {
 			return null;
 		var setter = AbstractProperties.accessor(session, property, false, span),
 			type = AbstractProperties.typeOf(session, object.type, property),
-			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002", Assignment(span));
+			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"',
+				DiagnosticCode.ASSIGNMENT_OR_BINDING, Assignment(span));
 		if (assigned != null)
 			value = assigned.bind(value, value.type);
 		var call = callResolver.typeAbstractAccessorCall(object, setter, [value], span, scope);
@@ -3267,13 +3293,14 @@ class BodyTyper implements BodyTyping {
 
 	/** The index of a `Dynamic` value, which must be an Int as Haxe requires (`d["key"]` is an error there too). */
 	public function dynamicIndex(index:TypedExpression):TypedExpression
-		return coerce(ConversionResolver.plainValue(index, this), TInt, "array index", "E1014");
+		return coerce(ConversionResolver.plainValue(index, this), TInt, "array index",
+			DiagnosticCode.INDEX_OR_ITERATION);
 
 	public function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
 		return switch type {
 			case TArray(element): element;
 			default:
-				fail("E1015", "Indexing requires an Array value", span);
+				fail(DiagnosticCode.ARRAY_REQUIRED, "Indexing requires an Array value", span);
 				TVoid;
 		};
 
@@ -3355,7 +3382,7 @@ class BodyTyper implements BodyTyping {
 		}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 
 	static function sameType(left:CompilerType, right:CompilerType):Bool

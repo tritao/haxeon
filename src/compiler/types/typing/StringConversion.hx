@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
@@ -75,7 +76,8 @@ class StringConversion {
 			call =
 				bodyTyper.coerce(bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
 				MethodCall(TemporaryVariable(present.temporary,
-				span), "toString", [], span), span), inner, TString), TString, "string conversion", "E1010");
+				span), "toString", [], span), span), inner, TString), TString, "string conversion",
+				DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		if (!nullable)
 			return new TypedExpression(TBlockExpression([whole.statement], call), TString, span);
 		var absent = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type,
@@ -102,14 +104,15 @@ class StringConversion {
 		if (named != null)
 			return named;
 		if (isStringConvertible(session, value.type))
-			return bodyTyper.coerce(value, TString, "string conversion", "E1010");
+			return bodyTyper.coerce(value, TString, "string conversion", DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		switch value.type {
 			// A Null<String> is the same reference as a String; conversion itself writes null as "null".
 			case TNullable(inner) if (TypeRelations.equals(inner, TString)):
 				return new TypedExpression(TCast(value), TString, value.span);
 			default:
 		}
-		var dynamicValue = bodyTyper.coerce(value, TDynamic, "string conversion", "E1010");
+		var dynamicValue = bodyTyper.coerce(value, TDynamic, "string conversion",
+			DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		if (TypeRelations.equals(value.type, TFloat) || TypeRelations.equals(value.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STD);
 			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);

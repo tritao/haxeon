@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstField;
@@ -54,7 +55,7 @@ class AbstractProperties {
 		MemberAccess.abstractProperty(session, property.declaration, property.field, span);
 		var access = read ? property.field.readAccess : property.field.writeAccess;
 		if (access != (read ? GetAccess : SetAccess))
-			throw new CompileError(new Diagnostic("E1024",
+			throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 				'This expression cannot be accessed for ${read ? "reading" : "writing"}', span));
 		return (read ? "get_" : "set_") + property.field.name;
 	}
@@ -82,11 +83,12 @@ class AbstractProperties {
 			if (field.isStatic)
 				continue;
 			if (field.readAccess == null)
-				fail("E1002", "Cannot declare member variable in abstract", field.span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, "Cannot declare member variable in abstract", field.span);
 			if (!isAccessor(field.readAccess, GetAccess) || !isAccessor(field.writeAccess, SetAccess))
-				fail("E1002", "Member property accessors must be get/set or never", field.span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, "Member property accessors must be get/set or never",
+					field.span);
 			if (field.initializer != null)
-				fail("E1002", "on field that is not a real variable", field.span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, "on field that is not a real variable", field.span);
 			if (field.readAccess == GetAccess)
 				requireAccessor(session, declaration, field, "get_" + field.name);
 			if (field.writeAccess == SetAccess)
@@ -101,9 +103,10 @@ class AbstractProperties {
 		for (method in declaration.methods)
 			if (method.name == name && !method.isStatic)
 				return;
-		fail("E1002", 'Method $name required by property ${field.name} is missing', field.span);
+		fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Method $name required by property ${field.name} is missing',
+			field.span);
 	}
 
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

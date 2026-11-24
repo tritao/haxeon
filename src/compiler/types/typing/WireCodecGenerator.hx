@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.semantic.DeclarationReads;
 import compiler.types.typing.HelperRequests.HelperRequest;
@@ -88,7 +89,8 @@ class WireCodecGenerator {
 		type = session.monomorphs.closeReached(type);
 		if (!isRequestType(session, type)) {
 			var format = json ? "JSON" : "MessagePack";
-			BodyTyper.fail("E1024", '$format does not support type "$type" in the current wire profile', span);
+			BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+				'$format does not support type "$type" in the current wire profile', span);
 		}
 		var key = typeKey(type), request:WireCodecRequest = {type: type, origin: origin, span: span};
 		var added = session.output.requests.add(json ? JsonCodecHelper(key, request) : WireCodecHelper(key, request));
@@ -366,7 +368,7 @@ class WireCodecGenerator {
 			if (annotated) {
 				validateWireMarker(alias.metadata);
 				if (explicit != null)
-					BodyTyper.fail("E1024",
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 						'Wire typedefs "${explicit.name}" and "${alias.name}" have the same structural type',
 						alias.span);
 				explicit = alias;
@@ -412,10 +414,11 @@ class WireCodecGenerator {
 			};
 			var id = memberId(metadata, owner + "." + field.name, position);
 			if (id != 0 && ids.exists(id))
-				BodyTyper.fail("E1024", 'Duplicate @:id($id) in $owner', position);
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Duplicate @:id($id) in $owner', position);
 			ids.set(id, field.name);
 			if (!isRequestType(session, field.type))
-				BodyTyper.fail("E1024", 'Wire record field "$owner.${field.name}" has unsupported type "${field.type}"',
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+					'Wire record field "$owner.${field.name}" has unsupported type "${field.type}"',
 					position);
 			result.push({field: field, id: id});
 		}
@@ -437,7 +440,8 @@ class WireCodecGenerator {
 
 	function checkKeyMode(named:Bool, id:Int, member:String, span:SourceSpan):Void {
 		if (!named && id == 0)
-			BodyTyper.fail("E1024", 'Wire member "$member" needs @:id(n): cannot mix named and numbered members', span);
+			BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+				'Wire member "$member" needs @:id(n): cannot mix named and numbered members', span);
 	}
 
 	function collectType(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>,
@@ -445,7 +449,8 @@ class WireCodecGenerator {
 			reachable:Map<String, WireCodecRequest>, visiting:Map<String, Bool>, path:Array<String>, origin:String,
 			span:SourceSpan):Void {
 		if (!isRequestType(session, type))
-			BodyTyper.fail("E1024", 'MessagePack does not support type "$type" in the current wire profile', span);
+			BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+				'MessagePack does not support type "$type" in the current wire profile', span);
 		var key = typeKey(type);
 		if (reachable.exists(key))
 			return;
@@ -454,7 +459,7 @@ class WireCodecGenerator {
 				case TInstance(NominalKind.Enum, _, _): "enum";
 				default: "record";
 			};
-			BodyTyper.fail("E1024",
+			BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 				'MessagePack $schemaKind schema cannot be recursive (${path.concat([key]).join(" -> ")})', span);
 		}
 		visiting.set(key, true);
@@ -468,16 +473,20 @@ class WireCodecGenerator {
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = classes.get(name);
 				if (declaration == null)
-					BodyTyper.fail("E1024", 'MessagePack record "$name" is not available in the typed program', span);
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						'MessagePack record "$name" is not available in the typed program', span);
 				if (declaration.base != null)
-					BodyTyper.fail("E1024", 'MessagePack record "$name" cannot extend another class yet',
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						'MessagePack record "$name" cannot extend another class yet',
 						declaration.span);
 				validateWireMarker(session.classDecls.get(name).metadata);
 				if (declaration.isNativeValue)
-					BodyTyper.fail("E1024", 'Wire record "$name" requires managed storage', span);
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Wire record "$name" requires managed storage',
+						span);
 				var fields = serializableFields(session, declaration);
 				if (fields.length == 0)
-					BodyTyper.fail("E1024", 'MessagePack record "$name" must declare at least one instance field',
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						'MessagePack record "$name" must declare at least one instance field',
 						declaration.span);
 				for (wireField in fields)
 					visit(wireField.field.type, wireField.field.span);
@@ -486,7 +495,8 @@ class WireCodecGenerator {
 				var declaration = requiredEnum(enums, name, span),
 					cases = wireEnumCases(declaration, span);
 				if (cases.length == 0)
-					BodyTyper.fail("E1024", 'MessagePack enum "$name" must declare at least one constructor',
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						'MessagePack enum "$name" must declare at least one constructor',
 						declaration.span);
 				for (wireCase in cases)
 					for (parameter in wireCase.caseDecl.params)
@@ -517,15 +527,15 @@ class WireCodecGenerator {
 					break;
 				}
 			if (!hasDirectStorage(field))
-				BodyTyper.fail("E1024",
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 					'MessagePack record field "${declaration.name}.${field.name}" must have direct storage',
 					field.span);
 			if (!isRequestType(session, field.type))
-				BodyTyper.fail("E1024",
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 					'MessagePack record field "${declaration.name}.${field.name}" has unsupported type "${field.type}"',
 					field.span);
 			if (field.initializer != null && !isWireDefaultExpression(field.initializer))
-				BodyTyper.fail("E1024",
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 					'MessagePack record field "${declaration.name}.${field.name}" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal',
 					field.span);
 			var id = memberId(field.metadata, declaration.name + "." + field.name, field.span);
@@ -533,7 +543,7 @@ class WireCodecGenerator {
 				var previous = ids.get(id);
 				if (previous == null)
 					throw new InternalError('Missing MessagePack record field for @:id($id)');
-				BodyTyper.fail("E1024",
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 					'MessagePack record fields "${declaration.name}.${previous.name}" and "${declaration.name}.${field.name}" use duplicate @:id($id)',
 					field.span);
 			}
@@ -557,17 +567,20 @@ class WireCodecGenerator {
 			if (annotation.name != "id")
 				continue;
 			if (id != 0)
-				BodyTyper.fail("E1024", 'Wire member "$name" cannot declare @:id more than once', annotation.span);
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+					'Wire member "$name" cannot declare @:id more than once', annotation.span);
 			if (annotation.arguments.length != 1)
-				BodyTyper.fail("E1024", '@:id requires exactly one integer argument', annotation.span);
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, '@:id requires exactly one integer argument',
+					annotation.span);
 			switch annotation.arguments[0] {
 				case compiler.syntax.Ast.AstExpression.IntegerLiteral(value, _):
 					id = value;
 				default:
-					BodyTyper.fail("E1024", '@:id requires an integer literal argument', annotation.span);
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, '@:id requires an integer literal argument',
+						annotation.span);
 			}
 			if (id <= 0)
-				BodyTyper.fail("E1024", '@:id must be a positive integer', span);
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, '@:id must be a positive integer', span);
 		}
 		return id;
 	}
@@ -581,7 +594,7 @@ class WireCodecGenerator {
 				var previous = ids.get(id);
 				if (previous == null)
 					throw new InternalError('Missing MessagePack enum constructor for @:id($id)');
-				BodyTyper.fail("E1024",
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 					'MessagePack enum "${declaration.name}" constructors "${previous.name}" and "${caseDecl.name}" use duplicate @:id($id)',
 					caseDecl.span);
 			}
@@ -1421,7 +1434,8 @@ class WireCodecGenerator {
 		for (metadata in annotations)
 			if (metadata.name == "wire") {
 				if (metadata.arguments.length != 0)
-					BodyTyper.fail("E1024", '@:wire does not accept arguments', metadata.span);
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, '@:wire does not accept arguments',
+						metadata.span);
 			}
 	}
 
@@ -1440,14 +1454,16 @@ class WireCodecGenerator {
 	function requiredClass(classes:Map<String, TypedClass>, name:String, span:SourceSpan):TypedClass {
 		var declaration = classes.get(name);
 		if (declaration == null)
-			BodyTyper.fail("E1024", 'MessagePack record "$name" is not available in the typed program', span);
+			BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+				'MessagePack record "$name" is not available in the typed program', span);
 		return cast declaration;
 	}
 
 	function requiredEnum(enums:Map<String, TypedEnum>, name:String, span:SourceSpan):TypedEnum {
 		var declaration = enums.get(name);
 		if (declaration == null)
-			BodyTyper.fail("E1024", 'MessagePack enum "$name" is not available in the typed program', span);
+			BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+				'MessagePack enum "$name" is not available in the typed program', span);
 		return cast declaration;
 	}
 

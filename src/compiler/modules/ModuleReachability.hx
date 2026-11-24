@@ -1,6 +1,7 @@
 package compiler.modules;
 
 import compiler.core.Diagnostic;
+import compiler.core.DiagnosticCode;
 import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.CancellationToken;
@@ -62,7 +63,8 @@ class ModuleReachability {
 			for (dependency in state.dependencies)
 				if (!modules.exists(dependency)) {
 					var span = state.source.span(0, state.source.bytes.length);
-					var diagnostic = Diagnostic.unresolved("E2001", UnresolvedNameKind.WantedModule, dependency, span);
+					var diagnostic = Diagnostic.unresolved(DiagnosticCode.MISSING_MODULE,
+						UnresolvedNameKind.WantedModule, dependency, span);
 					state.diagnostics.push(diagnostic);
 					throw new CompileError(diagnostic);
 				}

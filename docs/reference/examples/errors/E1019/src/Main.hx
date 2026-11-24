@@ -1,0 +1,7 @@
+class Main {
+	static function main():Void {
+		defer {
+			return;
+		}
+	}
+}

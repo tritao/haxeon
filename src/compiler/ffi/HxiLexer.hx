@@ -2,6 +2,7 @@ package compiler.ffi;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
 import compiler.documentation.Documentation.DocumentationComment;
@@ -40,7 +41,7 @@ class HxiLexer {
 					&& !(bytes.get(position) == "*".code && bytes.get(position + 1) == "/".code))
 					position++;
 				if (position + 1 >= bytes.length)
-					throw new CompileError(new Diagnostic("E3001", "Unterminated HXI block comment",
+					throw new CompileError(new Diagnostic(DiagnosticCode.HXI_ERROR, "Unterminated HXI block comment",
 						source.span(commentStart, position)));
 				if (commentStart + 2 < bytes.length && bytes.get(commentStart + 2) == "*".code
 					&& position >= commentStart + 3)
@@ -57,7 +58,7 @@ class HxiLexer {
 				while (position < bytes.length && bytes.get(position) != "\"".code)
 					position += bytes.get(position) == "\\".code && position + 1 < bytes.length ? 2 : 1;
 				if (position >= bytes.length)
-					throw new CompileError(new Diagnostic("E3001", "Unterminated HXI string",
+					throw new CompileError(new Diagnostic(DiagnosticCode.HXI_ERROR, "Unterminated HXI string",
 						source.span(start, position)));
 				position++;
 			} else if ((code >= "A".code && code <= "Z".code) || (code >= "a".code && code <= "z".code)
@@ -96,7 +97,7 @@ class HxiLexer {
 			else if (isPunctuation(code))
 				position++;
 			else
-				throw new CompileError(new Diagnostic("E3001",
+				throw new CompileError(new Diagnostic(DiagnosticCode.HXI_ERROR,
 					'Unexpected HXI character "${String.fromCharCode(code)}"', source.span(start, start + 1)));
 			result.push({text: source.slice(start, position), span: source.span(start, position)});
 		}

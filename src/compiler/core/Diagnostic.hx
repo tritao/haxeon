@@ -27,7 +27,7 @@ typedef UnresolvedName = {
 
 /** Structured compiler feedback tied to an exact source span. */
 class Diagnostic {
-	public final code:String;
+	public final code:DiagnosticCode;
 	public final message:String;
 	public final severity:DiagnosticSeverity;
 	public final span:SourceSpan;
@@ -35,12 +35,12 @@ class Diagnostic {
 	public final unresolvedName:Null<UnresolvedName>;
 	public final notes:Array<String> = [];
 
-	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>,
+	public function new(code:DiagnosticCode, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>,
 			?unresolvedName:UnresolvedName) {
 		// A name an import made ambiguous resolves to a marker that matches nothing, so whichever check rejects it first
 		// reports the ambiguity instead, at its own span; the marker never reaches a message.
 		var ambiguity = AmbiguousName.describe(message);
-		this.code = ambiguity == null ? code : AmbiguousName.CODE;
+		this.code = ambiguity == null ? code : DiagnosticCode.AMBIGUOUS_IMPORT;
 		this.message = ambiguity == null ? message : ambiguity;
 		this.span = span;
 		this.unresolvedName = ambiguity == null ? unresolvedName : null;
@@ -48,7 +48,8 @@ class Diagnostic {
 		this.fixes = fixes == null ? [] : fixes;
 	}
 
-	public static function unresolved(code:String, kind:UnresolvedNameKind, name:String, span:SourceSpan):Diagnostic {
+	public static function unresolved(code:DiagnosticCode, kind:UnresolvedNameKind, name:String,
+			span:SourceSpan):Diagnostic {
 		var prefix = kind == UnresolvedNameKind.WantedModule ? "Missing" : "Unknown";
 		return new Diagnostic(code, '$prefix $kind "$name"', span, null, null, {kind: kind, name: name});
 	}

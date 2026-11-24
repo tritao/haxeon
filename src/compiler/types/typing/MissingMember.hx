@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.Diagnostic;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.types.FunctionTypes;
@@ -17,7 +18,7 @@ class MissingMember extends CompileError {
 	public final span:SourceSpan;
 
 	/** `at` is where the error is reported when it stands, when that is not the call itself (the member's name). */
-	public function new(code:String, message:String, span:SourceSpan, ?at:SourceSpan) {
+	public function new(code:DiagnosticCode, message:String, span:SourceSpan, ?at:SourceSpan) {
 		super(new Diagnostic(code, message, at == null ? span : at));
 		this.span = span;
 	}
@@ -27,7 +28,7 @@ class MissingMember extends CompileError {
 	 * of a missing field, at the member's name in `span`.
 	 */
 	public static function field(owner:String, name:String, span:SourceSpan):MissingMember
-		return new MissingMember("E1005", '$owner has no field $name', span,
+		return new MissingMember(DiagnosticCode.NAME_OR_MEMBER, '$owner has no field $name', span,
 			AbstractProperties.nameSpan(span, name, true));
 
 	/**

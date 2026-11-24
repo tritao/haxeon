@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.InterfaceFieldAccessors;
 import compiler.syntax.Ast.AstClass;
@@ -69,7 +70,7 @@ class InterfaceProperties {
 		MemberAccess.interfaceProperty(session, property.declaration, property.field, span);
 		var name = InterfaceFieldAccessors.accessorName(property.field, read);
 		if (name == null)
-			throw new CompileError(new Diagnostic("E1024",
+			throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 				'This expression cannot be accessed for ${read ? "reading" : "writing"}', span));
 		return property.declaration.name + "." + name;
 	}
@@ -78,14 +79,14 @@ class InterfaceProperties {
 	public static function validate(declaration:AstInterface):Void
 		for (field in declaration.fields) {
 			if (field.isStatic)
-				fail("E1002", "You can only declare static fields in extern interfaces",
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, "You can only declare static fields in extern interfaces",
 					field.declarationSpan ?? field.span);
 			var initializer = field.initializer;
 			if (initializer != null)
-				fail("E1002", "Initialization on field of interface",
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, "Initialization on field of interface",
 					compiler.syntax.Parser.expressionSpan(initializer));
 			if (field.type == null)
-				fail("E1002", "Variable requires type-hint or initialization", field.span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, "Variable requires type-hint or initialization", field.span);
 		}
 
 	/**
@@ -105,12 +106,14 @@ class InterfaceProperties {
 						var name = (read ? "get_" : "set_") + field.name,
 							method = MemberAccess.methodInfo(session, classDecl.name, name);
 						if (method == null || method.isStatic)
-							fail("E1007", 'Field $name needed by $interfaceName is missing', classNameSpan(classDecl));
+							fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+								'Field $name needed by $interfaceName is missing', classNameSpan(classDecl));
 					default:
 				}
 			if (MemberAccess.classField(session, classDecl.name, field.name, false) == null
 				&& !hasInstanceMethod(session, classDecl, field.name))
-				fail("E1007", 'Field ${field.name} needed by $interfaceName is missing', classNameSpan(classDecl));
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Field ${field.name} needed by $interfaceName is missing',
+					classNameSpan(classDecl));
 		}
 		for (field in interfaceDecl.fields) {
 			if (field.isStatic)
@@ -119,16 +122,17 @@ class InterfaceProperties {
 			if (found == null) {
 				var method = MemberAccess.methodInfo(session, classDecl.name, field.name),
 					declared = method == null ? null : session.signatures.get(method.owner + "." + field.name);
-				fail("E1007",
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
 					'Field ${field.name} has different property access than in $interfaceName (method should be ${kindOf(field)})',
 					declared == null ? classNameSpan(classDecl) : nameSpan(declared.span, field.name));
 				return;
 			}
 			var at = nameSpan(found.field.span, field.name);
 			if (!isPublic(found.field))
-				fail("E1007", 'Field ${field.name} should be public as requested by $interfaceName', at);
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					'Field ${field.name} should be public as requested by $interfaceName', at);
 			if (!unifiesKind(found.field, field))
-				fail("E1007",
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
 					'Field ${field.name} has different property access than in $interfaceName (${kindOf(found.field)} should be ${kindOf(field)})',
 					at);
 			var classType = TInstance(NominalKind.Class, classDecl.name, [
@@ -138,7 +142,8 @@ class InterfaceProperties {
 				actual = bodyTyper.findFieldType(classType, field.name),
 				expected = session.declarations.types.fieldType(interfaceDecl.name, field, interfaceSubstitutions);
 			if (actual == null || !TypeRelations.equals(actual, expected))
-				fail("E1003", 'Field ${field.name} has different type than in $interfaceName', at);
+				fail(DiagnosticCode.TYPE_CONSTRAINT, 'Field ${field.name} has different type than in $interfaceName',
+					at);
 		}
 	}
 
@@ -218,6 +223,6 @@ class InterfaceProperties {
 		return new SourceSpan(span.file, start, start + haxe.io.Bytes.ofString(simple).length);
 	}
 
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

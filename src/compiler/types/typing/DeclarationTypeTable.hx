@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -662,7 +663,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 		var chain = members.slice(first).concat(members.slice(0, first)),
 			others = [for (index in 1...chain.length) '"${chain[index]}"'],
 			function_ = inferredFunctions.get(chain[0]);
-		throw new DeclarationCycle(key, new Diagnostic("E1002",
+		throw new DeclarationCycle(key, new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 			'${function_ == null ? "Field" : "Function"} "${chain[0]}" needs a type annotation: its type depends on ${others.join(" and ")}, which '
 			+ (others.length == 1 ? "depends" : "depend") + ' on it; annotate one of them',
 			function_ == null ? fieldSpan(chain[0]) : function_.span));

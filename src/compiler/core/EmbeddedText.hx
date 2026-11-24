@@ -54,7 +54,7 @@ class EmbeddedText {
 	}
 
 	static function error(message:String, span:SourceSpan):CompileError
-		return new CompileError(new Diagnostic("E0002", message, span));
+		return new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, span));
 
 	static function validUtf8(bytes:Bytes):Bool {
 		var index = 0;

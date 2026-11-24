@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnum;
 import compiler.syntax.Ast.AstExpression;
@@ -26,13 +27,13 @@ class EnumCreation {
 			span:SourceSpan, expectedType:Null<CompilerType>):AstExpression {
 		var allEnums = name == "Type.allEnums";
 		if (allEnums ? arguments.length != 1 : arguments.length < 2 || arguments.length > 3)
-			fail("E1008",
+			fail(DiagnosticCode.CALL_FORM,
 				'Function "$name" expects ${allEnums ? "1 argument" : "2 or 3 arguments"}, got ${arguments.length}',
 				span);
 		var enumName = switch arguments[0] {
 			case Variable(value, _) if (session.enumDecls.exists(value)): value;
 			default:
-				fail("E1009",
+				fail(DiagnosticCode.VALUE_CONVERSION,
 					'$name needs an enum named where it is called; an enum held as a value is not supported yet', span);
 				"";
 		},
@@ -122,6 +123,6 @@ class EnumCreation {
 	}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

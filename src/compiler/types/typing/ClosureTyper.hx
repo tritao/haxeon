@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.semantic.LambdaName;
 import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -77,7 +78,8 @@ class ClosureTyper {
 				default: false;
 			}) && inferDynamicLambdaResult;
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
-			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}',
+			fail(DiagnosticCode.CALL_FORM,
+				'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}',
 				span);
 		BodyTyper.rejectDuplicateParameters(arguments);
 		var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
@@ -103,7 +105,8 @@ class ClosureTyper {
 				default: TNullable(argumentType);
 			};
 			if (argumentType == null)
-				fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context',
+				fail(DiagnosticCode.TYPE_CONSTRAINT,
+					'Cannot infer lambda parameter "${argument.name}" without a function context',
 					argument.span);
 			// A lambda has no direct entry: it takes `Null<T>` for an argument with a value default and fills it itself.
 			var declaredType = argumentType;
@@ -114,7 +117,7 @@ class ClosureTyper {
 			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i])
 				&& !TypeRelations.equals(declaredType, expectedFunction.arguments[i])
 				&& !session.relations.convertsInFunction(expectedFunction.arguments[i], argumentType))
-				fail("E1003", "Lambda argument type does not match its context", argument.span);
+				fail(DiagnosticCode.TYPE_CONSTRAINT, "Lambda argument type does not match its context", argument.span);
 			lambdaArguments.push({
 				name: lambdaScope.define(localName, argumentType, argument.span).id,
 				type: argumentType
@@ -173,7 +176,7 @@ class ClosureTyper {
 				}
 				// A closure that only reads a local sees whatever it holds when the closure is created, so it must be assigned by then.
 				if (!facts.freeAssigned.exists(name) && !scope.isAssignedBinding(binding))
-					fail("E1023", 'Local "$name" may be used before assignment', span);
+					fail(DiagnosticCode.DEFINITE_ASSIGNMENT, 'Local "$name" may be used before assignment', span);
 				var captureType:CompilerType = scope.typeOf(binding);
 				var declaredCaptureType = scope.declaredTypeOf(binding);
 				var cellClass:Null<String> = session.currentContext.storage.cell(binding.id),
@@ -338,7 +341,7 @@ class ClosureTyper {
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(typedBody,
 			function(type, cases) return bodyTyper.exhaustiveSwitch(type, cases)))
-			fail("E1006", 'Function $lambdaName does not return on every path', span);
+			fail(DiagnosticCode.FUNCTION_COMPLETION, 'Function $lambdaName does not return on every path', span);
 		var lambdaCells = copyMap(context.storage.cells),
 			lambdaCellTypes = copyMap(context.storage.types),
 			lambdaCellKinds = copyMap(context.storage.kinds),
@@ -412,6 +415,6 @@ class ClosureTyper {
 	}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

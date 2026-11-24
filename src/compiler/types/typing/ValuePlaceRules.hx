@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -24,7 +25,7 @@ class ValuePlaceRules {
 				if (session.relations.isValueClass(parent.type) || session.relations.isNullableValueClass(parent.type))
 					rejectObservableMutation(session, parent, span);
 				else if (isObservableField(session, parent.type, name))
-					throw new CompileError(new Diagnostic("E1027",
+					throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_PLACE,
 						'Cannot mutate a struct inside Observable field "$name"; copy the value, mutate it, and assign it back',
 						span));
 			case TCast(value), TAbiCast(value), TParameterConversion(value, _):
@@ -85,7 +86,7 @@ class ValuePlaceRules {
 	static function rejectTemporary(receiver:TypedExpression, span:SourceSpan):Void {
 		var origin = receiver.span;
 		var expression = origin.file.slice(origin.start, origin.end);
-		throw new CompileError(new Diagnostic("E1027",
+		throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_PLACE,
 			'Cannot mutate temporary struct copy produced by "$expression"; bind it to a local first', span));
 	}
 }

@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
@@ -294,6 +295,6 @@ class AbstractConversionGraph {
 				throw new InternalError(message);
 			span = declaration.span;
 		}
-		throw new CompileError(new Diagnostic("E1007", message, span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER, message, span));
 	}
 }

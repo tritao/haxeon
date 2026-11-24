@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
@@ -145,13 +146,16 @@ class ExpressionTyper {
 				expectedType);
 			case ThrowExpression(value, span): throwExpression(value, span, scope);
 			case Capture(_, _, span):
-				fail("E1019", "A capture `name = pattern` binds only where the pattern itself is matched", span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER,
+					"A capture `name = pattern` binds only where the pattern itself is matched", span);
 				null;
 			case Spread(_, span):
-				fail("E1008", "A spread `...values` passes a rest argument, as a call's last argument", span);
+				fail(DiagnosticCode.CALL_FORM, "A spread `...values` passes a rest argument, as a call's last argument",
+					span);
 				null;
 			case Extractor(_, _, span):
-				fail("E1019", "An extractor `expression => pattern` matches only as a switch case", span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER,
+					"An extractor `expression => pattern` matches only as a switch case", span);
 				null;
 			case Cast(value, target, span): typeCast(value, target, span, scope, expectedType);
 			case CheckType(value, type, span): typeCheckType(value, type, span, scope);
@@ -241,13 +245,14 @@ class ExpressionTyper {
 		if (recordName != null)
 			return typeRecordLayoutQuery(recordName, kind, field, span);
 		if (kind == OffsetOf)
-			fail("E1022", "offsetof requires a flat struct or native value record type", span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH, "offsetof requires a flat struct or native value record type", span);
 		var hxiType = try NativeLayout.fieldType(resolved) catch (_:Dynamic) {
-			fail("E1022", 'Type "$resolved" has no fixed native ABI layout', span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH, 'Type "$resolved" has no fixed native ABI layout', span);
 			cast null;
 		}, layout = HxiAbi.forTarget(session.nativeAbiTarget).layout(hxiType);
 		if (layout == null)
-			fail("E1022", 'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH,
+				'Type "$resolved" has no fixed native ABI layout for "${session.nativeAbiTarget}"', span);
 		size = switch kind {
 			case SizeOf: layout.size;
 			case AlignOf: layout.align;
@@ -289,19 +294,20 @@ class ExpressionTyper {
 			span:SourceSpan):TypedExpression {
 		var layout = session.nativeLayoutsByName.get(name);
 		if (layout == null)
-			fail("E1022", 'Record "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH,
+				'Record "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
 		var size = switch kind {
 			case SizeOf: layout.size;
 			case AlignOf: layout.alignment;
 			case OffsetOf:
 				if (field == null)
-					fail("E1022", "offsetof requires a field name", span);
+					fail(DiagnosticCode.NATIVE_OR_CATCH, "offsetof requires a field name", span);
 				var found:Null<Int> = null;
 				for (candidate in layout.fields)
 					if (candidate.name == field)
 						found = candidate.offset;
 				if (found == null)
-					fail("E1022", 'Record "$name" has no field "$field"', span);
+					fail(DiagnosticCode.NATIVE_OR_CATCH, 'Record "$name" has no field "$field"', span);
 				cast found;
 			case TypeInfo: throw new InternalError("typeInfo was dispatched before scalar layout query handling");
 		};
@@ -537,12 +543,12 @@ class ExpressionTyper {
 				span);
 		var name = descriptorRecordName(resolved);
 		if (name == null)
-			fail("E1022",
+			fail(DiagnosticCode.NATIVE_OR_CATCH,
 				'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.display(resolved)}"',
 				span);
 		var descriptor = buildNativeTypeDescriptor(resolved);
 		if (descriptor == null)
-			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
+			fail(DiagnosticCode.NATIVE_OR_CATCH, 'Value "$name" has no source declaration for typeInfo', span);
 		var descriptorType = typeInfoType(),
 			descriptorExpression = ObjectLiteral([
 				objectField("version", IntegerLiteral(descriptor.version, span), span),
@@ -592,26 +598,30 @@ class ExpressionTyper {
 			if (hasMetadata(declaration.metadata, "annotation")) {
 				validateAnnotationMarker(declaration.metadata);
 				if (declaration.isStruct != true)
-					fail("E1024", '@:annotation requires a value struct declaration', declaration.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, '@:annotation requires a value struct declaration',
+						declaration.span);
 				if (declaration.methods.length != 0)
-					fail("E1024", 'Annotation struct "${declaration.name}" cannot declare methods', declaration.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						'Annotation struct "${declaration.name}" cannot declare methods', declaration.span);
 				for (field in declaration.fields)
 					if (field.isStatic || field.type == null)
-						fail("E1024",
+						fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 							'Annotation struct "${declaration.name}" requires explicitly typed instance fields',
 							field.span);
 				if (abstractSchemas.exists(declaration.name))
-					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Duplicate annotation declaration "${declaration.name}"',
+						declaration.span);
 				structSchemas.set(declaration.name, declaration);
 			}
 		for (declaration in program.abstracts)
 			if (declaration.values != null && hasMetadata(declaration.metadata, "annotation")) {
 				if (structSchemas.exists(declaration.name))
-					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Duplicate annotation declaration "${declaration.name}"',
+						declaration.span);
 				validateAnnotationMarker(declaration.metadata);
 				var underlying = session.declarations.resolve(declaration.underlying, declaration.span, []);
 				if (!isAnnotationScalar(underlying))
-					fail("E1024",
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 						'Annotation enum abstract "${declaration.name}" must use a supported scalar representation',
 						declaration.span);
 				abstractSchemas.set(declaration.name, declaration);
@@ -627,7 +637,8 @@ class ExpressionTyper {
 			for (field in schema.fields) {
 				var expected = session.declarations.resolve(field.type, field.span, []);
 				if (!isAnnotationScalar(expected))
-					fail("E1024", 'Annotation field "${name}.${field.name}" must use a supported scalar type',
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+						'Annotation field "${name}.${field.name}" must use a supported scalar type',
 						field.span);
 				if (field.initializer != null)
 					typeAnnotationArgument(field.name, expected, field.initializer, {
@@ -657,9 +668,11 @@ class ExpressionTyper {
 			if (annotation.name == "annotation" || isBuiltInMetadata(annotation.name))
 				continue;
 			if (!annotationNames.exists(annotation.name))
-				fail("E1024", 'Unknown annotation "${annotation.name}" on "$owner"', annotation.span);
+				fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Unknown annotation "${annotation.name}" on "$owner"',
+					annotation.span);
 			if (seen.exists(annotation.name))
-				fail("E1024", 'Annotation "${annotation.name}" is repeated on "$owner"', annotation.span);
+				fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Annotation "${annotation.name}" is repeated on "$owner"',
+					annotation.span);
 			seen.set(annotation.name, true);
 			var arguments:Array<NativeTypeAnnotationArgument> = [];
 			if (structSchemas.exists(annotation.name)) {
@@ -674,19 +687,21 @@ class ExpressionTyper {
 					if (named != null) {
 						namedSeen = true;
 						if (!fieldsByName.exists(named.name))
-							fail("E1024", 'Annotation "${annotation.name}" has unknown named argument "${named.name}"',
+							fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+								'Annotation "${annotation.name}" has unknown named argument "${named.name}"',
 								named.span);
 						if (argumentsByName.exists(named.name))
-							fail("E1024",
+							fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 								'Duplicate named argument "${named.name}" for annotation "${annotation.name}"',
 								named.span);
 						argumentsByName.set(named.name, named.value);
 					} else {
 						if (namedSeen)
-							fail("E1024", "Positional annotation arguments cannot follow named arguments",
+							fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+								"Positional annotation arguments cannot follow named arguments",
 								annotation.span);
 						if (positionalCount >= fields.length)
-							fail("E1024",
+							fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 								'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
 								annotation.span);
 						argumentsByName.set(fields[positionalCount].name, argument);
@@ -701,10 +716,11 @@ class ExpressionTyper {
 						expression = field.initializer;
 					if (expression == null) {
 						if (!namedSeen && annotation.arguments.length < fields.length)
-							fail("E1024",
+							fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 								'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
 								annotation.span);
-						fail("E1024", 'Annotation "${annotation.name}" is missing required argument "${field.name}"',
+						fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+							'Annotation "${annotation.name}" is missing required argument "${field.name}"',
 							annotation.span);
 					}
 					arguments.push(typeAnnotationArgument(field.name, expected, expression, annotation));
@@ -712,16 +728,17 @@ class ExpressionTyper {
 			} else {
 				var schema = abstractSchemas.get(annotation.name);
 				if (schema == null)
-					fail("E1024", 'Unknown annotation "${annotation.name}" on "$owner"', annotation.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Unknown annotation "${annotation.name}" on "$owner"',
+						annotation.span);
 				var expected = session.declarations.resolve(schema.underlying, schema.span, []);
 				if (annotation.arguments.length != 1)
-					fail("E1024",
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 						'Annotation "${annotation.name}" expects one argument, got ${annotation.arguments.length}',
 						annotation.span);
 				var nominal = TAbstract(schema.name, [], expected),
 					typed = bodyTyper.coerce(bodyTyper.typeExpression(annotation.arguments[0], new Scope(), nominal),
 						nominal, 'annotation argument "value"',
-						"E1024");
+						DiagnosticCode.ANNOTATION_OR_SCHEMA);
 				arguments.push({
 					name: "value",
 					type: SemanticSignature.type(expected),
@@ -750,7 +767,7 @@ class ExpressionTyper {
 	function typeAnnotationArgument(name:String, expected:CompilerType, expression:AstExpression,
 			annotation:AstMetadata):NativeTypeAnnotationArgument {
 		var typed = bodyTyper.coerce(bodyTyper.typeExpression(expression, new Scope(), expected), expected,
-			'annotation argument "$name"', "E1024"),
+			'annotation argument "$name"', DiagnosticCode.ANNOTATION_OR_SCHEMA),
 			value = annotationConstant(typed, annotation);
 		return {name: name, type: SemanticSignature.type(expected), value: value};
 	}
@@ -784,7 +801,8 @@ class ExpressionTyper {
 		};
 
 	static function invalidAnnotationConstant(annotation:AstMetadata):NativeTypeAnnotationValue
-		return throw new CompileError(new Diagnostic("E1024", "Annotation values must be compile-time scalar constants",
+		return throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+			"Annotation values must be compile-time scalar constants",
 			annotation.span));
 
 	function typedMetadata(metadata:Array<AstMetadata>):Array<NativeTypeAnnotationData> {
@@ -792,14 +810,16 @@ class ExpressionTyper {
 		for (annotation in metadata) {
 			if (annotation.name == "renamedFrom") {
 				if (annotation.arguments.length != 1)
-					fail("E1024", "@:renamedFrom requires exactly one string literal", annotation.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, "@:renamedFrom requires exactly one string literal",
+						annotation.span);
 				var oldName = switch annotation.arguments[0] {
 					case StringLiteral(value, _): value;
-					case _: throw new CompileError(new Diagnostic("E1024",
+					case _: throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 						"@:renamedFrom requires exactly one string literal", annotation.span));
 				};
 				if (oldName.length == 0)
-					fail("E1024", "@:renamedFrom cannot name an empty field", annotation.span);
+					fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, "@:renamedFrom cannot name an empty field",
+						annotation.span);
 				result.push({
 					name: "renamedFrom",
 					arguments: [{name: "value", type: "String", value: StringValue(oldName)}]
@@ -839,7 +859,7 @@ class ExpressionTyper {
 	static function validateAnnotationMarker(metadata:Array<AstMetadata>):Void
 		for (annotation in metadata)
 			if (annotation.name == "annotation" && annotation.arguments.length != 0)
-				fail("E1024", "@:annotation does not accept arguments", annotation.span);
+				fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, "@:annotation does not accept arguments", annotation.span);
 
 	static function isAnnotationScalar(type:CompilerType):Bool
 		return switch type {
@@ -983,7 +1003,8 @@ class ExpressionTyper {
 						integer)) 'integer literal $integer is outside the range of native scalar ${nativeInteger.name}'
 					else "only scalar literal defaults are supported; executable and computed defaults are unsupported";
 			};
-			fail("E1024", 'Native descriptor field "$owner.$fieldName" has an unsupported default: $reason', span);
+			fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+				'Native descriptor field "$owner.$fieldName" has an unsupported default: $reason', span);
 		}
 		var valueType = switch value {
 			case IntValue(_): "Int";
@@ -1199,30 +1220,32 @@ class ExpressionTyper {
 			typedFields:Array<TypedObjectField> = [];
 		for (field in fields) {
 			if (seen.exists(field.name))
-				fail("E1001", 'Duplicate object field "${field.name}"', field.span);
+				fail(DiagnosticCode.DUPLICATE_PARAMETER_OR_FIELD, 'Duplicate object field "${field.name}"', field.span);
 			seen.set(field.name, true);
 			var expectedField = anonymousField(expectedFields, field.name);
 			if (expectedFields != null && expectedField == null)
-				fail("E1002", 'Unexpected object field "${field.name}"', field.span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Unexpected object field "${field.name}"', field.span);
 			// A field of a dynamic object is Dynamic, so its value is typed in a Dynamic context: `{items: []}` passed as
 			// Dynamic holds an Array<Dynamic>, while a value that has a type of its own keeps it.
 			var fieldExpected = expectedField != null ? expectedField.type : objectExpected == null
 				&& isDynamicExpectation(expectedType) ? TDynamic : null;
 			var value = bodyTyper.typeExpression(field.value, scope, fieldExpected);
 			if (expectedField != null)
-				value = bodyTyper.coerce(value, expectedField.type, 'object field "${field.name}"', "E1002",
+				value = bodyTyper.coerce(value, expectedField.type, 'object field "${field.name}"',
+					DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					Assignment(value.span));
 			else if ((switch (value.type) {
 				case TNull: true;
 				default: false;
 			}))
-				value = bodyTyper.coerce(value, TDynamic, 'object field "${field.name}"', "E1002");
+				value = bodyTyper.coerce(value, TDynamic, 'object field "${field.name}"',
+				DiagnosticCode.ASSIGNMENT_OR_BINDING);
 			typedFields.push({name: field.name, value: value});
 		}
 		if (expectedFields != null)
 			for (field in expectedFields)
 				if (!field.optional && !seen.exists(field.name))
-					fail("E1002", 'Missing object field "${field.name}"', span);
+					fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Missing object field "${field.name}"', span);
 		var resolvedResult:CompilerType,
 			isDynamic = objectExpected == null && isDynamicExpectation(expectedType);
 		if (objectExpected == null) {
@@ -1286,7 +1309,7 @@ class ExpressionTyper {
 			if (!dynamicContext)
 				expectedElement = session.monomorphs.create("the element type of this empty array", span);
 			if (!dynamicContext && expectedElement == null)
-				fail("E1003", "Empty array literal requires an expected element type", span);
+				fail(DiagnosticCode.TYPE_CONSTRAINT, "Empty array literal requires an expected element type", span);
 			if (expectedElement == null)
 				expectedElement = TDynamic;
 		}
@@ -1301,7 +1324,8 @@ class ExpressionTyper {
 				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType,
 					typedValue.type);
 				if (joined == null)
-					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array",
+					fail(DiagnosticCode.TYPE_CONSTRAINT,
+						"Array elements have incompatible types; use Array<Dynamic> for a mixed-type array",
 						typedValue.span);
 				elementType = joined;
 			}
@@ -1318,7 +1342,7 @@ class ExpressionTyper {
 		// Decide storage before coercing any element: a later Float or nullable value can widen it.
 		typedValues = [
 			for (value in typedValues)
-				bodyTyper.coerce(value, elementType, "array element", "E1003", ArrayItem)
+				bodyTyper.coerce(value, elementType, "array element", DiagnosticCode.TYPE_CONSTRAINT, ArrayItem)
 		];
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 	}
@@ -1345,8 +1369,10 @@ class ExpressionTyper {
 			} else
 				resolvedValue = valueType;
 			typedEntries.push({
-				key: bodyTyper.coerce(key, resolvedKey, "map key", "E1003", NamedArgument("set", "k")),
-				value: bodyTyper.coerce(value, resolvedValue, "map value", "E1003", NamedArgument("set", "v"))
+				key: bodyTyper.coerce(key, resolvedKey, "map key", DiagnosticCode.TYPE_CONSTRAINT,
+					NamedArgument("set", "k")),
+				value: bodyTyper.coerce(value, resolvedValue, "map value", DiagnosticCode.TYPE_CONSTRAINT,
+					NamedArgument("set", "v"))
 			});
 		}
 		// With nothing expected, `new Map()` has type variables for its key and value, which the first use that fixes them
@@ -1356,7 +1382,7 @@ class ExpressionTyper {
 		if (valueType == null && entries.length == 0)
 			valueType = session.monomorphs.create("the value type of this empty map", span, true);
 		if (keyType == null || valueType == null)
-			fail("E1003", "An empty map literal requires an expected key and value type", span);
+			fail(DiagnosticCode.TYPE_CONSTRAINT, "An empty map literal requires an expected key and value type", span);
 		DeclaredConformance.requireMapRuntime(session, keyType, valueType, span);
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
@@ -1477,11 +1503,11 @@ class ExpressionTyper {
 				keyType = element;
 			case TIterator(element):
 				if (valueName != null)
-					fail("E1014", "Key/value array comprehension requires a Map", span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION, "Key/value array comprehension requires a Map", span);
 				keyType = element;
 			case TRange:
 				if (valueName != null)
-					fail("E1014", "Key/value array comprehension requires a Map", span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION, "Key/value array comprehension requires a Map", span);
 				keyType = TInt;
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
@@ -1493,7 +1519,7 @@ class ExpressionTyper {
 				keyType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type,
 					false) : null;
 				if (keyType == null)
-					fail("E1014",
+					fail(DiagnosticCode.INDEX_OR_ITERATION,
 						"Array comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (keyType == null)
@@ -1529,7 +1555,7 @@ class ExpressionTyper {
 			case TBool: false;
 			default: true;
 		}))
-			fail("E1004", "Array comprehension condition must be Bool", span);
+			fail(DiagnosticCode.BOOLEAN_CONDITION, "Array comprehension condition must be Bool", span);
 		// The value is only computed where the condition holds, so it sees what the condition proves.
 		var valueScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition,
 			true, session.isPureCall);
@@ -1557,7 +1583,8 @@ class ExpressionTyper {
 				elementType = TNullable(variable);
 		}
 		if (flattenedElement == null)
-			typedValue = bodyTyper.coerce(typedValue, elementType, "array comprehension value", "E1003", ArrayItem);
+			typedValue = bodyTyper.coerce(typedValue, elementType, "array comprehension value",
+				DiagnosticCode.TYPE_CONSTRAINT, ArrayItem);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TArray(elementType),
 				resultName = "$comprehension-result:" + span.start;
@@ -1624,11 +1651,11 @@ class ExpressionTyper {
 				itemType = element;
 			case TIterator(element):
 				if (valueName != null)
-					fail("E1014", "Key/value map comprehension requires a Map", span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION, "Key/value map comprehension requires a Map", span);
 				itemType = element;
 			case TRange:
 				if (valueName != null)
-					fail("E1014", "Key/value map comprehension requires a Map", span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION, "Key/value map comprehension requires a Map", span);
 				itemType = TInt;
 			case TMap(mapKey, mapValue):
 				DeclaredConformance.requireMapRuntime(session, mapKey, mapValue, span);
@@ -1640,7 +1667,7 @@ class ExpressionTyper {
 				itemType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type,
 					false) : null;
 				if (itemType == null)
-					fail("E1014",
+					fail(DiagnosticCode.INDEX_OR_ITERATION,
 						"Map comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (itemType == null)
@@ -1658,7 +1685,7 @@ class ExpressionTyper {
 			case TBool: false;
 			default: true;
 		}))
-			fail("E1004", "Map comprehension condition must be Bool", span);
+			fail(DiagnosticCode.BOOLEAN_CONDITION, "Map comprehension condition must be Bool", span);
 		// The entry is only computed where the condition holds, so it sees what the condition proves.
 		var entryScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition,
 			true, session.isPureCall);
@@ -1667,8 +1694,10 @@ class ExpressionTyper {
 			typedValue = bodyTyper.typeExpression(value, entryScope, expected == null ? null : expected.value),
 			resultKey = expected == null ? typedKey.type : expected.key,
 			resultValue = expected == null ? typedValue.type : expected.value;
-		typedKey = bodyTyper.coerce(typedKey, resultKey, "map comprehension key", "E1003", NamedArgument("set", "k"));
-		typedValue = bodyTyper.coerce(typedValue, resultValue, "map comprehension value", "E1003",
+		typedKey = bodyTyper.coerce(typedKey, resultKey, "map comprehension key", DiagnosticCode.TYPE_CONSTRAINT,
+			NamedArgument("set", "k"));
+		typedValue = bodyTyper.coerce(typedValue, resultValue, "map comprehension value",
+			DiagnosticCode.TYPE_CONSTRAINT,
 			NamedArgument("set", "v"));
 		DeclaredConformance.requireMapRuntime(session, resultKey, resultValue, span);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
@@ -1712,7 +1741,7 @@ class ExpressionTyper {
 			case TInt: false;
 			default: true;
 		}))
-			fail("E1014", "Range bounds must be Int values", span);
+			fail(DiagnosticCode.INDEX_OR_ITERATION, "Range bounds must be Int values", span);
 		return new TypedExpression(TRange(typedStart, typedEnd), TRange, span);
 	}
 
@@ -1732,7 +1761,8 @@ class ExpressionTyper {
 					TDynamic, span);
 			case TMap(key, value):
 				DeclaredConformance.requireMapRuntime(session, key, value, span);
-				var typedKey = bodyTyper.coerce(typedIndex, key, "map key", "E1002", NamedArgument("get", "k")),
+				var typedKey = bodyTyper.coerce(typedIndex, key, "map key", DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					NamedArgument("get", "k")),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey),
@@ -1743,11 +1773,11 @@ class ExpressionTyper {
 					case TNever | TDynamic: true;
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
 					default: false;
-				})) typedIndex = bodyTyper.coerce(typedIndex, TInt, "array index", "E1014");
+				})) typedIndex = bodyTyper.coerce(typedIndex, TInt, "array index", DiagnosticCode.INDEX_OR_ITERATION);
 				if ((switch (typedIndex.type) {
 					case TInt: false;
 					default: true;
-				})) fail("E1014", "Array index must be Int",
+				})) fail(DiagnosticCode.INDEX_OR_ITERATION, "Array index must be Int",
 					typedIndex.span);
 				var element = bodyTyper.arrayElementType(typedArray.type,
 					span);
@@ -1764,7 +1794,7 @@ class ExpressionTyper {
 			case TInt: false;
 			default: true;
 		}))
-			fail("E1014", "Array length must be Int", typedLength.span);
+			fail(DiagnosticCode.INDEX_OR_ITERATION, "Array length must be Int", typedLength.span);
 		var loweredElement = bodyTyper.lowerType(element, span);
 		return new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
 	}
@@ -1812,7 +1842,8 @@ class ExpressionTyper {
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedSubject.type)
 			&& !BodyTyper.isEnum(typedSubject.type)) {
 			if (!TupleSwitch.wholeValueCases(compiler.syntax.SwitchCases.expressionPatterns(cases)))
-				fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedSubject.span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER, "Switch requires an Int, String, Bool, array, or enum value",
+					typedSubject.span);
 			// `_`, names and `null` match any value: as the tuple of that one value (`TupleSwitch.wholeValueCases`).
 			typedSubject = TupleSwitch.wholeValue(typedSubject);
 			wholeValue = true;
@@ -1856,7 +1887,7 @@ class ExpressionTyper {
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null
 					? null : bodyTyper.coerce(bodyTyper.typeExpression(parsedGuard, caseScope), TBool, "switch guard",
-					"E1003", Condition("if")),
+					DiagnosticCode.TYPE_CONSTRAINT, Condition("if")),
 				caseIndex = typedCases.length,
 				typedResult:TypedExpression;
 			if (typedGuard != null)
@@ -1875,7 +1906,7 @@ class ExpressionTyper {
 				var joined = resultType == null ? typedResult.type : commonConditionalType(resultType,
 					typedResult.type);
 				if (joined == null)
-					fail("E1003", "Switch branches must have matching types", switchCase.span);
+					fail(DiagnosticCode.TYPE_CONSTRAINT, "Switch branches must have matching types", switchCase.span);
 				resultType = joined;
 			}
 			typedCases.push({
@@ -1889,11 +1920,11 @@ class ExpressionTyper {
 		})) {
 			var joined = resultType == null ? typedDefault.type : commonConditionalType(resultType, typedDefault.type);
 			if (joined == null)
-				fail("E1003", "Switch branches must have matching types", span);
+				fail(DiagnosticCode.TYPE_CONSTRAINT, "Switch branches must have matching types", span);
 			resultType = joined;
 		}
 		if (resultType == null)
-			fail("E1003", "Switch expression has no result branches", span);
+			fail(DiagnosticCode.TYPE_CONSTRAINT, "Switch expression has no result branches", span);
 		typedCases = [for (index in 0...typedCases.length) {
 			var switchCase = typedCases[index],
 				deferred = deferredCaseResults.get(index),
@@ -1928,16 +1959,18 @@ class ExpressionTyper {
 				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes,
 					[for (typedCase in typedCases) for (arm in typedCase.arms) arm]);
 			if (unmatched != null)
-				fail("E1021", TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+					TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
 					span);
 		} else if (typedDefault == null && !seenCases.exists("$catchall")) {
 			// A switch over Bool covers `true` and `false`; one over Null<Bool> need not match null (it reads as false).
 			if (isBoolSwitch(typedSubject.type)) {
 				var missing = [for (value in ["true", "false"]) if (!seenCases.exists('bool:$value')) value];
 				if (missing.length > 0)
-					fail("E1021", 'Bool switch is missing cases: ${missing.join(", ")}', span);
+					fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, 'Bool switch is missing cases: ${missing.join(", ")}',
+						span);
 			} else if (!BodyTyper.isEnum(typedSubject.type))
-				fail("E1021", "Switch expression requires a default branch", span);
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, "Switch expression requires a default branch", span);
 		}
 		if (BodyTyper.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(BodyTyper.enumName(typedSubject.type)),
@@ -1967,7 +2000,8 @@ class ExpressionTyper {
 					missing.push(nullWitness);
 			}
 			if (missing.length > 0)
-				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, 'Enum switch is missing cases: ${missing.join(", ")}',
+					span);
 		}
 		var paths = caseScopes.copy(),
 			pathTypes = [for (switchCase in typedCases) switchCase.result.type];
@@ -2011,7 +2045,7 @@ class ExpressionTyper {
 			expectedType:Null<CompilerType>):TypedExpression {
 		var typedCondition = plain(bodyTyper.typeExpression(predicate, scope, TBool), Condition("if"));
 		if (!sameType(typedCondition.type, TBool))
-			fail("E1011", "Conditional expression requires a Bool condition", span);
+			fail(DiagnosticCode.LOGIC_OR_COMPARISON, "Conditional expression requires a Bool condition", span);
 		var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
 			falseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false, session.isPureCall),
 			contextualType = expectedType;
@@ -2053,7 +2087,7 @@ class ExpressionTyper {
 			branchExpected),
 			resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 		if (resultType == null)
-			fail("E1003", "Conditional branches must have matching types", span);
+			fail(DiagnosticCode.TYPE_CONSTRAINT, "Conditional branches must have matching types", span);
 		typedTrue = branchResult(typedTrue, resultType, "conditional branch");
 		typedFalse = branchResult(typedFalse, resultType, "conditional branch");
 		scope.join(continuingPaths([trueScope, falseScope], [typedTrue.type, typedFalse.type]));
@@ -2072,7 +2106,7 @@ class ExpressionTyper {
 			case TNever: true;
 			default: false;
 		}))
-			return bodyTyper.coerce(value, resultType, context, "E1003", Assignment(value.span));
+			return bodyTyper.coerce(value, resultType, context, DiagnosticCode.TYPE_CONSTRAINT, Assignment(value.span));
 		return new TypedExpression(TBlockExpression([TExpression(value, value.span)],
 			new TypedExpression(TVoidLiteral, TVoid, value.span)), TVoid, value.span);
 	}
@@ -2098,7 +2132,7 @@ class ExpressionTyper {
 		// A value that never arrives (a `throw`) has every type, as Haxe's Never: `(throw e : Int)` and `cast (throw e)` are that
 		// expression, typed as the target, as any other coercion of Never makes it.
 		if (typedValue.type.match(TNever))
-			return bodyTyper.coerce(typedValue, targetType, "cast", "E1003");
+			return bodyTyper.coerce(typedValue, targetType, "cast", DiagnosticCode.TYPE_CONSTRAINT);
 		// Lowering requires a typed null. Preserve nullable targets directly; use the normal Dynamic cast for scalars.
 		if ((switch typedValue.type {
 			case TNull: true;
@@ -2119,7 +2153,7 @@ class ExpressionTyper {
 	function typeCheckType(value:AstExpression, type:AstType, span:SourceSpan, scope:Scope):TypedExpression {
 		var targetType = bodyTyper.lowerType(type, span),
 			typedValue = bodyTyper.typeExpression(value, scope, targetType);
-		return bodyTyper.coerce(typedValue, targetType, "type check", "E1003", Cast(span));
+		return bodyTyper.coerce(typedValue, targetType, "type check", DiagnosticCode.TYPE_CONSTRAINT, Cast(span));
 	}
 
 	/** Give each null-producing arm a concrete type without discarding its evaluation. */
@@ -2139,7 +2173,7 @@ class ExpressionTyper {
 				new TypedExpression(TSwitchExpression(subject, converted,
 					defaultExpression == null ? null : coerceCastNull(defaultExpression, expected)),
 					expected, value.span);
-			default: bodyTyper.coerce(value, expected, "cast", "E1003");
+			default: bodyTyper.coerce(value, expected, "cast", DiagnosticCode.TYPE_CONSTRAINT);
 		};
 	}
 
@@ -2159,7 +2193,8 @@ class ExpressionTyper {
 		if (!dynamicOperand)
 			return null;
 		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
-		var boxed = [for (operand in operands) bodyTyper.coerce(operand, TDynamic, "dynamic operand", "E1010")];
+		var boxed = [for (operand in operands) bodyTyper.coerce(operand, TDynamic, "dynamic operand",
+			DiagnosticCode.OPERATOR_OR_STRING_CONVERSION)];
 		return new TypedExpression(TCall("haxeon.DynamicOps." + name, boxed), result, span);
 	}
 
@@ -2177,14 +2212,15 @@ class ExpressionTyper {
 		if (dynamicResult != null)
 			return dynamicResult;
 		if (!isNumeric(typedValue.type))
-			fail("E1010", "Numeric negation requires an Int, Int64, or Float operand", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION,
+				"Numeric negation requires an Int, Int64, or Float operand", span);
 		return new TypedExpression(TNegate(typedValue), typedValue.type, span);
 	}
 
 	public function logicalNot(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedValue = plain(bodyTyper.typeExpression(value, scope), UnaryOperand(span));
 		if (!sameType(typedValue.type, TBool))
-			fail("E1011", "Logical negation requires a Bool operand", span);
+			fail(DiagnosticCode.LOGIC_OR_COMPARISON, "Logical negation requires a Bool operand", span);
 		return new TypedExpression(TNot(typedValue), TBool, span);
 	}
 
@@ -2206,7 +2242,7 @@ class ExpressionTyper {
 		if (sameType(typedTarget.type, TDynamic) || isNullableNumber(storedType(target, typedTarget, scope)))
 			return rewrittenPostfixIncrement(target, delta, span, scope);
 		if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
-			fail("E1018", "Postfix increment requires a numeric target", span);
+			fail(DiagnosticCode.INCREMENT_TARGET, "Postfix increment requires a numeric target", span);
 		var operation:TypedExpressionKind = switch typedTarget.expression {
 			case TLocal(name): TPostfixLocal(name, delta);
 			case TCaptured(name) if (isCellCapture(scope, name)): TPostfixCaptured(name, delta);
@@ -2220,7 +2256,8 @@ class ExpressionTyper {
 					case TAnonymous(_, fields):
 						for (field in fields)
 							if (field.name == name && field.isFinal)
-								fail("E1024", 'Final anonymous field "$name" cannot be assigned', span);
+								fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+									'Final anonymous field "$name" cannot be assigned', span);
 					default:
 				}
 				FinalFieldRules.rejectInstanceMutation(session, object, name, span);
@@ -2246,7 +2283,7 @@ class ExpressionTyper {
 				if (property != null && isAccessorProperty(property.object, property.field, scope))
 					return rewrittenPostfixIncrement(Member(property.object, property.field, span), delta, span, scope,
 						true);
-				fail("E1018", "Postfix increment target is not assignable", span);
+				fail(DiagnosticCode.INCREMENT_TARGET, "Postfix increment target is not assignable", span);
 				TPostfixLocal("", delta);
 		};
 		switch target {
@@ -2364,7 +2401,7 @@ class ExpressionTyper {
 				case Member(object, field, _): FieldAssignment(object, field, updated, span);
 				case Index(array, offset, _): IndexAssignment(array, offset, updated, span);
 				default:
-					fail("E1018", "Postfix increment target is not assignable", span);
+					fail(DiagnosticCode.INCREMENT_TARGET, "Postfix increment target is not assignable", span);
 					Assignment("", updated, span);
 			};
 		var statements = bindings.concat([TemporaryDeclaration(old, null, target, span), store]);
@@ -2514,12 +2551,14 @@ class ExpressionTyper {
 				case TDynamic: true;
 				default: false;
 			}))
-				left = bodyTyper.coerce(left, expected, "arithmetic operand", "E1010");
+				left = bodyTyper.coerce(left, expected, "arithmetic operand",
+				DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 			if ((switch (right.type) {
 				case TDynamic: true;
 				default: false;
 			}))
-				right = bodyTyper.coerce(right, expected, "arithmetic operand", "E1010");
+				right = bodyTyper.coerce(right, expected, "arithmetic operand",
+				DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		}
 		if ((switch (left.type) {
 			case TNever: true;
@@ -2543,7 +2582,7 @@ class ExpressionTyper {
 		if (dynamicResult != null)
 			return dynamicResult;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Arithmetic requires matching numeric operands", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span);
 		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right),
 			promoted.type, span);
@@ -2554,7 +2593,7 @@ class ExpressionTyper {
 			rightScope = FlowAnalysis.narrowedScope(scope, left, and, session.isPureCall),
 			right = plain(bodyTyper.typeExpression(b, rightScope));
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
-			fail("E1011", "Logical operators require Bool operands", span);
+			fail(DiagnosticCode.LOGIC_OR_COMPARISON, "Logical operators require Bool operands", span);
 		// Control continues either without the right operand (the scope after the left) or after it.
 		scope.join([scope, rightScope]);
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
@@ -2578,7 +2617,7 @@ class ExpressionTyper {
 		if (dynamicResult != null)
 			return dynamicResult;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Arithmetic requires matching numeric operands", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span, operation != 2);
 		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left,
 			promoted.right), promoted.type, span);
@@ -2601,7 +2640,7 @@ class ExpressionTyper {
 		if (dynamicResult != null)
 			return dynamicResult;
 		if (!isNumeric(left.type) || !isNumeric(right.type))
-			fail("E1010", "Modulo requires matching numeric operands", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Modulo requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span);
 		return sameType(promoted.type, TInt)
 			|| sameType(promoted.type,
@@ -2645,14 +2684,16 @@ class ExpressionTyper {
 		var leftNumeric = numericRepresentation(left.type),
 			rightNumeric = numericRepresentation(right.type);
 		if (leftNumeric != null && !sameType(left.type, leftNumeric))
-			left = bodyTyper.coerce(left, leftNumeric, "bitwise operand", "E1010");
+			left = bodyTyper.coerce(left, leftNumeric, "bitwise operand", DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		if (rightNumeric != null && !sameType(right.type, rightNumeric))
-			right = bodyTyper.coerce(right, rightNumeric, "bitwise operand", "E1010");
+			right = bodyTyper.coerce(right, rightNumeric, "bitwise operand",
+				DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		if (operation >= 3) {
 			if (!sameType(left.type, TInt) && !sameType(left.type, TInt64))
-				fail("E1010", "Shift operators require an Int or Int64 value", span);
+				fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Shift operators require an Int or Int64 value",
+					span);
 			if (!sameType(right.type, TInt))
-				fail("E1010", "Shift counts must be Int values", span);
+				fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Shift counts must be Int values", span);
 			var shift:TypedExpressionKind = switch operation {
 				case 3: TShiftLeft(left, right);
 				case 4: TShiftRight(left, right);
@@ -2663,10 +2704,10 @@ class ExpressionTyper {
 
 		if ((!sameType(left.type, TInt) && !sameType(left.type, TInt64))
 			|| (!sameType(right.type, TInt) && !sameType(right.type, TInt64)))
-			fail("E1010", "Bitwise operators require integer operands", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Bitwise operators require integer operands", span);
 		var operandType = sameType(left.type, TInt64) || sameType(right.type, TInt64) ? TInt64 : TInt;
-		left = bodyTyper.coerce(left, operandType, "bitwise operand", "E1010");
-		right = bodyTyper.coerce(right, operandType, "bitwise operand", "E1010");
+		left = bodyTyper.coerce(left, operandType, "bitwise operand", DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
+		right = bodyTyper.coerce(right, operandType, "bitwise operand", DiagnosticCode.OPERATOR_OR_STRING_CONVERSION);
 		var expression:TypedExpressionKind = switch operation {
 			case 0: TBitAnd(left, right);
 			case 1: TBitXor(left, right);
@@ -2706,7 +2747,8 @@ class ExpressionTyper {
 			return null;
 		var missing = [for (value in values) if (value.key != "null" && !seenCases.exists(value.key)) value.name];
 		if (missing.length > 0)
-			fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
+			fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+				'Enum abstract switch is missing values: ${missing.join(", ")}', span);
 		var message =
 			new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(subject)} value'),
 			TString, span);
@@ -2751,7 +2793,7 @@ class ExpressionTyper {
 					return comparison;
 				var type = left.type;
 				if (!DeclaredConformance.has(session, type, "Equatable"))
-					fail("E1025", 'Enum "$name" does not conform to Equatable', comparison.span);
+					fail(DiagnosticCode.CONFORMANCE, 'Enum "$name" does not conform to Equatable', comparison.span);
 				var keyed = EnumEqualityGenerator.request(session, type, session.currentContext.name, comparison.span);
 				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					comparison.span);
@@ -2858,7 +2900,7 @@ class ExpressionTyper {
 					default: operand.type;
 				};
 				if (session.relations.isStruct(valueType) && !DeclaredConformance.supportsEquality(session, valueType))
-					fail("E1025",
+					fail(DiagnosticCode.CONFORMANCE,
 						'Struct "${compiler.semantic.SemanticSignature.display(valueType)}" does not conform to Equatable',
 						span);
 			}
@@ -2923,7 +2965,7 @@ class ExpressionTyper {
 				default: null;
 			};
 			if (nullableElement != null) {
-				right = bodyTyper.coerce(right, left.type, "equality comparison", "E1011");
+				right = bodyTyper.coerce(right, left.type, "equality comparison", DiagnosticCode.LOGIC_OR_COMPARISON);
 				var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
 				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					span);
@@ -2934,7 +2976,7 @@ class ExpressionTyper {
 				default: null;
 			};
 			if (nullableElement != null) {
-				left = bodyTyper.coerce(left, right.type, "equality comparison", "E1011");
+				left = bodyTyper.coerce(left, right.type, "equality comparison", DiagnosticCode.LOGIC_OR_COMPARISON);
 				var keyed = ValueEqualityGenerator.request(session, right.type, session.currentContext.name, span);
 				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					span);
@@ -2959,11 +3001,11 @@ class ExpressionTyper {
 			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
 		}
 		if (operation == 2 && session.relations.isAssignable(left.type, right.type)) {
-			left = bodyTyper.coerce(left, right.type, "equality comparison", "E1011");
+			left = bodyTyper.coerce(left, right.type, "equality comparison", DiagnosticCode.LOGIC_OR_COMPARISON);
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		}
 		if (operation == 2 && session.relations.isAssignable(right.type, left.type)) {
-			right = bodyTyper.coerce(right, left.type, "equality comparison", "E1011");
+			right = bodyTyper.coerce(right, left.type, "equality comparison", DiagnosticCode.LOGIC_OR_COMPARISON);
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		}
 		if (operation == 2
@@ -3012,7 +3054,7 @@ class ExpressionTyper {
 		if (dynamicOrder != null)
 			return dynamicOrder;
 		if (!isNumeric(left.type) || !isNumeric(right.type)) {
-			fail("E1011", "Comparison requires matching numeric operands", span);
+			fail(DiagnosticCode.LOGIC_OR_COMPARISON, "Comparison requires matching numeric operands", span);
 		}
 		var promoted = promoteNumericOperands(left, right, span);
 		left = promoted.left;
@@ -3037,8 +3079,9 @@ class ExpressionTyper {
 		// Only widenings that lose nothing: an Int into a Float or an Int64. Int64 and Float stay an explicit conversion.
 		if (!sameType(value.type, TInt) || !(sameType(inner, TFloat) || sameType(inner, TInt64)))
 			return null;
-		return bodyTyper.coerce(bodyTyper.coerce(value, inner, "numeric operand", "E1010"), other,
-			"equality comparison", "E1011");
+		return bodyTyper.coerce(bodyTyper.coerce(value, inner, "numeric operand",
+			DiagnosticCode.OPERATOR_OR_STRING_CONVERSION), other,
+			"equality comparison", DiagnosticCode.LOGIC_OR_COMPARISON);
 	}
 
 	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
@@ -3078,15 +3121,16 @@ class ExpressionTyper {
 		var leftNumeric = numericRepresentation(left.type),
 			rightNumeric = numericRepresentation(right.type);
 		if (leftNumeric == null || rightNumeric == null)
-			fail("E1010", "Arithmetic requires numeric operands", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION, "Arithmetic requires numeric operands", span);
 		var hasInt64 = sameType(leftNumeric, TInt64) || sameType(rightNumeric, TInt64);
 		var hasFloat = sameType(leftNumeric, TFloat) || sameType(rightNumeric, TFloat);
 		if (hasInt64 && hasFloat)
-			fail("E1010", "Int64 and Float arithmetic requires an explicit conversion", span);
+			fail(DiagnosticCode.OPERATOR_OR_STRING_CONVERSION,
+				"Int64 and Float arithmetic requires an explicit conversion", span);
 		var type = hasInt64 ? TInt64 : forceFloat || hasFloat ? TFloat : TInt;
 		return {
-			left: bodyTyper.coerce(left, type, "numeric operand", "E1010"),
-			right: bodyTyper.coerce(right, type, "numeric operand", "E1010"),
+			left: bodyTyper.coerce(left, type, "numeric operand", DiagnosticCode.OPERATOR_OR_STRING_CONVERSION),
+			right: bodyTyper.coerce(right, type, "numeric operand", DiagnosticCode.OPERATOR_OR_STRING_CONVERSION),
 			type: type
 		};
 	}
@@ -3190,6 +3234,6 @@ class ExpressionTyper {
 		};
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

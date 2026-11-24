@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.semantic.LambdaName;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
@@ -134,7 +135,8 @@ class StatementTyper {
 			compiler.types.Monomorphs.nameLocal(variable, name, span);
 			return variable;
 		}
-		throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of local "$name"; add a type annotation',
+		throw new CompileError(new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+			'Cannot infer type of local "$name"; add a type annotation',
 			span));
 	}
 
@@ -267,7 +269,8 @@ class StatementTyper {
 				declaredType = TNullable(variable);
 		}
 		if (declaredType != null)
-			value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002", Assignment(span));
+			value = bodyTyper.coerce(value, declaredType, 'local "$name"', DiagnosticCode.ASSIGNMENT_OR_BINDING,
+				Assignment(span));
 		else
 			value = ValueCopy.bind(session, value, value.type);
 		// Its type's empty variables (`var list = []`, `var x = null`) are this local's: one nothing fills is reported by it.
@@ -276,7 +279,8 @@ class StatementTyper {
 		if (recursiveCell != null && predeclared != null)
 			return [TDeclare(predeclared.id, declaredType, span), TAssign(predeclared.id, value, span)];
 		else if (TypeRelations.equals(value.type, TNull))
-			fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
+			fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Null requires an explicit nullable type for local "$name"',
+				span);
 		if (localFunction == null && declared == null)
 			localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
 		var binding = predeclared != null ? predeclared : scope.define(name, value.type, span, true, null, false,
@@ -363,7 +367,8 @@ class StatementTyper {
 					if (expected == null)
 						context.inferredResult = value.type;
 					else
-						value = bodyTyper.coerce(value, expected, "return", "E1003", Return(span));
+						value = bodyTyper.coerce(value, expected, "return", DiagnosticCode.TYPE_CONSTRAINT,
+							Return(span));
 					output.push(TReturn(value, span));
 				}
 				output;
@@ -378,20 +383,20 @@ class StatementTyper {
 					case TVoid: false;
 					default: true;
 				}))
-					fail("E1003", "Return type mismatch", span);
+					fail(DiagnosticCode.TYPE_CONSTRAINT, "Return type mismatch", span);
 				[TReturnVoid(span)];
 			case Throw(expression, span):
 				var value = bodyTyper.typeExpression(expression, scope);
 				if (TypeRelations.equals(value.type, TVoid))
-					fail("E1021", "Cannot throw a Void value", span);
+					fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, "Cannot throw a Void value", span);
 				[TThrow(ThrownValue.of(session, bodyTyper, value, span), span)];
 			case Break(span):
 				if (context.loopDepth == 0)
-					fail("E1017", "break is only valid inside a loop", span);
+					fail(DiagnosticCode.LOOP_CONTROL, "break is only valid inside a loop", span);
 				[TBreak(span)];
 			case Continue(span):
 				if (context.loopDepth == 0)
-					fail("E1017", "continue is only valid inside a loop", span);
+					fail(DiagnosticCode.LOOP_CONTROL, "continue is only valid inside a loop", span);
 				[TContinue(span)];
 			case Expression(expression, span):
 				[TExpression(bodyTyper.typeExpression(expression, scope, (switch (result) {
@@ -411,7 +416,7 @@ class StatementTyper {
 			rootBinding = dot < 0 ? null : bodyTyper.referenceBinding(BindingWalker.rootOf(written), span,
 				name.substring(0, dot), scope);
 		if (binding != null && binding.scoped)
-			fail("E1002", 'Cannot reassign scoped binding "$name"', span);
+			fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Cannot reassign scoped binding "$name"', span);
 		var current = binding == null ? null : scope.typeOf(binding);
 		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators, and a nullable
 		// number the same way, reading null as 0 as Haxe does.
@@ -425,7 +430,7 @@ class StatementTyper {
 			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
 		}
 		if (binding != null && !scope.isAssignedBinding(binding))
-			fail("E1023", 'Local "$name" may be used before assignment', span);
+			fail(DiagnosticCode.DEFINITE_ASSIGNMENT, 'Local "$name" may be used before assignment', span);
 		if (binding == null || current == null) {
 			var dot = name.indexOf("."),
 				owner = dot < 0 ? session.currentContext.lexicalOwner : name.substring(0, dot),
@@ -441,7 +446,8 @@ class StatementTyper {
 				return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
 			}
 			if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
-				fail("E1018", 'Increment requires a numeric local or static field "$name"', span);
+				fail(DiagnosticCode.INCREMENT_TARGET, 'Increment requires a numeric local or static field "$name"',
+					span);
 			bodyTyper.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 			FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 			var oldValue = new TypedExpression(TStaticField(staticField.owner, fieldName), staticField.type, span),
@@ -454,11 +460,11 @@ class StatementTyper {
 			return TStaticFieldAssign(staticField.owner, fieldName, updated, span);
 		}
 		if (!sameType(current, TInt) && !sameType(current, TFloat))
-			fail("E1018", 'Increment requires a numeric local "$name"', span);
+			fail(DiagnosticCode.INCREMENT_TARGET, 'Increment requires a numeric local "$name"', span);
 		scope.invalidateExpressionsForBinding(binding);
 		if (scope.isCaptured(binding)) {
 			if (!scope.isCellCaptured(binding))
-				fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
+				fail(DiagnosticCode.MUTABLE_CAPTURE, 'Captured variable "$name" requires mutable capture cells', span);
 			return TCapturedIncrement(name, current, delta, span);
 		}
 		return TIncrement(binding.id, current, delta, span);
@@ -545,11 +551,11 @@ class StatementTyper {
 		if (dot < 0) {
 			var binding = bound != null ? bound : bodyTyper.referenceBinding(written, span, name, scope);
 			if (binding != null && binding.scoped)
-				fail("E1002", 'Cannot reassign scoped binding "$name"', span);
+				fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Cannot reassign scoped binding "$name"', span);
 			if (binding != null && binding.localFunction != null && binding.localFunction.isInline == true)
-				fail("E1007", "Cannot set inline closure", span);
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER, "Cannot set inline closure", span);
 			if (binding != null && binding.localFunction != null && binding.localFunction.generic != null)
-				fail("E1007", 'Cannot access function $name for writing', span);
+				fail(DiagnosticCode.DECLARATION_OR_MODIFIER, 'Cannot access function $name for writing', span);
 			if (binding == null) {
 				var thisType = scope.receiverType(),
 					owner = session.currentContext.lexicalOwner;
@@ -571,7 +577,8 @@ class StatementTyper {
 					PropertyWriteRules.rejectInstanceMutation(session, thisType, name, span);
 					var assignedValue = bodyTyper.typeExpression(expression, scope, instanceField),
 						value = stored(assigned,
-							bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002", Assignment(span)),
+							bodyTyper.coerce(assignedValue, instanceField, 'field "$name"',
+							DiagnosticCode.ASSIGNMENT_OR_BINDING, Assignment(span)),
 							assignedValue);
 					var receiver = bodyTyper.typeExpression(Variable("this", span), scope),
 						propertySetter = ClassProperties.instanceAccessor(session, thisType, name, false, receiver,
@@ -596,13 +603,15 @@ class StatementTyper {
 				if (owner != null)
 					staticField = bodyTyper.findStaticFieldNullable(owner, name);
 				if (staticField == null)
-					throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+					throw new CompileError(Diagnostic.unresolved(DiagnosticCode.NAME_OR_MEMBER,
+						UnresolvedNameKind.WantedVariable, name,
 						span));
 				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, name, span);
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, name, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = stored(assigned,
-						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002", Assignment(span)),
+						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"',
+						DiagnosticCode.ASSIGNMENT_OR_BINDING, Assignment(span)),
 						assignedValue);
 				return staticStore(staticField.owner, name, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
@@ -610,12 +619,14 @@ class StatementTyper {
 			var expected = scope.declaredTypeOf(binding);
 			var assignedValue = bodyTyper.typeExpression(expression, scope, expected),
 				value = stored(assigned,
-					bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002", Assignment(span)),
+					bodyTyper.coerce(assignedValue, expected, 'local "$name"', DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					Assignment(span)),
 					assignedValue),
 				statement:TypedStatement;
 			if (scope.isCaptured(binding)) {
 				if (!scope.isCellCaptured(binding))
-					fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
+					fail(DiagnosticCode.MUTABLE_CAPTURE, 'Captured variable "$name" requires mutable capture cells',
+						span);
 				statement = TCapturedAssign(name, value, span);
 			} else
 				statement = TAssign(binding.id, value, span);
@@ -655,7 +666,8 @@ class StatementTyper {
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = stored(assigned,
-						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002", Assignment(span)),
+						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"',
+						DiagnosticCode.ASSIGNMENT_OR_BINDING, Assignment(span)),
 						assignedValue);
 				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
@@ -664,7 +676,8 @@ class StatementTyper {
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
 					value = stored(assigned,
-						bodyTyper.coerce(assignedValue, expected, 'field "$name"', "E1002", Assignment(span)),
+						bodyTyper.coerce(assignedValue, expected, 'field "$name"', DiagnosticCode.ASSIGNMENT_OR_BINDING,
+						Assignment(span)),
 						assignedValue),
 					setter:Null<String> = platformField == null ? null : platformField.set,
 					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
@@ -706,16 +719,18 @@ class StatementTyper {
 				var index = bodyTyper.dynamicIndex(typedIndex),
 					assignedValue = bodyTyper.typeExpression(expression, scope),
 					value = bodyTyper.coerce(stored(assigned, assignedValue, assignedValue), TDynamic, "array element",
-						"E1002");
+						DiagnosticCode.ASSIGNMENT_OR_BINDING);
 				scope.invalidateExpressionNamespace("array-entry:");
 				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 				TExpression(new TypedExpression(TCall("haxeon.DynamicOps.setIndex", [typedArray, index, value]), TVoid,
 					span), span);
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
-				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", "E1002", NamedArgument("set", "k"));
+				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					NamedArgument("set", "k"));
 				var assignedValue = bodyTyper.typeExpression(expression, scope, mapValue),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, mapValue, "map value", "E1002",
+					value = stored(assigned,
+						bodyTyper.coerce(assignedValue, mapValue, "map value", DiagnosticCode.ASSIGNMENT_OR_BINDING,
 						NamedArgument("set", "v")),
 						assignedValue),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
@@ -730,15 +745,16 @@ class StatementTyper {
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
 					default: false;
 				}))
-					typedIndex = bodyTyper.coerce(typedIndex, TInt, "array index", "E1014");
+					typedIndex = bodyTyper.coerce(typedIndex, TInt, "array index", DiagnosticCode.INDEX_OR_ITERATION);
 				if ((switch (typedIndex.type) {
 					case TInt: false;
 					default: true;
 				}))
-					fail("E1014", "Array index must be Int", typedIndex.span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION, "Array index must be Int", typedIndex.span);
 				var element = bodyTyper.arrayElementType(typedArray.type, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, element),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, element, "array element", "E1002",
+					value = stored(assigned,
+						bodyTyper.coerce(assignedValue, element, "array element", DiagnosticCode.ASSIGNMENT_OR_BINDING,
 						Assignment(span)), assignedValue);
 				// A stored value can replace any literal-index element reached through an alias.
 				// Drop these transient refinements globally rather than retaining an unsound path fact.
@@ -759,7 +775,7 @@ class StatementTyper {
 	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression,
 			span:SourceSpan):TypedStatement {
 		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
-		var boxed = bodyTyper.coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
+		var boxed = bodyTyper.coerce(value, TDynamic, 'field "$fieldName"', DiagnosticCode.ASSIGNMENT_OR_BINDING),
 			call = new TypedExpression(TCall("Reflect.setField", [
 				object,
 				new TypedExpression(TStringLiteral(fieldName), TString, span),
@@ -797,14 +813,15 @@ class StatementTyper {
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = stored(assigned, bodyTyper.coerce(assignedValue, staticField.type, 'field "$fieldName"',
-						"E1002", Assignment(span)), assignedValue);
+						DiagnosticCode.ASSIGNMENT_OR_BINDING, Assignment(span)), assignedValue);
 				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"', "E1002",
+					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"',
+						DiagnosticCode.ASSIGNMENT_OR_BINDING,
 						Assignment(span)), assignedValue);
 				var setter:Null<String> = platformField == null ? null : platformField.set,
 					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
@@ -842,10 +859,12 @@ class StatementTyper {
 			return null;
 		var field = DynamicMethods.resolve(session, object, name, span);
 		if (field == null)
-			fail("E1002", "Cannot rebind this method : please use 'dynamic' before method declaration",
+			fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+				"Cannot rebind this method : please use 'dynamic' before method declaration",
 				AbstractProperties.nameSpan(span, name, false));
 		var source = bodyTyper.typeExpression(expression, scope, field.type),
-			value = stored(assigned, bodyTyper.coerce(source, field.type, 'field "$name"', "E1002", Assignment(span)),
+			value = stored(assigned, bodyTyper.coerce(source, field.type, 'field "$name"',
+				DiagnosticCode.ASSIGNMENT_OR_BINDING, Assignment(span)),
 				source);
 		scope.invalidateField(name);
 		if (field.setter != null) {
@@ -902,15 +921,17 @@ class StatementTyper {
 			switch loweredCatchType {
 				case TDynamic:
 					if (i != catches.length - 1)
-						fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
+						fail(DiagnosticCode.NATIVE_OR_CATCH, "Dynamic catch must be the final catch clause",
+							catchClause.span);
 				case TInt, TFloat, TBool, TString:
 				case TInstance(kind, _, arguments):
 					if (Std.string(kind) != "class" && Std.string(kind) != "interface" && Std.string(kind) != "enum")
-						fail("E1022", "Unsupported catch binding type", catchClause.span);
+						fail(DiagnosticCode.NATIVE_OR_CATCH, "Unsupported catch binding type", catchClause.span);
 					if (arguments.length != 0)
-						fail("E1022", "Unsupported generic catch binding type", catchClause.span);
+						fail(DiagnosticCode.NATIVE_OR_CATCH, "Unsupported generic catch binding type",
+							catchClause.span);
 				default:
-					fail("E1022", "Unsupported catch binding type", catchClause.span);
+					fail(DiagnosticCode.NATIVE_OR_CATCH, "Unsupported catch binding type", catchClause.span);
 			}
 			var catchScope = new Scope(scope);
 			// A handler can run after any prefix of the try body, not just after its final state.
@@ -956,7 +977,7 @@ class StatementTyper {
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, scope),
 			bodyTyper, Condition("if"));
 		if (!TypeRelations.equals(typedCondition.type, TBool))
-			fail("E1004", "If condition must be Bool", span);
+			fail(DiagnosticCode.BOOLEAN_CONDITION, "If condition must be Bool", span);
 		var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
 			elseScope = FlowAnalysis.narrowedScope(scope, typedCondition, false, session.isPureCall),
 			mark = session.checkpoint(),
@@ -998,7 +1019,7 @@ class StatementTyper {
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, scope),
 			bodyTyper, Condition("while"));
 		if (!TypeRelations.equals(typedCondition.type, TBool))
-			fail("E1004", "While condition must be Bool", span);
+			fail(DiagnosticCode.BOOLEAN_CONDITION, "While condition must be Bool", span);
 		var context = session.currentContext;
 		context.loopDepth++;
 		// The condition is evaluated right before every iteration, so what it proves holds where the body starts.
@@ -1021,7 +1042,7 @@ class StatementTyper {
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, bodyScope),
 			bodyTyper, Condition("while"));
 		if (!TypeRelations.equals(typedCondition.type, TBool))
-			fail("E1004", "Do-while condition must be Bool", span);
+			fail(DiagnosticCode.BOOLEAN_CONDITION, "Do-while condition must be Bool", span);
 		// The body runs at least once, so what it assigns and narrows holds afterwards, unless a break or continue can skip the
 		// rest of it.
 		if (!AstScan.breaksOut(body) && !AstScan.continuesOut(body))
@@ -1078,7 +1099,8 @@ class StatementTyper {
 			case TMap(key, value):
 				var mapName = session.mapName(key, value);
 				if (mapName == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+					fail(DiagnosticCode.RUNTIME_SUPPORT, "This map key/value type has no compiler-owned runtime ABI",
+						span);
 				if (valueName == null) {
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(value),
 						span);
@@ -1088,7 +1110,8 @@ class StatementTyper {
 				var item = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type,
 					false) : null;
 				if (item == null)
-					fail("E1014", "For-in requires an iterable or an iterator with hasNext():Bool and next()", span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION,
+						"For-in requires an iterable or an iterator with hasNext():Bool and next()", span);
 				item;
 		};
 		var loopScope = new Scope(scope);
@@ -1118,7 +1141,7 @@ class StatementTyper {
 					valueBinding = loopScope.define(valueName, value, span);
 					bodyTyper.bindCell(valueBinding, value);
 				default:
-					fail("E1014", "Key/value for-in requires a Map", span);
+					fail(DiagnosticCode.INDEX_OR_ITERATION, "Key/value for-in requires a Map", span);
 			}
 		var context = session.currentContext;
 		context.loopDepth++;
@@ -1191,7 +1214,8 @@ class StatementTyper {
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedExpression.type)
 			&& !BodyTyper.isEnum(typedExpression.type)) {
 			if (!TupleSwitch.wholeValueCases(compiler.syntax.SwitchCases.patterns(cases)))
-				fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedExpression.span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER, "Switch requires an Int, String, Bool, array, or enum value",
+					typedExpression.span);
 			// `_`, names and `null` match any value: as the tuple of that one value (`TupleSwitch.wholeValueCases`).
 			typedExpression = TupleSwitch.wholeValue(typedExpression);
 			wholeValue = true;
@@ -1215,7 +1239,7 @@ class StatementTyper {
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null
 					? null : bodyTyper.coerce(bodyTyper.typeExpression(parsedGuard, caseScope),
-					TBool, "switch guard", "E1003", Condition("if"));
+					TBool, "switch guard", DiagnosticCode.TYPE_CONSTRAINT, Condition("if"));
 			if (typedGuard != null)
 				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
 			var typedBody = bodyTyper.typeStatements(switchCase.statements, caseScope, result);
@@ -1231,7 +1255,8 @@ class StatementTyper {
 			if (unmatched == null)
 				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes, arms);
 			if (unmatched != null)
-				fail("E1021", TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+					TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
 					span);
 			// A statement may leave values of an Int or String element unmatched, as in Haxe: such a tuple runs no case.
 			if (TupleSwitch.unmatched(session, bodyTyper, tupleTypes, arms) != null)
@@ -1265,14 +1290,16 @@ class StatementTyper {
 					missing.push(nullWitness);
 			}
 			if (missing.length > 0)
-				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, 'Enum switch is missing cases: ${missing.join(", ")}',
+					span);
 		}
 		// A switch over Bool covers `true` and `false`, as Haxe requires of a statement too; one over Null<Bool> need not match
 		// null (it reads as false).
 		if (isBoolSwitch(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 			var missing = [for (value in ["true", "false"]) if (!seenCases.exists('bool:$value')) value];
 			if (missing.length > 0)
-				fail("E1021", 'Bool switch is missing cases: ${missing.join(", ")}', span);
+				fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN, 'Bool switch is missing cases: ${missing.join(", ")}',
+					span);
 		}
 		// A switch over a closed enum abstract covers every declared value, as one over an enum covers every constructor.
 		// Its implicit default throws, so a value outside the declared set fails at the switch rather than skipping it. As
@@ -1284,7 +1311,8 @@ class StatementTyper {
 				var missing =
 					[for (value in values) if (value.key != "null" && !seenCases.exists(value.key)) value.name];
 				if (missing.length > 0)
-					fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
+					fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
+						'Enum abstract switch is missing values: ${missing.join(", ")}', span);
 				unmatchedEnumAbstract =
 					'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
 				var nullArm = SwitchNullCoverage.nullAccessArm(typedExpression, seenCases, span);
@@ -1331,11 +1359,12 @@ class StatementTyper {
 			case TAnonymous(_, fields):
 				for (field in fields)
 					if (field.name == name && field.isFinal)
-						fail("E1024", 'Final anonymous field "$name" cannot be assigned', span);
+						fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'Final anonymous field "$name" cannot be assigned',
+							span);
 			default:
 		}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

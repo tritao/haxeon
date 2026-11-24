@@ -2,6 +2,7 @@ package build.shader;
 
 import build.execution.Directories;
 import build.execution.ProcessRunner;
+import compiler.core.DiagnosticCode;
 import compiler.core.UsageError;
 import haxe.Json;
 import haxe.crypto.Sha256;
@@ -167,7 +168,7 @@ class ShaderBuild {
 				message = pattern.matched(5);
 			var base = Path.addTrailingSlash(Path.normalize(project)),
 				name = StringTools.startsWith(path, base) ? path.substr(base.length) : path;
-			var code = warning ? "W4001" : "E4001",
+			var code = warning ? DiagnosticCode.SHADER_WARNING : DiagnosticCode.SHADER_ERROR,
 				label = style == "short" ? code : (warning ? "warning" : "error") + '[$code]';
 			if (message.indexOf("non-opaque uniforms outside a block") >= 0)
 				message = "Declare numeric uniforms inside a layout(std140, binding=N) uniform block";

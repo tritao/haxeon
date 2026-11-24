@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
@@ -224,5 +225,5 @@ class KeyPathTyping {
 	}
 
 	static function fail(message:String, span:SourceSpan):Void
-		throw new CompileError(new Diagnostic("E1009", message, span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION, message, span));
 }

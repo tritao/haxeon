@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.AllocationMeter;
 import compiler.core.Diagnostic;
+import compiler.core.DiagnosticCode;
 import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
@@ -148,7 +149,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (cachedMetadata == null)
 			for (fn in program.functions) {
 				if (session.externals.exists(fn.name))
-					BodyTyper.fail("E1000", 'Function "${fn.name}" conflicts with a registered native', fn.span);
+					BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+						'Function "${fn.name}" conflicts with a registered native', fn.span);
 				if (fn.isExtern == true)
 					typedNatives.push(externTyper.typeExtern(fn));
 			}
@@ -160,7 +162,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				for (method in classDecl.methods)
 					if (externClass || method.isExtern == true) {
 						if (!method.isStatic)
-							BodyTyper.fail("E1021",
+							BodyTyper.fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
 								'Extern instance method "${classDecl.name}.${method.name}" is not supported yet',
 								method.span);
 						var nativeName = method.name.indexOf(".") >= 0
@@ -236,7 +238,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			else if (entryPoint == null && session.signatures.exists("Main.main"))
 				main = session.signatures.required("Main.main");
 			else
-				throw new CompileError(new compiler.core.Diagnostic("E1000",
+				throw new CompileError(new compiler.core.Diagnostic(DiagnosticCode.DECLARATION_CONFLICT,
 					'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"',
 					entrySpan ?? session.declarations.fallbackSpan));
 			var result = main.arguments.length == 0 ? bodyTyper.functionResultType(main, main.span) : TVoid,
@@ -247,7 +249,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			// An unannotated entry point whose body failed has no result type: its body's error is the one to report.
 			var bodyFailed = AstFunctions.isInferred(main.result) && session.recoveredErrors.length > 0;
 			if (main.arguments.length != 0 || !returnsIntOrVoid && !bodyFailed)
-				throw new CompileError(new compiler.core.Diagnostic("E1000",
+				throw new CompileError(new compiler.core.Diagnostic(DiagnosticCode.DECLARATION_CONFLICT,
 					'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void',
 					main.span));
 		}
@@ -316,7 +318,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				for (caseDecl in enumDecl.cases)
 					for (parameter in caseDecl.params)
 						if (NativeLayout.containsNativeLayoutType(parameter))
-							BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet',
+							BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+								'Native layout types cannot be stored in a Haxe enum yet',
 								caseDecl.span);
 		if (cachedMetadata == null)
 			for (interfaceIndex in 0...typedInterfaces.length) {
@@ -328,10 +331,12 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						parsedMethod = parsedMethods[methodIndex];
 					for (argument in method.arguments)
 						if (NativeLayout.containsNativeLayoutType(argument))
-							BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet',
+							BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+								'Native layout types cannot be passed by value in an interface yet',
 								parsedMethod.span);
 					if (NativeLayout.containsNativeLayoutType(method.result))
-						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet',
+						BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+							'Native layout types cannot be returned by value in an interface yet',
 							parsedMethod.span);
 				}
 			}
@@ -785,37 +790,42 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			]);
 			for (capability in ["Hashable", "Equatable"])
 				if (session.relations.isAssignable(actual, TInstance(NominalKind.Interface, capability, [])))
-					BodyTyper.fail("E1025",
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Class "${classDecl.name}" cannot conform to $capability; use a struct for value equality',
 						classDecl.span);
 		}
 
 		if (isStruct && isNativeValue)
-			BodyTyper.fail("E1022",
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 				'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields',
 				classDecl.span);
 		if (isStruct && classDecl.typeParameters.length > 0)
-			BodyTyper.fail("E1022", 'Generic struct "${classDecl.name}" is not supported yet', classDecl.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Generic struct "${classDecl.name}" is not supported yet',
+				classDecl.span);
 		if (isValue)
 			validateFiniteValueLayout(classDecl, [], []);
 		if ((isValue || isNativeValue) && classDecl.base != null)
-			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+				'Value class "${classDecl.name}" cannot extend another class', classDecl.span);
 		if ((isValue && !isStruct || isNativeValue) && classDecl.interfaces.length > 0)
-			BodyTyper.fail("E1022", 'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+				'Value class "${classDecl.name}" cannot implement interfaces', classDecl.span);
 		if (isNativeValue && classDecl.typeParameters.length > 0)
-			BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot be generic', classDecl.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Native value record "${classDecl.name}" cannot be generic',
+				classDecl.span);
 		if (isNativeValue) {
 			for (field in classDecl.fields) {
 				if (field.isStatic)
-					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare static fields',
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+						'Native value record "${classDecl.name}" cannot declare static fields',
 						field.span);
 				if (field.initializer != null)
-					BodyTyper.fail("E1022",
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 						'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
 			}
 			for (method in classDecl.methods)
 				if (!method.isStatic)
-					BodyTyper.fail("E1022",
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 						'Native value record "${classDecl.name}" cannot declare instance methods or constructors',
 						method.span);
 		}
@@ -827,20 +837,24 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (specialization != null && field.isStatic)
 				continue;
 			if (fieldNames.exists(field.name))
-				BodyTyper.fail("E1000", 'Duplicate field "${classDecl.name}.${field.name}"', field.span);
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT, 'Duplicate field "${classDecl.name}.${field.name}"',
+					field.span);
 			if (field.isInline && !field.isStatic)
-				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
+				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
 			if (field.isInline && field.initializer == null)
-				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer',
+				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					'Inline field "${classDecl.name}.${field.name}" requires an initializer',
 					field.span);
 			var type = session.declarations.types.fieldType(classDecl.name, field, erasedSubstitutions);
 			if ((switch (type) {
 				case TVoid: true;
 				default: false;
 			}))
-				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
+				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+				'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
-				BodyTyper.fail("E1022",
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 					'Native layout types can only appear in value structs or native value record fields', field.span);
 			var initializer:Null<TypedExpression> = null,
 				initializerContextWarnings:Null<Array<compiler.core.Diagnostic>> = null,
@@ -850,7 +864,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				if (field.isInline) {
 					var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
 					if (resolved == null)
-						BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"',
+						BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+							'Unable to resolve inline constant "${classDecl.name}.${field.name}"',
 							field.span);
 					initializer = resolved.initializer;
 					inlineValue = resolved.value;
@@ -909,11 +924,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			TInstance(NominalKind.Class, classDecl.name, []));
 		for (metadata in classDecl.metadata) {
 			if (metadata.name == "flat" && !propertyFacts.flat)
-				BodyTyper.fail("E1022",
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 					'Struct "${classDecl.name}" asserts @:flat but field "${propertyFacts.flatPath}" is not Flat',
 					metadata.span);
 			if (metadata.name == "portable" && !propertyFacts.portable)
-				BodyTyper.fail("E1022",
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 					'Struct "${classDecl.name}" asserts @:portable but field "${propertyFacts.portablePath}" is not Portable',
 					metadata.span);
 		}
@@ -925,7 +940,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				classSemanticSubstitutions),
 				interfaceName = BodyTyper.inheritanceName(interfaceType);
 			if (!session.interfaceDecls.exists(interfaceName) && !StructProperties.isConstraintType(interfaceInstance))
-				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedInterface, interfaceName,
+				throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					UnresolvedNameKind.WantedInterface, interfaceName,
 					classDecl.span));
 			validateInterfaceImplementation(classDecl, interfaceInstance, classSemanticSubstitutions, classDecl.span);
 		}
@@ -978,13 +994,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		session.runtimeDependencyTracker.record(classDecl.name + ".new", RuntimeType.OBSERVABLE_SOURCE);
 		session.runtimeDependencyTracker.record(classDecl.name + ".new", RuntimeType.REACTIVE_RUNTIME);
 		if (isValue || isNativeValue)
-			BodyTyper.fail("E1025",
+			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 				'Observable conformance is only supported on classes with identity: "${classDecl.name}"',
 				classDecl.span);
 		if (classDecl.base != null) {
 			var baseType = session.declarations.resolve(classDecl.base, classDecl.span, classSemanticSubstitutions);
 			if (!DeclaredConformance.has(session, baseType, "Observable"))
-				BodyTyper.fail("E1025", 'Observable class "${classDecl.name}" must extend an Observable base class',
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+					'Observable class "${classDecl.name}" must extend an Observable base class',
 					classDecl.span);
 		}
 		for (field in DiffIntrinsics.storedFields(classDecl)) {
@@ -1015,7 +1032,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						classSemanticSubstitutions), declaredType)
 						|| !TypeRelations.equals(session.declarations.types.resultType(method,
 						classSemanticSubstitutions), TBool))
-						BodyTyper.fail("E1003",
+						BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
 							'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool',
 							method.span);
 				} else if (method.name == "hash" && DeclaredConformance.has(session, declaredType, "Hashable")) {
@@ -1024,27 +1041,28 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						|| method.arguments.length != 0
 						|| !TypeRelations.equals(session.declarations.types.resultType(method,
 						classSemanticSubstitutions), TInt))
-						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int',
+						BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+							'Method "${classDecl.name}.hash" must have signature hash():Int',
 							method.span);
 				}
 			if (!hasEquals)
 				for (entry in DiffIntrinsics.conformanceFields(session, declaredType)) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsEquality(session, fieldType))
-						BodyTyper.fail("E1025",
+						BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 							'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable',
 							field.span);
 				}
 			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
 				if (hasEquals)
-					BodyTyper.fail("E1025",
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int',
 						classDecl.span);
 				var hashFields = DiffIntrinsics.conformanceFields(session, declaredType);
 				for (entry in hashFields) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsHash(session, fieldType))
-						BodyTyper.fail("E1025",
+						BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 							'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable',
 							field.span);
 				}
@@ -1058,12 +1076,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var interfaceName = switch interfaceType {
 			case TInstance(NominalKind.Interface, name, _): name;
 			default:
-				BodyTyper.fail("E1007", 'Enum "${declaration.name}" must implement an interface', declaration.span);
+				BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					'Enum "${declaration.name}" must implement an interface', declaration.span);
 				return;
 		};
 		var contract = session.interfaceDecls.get(interfaceName);
 		if (contract == null)
-			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedInterface, interfaceName,
+			throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,
+				UnresolvedNameKind.WantedInterface, interfaceName,
 				declaration.span));
 		var interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceType);
 		for (base in contract.bases)
@@ -1077,11 +1097,12 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					if (candidate.name == method.name)
 						implementation = candidate;
 			if (implementation == null || implementation.isStatic)
-				BodyTyper.fail("E1007", 'Enum "${declaration.name}" does not implement "$interfaceName.${method.name}"',
+				BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					'Enum "${declaration.name}" does not implement "$interfaceName.${method.name}"',
 					declaration.span);
 			if ((implementation.typeParameters != null && implementation.typeParameters.length > 0)
 				|| !sameSignature(implementation, method, enumSubstitutions, interfaceSubstitutions))
-				BodyTyper.fail("E1003",
+				BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
 					'Method "${declaration.name}.${method.name}" does not match interface "$interfaceName"',
 					implementation.span);
 		}
@@ -1112,15 +1133,16 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (declaration.methods != null)
 			for (method in declaration.methods) {
 				if (seenMethods.exists(method.name))
-					BodyTyper.fail("E1003", 'Duplicate method "${declaration.name}.${method.name}"', method.span);
+					BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+						'Duplicate method "${declaration.name}.${method.name}"', method.span);
 				seenMethods.set(method.name, true);
 				if (!hasPayload && (method.name == "equals" || method.name == "hash"))
-					BodyTyper.fail("E1025",
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash',
 						method.span);
 				if (method.name != "equals" && method.name != "hash") {
 					if (!requiredMethods.exists(method.name))
-						BodyTyper.fail("E1025",
+						BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 							'Enum method "${declaration.name}.${method.name}" must implement a declared interface method',
 							method.span);
 					continue;
@@ -1128,7 +1150,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				if (method.name == "equals") {
 					hasEquals = true;
 					if (!equatable)
-						BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals',
+						BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+							'Enum "${declaration.name}" must declare Equatable to define equals',
 							method.span);
 					if (method.isStatic
 						|| method.arguments.length != 1
@@ -1137,13 +1160,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						substitutions), type)
 						|| !TypeRelations.equals(session.declarations.types.resultType(method, substitutions),
 						TBool))
-						BodyTyper.fail("E1003",
+						BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
 							'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool',
 							method.span);
 				} else {
 					hasHash = true;
 					if (!hashable)
-						BodyTyper.fail("E1025",
+						BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 							session.relations.recursiveAnonymousField(type, [],
 							null) == null ? 'Enum "${declaration.name}" must declare Hashable to define hash'
 							: DeclaredConformance.capabilityError(session,
@@ -1154,12 +1177,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
 						|| !TypeRelations.equals(session.declarations.types.resultType(method, substitutions),
 						TInt))
-						BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int',
+						BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+							'Method "${declaration.name}.hash" must have signature hash():Int',
 							method.span);
 				}
 			}
 		if (hashable && hasEquals && !hasHash)
-			BodyTyper.fail("E1025",
+			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 				'Cannot synthesize Hashable for "${declaration.name}" with a handwritten equals; provide hash():Int',
 				declaration.span);
 		if (!equatable)
@@ -1169,11 +1193,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				var fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
 					field = parameter.name == null ? "payload" : parameter.name;
 				if (!hasEquals && !DeclaredConformance.supportsEquality(session, fieldType))
-					BodyTyper.fail("E1025",
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Cannot synthesize Equatable for "${declaration.name}": ${constructor.name}.$field does not conform to Equatable',
 						parameter.span);
 				if (hashable && !hasHash && !DeclaredConformance.supportsHash(session, fieldType))
-					BodyTyper.fail("E1025",
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable',
 						parameter.span);
 			}
@@ -1183,7 +1207,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	function validateFiniteValueLayout(declaration:AstClass, visiting:Array<String>, complete:Map<String, Bool>):Void {
 		var cycle = visiting.indexOf(declaration.name);
 		if (cycle >= 0)
-			BodyTyper.fail("E1022",
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 				'Value layout contains a by-value cycle: ${visiting.slice(cycle).concat([declaration.name]).join(" -> ")}',
 				declaration.span);
 		if (complete.exists(declaration.name))
@@ -1316,7 +1340,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (type == null || structureMentionsParameter(type)
 			|| !TypeRelations.equals(DeclarationTypeTable.substitute(type,
 			session.representation.erasedNominalSubstitutions(classDecl.name)), erased))
-			BodyTyper.fail("E1002",
+			BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 				'Cannot infer the type of field "${classDecl.name}.${field.name}" in generic class "${classDecl.name}" from its initializer; annotate it',
 				field.span);
 		return type;
@@ -1340,7 +1364,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	public function inlineFieldType(classDecl:AstClass, field:compiler.syntax.Ast.AstField):CompilerType {
 		var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
 		if (resolved == null)
-			BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+			BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+				'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
 		return resolved.value.type;
 	}
 
@@ -1875,12 +1900,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue);
 			if (!requestedValue && !isNativeValue) {
 				if (hasMetadata(classDecl.metadata, "assertLayout"))
-					BodyTyper.fail("E1022", "@:assertLayout requires a native layout", classDecl.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, "@:assertLayout requires a native layout",
+						classDecl.span);
 				continue;
 			}
 			for (field in classDecl.fields)
 				if (!field.isStatic && field.type == null)
-					BodyTyper.fail("E1022",
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 						'${isNativeValue ? "Native value" : "Value"} field "${classDecl.name}.${field.name}" needs a type annotation: its type is part of the layout',
 						field.span);
 			// A generic value class is rejected when the class is typed: it has no layout.
@@ -1930,37 +1956,42 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	function validateLayoutAssertion(name:String, metadata:compiler.syntax.Ast.AstMetadata):Void {
 		var layout = session.nativeLayoutsByName.get(name);
 		if (layout == null)
-			BodyTyper.fail("E1022", "@:assertLayout requires a native layout", metadata.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, "@:assertLayout requires a native layout", metadata.span);
 		var args = metadata.arguments;
 		if (args.length == 0 || args.length % 2 == 0)
-			BodyTyper.fail("E1022", "@:assertLayout expects a size followed by field names and offsets", metadata.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+				"@:assertLayout expects a size followed by field names and offsets", metadata.span);
 
 		function expected(index:Int):Int {
 			return switch args[index] {
 				case IntegerLiteral(value, _) if (value >= 0): value;
 				case _:
-					BodyTyper.fail("E1022", "@:assertLayout expects a non-negative integer", metadata.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, "@:assertLayout expects a non-negative integer",
+						metadata.span);
 					0;
 			}
 		}
 
 		var size = expected(0);
 		if (layout.size != size)
-			BodyTyper.fail("E1022", 'sizeof<$name>() is ${layout.size}, expected $size', metadata.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'sizeof<$name>() is ${layout.size}, expected $size',
+				metadata.span);
 		for (index in 0...Std.int(args.length / 2)) {
 			var argument = 1 + index * 2;
 			var field = switch args[argument] {
 				case StringLiteral(value, _): value;
 				case _:
-					BodyTyper.fail("E1022", "@:assertLayout expects a field name string", metadata.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, "@:assertLayout expects a field name string",
+						metadata.span);
 					"";
 			}
 			var actual = Lambda.find(layout.fields, candidate -> candidate.name == field);
 			if (actual == null)
-				BodyTyper.fail("E1022", 'Record "$name" has no field "$field"', metadata.span);
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Record "$name" has no field "$field"', metadata.span);
 			var offset = expected(argument + 1);
 			if (actual.offset != offset)
-				BodyTyper.fail("E1022", 'offsetof<$name>("$field") is ${actual.offset}, expected $offset',
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+					'offsetof<$name>("$field") is ${actual.offset}, expected $offset',
 					metadata.span);
 		}
 	}
@@ -1986,7 +2017,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (declaration == null || (!declaration.isNativeValue && !declaration.isFlat))
 			throw new InternalError('Missing flat or native value record "$name"');
 		if (visiting.exists(key))
-			BodyTyper.fail("E1022", 'Flat value record "$name" contains a by-value layout cycle', declaration.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Flat value record "$name" contains a by-value layout cycle',
+				declaration.span);
 		visiting.set(key, true);
 		var nativeDeclarations:Map<String, HxiDeclaration> = [];
 		for (field in declaration.fields)
@@ -1999,7 +2031,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					field.type) ? TInt : field.type, span:field.span
 			}], nativeDeclarations, declaration.span) catch (error:haxe.Exception) {
 			visiting.remove(key);
-			BodyTyper.fail("E1022", 'Invalid flat value record "$name": ${Std.string(error)}', declaration.span);
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Invalid flat value record "$name": ${Std.string(error)}',
+				declaration.span);
 			cast null;
 		};
 		visiting.remove(key);
@@ -2015,11 +2048,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				collectNestedNativeDeclarations(representation, target, classes, layouts, visiting, result, span);
 			case TInstance(NominalKind.NativeValue, name, arguments):
 				if (arguments.length != 0)
-					BodyTyper.fail("E1022", 'Generic native value field "$name" has no fixed layout', span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+						'Generic native value field "$name" has no fixed layout', span);
 				addNestedNativeDeclaration(name, target, classes, layouts, visiting, result);
 			case TInstance(NominalKind.Class, name, arguments):
 				if (arguments.length != 0)
-					BodyTyper.fail("E1022", 'Generic struct field "$name" has no fixed layout', span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Generic struct field "$name" has no fixed layout',
+						span);
 				addNestedNativeDeclaration(name, target, classes, layouts, visiting, result);
 			case _:
 		}
@@ -2052,9 +2087,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		for (metadata in classDecl.metadata)
 			if (metadata.name == "flat" || metadata.name == "portable") {
 				if (metadata.arguments.length != 0)
-					BodyTyper.fail("E1022", '@:${metadata.name} does not accept arguments', metadata.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, '@:${metadata.name} does not accept arguments',
+						metadata.span);
 				if (!isValue && !isNativeValue)
-					BodyTyper.fail("E1022", '@:${metadata.name} may only assert a value struct layout', metadata.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+						'@:${metadata.name} may only assert a value struct layout', metadata.span);
 			}
 	}
 
@@ -2063,23 +2100,27 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		for (entry in metadata)
 			if (entry.name == "repr") {
 				if (hasRepresentation)
-					BodyTyper.fail("E1022", 'Duplicate @:repr metadata', entry.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, 'Duplicate @:repr metadata', entry.span);
 				hasRepresentation = true;
 				if (entry.arguments.length != 1)
-					BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, '@:repr requires exactly one string argument',
+						entry.span);
 				var representation:Null<String> = null;
 				switch entry.arguments[0] {
 					case StringLiteral(value, _):
 						representation = value;
 					case _:
-						BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+						BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, '@:repr requires exactly one string argument',
+							entry.span);
 				}
 				if (representation == null)
-					BodyTyper.fail("E1022", '@:repr requires exactly one string argument', entry.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, '@:repr requires exactly one string argument',
+						entry.span);
 				if (representation != "C")
-					BodyTyper.fail("E1022", 'Unsupported native representation "$representation"', entry.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+						'Unsupported native representation "$representation"', entry.span);
 				if (!isValue)
-					BodyTyper.fail("E1022", '@:repr("C") requires @:value', entry.span);
+					BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH, '@:repr("C") requires @:value', entry.span);
 			}
 		return hasRepresentation;
 	}
@@ -2093,11 +2134,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					method.span) : session.declarations.types.resultType(method, substitutions);
 		for (argument in arguments)
 			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
-				BodyTyper.fail("E1022",
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 					'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet',
 					method.span);
 		if (NativeLayout.containsUnsupportedRuntimeValueType(result))
-			BodyTyper.fail("E1022",
+			BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
 				'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet',
 				method.span);
 		return {
@@ -2166,7 +2207,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var interfaceName = switch interfaceInstance {
 			case TInstance(Interface, name, _): name;
 			default:
-				BodyTyper.fail("E1007", "Implemented type must be an interface", span);
+				BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER, "Implemented type must be an interface", span);
 				return;
 		};
 		if (StructProperties.isConstraintType(interfaceInstance)) {
@@ -2174,7 +2215,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				actual = TInstance(NominalKind.Class, classDecl.name, []);
 			if (!session.relations.satisfiesConstraint(actual, interfaceInstance)) {
 				var detail = session.relations.constraintFailure(actual, interfaceInstance);
-				BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not satisfy $property: $detail', span);
+				BodyTyper.fail(DiagnosticCode.NATIVE_OR_CATCH,
+					'Struct "${classDecl.name}" does not satisfy $property: $detail', span);
 			}
 			return;
 		}
@@ -2186,7 +2228,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			var baseInstance = session.declarations.resolve(baseType, interfaceDecl.span, interfaceSubstitutions),
 				base = BodyTyper.inheritanceName(baseType);
 			if (!session.interfaceDecls.exists(base) && !StructProperties.isConstraintType(baseInstance))
-				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedInterface, base, span));
+				throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					UnresolvedNameKind.WantedInterface, base, span));
 			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
 		}
 		InterfaceProperties.validateImplementation(session, bodyTyper, classDecl, interfaceDecl,
@@ -2201,14 +2244,15 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (method.isDynamic == true && (implementation == null || implementation.isStatic)) {
 				var variable = MemberAccess.classField(session, classDecl.name, method.name, false);
 				if (variable != null)
-					BodyTyper.fail("E1007",
+					BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
 						'Field ${method.name} has different property access than in $interfaceName (${InterfaceProperties.kindOf(variable.field)} should be dynamic method)',
 						InterfaceProperties.nameSpan(variable.field.span, method.name));
-				BodyTyper.fail("E1007", 'Field ${method.name} needed by $interfaceName is missing',
+				BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					'Field ${method.name} needed by $interfaceName is missing',
 					InterfaceProperties.classNameSpan(classDecl));
 			}
 			if (implementation == null || implementation.isStatic)
-				BodyTyper.fail("E1007",
+				BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
 					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"',
 					span);
 			var implementationName = implementation.owner + "." + method.name,
@@ -2217,12 +2261,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				var isDynamic = DynamicMethods.isDynamic(session, implementationMethod, implementation.owner),
 					expectsDynamic = method.isDynamic == true;
 				if (expectsDynamic && !MemberAccess.isPublicMethod(session, implementation.owner, method.name))
-					BodyTyper.fail("E1007", 'Field ${method.name} should be public as requested by $interfaceName',
+					BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
+						'Field ${method.name} should be public as requested by $interfaceName',
 						InterfaceProperties.methodNameSpan(implementationMethod));
 				if (isDynamic != expectsDynamic) {
 					var actualKind = isDynamic ? "dynamic method" : "method",
 						expectedKind = expectsDynamic ? "dynamic method" : "method";
-					BodyTyper.fail("E1007",
+					BodyTyper.fail(DiagnosticCode.DECLARATION_OR_MODIFIER,
 						'Field ${method.name} has different property access than in $interfaceName ($actualKind should be $expectedKind)',
 						InterfaceProperties.methodNameSpan(implementationMethod));
 				}
@@ -2238,9 +2283,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (implementationMethod == null
 				|| !sameSignature(implementationMethod, method, implementationSubstitutions, interfaceSubstitutions)) {
 				if ((implied || method.isDynamic == true) && implementationMethod != null)
-					BodyTyper.fail("E1003", 'Field ${method.name} has different type than in $interfaceName',
+					BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
+						'Field ${method.name} has different type than in $interfaceName',
 						InterfaceProperties.methodNameSpan(implementationMethod));
-				BodyTyper.fail("E1003",
+				BodyTyper.fail(DiagnosticCode.TYPE_CONSTRAINT,
 					'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"',
 					span);
 			}
@@ -2286,7 +2332,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (fn.metadata != null)
 			for (entry in fn.metadata)
 				if (entry.name == "cNative")
-					BodyTyper.fail("E1021",
+					BodyTyper.fail(DiagnosticCode.COVERAGE_THROW_OR_EXTERN,
 						'@:${entry.name} binds only an extern function; "$name" has a body, which would run instead',
 						entry.span);
 	}

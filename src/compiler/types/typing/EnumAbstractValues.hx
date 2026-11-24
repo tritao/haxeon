@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstEnumAbstractValue;
@@ -29,7 +30,7 @@ class EnumAbstractValues {
 		if (known != null)
 			return known;
 		if (session.constants.enumAbstractConstantsInProgress.exists(key))
-			BodyTyper.fail("E1002", 'Cyclic enum abstract constant "$key"', value.span);
+			BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Cyclic enum abstract constant "$key"', value.span);
 		session.constants.enumAbstractConstantsInProgress.set(key, true);
 		var previous = session.constants.enumAbstractConstantOwner;
 		session.constants.enumAbstractConstantOwner = declaration.name;
@@ -38,7 +39,7 @@ class EnumAbstractValues {
 			// The initializer is the abstract's own code, typed where a value is first used, which may be another class.
 			var expression = MemberAccess.allowed(session,
 				() -> typer.coerce(typer.typeExpression(value.value, new Scope(),
-				storage), storage, 'enum abstract value "$key"', "E1002"));
+				storage), storage, 'enum abstract value "$key"', DiagnosticCode.ASSIGNMENT_OR_BINDING));
 			session.constants.enumAbstractConstantOwner = previous;
 			session.constants.enumAbstractConstantsInProgress.remove(key);
 			session.constants.enumAbstractConstants.set(key, expression);

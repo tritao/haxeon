@@ -1,5 +1,6 @@
 package compiler.syntax;
 
+import compiler.core.DiagnosticCode;
 import compiler.syntax.Ast.AstTypeConstraint;
 import compiler.core.Diagnostic;
 import compiler.core.InternalError;
@@ -363,7 +364,7 @@ class Parser {
 			leaveLambdaMember(outer);
 		var main = script ? explicitMain(functions, classes) : null;
 		if (main != null && hasOtherStatements)
-			throw new CompileError(new Diagnostic("E0002",
+			throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 				"A script cannot declare main and also contain top-level statements", main.span));
 		if (variables != null) {
 			var error = main == null ? variables.localError : variables.fieldError;
@@ -559,10 +560,12 @@ class Parser {
 			var method = parseFunctionBody(functionStart, methodName, true, isStatic,
 				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic, false, isDynamic);
 			if (isDynamic && !isStatic)
-				throw new CompileError(new Diagnostic("E1007", "Invalid modifier: dynamic on method of abstract",
+				throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					"Invalid modifier: dynamic on method of abstract",
 					memberStart.merge(method.span)));
 			if (isDynamic && isInline)
-				throw new CompileError(new Diagnostic("E1007", "Invalid modifier combination: dynamic + inline",
+				throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					"Invalid modifier combination: dynamic + inline",
 					memberStart.merge(method.span)));
 			methods.push(method);
 		}
@@ -736,14 +739,15 @@ class Parser {
 	function parseQualifiedName():String {
 		if (recovering && isExpressionTerminator(kindOf(current()))) {
 			var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected name", span));
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR, "Expected name", span));
 			return "";
 		}
 		var name = textOf(consumeName());
 		while (match(TokenKind.Dot)) {
 			if (recovering && isExpressionTerminator(kindOf(current()))) {
 				var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-				recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected name", span));
+				recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR, "Expected name",
+					span));
 				break;
 			}
 			name += "." + textOf(consumeName());
@@ -837,7 +841,7 @@ class Parser {
 		for (index in 0...arguments.length - 1)
 			switch arguments[index].type {
 				case AppliedType("haxe.Rest", _):
-					throw new CompileError(new Diagnostic("E0002",
+					throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 						"Rest should only be used for the last function argument",
 						arguments[index].span));
 				default:
@@ -1291,7 +1295,7 @@ class Parser {
 	}
 
 	function scriptVariableError(message:String):Diagnostic
-		return new Diagnostic("E0002", message, spanOf(current()));
+		return new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, spanOf(current()));
 
 	/** `extern` among a member's modifiers. */
 	inline function isExternModifier():Bool
@@ -1406,7 +1410,8 @@ class Parser {
 
 	static function rejectDynamicVariable(isDynamic:Bool, name:String, span:SourceSpan):Void {
 		if (isDynamic)
-			throw new CompileError(new Diagnostic("E1007", "Invalid accessor 'dynamic' for variable " + name, span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
+				"Invalid accessor 'dynamic' for variable " + name, span));
 	}
 
 	function parseInterface():AstInterface {
@@ -1476,7 +1481,7 @@ class Parser {
 			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
 				end = spanOf(consume(TokenKind.Semicolon));
 			if (isStatic)
-				throw new CompileError(new Diagnostic("E1002",
+				throw new CompileError(new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 					"You can only declare static fields in extern interfaces",
 					memberStart.merge(end)));
 			methods.push({
@@ -1681,7 +1686,8 @@ class Parser {
 				return switch target {
 					case Variable(name, _):
 						Increment(name, delta, expressionSpan(target).merge(end));
-					default: throw new CompileError(new Diagnostic("E0002", "Increment target must be a variable",
+					default: throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
+						"Increment target must be a variable",
 						expressionSpan(target)));
 				};
 			}
@@ -1732,7 +1738,7 @@ class Parser {
 					case Member(object, field, _): FieldAssignment(object, field, assigned,
 						expressionSpan(target).merge(end));
 					default:
-						throw new CompileError(new Diagnostic("E0002",
+						throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 							"Assignment target must be a variable, field, or array element",
 							expressionSpan(target)));
 				};
@@ -2092,7 +2098,8 @@ class Parser {
 			case Variable(name, _): Assignment(name, value, span);
 			case Index(array, offset, _): IndexAssignment(array, offset, value, span);
 			case Member(object, field, _): FieldAssignment(object, field, value, span);
-			default: throw new CompileError(new Diagnostic("E0002", message, expressionSpan(target)));
+			default: throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message,
+				expressionSpan(target)));
 		};
 
 	/** `store` as a value, after the bindings that make its target stable (`AssignmentTarget`). */
@@ -2291,7 +2298,8 @@ class Parser {
 			return parseKeyPathLiteral(spanOf(previous()));
 		if (recovering && isExpressionTerminator(kindOf(current()))) {
 			var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected expression", span));
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR, "Expected expression",
+				span));
 			return ErrorExpression(span);
 		}
 		if (check(TokenKind.At)) {
@@ -2922,7 +2930,7 @@ class Parser {
 		}
 		if (recoveringAtEnd()) {
 			var span = spanOf(current());
-			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002",
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 				"Expression block requires a result expression",
 				span));
 			return ErrorExpression(span);
@@ -3196,15 +3204,15 @@ class Parser {
 	function parseEmbeddedText(start:SourceSpan):AstExpression {
 		var message = "Embed.text requires one literal path";
 		if (!match(TokenKind.StringLiteral))
-			throw new CompileError(new Diagnostic("E0002", message, start));
+			throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, start));
 		var argument = parseStringExpression(previous());
 		match(TokenKind.Comma);
 		if (!match(TokenKind.RightParen))
-			throw new CompileError(new Diagnostic("E0002", message, start));
+			throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, start));
 		var span = start.merge(spanOf(previous()));
 		return switch argument {
 			case StringLiteral(path, _): StringLiteral(embedded.read(path, span), span);
-			default: throw new CompileError(new Diagnostic("E0002", message, span));
+			default: throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, span));
 		};
 	}
 
@@ -3234,7 +3242,8 @@ class Parser {
 			if (match(TokenKind.Dot)) {
 				if (recovering && isExpressionTerminator(kindOf(current()))) {
 					var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-					recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected member name", span));
+					recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR,
+						"Expected member name", span));
 					break;
 				}
 				var nameToken = consumeName(), name = textOf(nameToken);
@@ -3318,7 +3327,7 @@ class Parser {
 	function parseAtomicType():AstType {
 		if (recovering && isExpressionTerminator(kindOf(current()))) {
 			var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected type", span));
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR, "Expected type", span));
 			return ErrorType(span);
 		}
 		if (match(TokenKind.LeftBrace)) {
@@ -3504,7 +3513,7 @@ class Parser {
 	function insertMissing(kind:TokenKind):TokenId {
 		var replacement = tokenText(kind),
 			span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002",
+		recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 			'Expected $kind, got ${kindOf(current())}', span,
 			compiler.core.Diagnostic.DiagnosticSeverity.Error,
 			[
@@ -3520,7 +3529,8 @@ class Parser {
 
 	function missingFunctionBody():Void {
 		var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
-		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected function body", span,
+		recordRecoveryDiagnostic(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR, "Expected function body",
+			span,
 			compiler.core.Diagnostic.DiagnosticSeverity.Error, [
 				{id: "insert-function-body", title: "Insert function body", edits: [{span: span, replacement: " {}"}]}
 			]));
@@ -3642,7 +3652,7 @@ class Parser {
 	}
 
 	function fail(token:TokenId, message:String):Void
-		throw new CompileError(new Diagnostic("E0002", message, spanOf(token)));
+		throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, message, spanOf(token)));
 
 	function parseIntegerToken(token:TokenId, negative:Bool = false):Int {
 		var hexadecimal = isHexIntegerToken(token),
@@ -3684,7 +3694,7 @@ class Parser {
 				fail(token, 'Integer literal "${textOf(token)}" is outside the supported range');
 			return value;
 		} catch (_:Dynamic) {
-			throw new CompileError(new Diagnostic("E0002",
+			throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 				'Integer literal "${textOf(token)}" is outside the supported range', spanOf(token)));
 		}
 	}
@@ -3859,7 +3869,7 @@ class Parser {
 
 	@:noReturn
 	static function invalidEscape(message:String, span:SourceSpan):Void
-		throw new CompileError(new Diagnostic("E0001", 'Invalid escape sequence: $message', span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.LEXICAL_ERROR, 'Invalid escape sequence: $message', span));
 
 	function parseStringExpression(token:TokenId):AstExpression {
 		var text = textOf(token);
@@ -3941,7 +3951,7 @@ class Parser {
 			}
 			index++;
 		}
-		throw new CompileError(new Diagnostic("E0002", "Unterminated string interpolation", span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.SYNTAX_ERROR, "Unterminated string interpolation", span));
 	}
 
 	function parseInterpolatedExpression(source:String, outer:SourceSpan, offset:Int):AstExpression {

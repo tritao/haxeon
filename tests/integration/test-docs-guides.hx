@@ -2,7 +2,7 @@
 /**
  * Check published links and match the guides, language tour and migration pages to their examples, as described in
  * docs/DEVELOPMENT.md. Build copies of each project and check its output or open its app for a few frames.
- * `--no-build` checks the pages only.
+ * `--no-build` checks the pages only. `--errors-only` builds only the error reference examples.
  */
 import haxe.io.Path;
 import haxeon.Script;
@@ -34,11 +34,14 @@ function main() {
 		examples:Array<Example> = [],
 		pages = 0,
 		checked = 0;
+	var errorsOnly = Sys.args().indexOf("--errors-only") >= 0;
 	for (section in PUBLISHED) {
 		var directory = Path.join([root, "docs", section]);
 		var names = [for (name in FileSystem.readDirectory(directory)) if (StringTools.endsWith(name, ".md")) name];
 		names.sort(Reflect.compare);
-		if (section != "reference")
+		if (section == "reference")
+			examples = examples.concat(referenceErrorProjects(Path.join([directory, "examples"]), failures));
+		else if (!errorsOnly)
 			examples = examples.concat(exampleProjects(section, Path.join([directory, "examples"])));
 		for (name in names) {
 			var page = Path.join([directory, name]),
@@ -46,6 +49,8 @@ function main() {
 				shown = 'docs/$section/$name';
 			checkLinks(root, page, shown, text, failures);
 			pages++;
+			if (section == "reference" && name == "ERRORS.md")
+				checkErrorsPage(root, shown, text, failures);
 			if (section == "reference")
 				continue;
 			if (section == "guides" && name != "README.md" && !~/^[0-9][0-9]-[a-z0-9-]+\.md$/.match(name)) {
@@ -97,11 +102,16 @@ function main() {
 	if (FileSystem.exists(work))
 		Script.check("cmake", ["-E", "rm", "-rf", work]);
 	FileSystem.createDirectory(work);
-	var built = 0;
+	var built = 0, rejected = 0;
 	for (example in examples) {
 		// A copy, so builds write nowhere in the tree; under its own directory name, which names the package.
 		var project = Path.join([work, example.section, example.slug, example.relative]);
 		copyTree(example.source, project);
+		if (example.section == "reference") {
+			checkErrorExample(project, example.relative);
+			rejected++;
+			continue;
+		}
 		var app = isApp(project);
 		Sys.println('== ${example.section}/${example.slug}/${example.relative}');
 		if (app) {
@@ -127,7 +137,7 @@ function main() {
 		}
 		built++;
 	}
-	Sys.println('PASS: $pageSummary, and $built example projects build and run');
+	Sys.println('PASS: $pageSummary, $built example projects build and run, and $rejected fail with their expected code');
 }
 
 /** "Your first app": the manifest is the one `haxeon create my_app` writes, and the release build runs on its own. */
@@ -393,11 +403,79 @@ function runProgram(project:String):Void {
 			+ File.getContent(expected));
 }
 
+/**
+ * The error reference has one `## CODE: title` section per DiagnosticCode, in code order, and a section's Haxe block is
+ * the whole `src/Main.hx` of that code's example project, which must fail with that code.
+ */
+function checkErrorsPage(root:String, shown:String, text:String, failures:Array<String>):Void {
+	var registry = content(Path.join([root, "src/compiler/core/DiagnosticCode.hx"])),
+		value = ~/= "([EW][0-9]{4})";/,
+		codes:Array<String> = [];
+	while (value.match(registry)) {
+		codes.push(value.matched(1));
+		registry = value.matchedRight();
+	}
+	codes.sort(Reflect.compare);
+	var sections = text.split("\n## "), documented:Array<String> = [], heading = ~/^([EW][0-9]{4}): \S/;
+	for (section in sections.slice(1)) {
+		if (!heading.match(section)) {
+			failures.push('$shown: a section is headed "## CODE: title", not "## ${section.split("\n")[0]}"');
+			continue;
+		}
+		var code = heading.matched(1);
+		documented.push(code);
+		var example = Path.join([root, "docs/reference/examples/errors", code, "src/Main.hx"]),
+			blocks = [for (block in fencedBlocks(section)) if (block.language == "haxe") block];
+		if (blocks.length > 1)
+			failures.push('$shown: $code shows more than one Haxe block');
+		else if (blocks.length == 1 && !FileSystem.exists(example))
+			failures.push('$shown: $code shows a program, but docs/reference/examples/errors/$code/src/Main.hx does not exist');
+		else if (blocks.length == 1 && blocks[0].lines.join("\n") != StringTools.rtrim(normalize(content(example))))
+			failures.push('$shown: $code shows a program that differs from docs/reference/examples/errors/$code/src/Main.hx');
+		else if (blocks.length == 0 && FileSystem.exists(example))
+			failures.push('$shown: $code has an example project but does not show its src/Main.hx');
+	}
+	if (documented.join(",") != codes.join(","))
+		failures.push('$shown: its sections must be the codes in src/compiler/core/DiagnosticCode.hx, in order; documented '
+			+ documented.join(" ") + ', defined ' + codes.join(" "));
+}
+
+/** The projects under docs/reference/examples/errors, one per code, each holding its code in expected-error.txt. */
+function referenceErrorProjects(examples:String, failures:Array<String>):Array<Example> {
+	var projects = exampleProjects("reference", examples, "errors");
+	var root = Path.join([examples, "errors"]);
+	var codes = [for (name in FileSystem.readDirectory(root))
+		if (FileSystem.isDirectory(Path.join([root, name]))) name];
+	for (code in codes) {
+		var project = Path.join([root, code]);
+		var source = Path.join([project, "src/Main.hx"]);
+		if (!~/^E[0-9]{4}$/.match(code) || !FileSystem.exists(Path.join([project, "haxeon.toml"]))
+			|| StringTools.trim(content(source)) == "" || StringTools.trim(content(Path.join([
+				project,
+				"expected-error.txt"
+			]))) != code)
+			failures.push('docs/reference/examples/errors/$code must contain haxeon.toml, src/Main.hx, and its code in expected-error.txt');
+	}
+	return projects;
+}
+
+/** A failed build must print exactly one diagnostic, with the code named by the example. */
+function checkErrorExample(project:String, code:String):Void {
+	var expected = StringTools.trim(content(Path.join([project, "expected-error.txt"])));
+	var log = Path.join([project, "build.log"]);
+	var status = haxeon(["build", "--color=never", "--diagnostic-format=short"], project, log);
+	// The one-shot worker also prints an exception summary.
+	var location = ~/^(?!Uncaught exception: ).+:[0-9]+:[0-9]+: ([EW][0-9]{4}): /;
+	var actual = [for (line in lines(log)) if (location.match(line)) location.matched(1)];
+	if (status == 0 || actual.length != 1 || actual[0] != expected)
+		Script.fail('FAIL: $code expected one diagnostic ($expected) and a failed build; exit $status, log:\n${content(log)}');
+}
+
 /** Each project under a section's `examples` directory, grouped by page. */
-function exampleProjects(section:String, examples:String):Array<Example> {
+function exampleProjects(section:String, examples:String, ?only:String):Array<Example> {
 	var result:Array<Example> = [];
 	var slugs = [for (name in FileSystem.readDirectory(examples))
-		if (FileSystem.isDirectory(Path.join([examples, name]))) name];
+		if ((only == null || name == only) && FileSystem.isDirectory(Path.join([examples, name]))) name];
 	slugs.sort(Reflect.compare);
 	for (slug in slugs)
 		for (file in exampleFiles(Path.join([examples, slug]), ""))

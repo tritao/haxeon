@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
@@ -107,7 +108,7 @@ class EnumEqualityGenerator {
 			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.get(name);
 				if (declaration == null)
-					BodyTyper.fail("E1025", 'Type.enumEq cannot resolve enum "$name"', span);
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE, 'Type.enumEq cannot resolve enum "$name"', span);
 				var custom = reflective ? null : EnumConformanceMethods.method(session, type, "equals");
 				if (custom != null) {
 					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "equals"), [
@@ -151,7 +152,7 @@ class EnumEqualityGenerator {
 					statements.push(TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span));
 				}
 			default:
-				BodyTyper.fail("E1025",
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 					'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"',
 					span);
 		}

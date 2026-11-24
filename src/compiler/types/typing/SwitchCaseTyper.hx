@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.types.Type.CompilerType;
@@ -75,7 +76,7 @@ class SwitchCaseTyper {
 				seenCases.set("$catchall", true);
 			if (caseKey != null && !guarded) {
 				if (seenCases.exists(caseKey))
-					fail("E1020", "Duplicate switch case", caseSpan);
+					fail(DiagnosticCode.LOOKUP_OR_DECLARATION, "Duplicate switch case", caseSpan);
 				seenCases.set(caseKey, true);
 			}
 			matches.push(match);
@@ -134,7 +135,8 @@ class SwitchCaseTyper {
 			scope:Scope):TypedExpression {
 		var type = constantType == null
 			|| compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
-		return bodyTyper.coerce(bodyTyper.typePatternValue(value, scope, type), type, "switch case", "E1019");
+		return bodyTyper.coerce(bodyTyper.typePatternValue(value, scope, type), type, "switch case",
+			DiagnosticCode.PATTERN_OR_DEFER);
 	}
 
 	/**
@@ -148,10 +150,11 @@ class SwitchCaseTyper {
 		for (bound in names) {
 			var first = named(firstNames, bound.name);
 			if (first == null)
-				fail("E1019", 'Variable ${bound.name} must appear exactly once in each sub-pattern', bound.span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER,
+					'Variable ${bound.name} must appear exactly once in each sub-pattern', bound.span);
 			else if (!bodyTyper.isAssignableTo(bound.type, first.type))
 				// Reported at the first pattern's binding, as Haxe does.
-				fail("E1003",
+				fail(DiagnosticCode.TYPE_CONSTRAINT,
 					'${compiler.semantic.SemanticSignature.display(bound.type)} should be ${compiler.semantic.SemanticSignature.display(first.type)}',
 					first.span);
 			if (first != null)
@@ -159,7 +162,8 @@ class SwitchCaseTyper {
 		}
 		for (first in firstNames)
 			if (named(names, first.name) == null)
-				fail("E1019", 'Variable ${first.name} must appear exactly once in each sub-pattern', first.span);
+				fail(DiagnosticCode.PATTERN_OR_DEFER,
+					'Variable ${first.name} must appear exactly once in each sub-pattern', first.span);
 		function local(id:Null<String>):Null<String>
 			return id == null ? null : locals.exists(id) ? locals.get(id) : id;
 		function bindings(list:Array<TypedSwitchBinding>):Array<TypedSwitchBinding>
@@ -202,6 +206,6 @@ class SwitchCaseTyper {
 		return null;
 	}
 
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

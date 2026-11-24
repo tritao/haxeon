@@ -7,6 +7,7 @@ import compiler.compilation.CompilerPublication.ReconnectReason;
 import compiler.core.CancellationError;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.service.LanguageService;
@@ -41,11 +42,11 @@ class LanguageServiceProtocol {
 		try {
 			request = Json.parse(line);
 		} catch (error:Dynamic)
-			return failure(null, "E0000", "Invalid JSON request");
+			return failure(null, DiagnosticCode.EDITOR_REQUEST, "Invalid JSON request");
 		var id:Dynamic = Reflect.field(request, "id"),
 			method:String = Reflect.field(request, "method");
 		if (method == null)
-			return failure(id, "E0000", "Request method is required");
+			return failure(id, DiagnosticCode.EDITOR_REQUEST, "Request method is required");
 		if (method == "cancel") {
 			var target = Reflect.field(request, "requestId"),
 				cancelled = cancel(target);
@@ -166,7 +167,7 @@ class LanguageServiceProtocol {
 			return failureDiagnostic(id, error.diagnostic);
 		} catch (error:Dynamic) {
 			finishRequest(requestKey);
-			return failure(id, "E0000", Std.string(error));
+			return failure(id, DiagnosticCode.EDITOR_REQUEST, Std.string(error));
 		}
 	}
 

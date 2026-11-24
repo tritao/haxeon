@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstField;
 import compiler.types.InlineConstantEvaluator;
@@ -52,7 +53,7 @@ class InlineConstantResolver {
 			return cached;
 		}
 		if (session.constants.inlineConstantsInProgress.exists(key))
-			fail("E1002", 'Cyclic inline constant reference through "$key"', span);
+			fail(DiagnosticCode.ASSIGNMENT_OR_BINDING, 'Cyclic inline constant reference through "$key"', span);
 		session.constants.inlineConstantsInProgress.set(key, true);
 		var dependencies:Map<String, Bool> = [];
 		dependencyCollectors.push(dependencies);
@@ -68,7 +69,8 @@ class InlineConstantResolver {
 				var initializer = bodyTyper.typeInlineInitializer(field, constantOwner, constantType, typeParameters),
 					literal = InlineConstantEvaluator.evaluate(initializer);
 				if (literal == null)
-					fail("E1002", 'Inline field "$constantOwner.$name" requires a compile-time constant initializer',
+					fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+						'Inline field "$constantOwner.$name" requires a compile-time constant initializer',
 						fieldSpan);
 				var targets = [for (target in dependencies.keys()) target];
 				targets.sort(Reflect.compare);
@@ -76,7 +78,7 @@ class InlineConstantResolver {
 					dependencies: targets,
 					initializer: initializer,
 					value: bodyTyper.coerce(literal, constantType == null ? initializer.type : constantType,
-						'inline field "$constantOwner.$name"', "E1002")
+						'inline field "$constantOwner.$name"', DiagnosticCode.ASSIGNMENT_OR_BINDING)
 				});
 			});
 		} catch (error:haxe.Exception) {
@@ -93,6 +95,6 @@ class InlineConstantResolver {
 	}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -96,7 +97,7 @@ class ClassProperties {
 		}
 		var method = MemberAccess.methodInfo(session, found.declaration.name, simple);
 		if (method == null || method.isStatic)
-			throw new CompileError(new Diagnostic("E1005", "Could not resolve accessor", span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER, "Could not resolve accessor", span));
 		return method.owner + "." + simple;
 	}
 
@@ -128,12 +129,12 @@ class ClassProperties {
 	/** Inside its own accessor a property is its variable, which only a stored one has (`@:isVar`, or a `default` or `null` side). */
 	static function requireStorage(field:AstField, read:Bool, span:SourceSpan):Void
 		if (!StructProperties.hasStorage(field))
-			throw new CompileError(new Diagnostic("E1024",
+			throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 				"This field cannot be accessed because it is not a real variable",
 				AbstractProperties.nameSpan(span, field.name, read)));
 
 	static function inaccessible(read:Bool, name:String, span:SourceSpan):Void
-		throw new CompileError(new Diagnostic("E1024",
+		throw new CompileError(new Diagnostic(DiagnosticCode.ANNOTATION_OR_SCHEMA,
 			'This expression cannot be accessed for ${read ? "reading" : "writing"}',
 			AbstractProperties.nameSpan(span, name, read)));
 
@@ -163,7 +164,7 @@ class ClassProperties {
 					} else
 						declared = declaresInstanceMethod(session, declaration, name);
 					if (!declared)
-						throw new CompileError(new Diagnostic("E1002",
+						throw new CompileError(new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 							'Method $name required by property ${field.name} is missing',
 							field.declarationSpan ?? field.span));
 				}
@@ -211,11 +212,11 @@ class ClassProperties {
 		}
 		var method = session.signatures.get(getter);
 		if (method == null)
-			throw new CompileError(new Diagnostic("E1005", "Could not resolve accessor", span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER, "Could not resolve accessor", span));
 		if (scope != null)
 			session.invalidateCallEffects(getter, scope);
 		var call = new TypedExpression(TCall(getter, []), bodyTyper.functionResultType(method, method.span), span);
-		return bodyTyper.coerce(call, type, 'property "$name"', "E1002");
+		return bodyTyper.coerce(call, type, 'property "$name"', DiagnosticCode.ASSIGNMENT_OR_BINDING);
 	}
 
 	/** A write of `value` (of the property's type) to the static `name` of `owner` that calls its setter, or null. */
@@ -228,14 +229,15 @@ class ClassProperties {
 		}
 		var method = session.signatures.get(setter);
 		if (method == null)
-			throw new CompileError(new Diagnostic("E1005", "Could not resolve accessor", span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER, "Could not resolve accessor", span));
 		var argumentTypes = bodyTyper.argumentTypesOf(method);
 		if (argumentTypes.length != 1)
 			return null;
 		session.invalidateCallEffects(setter, scope);
 		scope.invalidateExpression('static:$owner.$name');
 		return new TypedExpression(TCall(setter,
-			[bodyTyper.coerce(value, argumentTypes[0], 'property "$name"', "E1002", Assignment(value.span))]),
+			[bodyTyper.coerce(value, argumentTypes[0], 'property "$name"', DiagnosticCode.ASSIGNMENT_OR_BINDING,
+			Assignment(value.span))]),
 			bodyTyper.functionResultType(method, method.span), span);
 	}
 }

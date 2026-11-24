@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.NativeLayout;
@@ -314,7 +315,7 @@ class TypeRepresentation {
 		var remaining = [MAX_OWNER_TYPE_NODES];
 		for (argument in arguments)
 			if (exceedsOwnerComplexity(argument, 1, [], remaining))
-				throw new CompileError(new Diagnostic("E1028",
+				throw new CompileError(new Diagnostic(DiagnosticCode.SPECIALIZATION_COMPLEXITY,
 					'Generic owner "$name" exceeds the specialization type complexity limit ($MAX_OWNER_TYPE_DEPTH nesting levels or $MAX_OWNER_TYPE_NODES type nodes); check for polymorphic recursion',
 					span));
 	}
@@ -954,7 +955,7 @@ class TypeRepresentation {
 		if (isNullMapValue(value)) return;
 		if (hasMapStorageChange(mapBoundaryType(value.type), mapBoundaryType(target), [])) {
 			var context = owner == null ? "Generic map boundary" : 'Type "${SemanticSignature.display(owner)}"';
-			throw new CompileError(new Diagnostic("E1009",
+			throw new CompileError(new Diagnostic(DiagnosticCode.VALUE_CONVERSION,
 				'$context: scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary (${SemanticSignature.display(value.type)} to ${SemanticSignature.display(target)})',
 				value.span));
 		}
@@ -1216,7 +1217,8 @@ class TypeRepresentation {
 						session.monomorphs.noteFieldUse(structure, name);
 						return field.type;
 					}
-				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
+				throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER, 'Unknown anonymous field "$name"',
+					span));
 			case TInstance(Class, className, _):
 				var declaration = session.classDecls.get(className);
 				if (declaration != null) {
@@ -1227,9 +1229,11 @@ class TypeRepresentation {
 						return fieldType(session.declarations.resolve(declaration.base, declaration.span,
 							nominalSubstitutions(type)), name, span);
 				}
-				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
+				throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER, 'Unknown field "$className.$name"',
+					span));
 			default:
-				throw new CompileError(new Diagnostic("E1005", 'Field "$name" requires an object', span));
+				throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER, 'Field "$name" requires an object',
+					span));
 		}
 	}
 

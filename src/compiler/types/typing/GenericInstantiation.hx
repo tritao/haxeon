@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.syntax.Ast.AstTypeConstraint;
 import compiler.syntax.Ast.AstArgument;
 import compiler.core.Diagnostic;
@@ -41,7 +42,8 @@ class GenericInstantiation {
 			required--;
 		if (arguments.length < required || arguments.length > fn.arguments.length) {
 			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
-			fail("E1008", 'Function "$baseName" expects $expected arguments, got ${arguments.length}', span);
+			fail(DiagnosticCode.CALL_FORM, 'Function "$baseName" expects $expected arguments, got ${arguments.length}',
+				span);
 		}
 		var substitutions:Map<String, CompilerType> = presetSubstitutions == null
 			? [] : [for (parameter => type in presetSubstitutions) parameter => type],
@@ -51,7 +53,8 @@ class GenericInstantiation {
 				arguments[i].span);
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
-				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+				fail(DiagnosticCode.TYPE_CONSTRAINT, 'Cannot infer generic type parameter "$parameter" for "$baseName"',
+					span);
 		settleNullArguments(substitutions);
 		settleTypeArguments(baseName, fn, arguments, substitutions, span);
 		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
@@ -109,7 +112,8 @@ class GenericInstantiation {
 				if (actualElement != null && expectedElement != null)
 					Monomorphs.unify(actualElement, expectedElement);
 				if (!session.relations.isAssignable(argument.type, expected))
-					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
+					fail(DiagnosticCode.VALUE_CONVERSION,
+						'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
 				var hidden = "$iteration-argument:" + index,
 					parameter = fn.arguments[index];
 				var iterable = session.monomorphs.closeReached(argument.type);
@@ -198,7 +202,8 @@ class GenericInstantiation {
 			expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
 		if (!session.relations.satisfiesConstraint(actual, expected)) {
 			var detail = session.relations.constraintFailure(actual, expected);
-			fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
+			fail(session.relations.recursiveCapabilityFailure(actual, expected)
+				? DiagnosticCode.CONFORMANCE : DiagnosticCode.TYPE_CONSTRAINT,
 				'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"'
 				+ (detail == null ? "" : ': $detail'), span);
 		}
@@ -230,7 +235,7 @@ class GenericInstantiation {
 					&& carriers.length == 1 && session.monomorphs.carriedOnlyBy(cell, carriers[0].span))
 					Monomorphs.unify(TMonomorph(cell), TDynamic);
 				else
-					fail("E1003",
+					fail(DiagnosticCode.TYPE_CONSTRAINT,
 						'Cannot infer ${cell.origin} where it is passed to "$baseName": a generic call needs its type arguments'
 						+ ' when it is typed; give it a type',
 						cell.span);
@@ -462,7 +467,8 @@ class GenericInstantiation {
 				if (session.relations.isAssignable(actual, previous))
 					substitutions.set(name, actual);
 				else if (!session.relations.isAssignable(previous, actual))
-					fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
+					fail(DiagnosticCode.TYPE_CONSTRAINT, 'Conflicting types inferred for generic parameter "$name"',
+						span);
 			}
 		} else
 			substitutions.set(name, actual);
@@ -599,6 +605,6 @@ class GenericInstantiation {
 	}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

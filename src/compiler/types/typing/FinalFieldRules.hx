@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
@@ -46,7 +47,8 @@ class FinalFieldRules {
 		};
 		if (viaThis && session.currentContext.sourceFunctionName == owner + ".new")
 			return;
-		fail("E1026", 'Final field "$owner.$name" can only be assigned through this in the constructor of "$owner"',
+		fail(DiagnosticCode.READ_ONLY_BINDING,
+			'Final field "$owner.$name" can only be assigned through this in the constructor of "$owner"',
 			span);
 	}
 
@@ -58,7 +60,7 @@ class FinalFieldRules {
 			return;
 		for (field in declaration.fields)
 			if (field.name == name && field.isStatic && field.isFinal)
-				fail("E1026",
+				fail(DiagnosticCode.READ_ONLY_BINDING,
 					'Final static field "${compiler.semantic.AbstractStatics.displayOwner(owner)}.$name" cannot be assigned',
 					span);
 	}
@@ -70,6 +72,6 @@ class FinalFieldRules {
 		};
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

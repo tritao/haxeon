@@ -5,7 +5,6 @@ package compiler.core;
  * message for it. It has no dependencies, so `Diagnostic` can turn any diagnostic that would show a marker into E1029.
  */
 class AmbiguousName {
-	public static inline final CODE = "E1029";
 	static inline final MARKER = "Ambiguous$";
 	static inline final SEPARATOR = "$$";
 

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.ImplicitConstructors;
 import compiler.syntax.Ast.AstArgument;
@@ -24,27 +25,32 @@ class RpcServiceTyping {
 			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):TypedExpression {
 		var serving = operation == "serve";
 		if (serving ? arguments.length != 2 : arguments.length < 1 || arguments.length > 2)
-			BodyTyper.fail("E1008", serving ? "RpcConnection.serve expects an interface and its implementation"
+			BodyTyper.fail(DiagnosticCode.CALL_FORM,
+				serving ? "RpcConnection.serve expects an interface and its implementation"
 				: "RpcConnection.of expects an interface and an optional timeout", span);
 		var owner = switch arguments[0] {
 			case Variable(name, _) if (session.interfaceDecls.exists(name)): name;
 			default:
-				BodyTyper.fail("E1009", 'RpcConnection.$operation expects a service interface', span);
+				BodyTyper.fail(DiagnosticCode.VALUE_CONVERSION, 'RpcConnection.$operation expects a service interface',
+					span);
 				null;
 		};
 		var service = session.interfaceDecls.required(owner);
-		RpcServiceDeclaration.validate(service, (message, at) -> BodyTyper.fail("E1024", message, at));
+		RpcServiceDeclaration.validate(service,
+			(message, at) -> BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, message, at));
 
 		var ids:Map<Int, Bool> = [], pinned:Null<Bool> = null;
 		var methodIds = [for (method in service.methods) {
 			var name = owner + "." + method.name,
 				id = WireCodecGenerator.memberId(method.metadata ?? [], name, method.span);
 			if (pinned != null && pinned != (id != 0))
-				BodyTyper.fail("E1024", 'RPC service "$owner" mixes named and numbered methods', method.span);
+				BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA,
+					'RPC service "$owner" mixes named and numbered methods', method.span);
 			pinned = id != 0;
 			if (id != 0) {
 				if (ids.exists(id))
-					BodyTyper.fail("E1024", 'RPC service "$owner" uses duplicate @:id($id)', method.span);
+					BodyTyper.fail(DiagnosticCode.ANNOTATION_OR_SCHEMA, 'RPC service "$owner" uses duplicate @:id($id)',
+						method.span);
 				ids.set(id, true);
 			}
 			id;

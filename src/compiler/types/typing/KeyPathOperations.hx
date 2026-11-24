@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
@@ -16,11 +17,11 @@ class KeyPathOperations {
 			scope:Scope, bodyTyper:BodyTyping):Null<TypedExpression> {
 		return switch receiver.type {
 			case TKeyPath(root, value, writable) if (name == "then"):
-				if (arguments.length != 1) fail("E1008", "KeyPath.then expects 1 argument", span);
+				if (arguments.length != 1) fail(DiagnosticCode.CALL_FORM, "KeyPath.then expects 1 argument", span);
 				var next = bodyTyper.typeExpression(arguments[0], scope);
 				switch next.type {
 					case TKeyPath(nextRoot, result, nextWritable):
-						if (!TypeRelations.equals(value, nextRoot)) fail("E1009",
+						if (!TypeRelations.equals(value, nextRoot)) fail(DiagnosticCode.VALUE_CONVERSION,
 							"KeyPath.then requires matching intermediate types", span);
 						var first = KeyPathTyping.known(session, receiver), second = KeyPathTyping.known(session, next);
 						if (first != null && second != null)
@@ -30,23 +31,25 @@ class KeyPathOperations {
 							if (writable && nextWritable && session.relations.isValueClass(value)
 								&& (second == null || second.rootWriteback)
 								&& KeyPathTyping.mayProjectTrackedStruct(session, root, first))
-								fail("E1027",
+								fail(DiagnosticCode.VALUE_PLACE,
 									"Cannot mutate a struct inside Observable storage through an unknown composed path; compose a read-only KeyPath instead",
 									span);
 							KeyPathComposition.create(session, receiver, next, root, value, result,
 								writable && nextWritable, span);
 						}
 					default:
-						fail("E1009", "KeyPath.then requires a key path", span);
+						fail(DiagnosticCode.VALUE_CONVERSION, "KeyPath.then requires a key path", span);
 						null;
 				}
 			case TKeyPath(root, value, _) if (name == "toString"):
-				if (arguments.length != 0) fail("E1008", "KeyPath.toString expects no arguments", span);
+				if (arguments.length != 0) fail(DiagnosticCode.CALL_FORM, "KeyPath.toString expects no arguments",
+					span);
 				new AnonymousTypeRegistry(session).register(receiver.type);
 				new TypedExpression(TField(receiver, "$display"), TString, span);
 			case TKeyPath(root, value, _) if (name == "get"):
 				if (arguments.length != 1)
-					throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E1008",
+					throw new compiler.core.Diagnostic
+						.CompileError(new compiler.core.Diagnostic(DiagnosticCode.CALL_FORM,
 						'KeyPath.get expects 1 argument, got ${arguments.length}', span));
 				var target = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, root), root,
 					"key path root"),
@@ -66,17 +69,19 @@ class KeyPathOperations {
 						TFunction([root], value, []), span), [target]), value, span);
 				}
 			case TKeyPath(root, value, writable) if (name == "set"):
-				if (arguments.length != 2) fail("E1008", 'KeyPath.set expects 2 arguments, got ${arguments.length}',
+				if (arguments.length != 2) fail(DiagnosticCode.CALL_FORM,
+					'KeyPath.set expects 2 arguments, got ${arguments.length}',
 					span);
 				var definition = KeyPathTyping.known(session, receiver);
 				if (!writable || definition != null && !definition.writable) {
 					var message = definition != null && definition.writeError != null
 						? definition.writeError : "Cannot write through a read-only KeyPath";
 					fail(StringTools.startsWith(message, "Cannot mutate a struct inside Observable")
-						? "E1027" : "E1009", message, span);
+						? DiagnosticCode.VALUE_PLACE : DiagnosticCode.VALUE_CONVERSION, message, span);
 				}
 				var target = bodyTyper.typeExpression(arguments[0], scope, root);
-				if (!session.relations.isAssignable(target.type, root)) fail("E1009", "Type mismatch for key path root",
+				if (!session.relations.isAssignable(target.type, root)) fail(DiagnosticCode.VALUE_CONVERSION,
+					"Type mismatch for key path root",
 					target.span);
 				// A place must retain its storage: ordinary argument coercion copies structs.
 				if (!TypeRelations.equals(target.type, root)) target = session.representation.boundaryCast(target,
@@ -197,6 +202,6 @@ class KeyPathOperations {
 	}
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic(code, message, span));
 }

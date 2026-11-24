@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.DiagnosticCode;
 import compiler.syntax.Ast.AstTypeConstraint;
 import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
@@ -710,7 +711,7 @@ class DeclarationIndex {
 			if (actual == null || !relations.satisfiesConstraint(actual, expected)) {
 				var detail = actual == null ? null : relations.constraintFailure(actual, expected);
 				if (actual != null && relations.recursiveCapabilityFailure(actual, expected))
-					throw new CompileError(new Diagnostic("E1025",
+					throw new CompileError(new Diagnostic(DiagnosticCode.CONFORMANCE,
 						'Type argument for "${constraint.parameter}" does not satisfy constraint: $detail', span));
 				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"'
 					+ (detail == null ? "" : ': $detail'),
@@ -750,7 +751,8 @@ class DeclarationIndex {
 				classDecl.typeParameters.length, span);
 		if (PlatformAbi.isType(name))
 			return PlatformAbi.valueType(name);
-		throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedType, name, span));
+		throw new CompileError(Diagnostic.unresolved(DiagnosticCode.LOOKUP_OR_DECLARATION,
+			UnresolvedNameKind.WantedType, name, span));
 	}
 
 	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int,
@@ -1084,7 +1086,8 @@ class DeclarationIndex {
 				var interfaceName = nominalName(resolve(interfaceType, decl.span, substitutions));
 				if (interfaceName == null
 					|| (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
-					throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedInterface,
+					throw new CompileError(Diagnostic.unresolved(DiagnosticCode.LOOKUP_OR_DECLARATION,
+						UnresolvedNameKind.WantedInterface,
 						ModuleCanonicalizer.astTypeName(interfaceType), decl.span));
 			}
 		}
@@ -1165,7 +1168,7 @@ class DeclarationIndex {
 				if (field.type != null)
 					types.fieldType(decl.name, field, substitutions);
 				else if (field.initializer == null)
-					throw new CompileError(new Diagnostic("E1002",
+					throw new CompileError(new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
 						'Cannot infer type of field "${field.name}" without an initializer', field.span));
 			for (method in decl.methods)
 				resolveFunction(method, decl.name + "." + method.name, substitutions);
@@ -1363,7 +1366,8 @@ class DeclarationIndex {
 		if (!classes.exists(name)) {
 			if (PlatformAbi.isType(name))
 				return;
-			throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedBaseClass, name,
+			throw new CompileError(Diagnostic.unresolved(DiagnosticCode.LOOKUP_OR_DECLARATION,
+				UnresolvedNameKind.WantedBaseClass, name,
 				fallbackSpan));
 		}
 		var decl = classes.get(name);
@@ -1382,7 +1386,8 @@ class DeclarationIndex {
 		if (StructProperties.isConstraintName(name))
 			return;
 		if (!interfaces.exists(name))
-			throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedInterface, name,
+			throw new CompileError(Diagnostic.unresolved(DiagnosticCode.LOOKUP_OR_DECLARATION,
+				UnresolvedNameKind.WantedInterface, name,
 				fallbackSpan));
 		var decl = interfaces.get(name);
 		if (visiting.exists(name))
@@ -1473,5 +1478,5 @@ class DeclarationIndex {
 
 	@:noReturn
 	static function fail(message:String, span:SourceSpan):Void
-		throw new CompileError(new Diagnostic("E1020", message, span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.LOOKUP_OR_DECLARATION, message, span));
 }

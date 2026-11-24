@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.AnonymousField;
@@ -233,10 +234,12 @@ class IterationProtocol {
 		var span = receiver.span,
 			found = method(session.declarations, receiver.type, name);
 		if (found == null)
-			throw new CompileError(new Diagnostic("E1014", 'Iteration requires "$name()"', span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.INDEX_OR_ITERATION, 'Iteration requires "$name()"',
+				span));
 		var result = switch found.type {
 			case TFunction([], result, _): result;
-			default: throw new CompileError(new Diagnostic("E1014", 'Iteration requires a zero-argument "$name()"',
+			default: throw new CompileError(new Diagnostic(DiagnosticCode.INDEX_OR_ITERATION,
+				'Iteration requires a zero-argument "$name()"',
 				span));
 		};
 		var expression:TypedExpression;
@@ -264,7 +267,8 @@ class IterationProtocol {
 			default:
 				var signature = session.signatures.get(found.owner + "." + name);
 				if (signature == null)
-					throw new CompileError(new Diagnostic("E1007", 'Missing iteration method signature "$name"', span));
+					throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
+						'Missing iteration method signature "$name"', span));
 				// A loop calls the iterable's methods as source would, and reaches a private one only where source could (Haxe
 				// reports a private `iterator()` at the iterated expression).
 				compiler.types.typing.MemberAccess.method(session, found.owner, name, span);

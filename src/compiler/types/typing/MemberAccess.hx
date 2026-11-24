@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.AbstractStatics;
@@ -206,7 +207,7 @@ class MemberAccess {
 	static function require(session:TypingSession, member:DeclaredMember, span:SourceSpan):Void {
 		if (reachable(session, member, span))
 			return;
-		throw new CompileError(new Diagnostic("E1030", member.name == "new"
+		throw new CompileError(new Diagnostic(DiagnosticCode.PRIVATE_ACCESS, member.name == "new"
 			? 'Cannot access private constructor of ${member.owner}' : 'Cannot access private field ${member.name}',
 			span));
 	}

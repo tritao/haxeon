@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.Diagnostic;
+import compiler.core.DiagnosticCode;
 import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
@@ -57,7 +58,7 @@ class DiffIntrinsics {
 				for (entry in conformanceFields(session, type)) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsHash(session, fieldType))
-						fail("E1025",
+						fail(DiagnosticCode.CONFORMANCE,
 							'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable',
 							field.span);
 					var fieldValue = synthesized(Member(TemporaryVariable(value, span), field.name, span), span),
@@ -83,7 +84,7 @@ class DiffIntrinsics {
 						resolved == null ? null : {root: resolved.root, fields: resolved.fields};
 				};
 				if (path == null || path.fields.length != 1)
-					fail("E1009", '$name requires a known direct-field key path', span);
+					fail(DiagnosticCode.VALUE_CONVERSION, '$name requires a known direct-field key path', span);
 				var declaration = classOf(session, path.root, name, span), field = path.fields[0].field.name;
 				requireDiffable(session, declaration, name, span);
 				var fields = maskedFields(session, declaration, name, span);
@@ -100,11 +101,11 @@ class DiffIntrinsics {
 				expectArguments(name, arguments, 1, span);
 				var type = typeOf(arguments[0]), declaration = classOf(session, type, name, span);
 				if (session.relations.isStruct(type))
-					fail("E1009",
+					fail(DiagnosticCode.VALUE_CONVERSION,
 						'$name is unnecessary for struct "${declaration.name}"; bind the value to a local to copy it',
 						span);
 				if (declaration.typeParameters.length > 0)
-					fail("E1009",
+					fail(DiagnosticCode.VALUE_CONVERSION,
 						'$name does not support generic class "${compiler.semantic.SemanticSignature.display(type)}"',
 						span);
 				var source = hold(session, "copy-source", span),
@@ -116,7 +117,7 @@ class DiffIntrinsics {
 				for (entry in conformanceFields(session, type)) {
 					var field = entry.field;
 					if (!isWritable(field))
-						fail("E1009",
+						fail(DiagnosticCode.VALUE_CONVERSION,
 							'$name cannot copy immutable field "${field.name}" of "${compiler.semantic.SemanticSignature.display(type)}"',
 							span);
 					statements.push(synthesizedStatement(FieldAssignment(TemporaryVariable(result, span), field.name,
@@ -158,7 +159,8 @@ class DiffIntrinsics {
 				for (index in 0...fields.length) {
 					var field = fields[index];
 					if (!isWritable(field))
-						fail("E1009", '$name cannot assign immutable field "${field.name}" of "${declaration.name}"',
+						fail(DiagnosticCode.VALUE_CONVERSION,
+							'$name cannot assign immutable field "${field.name}" of "${declaration.name}"',
 							span);
 					statements.push(If(differs(before, after, field.name, span), [
 						synthesizedStatement(FieldAssignment(TemporaryVariable(target, span), field.name,
@@ -169,7 +171,8 @@ class DiffIntrinsics {
 				}
 				return BlockExpression(statements, TemporaryVariable(mask, span), span);
 			default:
-				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedFunction, name, span));
+				throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,
+					UnresolvedNameKind.WantedFunction, name, span));
 		}
 	}
 
@@ -267,7 +270,8 @@ class DiffIntrinsics {
 			[for (parameter in declaration.typeParameters) TTypeParameter(declaration.name, parameter)]),
 			fields = [for (entry in conformanceFields(session, type)) entry.field];
 		if (fields.length > 32)
-			fail("E1009", '$name supports at most 32 fields; "${declaration.name}" has ${fields.length}', span);
+			fail(DiagnosticCode.VALUE_CONVERSION,
+				'$name supports at most 32 fields; "${declaration.name}" has ${fields.length}', span);
 		return fields;
 	}
 
@@ -276,7 +280,7 @@ class DiffIntrinsics {
 			case TInstance(NominalKind.Class, className,
 				_) if (DeclaredConformance.has(session, type, "Diffable")): className;
 			default:
-				fail("E1009",
+				fail(DiagnosticCode.VALUE_CONVERSION,
 					'$name requires Diffable conformance for "${compiler.semantic.SemanticSignature.display(type)}"',
 					span);
 				"";
@@ -287,13 +291,15 @@ class DiffIntrinsics {
 	static function requireDiffable(session:TypingSession, declaration:AstClass, name:String, span:SourceSpan):Void {
 		var type = TInstance(NominalKind.Class, declaration.name, []);
 		if (!DeclaredConformance.has(session, type, "Diffable"))
-			fail("E1009", '$name requires Diffable conformance for "${declaration.name}"', span);
+			fail(DiagnosticCode.VALUE_CONVERSION, '$name requires Diffable conformance for "${declaration.name}"',
+				span);
 	}
 
 	static function classNamed(session:TypingSession, name:String, span:SourceSpan):AstClass {
 		var declaration = session.classDecls.get(name);
 		if (declaration == null)
-			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedClass, name, span));
+			throw new CompileError(Diagnostic.unresolved(DiagnosticCode.DECLARATION_OR_MODIFIER,
+				UnresolvedNameKind.WantedClass, name, span));
 		return declaration;
 	}
 
@@ -301,13 +307,14 @@ class DiffIntrinsics {
 		return switch argument {
 			case Variable(value, _): value;
 			default:
-				fail("E1009", '$name expects a class as its first argument', span);
+				fail(DiagnosticCode.VALUE_CONVERSION, '$name expects a class as its first argument', span);
 				"";
 		};
 
 	static function expectArguments(name:String, arguments:Array<AstExpression>, count:Int, span:SourceSpan):Void
 		if (arguments.length != count)
-			fail("E1008", 'Function "$name" expects $count argument${count == 1 ? "" : "s"}, got ${arguments.length}',
+			fail(DiagnosticCode.CALL_FORM,
+				'Function "$name" expects $count argument${count == 1 ? "" : "s"}, got ${arguments.length}',
 				span);
 
 	static function differs(left:TemporaryLocal, right:TemporaryLocal, field:String, span:SourceSpan):AstExpression
@@ -320,7 +327,7 @@ class DiffIntrinsics {
 		return new TemporaryLocal('$' + 'diff:$purpose:${span.start}:${session.currentContext.diffTemporary++}');
 
 	@:noReturn
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		BodyTyper.fail(code, message, span);
 
 	/**

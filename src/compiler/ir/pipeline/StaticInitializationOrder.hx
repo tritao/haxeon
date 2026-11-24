@@ -1,6 +1,7 @@
 package compiler.ir.pipeline;
 
 import compiler.core.Diagnostic;
+import compiler.core.DiagnosticCode;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.reuse.IrFunctionMemo;
@@ -50,7 +51,7 @@ class StaticInitializationOrder {
 	 * declaration: its statics may be read before they are set.
 	 */
 	public static function loopWarning(classDecl:TypedClass):Diagnostic
-		return new Diagnostic("W1002",
+		return new Diagnostic(DiagnosticCode.STATIC_INIT_CYCLE,
 			"maybe loop in static generation of " + AbstractStatics.displayOwner(classDecl.name),
 			classDecl.span, Warning);
 

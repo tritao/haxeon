@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
@@ -124,7 +125,8 @@ class HashGenerator {
 			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.get(name);
 				if (declaration == null)
-					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable',
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+						'Cannot synthesize Hashable for "$name": declaration is unavailable',
 						req.span);
 				var custom = EnumConformanceMethods.method(session, type, "hash");
 				if (custom != null) {
@@ -166,7 +168,8 @@ class HashGenerator {
 			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
-					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable',
+					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+						'Cannot synthesize Hashable for "$name": declaration is unavailable',
 						req.span);
 				var custom = DiffIntrinsics.conformanceMethod(session, type, "hash");
 				if (custom != null) {
@@ -193,7 +196,7 @@ class HashGenerator {
 					statements.push(TReturn(new TypedExpression(TLocal(hashName), TInt, span), span));
 				}
 			default:
-				BodyTyper.fail("E1025",
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 					'Cannot synthesize Hashable for type "${compiler.semantic.SemanticSignature.display(type)}"',
 					req.span);
 		}

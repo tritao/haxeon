@@ -2,6 +2,7 @@ package compiler.types.analysis;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
@@ -99,5 +100,6 @@ class ScopedEscapeChecker extends BindingWalker {
 	}
 
 	static function reject(name:String, operation:String, span:SourceSpan):Void
-		throw new CompileError(new Diagnostic("E1002", 'Scoped binding "$name" cannot be $operation', span));
+		throw new CompileError(new Diagnostic(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+			'Scoped binding "$name" cannot be $operation', span));
 }

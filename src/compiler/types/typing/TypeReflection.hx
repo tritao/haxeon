@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstExpression;
@@ -37,7 +38,7 @@ class TypeReflection {
 			default: 1;
 		};
 		if (arguments.length != expected)
-			fail("E1008",
+			fail(DiagnosticCode.CALL_FORM,
 				'Function "$name" expects $expected argument${expected == 1 ? "" : "s"}, got ${arguments.length}',
 				span);
 		switch name {
@@ -79,13 +80,13 @@ class TypeReflection {
 					unsupported(name, "a class named where it is called", span);
 				var declaration = session.classDecls.get(className);
 				if (declaration.typeParameters.length > 0)
-					fail("E1009", '$name of a generic class is not supported yet', span);
+					fail(DiagnosticCode.VALUE_CONVERSION, '$name of a generic class is not supported yet', span);
 				// The object is made without running its constructor, so its variables hold their type's default, null for a
 				// reference: a field is never-null only where every object of the class is constructed (`IrNonNullFields`).
 				return new TypedExpression(TNew(className, [], false), TInstance(NominalKind.Class, className, []),
 					span);
 			default:
-				fail("E1009",
+				fail(DiagnosticCode.VALUE_CONVERSION,
 					'$name needs classes and enums as runtime values (Class<T>, Enum<T>), which Haxeon does not have yet',
 					span);
 				return null;
@@ -136,10 +137,10 @@ class TypeReflection {
 	}
 
 	static function unsupported(name:String, what:String, span:SourceSpan):Void
-		fail("E1009",
+		fail(DiagnosticCode.VALUE_CONVERSION,
 			'$name needs $what; a class or enum held as a value needs classes and enums as runtime values, which Haxeon does not have yet',
 			span);
 
-	static function fail(code:String, message:String, span:SourceSpan):Void
+	static function fail(code:DiagnosticCode, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

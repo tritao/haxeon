@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstAbstract;
@@ -31,18 +32,21 @@ class RawRepresentableGenerator {
 		switch raw {
 			case TInt, TString:
 			default:
-				BodyTyper.fail("E1025", "RawRepresentable requires an Int or String enum abstract", declaration.span);
+				BodyTyper.fail(DiagnosticCode.CONFORMANCE, "RawRepresentable requires an Int or String enum abstract",
+					declaration.span);
 		}
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
-			BodyTyper.fail("E1025", "RawRepresentable enum abstracts cannot declare implicit from/to conversions",
+			BodyTyper.fail(DiagnosticCode.CONFORMANCE,
+				"RawRepresentable enum abstracts cannot declare implicit from/to conversions",
 				declaration.span);
 		for (value in declaration.values) {
 			if (value.name == "rawValue" || value.name == "fromRaw" || value.name == "toString")
-				BodyTyper.fail("E1000",
+				BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
 					'Constant "${declaration.name}.${value.name}" conflicts with a synthesized RawRepresentable member',
 					value.span);
 			if (InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value)) == null)
-				BodyTyper.fail("E1002", "RawRepresentable requires compile-time constant raw values", value.span);
+				BodyTyper.fail(DiagnosticCode.ASSIGNMENT_OR_BINDING,
+					"RawRepresentable requires compile-time constant raw values", value.span);
 		}
 	}
 

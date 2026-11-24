@@ -1,5 +1,6 @@
 package compiler;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceFile;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.pipeline.IrProgramAssembler;
@@ -18,7 +19,7 @@ class Frontend {
 		var ast = new Parser(new Lexer(file).tokenizeTable()).parseProgram();
 		// They are static fields of the module's class (ModuleFields), and this pipeline has no module.
 		if (ast.fields != null && ast.fields.length > 0)
-			throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E0002",
+			throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 				"Module-level variables need a module: compile them with compiler.Compiler", ast.fields[0].span));
 		// The convenience frontend has no target; keep its IR portable.
 		return IrProgramAssembler.generate(Typer.type(compiler.semantic.AbstractStatics.fold(ast)),

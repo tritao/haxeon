@@ -1,5 +1,6 @@
 package compiler.types.analysis;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
@@ -40,8 +41,10 @@ class FinalLocalChecker extends BindingWalker {
 		if (declaration == null || name.indexOf(".") >= 0)
 			return;
 		if (finals.exists(declaration))
-			throw new CompileError(new Diagnostic("E1026", 'Cannot reassign final local "$name"', span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.READ_ONLY_BINDING,
+				'Cannot reassign final local "$name"', span));
 		if (functions.exists(declaration))
-			throw new CompileError(new Diagnostic("E1026", 'Cannot access function $name for writing', span));
+			throw new CompileError(new Diagnostic(DiagnosticCode.READ_ONLY_BINDING,
+				'Cannot access function $name for writing', span));
 	}
 }

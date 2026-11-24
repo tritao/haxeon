@@ -3,6 +3,7 @@ package compiler.types.typing;
 import compiler.NullSafetyRule;
 import compiler.NullSafetyRule.NullSafetyMode;
 import compiler.core.Diagnostic;
+import compiler.core.DiagnosticCode;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstMetadata;
@@ -59,8 +60,8 @@ enum NullSafetyUse {
  * typing ends, so one body reports all of its own.
  */
 class NullSafety {
-	public static inline final ERROR = "E1005";
-	public static inline final WARNING = "W1003";
+	public static final ERROR = DiagnosticCode.NAME_OR_MEMBER;
+	public static final WARNING = DiagnosticCode.NULL_SAFETY_WARNING;
 
 	final session:TypingSession;
 

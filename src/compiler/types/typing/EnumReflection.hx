@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
@@ -60,7 +61,7 @@ class EnumReflection {
 						session.representation.enumStorageType(enumDecl.typeParameters, parameter, type), span),
 					read = session.representation.boundaryCast(stored,
 						session.representation.enumParameterType(enumDecl.typeParameters, parameter, type));
-				bodyTyper.coerce(read, TDynamic, "Type.enumParameters argument", "E1002");
+				bodyTyper.coerce(read, TDynamic, "Type.enumParameters argument", DiagnosticCode.ASSIGNMENT_OR_BINDING);
 			}]), result, span);
 		}
 		if (enumDecl.cases.length == 1)

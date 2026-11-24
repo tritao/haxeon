@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.DiagnosticCode;
 import compiler.core.QualifiedName;
 import compiler.core.UnresolvedNameKind;
 import compiler.modules.ModulePath;
@@ -611,7 +612,7 @@ class ModuleAnalyzer {
 		function check(name:String, isPrivate:Bool, span:compiler.core.Source.SourceSpan):Void {
 			var path = prefix + name;
 			if (!isPrivate && path != moduleName && sourceLoader.isStandardModule(path))
-				throw new CompileError(new compiler.core.Diagnostic("E1020",
+				throw new CompileError(new compiler.core.Diagnostic(DiagnosticCode.LOOKUP_OR_DECLARATION,
 					'Type name $path is redefined from module $moduleName', span));
 		}
 		for (declaration in ast.aliases)

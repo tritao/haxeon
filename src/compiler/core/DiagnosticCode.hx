@@ -1,0 +1,50 @@
+package compiler.core;
+
+/**
+ * Every diagnostic code the compiler and its tools report. A code is raised through this type, so each one is listed
+ * here; docs/reference/ERRORS.md documents each, and the docs-guides suite checks that the two agree.
+ */
+enum abstract DiagnosticCode(String) to String {
+	var EDITOR_REQUEST = "E0000";
+	var LEXICAL_ERROR = "E0001";
+	var SYNTAX_ERROR = "E0002";
+	var DECLARATION_CONFLICT = "E1000";
+	var DUPLICATE_PARAMETER_OR_FIELD = "E1001";
+	var ASSIGNMENT_OR_BINDING = "E1002";
+	var TYPE_CONSTRAINT = "E1003";
+	var BOOLEAN_CONDITION = "E1004";
+	var NAME_OR_MEMBER = "E1005";
+	var FUNCTION_COMPLETION = "E1006";
+	var DECLARATION_OR_MODIFIER = "E1007";
+	var CALL_FORM = "E1008";
+	var VALUE_CONVERSION = "E1009";
+	var OPERATOR_OR_STRING_CONVERSION = "E1010";
+	var LOGIC_OR_COMPARISON = "E1011";
+	var UNREACHABLE_STATEMENT = "E1012";
+	var MUTABLE_CAPTURE = "E1013";
+	var INDEX_OR_ITERATION = "E1014";
+	var ARRAY_REQUIRED = "E1015";
+	var RUNTIME_SUPPORT = "E1016";
+	var LOOP_CONTROL = "E1017";
+	var INCREMENT_TARGET = "E1018";
+	var PATTERN_OR_DEFER = "E1019";
+	var LOOKUP_OR_DECLARATION = "E1020";
+	var COVERAGE_THROW_OR_EXTERN = "E1021";
+	var NATIVE_OR_CATCH = "E1022";
+	var DEFINITE_ASSIGNMENT = "E1023";
+	var ANNOTATION_OR_SCHEMA = "E1024";
+	var CONFORMANCE = "E1025";
+	var READ_ONLY_BINDING = "E1026";
+	var VALUE_PLACE = "E1027";
+	var SPECIALIZATION_COMPLEXITY = "E1028";
+	var AMBIGUOUS_IMPORT = "E1029";
+	var PRIVATE_ACCESS = "E1030";
+	var MISSING_MODULE = "E2001";
+	var HXI_ERROR = "E3001";
+	var SHADER_ERROR = "E4001";
+	var INTERNAL_ANALYSIS = "E9001";
+	var NULL_DEFAULT = "W1001";
+	var STATIC_INIT_CYCLE = "W1002";
+	var NULL_SAFETY_WARNING = "W1003";
+	var SHADER_WARNING = "W4001";
+}
