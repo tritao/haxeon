@@ -2,7 +2,7 @@
 	"about": "scripts/perf-guard.py, small-project part: a cold haxeon build and haxeon check of tests/perf/small-project with the CLI built from the checkout, from no compile server running to the server's exit: the CLI's start and its project resolution, the server's start and the compile. Two modes, each with metrics of its own: vm_*, always measured, with haxeon-aot set aside so the VM runs the CLI's and the server's bytecode; aot_*, measured only when the CLI and compiler built ahead of time (haxeon-aot, haxeon dev aot) are current, which run the CLI and serve the compile, and skipped otherwise. The CLI's digest store is the guard's own, filled by an unmeasured build before the measured ones, each on a fresh copy of the project; the empty_store metrics measure one more build with it emptied. Measured on Linux x86-64; scripts/perf-guard.py --update writes the metrics that improved beyond their tolerance, --raise=METRIC=REASON one that is higher on purpose with its reason (raise_reason), in the commit that moves it. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"vm_build_instructions": {
-			"value": 13143579416,
+			"value": 10813414387,
 			"tolerance": 0.03,
 			"why": "Instructions of every process the build starts on the VM, from perf: startup, which dominates a small project's build, and the compile. Compared only where perf is installed and allowed."
 		},
@@ -13,7 +13,7 @@
 			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (build about +1.7 and +0.7 MB)"
 		},
 		"vm_check_instructions": {
-			"value": 12677986887,
+			"value": 10345595459,
 			"tolerance": 0.03,
 			"why": "As vm_build_instructions, for a check, which types the project without writing a module."
 		},
@@ -24,7 +24,7 @@
 			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (check about +2.4 and +0.9 MB)"
 		},
 		"vm_build_empty_store_instructions": {
-			"value": 16835342331,
+			"value": 14647488311,
 			"tolerance": 0.03,
 			"why": "As build_instructions, with the digest store emptied first: the build that reads and hashes every input, the pinned Haxe and the compiler's sources among them. A regression guard."
 		},

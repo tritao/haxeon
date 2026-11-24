@@ -493,7 +493,13 @@ typer's drain order) and 5 (live pruning).
   pointer-free blocks of unknown owner; the three retractable publications copy
   the type registry, object and inline caches and the assembler state instead
   of sharing them. The baseline predates recorded reads (`540848a15`): measure
-  it before and after that commit before raising it.
+  it before and after that commit before raising it. Sharing the publications'
+  unchanged tables copy-on-write (forked maps and symbol pools, reused writer
+  segments) was tried and set aside: it cut the self-compile server's live data
+  by only about 4 MB and cost body edits about 7% of their instructions, since
+  every lookup went through the fork. Paused behind signature-edit latency; if
+  taken up again, share at publication granularity with no cost on the build's
+  own lookups.
 - **Signature edits.** perf-guard's signature edit retypes about 1,350
   functions, the callers of the edited constructor, which all change; the
   inliner now redoes only those (958 functions). Most of what is left is per
