@@ -498,11 +498,20 @@ typer's drain order) and 5 (live pruning).
   of sharing them. The baseline predates recorded reads (`540848a15`): measure
   it before and after that commit before raising it.
 - **Signature edits.** perf-guard's signature edit retypes about 1,350
-  functions. About 40% of its cost is per retyped function and needed; the
-  avoidable part is the inliner remaking every transitive caller of a changed
-  callee (early cutoff on what each caller read, in progress), HashLink
-  metadata lowering redone for the program, and the collections this
-  allocation triggers.
+  functions, the callers of the edited constructor, which all change; the
+  inliner now redoes only those (958 functions). Most of what is left is per
+  changed function: typing, IR generation, the assembly stages, lowering. The
+  collections are a small part (about 4% of its instructions). The edit adds
+  a function (the constructor's nullable-scalar adapter), so the dense
+  function, string and type indices after it move and about 2,800 functions
+  are relinked and encoded again (see "A new constant or global relinks the
+  functions after it" in WARM_REBUILD_REUSE.md). Per function, load/store
+  forwarding's field dataflow is the inliner's largest part.
+- **Whole-program link and walk in every build.** Linking asks every
+  function's requests of fresh tables (`HlRequestAnswers`, mostly
+  `internTypeByKey`) and the plain build walks reachability again
+  (`HlPlainBuild.reachable`, unlike the IR stages' kept walks): about 8% and
+  5% of a body edit's samples.
 - **The body edit outside IR assembly:** whole-program purity inference (the
   recorded reads give the exact "declarations unchanged" signal a
   per-function memo needs), IR generation, the ABI description, generated
