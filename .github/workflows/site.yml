@@ -40,9 +40,10 @@ jobs:
       # The live UI Showcase on /ui/: Emscripten and the toolkit's Wasm build, so only here and in the deploy.
       - run: nice -n 10 npm run build:showcase
       - run: nice -n 10 npm run check:commands
-      - run: nice -n 10 npm run check:links
       - run: nice -n 10 scripts/build-native.sh
         working-directory: .
+      - run: nice -n 10 npm run build:circuit-run
+      - run: nice -n 10 npm run check:links
       - run: nice -n 10 node scripts/check-template-web.mjs
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}

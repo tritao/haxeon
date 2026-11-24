@@ -6,6 +6,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "build:showcase": "bash scripts/build-showcase.sh",
+    "build:circuit-run": "bash scripts/build-circuit-run.sh",
     "preview": "astro preview",
     "check:commands": "node scripts/check-commands.mjs",
     "check:examples": "node scripts/check-examples.mjs",

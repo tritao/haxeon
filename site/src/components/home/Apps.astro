@@ -81,7 +81,7 @@ import { docsUrl, repositorySource } from '../../../docs.mjs';
               'credentials',
               'platform',
               'agentkit',
-            ].map((name) => <a href={repositorySource('packages/' + name)}>{name}</a>)
+            ].map((name) => <a href={name === 'gpu' ? '/gpu/' : repositorySource('packages/' + name)}>{name}</a>)
           }
         </div>
       </Card>

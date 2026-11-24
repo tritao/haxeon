@@ -19,9 +19,13 @@
     const canvas = document.getElementById("canvas");
     const status = document.getElementById("status");
     let circuitHostMemory;
+    function notifyParent(state) {
+      if (parent !== window) parent.postMessage("haxeon-circuit-run-" + state, location.origin);
+    }
     function report(error) {
       status.textContent = "Circuit Run failed: " + error;
       document.documentElement.dataset.circuitRun = "failed";
+      notifyParent("failed");
       console.error(error);
     }
     var Module = {
@@ -55,8 +59,9 @@
                 status.textContent = "Circuit Run closed";
                 return;
               }
-              if (result === 1) {
+              if (result === 1 && document.documentElement.dataset.circuitRun !== "ready") {
                 document.documentElement.dataset.circuitRun = "ready";
+                notifyParent("ready");
                 status.textContent = "Arrow keys to steer. R to restart. M to mute.";
               }
               requestAnimationFrame(tick);

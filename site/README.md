@@ -20,6 +20,10 @@ installs Emscripten on its first run and reuses the build directory under `out/s
 afterwards. CI and the deploy run it; without it /ui/ shows the Showcase's preview image. Use
 `npm run preview` after both to exercise the live Showcase.
 
+`npm run build:circuit-run` adds the playable WebGL2 Circuit Run example to /gpu/ after the static build.
+It uses the same Emscripten SDK and requires the native Haxeon CLI from `scripts/build-native.sh`.
+The Website workflow builds it. The static page shows the desktop capture and source links on its own.
+
 Open the URL printed by Astro. The production build is static HTML in `dist/`. Use
 `npm run preview` to serve it locally. Set `ASTRO_TELEMETRY_DISABLED=1` in environments with a
 read-only home directory.
@@ -29,7 +33,7 @@ Starlight reads Markdown directly from `../docs/guides/`, `../docs/reference/`, 
 relative to the source files. The site rewrites links between published pages and links to guide examples in the
 repository. The CLI page appends command help generated from `../src/tools/CliHelp.hx` on each build.
 
-The home, Language, UI, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
+The home, Language, UI, GPU, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
 page metadata, search and the theme switch. Its component overrides provide the shared site header and footer,
 including page navigation and last-updated metadata where available. Splash pages provide their own visible heading
 and full-width section layout.

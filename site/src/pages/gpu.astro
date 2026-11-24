@@ -1,0 +1,313 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Card from '../components/Card.astro';
+import CodeCard from '../components/CodeCard.astro';
+import circuitRenderer from '../../../packages/gpu/examples/circuit-run/src/CircuitRenderer.hx?raw';
+import { docsUrl, repositorySource } from '../../docs.mjs';
+
+const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
+const gpuDocs = repositorySource('packages/gpu/README.md');
+const circuit = 'packages/gpu/examples/circuit-run/';
+const backends = [
+  { platform: 'Linux', api: 'OpenGL 3.3 core', shader: 'GLSL', status: 'Supported' },
+  { platform: 'Web', api: 'WebGL2', shader: 'GLSL ES', status: 'Experimental' },
+  { platform: 'macOS', api: 'Metal', shader: 'MSL', status: 'Experimental' },
+  { platform: 'Windows', api: 'Direct3D 11', shader: 'HLSL 5', status: 'Experimental' },
+];
+const sample = ['new', 'record'].map((name) => {
+  const method = circuitRenderer.match(new RegExp(`^\\tpublic function ${name}\\([^\\n]*\\{[\\s\\S]*?^\\t\\}`, 'm'));
+  if (!method) throw new Error(`Missing CircuitRenderer.${name} in the GPU page sample`);
+  return method[0].replace(/^\t/gm, '');
+}).join('\n\n');
+---
+
+<StarlightPage frontmatter={{
+  title: 'GPU',
+  template: 'splash',
+  prev: false,
+  next: false,
+  description: 'Draw custom views, games and visualisations with Haxeon’s portable GPU layer.',
+}}>
+  <div class="landing-content">
+    <section class="page-intro paper">
+      <div class="wrap">
+        <div class="head">
+          <h1 id="_top" tabindex="-1">Draw on the GPU from Haxeon.</h1>
+          <p class="lede">Add custom drawing to your Haxeon app with a thin, portable GPU layer. Buffers, pipelines and passes are objects in your code, and Haxeon submits your work through the platform’s graphics API.</p>
+          <ul class="chips" aria-label="Graphics backends">
+            {backends.map(({ api, status }) => <li>{api} · {status}</li>)}
+          </ul>
+          <p>The GPU package is not a game engine. It has no scene graph, asset pipeline or physics.</p>
+          <div class="ctas">
+            <a class="btn primary" href={gpuDocs}>GPU package README</a>
+            <a class="btn ghost" href="#examples">See examples</a>
+          </div>
+        </div>
+        <figure>
+          <img class="showcase-light" src="/gpu/3d-views-light.webp" width="1280" height="900" alt="The UI Showcase’s 3D Views page with a coloured cube inside its viewport panel." />
+          <img class="showcase-dark" src="/gpu/3d-views-dark.webp" width="1280" height="900" alt="The UI Showcase’s 3D Views page with a coloured cube inside its viewport panel." />
+          <figcaption>The UI Showcase composites a live, depth-tested cube into its layout.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>What you can build</h2></div>
+        <div class="grid three">
+          <Card>
+            <h3>Views inside your app</h3>
+            <img class="card-image" src="/gpu/cube-viewport.webp" width="672" height="378" loading="lazy" alt="Close-up of the coloured cube in the Showcase viewport." />
+            <p>Draw a chart, map, preview or editor viewport alongside your app’s controls.</p>
+          </Card>
+          <Card>
+            <h3>Games and visualisations</h3>
+            <img class="card-image" src="/gpu/circuit-run.webp" width="540" height="452" loading="lazy" alt="Circuit Run’s maze and its node counter, sound and restart controls." />
+            <p>Draw a scene across the window. Circuit Run draws its maze and actors with one GPU draw per frame.</p>
+          </Card>
+          <Card>
+            <h3>Compute and image work</h3>
+            <p>On backends with compute support, dispatch work over storage buffers or images. Use <code>Readback</code> to bring results back into your program where the backend supports it.</p>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>The code</h2>
+          <p class="lede">Circuit Run builds a pipeline from an embedded shader and allocates a dynamic vertex buffer. Each frame it updates the vertices, records one draw for the maze and actors, and seals the window pass in a batch.</p>
+        </div>
+        <CodeCard code={sample} lang="haxe" title="src/CircuitRenderer.hx" />
+        <p class="note"><a href={repositorySource(circuit + 'src/CircuitRenderer.hx')}>Read CircuitRenderer.hx</a></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>Inside your UI</h2></div>
+        <div class="grid">
+          <Card>
+            <h3>Put a viewport in your layout</h3>
+            <p>You own the renderer. <a href={repositorySource('packages/ui/haxe/haxeon/ui/widgets/GpuViewport.hx')}><code>GpuViewport</code></a> composites your surface, handles pointer input for pan and zoom, and redraws cached content when the camera or content revision changes. Call <code>invalidate()</code> on <a href={repositorySource('packages/ui/haxe/haxeon/ui/core/GraphicsSurfaceViewportContent.hx')}><code>GraphicsSurfaceViewportContent</code></a> when the surface changes.</p>
+          </Card>
+          <Card>
+            <h3>Put controls over a full-window scene</h3>
+            <p>Draw your scene first, then draw retained UI on the same surface. <a href={repositorySource(circuit + 'src/Main.hx')}>Circuit Run</a> does this for its node counter, sound toggle and restart button.</p>
+          </Card>
+        </div>
+        <p class="note"><a href="/ui/">Explore the UI toolkit</a></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>What the API covers</h2></div>
+        <div class="grid three">
+          <Card compact>
+            <h3>Resources</h3>
+            <p>Create a <a href={gpu('Buffer')}><code>Buffer</code></a>, <a href={gpu('Image')}><code>Image</code></a> or <a href={gpu('Sampler')}><code>Sampler</code></a>.</p>
+          </Card>
+          <Card compact>
+            <h3>Pipelines and shaders</h3>
+            <p>Build a <a href={gpu('Pipeline')}><code>Pipeline</code></a> from a <a href={gpu('Shader')}><code>Shader</code></a> and describe vertex layouts and render state.</p>
+          </Card>
+          <Card compact>
+            <h3>Passes</h3>
+            <p>Describe render attachments with <a href={gpu('RenderPassDesc')}><code>RenderPassDesc</code></a>. Open render, compute and copy passes with <a href={gpu('Renderer')}><code>Renderer</code></a>, subject to backend support.</p>
+          </Card>
+          <Card compact>
+            <h3>Commands and batches</h3>
+            <p>Record GPU commands in a <a href={gpu('CommandBuffer')}><code>CommandBuffer</code></a>. Seal passes in a <a href={gpu('Batch')}><code>Batch</code></a> you can submit again.</p>
+          </Card>
+          <Card compact>
+            <h3>Frames and timing</h3>
+            <p>Use <a href={gpuDocs + '#frame-callbacks'}><code>Surface</code></a> frame callbacks or request frames on demand. Measure GPU work with <a href={gpu('Timestamp')}><code>Timestamp</code></a> where supported.</p>
+          </Card>
+          <Card compact>
+            <h3>Capabilities, limits and device loss</h3>
+            <p>Query <a href={gpu('Features')}><code>Features</code></a> and <a href={gpu('Limits')}><code>Limits</code></a> before using optional operations. Handle device loss through <a href={gpu('GpuError')}><code>GpuError</code></a> and recreate the renderer.</p>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <section id="backends">
+      <div class="wrap">
+        <div class="head">
+          <h2>Backends and shaders</h2>
+          <p class="lede">Write shaders for each graphics API you target. Haxeon does not translate shaders between APIs. Circuit Run embeds desktop GLSL and selects a GLSL ES variant for WebGL2 at build time.</p>
+        </div>
+        <table aria-label="GPU backends">
+          <thead><tr><th scope="col">Platform</th><th scope="col">Graphics API</th><th scope="col">Shader language</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            {backends.map(({ platform, api, shader, status }) => (
+              <tr><th scope="row">{platform}</th><td>{api}</td><td>{shader}</td><td>{status}</td></tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>Going lower</h2></div>
+        <div class="grid three">
+          <Card>
+            <h3>Native handles</h3>
+            <p>Call <code>nativeHandle()</code> on <a href={gpu('Renderer')}><code>Renderer</code></a>, <a href={gpu('Shader')}><code>Shader</code></a> or <a href={gpu('Pipeline')}><code>Pipeline</code></a> to pass the opaque handle to NativeKit’s C GPU API. Use <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}><code>nkgpu_get_native_context()</code></a> to request borrowed device or context handles where available.</p>
+          </Card>
+          <Card>
+            <h3>Your own graphics code</h3>
+            <p>Keep your renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>Haxeon’s C FFI</a>. Expose a C interface for C++ code.</p>
+          </Card>
+          <Card>
+            <h3>Compute and readback</h3>
+            <p>On a backend with compute support, open a compute pass and dispatch through <a href={gpu('Renderer')}><code>Renderer</code></a> or <a href={gpu('CommandBuffer')}><code>CommandBuffer</code></a>. Use <a href={gpu('Readback')}><code>Readback</code></a> to read a supported image or buffer range.</p>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <section id="examples">
+      <div class="wrap">
+        <div class="head"><h2>Examples</h2></div>
+        <div class="grid">
+          <Card>
+            <h3>Circuit Run</h3>
+            <div class="circuit-preview">
+              <img src="/gpu/circuit-run.webp" width="540" height="452" loading="lazy" alt="The desktop game window with a teal runner and pink drone in the maze." />
+              <button class="btn primary" type="button" data-circuit-run hidden>Play in the browser</button>
+              <p role="status" hidden></p>
+            </div>
+            <p>Collect nodes and dodge the drone in this Linux and experimental WebGL2 example.</p>
+            <p><a href={repositorySource(circuit + 'src')}>Source</a> · <a href={repositorySource(circuit + 'README.md')}>README</a></p>
+          </Card>
+          <Card>
+            <h3>UI Showcase</h3>
+            <p>Open 3D Views for a live cube in the UI, or Images &amp; Layers to explore image fitting and composition.</p>
+            <p><a href="/ui/showcase/">Open the UI Showcase</a></p>
+          </Card>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>Status</h2></div>
+        <div class="grid three">
+          <Card compact>
+            <h3>Works today</h3>
+            <ul><li>Linux rendering with OpenGL 3.3 core</li><li>GPU drawing inside a UI layout and retained UI over a scene</li></ul>
+          </Card>
+          <Card compact>
+            <h3>Experimental</h3>
+            <ul><li>WebGL2 on the web</li><li>Metal on macOS</li><li>Direct3D 11 on Windows</li></ul>
+          </Card>
+          <Card compact>
+            <h3>Not yet</h3>
+            <ul>
+              <li>Vulkan</li>
+              <li>Shader translation</li>
+              <li>Live editing for GPU apps using the platform <a href={repositorySource('packages/platform/src/haxeon/platform/App.hx')}><code>App</code></a> interface. It has no live entry points, so <a href={docsUrl('reference/CLI.md')}><code>haxeon run --watch</code></a> relaunches the app on edits.</li>
+            </ul>
+          </Card>
+        </div>
+      </div>
+    </section>
+  </div>
+</StarlightPage>
+
+<style>
+  .page-intro .head .ctas { margin-top: 0; }
+  #examples { scroll-margin-top: var(--sl-nav-height); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--hx-space-5);
+  }
+  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  figure, .grid p { margin: 0; }
+  img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
+  .card-image { aspect-ratio: 16 / 9; object-fit: cover; object-position: top; }
+  .showcase-light, :global([data-theme='light']) .showcase-dark { display: none; }
+  :global([data-theme='light']) .showcase-light { display: block; }
+  figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
+  ul { margin: 0; padding-inline-start: 1.25rem; }
+  li + li { margin-top: var(--hx-space-2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
+  .chips li {
+    margin: 0;
+    padding: 3px 9px;
+    font-size: 0.8rem;
+    border-radius: var(--hx-radius-pill);
+    background: var(--sl-color-accent-low);
+    color: var(--sl-color-white);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sl-color-gray-5); }
+  thead th { font: 600 0.75rem var(--sl-font-mono); color: var(--sl-color-gray-3); }
+  .circuit-preview { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
+  .circuit-preview [hidden] { display: none; }
+  .circuit-preview :global(iframe) { width: 100%; height: 510px; border: 0; border-radius: var(--hx-radius-m); }
+  .circuit-preview:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
+  .circuit-preview[data-running] img { display: none; }
+  @media (max-width: 55rem) {
+    .grid { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 30rem) {
+    th, td { padding-inline: 4px; font-size: 0.8rem; }
+    .circuit-preview :global(iframe) { height: 365px; }
+  }
+</style>
+
+<script>
+  const start = document.querySelector<HTMLButtonElement>('[data-circuit-run]');
+  const url = '/gpu/circuit-run/index.html';
+
+  if (start) {
+    fetch(url, { method: 'HEAD' }).then((response) => {
+      start.hidden = !response.ok;
+    }).catch(() => {});
+
+    start.addEventListener('click', () => {
+      const wrapper = start.parentElement!;
+      const status = wrapper.querySelector<HTMLElement>('[role="status"]')!;
+      const frame = document.createElement('iframe');
+      frame.title = 'Circuit Run';
+      frame.src = url;
+      start.disabled = true;
+      status.hidden = false;
+      status.textContent = 'Loading Circuit Run…';
+
+      function failed() {
+        delete wrapper.dataset.running;
+        frame.remove();
+        status.hidden = false;
+        status.textContent = 'Circuit Run could not load.';
+        start.hidden = false;
+        start.disabled = false;
+        window.removeEventListener('message', receive);
+        window.clearTimeout(timeout);
+      }
+
+      function receive(event: MessageEvent) {
+        if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
+        if (event.data === 'haxeon-circuit-run-ready') {
+          window.clearTimeout(timeout);
+          wrapper.dataset.running = '';
+          status.hidden = true;
+          start.hidden = true;
+          frame.contentDocument?.querySelector('canvas')?.focus();
+        } else if (event.data === 'haxeon-circuit-run-failed') {
+          failed();
+        }
+      }
+
+      const timeout = window.setTimeout(failed, 30000);
+      window.addEventListener('message', receive);
+      wrapper.prepend(frame);
+    });
+  }
+</script>
