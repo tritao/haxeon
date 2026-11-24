@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { existsSync, globSync } from 'node:fs';
+import { existsSync, globSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -15,6 +15,8 @@ const checkoutHaxe = new URL(
 );
 const cliPrinter = fileURLToPath(new URL('../scripts/PrintCliHelp.hx', import.meta.url));
 const exec = promisify(execFile);
+// Rendered pages depend on docs.mjs too: it decides slugs and rewrites links.
+const docsConfig = readFileSync(new URL('../docs.mjs', import.meta.url), 'utf8');
 
 type CliHelp = {
   overview: string;
@@ -128,8 +130,8 @@ const docs = defineCollection({
       await files.load({
         ...context,
         entryTypes,
-        // Repository links depend on the source revision. Generated help can change without Markdown edits.
-        generateDigest: (source) => context.generateDigest(`${sourceRef}\n${cliHelp}\n${source}`),
+        // Repository links depend on the source revision. Generated help and docs.mjs can change without Markdown edits.
+        generateDigest: (source) => context.generateDigest(`${sourceRef}\n${docsConfig}\n${cliHelp}\n${source}`),
       });
     },
   },
