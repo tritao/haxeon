@@ -7,7 +7,6 @@ import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleMain from '../../../packages/gpu/examples/triangle/src/Main.hx?raw';
 import triangleShader from '../../../packages/gpu/examples/triangle/src/shaders/Triangle.glsl?raw';
 import particlesMain from '../../../packages/gpu/examples/particles/src/Main.hx?raw';
-import fountainView from '../../../packages/gpu/examples/viewport/src/FountainView.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
@@ -32,8 +31,6 @@ const method = (source: string, name: string) => {
 const ready = method(triangleMain, 'ready');
 const frame = method(triangleMain, 'frame');
 const computeFrame = method(particlesMain, 'frame');
-const viewportExample = 'packages/gpu/examples/viewport/';
-const viewportBuild = method(fountainView, 'build');
 
 // The build generates shaders.Triangle; scripts/build-gpu-modules.sh copies it here before the site builds.
 const generatedModules = import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true });
@@ -125,23 +122,6 @@ const appLines = triangleMain.trimEnd().split('\n').length;
           </div>
         </div>
         <p class="note"><a href={repositorySource(triangle + 'src/Main.hx')}>Read the whole app</a> · <a href={repositorySource(triangle + 'README.md')}>Run it</a></p>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Inside your UI</h2>
-          <p class="lede">A <a href={repositorySource('packages/ui/haxe/haxeon/ui/widgets/GpuViewport.hx')}><code>GpuViewport</code></a> sits in your layout like any other view. Your app draws into an image; the viewport composites it, fits it to the space it gets, and pans and zooms with the pointer.</p>
-        </div>
-        <div class="grid first-frame">
-          <figure>
-            <img src="/gpu/viewport.webp" width="960" height="600" loading="lazy" alt="A window with a sidebar of controls (gravity and spread sliders, a warm colours switch and a reset button) beside a viewport showing an orange particle fountain." />
-          </figure>
-          <CodeCard code={viewportBuild} lang="haxe" title="src/FountainView.hx" />
-        </div>
-        <p class="note">To put controls over a full-window scene instead, draw the scene first and the UI on the same surface, as Circuit Run does for its HUD.</p>
-        <p class="note"><a href={repositorySource(viewportExample + 'src')}>Read the whole app</a> · <a href={repositorySource(viewportExample + 'README.md')}>Run it</a> · <a href="/ui/">Explore the UI toolkit</a></p>
       </div>
     </section>
 
