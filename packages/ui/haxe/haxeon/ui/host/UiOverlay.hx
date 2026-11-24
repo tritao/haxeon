@@ -34,7 +34,10 @@ class UiOverlay implements Disposable {
 	var dirty = true;
 	var disposed = false;
 
-	/** Borrows the window and surface. Takes ownership of the supplied fonts. */
+	/**
+	 * Borrows the window and surface. Takes ownership of supplied fonts after
+	 * validating the logical width, including when subsequent setup fails.
+	 */
 	public static function attach(window:Window, surface:Surface, events:EventPump, logicalWidth:Float,
 			?fonts:FontCollection):UiOverlay {
 		if (!Math.isFinite(logicalWidth) || logicalWidth <= 0.0)

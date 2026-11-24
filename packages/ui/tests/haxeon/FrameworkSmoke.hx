@@ -4935,11 +4935,14 @@ class FrameworkSmoke {
 
 	@:access(haxeon.ui.host.UiOverlay)
 	static function checkUiOverlay():Void {
+		var fonts = FontCollection.create();
+		defer fonts.dispose();
 		var rejected = false;
-		try UiOverlay.attach(null, null, null, Math.NaN) catch (error:BindingError) {
+		try UiOverlay.attach(null, null, null, Math.NaN, fonts) catch (error:BindingError) {
 			rejected = error.kind == BindingErrorKind.InvalidArgument && error.operation == "UiOverlay.attach";
 		}
 		if (!rejected) throw "UiOverlay did not reject an invalid logical width";
+		fonts.addSystemFallbacks();
 
 		scoped var runtime = Runtime.start();
 		var options = new WindowOptions(320, 192);
@@ -4968,7 +4971,7 @@ class FrameworkSmoke {
 			if (!runtime.events.poll()) runtime.events.wait(0.01);
 		if (!ready) throw "UI overlay surface was not ready";
 
-		var overlay = UiOverlay.attach(window, surface, runtime.events, 320);
+		var overlay = UiOverlay.attach(window, surface, runtime.events, 320, fonts);
 		defer overlay.dispose();
 		var context = overlay.context;
 		var view = new OverlaySmokeView();
@@ -5006,6 +5009,7 @@ class FrameworkSmoke {
 		if (context.onAnimationFrameRequested == null) throw "The overlay did not connect frame requests";
 		overlay.dispose();
 		if (context.onAnimationFrameRequested != null) throw "Overlay disposal left a frame request connected";
+		if (!fonts.isDisposed()) throw "Overlay disposal did not release the supplied fonts";
 	}
 
 	static function checkWindowChrome(context:UiContext):Bool {
