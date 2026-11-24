@@ -10,6 +10,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.Path;
 import project.ResolvedProject;
+import project.ShaderInputs;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -40,22 +41,23 @@ class AndroidWatch {
 		var port = Std.string(PATCH_PORT);
 		if (Sys.command(adb, ["-s", device, "forward", 'tcp:$port', 'tcp:$port']) != 0)
 			throw new InternalError('Could not forward the patch port $port to $device');
-		var files = WatchRun.snapshot(project), watcher = WatchRun.openWatcher(project, files);
+		var files = WatchRun.snapshot(project, target), watcher = WatchRun.openWatcher(project, files);
 		Sys.println('Watching ${project.rootPackage.name} for edits; each is sent to $device (Ctrl-C stops)');
 		while (true) {
 			if (watcher != null) {
 				var notified = watcher.wait(WatchRun.POLL_SECONDS);
 				if (session != null)
 					session.keepWorkersAlive();
-				if (!notified)
+				if (notified)
+					WatchRun.coalesce(watcher);
+				else if (ShaderInputs.roots(project).length == 0)
 					continue;
-				WatchRun.coalesce(watcher);
 			} else {
 				Sys.sleep(WatchRun.POLL_SECONDS);
 				if (session != null)
 					session.keepWorkersAlive();
 			}
-			var current = WatchRun.snapshot(project);
+			var current = WatchRun.snapshot(project, target);
 			if (WatchRun.same(files, current))
 				continue;
 			files = current;

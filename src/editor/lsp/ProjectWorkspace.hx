@@ -15,6 +15,7 @@ import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import project.CompilerInputs;
 import project.PackageManifest;
+import project.ShaderInputs;
 import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
@@ -506,6 +507,9 @@ class ProjectWorkspace {
 				if (projectionRoot != null && roots.indexOf(local(projectionRoot)) < 0)
 					roots.push(local(projectionRoot));
 			}
+			var generatedShaders = ShaderInputs.output(HaxeonProjectBuild.outputDirectory(resolved, false), target);
+			if (ShaderInputs.roots(resolved).length > 0 && FileSystem.exists(ShaderInputs.sources(generatedShaders)))
+				roots.push(local(generatedShaders));
 			// The manifest names the outputs of its source folders exactly; elsewhere build and out are presumed outputs.
 			for (root in roots)
 				if (!sourceFolders.exists(root))

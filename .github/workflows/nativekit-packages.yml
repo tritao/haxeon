@@ -50,7 +50,7 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           echo "NATIVEKIT_GLSLANG_SHA256=$(sha256sum "$RUNNER_TEMP/glslangValidator" | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - run: ./packages/ui/tools/check-shaders.sh
-      - run: ./packages/gpu/tools/check-shaders.sh --check
+      - run: ./packages/gpu/tools/check-shaders.sh
 
   ui:
     runs-on: ubuntu-latest
@@ -63,7 +63,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           libffi-dev libfontconfig1-dev libgl1-mesa-dev libgles2-mesa-dev
-          libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build python3-fonttools xvfb
+          libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build python3-fonttools python3-yaml ripgrep xvfb
       - run: ./scripts/bootstrap-tools.sh
       - name: Configure the UI native runtime
         run: >-
@@ -72,6 +72,8 @@ jobs:
           -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=OFF
       - name: Run managed UI framework coverage
         run: ./packages/ui/tools/test-haxeon-framework.sh
+      - name: Test project shader generation
+        run: ./packages/gpu/tools/test-shader-build.sh
       - uses: browser-actions/setup-chrome@v2
         id: chrome
         with:

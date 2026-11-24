@@ -2,6 +2,7 @@ package build.lowering;
 
 import build.Artifact.ArtifactKind;
 import build.BuildPlan;
+import build.TargetLayout;
 import build.execution.ActionId;
 import build.execution.ActionMerge;
 import build.execution.ExecutionAction;
@@ -11,6 +12,8 @@ import build.native.NativeSourcesProvider;
 import build.provider.CompilerProvider;
 import build.provider.FfiProvider;
 import build.provider.RuntimeProvider;
+import build.provider.ShaderProvider;
+import project.ShaderInputs;
 import compiler.core.InternalError;
 
 /** Orchestrates provider lowering without owning provider-specific commands. */
@@ -27,6 +30,12 @@ class PlanLowerer {
 
 		var project = context.project;
 		if (project != null) {
+			var buildDirectory = TargetLayout.projectBuildDirectory(project.root, project.manifest.outputDir,
+				context.environment.instrument != null),
+				shaderRoot = ShaderInputs.output(buildDirectory, context.environment.target),
+				shaders = ShaderProvider.action(project, context, shaderRoot);
+			if (shaders != null)
+				actions.push(shaders);
 			for (artifact in plan.artifacts)
 				if (artifact.id.kind == ArtifactKind.FfiInterface) {
 					var resolvedPackage = project.packages.get(artifact.id.packageId),
@@ -70,12 +79,15 @@ class PlanLowerer {
 							if (dependency.kind == ArtifactKind.FfiInterface)
 								dependencies = dependencies.concat(loweredDependency);
 						}
+						if (shaders != null)
+							dependencies.push(shaders.id);
 						var destination = context.output == null ? (artifact.id.kind == ArtifactKind.WasmModule
 							? context.layout.wasmModulePath(artifact.id.packageId)
 							: context.layout.hashLinkModulePath(artifact.id.packageId)) : context.output;
 						actions.push(CompilerProvider.action(project, context,
 							new ActionId('compile-project:${artifact.id.key()}'), dependencies,
-							destination, artifact.id.kind == ArtifactKind.CModule));
+							destination, artifact.id.kind == ArtifactKind.CModule,
+							shaders == null ? null : shaderRoot));
 					case FfiInterface:
 					default:
 						if (artifact.id.kind != ArtifactKind.NativeRuntime

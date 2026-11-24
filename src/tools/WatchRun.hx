@@ -1,5 +1,7 @@
 package tools;
 
+import build.HaxeonProjectBuild;
+import build.Target;
 import build.execution.OutputCapture;
 import compiler.core.InternalError;
 import compiler.tools.Verbosity;
@@ -7,6 +9,7 @@ import haxe.Json;
 import haxe.io.Path;
 import project.PackageManifest;
 import project.ResolvedProject;
+import project.ShaderInputs;
 import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
@@ -33,7 +36,7 @@ class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
 			liveHost:Null<String>, entry:String,
 			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, verbosity:Verbosity,
-			?session:build.BuildSession, runner:Bool = false):Int {
+			?session:build.BuildSession, runner:Bool = false, instrument:Bool = false):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw new InternalError("haxeon run --watch currently requires Linux, macOS or Windows");
 		// Each edit's result goes to the events file too, and the app (and a live host) learns its path from the environment.
@@ -42,7 +45,7 @@ class WatchRun {
 		WatchEvents.reset(events);
 		Sys.putEnv(WatchEvents.ENVIRONMENT, events);
 		var project = initial,
-			baseline = snapshot(project),
+			baseline = snapshot(project, null, instrument),
 			logPath = output + ".watch.log",
 			profile = startProfile(profiling),
 			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile, runner),
@@ -81,7 +84,7 @@ class WatchRun {
 				// Scan once the save has finished, not halfway through it and then again.
 				if (notified)
 					coalesce(watcher);
-				var observed = snapshot(project);
+				var observed = snapshot(project, null, instrument);
 				if (same(baseline, observed)) {
 					// Writes that are not edits (the app's log, build output) also notify; do not scan again for them at once.
 					if (notified)
@@ -102,7 +105,7 @@ class WatchRun {
 						coalesce(watcher);
 					} else
 						Sys.sleep(0.5);
-					observed = snapshot(project);
+					observed = snapshot(project, null, instrument);
 					if (same(baseline, observed))
 						break;
 					baseline = observed;
@@ -133,7 +136,7 @@ class WatchRun {
 				}
 				// A project resolved again may watch other directories; an edit of Haxe contents keeps the same one.
 				if (updated != project)
-					watcher = reopenWatcher(watcher, project);
+					watcher = reopenWatcher(watcher, updated, instrument);
 				project = updated;
 				var published = liveHost == null ? null : publication(output);
 				WatchEvents.emit(events, "build-ok", build, published == null ? null : published.revision);
@@ -194,10 +197,11 @@ class WatchRun {
 		while (watcher.wait(COALESCE_SECONDS) && Sys.time() < quiet) {}
 	}
 
-	static function reopenWatcher(old:Null<DirectoryWatcher>, project:ResolvedProject):Null<DirectoryWatcher> {
+	static function reopenWatcher(old:Null<DirectoryWatcher>, project:ResolvedProject,
+			instrument:Bool):Null<DirectoryWatcher> {
 		if (old != null)
 			old.close();
-		return openWatcher(project, snapshot(project));
+		return openWatcher(project, snapshot(project, null, instrument));
 	}
 
 	/** Package roots are watched recursively; watched files outside every root (native sources elsewhere) by their directory. */
@@ -369,14 +373,15 @@ class WatchRun {
 		Each watched file's modification time and size. One stat per file: the same scan with `exists` and `isDirectory`
 		before each stat made four calls per file and took ~105 ms for the editor's 1,224 files, twice per save.
 	**/
-	public static function snapshot(project:ResolvedProject):Map<String, String> {
+	public static function snapshot(project:ResolvedProject, ?target:Target,
+			instrument:Bool = false):Map<String, String> {
 		var result:Map<String, String> = [];
 		for (item in project.packages.packages) {
 			// Either manifest name, so a migration (one appearing, the other going) is a change too.
 			for (name in [PackageManifest.TOML_NAME, PackageManifest.JSON_NAME])
 				record(Path.join([item.root, name]), result);
 			for (root in item.sourceRoots)
-				collect(root, result);
+				collect(root, "hx", result);
 			for (path in item.ffiInterfaces)
 				record(path, result);
 			for (path in item.ffiProjections)
@@ -385,6 +390,18 @@ class WatchRun {
 				record(path, result);
 			for (path in item.nativeCMakeInputs)
 				record(path, result);
+		}
+		var shaderRoots = ShaderInputs.roots(project);
+		if (shaderRoots.length > 0) {
+			for (root in shaderRoots)
+				collect(root, "glsl", result);
+			var generated = ShaderInputs.output(HaxeonProjectBuild.outputDirectory(project, instrument),
+				target == null ? Target.detectHost() : target);
+			var dependencies = ShaderInputs.dependencies(generated);
+			if (FileSystem.exists(dependencies))
+				for (line in File.getContent(dependencies).split("\n"))
+					if (line != "")
+						record(line, result);
 		}
 		return result;
 	}
@@ -396,12 +413,12 @@ class WatchRun {
 			result.set(path, signature(path, stat));
 	}
 
-	static function collect(root:String, result:Map<String, String>):Void {
+	static function collect(root:String, extension:String, result:Map<String, String>):Void {
 		var stat = statOrNull(root);
 		if (stat == null)
 			return;
 		if (!isDirectory(stat)) {
-			if (Path.extension(root) == "hx")
+			if (Path.extension(root) == extension)
 				result.set(root, signature(root, stat));
 			return;
 		}
@@ -410,8 +427,8 @@ class WatchRun {
 			if (entry == null)
 				continue;
 			if (isDirectory(entry))
-				collect(path, result);
-			else if (Path.extension(path) == "hx")
+				collect(path, extension, result);
+			else if (Path.extension(path) == extension)
 				result.set(path, signature(path, entry));
 		}
 	}

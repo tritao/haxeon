@@ -14,13 +14,14 @@ import compiler.core.InternalError;
 import compiler.core.UsageError;
 import project.CompilerInputs;
 import project.ResolvedProject;
+import project.ShaderInputs;
 import sys.io.File;
 
 /** One project-level request to the persistent Haxeon compiler service. */
 class CompilerProvider {
 	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId,
 			dependencies:Array<ActionId>,
-			output:String, aheadOfTime:Bool = false):ExecutionAction {
+			output:String, aheadOfTime:Bool = false, ?shaderRoot:String):ExecutionAction {
 		if (project == null)
 			throw new InternalError("CompilerProvider requires a resolved project");
 		if (project.manifest.entry == null)
@@ -73,6 +74,13 @@ class CompilerProvider {
 		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
 		for (sourceRoot in compilerInputs.roots)
 			arguments.push("--root=" + sourceRoot);
+		if (shaderRoot != null) {
+			var generated = ShaderInputs.sources(shaderRoot);
+			arguments.push("--root=" + shaderRoot);
+			arguments.push("--sources-file=" + generated);
+			inputs.push(generated);
+			inputs.push(haxe.io.Path.join([shaderRoot, "shaders"]));
+		}
 		for (root in compilerInputs.packageRoots)
 			arguments.push('--package-root=${root.packageName}=${root.path}');
 		for (projection in compilerInputs.ffiProjections)

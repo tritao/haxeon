@@ -10,10 +10,10 @@ import build.execution.ExecutionPlan;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCache;
+import build.provider.ShaderProvider;
 import compiler.core.InternalError;
 import compiler.tools.ReportStyle;
 import compiler.tools.Verbosity;
-import haxe.io.Path;
 import project.ResolvedProject;
 
 /**
@@ -26,7 +26,7 @@ class HaxeonProjectBuild {
 	 * its compiler worker, module and instrumented native libraries never mix with the ordinary build's.
 	 */
 	public static function outputDirectory(project:ResolvedProject, instrument:Bool):String
-		return Path.join([project.root, project.manifest.outputDir + (instrument ? "-instrument" : "")]);
+		return TargetLayout.projectBuildDirectory(project.root, project.manifest.outputDir, instrument);
 
 	/** The compiler defines that turn on the instrumented flavor's probes and scope them. */
 	public static function instrumentDefines(project:ResolvedProject):Array<String> {
@@ -129,7 +129,8 @@ class HaxeonProjectBuild {
 		// Run on every build (`alwaysRun`), so the executor neither checks nor records a fingerprint.
 		var unchecked = new ExecutionPlan([
 			for (action in plan.actions)
-				new ExecutionAction(action.id, [], action.inputs, action.outputs, action.description, action.action,
+				new ExecutionAction(action.id, action.dependencies, action.inputs, action.outputs, action.description,
+				action.action,
 				false, true)
 		]);
 		var result = ExecutionBackendFactory.create(environment, jobs, null, session, verbosity,
@@ -170,8 +171,11 @@ class HaxeonProjectBuild {
 		for (action in plan.actions)
 			switch action.action {
 				case Compiler(_, _, _, _, _):
-					actions.push(new ExecutionAction(action.id, [], action.inputs, action.outputs, action.description,
-						action.action, false, action.alwaysRun));
+					var dependencies = action.dependencies.filter(ShaderProvider.owns);
+					actions.push(new ExecutionAction(action.id, dependencies, action.inputs, action.outputs,
+						action.description, action.action, false, action.alwaysRun));
+				case Process(_, _, _, _) if (ShaderProvider.owns(action.id)):
+					actions.push(action);
 				case Process(_, _, _, _):
 			}
 		if (actions.length == 0)

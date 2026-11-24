@@ -194,6 +194,9 @@ class PackageManifest {
 	public final nullSafetyRules:Array<NullSafetyRule>;
 
 	public final outputDir:String;
+
+	/** Shader module names mapped to named preprocessor define sets. */
+	public final shaderVariants:Map<String, Map<String, Array<String>>>;
 	public final dependencies:Map<String, PackageDependency>;
 	public final native:Null<NativeManifest>;
 	public final ffi:Null<FfiManifest>;
@@ -224,7 +227,7 @@ class PackageManifest {
 			compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
 			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
 			?app:AppManifest, ?packageVersion:String, ?publish:PublishManifest,
-			?patches:Map<String, Map<String, String>>) {
+			?patches:Map<String, Map<String, String>>, ?shaderVariants:Map<String, Map<String, Array<String>>>) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -240,6 +243,7 @@ class PackageManifest {
 		this.nullSafety = nullSafety;
 		this.nullSafetyRules = nullSafetyRules.copy();
 		this.outputDir = outputDir;
+		this.shaderVariants = shaderVariants == null ? [] : shaderVariants;
 		this.dependencies = dependencies;
 		this.native = native;
 		this.ffi = ffi;
@@ -302,7 +306,7 @@ class PackageManifest {
 		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
 		"target",
 		"defines", "inline", "nullSafety", "outputDir", "package", "app", "dependencies", "patch", "native", "ffi",
-		"format", "compatibility", "publish", "instrument"
+		"format", "compatibility", "publish", "instrument", "shaderVariants"
 	];
 
 	/** A manifest's objects (`decode`, or made by `haxeon create`) as a haxeon.toml's text. */
@@ -465,7 +469,7 @@ class PackageManifest {
 			outputDir, dependencies, native, ffi, compatibility, inlineEnabled,
 			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path),
 			packageData == null ? null : optionalNullableString(packageData, "version", '$path package'),
-			parsePublish(raw, path), parsePatches(raw, path));
+			parsePublish(raw, path), parsePatches(raw, path), parseShaderVariants(raw, path));
 	}
 
 	/** `publish`: false, or a table with `exclude` and `vendor` (PublishManifest). */
@@ -656,6 +660,35 @@ class PackageManifest {
 		if (!Std.isOfType(value, Bool))
 			throw new InternalError('$path "$field" must be a boolean');
 		return cast value;
+	}
+
+	static function parseShaderVariants(raw:Dynamic, path:String):Map<String, Map<String, Array<String>>> {
+		var result:Map<String, Map<String, Array<String>>> = [];
+		var data:Dynamic = Reflect.field(raw, "shaderVariants");
+		if (data == null)
+			return result;
+		if (!isObject(data))
+			throw new InternalError('$path "shaderVariants" must be a table keyed by shader module');
+		for (module in Reflect.fields(data)) {
+			var value:Dynamic = Reflect.field(data, module);
+			if (!~/^shaders(\.[A-Za-z_][A-Za-z0-9_]*)+$/.match(module) || !isObject(value))
+				throw new InternalError('$path invalid shaderVariants module "$module"');
+			var variants:Map<String, Array<String>> = [];
+			for (name in Reflect.fields(value)) {
+				var context = '$path shaderVariants.$module';
+				if (!~/^[A-Za-z][A-Za-z0-9_]*$/.match(name) || Reflect.field(value, name) == null)
+					throw new InternalError('$context invalid variant "$name"');
+				var defines = stringArray(value, name, context, []);
+				for (define in defines)
+					if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(define))
+						throw new InternalError('$context invalid shader define "$define"');
+				variants.set(name, defines);
+			}
+			if (!variants.iterator().hasNext())
+				throw new InternalError('$path shaderVariants.$module must declare a variant');
+			result.set(module, variants);
+		}
+		return result;
 	}
 
 	static function stringArray(raw:Dynamic, field:String, path:String, fallback:Array<String>):Array<String> {

@@ -95,6 +95,21 @@ class HaxeonSdk {
 	public static function cmakeDirectory(home:String):String
 		return Path.join([home, "cmake"]);
 
+	/** The shader driver and Haxe generator, as shipped by the SDK or read live in a checkout. */
+	public static function shaderTools(home:String):{build:String, driver:String, generator:String} {
+		var checkout = source(home);
+		var root = Path.join([home, "tools", "shaders"]);
+		return checkout == null ? {
+			build: Path.join([root, "build.py"]),
+			driver: Path.join([root, "shaders.py"]),
+			generator: Path.join([root, "generate-shader-haxe.py"])
+		} : {
+			build: Path.join([checkout, "tools", "shaders", "build.py"]),
+			driver: Path.join([checkout, "vendor", "nativekit", "modules", "gpu", "tools", "shaders.py"]),
+			generator: Path.join([checkout, "packages", "gpu", "tools", "generate-shader-haxe.py"])
+		};
+	}
+
 	/** The runtime's headers (`hl.h`, ...), which native code built for the VM compiles against. */
 	public static function includeDirectory(home:String):String
 		return Path.join([home, "include"]);

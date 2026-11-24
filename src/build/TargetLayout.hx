@@ -104,11 +104,14 @@ class TargetLayout {
 			"lib" + safeFfiName(name) + environment.toolchain.sharedLibrarySuffix
 		]);
 
-	public function targetDirectory():String {
-		if (environment.target.equals(Target.detectHost()))
-			return "host";
-		return environment.target.toString();
-	}
+	public function targetDirectory():String
+		return directoryFor(environment.target);
+
+	public static function projectBuildDirectory(root:String, outputDir:String, instrument:Bool):String
+		return Path.join([root, outputDir + (instrument ? "-instrument" : "")]);
+
+	public static function directoryFor(target:Target):String
+		return target.equals(Target.detectHost()) ? "host" : target.toString();
 
 	public function androidAbi():String {
 		if (!environment.target.isAndroid())
