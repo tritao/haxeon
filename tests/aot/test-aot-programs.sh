@@ -26,13 +26,13 @@ while (($# > 0)); do
 	case $1 in
 	-v) verbose=1 ;;
 	--sanitize) sanitize=1 ;;
-	--all) mapfile -t -O "${#programs[@]}" programs < <(grep -v '^#' "$root_dir/tests/programs/expected-exits.tsv" | cut -f1 | sed '/^$/d') ;;
+	--all) while IFS= read -r program; do programs+=("$program"); done < <(grep -v '^#' "$root_dir/tests/programs/expected-exits.tsv" | cut -f1 | sed '/^$/d') ;;
 	*) programs+=("$1") ;;
 	esac
 	shift
 done
 if ((${#programs[@]} == 0)); then
-	mapfile -t programs < <(grep -v '^#' "$root_dir/tests/aot/programs.txt" | sed '/^$/d')
+	while IFS= read -r program; do programs+=("$program"); done < <(grep -v '^#' "$root_dir/tests/aot/programs.txt" | sed '/^$/d')
 fi
 out_dir=${HAXEON_AOT_OUTPUT_DIR:-$haxeon_suite_out/aot-tests}
 sdk=${HAXEON_SDK:-$root_dir/out/sdk}
@@ -64,7 +64,7 @@ mkdir -p "$out_dir"
 build_c() {
 	local work=$1 name=$2
 	cmake -S "$root_dir/cmake/aot" -B "$work/build" -G Ninja -DCMAKE_MAKE_PROGRAM="$ninja" -DHaxeon_DIR="$sdk/cmake" \
-		-DC_SOURCES="$work/$name.c" -DOUTPUT="$work/$name" -DDEVELOPMENT="$development" ${toolchain:+-DCMAKE_C_COMPILER="$toolchain"} "${sanitizer_flags[@]}" \
+		-DC_SOURCES="$work/$name.c" -DOUTPUT="$work/$name" -DDEVELOPMENT="$development" ${toolchain:+-DCMAKE_C_COMPILER="$toolchain"} ${sanitizer_flags[@]+"${sanitizer_flags[@]}"} \
 		&& cmake --build "$work/build"
 }
 export TZ=Asia/Kolkata
