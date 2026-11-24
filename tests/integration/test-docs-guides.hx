@@ -37,7 +37,7 @@ function main() {
 	var errorsOnly = Sys.args().indexOf("--errors-only") >= 0;
 	for (section in PUBLISHED) {
 		var directory = Path.join([root, "docs", section]);
-		var names = [for (name in FileSystem.readDirectory(directory)) if (StringTools.endsWith(name, ".md")) name];
+		var names = markdownPages(directory, "");
 		names.sort(Reflect.compare);
 		if (section == "reference")
 			examples = examples.concat(referenceErrorProjects(Path.join([directory, "examples"]), failures));
@@ -48,6 +48,7 @@ function main() {
 				text = normalize(File.getContent(page)),
 				shown = 'docs/$section/$name';
 			checkLinks(root, page, shown, text, failures);
+			checkCheckoutPaths(shown, text, failures);
 			pages++;
 			if (section == "reference" && name == "ERRORS.md")
 				checkErrorsPage(root, shown, text, failures);
@@ -401,6 +402,34 @@ function runProgram(project:String):Void {
 	if (normalize(File.getContent(log)) != normalize(File.getContent(expected)))
 		Script.fail('FAIL: ${Path.withoutDirectory(project)} printed:\n${File.getContent(log)}\nand its expected-output.txt holds:\n'
 			+ File.getContent(expected));
+}
+
+/** The section's pages, in subdirectories too, by path relative to it; example projects are not pages. */
+function markdownPages(directory:String, relative:String):Array<String> {
+	var result:Array<String> = [];
+	for (name in FileSystem.readDirectory(Path.join([directory, relative]))) {
+		var path = relative == "" ? name : '$relative/$name';
+		if (FileSystem.isDirectory(Path.join([directory, path]))) {
+			if (name != "examples")
+				result = result.concat(markdownPages(directory, path));
+		} else if (StringTools.endsWith(name, ".md"))
+			result.push(path);
+	}
+	result.sort(Reflect.compare);
+	return result;
+}
+
+/**
+ * Published pages are read by people with a release, not a checkout: they name the installed `haxeon`, and never the
+ * checkout's scripts, tools, sources, tests, vendored code or unpublished documentation.
+ */
+function checkCheckoutPaths(shown:String, text:String, failures:Array<String>):Void {
+	var checkout =
+		~/scripts[\/\\]haxeon|scripts\/[a-z0-9-]+\.(sh|py|ps1|cmd)|\bvendor\/|docs\/(design|internals|reports|adr)\/|\btests\/(integration|programs|runtime|tooling|native|fixtures|compiler)\/|\bsrc\/(compiler|tools|build|editor)\/|\.tools\/|\bout\/(sdk|tools)\//;
+	var lines = text.split("\n");
+	for (index in 0...lines.length)
+		if (checkout.match(lines[index]))
+			failures.push('$shown:${index + 1}: "${checkout.matched(0)}" points into a Haxeon checkout; published pages describe a release');
 }
 
 /**

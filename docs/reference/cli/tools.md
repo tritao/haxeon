@@ -24,7 +24,7 @@ recipes run it during the build.
 
 ## dev
 
-See [Development](../../DEVELOPMENT.md) for working in the Haxeon checkout.
+`haxeon dev` runs the commands for working on Haxeon itself. It runs only from a Haxeon checkout and says so elsewhere.
 
 ## version
 
