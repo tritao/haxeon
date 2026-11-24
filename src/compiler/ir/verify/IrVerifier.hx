@@ -1852,54 +1852,9 @@ class IrVerifier {
 			throw new InternalError('IR value ${value.id} has the wrong type');
 	}
 
-	public static function sameType(left:IrType, right:IrType):Bool
-		return switch left {
-			case Obj(a): switch right {
-					case Obj(b): a == b;
-					default: false;
-				};
-			case Enum(a): switch right {
-					case Enum(b): a == b;
-					default: false;
-				};
-			case EnumTag(a): switch right {
-					case EnumTag(b): a == b;
-					default: false;
-				};
-			case Abstract(a): switch right {
-					case Abstract(b): a == b;
-					default: false;
-				};
-			case Virtual(a): switch right {
-					case Virtual(b): a == b;
-					default: false;
-				};
-			case Nullable(a): switch right {
-					case Nullable(b): sameType(a, b);
-					default: false;
-				};
-			case Array(a): switch right {
-					case Array(b): sameType(a, b);
-					default: false;
-				};
-			case Iterator(a): switch right {
-					case Iterator(b): sameType(a, b);
-					default: false;
-				};
-			case Function(aArgs, aResult): switch right {
-					case Function(bArgs, bResult):
-						if (aArgs.length != bArgs.length) false;
-						else {
-							var equal = sameType(aResult, bResult);
-							for (i in 0...aArgs.length)
-								if (!sameType(aArgs[i], bArgs[i]))
-									equal = false;
-							equal;
-						}
-					default: false;
-				};
-			default: Type.enumEq(left, right);
-		};
+	/** Whether two types are the same type, by `IrTypeIdentity.same`, the one structural type equality. */
+	public static inline function sameType(left:IrType, right:IrType):Bool
+		return compiler.ir.model.IrTypeIdentity.same(left, right);
 
 	static function isReference(type:IrType):Bool
 		return switch type {

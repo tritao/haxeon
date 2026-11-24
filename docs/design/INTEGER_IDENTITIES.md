@@ -168,8 +168,10 @@ remembers an answer. The self-compile's bytes are the check for each step.
 5. *Declarations by id* (`IrValue.type`, function results, object fields), only if a profile after step 4 still
    shows structural type work: it is the IR core's declaration side and touches most passes.
 
-Separately from ids, the copies of type equality (`IrVerifier.sameType`, `HlModuleAssembler.sameType`, `Type.enumEq`
-on IR types) can become `IrTypeIdentity.same`.
+Separately from ids, the copies of type equality: `IrVerifier.sameType` is `IrTypeIdentity.same` (done; its callers keep
+the name), and two bodies' types compare as ids (`IrFunctionStateEquality`, step 4). The others are different relations
+and stay: `HlModuleAssembler.sameType` compares texts with lambda ordinals erased, and `Type.enumEq` compares a
+`Function`'s argument lists by reference, so two equal function types built apart are unequal to it.
 
 ## What it does not change
 
