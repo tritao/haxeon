@@ -89,7 +89,7 @@ class UiHostRuntime implements Disposable {
 				nativeSurface = target;
 				frame = new UiSurfaceFrame(target, frameState.framebufferWidth, frameState.framebufferHeight);
 				created.context().density = context.touchPrimary ? Density.Touch : Density.Pointer;
-				binding = UiSurfaceBinding.attachNative(created.context(), window, target, context.events);
+				binding = UiSurfaceBinding.attachNative(created.context(), window, target, context.events, context.requestFrame);
 				binding.setCoordinateScale(context.zoom);
 				session.transition(UiHostLifecycle.Running);
 			}

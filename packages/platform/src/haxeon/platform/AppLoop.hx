@@ -7,6 +7,8 @@ import nativekit.ffi.NativeKitTypes.Result;
 
 /** Drives an app from native surface callbacks and the runtime's event pump. */
 class AppLoop implements Disposable {
+	static inline var maxFrameDeltaSeconds = 0.1;
+
 	final loop:EventLoop;
 	final surface:Surface;
 	final app:App;
@@ -17,17 +19,13 @@ class AppLoop implements Disposable {
 	var pending:Null<Int64>;
 	var submittedTiming:Null<SurfaceFrameTiming>;
 	var frameRan = false;
+	var lastFrameAt:Null<Float>;
 	var stopped = false;
-	public var firstFramePresented(default, null) = false;
-
-	/** Requests shutdown and reports whether all submitted work has completed. */
-	public function stop():Bool {
-		stopped = true;
-		return pending == null;
-	}
 	var disposed = false;
 	var disposalRequested = false;
 	var failure:Null<haxe.Exception>;
+
+	public var firstFramePresented(default, null) = false;
 
 	@:allow(haxeon.platform.Runtime)
 	private function new(events:EventPump, surface:Surface, app:App, recorder:Null<FrameRecorder>) {
@@ -50,6 +48,12 @@ class AppLoop implements Disposable {
 			readySubscription.dispose();
 			throw error;
 		}
+	}
+
+	/** Requests shutdown and reports whether all submitted work has completed. */
+	public function stop():Bool {
+		stopped = true;
+		return pending == null;
 	}
 
 	/** Pumps one browser tick without blocking. Returns false once any submitted frame has completed and the app has stopped. */
@@ -99,16 +103,20 @@ class AppLoop implements Disposable {
 			if (app.shouldQuit())
 				return;
 			app.ready();
-			frameSubscription = surface.onFrameTick(draw);
+			frameSubscription = surface.onFrame(draw);
 		} catch (error:haxe.Exception) fail(error);
 	}
 
-	function draw(tick:FrameTick):Void {
-		if (stopped || frameRan || pending != null || tick.width <= 0 || tick.height <= 0)
+	function draw(width:Int, height:Int):Void {
+		if (stopped || frameRan || pending != null || width <= 0 || height <= 0)
 			return;
 		try {
 			if (app.shouldQuit())
 				return;
+			var now = Sys.monotonicTime();
+			var previous = lastFrameAt;
+			var delta = previous == null ? 0.0 : Math.min(now - previous, maxFrameDeltaSeconds);
+			var tick = new FrameTick(now, width, height, delta);
 			var timing = recorder == null ? null : recorder.begin(surface, tick.timeSeconds);
 			var frame = surface.acquireFrame();
 			defer {
@@ -124,6 +132,7 @@ class AppLoop implements Disposable {
 				}
 			}
 			frameRan = true;
+			lastFrameAt = now;
 			app.frame(tick, frame);
 		} catch (error:haxe.Exception) fail(error);
 	}

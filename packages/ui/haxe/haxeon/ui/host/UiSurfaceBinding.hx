@@ -28,10 +28,7 @@ class UiSurfaceBinding implements Disposable {
 	var layout:LayoutFrame;
 	var info:FrameInfo;
 	var resizeSubscription:Null<EventSubscription>;
-	var previousFrameRequest:Null<Void->Void>;
-	var overlayFrameRequest:Null<Void->Void>;
 	var lastView:View;
-	var lastFrameAt = 0.0;
 	var lastWidth = 0;
 	var lastHeight = 0;
 	var frameDirty = true;
@@ -43,12 +40,12 @@ class UiSurfaceBinding implements Disposable {
 
 	/** Also supports hosts whose window and surface are managed by native code. */
 	public static function attachNative(context:UiContext, window:WindowHandle, surface:Surface,
-			events:EventPump):UiSurfaceBinding {
-		return connect(context, window, surface, events, false, null);
+			events:EventPump, ?requestFrame:Void->Void):UiSurfaceBinding {
+		return connect(context, window, surface, events, false, null, requestFrame);
 	}
 
 	static function connect(context:UiContext, window:WindowHandle, surface:Surface, events:EventPump,
-			redrawOnInput:Bool, managedWindow:Null<Window>):UiSurfaceBinding {
+			redrawOnInput:Bool, managedWindow:Null<Window>, ?requestFrame:Void->Void):UiSurfaceBinding {
 		var binding = new UiSurfaceBinding(context, window, surface);
 		var ready = false;
 		defer if (!ready) binding.dispose();
@@ -58,6 +55,7 @@ class UiSurfaceBinding implements Disposable {
 			binding.windowAttached = true;
 		}
 		binding.input.attach(events, redrawOnInput);
+		context.onAnimationFrameRequested = requestFrame == null ? surface.requestFrame : requestFrame;
 		if (managedWindow != null)
 			binding.owner = managedWindow.registerDependent(binding.dispose);
 		ready = true;
@@ -86,12 +84,6 @@ class UiSurfaceBinding implements Disposable {
 			resizeSubscription = surface.onResize(function(width, _, _, _) {
 				if (width > 0) setCoordinateScale(width / fixedWidth);
 			});
-			previousFrameRequest = context.onAnimationFrameRequested;
-			overlayFrameRequest = function() {
-				if (previousFrameRequest != null) previousFrameRequest();
-				surface.requestFrame();
-			};
-			context.onAnimationFrameRequested = overlayFrameRequest;
 		}
 		fixedWidth = width;
 		layout = new LayoutFrame(width, 1.0);
@@ -111,12 +103,10 @@ class UiSurfaceBinding implements Disposable {
 			throw "Set the UI frame width before recording an overlay";
 		var scale = tick.width / fixedWidth;
 		var height = tick.height / scale;
-		var delta = lastFrameAt == 0.0 ? 0.0 : Math.min(tick.timeSeconds - lastFrameAt, 0.1);
-		lastFrameAt = tick.timeSeconds;
 		if (frameDirty || lastView != view || context.isDirty() || context.needsAnimationFrame
 			|| tick.width != lastWidth || tick.height != lastHeight) {
 			layout.setViewport(fixedWidth, height);
-			layout.deltaSeconds = delta;
+			layout.deltaSeconds = tick.deltaSeconds;
 			frameDirty = false;
 			context.submit(view, layout);
 			lastView = view;
@@ -131,8 +121,7 @@ class UiSurfaceBinding implements Disposable {
 		if (disposed)
 			return;
 		disposed = true;
-		if (overlayFrameRequest != null && context.onAnimationFrameRequested == overlayFrameRequest)
-			context.onAnimationFrameRequested = previousFrameRequest;
+		context.onAnimationFrameRequested = null;
 		defer if (resizeSubscription != null) resizeSubscription.dispose();
 		defer if (owner != null) owner.detach();
 		defer context.detachPlatformSurface(surface);

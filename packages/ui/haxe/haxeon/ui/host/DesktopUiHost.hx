@@ -304,8 +304,6 @@ class DesktopUiHost {
 			runtime = liveRuntime;
 			liveRuntime.start(function(_) return create(hostContext));
 			if (session.state == UiHostLifecycle.Failed) throw session.error;
-			if (liveRuntime.app() != null)
-				liveRuntime.app().context().onAnimationFrameRequested = scheduleFrame;
 			var borrowedSurface = Surface.borrowNativeHandle(surface);
 			nativeSurface = borrowedSurface;
 

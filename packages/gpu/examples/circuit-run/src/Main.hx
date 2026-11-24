@@ -33,7 +33,6 @@ class Main implements App {
 
 	var previousPlayer:Position;
 	var previousDrone:Position;
-	var lastFrame = 0.0;
 	var accumulator = 0.0;
 
 	#if circuit_run_web
@@ -163,7 +162,6 @@ class Main implements App {
 		sounds.clear();
 		snapshotPositions();
 		accumulator = 0.0;
-		lastFrame = 0.0;
 		hudBinding.invalidateFrame();
 	}
 
@@ -184,8 +182,7 @@ class Main implements App {
 	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
 		var width = tick.width;
 		var height = tick.height;
-		var now = tick.timeSeconds;
-		advanceSimulation(now);
+		advanceSimulation(tick.deltaSeconds);
 		var progress = accumulator / stepSeconds;
 		var player = lerp(previousPlayer, game.playerPosition(), progress);
 		var drone = lerp(previousDrone, game.dronePosition(), progress);
@@ -197,13 +194,8 @@ class Main implements App {
 		frame.submit([gpuStep, uiStep]);
 	}
 
-	function advanceSimulation(now:Float):Void {
-		if (lastFrame != 0.0) {
-			var elapsed = now - lastFrame;
-			// Bound catch-up after a stall or a hidden window.
-			accumulator += Math.min(elapsed, 0.1);
-		}
-		lastFrame = now;
+	function advanceSimulation(deltaSeconds:Float):Void {
+		accumulator += deltaSeconds;
 
 		while (accumulator >= stepSeconds) {
 			snapshotPositions();
