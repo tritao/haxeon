@@ -3,10 +3,10 @@
 A Haxeon maze-chase sample inspired by the small Sokol-based game
 [pacman.zig](https://github.com/floooh/pacman.zig). Circuit Run uses its own
 maze and draws every tile and actor from colored rectangles in one GPU draw
-call. The GLSL files in `src/shaders/` are embedded at compile time.
+call. The build compiles the shader in `src/shaders/` for each backend.
 NativeKit supplies the window, keyboard events, and GPU backend.
 
-From the repository root on Linux with an X11 display and OpenGL 3.3:
+From the repository root on Linux with an X11 display and OpenGL 4.1:
 
 ```sh
 scripts/haxeon run --project packages/gpu/examples/circuit-run/haxeon.json

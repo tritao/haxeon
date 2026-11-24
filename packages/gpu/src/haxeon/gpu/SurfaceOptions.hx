@@ -15,10 +15,11 @@ class SurfaceOptions {
 		options.flags = (flags ?? SurfaceFlags.empty()) | SurfaceFlags.Depth | SurfaceFlags.Stencil
 			| SurfaceFlags.FillWindow;
 		options.api = NativeKitGpu.nkgpu_default_graphics_api();
+		// The shader build compiles desktop OpenGL shaders to GLSL 4.1.
 		if (options.api == GraphicsApi.Opengl) {
 			options.flags = options.flags | SurfaceFlags.ForwardCompatible;
-			options.majorVersion = 3;
-			options.minorVersion = 3;
+			options.majorVersion = 4;
+			options.minorVersion = 1;
 		}
 		return options;
 	}
