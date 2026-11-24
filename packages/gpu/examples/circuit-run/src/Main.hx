@@ -5,10 +5,10 @@ import haxeon.platform.AppLoop;
 import haxeon.platform.FrameTick;
 import haxeon.platform.FrameRecorder;
 import haxeon.platform.SurfaceFrame;
+#if circuit_run_web
 import haxeon.ui.FontCollection;
-import haxeon.ui.Renderer;
-import haxeon.ui.core.UiContext;
-import haxeon.ui.host.UiSurfaceBinding;
+#end
+import haxeon.ui.host.UiOverlay;
 import haxeon.platform.Runtime;
 import haxeon.platform.WindowOptions;
 import nativekit.ffi.NativeKitTypes;
@@ -22,11 +22,8 @@ class Main implements App {
 	final sounds:Sounds;
 	var surface:Surface;
 	var renderer:CircuitRenderer;
-	var hud:CircuitHud;
-	var hudContext:UiContext;
-	var hudRenderer:Renderer;
-	var hudFonts:FontCollection;
-	var hudBinding:UiSurfaceBinding;
+	var hud:UiOverlay;
+	var hudView:CircuitHud;
 	final runtime:Runtime;
 
 	var running = true;
@@ -108,17 +105,17 @@ class Main implements App {
 		options.flags = WindowFlags.Resizable;
 		var window = runtime.createWindow(options);
 		surface = window.createSurface(SurfaceOptions.forGpu(CircuitRenderer.width, CircuitRenderer.surfaceHeight));
-		hudFonts = FontCollection.create();
 		#if circuit_run_web
-		hudFonts.add("/assets/IBMPlexSans-Regular.ttf");
+		var fonts = FontCollection.create();
+		try fonts.add("/assets/IBMPlexSans-Regular.ttf") catch (error:haxe.Exception) {
+			fonts.dispose();
+			throw error;
+		}
+		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width, fonts);
 		#else
-		hudFonts.addSystemFallbacks();
+		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width);
 		#end
-		hudRenderer = Renderer.create();
-		hudContext = new UiContext(null, hudFonts);
-		hudBinding = UiSurfaceBinding.attach(hudContext, window, surface, runtime.events);
-		hudBinding.setFrameWidth(CircuitRenderer.width);
-		hud = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
+		hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
 		window.onClose(function() running = false);
 		window.onKey(handleKey);
 		snapshotPositions();
@@ -131,11 +128,7 @@ class Main implements App {
 		return !running;
 
 	function dispose():Void {
-		defer if (hudFonts != null) hudFonts.dispose();
-		defer if (hudRenderer != null) hudRenderer.dispose();
-		defer if (hudContext != null) hudContext.dispose();
-		if (hudBinding != null)
-			hudBinding.dispose();
+		if (hud != null) hud.dispose();
 	}
 
 	public function ready():Void
@@ -162,12 +155,12 @@ class Main implements App {
 		sounds.clear();
 		snapshotPositions();
 		accumulator = 0.0;
-		hudBinding.invalidateFrame();
+		hud.invalidate();
 	}
 
 	function toggleSound():Void {
 		sounds.toggleMute();
-		hudBinding.invalidateFrame();
+		hud.invalidate();
 	}
 
 	function onGameEvent(event:CircuitEvent):Void {
@@ -176,7 +169,7 @@ class Main implements App {
 			case RoundFinished(Captured): Caught;
 			case RoundFinished(Cleared): Clear;
 		});
-		hudBinding.invalidateFrame();
+		hud.invalidate();
 	}
 
 	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
@@ -189,7 +182,7 @@ class Main implements App {
 		scoped var batch = renderer.record(game, player, drone, width, height);
 		var gpuStep = batch.frameStep();
 		defer gpuStep.dispose();
-		var uiStep = hudBinding.frameStep(hud, hudRenderer, frame, tick);
+		var uiStep = hud.frameStep(hudView, frame, tick);
 		defer uiStep.dispose();
 		frame.submit([gpuStep, uiStep]);
 	}

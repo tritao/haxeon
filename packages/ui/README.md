@@ -29,12 +29,11 @@ UI has no dependency on a Materia or SceneKit checkout.
 Compiler and native artifacts should live under Haxeon’s `out/` tree or an
 explicit build directory, rather than inside the package’s source folders.
 
-For an app that already owns a desktop window and event loop, use
-`DesktopUiSurface.mount(window, events, width, height, view, onError)` to add a
-UI region. The mount owns its UI resources and input subscription, schedules
-frames on demand, and cleans up with the window. Call `invalidate()` after
-app-driven state changes that affect the view. The normal `DesktopUiHost`
-uses the same input binding and frame rendering helpers.
+For an app that already owns a window and surface, attach a `UiOverlay` with
+`UiOverlay.attach(window, surface, events, logicalWidth)`. Add the step from
+`frameStep(view, frame, tick)` to the app's frame submission after its GPU work.
+Call `invalidate()` when app state read by the view changes. The overlay owns its
+UI resources, including any font collection supplied to `attach`.
 
 ## Search pickers and tooltips
 
