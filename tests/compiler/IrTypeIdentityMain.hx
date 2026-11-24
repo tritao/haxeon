@@ -1,5 +1,6 @@
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.IrTypeMap;
 
 /** An IR type's identity text is fixed by the compiler, not by how the runtime that built it prints enums and arrays. */
 class IrTypeIdentityMain {
@@ -35,5 +36,23 @@ class IrTypeIdentityMain {
 			throw 'list text is ${IrTypeIdentity.listText([I32, Array(Bool)])}';
 		if (IrTypeIdentity.id(Obj("pkg.A")) == IrTypeIdentity.id(Obj("pkg.B")))
 			throw "distinct types share an identity number";
+		checkMap();
+	}
+
+	static function checkMap():Void {
+		var types = new IrTypeMap<Int>();
+		for (index in 0...32)
+			types.set(Function([Array(Obj('pkg.Type$index'))], Void), index);
+		types.set(Array(Enum("pkg.Type0")), 32);
+		types.set(Array(Obj("pkg.Type0")), 33);
+		var copy = types.copy();
+		types.clear();
+		for (index in 0...32) {
+			var type = Function([Array(Obj('pkg.Type$index'))], Void);
+			if (types.exists(type) || copy.get(type) != index)
+				throw 'type map lost its structural key for pkg.Type$index';
+		}
+		if (copy.get(Array(Enum("pkg.Type0"))) != 32 || copy.get(Array(Obj("pkg.Type0"))) != 33)
+			throw "type map confused different kinds with the same name";
 	}
 }

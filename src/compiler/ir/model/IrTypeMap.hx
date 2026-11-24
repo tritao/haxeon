@@ -3,15 +3,15 @@ package compiler.ir.model;
 import compiler.ir.model.Ir.IrType;
 
 /**
- * A map keyed by an IR type's structure. Equal types are different enum values, so a key is hashed by walking the type and
- * compared with `IrTypeIdentity.same`: a lookup builds no text and allocates nothing, and only an insertion can grow the
- * table. Open addressing over parallel arrays, linear probing, never more than half full.
+ * A map keyed by an IR type's structure. Keys are hashed structurally and compared with `IrTypeIdentity.same`.
+ * Open addressing over parallel arrays, linear probing, never more than half full.
  */
 @:nullSafety(Strict)
 class IrTypeMap<V> {
 	var keys:Array<Null<IrType>>;
 	var values:Array<Null<V>>;
 	var hashes:Array<Int>;
+	var nameHashes:Map<String, Int> = [];
 	var count = 0;
 
 	public function new() {
@@ -35,7 +35,7 @@ class IrTypeMap<V> {
 		return find(type, hash(type)) >= 0;
 
 	public function set(type:IrType, value:V):Void {
-		var code = hash(type), slot = find(type, code);
+		var code = hash(type, true), slot = find(type, code);
 		if (slot >= 0) {
 			values[slot] = value;
 			return;
@@ -51,12 +51,14 @@ class IrTypeMap<V> {
 		result.keys = keys.copy();
 		result.values = values.copy();
 		result.hashes = hashes.copy();
+		result.nameHashes = nameHashes.copy();
 		result.count = count;
 		return result;
 	}
 
 	public function clear():Void {
 		allocate(16);
+		nameHashes.clear();
 		count = 0;
 	}
 
@@ -108,7 +110,7 @@ class IrTypeMap<V> {
 	}
 
 	/** A hash of the type's structure, consistent with `IrTypeIdentity.same`. */
-	public static function hash(type:IrType):Int
+	function hash(type:IrType, rememberNames:Bool = false):Int
 		return mix(switch type {
 			case Void: 1;
 			case I32: 2;
@@ -121,25 +123,31 @@ class IrTypeMap<V> {
 			case ManagedBytes: 9;
 			case Dyn: 10;
 			case TypeRef: 11;
-			case Nullable(element): mix(12) ^ hash(element);
-			case Array(element): mix(13) ^ hash(element);
-			case Iterator(element): mix(14) ^ hash(element);
-			case Enum(name): mix(15) ^ text(name);
-			case EnumTag(name): mix(16) ^ text(name);
-			case Obj(name): mix(17) ^ text(name);
-			case Abstract(name): mix(18) ^ text(name);
-			case Virtual(name): mix(19) ^ text(name);
+			case Nullable(element): mix(12) ^ hash(element, rememberNames);
+			case Array(element): mix(13) ^ hash(element, rememberNames);
+			case Iterator(element): mix(14) ^ hash(element, rememberNames);
+			case Enum(name): mix(15) ^ nameHash(name, rememberNames);
+			case EnumTag(name): mix(16) ^ nameHash(name, rememberNames);
+			case Obj(name): mix(17) ^ nameHash(name, rememberNames);
+			case Abstract(name): mix(18) ^ nameHash(name, rememberNames);
+			case Virtual(name): mix(19) ^ nameHash(name, rememberNames);
 			case Function(arguments, result):
-				var code = mix(20) ^ hash(result);
+				var code = mix(20) ^ hash(result, rememberNames);
 				for (argument in arguments)
-					code = mix(code) ^ hash(argument);
+					code = mix(code) ^ hash(argument, rememberNames);
 				code;
 		});
 
-	static function text(value:String):Int {
+	function nameHash(value:String, remember:Bool):Int {
+		var known = nameHashes.get(value);
+		if (known != null)
+			return known;
 		var code = -2128831035;
 		for (index in 0...value.length)
 			code = (code ^ StringTools.fastCodeAt(value, index)) * 16777619;
+		// Retain names only from entries, so unsuccessful lookups cannot grow the cache.
+		if (remember)
+			nameHashes.set(value, code);
 		return code;
 	}
 

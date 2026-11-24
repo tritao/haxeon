@@ -545,6 +545,16 @@ lowering 17%, IR generation and SSA 11%, parsing 5.5%.
 - **SSA value names.** Every SSA temporary carries a `"v<id>"` String
   (`IrSsaVariables` makes each once). A temporary needs no name; drop
   the field for temporaries with ADR 0003 M3's structured identities.
+- **Canonical IR types.** Extend `IrTypeIds` from numbering the types in
+  encoded bodies to interning at construction. Intern named types by kind
+  and `IrSymbol.id`, and compound types by kind and their child ids. Own
+  the argument arrays so callers cannot change an interned key. Then
+  `IrTypeMap` can use ids and structural equality can become an identity
+  check. Keep runtime type discriminators, serialized names and backend
+  index assignment independent of interning order. This is a representation
+  migration across construction and pattern-match sites in roughly 150
+  compiler files. Choose the pool lifetime around incremental IR reuse
+  before moving construction into the pool.
 - **Per-function scratch.** Register allocation, SSA liveness and the lowering
   tables now keep their storage across functions; the rest of SSA building,
   lowering and the inliner still allocate per function. Do them together as
