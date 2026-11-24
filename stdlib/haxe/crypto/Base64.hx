@@ -31,14 +31,18 @@ class Base64 {
 		return output.toString();
 	}
 
+	/**
+	 * Decodes from the text's UTF-8 bytes: indexing the String per character is linear on targets that store UTF-8
+	 * (wasm32 counts UTF-16 units from the start on each `charAt`), which made a large decode quadratic.
+	 */
 	public static function decode(text:String, complement:Bool = true):Bytes {
-		var length = text.length;
+		var source = Bytes.ofString(text), length = source.length;
 		if (complement)
-			while (length > 0 && text.charCodeAt(length - 1) == "=".code)
+			while (length > 0 && source.get(length - 1) == "=".code)
 				length--;
 		var output = Bytes.alloc(Std.int(length * 6 / 8)), accumulator = 0, bits = 0, position = 0;
 		for (index in 0...length) {
-			var digit = CHARS.indexOf(text.charAt(index));
+			var digit = digitOf(source.get(index));
 			if (digit < 0)
 				throw 'Invalid Base64 character at $index';
 			accumulator = (accumulator << 6) | digit;
@@ -50,4 +54,13 @@ class Base64 {
 		}
 		return output;
 	}
+
+	/** The value of a byte of `CHARS`, or -1 for any other byte (every byte of a non-ASCII character). */
+	static function digitOf(code:Int):Int
+		return if (code >= "A".code && code <= "Z".code) code - "A".code
+			else if (code >= "a".code && code <= "z".code) code - "a".code + 26
+			else if (code >= "0".code && code <= "9".code) code - "0".code + 52
+			else if (code == "+".code) 62
+			else if (code == "/".code) 63
+			else -1;
 }

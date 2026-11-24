@@ -11,7 +11,53 @@ function shout(text:String):String return text + "!";
 function apply(callback:Int->Int):Int return callback(20);
 function pair(left:Int, right:String):String return right + left;
 
+enum AdapterColor {
+	Red;
+	Green;
+	Blue;
+}
+
+// Each source shares one argument and its result with the target and differs in the first argument, so the shared
+// values cross the adapter through Dynamic. Float32 is not yet a runtime value type, so no closure can take one.
+function sharedBytes(first:Int, value:haxe.io.Bytes):haxe.io.Bytes return value.length == first ? value : null;
+function sharedRaw(first:Int, value:hl.Bytes):hl.Bytes return first == 1 ? value : null;
+function sharedAbstract(first:Int, value:hl.Abstract<"adapter_handle">):hl.Abstract<"adapter_handle"> return first == 1
+	? value : null;
+function sharedTag(first:Int, value:AdapterColor):AdapterColor return first == 1 ? value : Red;
+function sharedInt64(first:Int, value:haxe.Int64):haxe.Int64 return value + first;
+
+function sharedTypes():Int {
+	var bytes = haxe.io.Bytes.alloc(3);
+	bytes.set(1, 7);
+	var dynamicBytes:Dynamic = sharedBytes;
+	var bytesView:(Dynamic, haxe.io.Bytes) -> haxe.io.Bytes = cast dynamicBytes;
+	var bytesResult = bytesView(3, bytes);
+	if (bytesResult != bytes || bytesResult.get(1) != 7) return 20;
+	// Wasm GC has no raw view of Bytes yet.
+	#if !wasmgc
+	var raw:hl.Bytes = bytes.getData();
+	var dynamicRaw:Dynamic = sharedRaw;
+	var rawView:(Dynamic, hl.Bytes) -> hl.Bytes = cast dynamicRaw;
+	var rawResult = rawView(1, raw);
+	if (rawResult != raw || rawView(2, raw) != null) return 21;
+	#end
+	var dynamicAbstract:Dynamic = sharedAbstract;
+	var abstractView:(Dynamic, hl.Abstract<"adapter_handle">) -> hl.Abstract<"adapter_handle"> = cast dynamicAbstract;
+	if (abstractView(1, null) != null) return 22;
+	var dynamicTag:Dynamic = sharedTag;
+	var tagView:(Dynamic, AdapterColor) -> AdapterColor = cast dynamicTag;
+	if (tagView(1, Blue) != Blue || tagView(2, Green) != Red) return 23;
+	var dynamicInt64:Dynamic = sharedInt64;
+	var int64View:(Dynamic, haxe.Int64) -> haxe.Int64 = cast dynamicInt64;
+	var big = haxe.Int64.make(1, 5);
+	var int64Result = int64View(2, big);
+	if (int64Result.high != 1 || int64Result.low != 7) return 24;
+	return 42;
+}
+
 function main():Int {
+	var shared = sharedTypes();
+	if (shared != 42) return shared;
 	// Int result read as Float.
 	var source:Dynamic = twice;
 	var asFloat:Int->Float = cast source;
