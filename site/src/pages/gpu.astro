@@ -81,7 +81,7 @@ const sample = record[0]
         </div>
         <figure class="circuit-preview">
           <img src="/gpu/circuit-run.webp" width="540" height="452" alt="Circuit Run: a teal runner and a pink drone in a maze, with a node counter, sound toggle and restart button." />
-          <button class="btn primary" type="button" data-circuit-run hidden>Play in the browser</button>
+          <button class="btn primary" type="button" data-circuit-run data-pending>Play in the browser</button>
           <p role="status" hidden></p>
           <figcaption>Circuit Run draws its maze and actors with one GPU draw per frame, with UI controls on top.</figcaption>
         </figure>
@@ -291,6 +291,7 @@ const sample = record[0]
   thead th { font: 600 0.75rem var(--sl-font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--sl-color-gray-3); }
   .circuit-preview { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
   .circuit-preview [hidden] { display: none; }
+  .circuit-preview [data-pending] { visibility: hidden; }
   .circuit-preview p { margin: 0; }
   .circuit-preview :global(iframe) { width: 100%; aspect-ratio: 540 / 510; height: auto; border: 0; border-radius: var(--hx-radius-m); }
   .circuit-preview:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
@@ -308,9 +309,14 @@ const sample = record[0]
   const url = '/gpu/circuit-run/index.html';
 
   if (start) {
+    // The button keeps its space while the check runs, so a present build does not shift the hero.
     fetch(url, { method: 'HEAD' }).then((response) => {
       start.hidden = !response.ok;
-    }).catch(() => {});
+    }).catch(() => {
+      start.hidden = true;
+    }).finally(() => {
+      delete start.dataset.pending;
+    });
 
     start.addEventListener('click', () => {
       const wrapper = start.parentElement!;
