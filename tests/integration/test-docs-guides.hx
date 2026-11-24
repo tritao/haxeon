@@ -514,8 +514,7 @@ function checkErrorExample(project:String, code:String):Void {
 	var expected = StringTools.trim(content(Path.join([project, "expected-error.txt"])));
 	var log = Path.join([project, "build.log"]);
 	var status = haxeon(["build", "--color=never", "--diagnostic-format=short"], project, log);
-	// The one-shot worker also prints an exception summary.
-	var location = ~/^(?!Uncaught exception: ).+:[0-9]+:[0-9]+: ([EW][0-9]{4}): /;
+	var location = ~/^.+:[0-9]+:[0-9]+: ([EW][0-9]{4}): /;
 	var actual = [for (line in lines(log)) if (location.match(line)) location.matched(1)];
 	if (status == 0 || actual.length != 1 || actual[0] != expected)
 		Script.fail('FAIL: $code expected one diagnostic ($expected) and a failed build; exit $status, log:\n${content(log)}');

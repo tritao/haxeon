@@ -43,7 +43,7 @@ class CompilerExecutable {
 			case "ffi-audit":
 				Sys.exit(FfiAuditMain.run(arguments.slice(1)));
 			case _:
-				compiler.tools.HaxeonCompiler.run(arguments);
+				Sys.exit(compiler.tools.HaxeonCompiler.run(arguments));
 		}
 	}
 
