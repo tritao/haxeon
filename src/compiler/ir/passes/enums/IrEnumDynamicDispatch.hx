@@ -34,7 +34,7 @@ private typedef EnumDynamicRequest = {
  * (`RENAMED`), and asks for the unboxes and type tests it calls. The helpers are named by the enum type.
  */
 @:nullSafety(Strict)
-class IrEnumDynamicDispatch implements IrFunctionPass {
+class IrEnumDynamicDispatch extends IrFunctionPass {
 	/** Read-only: no type values in a function. */
 	@:processWide("a shared empty map, only ever read")
 	static final noTypeValues:Map<Int, IrType> = [];
@@ -132,7 +132,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		return skipped == null || !skipped.exists(fn.name);
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var flags = 0;
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -159,7 +159,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		return id;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
 		var boxes:Map<String, Bool> = [], views:Map<String, Bool> = [], closing:Map<String, Bool> = [];
 		functionNames = index;
 		for (position in 0...functions.length) {
@@ -288,7 +288,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		return session == null ? null : session.memos.helper(name);
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return switch kind {
 			case UNREACHED:
 				var skipped = unreached, notReached = skipped != null && skipped.exists(key);
@@ -314,7 +314,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		return name != null ? name : helperName(UNBOX_PREFIX, type);
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (reader.read(UNREACHED, fn.name) == 1)
 			return fn;
 		var typeValues:Null<Map<Int, IrType>> = null;
@@ -365,7 +365,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		});
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		if (kind == UNBOX) {
 			var id = key(type), helper = unboxNames.get(id);
 			if (helper == null) {
@@ -382,7 +382,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		}
 	}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var rewritten = [for (fn in functions) if (!dropped.exists(fn.name)) fn];
 		for (helper in made)
 			rewritten.push(helper);

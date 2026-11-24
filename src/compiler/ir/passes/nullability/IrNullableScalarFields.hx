@@ -175,7 +175,7 @@ class IrNullableScalarFields {
  * the normalizer of each width it stores.
  */
 @:nullSafety(Strict)
-class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass {
+class IrNullableScalarFieldsPass extends compiler.ir.pipeline.IrFunctionPass {
 	public static inline final FIELD = 0;
 
 	static inline final STORES = 1;
@@ -188,7 +188,7 @@ class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass 
 		this.builder = builder;
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -205,15 +205,15 @@ class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass 
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var split = key.indexOf("\u0001");
 		return fields.storageCode(key.substr(0, split), key.substr(split + 1));
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (summary != STORES)
 			return fn;
 		var body = fn.encodedBody(builder);
@@ -224,9 +224,9 @@ class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass 
 		return IrFunction.ofOwnedBody(edited);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		fields.helperFor(type, {size: kind >> 1, signed: kind & 1 == 1});
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return fields.withHelpers(functions);
 }

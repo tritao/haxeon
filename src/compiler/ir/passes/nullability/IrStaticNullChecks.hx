@@ -29,7 +29,7 @@ import compiler.ir.model.Ir;
  * the check of each static by its name and the receiver's type; the checks come last, by name.
  */
 @:nullSafety(Strict)
-class IrStaticNullChecks implements IrFunctionPass {
+class IrStaticNullChecks extends IrFunctionPass {
 	public static inline final STAGE = "static-null-checks";
 
 	/** Fact: whether initialization can call the function named by the key. */
@@ -77,7 +77,7 @@ class IrStaticNullChecks implements IrFunctionPass {
 			?builder:IrBodyBuilder):Array<IrFunction>
 		return IrFunctionStages.apply(STAGE, new IrStaticNullChecks(objects, builder), functions);
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(builder),
 			flags = IrInitCalls.stores(fn, builder, lineage).relevant ? STORES : 0;
 		for (block in 0...body.blockCount()) {
@@ -92,7 +92,7 @@ class IrStaticNullChecks implements IrFunctionPass {
 	}
 
 	/** The functions initialization may call, from what the functions that store something give (`STORES`). */
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var stores:Array<Null<IrInitCalls>> = [
 			for (index in 0...functions.length)
 				summaries[index] & STORES != 0 ? IrInitCalls.stores(functions[index], builder, lineage) : null
@@ -102,13 +102,13 @@ class IrStaticNullChecks implements IrFunctionPass {
 		reached = calls.reachable("__init", names.exists);
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return switch kind {
 			case REACHED: reached.exists(key) ? 1 : 0;
 			case _: valueTypes.exists(key) ? 1 : 0;
 		};
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary & READS_STATIC == 0 || reader.read(REACHED, fn.name) == 0)
 			return fn;
 		var body = fn.encodedBody(builder);
@@ -152,14 +152,14 @@ class IrStaticNullChecks implements IrFunctionPass {
 		return edited == null ? fn : IrFunction.ofOwnedBody(edited);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		if (name == null)
 			throw new InternalError("A static null check is asked for by the static's name");
 		var valueType = kind == OF_VALUE ? type : null;
 		helpers.set(helperName(name, valueType), {name: name, valueType: valueType});
 	}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var result = functions.copy(), names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (helperName in names) {

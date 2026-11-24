@@ -46,7 +46,7 @@ private typedef ScalarArgumentChoice = {
  * cloned with its value arguments expanded into slots, and direct calls are redirected to the clones in place.
  */
 @:nullSafety(Strict)
-class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
+class IrScalarArguments extends compiler.ir.pipeline.IrFunctionPass {
 	/** The functions each function takes as closures. */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final CLOSURE_NAMES =
@@ -160,7 +160,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	 * (`SIGNATURE`) and those that take closures (`CLOSES`). In a session the choice is kept (`CHOICE`) while the program's tables
 	 * and those functions give it the same, and the clones are made only when a stage asks for one.
 	 */
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		originals = functions;
 		var known = lineage;
@@ -390,7 +390,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		}
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var flags = 0;
 		if (IrScalarAbiEligibility.permits(fn.kind, false) && namesObject(fn))
 			flags |= SIGNATURE;
@@ -411,7 +411,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		return false;
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		switch kind {
 			case CANDIDATES:
 				return candidatesPrint;
@@ -453,7 +453,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		].join(";"));
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = fn.encodedBody(scratch.bodyBuilder);
 		// The calls a function makes go to a candidate or not by the candidates; a method call's target by the classes
 		// (`METHOD`), and a rewrite's slots by the value layouts (`REWRITE`).
@@ -494,11 +494,11 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		return calls;
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The scalar ABI asks for no helper");
 
 	/** The rewritten functions, then the candidates' clones and the receiver-preserving ones a call selects. */
-	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext())
 			return rewritten;
 		rewritten = rewritten.copy();

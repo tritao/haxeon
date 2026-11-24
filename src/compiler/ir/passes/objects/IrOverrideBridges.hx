@@ -30,7 +30,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * Direct calls of the override keep its own signature.
  */
 @:nullSafety(Strict)
-class IrOverrideBridges implements IrFunctionPass {
+class IrOverrideBridges extends IrFunctionPass {
 	public static inline final BRIDGE_PREFIX = "$override-bridge:";
 	public static inline final CALL_PREFIX = "$override-call:";
 
@@ -74,10 +74,10 @@ class IrOverrideBridges implements IrFunctionPass {
 		return root;
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		byName = [for (object in objects) object.name => object];
 		var functionIndex = names, bridged:Map<String, Bool> = [];
 		index = functionIndex;
@@ -111,10 +111,10 @@ class IrOverrideBridges implements IrFunctionPass {
 		objects = rewritten;
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return bridges.length == 0 ? 0 : IrFacts.UNKNOWN;
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (reader.read(BRIDGED, "") == 0)
 			return fn;
 		return IrFunctionRewrite.instructions(fn, adapted);
@@ -145,9 +145,9 @@ class IrOverrideBridges implements IrFunctionPass {
 			default: null;
 		};
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		if (bridges.length == 0)
 			return functions;
 		var made = [for (name => adapter in adapters) {

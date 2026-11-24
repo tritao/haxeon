@@ -14,7 +14,7 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  * is last build's; without one, nothing is printed.
  */
 @:nullSafety(Strict)
-class IrDerivedHelpers implements IrFunctionPass {
+class IrDerivedHelpers extends IrFunctionPass {
 	final stage:String;
 	final lineage:Null<IrLineage>;
 	final checks:Bool;
@@ -44,22 +44,22 @@ class IrDerivedHelpers implements IrFunctionPass {
 		return IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, lineage, checks, builder, make);
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var known = lineage;
 		return known == null ? 0 : known.memos.facts.intern(print(kind, key));
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
 		return fn;
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError('The helpers of $stage ask for no other helper');
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 }

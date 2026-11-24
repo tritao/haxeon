@@ -18,7 +18,7 @@ import compiler.ir.reuse.IrFactReader;
  * rewrite reads of the declarations, the value objects' layouts, as one fact (`REWRITE`, `IrInlineValueLayout.declarationsFact`).
  */
 @:nullSafety(Strict)
-class IrValueObjectRows implements IrFunctionPass {
+class IrValueObjectRows extends IrFunctionPass {
 	static inline final VALUE = 0;
 	static inline final REWRITE = 1;
 
@@ -46,7 +46,7 @@ class IrValueObjectRows implements IrFunctionPass {
 			default: null;
 		};
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -59,9 +59,9 @@ class IrValueObjectRows implements IrFunctionPass {
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return switch kind {
 			case VALUE:
 				var object = objects.get(key);
@@ -69,7 +69,7 @@ class IrValueObjectRows implements IrFunctionPass {
 			default: declarations();
 		};
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != OBJECT_ROWS)
 			return fn;
 		var body = fn.encodedBody(builder), found = false;
@@ -92,9 +92,9 @@ class IrValueObjectRows implements IrFunctionPass {
 		return rewrite(fn);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("A value object rows rewrite asks for no helper");
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 }

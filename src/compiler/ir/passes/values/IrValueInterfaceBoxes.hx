@@ -28,7 +28,7 @@ import compiler.ir.reuse.IrFactReader;
  * their names alone.
  */
 @:nullSafety(Strict)
-class IrValueInterfaceBoxes implements IrFunctionPass {
+class IrValueInterfaceBoxes extends IrFunctionPass {
 	public static inline final BOX_PREFIX = "$value-interface-box:";
 	public static inline final UNBOX_PREFIX = "$value-interface-unbox:";
 	static inline final TYPE_ID = "$value-interface-object-type-id";
@@ -136,23 +136,23 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 		return result;
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var existing = existingFunctions;
 		functionMap = existing == null ? names : new IrFunctionIndex(STAGE,
 			existing.concat(functions));
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		if (kind == INTERFACE)
 			return interfaceMap.exists(key) ? 1 : 0;
 		var object = objectMap.get(key);
 		return object == null || !object.isValue ? 0 : object.interfaces.length == 0 ? 1 : 2;
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		var name = switch type {
 			case Obj(name), Virtual(name): name;
 			default: "";
@@ -175,7 +175,7 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 		}
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		// The function's type values and next free value id are only worked out when an instruction needs them.
 		var typesOfCurrent:Null<Map<Int, IrType>> = null, next = -1;
 		function types():Map<Int, IrType> {
@@ -273,7 +273,7 @@ class IrValueInterfaceBoxes implements IrFunctionPass {
 	static function typeTestName(valueName:String, exact:Bool):String
 		return "$value-interface-type-test:" + (exact ? "exact:" : "instance:") + valueName;
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var functionMap = index();
 		if (needsTypeId && !functionMap.exists(TYPE_ID)) {
 			// The physical class of an interface box is an implementation detail.

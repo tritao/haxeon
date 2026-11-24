@@ -50,7 +50,7 @@ private typedef OptionalMethodRequest = {
  * session reuses them too (`IrFunctionStages.derived`).
  */
 @:nullSafety(Strict)
-class IrOptionalFieldStorage implements IrFunctionPass {
+class IrOptionalFieldStorage extends IrFunctionPass {
 	public static inline final STAGE = "optional-field-storage";
 
 	// Facts.
@@ -191,7 +191,7 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 		return IrFunctionStages.apply(STAGE, this, functions);
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -211,10 +211,10 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
 		originals = functions;
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var known = lineage;
 		if (known == null)
 			return 0;
@@ -227,10 +227,10 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 		});
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
 		return summary == 0 ? fn : rewritten(fn, reader);
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		if (name != null && !asked.exists(name)) {
 			asked.set(name, true);
 			methods.push(name);
@@ -240,7 +240,7 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 	 * The rewritten functions, then for each plan in key order its accessors and place getters and setters, then the value methods
 	 * specialized to a field path, in the order they were asked for.
 	 */
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var all = functions.copy();
 		var ordered = [for (fields in plans)
 			for (plan in fields)

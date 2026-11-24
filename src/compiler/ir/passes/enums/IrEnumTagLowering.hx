@@ -381,7 +381,7 @@ interface IrTagEscapeReads {
  * provider of each inline-enum request; it asks for the adapters it needs, which `finish` adds.
  */
 @:nullSafety(Strict)
-class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
+class IrTagEscapesPass extends IrFunctionPass implements IrTagEscapeReads {
 	// Facts.
 	static inline final TAGS = 0;
 	static inline final SIGNATURE = 1;
@@ -418,10 +418,10 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 		providers = new IrInlineEnumProviders(program);
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		existing = names;
 		for (name => pair in IrEnumTagStorage.adapterNames(program)) {
 			boxNames.set(name, pair.box);
@@ -444,7 +444,7 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 			+ ":"
 			+ IrTypeIds.id(output);
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var tables = lookups;
 		return switch kind {
 			case TAGS: tags ? 1 : 0;
@@ -568,13 +568,13 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 		}
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		switch type {
 			case EnumTag(name): required.set(name, true);
 			default: throw new InternalError("An enum tag adapter request names no tag");
 		}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		this.reader = reader;
 		asked = [];
 		var walk = new IrBodyTagEscapes(this), body = fn.encodedBody(builder), result = fn;
@@ -587,7 +587,7 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 		return result;
 	}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		program.functions = functions;
 		var names = existing;
 		if (tags && names != null)
@@ -1048,7 +1048,7 @@ class IrBodyTagEscapes {
  * and the dropping of tag equalities nothing calls are the whole-program steps around it.
  */
 @:nullSafety(Strict)
-class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeReads {
+class IrEnumTagLoweringPass extends IrFunctionPass implements IrTagEscapeReads {
 	/** The tag equalities something calls, kept with the walk summaries they were found from. */
 	@:processWide("a kept walk's key, only ever read")
 	static final CALLED_EQUALITIES = new compiler.ir.reuse.IrStageMemo
@@ -1165,7 +1165,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 		return dynamicUnboxes.get(name);
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
@@ -1176,7 +1176,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
 		input = index;
 		for (fn in functions)
 			switch fn.kind {
@@ -1337,7 +1337,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 		return key.charAt(0) == "V" ? Virtual(name) : Obj(name);
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var tables = lookups;
 		return switch kind {
 			case ELIGIBLE: names.exists(key) ? 1 : 0;
@@ -1427,13 +1427,13 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 			required.set(enumName, true);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		switch type {
 			case EnumTag(name): required.set(name, true);
 			default: throw new InternalError("An enum tag adapter request names no tag");
 		}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (!names.keys().hasNext())
 			return fn;
 		this.reader = reader;
@@ -1450,7 +1450,7 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 		return result;
 	}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		if (!names.keys().hasNext())
 			return functions;
 		// A tag equality nothing calls goes: its callers compare tags. The wrappers are made each build, so what they call is

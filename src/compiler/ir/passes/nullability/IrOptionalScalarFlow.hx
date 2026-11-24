@@ -46,7 +46,7 @@ private typedef OptionalClosure = {
  * the helpers, each derived (`IrFunctionStages.derived`) from what it reads the same way.
  */
 @:nullSafety(Strict)
-class IrOptionalScalarFlow implements IrFunctionPass {
+class IrOptionalScalarFlow extends IrFunctionPass {
 	public static inline final PREFIX = "$optional-scalar:";
 	public static inline final WRAPPER = "$optional-components:";
 
@@ -144,7 +144,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			default: null;
 		};
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var summary = nullableObject(fn.result) != null ? NULLABLE_OBJECTS : 0;
 		for (arg in fn.arguments)
 			if (nullableObject(arg.type) != null)
@@ -165,7 +165,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		return summary;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		originals = functions;
 		for (index in 0...functions.length) {
 			var fn = functions[index];
@@ -193,7 +193,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				versions.set(name, known.version(name));
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		// What the fact is computed from is not what the rewrite being made reads.
 		var current = reading;
 		reading = null;
@@ -243,7 +243,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		return made;
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary == 0)
 			return fn;
 		return readingWith(reader, () -> {
@@ -263,7 +263,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		});
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		var value = switch type {
 			case Obj(name): name;
 			default: throw new InternalError("An optional scalar request names no class");
@@ -284,7 +284,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 				made;
 			}));
 
-	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
 		var made:Array<IrFunction> = [];
 		for (fn in originals)
 			if (candidates.exists(fn.name))

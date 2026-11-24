@@ -195,7 +195,7 @@ class IrInlineCache {
  * on IR content and on the (sorted) order of `program.functions`, so an incremental build matches a clean one.
  */
 @:nullSafety(Strict)
-class IrInliner implements IrFactSource {
+class IrInliner extends IrFactSource {
 	/** By the version of the inliner's output for a function, the function's inlined form, frozen (`inlinedVersion`): what a caller that splices it reads of it is that version (the inliner's facts). */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final FORMS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlinedForm>("inlined-forms");
@@ -865,7 +865,7 @@ class IrInliner implements IrFactSource {
 		return frameReaders.length > 0 ? frameReaders[frameReaders.length - 1] : null;
 
 	/** The value of the stage's fact of `kind` about `key`, as the program stands in this compile (`IrFacts`). */
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var table = facts;
 		if (table == null)
 			throw new InternalError('The inliner read its fact $kind of $key without a memo');

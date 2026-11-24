@@ -22,7 +22,7 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  * other constructors too.
  */
 @:nullSafety(Strict)
-class IrValueConstructors implements IrFunctionPass {
+class IrValueConstructors extends IrFunctionPass {
 	static inline final CONSTRUCTOR = 0;
 
 	/** The summary of a function that calls a function named as a constructor. */
@@ -59,7 +59,7 @@ class IrValueConstructors implements IrFunctionPass {
 		this.lineage = lineage;
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -72,7 +72,7 @@ class IrValueConstructors implements IrFunctionPass {
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var builder = scratch.bodyBuilder;
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		// Callees are frozen, or copies: the functions they were made from are edited in place below.
@@ -127,10 +127,10 @@ class IrValueConstructors implements IrFunctionPass {
 		}
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return forms.get(key) ?? 0;
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != CALLS_CONSTRUCTOR)
 			return fn;
 		var source = fn.encodedBody(scratch.bodyBuilder);
@@ -149,10 +149,10 @@ class IrValueConstructors implements IrFunctionPass {
 		return body == source ? fn : IrFunction.ofOwnedBody(body);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The value constructor expansion asks for no helper");
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 
 	/** `body`, or a copy of it when it is not frozen. */

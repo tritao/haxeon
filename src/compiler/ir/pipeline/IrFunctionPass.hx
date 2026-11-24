@@ -13,38 +13,49 @@ import compiler.ir.verify.IrVerifier;
  * `transform` each function, reading everything else it depends on through the reader (`IrFactReader.read`, computed by `fact`) and
  * asking for helpers through it (`IrFactReader.request`, made by `request`); `finish` the program from the rewritten functions.
  * A transform must read nothing about the program but through the reader, and have no side effect but its requests.
+ *
+ * A class, not an interface, as `IrFactSource` is: the run calls it per function.
  */
-interface IrFunctionPass extends IrFactSource {
+class IrFunctionPass extends IrFactSource {
 	/** What the whole-program step needs of `fn`, as a number: it may depend on `fn` alone. */
-	function summarize(fn:IrFunction):Int;
+	public function summarize(fn:IrFunction):Int
+		throw unimplemented();
 
 	/**
 	 * The whole-program step, from the functions in program order and their summaries. `names` indexes them: in a session, through
 	 * the program's shared index (`IrLineage.named`).
 	 */
-	function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void;
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
+		throw unimplemented();
 
 	/** `fn` rewritten: `fn` itself when the stage leaves it alone. */
-	function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction;
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
+		throw unimplemented();
 
 	/**
 	 * Makes the helper of `kind` (the stage's own numbering) for `type` and `name` (what else the stage keys the helper by, such as
 	 * the static it checks), when it is not made yet; called in the order the rewrites asked.
 	 */
-	function request(kind:Int, type:IrType, name:Null<String>):Void;
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
+		throw unimplemented();
 
 	/** The program's functions from the rewritten ones, in program order: the helpers the stage made added. */
-	function finish(functions:Array<IrFunction>):Array<IrFunction>;
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		throw unimplemented();
 }
 
 /**
-
  * What a stage's facts are computed from (`IrFacts`): a per-function stage (`IrFunctionPass`), or a stage that drives its own run
- * and reads its facts through an `IrFactReader` all the same (`IrInliner`).
+ * and reads its facts through an `IrFactReader` all the same (`IrInliner`). A class, not an interface: HashLink calls an
+ * interface's methods by name, through a virtual made at each conversion, and a fact is read per function and stage.
  */
-interface IrFactSource {
+class IrFactSource {
 	/** The value of the stage's fact of `kind` and `key`, as the program stands in this run (after `prepare`, for a pass). */
-	function fact(kind:Int, key:String):Int;
+	public function fact(kind:Int, key:String):Int
+		throw unimplemented();
+
+	function unimplemented():compiler.core.InternalError
+		return new compiler.core.InternalError("A stage defines every method its run calls");
 }
 
 /**

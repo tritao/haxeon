@@ -370,7 +370,7 @@ class IrTypedInterfaceDispatch {
  * name, whether it is a value object (`VALUE`), and for each method value's interface whether it is one (`CONTRACT`).
  */
 @:nullSafety(Strict)
-class IrTypedInterfaceCalls implements IrFunctionPass {
+class IrTypedInterfaceCalls extends IrFunctionPass {
 	static inline final VALUE = 0;
 	static inline final CONTRACT = 1;
 
@@ -382,15 +382,15 @@ class IrTypedInterfaceCalls implements IrFunctionPass {
 		contracts = [for (entry in interfaces) entry.name => true];
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return (kind == VALUE ? values : contracts).exists(key) ? 1 : 0;
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		function isValue(type:IrType):Bool return switch type {
 			case Obj(name): reader.read(VALUE, name) == 1;
 			default: false;
@@ -428,8 +428,8 @@ class IrTypedInterfaceCalls implements IrFunctionPass {
 		return IrFunctionRewrite.instructions(fn, replacement);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 }

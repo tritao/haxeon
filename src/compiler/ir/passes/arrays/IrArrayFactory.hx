@@ -121,7 +121,7 @@ class IrArrayFactory {
  * it depends on the function alone. One that makes a typed reference array asks for the array runtime (`TYPED`), which `finish`
  * adds once.
  */
-class IrArrayFactoryPass implements compiler.ir.pipeline.IrFunctionPass {
+class IrArrayFactoryPass extends compiler.ir.pipeline.IrFunctionPass {
 	public static inline final STAGE = "array-factory";
 
 	static inline final TYPED = 0;
@@ -136,16 +136,16 @@ class IrArrayFactoryPass implements compiler.ir.pipeline.IrFunctionPass {
 		this.builder = builder;
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return compiler.ir.reuse.IrFacts.UNKNOWN;
 
-	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = fn.encodedBody(builder);
 		if (!IrArrayFactory.requests(body, name))
 			return fn;
@@ -155,10 +155,10 @@ class IrArrayFactoryPass implements compiler.ir.pipeline.IrFunctionPass {
 		return IrFunction.ofOwnedBody(edited);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		typed = true;
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		if (typed) {
 			program.functions = functions;
 			IrProgramAssembler.ensureArrayRuntime(program, true, true, false);

@@ -600,7 +600,7 @@ class IrInlineEnumLowering {
  * adapters are derived (`IrFunctionStages.derived`), reading `LAYOUT`.
  */
 @:nullSafety(Strict)
-class IrInlineEnumLoweringPass implements IrFunctionPass {
+class IrInlineEnumLoweringPass extends IrFunctionPass {
 	public static inline final STAGE = "inline-enum-lowering";
 
 	static inline final SELECTED = 0;
@@ -675,12 +675,12 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 			});
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		if (kind == SELECTED)
 			return lowering.isSelected(key) ? 1 : 0;
 		var known = lineage;
@@ -718,7 +718,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 			reader.read(SELECTED, name);
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		var body = fn.encodedBody(builder);
 		readEnums(body.result, reader);
 		for (value in 0...body.valueLimit())
@@ -760,7 +760,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 			}
 		}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {
 		if (name == null) {
 			called.set(natives[kind], true);
 			return;
@@ -776,6 +776,6 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 		});
 	}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 }

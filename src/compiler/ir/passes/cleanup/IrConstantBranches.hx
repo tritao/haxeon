@@ -20,7 +20,7 @@ import compiler.ir.reuse.IrFactReader;
  * condition calls, the constant that callee returns (`CONSTANT`).
  */
 @:nullSafety(Strict)
-class IrConstantBranches implements IrFunctionPass {
+class IrConstantBranches extends IrFunctionPass {
 	/** The fact of a callee: 1 when it returns true, 0 false, -1 when it is not a constant function. */
 	static inline final CONSTANT = 0;
 
@@ -31,7 +31,7 @@ class IrConstantBranches implements IrFunctionPass {
 
 	public function new() {}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		if (fn.result != Bool || fn.blocks.length != 1)
 			return NOT_CONSTANT;
 		var block = fn.blocks[0], value:Null<Bool> = null, id = -1;
@@ -51,24 +51,24 @@ class IrConstantBranches implements IrFunctionPass {
 		}
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		constants = [];
 		for (index in 0...functions.length)
 			if (summaries[index] != NOT_CONSTANT)
 				constants.set(functions[index].name, summaries[index]);
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var constant = constants.get(key);
 		return constant == null ? NOT_CONSTANT : constant;
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
 		return fold(fn, reader);
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 
 	static function fold(fn:IrFunction, constants:IrFactReader):IrFunction {

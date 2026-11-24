@@ -14,7 +14,7 @@ import compiler.ir.model.IrPassScratch;
  * only when it or a helper it calls changed.
  */
 @:nullSafety(Strict)
-class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass {
+class IrValueArrayScalarLowering extends compiler.ir.pipeline.IrFunctionPass {
 	static inline final HELPER = 0;
 
 	/** A function's summary: it calls a function named as one of the element's helpers. */
@@ -67,7 +67,7 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 	inline function helperName(name:String):Bool
 		return StringTools.startsWith(name, prefix) && StringTools.endsWith(name, suffix);
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		var body = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
@@ -80,7 +80,7 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		var known = lineage;
 		if (known != null)
@@ -88,10 +88,10 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 				versions.set(name, known.version(name));
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return helpers.exists(key) ? versions.get(key) ?? 0 : -1;
 
-	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (summary != CALLS)
 			return fn;
 		var body = fn.encodedBody(scratch.bodyBuilder);
@@ -107,10 +107,10 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 		return edited == body ? fn : IrFunction.ofOwnedBody(edited);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new compiler.core.InternalError("The value array scalar lowering asks for no helper");
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 
 	/** A call row of `body` to one of `helpers` other than itself, with as many operands as it takes arguments: the helper. */

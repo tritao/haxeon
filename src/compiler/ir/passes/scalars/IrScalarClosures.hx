@@ -20,7 +20,7 @@ import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 
 /** HashLink's scalar argument/result convention applied to typed, non-erased closures. */
 @:nullSafety(Strict)
-class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
+class IrScalarClosures extends compiler.ir.pipeline.IrFunctionPass {
 	/** What each function's rows do with closures (`IrClosureUses`). */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final USES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrClosureUses>("closure-uses");
@@ -118,12 +118,12 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	}
 
 	/** What the choice reads of a function: what it does with closures (`USES`), and its signature when it is not only reachable (`EXPOSED`). */
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return (IrClosureUses.of(fn, scratch, useCounts, lineage).events.length > 0 ? USES_CLOSURES : 0)
 			| (fn.retention != Reachable ? EXPOSED : 0);
 
 	/** The candidate closure types: what each function does with closures (by its summary), decided against the program. */
-	public function prepare(inputs:Array<IrFunction>, summaries:Array<Int>,
+	override public function prepare(inputs:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		for (native in program.natives) {
 			for (type in native.arguments)
@@ -168,7 +168,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			candidates.remove(name);
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		if (kind == INLINE_ENUM) {
 			var name = inlineEnums.get(key);
 			return name == null ? 0 : intern(name);
@@ -258,7 +258,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			reader.read(CANDIDATE, name);
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		var body = bodyOf(fn);
 		readTypeFacts(body.result, reader);
 		for (value in 0...body.valueLimit())
@@ -274,7 +274,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		return candidates.keys().hasNext() ? rewriteFunction(fn, body, reader) : fn;
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		switch kind {
 			case ERASURE:
 				ensureErasure(type);
@@ -339,7 +339,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	}
 
 	/** The program with the candidates' types mapped, the adapters made and the rewritten functions. */
-	public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(rewritten:Array<IrFunction>):Array<IrFunction> {
 		if (!candidates.keys().hasNext())
 			return rewritten;
 		var generated:Array<IrFunction> = [],

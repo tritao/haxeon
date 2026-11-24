@@ -709,7 +709,7 @@ class IrValueArrayProgramRewrite {
  * registries (`IrValueArrayRequests`); any other is left as it is, and reused unread at the same version.
  */
 @:nullSafety(Strict)
-private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPass {
+private class ValueArrayElementPass extends compiler.ir.pipeline.IrFunctionPass {
 	public static inline final ELEMENT = 0;
 
 	final gate:IrFunction->Bool;
@@ -725,16 +725,16 @@ private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPa
 		this.element = element;
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return element();
 
-	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (!gate(fn))
 			return fn;
 		reader.read(ELEMENT, "");
@@ -744,10 +744,10 @@ private class ValueArrayElementPass implements compiler.ir.pipeline.IrFunctionPa
 		return result;
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		requests.replay(kind, type, name ?? "");
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;
 }
 

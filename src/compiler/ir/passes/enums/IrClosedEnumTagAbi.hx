@@ -30,7 +30,7 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
  * stage. The program's tables are projected after the functions (`projected`).
  */
 @:nullSafety(Strict)
-class IrClosedEnumTagAbi implements IrFunctionPass {
+class IrClosedEnumTagAbi extends IrFunctionPass {
 	/** What each function lets escape, for the closed enum tag ABI's choice (`IrTagEscapeRecord`). */
 	@:processWide("a contribution memo's key, only ever read")
 	public static final ESCAPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrTagEscapeRecord>("tag-escapes");
@@ -181,14 +181,14 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		return false;
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
 	/**
 	 * Chooses the closed tags: the payload-free enums that nothing lets escape. In a session the choice is kept with what each
 	 * function lets escape (`CHOICE`), so a build whose functions let the same escape takes it.
 	 */
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var known = lineage;
 		if (known == null) {
 			closed = choose(functions, names);
@@ -335,10 +335,10 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		return closed;
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return (kind == ANY_CLOSED ? closed.keys().hasNext() : closed.exists(key)) ? 1 : 0;
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (reader.read(ANY_CLOSED, "") == 0)
 			return fn;
 		this.reader = reader;
@@ -347,10 +347,10 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		return result;
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		throw new InternalError("The closed enum tag ABI asks for no helper");
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		if (!closed.keys().hasNext()) {
 			projected = program;
 			return functions;

@@ -34,7 +34,7 @@ import compiler.ir.model.IrFunction;
  * (`IrFunctionStages.derived`), so a session reuses them too.
  */
 @:nullSafety(Strict)
-class IrNullableScalarFlow implements IrFunctionPass {
+class IrNullableScalarFlow extends IrFunctionPass {
 	public static inline final PREFIX = "$nullable-scalar:require:";
 	public static inline final EQUAL_PREFIX = "$nullable-scalar:equal:";
 	public static inline final CALL_PREFIX = "$nullable-scalar:arguments:";
@@ -97,7 +97,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		return known;
 	}
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		if (inner(fn.result) != null || isSpecialization(fn.name))
 			return 0;
 		for (arg in fn.arguments)
@@ -110,7 +110,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 	 * The candidates, from the functions whose summaries say they may be one: those every caller can pass split, read from their
 	 * bodies. In a session the choice is kept (`CHOICE`) while those functions are the same.
 	 */
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		originals = functions;
 		var known = lineage,
 			last = known == null ? null : known.memos.lastResult(CHOICE),
@@ -174,7 +174,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		return true;
 	}
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var called = candidates.get(key);
 		if (called == null)
 			return 0;
@@ -188,7 +188,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		return shape;
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		var flow = analysis();
 		flow.reader = reader;
 		var result = rewritten(flow, fn, scratch.bodyBuilder, false);
@@ -196,13 +196,13 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		return result;
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		helpers.set(helperName(kind, type), type);
 
 	public static function helperName(kind:Int, type:IrType):String
 		return (kind == EQUAL ? EQUAL_PREFIX : PREFIX) + IrTypeIdentity.text(type);
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var result = functions.copy(), flow = analysis(), builder = scratch.bodyBuilder;
 		for (fn in originals)
 			if (candidates.exists(fn.name)) {

@@ -22,7 +22,7 @@ import compiler.ir.verify.IrVerifier;
  * whether it calls `__dynamic_equal`, and the rewrite of one that does reads whether any struct registers (`REGISTERED`).
  */
 @:nullSafety(Strict)
-class IrValueDynamicDispatch implements IrFunctionPass {
+class IrValueDynamicDispatch extends IrFunctionPass {
 	static inline final EQUAL = "$value-dynamic-equal";
 	static inline final EQUALITY_PREFIX = "$value$equality:";
 
@@ -60,7 +60,7 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 		return IrFunctionStages.apply("value-dynamic-dispatch", new IrValueDynamicDispatch(objects, unreached,
 			createdClasses), functions);
 
-	public function summarize(fn:IrFunction):Int {
+	override public function summarize(fn:IrFunction):Int {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
@@ -71,7 +71,7 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 		return 0;
 	}
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
 		this.names = names;
 		objectsByName = [for (object in objects) object.name => object];
@@ -117,10 +117,10 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 		requested.sort((a, b) -> Reflect.compare(a.suffix, b.suffix));
 	}
 
-	public function fact(kind:Int, key:String):Int
+	override public function fact(kind:Int, key:String):Int
 		return requested.length > 0 ? 1 : 0;
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != CALLS_EQUAL || reader.read(REGISTERED, "") == 0)
 			return fn;
 		return IrFunctionRewrite.instructions(fn, dispatched);
@@ -133,9 +133,9 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 			default: null;
 		};
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var index = names;
 		if (needsEqual && requested.length > 0 && index != null)
 			functions.push(dispatcher(requested, index, declaredEquatable));

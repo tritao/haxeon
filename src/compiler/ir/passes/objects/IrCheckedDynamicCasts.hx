@@ -27,7 +27,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * for the cast's helper. With a lineage the helpers are derived from that declaration (`IrFunctionStages.derived`).
  */
 @:nullSafety(Strict)
-class IrCheckedDynamicCasts implements IrFunctionPass {
+class IrCheckedDynamicCasts extends IrFunctionPass {
 	public static inline final PREFIX = "$checked-dynamic-cast:";
 
 	/** The fact of an object name: whether it is declared and a value object, with the flags of which casts are checked. */
@@ -75,22 +75,22 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		known = new IrFunctionIndex(stage, existing == null ? functions : existing.concat(functions));
 	}
 
-	public function summarize(fn:IrFunction):Int
+	override public function summarize(fn:IrFunction):Int
 		return 0;
 
-	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
+	override public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
 		if (existingFunctions == null)
 			known = names;
 		else
 			index(functions);
 
-	public function fact(kind:Int, key:String):Int {
+	override public function fact(kind:Int, key:String):Int {
 		var declaration = declarations.get(key),
 			flags = (checkObjects ? 1 : 0) | (checkValueObjects ? 2 : 0) | (checkFunctionCasts ? 4 : 0);
 		return flags * 3 + (declaration == null ? 0 : declaration.isValue ? 2 : 1);
 	}
 
-	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+	override public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
 			return switch located.value {
 				case SafeCast(out, input) if (isDyn(input.type)):
@@ -108,10 +108,10 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		return IrFunctionRewrite.instructions(fn, replacement);
 	}
 
-	public function request(kind:Int, type:IrType, name:Null<String>):Void
+	override public function request(kind:Int, type:IrType, name:Null<String>):Void
 		helperFor(type);
 
-	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+	override public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions.concat(generated);
 
 	/** The object whose declaration decides a cast to `type`; empty for a type that names none. */
