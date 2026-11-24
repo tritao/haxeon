@@ -1335,8 +1335,6 @@ class DeclarationIndex {
 	function resolveFunction(fn:AstFunction, owner:String, ?ownerSubstitutions:Map<String, CompilerType>):Void {
 		if (fn.isDynamic == true && fn.isInline == true)
 			fail("Invalid modifier combination: dynamic + inline", fn.span);
-		if (fn.isDynamic == true && fn.typeParameters != null && fn.typeParameters.length > 0)
-			fail("Dynamic methods with their own type parameters are not supported yet", fn.span);
 		var substitutions:Map<String, CompilerType> = ownerSubstitutions == null
 			? [] : [for (name => type in ownerSubstitutions) name => type],
 			typeParameters = fn.typeParameters;

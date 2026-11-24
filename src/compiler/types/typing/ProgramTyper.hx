@@ -283,7 +283,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					for (base in interfaceDecl.bases)
 						if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
 				],
-				methods:[for (method in interfaceDecl.methods)
+				methods:[for (method in interfaceDecl.methods) if (method.isDynamic != true)
 				{
 					name:method.name,
 						arguments:[
@@ -321,10 +321,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		if (cachedMetadata == null)
 			for (interfaceIndex in 0...typedInterfaces.length) {
 				var interfaceDecl = typedInterfaces[interfaceIndex],
-					parsed = program.interfaces[interfaceIndex];
+					parsedMethods = [for (method in program.interfaces[interfaceIndex].methods) if (method.isDynamic
+						!= true) method];
 				for (methodIndex in 0...interfaceDecl.methods.length) {
 					var method = interfaceDecl.methods[methodIndex],
-						parsedMethod = parsed.methods[methodIndex];
+						parsedMethod = parsedMethods[methodIndex];
 					for (argument in method.arguments)
 						if (NativeLayout.containsNativeLayoutType(argument))
 							BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet',
@@ -898,6 +899,12 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				continue;
 			fields.push(DynamicMethods.field(session, classDecl.name, method, erasedSubstitutions));
 		}
+		var abstractOwner = compiler.semantic.AbstractStatics.abstractOf(classDecl.name),
+			abstractDecl = abstractOwner == null ? null : session.declarations.abstracts.get(abstractOwner);
+		if (abstractDecl != null)
+			for (method in abstractDecl.methods)
+				if (method.isDynamic == true)
+					fields.push(DynamicMethods.field(session, classDecl.name, method, [], abstractOwner));
 		var propertyFacts = StructProperties.evaluate(session.declarations,
 			TInstance(NominalKind.Class, classDecl.name, []));
 		for (metadata in classDecl.metadata) {
@@ -1567,7 +1574,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					|| (selected != null && !selected.exists(name)))
 					continue;
 				var signature = session.signatures.required(name);
-				if (method.isStatic && !BodyTyper.isGeneric(signature))
+				if (method.isStatic && (!BodyTyper.isGeneric(signature) || signature.isDynamic == true))
 					methods.push({owner: abstractDecl.name, signature: signature});
 				else if (method.isStatic)
 					generic.push({owner: abstractDecl.name, signature: signature, name: name});
@@ -1577,7 +1584,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null],
 			outputs:Array<Null<TypingOutput>> = [for (_ in methods) null];
 		for (index in typingOrder(methods.length)) {
-			if (requiredTypes().isInferred(methods[index].signature)) {
+			if (!BodyTyper.isGeneric(methods[index].signature)
+				&& requiredTypes().isInferred(methods[index].signature)) {
 				var unit = requiredTypes().functionUnit(methods[index].signature);
 				if (unit != null) {
 					typed[index] = unit.typed;
@@ -1587,7 +1595,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			}
 			var mark = session.checkpoint(), unit = session.beginUnit();
 			try {
-				typed[index] = bodyTyper.typeFunction(methods[index].signature, methods[index].owner, true);
+				var entry = methods[index];
+				typed[index] = BodyTyper.isGeneric(entry.signature)
+					? elaboratedMethod(entry.owner, [], entry.signature,
+					DynamicMethods.eraseParameters(entry.signature, []), null)
+					: bodyTyper.typeFunction(entry.signature, entry.owner, true);
 				session.endUnit(unit);
 				outputs[index] = unit;
 			} catch (error:CompileError) {
@@ -1618,7 +1630,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					&& externTyper.nativeLibrary(declaration.name, declaration.metadata) == null)
 					for (method in declaration.methods) {
 						var key = declaration.name + "." + method.name;
-						if (BodyTyper.isGeneric(method) && method.isExtern != true
+						if (BodyTyper.isGeneric(method) && !DynamicMethods.isDynamic(session, method, declaration.name)
+							&& method.isExtern != true
 							&& (selected == null || selected.exists(key)))
 							checkGeneric(key, method, declaration.name, declaration.typeParameters);
 					}
@@ -1672,7 +1685,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (specialization == null && !method.isStatic && isConstrainedOwnerTemplate(classDecl.name))
 				continue;
 			// An `extern` method has no body: it is a native (`typeProgramPhases`).
-			if (BodyTyper.isGeneric(method) || method.isExtern == true)
+			var genericDynamic = BodyTyper.isGeneric(method)
+				&& DynamicMethods.isDynamic(session, method, classDecl.name);
+			if (BodyTyper.isGeneric(method) && !genericDynamic || method.isExtern == true)
 				continue;
 			if (method.name == "new")
 				hasConstructor = true;
@@ -1702,14 +1717,16 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			// typed. A specialization's fails the body that asked for it.
 			var mark = session.checkpoint(), unit = units == null ? null : session.beginUnit();
 			try {
-				var typedMethod = typeBody && elaborateGenerics
-					&& classDecl.typeParameters.length > 0 ? elaboratedMethod(classDecl, method, substitutions,
-					specialization) : typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-					substitutions,
-					specialization == null ? null : specialization.name + "." + method.name, null,
-					specialization == null ? null : specialization.name,
-					specialization == null ? null : specialization.typeArguments) : methodSignature(method,
-					classDecl.name, substitutions);
+				var physical = genericDynamic ? DynamicMethods.eraseParameters(method, substitutions) : substitutions,
+					typedMethod = if (!typeBody)
+						methodSignature(method, classDecl.name, physical);
+				else if (genericDynamic || elaborateGenerics && classDecl.typeParameters.length > 0)
+					elaboratedMethod(classDecl.name, classDecl.typeParameters, method, physical, specialization);
+				else
+					bodyTyper.typeFunction(method, classDecl.name, method.isStatic, physical,
+						specialization == null ? null : specialization.name + "." + method.name, null,
+						specialization == null ? null : specialization.name,
+						specialization == null ? null : specialization.typeArguments);
 				if (method.name == "new" && typeBody && instanceInitializers.length > 0)
 					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers,
 						specialization == null ? null : session.representation.receiverType(classDecl.name,
@@ -1775,18 +1792,19 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		return typedMethods;
 	}
 
-	/**
-	 * `method` of the generic class `classDecl` typed once with the class's parameters as themselves, then elaborated for
-	 * `substitutions`: the erased representation, or the owner specialization `specialization` (`CompileOptions.elaborateGenerics`).
-	 */
-	function elaboratedMethod(classDecl:AstClass, method:AstFunction, substitutions:Map<String, CompilerType>,
-			specialization:Null<compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation>):TypedFunction
-		return bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
-			ownSubstitutions(classDecl.name, classDecl.typeParameters, classDecl.name + "." + method.name, method),
+	// Elaborate owner parameters and any method parameters sharing an erased callback slot.
+	function elaboratedMethod(owner:String, ownerParameters:Array<String>, method:AstFunction,
+			substitutions:Map<String, CompilerType>,
+			specialization:Null<compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation>):TypedFunction {
+		var key = owner + "." + method.name,
+			owners = BodyTyper.isGeneric(method) ? [owner, key] : [owner];
+		return bodyTyper.typeFunction(method, owner, method.isStatic,
+			ownSubstitutions(owner, ownerParameters, key, method),
 			specialization == null ? null : specialization.name + "." + method.name, null,
 			specialization == null ? null : specialization.name,
 			specialization == null ? null : specialization.typeArguments, null,
-			new GenericElaboration([classDecl.name], substitutions, bodyTyper));
+			new GenericElaboration(owners, substitutions, bodyTyper));
+	}
 
 	function isConstrainedOwnerTemplate(name:String):Bool {
 		var declaration = session.classDecls.get(name);
@@ -2133,29 +2151,74 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (implied && InterfaceFieldAccessors.isHiddenAccessor(method.name))
 				continue;
 			var implementation = bodyTyper.findMethod(classDecl.name, method.name);
+			if (method.isDynamic == true && (implementation == null || implementation.isStatic)) {
+				var variable = MemberAccess.classField(session, classDecl.name, method.name, false);
+				if (variable != null)
+					BodyTyper.fail("E1007",
+						'Field ${method.name} has different property access than in $interfaceName (${InterfaceProperties.kindOf(variable.field)} should be dynamic method)',
+						InterfaceProperties.nameSpan(variable.field.span, method.name));
+				BodyTyper.fail("E1007", 'Field ${method.name} needed by $interfaceName is missing',
+					InterfaceProperties.classNameSpan(classDecl));
+			}
 			if (implementation == null || implementation.isStatic)
 				BodyTyper.fail("E1007",
 					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"',
 					span);
 			var implementationName = implementation.owner + "." + method.name,
 				implementationMethod = session.signatures.get(implementationName);
-			if (implementationMethod != null
-				&& DynamicMethods.isDynamic(session, implementationMethod, implementation.owner))
-				BodyTyper.fail("E1007",
-					'Field ${method.name} has different property access than in $interfaceName (dynamic method should be method)',
-					InterfaceProperties.methodNameSpan(implementationMethod));
-			if (!session.signatures.exists(implementationName)
-				|| !sameSignature(session.signatures.required(implementationName), method,
-				classSubstitutions, interfaceSubstitutions))
-				BodyTyper.fail("E1003", implied ? 'Field ${method.name} has different type than in $interfaceName'
-					: 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"',
-					implied
-					? InterfaceProperties.methodNameSpan(session.signatures.required(implementationName)) : span);
+			if (implementationMethod != null) {
+				var isDynamic = DynamicMethods.isDynamic(session, implementationMethod, implementation.owner),
+					expectsDynamic = method.isDynamic == true;
+				if (expectsDynamic && !MemberAccess.isPublicMethod(session, implementation.owner, method.name))
+					BodyTyper.fail("E1007", 'Field ${method.name} should be public as requested by $interfaceName',
+						InterfaceProperties.methodNameSpan(implementationMethod));
+				if (isDynamic != expectsDynamic) {
+					var actualKind = isDynamic ? "dynamic method" : "method",
+						expectedKind = expectsDynamic ? "dynamic method" : "method";
+					BodyTyper.fail("E1007",
+						'Field ${method.name} has different property access than in $interfaceName ($actualKind should be $expectedKind)',
+						InterfaceProperties.methodNameSpan(implementationMethod));
+				}
+			}
+			var implementationSubstitutions = classSubstitutions;
+			if (method.isDynamic == true && implementation.owner != classDecl.name) {
+				var instance = TInstance(Class, classDecl.name,
+					[for (parameter in classDecl.typeParameters) classSubstitutions.get(parameter)]),
+					projected = session.declarations.inheritance.project(instance, implementation.owner);
+				if (projected != null)
+					implementationSubstitutions = session.representation.nominalSubstitutions(projected);
+			}
+			if (implementationMethod == null
+				|| !sameSignature(implementationMethod, method, implementationSubstitutions, interfaceSubstitutions)) {
+				if ((implied || method.isDynamic == true) && implementationMethod != null)
+					BodyTyper.fail("E1003", 'Field ${method.name} has different type than in $interfaceName',
+						InterfaceProperties.methodNameSpan(implementationMethod));
+				BodyTyper.fail("E1003",
+					'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"',
+					span);
+			}
 		}
 	}
 
 	function sameSignature(left:AstFunction, right:AstFunction, ?leftSubstitutions:Map<String, CompilerType>,
 			?rightSubstitutions:Map<String, CompilerType>):Bool {
+		if (right.isDynamic == true) {
+			var leftParameters = BodyTyper.functionTypeParameters(left),
+				rightParameters = BodyTyper.functionTypeParameters(right);
+			if (leftParameters.length != rightParameters.length)
+				return false;
+			if (leftParameters.length > 0) {
+				leftSubstitutions = leftSubstitutions == null
+					? [] : [for (name => type in leftSubstitutions) name => type];
+				rightSubstitutions = rightSubstitutions == null
+					? [] : [for (name => type in rightSubstitutions) name => type];
+				for (index in 0...leftParameters.length) {
+					var parameter = TTypeParameter(right.name, rightParameters[index]);
+					leftSubstitutions.set(leftParameters[index], parameter);
+					rightSubstitutions.set(rightParameters[index], parameter);
+				}
+			}
+		}
 		if (left.arguments.length != right.arguments.length
 			|| !TypeRelations.equals(session.declarations.types.resultType(left, leftSubstitutions),
 			session.declarations.types.resultType(right, rightSubstitutions)))

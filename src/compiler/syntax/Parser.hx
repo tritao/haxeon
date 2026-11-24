@@ -515,10 +515,14 @@ class Parser {
 				isInline = false,
 				isFinal = false,
 				isPublic:Null<Bool> = null,
-				isExternMember = false;
+				isExternMember = false,
+				isDynamic = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline)
-				|| check(TokenKind.Static) || check(TokenKind.Final) || isExternModifier()) {
-				if (match(TokenKind.Static))
+				|| check(TokenKind.Static) || check(TokenKind.Final) || isExternModifier() || isDynamicModifier()) {
+				if (isDynamicModifier()) {
+					isDynamic = true;
+					advance();
+				} else if (match(TokenKind.Static))
 					isStatic = true;
 				else if (match(TokenKind.Inline))
 					isInline = true;
@@ -541,13 +545,22 @@ class Parser {
 			}
 			if (!check(TokenKind.Function)) {
 				// A property: what it may be is checked with its type (`AbstractProperties`), as Haxe does.
-				fields.push(parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart));
+				var field = parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart);
+				rejectDynamicVariable(isDynamic, field.name, memberStart);
+				fields.push(field);
 				continue;
 			}
 			var functionStart = spanOf(consume(TokenKind.Function)),
 				methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
-			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
-				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic));
+			var method = parseFunctionBody(functionStart, methodName, true, isStatic,
+				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic, false, isDynamic);
+			if (isDynamic && !isStatic)
+				throw new CompileError(new Diagnostic("E1007", "Invalid modifier: dynamic on method of abstract",
+					memberStart.merge(method.span)));
+			if (isDynamic && isInline)
+				throw new CompileError(new Diagnostic("E1007", "Invalid modifier combination: dynamic + inline",
+					memberStart.merge(method.span)));
+			methods.push(method);
 		}
 		var end = spanOf(consume(TokenKind.RightBrace));
 		return {
@@ -1092,7 +1105,7 @@ class Parser {
 					isDynamic = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
-					if (kindOf(current()) == TokenKind.Identifier && textOf(current()) == "dynamic") {
+					if (isDynamicModifier()) {
 						isDynamic = true;
 						advance();
 						continue;
@@ -1132,9 +1145,7 @@ class Parser {
 						isOverride, isDynamic));
 				} else {
 					var field = parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart);
-					if (isDynamic)
-						throw new CompileError(new Diagnostic("E1007",
-							"Invalid accessor 'dynamic' for variable " + field.name, modifierStart));
+					rejectDynamicVariable(isDynamic, field.name, modifierStart);
 					fields.push(field);
 				}
 			} catch (error:CompileError) {
@@ -1386,6 +1397,14 @@ class Parser {
 		return access;
 	}
 
+	function isDynamicModifier():Bool
+		return kindOf(current()) == TokenKind.Identifier && textOf(current()) == "dynamic";
+
+	static function rejectDynamicVariable(isDynamic:Bool, name:String, span:SourceSpan):Void {
+		if (isDynamic)
+			throw new CompileError(new Diagnostic("E1007", "Invalid accessor 'dynamic' for variable " + name, span));
+	}
+
 	function parseInterface():AstInterface {
 		var start = spanOf(consume(TokenKind.Interface)),
 			name = textOf(consume(TokenKind.Identifier)),
@@ -1404,10 +1423,13 @@ class Parser {
 				memberStart = spanOf(current()),
 				isPublic:Null<Bool> = null,
 				isStatic = false,
-				isFinal = false;
+				isFinal = false,
+				isDynamic = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static)
-				|| check(TokenKind.Inline) || check(TokenKind.Final)) {
-				if (check(TokenKind.Public) || check(TokenKind.Private))
+				|| check(TokenKind.Inline) || check(TokenKind.Final) || isDynamicModifier()) {
+				if (isDynamicModifier())
+					isDynamic = true;
+				else if (check(TokenKind.Public) || check(TokenKind.Private))
 					isPublic = kindOf(current()) == TokenKind.Public;
 				else if (check(TokenKind.Static))
 					isStatic = true;
@@ -1417,7 +1439,9 @@ class Parser {
 			}
 			// A variable or property: what it may be is checked with the interface (`InterfaceProperties`), as Haxe does.
 			if (check(TokenKind.Var) || isFinal) {
-				fields.push(parseField(methodMetadata, isPublic, isStatic, false, isFinal, null, memberStart));
+				var field = parseField(methodMetadata, isPublic, isStatic, false, isFinal, null, memberStart);
+				rejectDynamicVariable(isDynamic, field.name, memberStart);
+				fields.push(field);
 				continue;
 			}
 			var methodStart = spanOf(consume(TokenKind.Function)),
@@ -1447,9 +1471,14 @@ class Parser {
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
 				end = spanOf(consume(TokenKind.Semicolon));
+			if (isStatic)
+				throw new CompileError(new Diagnostic("E1002",
+					"You can only declare static fields in extern interfaces",
+					memberStart.merge(end)));
 			methods.push({
 				name: methodName,
 				isStatic: false,
+				isDynamic: isDynamic ? true : null,
 				isPublic: true,
 				isExtern: false,
 				isInline: false,

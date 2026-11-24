@@ -44,7 +44,7 @@ class AbstractStatics {
 		var storage:Array<AstClass> = [];
 		var abstracts = [for (declaration in program.abstracts) {
 			var stored = [for (field in declaration.fields) if (isStored(field)) field];
-			if (stored.length == 0)
+			if (stored.length == 0 && !Lambda.exists(declaration.methods, method -> method.isDynamic == true))
 				declaration;
 			else {
 				storage.push(storageClass(declaration, stored));

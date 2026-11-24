@@ -219,9 +219,7 @@ class CallResolver {
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, contextualGenericArguments:Bool = true,
 			?declaredReceiver:TypedExpression):TypedExpression {
 		try {
-			var dynamicMethod = DynamicMethods.read(session, receiver, name, span);
-			var call = dynamicMethod != null ? callDynamicMethod(dynamicMethod, name, arguments, span,
-				scope) : typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
+			var call = typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
 				contextualGenericArguments);
 			var declared = declaredReceiver == null ? receiver : declaredReceiver;
 			// The member's span is made only where the checker looks.
@@ -486,6 +484,12 @@ class CallResolver {
 			return new TypedExpression(TCast(receiver), synthesized.result, span);
 		}
 		receiver = TypeParameterMembers.receiver(session, bodyTyper, receiver, name, span);
+		var dynamicMethod = DynamicMethods.resolve(session, receiver, name, span);
+		if (dynamicMethod != null) {
+			var callee = session.representation.boundaryCast(dynamicMethod.storage, dynamicMethod.type, receiver.type);
+			return callDynamicMethod(callee, name, arguments, span, scope, dynamicMethod.method, expectedType,
+				dynamicMethod.substitutions);
+		}
 		var pathCall = KeyPathOperations.call(session, receiver, name, arguments, span, scope, bodyTyper);
 		if (pathCall != null)
 			return pathCall;
@@ -1577,7 +1581,41 @@ class CallResolver {
 	}
 
 	function callDynamicMethod(callee:TypedExpression, name:String, arguments:Array<AstExpression>,
-			span:SourceSpan, scope:Scope):TypedExpression {
+			span:SourceSpan, scope:Scope, ?method:AstFunction, ?expectedType:CompilerType,
+			?ownerSubstitutions:Map<String, CompilerType>):TypedExpression {
+		if (method != null && BodyTyper.functionTypeParameters(method).length > 0) {
+			var preset:Map<String, CompilerType> = ownerSubstitutions == null ? [] : copyMap(ownerSubstitutions),
+				parameters = BodyTyper.functionTypeParameters(method),
+				arity = method.arguments.length,
+				rest = arity > 0 && RestArguments.isRest(method.arguments[arity - 1].type),
+				required = FunctionTypes.requiredCount(FunctionTypes.ofArguments(method.arguments),
+					rest ? arity - 1 : arity);
+			if (arguments.length < required || arguments.length > arity && !rest)
+				fail("E1008", 'Wrong number of arguments to "$name"', span);
+			for (parameter in parameters)
+				preset.remove(parameter);
+			if (expectedType != null && !sameType(expectedType, TVoid))
+				genericInstantiation.inferTypeParameters(method.result, expectedType, parameters, preset, span);
+			var prepared = typeGenericCallArguments(method, arguments, scope, span, null, preset);
+			for (parameter in parameters)
+				if (!prepared.substitutions.exists(parameter))
+					prepared.substitutions.set(parameter, TDynamic);
+			genericInstantiation.validateConstraints(method, prepared.substitutions, span);
+			var semantic = DynamicMethods.functionType(session, method, prepared.substitutions);
+			return switch [callee.type, semantic] {
+				case [TFunction(physicalArguments, physicalResult, _), TFunction(semanticArguments, semanticResult, _)]:
+					var supplied = prepared.arguments;
+					for (_ in supplied.length...semanticArguments.length)
+						supplied.push(new TypedExpression(TNullLiteral, TNull, span));
+					var typed = coerceArguments(supplied, semanticArguments, name);
+					session.invalidateUnknownCall(scope);
+					return session.representation.boundaryCast(new TypedExpression(TClosureCall(callee, [
+						for (index in 0...typed.length) session.representation.boundaryCast(typed[index],
+							physicalArguments[index])
+					]), physicalResult, span), semanticResult);
+				default: throw new InternalError("Dynamic method without a function type");
+			};
+		}
 		return switch callee.type {
 			case TFunction(parameters, result, optional):
 				var typed = functionValueArguments(arguments, parameters, optional, null, scope, span,
@@ -1589,14 +1627,23 @@ class CallResolver {
 	}
 
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
-			scope:Scope):TypedExpression {
+			scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		// A static method of a class or abstract by its qualified name (`C.m()`, or `m()` inside C); module functions have no info.
 		var calledMethod = session.methodInfoOf(name);
 		if (calledMethod != null)
 			MemberAccess.method(session, calledMethod.owner, name.substr(name.lastIndexOf(".") + 1), span);
 		var hasSignature = session.signatures.exists(name);
-		if (hasSignature && session.signatures.required(name).isDynamic == true)
-			return typeClosureCall(Variable(name, span), arguments, span, scope, name);
+		if (hasSignature && session.signatures.required(name).isDynamic == true) {
+			var method = session.signatures.required(name);
+			if (BodyTyper.functionTypeParameters(method).length == 0)
+				return typeClosureCall(Variable(name, span), arguments, span, scope, name);
+			if (calledMethod == null)
+				throw new InternalError("Dynamic method without a declaring type");
+			var owner = DynamicMethods.staticOwner(session, calledMethod.owner),
+				type = DynamicMethods.functionType(session, method, DynamicMethods.eraseParameters(method, [])),
+				callee = new TypedExpression(TStaticField(owner, compiler.core.QualifiedName.last(name)), type, span);
+			return callDynamicMethod(callee, name, arguments, span, scope, method, expectedType);
+		}
 		if (hasSignature && BodyTyper.functionTypeParameters(session.signatures.required(name)).length > 0) {
 			var signature = session.signatures.required(name),
 				infoOwner:Null<String> = null,
@@ -1684,6 +1731,11 @@ class CallResolver {
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
+		if (DynamicMethods.isDynamic(session, method, methodInfo.owner)) {
+			if (methodInfo.isStatic)
+				return resolveFunctionCall(methodKey, arguments, span, scope, expectedType);
+			return typeMethodCall(bodyTyper.implicitReceiver(span, scope), name, arguments, span, scope, expectedType);
+		}
 		if (BodyTyper.functionTypeParameters(method).length > 0) {
 			var receiver:Null<TypedExpression> = null;
 			if (!methodInfo.isStatic) {
@@ -1701,12 +1753,7 @@ class CallResolver {
 				methodInfo.isStatic,
 				prepared.substitutions, receiver);
 		}
-		if (DynamicMethods.isDynamic(session, method, methodInfo.owner)) {
-			if (methodInfo.isStatic)
-				return typeClosureCall(Variable(methodKey, span), arguments, span, scope, methodKey);
-			var callee = bodyTyper.typedMember(bodyTyper.implicitReceiver(span, scope), name, span);
-			return callDynamicMethod(callee, name, arguments, span, scope);
-		}
+
 		if (methodInfo.isStatic) {
 			var typed = typeDeclaredCallArguments(arguments, method, scope, methodKey, span);
 			return applyCallEffect(new TypedExpression(TCall(methodKey, typed),
@@ -1886,7 +1933,7 @@ class CallResolver {
 			if (generated != null)
 				return generated;
 		}
-		return resolveFunctionCall(name, arguments, span, scope);
+		return resolveFunctionCall(name, arguments, span, scope, expectedType);
 	}
 
 	function typeEnumConstructor(name:String, arguments:Array<AstExpression>, expectedType:Null<CompilerType>,

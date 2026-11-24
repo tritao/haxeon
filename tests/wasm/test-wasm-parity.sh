@@ -64,6 +64,7 @@ inline_cases=(
 	wasm-bytes-runtime-kinds
 	generic-erased-runtime-kinds
 	generic-erased-function-reference-shapes
+	dynamic-method-owners
 	generic-erased-array-function-checks
 	generic-erased-reference-checks
 	generic-erased-numeric-checks

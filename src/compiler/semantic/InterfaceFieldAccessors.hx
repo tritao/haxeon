@@ -17,6 +17,7 @@ import compiler.syntax.Ast.AstType;
  *
  * - a `get`, `set` or `dynamic` side is its accessor, `get_x` or `set_x`, which Haxe adds to the interface too ("Field get_x
  *   needed by I is missing"), and which the implementing class declares;
+ * - a dynamic method's accessors read and write its callback slot through the implementing class;
  * - a `default` side (a physical variable) is a hidden accessor, `$get_x` or `$set_x`, which every class that implements the
  *   interface is given here, reading or writing its own variable;
  * - a `null` or `never` side has no method: it cannot be accessed through the interface.
@@ -40,6 +41,18 @@ class InterfaceFieldAccessors {
 			default: null;
 		};
 
+	public static function dynamicAccessorName(name:String, read:Bool):String
+		return (read ? GET_PREFIX : SET_PREFIX) + name;
+
+	static function dynamicType(method:AstFunction):AstType {
+		var erased = [for (parameter in method.typeParameters ?? []) parameter => NamedType("Dynamic")];
+		return ImplicitConstructors.substitute(FunctionType([
+			for (argument in method.arguments)
+				compiler.syntax.AstPredicates.isOptionalArgument(argument) ? NullableType(argument.type) : argument.type
+		], method.result,
+			[for (argument in method.arguments) compiler.syntax.AstPredicates.isOptionalArgument(argument)]), erased);
+	}
+
 	/** Whether `name` is a hidden accessor of a physical variable (`$get_x`, `$set_x`). */
 	public static function isHiddenAccessor(name:String):Bool
 		return StringTools.startsWith(name, GET_PREFIX) || StringTools.startsWith(name, SET_PREFIX);
@@ -55,10 +68,17 @@ class InterfaceFieldAccessors {
 		return !read && field.isFinal ? NullAccess : DefaultAccess;
 	}
 
-	/** The accessor methods `declaration` implies for its variables and properties, those it does not declare itself. */
+	/** The accessors implied by variables, properties, and dynamic methods. */
 	public static function implied(declaration:AstInterface):Array<AstFunction> {
 		var declared:Map<String, Bool> = [for (method in declaration.methods) method.name => true],
 			result:Array<AstFunction> = [];
+		for (method in declaration.methods)
+			if (method.isDynamic == true)
+				for (read in [true, false]) {
+					var name = dynamicAccessorName(method.name, read);
+					if (!declared.exists(name))
+						result.push(accessor(name, dynamicType(method), read, true, method.span));
+				}
 		for (field in declaration.fields) {
 			if (field.isStatic || field.type == null)
 				continue;
@@ -113,9 +133,8 @@ class InterfaceFieldAccessors {
 	}
 
 	/**
-	 * Adds to each class in `classes` (canonical) the hidden accessors of the physical variables of the interfaces it implements,
-	 * directly or through interface bases, that no base class has already, and returns them. `classes` entries are replaced, never
-	 * mutated. A class with no such variable of its own or of a base class is left without one: the interface check reports it.
+	 * Adds hidden accessors to the implementing classes and returns them. A base class can supply an accessor. Missing members
+	 * are left to the interface check.
 	 */
 	public static function add(classes:Array<AstClass>, interfaces:Array<AstInterface>):Array<{
 		owner:String,
@@ -126,7 +145,7 @@ class InterfaceFieldAccessors {
 				[for (declaration in interfaces) declaration.name => declaration];
 		for (index in 0...classes.length)
 			indexOf.set(classes[index].name, index);
-		if (!hasPhysicalVariables(interfaces))
+		if (!hasStorageAccessors(interfaces))
 			return [];
 		var added:Array<{owner:String, method:AstFunction}> = [], done:Map<String, Bool> = [];
 		function hasMethod(className:Null<String>, name:String):Bool {
@@ -173,18 +192,12 @@ class InterfaceFieldAccessors {
 				return;
 			var methods:Array<AstFunction> = [];
 			for (implemented in declaration.interfaces)
-				collect(implemented, interfaceByName, [], function(field, type) {
-					for (read in [true, false]) {
-						var name = accessorName(field, read);
-						if (name == null || !isHiddenAccessor(name) || hasMethod(className, name)
-							|| !hasVariable(className, field.name))
-							continue;
-						for (method in methods)
-							if (method.name == name)
-								name = null;
-						if (name != null)
-							methods.push(accessor(name, type, read, false, declaration.span, field.name));
-					}
+				collect(implemented, interfaceByName, [], function(member, type, read) {
+					if (!hasMethod(className, member.accessor)
+						&& [for (method in methods) method.name].indexOf(member.accessor) < 0
+						&& (member.dynamicMethod ? hasMethod(className, member.name) : hasVariable(className,
+						member.name)))
+						methods.push(accessor(member.accessor, type, read, false, declaration.span, member.name));
 				});
 			if (methods.length == 0)
 				return;
@@ -197,21 +210,24 @@ class InterfaceFieldAccessors {
 		return added;
 	}
 
-	static function hasPhysicalVariables(interfaces:Array<AstInterface>):Bool {
-		for (declaration in interfaces)
+	static function hasStorageAccessors(interfaces:Array<AstInterface>):Bool {
+		for (declaration in interfaces) {
+			for (method in declaration.methods)
+				if (method.isDynamic == true)
+					return true;
 			for (field in declaration.fields)
 				for (read in [true, false])
 					if (sideOf(field, read) == DefaultAccess)
 						return true;
+		}
 		return false;
 	}
 
 	/**
-	 * Hands each variable of the interface `type` names, and of its bases, to `found`, with its type as the implementing class sees
-	 * it: the interface's type parameters replaced by the arguments it is implemented with.
+	 * Visits storage accessors with the interface's type parameters substituted as the implementing class sees them.
 	 */
 	static function collect(type:AstType, interfaces:Map<String, AstInterface>, visited:Array<String>,
-			found:(AstField, AstType) -> Void):Void {
+			found:({name: String, accessor: String, dynamicMethod: Bool}, AstType, Bool) -> Void):Void {
 		var name = nominalName(type), declaration = name == null ? null : interfaces.get(name);
 		if (declaration == null || visited.indexOf(declaration.name) >= 0)
 			return;
@@ -226,7 +242,17 @@ class InterfaceFieldAccessors {
 		}
 		for (field in declaration.fields)
 			if (!field.isStatic && field.type != null)
-				found(field, ImplicitConstructors.substitute(field.type, own));
+				for (read in [true, false]) {
+					var name = accessorName(field, read);
+					if (name != null && isHiddenAccessor(name))
+						found({name: field.name, accessor: name, dynamicMethod: false},
+							ImplicitConstructors.substitute(field.type, own), read);
+				}
+		for (method in declaration.methods)
+			if (method.isDynamic == true)
+				for (read in [true, false])
+					found({name: method.name, accessor: dynamicAccessorName(method.name, read), dynamicMethod: true},
+						ImplicitConstructors.substitute(dynamicType(method), own), read);
 		for (base in declaration.bases)
 			collect(ImplicitConstructors.substitute(base, own), interfaces, visited, found);
 	}

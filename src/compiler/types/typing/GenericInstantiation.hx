@@ -31,6 +31,22 @@ class GenericInstantiation {
 		this.bodyTyper = bodyTyper;
 	}
 
+	public function validateConstraints(fn:AstFunction, substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
+		var constraints = fn.typeConstraints;
+		if (constraints != null)
+			for (constraint in constraints) {
+				var actual = requiredMapValue(substitutions, constraint.parameter),
+					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
+				if (!session.relations.satisfiesConstraint(actual, expected)) {
+					var detail = session.relations.constraintFailure(actual, expected);
+					fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
+						'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"'
+						+ (detail == null ? "" : ': $detail'),
+						span);
+				}
+			}
+	}
+
 	public function specialize(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
 			scope:Scope, owner:Null<String>,
 			isStatic:Bool, ?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
@@ -55,19 +71,7 @@ class GenericInstantiation {
 		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
 		for (parameter in [for (parameter in substitutions.keys()) parameter])
 			substitutions.set(parameter, session.monomorphs.closeReached(requiredMapValue(substitutions, parameter)));
-		var constraints = fn.typeConstraints;
-		if (constraints != null)
-			for (constraint in constraints) {
-				var actual = requiredMapValue(substitutions, constraint.parameter),
-					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
-				if (!session.relations.satisfiesConstraint(actual, expected)) {
-					var detail = session.relations.constraintFailure(actual, expected);
-					fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
-						'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"'
-						+ (detail == null ? "" : ': $detail'),
-						span);
-				}
-			}
+		validateConstraints(fn, substitutions, span);
 		var semanticExpected = bodyTyper.argumentTypesOf(fn, substitutions);
 		for (index in arguments.length...fn.arguments.length) {
 			var parameter = fn.arguments[index],

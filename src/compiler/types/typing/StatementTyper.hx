@@ -809,7 +809,13 @@ class StatementTyper {
 			value = stored(assigned, bodyTyper.coerce(source, field.type, 'field "$name"', "E1002", Assignment(span)),
 				source);
 		scope.invalidateField(name);
-		return isStatic ? staticStore(owner, name, value, source.type, field.type, span, scope, assigned)
+		if (field.setter != null) {
+			session.invalidateUnknownCall(scope);
+			var call = bodyTyper.propertySetterCall(object, field.setter, value, span);
+			return TExpression(assigned == null ? call : assigned.setter(call), span);
+		}
+		return isStatic ? staticStore(DynamicMethods.staticOwner(session, owner), name, value, source.type, field.type,
+			span, scope, assigned)
 			: TFieldAssign(object, name, session.representation.boundaryCast(value, field.storage.type, object.type),
 			span);
 	}

@@ -346,9 +346,6 @@ The Haxe code Haxeon rejects or runs differently is listed in
   `hokeys` native array); an explicit cast of a map of maps to
   `Map<String, Dynamic>` crashes in the runtime cast; and enum keys iterate in
   insertion order where Haxe on HashLink prints them in declaration order.
-- **Dynamic methods Haxe accepts and Haxeon does not:** `dynamic` methods of an
-  interface, static dynamic methods of an abstract, and dynamic methods with their
-  own type parameters.
 - **Generic owners specialized only from annotated members.** An owner whose
   member holds its parameter inside a structure is specialized (`3c1041b09`),
   but only when the member's type is written; one inferred from the body is not

@@ -692,3 +692,4 @@ wire-pinned-record	42
 rpc-wire-named-method	42
 map-to-string	42
 pattern-capture-names	42
+dynamic-method-owners	42

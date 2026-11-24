@@ -179,13 +179,13 @@ class InterfaceProperties {
 	}
 
 	/** A variable's kind in Haxe's words (`s_kind`): `var`, else its two sides, `(get,never)`. */
-	static function kindOf(field:AstField):String {
+	public static function kindOf(field:AstField):String {
 		var read = access(field, true), write = access(field, false);
 		return read == "default" && write == "default" ? "var" : '($read,$write)';
 	}
 
 	/** The span of `name` in a declaration's `span`, after its `var` or `final`: where Haxe reports a field (`cf_name_pos`). */
-	static function nameSpan(span:SourceSpan, name:String):SourceSpan {
+	public static function nameSpan(span:SourceSpan, name:String):SourceSpan {
 		var text = span.file.slice(span.start, span.end);
 		for (keyword in ["var ", "final ", "function "]) {
 			var at = text.indexOf(keyword);
@@ -205,7 +205,7 @@ class InterfaceProperties {
 		return nameSpan(method.span, method.name);
 
 	/** Where Haxe reports a field a class lacks: the class's name, after its `class` keyword. */
-	static function classNameSpan(classDecl:AstClass):SourceSpan {
+	public static function classNameSpan(classDecl:AstClass):SourceSpan {
 		var span = classDecl.span,
 			text = span.file.slice(span.start, span.end),
 			simple = classDecl.name.substr(classDecl.name.lastIndexOf(".") + 1),

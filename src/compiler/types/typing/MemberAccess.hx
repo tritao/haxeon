@@ -181,6 +181,11 @@ class MemberAccess {
 		return member == null || reachable(session, member, span);
 	}
 
+	public static function isPublicMethod(session:TypingSession, owner:String, name:String):Bool {
+		var member = declaredMethod(session, owner, name);
+		return member != null && isPublic(session, member);
+	}
+
 	static function declaredMethod(session:TypingSession, owner:String, name:String):Null<DeclaredMember> {
 		var declared = member(session, session.signaturesByOwner, owner, name);
 		return declared == null ? null : {

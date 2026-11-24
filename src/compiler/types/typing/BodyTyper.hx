@@ -1985,9 +1985,12 @@ class BodyTyper implements BodyTyping {
 				if (methodInfo != null) {
 					var member = compiler.core.QualifiedName.last(functionName);
 					MemberAccess.method(session, methodInfo.owner, member, span);
-					if (fn.isDynamic == true)
-						return new TypedExpression(TStaticField(methodInfo.owner, member),
-							DynamicMethods.functionType(session, fn, []), span);
+					if (fn.isDynamic == true) {
+						var type = DynamicMethods.functionType(session, fn, DynamicMethods.eraseParameters(fn, [])),
+							value = new TypedExpression(TStaticField(DynamicMethods.staticOwner(session,
+								methodInfo.owner), member), type, span);
+						return DynamicMethods.methodValue(session, value, fn, []);
+					}
 				}
 				var types = argumentTypesOf(fn);
 				// A function value is the dispatch entry when the function has one: a call through it may omit an argument.
@@ -2472,10 +2475,10 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		typedObject = TypeParameterMembers.receiver(session, this, typedObject, name, span);
 		var dynamicMethod = DynamicMethods.read(session, typedObject, name, span);
 		if (dynamicMethod != null)
 			return dynamicMethod;
-		typedObject = TypeParameterMembers.receiver(session, this, typedObject, name, span);
 		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic. Unlike `Reflect.field`, which
 		// gives null, reading a field of null throws, as reading any other field does.
 		if (sameType(typedObject.type, TDynamic)) {
