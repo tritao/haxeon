@@ -213,6 +213,10 @@ class IrInliner implements IrFactSource {
 	@:processWide("a contribution memo's key, only ever read")
 	public static final CALLS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrCallEdges>("inliner-calls");
 
+	/** The number interned for each function's parameter types (`parametersValue`), by the function's version. */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final PARAMETERS = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Int>("inliner-parameters");
+
 	/** Instruction budget for a callee without an `inline` hint. */
 	public static inline var SmallBudget = 24;
 
@@ -242,7 +246,11 @@ class IrInliner implements IrFactSource {
 	/** The component of a function (`componentLabels`). */
 	static inline final COMPONENT = 3;
 
-	/** Whether a function may be spliced at all, before its form is made (`isCandidate`): 0, or its source's version. */
+	/**
+	 * Whether a function may be spliced at all, before its form is made (`isCandidate`), and the parameters a caller binds its
+	 * arguments to: 0, or the number interned for its parameter types (`parametersValue`). Not its source's version: a caller whose
+	 * call binds reads the callee's form next (`FORM`), which names everything else a splice reads of it.
+	 */
 	static inline final CANDIDATE = 4;
 
 	/** The form of a function a caller splices: 0 when none may be (`spliceable`), else the version of the stage's output for it. */
@@ -380,6 +388,7 @@ class IrInliner implements IrFactSource {
 	final facts:Null<IrFacts>;
 	final forms:Null<IrContributionMemo<IrInlinedForm>>;
 	final calls:Null<IrContributionMemo<IrCallEdges>>;
+	final parameters:Null<IrContributionMemo<Int>>;
 	final versions:Null<compiler.ir.reuse.IrFunctionVersions>;
 
 	/** The function being inlined, innermost last, with the reader that records what its inlining reads (with a memo). */
@@ -434,6 +443,7 @@ class IrInliner implements IrFactSource {
 		facts = memos == null ? null : memos.facts;
 		forms = memos == null ? null : memos.contribution(FORMS);
 		calls = memos == null ? null : memos.contribution(CALLS);
+		parameters = memos == null ? null : memos.contribution(PARAMETERS);
 		versions = memos == null ? null : memos.versions;
 		if (memos != null)
 			memos.facts.begin();
@@ -894,10 +904,23 @@ class IrInliner implements IrFactSource {
 		if (kind == COMPONENT)
 			return componentLabels[id];
 		if (kind == CANDIDATE)
-			return isCandidate(id) ? knownVersion(id) : 0;
+			return isCandidate(id) ? parametersValue(id, table) : 0;
 		if (kind == FORM)
 			return spliceable(id);
 		throw new InternalError('The inliner has no fact of kind $kind');
+	}
+
+	/** The number `table` interns for function `id`'s parameter types: kept by its version in a session, so it is worked out once. */
+	function parametersValue(id:Int, table:IrFacts):Int {
+		var memo = parameters, version = inputVersions[id];
+		var known = memo == null || version == 0 ? null : memo.get(version);
+		if (known != null)
+			return known;
+		var value = table.intern("parameters "
+			+ IrTypeIdentity.listText([for (argument in functions[id].arguments) argument.type]));
+		if (memo != null && version != 0)
+			memo.keep(version, value);
+		return value;
 	}
 
 	/** The version of function `id`'s source, or a value no print keeps when it has none. */
@@ -976,20 +999,26 @@ class IrInliner implements IrFactSource {
 	}
 
 	/**
-	 * The version of the stage's output for function `id`, inlined in this compile: last compile's when the inlining left the same
-	 * source as it was then and now (`sameAsLast`), else a new one.
+	 * The version of the stage's output for function `id`, inlined in this compile, whose inlined form is `form`: last compile's when
+	 * that version names the same form, else a new one. So a caller that spliced the form last compile still holds when the
+	 * function's source changed but its form did not. When the inlining left the same source as it was then and now, the cleaned
+	 * form is last compile's too (`sameAsLast`); a form that only compares the same is cleaned again, since the body it was
+	 * frozen from may differ in what the cleanup numbers. A form that depends on where the walk made it (`impure`) has a new one.
 	 */
-	function outputVersion(id:Int, unchanged:Bool):Int {
+	function outputVersion(id:Int, form:Null<IrBody>, unchanged:Bool, impure:Bool):Int {
 		var memo = this.memo, forms = this.forms, versions = this.versions, input = inputVersions[id];
 		if (memo == null || forms == null || versions == null)
 			return 0;
-		var last = unchanged && input != 0 ? memo.last(slots[id]) : null;
-		if (last != null && last.input == input) {
-			var kept = forms.get(last.outputVersion);
-			if (kept != null && kept.body != null && kept.body == cachedOriginal(id)) {
+		var last = input != 0 && form != null && !impure ? memo.last(slots[id]) : null;
+		var kept = last == null ? null : forms.get(last.outputVersion);
+		var keptBody = kept == null ? null : kept.body;
+		if (last != null && keptBody != null && form != null) {
+			if (unchanged && last.input == input && keptBody == cachedOriginal(id)) {
 				sameAsLast[id] = last;
 				return last.outputVersion;
 			}
+			if (IrFunctionStateEquality.sameBodies(keptBody, form))
+				return last.outputVersion;
 		}
 		return versions.next();
 	}
@@ -1096,7 +1125,7 @@ class IrInliner implements IrFactSource {
 			impure[id] = true;
 		if (reader != null) {
 			readsOf[id] = reader.recorded();
-			outputVersions[id] = outputVersion(id, unchanged && !isImpure);
+			outputVersions[id] = outputVersion(id, result, unchanged, isImpure);
 		}
 		return result;
 	}

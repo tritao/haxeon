@@ -86,10 +86,11 @@ objects for the program handed to the backend (memoized by input versions).
 for the version of the function's source (`IrLineage`) with the facts its inlining read (`IrFacts`, through an `IrFactReader`);
 an entry is reused while its source has that version and every fact still has the print it read. The facts are: the settings
 every function depends on (entry point, profile, the inlining, load/store and strength-reduction switches); each callee's
-component; whether each callee may be spliced at all (by its name and source version); the form a spliced callee has (the
-version of the inliner's output for it, its form kept by that version in `IrStageMemos.inlinedForms`); the source of a callee
-copy elision read; and each *object* consulted. A caller depends on what it read of a callee, not on the callee's identity: a
-callee inlined again to a form nobody splices, or that is not spliced here, does not redo its callers. Objects are looked up
+component; whether each callee may be spliced at all, with the parameter types a call binds to; the form a spliced callee has
+(the version of the inliner's output for it, its form kept by that version in `IrStageMemos.inlinedForms`); the source of a
+callee copy elision read; and each *object* consulted. A caller depends on what it read of a callee, not on the callee's
+identity: a callee inlined again to a form nobody splices, or that is not spliced here, does not redo its callers, and a callee
+inlined again to a form that compares the same as last build's keeps that form's version, so its callers hold too. Objects are looked up
 through `IrObjectTable`, which records each name asked for, and each becomes a fact whose print is the object's description
 (its base, its methods, a value class's fields, its direct subclasses). Adding a class, or changing one object's methods,
 therefore redoes only the functions that looked at that object. Any new read of an object by the inliner or its passes must
