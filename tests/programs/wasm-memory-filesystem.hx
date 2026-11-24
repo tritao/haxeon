@@ -129,9 +129,9 @@ function numbers():Int {
 	var huge = haxe.Int64.fromFloat(1e300),
 		tiny = haxe.Int64.fromFloat(-1e300),
 		nan = haxe.Int64.fromFloat(Math.NaN);
-	return haxe.Int64.compare(huge, haxe.Int64.make(0x7fffffff, -1)) == 0
-		&& haxe.Int64.compare(tiny, haxe.Int64.make(-2147483647 - 1, 0)) == 0
-		&& haxe.Int64.compare(nan, haxe.Int64.ofInt(0)) == 0 ? 0 : 64;
+	var min = haxe.Int64.make(-2147483647 - 1, 0);
+	return haxe.Int64.compare(huge, min) == 0 && haxe.Int64.compare(tiny, min) == 0
+		&& haxe.Int64.compare(nan, min) == 0 ? 0 : 64;
 }
 
 function gc():Int {

@@ -1363,31 +1363,35 @@ class TestMain {
 			"import foo.Bar; function main():Int { var left:Bar = new Bar(); var right:foo_Bar = new foo_Bar(); return haxeon.wire.MessagePack.encode(left).length + haxeon.wire.MessagePack.encode(right).length; }");
 		wireCollisionCompiler.compile("Main");
 		expectCompileError('@:wire class MissingId { @:id(1) public var numbered:Int; public var id:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new MissingId()).length; }',
-			'Wire member "MissingId.id" needs @:id(n): cannot mix named and numbered members');
+			'Wire member "MissingId.id" needs @:id(n): cannot mix named and numbered members', true);
 		expectCompileError('typedef Mixed = { @:id(1) var first:Int; var second:Int; } function main():Int { var value:Mixed = {first: 1, second: 2}; return haxeon.wire.MessagePack.encode(value).length; }',
-			'Wire member "Mixed.second" needs @:id(n): cannot mix named and numbered members');
+			'Wire member "Mixed.second" needs @:id(n): cannot mix named and numbered members', true);
 		expectCompileError('typedef Bad = { var content:Dynamic; } function main():Int { var value:Bad = {content: null}; return haxeon.wire.MessagePack.encode(value).length; }',
-			'Wire record field "Bad.content" has unsupported type "TDynamic"');
+			'Wire record field "Bad.content" has unsupported type "TDynamic"', true);
 		expectCompileError('@:wire typedef First = { @:id(1) var value:Int; } @:wire typedef Second = { @:id(2) var value:Int; } function main():Int { var value:First = {value: 1}; return haxeon.wire.MessagePack.encode(value).length; }',
-			'Wire typedefs "First" and "Second" have the same structural type');
+			'Wire typedefs "First" and "Second" have the same structural type', true);
 		expectCompileError('@:wire class DuplicateId { @:id(1) public var left:Int; @:id(1) public var right:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new DuplicateId()).length; }',
-			'MessagePack record fields "DuplicateId.left" and "DuplicateId.right" use duplicate @:id(1)');
+			'MessagePack record fields "DuplicateId.left" and "DuplicateId.right" use duplicate @:id(1)', true);
 		expectCompileError('@:wire class UnsupportedWireDefault { @:id(1) public var value:Int = 1 + 2; } function main():Int { return haxeon.wire.MessagePack.encode(new UnsupportedWireDefault()).length; }',
-			'MessagePack record field "UnsupportedWireDefault.value" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal');
+			'MessagePack record field "UnsupportedWireDefault.value" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal',
+			true);
 		expectCompileError('@:wire class RecursiveWire { @:id(1) public var child:Null<RecursiveWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_19:class_RecursiveWire -> class_RecursiveWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_19:class_RecursiveWire -> class_RecursiveWire)',
+			true);
 		expectCompileError('@:wire class RecursiveArrayWire { @:id(1) public var children:Array<RecursiveArrayWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveArrayWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_24:class_RecursiveArrayWire -> class_RecursiveArrayWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_24:class_RecursiveArrayWire -> class_RecursiveArrayWire)',
+			true);
 		expectCompileError('@:wire class RecursiveMapWire { @:id(1) public var children:Map<String, RecursiveMapWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveMapWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)',
+			true);
 		expectCompileError('function main():Int { var values:Map<Bool, Int> = []; return haxeon.wire.MessagePack.encode(values).length; }',
-			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile');
+			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile', true);
 		expectCompileError('@:wire enum MissingEnumId { @:id(1) First; Value; } function main():Int { return haxeon.wire.MessagePack.encode(Value).length; }',
-			'Wire member "MissingEnumId.Value" needs @:id(n): cannot mix named and numbered members');
+			'Wire member "MissingEnumId.Value" needs @:id(n): cannot mix named and numbered members', true);
 		expectCompileError('@:wire enum DuplicateEnumId { @:id(1) Left; @:id(1) Right; } function main():Int { return haxeon.wire.MessagePack.encode(Left).length; }',
-			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
+			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)', true);
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
-			'MessagePack.decode requires an expected result type');
+			'MessagePack.decode requires an expected result type', true);
 		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
 			'Struct "Thing" does not conform to Equatable');
 		var temporaryStruct =
@@ -1490,7 +1494,8 @@ class TestMain {
 		expectCompileError('interface Diffable {} struct Unhashable {} class Snapshot implements Diffable { public var value:Unhashable; public function new() {} } function main():Int return haxeon.Diff.fingerprint(new Snapshot());',
 			'Cannot synthesize Diff.fingerprint for "Snapshot": field "value" does not conform to Hashable');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
-			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
+			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)',
+			true);
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
 			'Type "PayloadMapKey" does not conform to Hashable');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
