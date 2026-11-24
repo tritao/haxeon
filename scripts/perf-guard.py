@@ -834,8 +834,8 @@ def live_apps(work):
     if shutil.which("xvfb-run"):
         apps.append(LiveApp("ui", ui, os.path.join("src", "Main.hx"),
                             lambda index: ("times')" if index == 0 else f"times ({index})')", f"times ({index + 1})')"),
-                            (os.path.join("src", "Main.hx"), "static function options():DesktopUiHostOptions",
-                             "static function options(?width:Int):DesktopUiHostOptions"), ("xvfb-run", "-a")))
+                            (os.path.join("src", "Main.hx"), "static function options():UiHostOptions",
+                             "static function options(?width:Int):UiHostOptions"), ("xvfb-run", "-a")))
     else:
         print("perf-guard: live ui: skipped (no xvfb-run)")
     return apps
