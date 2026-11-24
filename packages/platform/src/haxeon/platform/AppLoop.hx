@@ -40,7 +40,8 @@ class AppLoop implements Disposable {
 					pending = null;
 					if (result == Result.Ok)
 						firstFramePresented = true;
-					else
+					// Cancellation ends the transaction without making the surface unusable.
+					else if (result != Result.ErrorCancelled)
 						fail(new NativeKitError(result, "AppLoop.frame", "Rendering or presentation failed"));
 				}
 			});

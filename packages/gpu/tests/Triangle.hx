@@ -42,6 +42,25 @@ import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 class Triangle {
+	@:access(haxeon.platform.AppLoop)
+	static function verifyFrameCompletionRecovery(runtime:Runtime, surface:Surface, app:App):Void {
+		scoped var loop = runtime.startApp(surface, app);
+		var source = new Handle(surface.nativeHandle().rawValue());
+		var token = haxe.Int64.ofInt(17);
+		loop.pending = token;
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorCancelled));
+		if (loop.pending != null || loop.stopped || loop.failure != null || loop.firstFramePresented)
+			throw "A canceled submission stopped the loop or marked a frame as presented";
+		loop.pending = token;
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.Ok));
+		if (loop.pending != null || loop.stopped || !loop.firstFramePresented)
+			throw "The loop did not accept a successful frame after cancellation";
+		loop.pending = token;
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorUnknown));
+		if (loop.pending != null || !loop.stopped || loop.failure == null)
+			throw "The loop did not stop on an unexpected rendering error";
+	}
+
 	static function verifyGeneratedEnumMembers():Void {
 		var vertexFormat:VertexFormat = VertexFormat.Float;
 		var floatUniform:UniformType = UniformType.Float;
@@ -279,7 +298,9 @@ class Triangle {
 		var calls = 0;
 		var lastTime = 0.0;
 		var timing:haxeon.platform.SurfaceFrameTiming = null;
-		var first = surface.onFrameTick(function(_) { staleCalls++; });
+		var first = surface.onFrameTick(function(_) {
+			staleCalls++;
+		});
 		var second = surface.onFrameTick(function(frame) {
 			if (frame.timeSeconds < lastTime || frame.width <= 0 || frame.height <= 0)
 				throw "Invalid frame callback payload";
@@ -497,8 +518,10 @@ class Triangle {
 		renderer.abortFrame();
 		var originalError = "draw failed";
 		var frameError:Dynamic = null;
-		try renderer.withFrame(function() { throw originalError; })
-		catch (error:Dynamic) frameError = error;
+		try renderer.withFrame(function() {
+			throw originalError;
+		})
+			catch (error:Dynamic) frameError = error;
 		if (frameError != originalError)
 			throw "Frame scope did not preserve the draw error";
 		renderer.withFrame(function() {});
@@ -548,6 +571,7 @@ class Triangle {
 		scoped var loopWindow = runtime.createWindowNative(windowOptions);
 		var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
 		var app = new TriangleLoopApp(loopSurface);
+		verifyFrameCompletionRecovery(runtime, loopSurface, app);
 		var recorded = 0;
 		runtime.run(loopSurface, app, new FrameRecorder(function(timing) {
 			if (timing.submittedSeconds == null || timing.submittedSeconds < timing.callbackSeconds)
@@ -590,8 +614,15 @@ private class TriangleLoopApp implements App {
 		if (renderer == null || tick.timeSeconds <= 0.0)
 			throw "The app drew before its surface was ready";
 		frames++;
-		if (frames == 1)
+		if (frames == 1) {
+			var rejected = false;
+			try frame.submit([]) catch (error:haxeon.platform.NativeKitError) {
+				rejected = error.result == Result.ErrorInvalidArgument;
+			}
+			if (!rejected || frame.isFinished())
+				throw "NativeKit did not reject an empty submission and leave the frame open";
 			return;
+		}
 		if (afterFrames != 1)
 			throw "The loop did not run post-frame work before drawing again";
 		batch = renderer.batch().windowPass(tick.width, tick.height).seal();

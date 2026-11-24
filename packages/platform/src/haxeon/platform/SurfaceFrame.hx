@@ -65,8 +65,8 @@ class SurfaceFrame {
 	/** Transfers the frame and ordered steps. Listen for SurfaceFrameComplete to get the result. */
 	public function submit(steps:Array<SurfaceFrameStep>):Void {
 		ensureOpen();
-		if (steps == null || steps.length == 0 || steps.length > 16)
-			throw BindingError.invalidArgument("SurfaceFrame.submit", "Expected 1 to 16 frame steps");
+		if (steps == null)
+			throw BindingError.invalidArgument("SurfaceFrame.submit", "Frame steps must not be null");
 		var handles = [];
 		for (step in steps) {
 			if (step == null)
