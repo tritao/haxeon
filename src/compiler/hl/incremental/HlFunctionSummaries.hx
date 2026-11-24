@@ -26,6 +26,9 @@ class HlFunctionSummaries {
 	/** The runtime natives each function's rows call (`HlLower.discoverRuntimeNatives`). */
 	public final natives = new IrFunctionMemo<Array<IrNative>>();
 
+	/** The last plain build's reachability walk with what it read, which the next reuses while the program gives it the same. */
+	public var reach:Null<HlPlainBuild.HlReachRecord> = null;
+
 	public function new() {}
 
 	/** Drops what the build that just ended did not ask for. */

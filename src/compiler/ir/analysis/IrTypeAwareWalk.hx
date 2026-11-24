@@ -806,7 +806,7 @@ class IrWalkRecord {
 	}
 
 	/** Whether two functions of one name declare the same to the walk: provider row, retention and signature. */
-	static function sameDeclaration(left:IrFunction, right:IrFunction):Bool {
+	public static function sameDeclaration(left:IrFunction, right:IrFunction):Bool {
 		if (left.retention != right.retention || left.arguments.length != right.arguments.length
 			|| !IrVerifier.sameType(left.result, right.result))
 			return false;

@@ -202,6 +202,11 @@ class IrReachability {
 		return {fatal: fatal, globals: globals, classes: classes};
 	}
 
+	/** Whether two functions give `trimTables` the same. */
+	public static function sameTrimSummary(left:IrTrimSummary, right:IrTrimSummary):Bool
+		return left == right || left.fatal == right.fatal && IrObjectTools.sameNames(left.globals, right.globals)
+			&& IrObjectTools.sameNames(left.classes, right.classes);
+
 	/** Calls `keep` with every class `type` names. */
 	static function namedClasses(type:IrType, keep:String->Void):Void
 		switch type {
@@ -428,6 +433,26 @@ class IrBodyEdges {
 			}
 		}
 		return summary;
+	}
+
+	/** Whether two bodies give a walk the same steps. */
+	public static function same(left:IrBodyEdges, right:IrBodyEdges):Bool {
+		if (left == right)
+			return true;
+		var count = left.kinds.length;
+		if (count != right.kinds.length)
+			return false;
+		for (index in 0...count) {
+			if (left.kinds[index] != right.kinds[index] || left.names[index] != right.names[index])
+				return false;
+			var a = left.details[index], b = right.details[index];
+			if (a == null || b == null) {
+				if (a != null || b != null)
+					return false;
+			} else if (!compiler.ir.model.IrTypeIdentity.same(a, b))
+				return false;
+		}
+		return true;
 	}
 }
 
