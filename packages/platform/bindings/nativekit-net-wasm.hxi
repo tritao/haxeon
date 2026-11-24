@@ -96,7 +96,10 @@ interface NativeKitNet @target("portable-abi32") @library("nativekit") @depends(
 	/**
 	 * Creates a session. All strings and headers are copied before return.
 	 */
-	extern fn nk_http_client_create(options: ptr<const<nk_http_client_options>>, out_client: ptr<nk_http_client> @out @owned) -> nk_result;
+	extern fn nk_http_client_create(
+		options: ptr<const<nk_http_client_options>>,
+		out_client: ptr<nk_http_client> @out @owned
+	) -> nk_result;
 	/**
 	 * Destroys a session and cancels its outstanding requests.
 	 */
@@ -104,17 +107,28 @@ interface NativeKitNet @target("portable-abi32") @library("nativekit") @depends(
 	/**
 	 * Reads the typed progress payload from an HTTP progress event.
 	 */
-	extern fn nk_http_event_progress(event: ptr<const<nk_event>>, out_progress: ptr<nk_http_progress> @out) -> nk_result;
+	extern fn nk_http_event_progress(
+		event: ptr<const<nk_event>>,
+		out_progress: ptr<nk_http_progress> @out
+	) -> nk_result;
 	/**
 	 * Decodes response metadata and body views from an HTTP headers/complete event.
 	 */
-	extern fn nk_http_event_response(event: ptr<const<nk_event>>, out_response: ptr<nk_http_response> @out) -> nk_result;
+	extern fn nk_http_event_response(
+		event: ptr<const<nk_event>>,
+		out_response: ptr<nk_http_response> @out
+	) -> nk_result;
 	/**
 	 * Starts one asynchronous HTTP request. `out_stream` may be null for callers
 	 * that do not need the streaming handle; it is set to NK_INVALID_HANDLE for a
 	 * buffered request.
 	 */
-	extern fn nk_http_request(client: nk_http_client, options: ptr<const<nk_http_request_options>>, out_request: ptr<nk_request_id> @out, out_stream: ptr<nk_http_stream> @out) -> nk_result;
+	extern fn nk_http_request(
+		client: nk_http_client,
+		options: ptr<const<nk_http_request_options>>,
+		out_request: ptr<nk_request_id> @out,
+		out_stream: ptr<nk_http_stream> @out
+	) -> nk_result;
 	/**
 	 * Returns the stream handle while the request remains active. Prefer the
 	 * `out_stream` result from nk_http_request() because a fast request can finish
@@ -124,7 +138,11 @@ interface NativeKitNet @target("portable-abi32") @library("nativekit") @depends(
 	/**
 	 * Reads one response header from a response view. The result is event-owned.
 	 */
-	extern fn nk_http_response_header(response: ptr<const<nk_http_response>>, index: u32, out_header: ptr<nk_http_header> @out) -> nk_result;
+	extern fn nk_http_response_header(
+		response: ptr<const<nk_http_response>>,
+		index: u32,
+		out_header: ptr<nk_http_header> @out
+	) -> nk_result;
 	/**
 	 * Closes a stream and cancels its request. This call is thread-safe.
 	 */
@@ -136,7 +154,12 @@ interface NativeKitNet @target("portable-abi32") @library("nativekit") @depends(
 	/**
 	 * Reads currently buffered bytes without blocking. Zero means no data or EOF.
 	 */
-	extern fn nk_http_stream_read(stream: nk_http_stream, buffer: ptr<u8>, size: u64, out_read: ptr<u64> @out) -> nk_result;
+	extern fn nk_http_stream_read(
+		stream: nk_http_stream,
+		buffer: ptr<u8>,
+		size: u64,
+		out_read: ptr<u64> @out
+	) -> nk_result;
 	/**
 	 * Session configuration copied by nk_http_client_create().
 	 */

@@ -28,8 +28,16 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	extern fn ak_asset_find_joint(asset: ak_asset_handle, name: utf8) -> i32;
 	extern fn ak_asset_get_image(asset: ak_asset_handle, image: u32, out_info: ptr<ak_image_info>) -> ak_result;
 	extern fn ak_asset_get_info(asset: ak_asset_handle, out_info: ptr<ak_asset_info>) -> ak_result;
-	extern fn ak_asset_get_material(asset: ak_asset_handle, material: u32, out_info: ptr<ak_material_info>) -> ak_result;
-	extern fn ak_asset_get_primitive(asset: ak_asset_handle, primitive: u32, out_info: ptr<ak_primitive_info>) -> ak_result;
+	extern fn ak_asset_get_material(
+		asset: ak_asset_handle,
+		material: u32,
+		out_info: ptr<ak_material_info>
+	) -> ak_result;
+	extern fn ak_asset_get_primitive(
+		asset: ak_asset_handle,
+		primitive: u32,
+		out_info: ptr<ak_primitive_info>
+	) -> ak_result;
 	/**
 	 * Joint names are the glTF node names, or node_<index> for unnamed nodes.
 	 */
@@ -45,45 +53,94 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	/**
 	 * Loads a GLB or a .gltf document whose buffers are embedded data URIs.
 	 */
-	extern fn ak_asset_load_memory(data: ptr<const<u8>> @in_array("size"), size: u32, out_asset: ptr<ak_asset_handle> @out @owned) -> ak_result;
+	extern fn ak_asset_load_memory(
+		data: ptr<const<u8>> @in_array("size"),
+		size: u32,
+		out_asset: ptr<ak_asset_handle> @out @owned
+	) -> ak_result;
 	extern fn ak_asset_material_name(asset: ak_asset_handle, material: u32) -> utf8 @borrowed;
 	extern fn ak_asset_primitive_name(asset: ak_asset_handle, primitive: u32) -> utf8 @borrowed;
 	/**
 	 * Packed float32 xyz bind normals in source glTF space.
 	 */
-	extern fn ak_asset_read_bind_normals(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_bind_normals(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Packed float32 xyz bind positions in source glTF space.
 	 */
-	extern fn ak_asset_read_bind_positions(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_bind_positions(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Decoded RGBA8 pixels, top row first.
 	 */
-	extern fn ak_asset_read_image(asset: ak_asset_handle, image: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_image(
+		asset: ak_asset_handle,
+		image: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Packed uint32 triangle indices.
 	 */
-	extern fn ak_asset_read_indices(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_indices(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Column-major float32 4x4 inverse binds in palette order; identity for rigid meshes.
 	 */
-	extern fn ak_asset_read_inverse_bind_matrices(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_inverse_bind_matrices(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Packed uint16x4 indices into this primitive's skin palette; empty for rigid meshes.
 	 */
-	extern fn ak_asset_read_joint_indices(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_joint_indices(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Packed float32x4 normalized weights; empty for rigid meshes.
 	 */
-	extern fn ak_asset_read_joint_weights(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_joint_weights(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Packed int32 skeleton joint indices in palette order; the owning joint for rigid meshes.
 	 */
-	extern fn ak_asset_read_skin_joints(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_skin_joints(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Packed float32 UV pairs with glTF's top-left origin; empty without texcoords.
 	 */
-	extern fn ak_asset_read_texcoords(asset: ak_asset_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_asset_read_texcoords(
+		asset: ak_asset_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Non-fatal import diagnostics, such as skipped primitives or undecodable images.
 	 */
@@ -95,7 +152,10 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	/**
 	 * Creates a posed copy at the rest pose, already evaluated.
 	 */
-	extern fn ak_instance_create(asset: ak_asset_handle, out_instance: ptr<ak_instance_handle> @out @owned) -> ak_result;
+	extern fn ak_instance_create(
+		asset: ak_asset_handle,
+		out_instance: ptr<ak_instance_handle> @out @owned
+	) -> ak_result;
 	extern fn ak_instance_destroy(instance: ak_instance_handle) -> void;
 	/**
 	 * Samples, blends, solves inverse kinematics, and skins the current layers.
@@ -111,19 +171,38 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	/**
 	 * One scene-space model matrix per joint, in joint order.
 	 */
-	extern fn ak_instance_read_joint_matrices(instance: ak_instance_handle, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_instance_read_joint_matrices(
+		instance: ak_instance_handle,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Deformed unit float32 xyz normals in scene space.
 	 */
-	extern fn ak_instance_read_normals(instance: ak_instance_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_instance_read_normals(
+		instance: ak_instance_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Deformed float32 xyz positions in scene space.
 	 */
-	extern fn ak_instance_read_positions(instance: ak_instance_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_instance_read_positions(
+		instance: ak_instance_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Axis-aligned bounds of every deformed primitive in scene space.
 	 */
-	extern fn ak_instance_read_skin_matrices(instance: ak_instance_handle, primitive: u32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> ak_result;
+	extern fn ak_instance_read_skin_matrices(
+		instance: ak_instance_handle,
+		primitive: u32,
+		data: nullable<ptr<u8>> @out_buffer("size"),
+		size: ptr<u32> @inout
+	) -> ak_result;
 	/**
 	 * Sets one of AK_MAX_IK_CHAINS inverse kinematics chains, applied in order by
 	 * the next evaluation. A null ik or zero weight disables the chain.
@@ -137,21 +216,42 @@ interface AnimKitNative @target("portable-abi64") @library("animkit_core") {
 	 * sources on the same joint compose, lowest source first, so two features never overwrite each other.
 	 * A turn stays until it is removed.
 	 */
-	extern fn ak_instance_set_joint_rotation(instance: ak_instance_handle, source: u32, joint: i32, x: f32, y: f32, z: f32, w: f32, weight: f32) -> ak_result;
+	extern fn ak_instance_set_joint_rotation(
+		instance: ak_instance_handle,
+		source: u32,
+		joint: i32,
+		x: f32,
+		y: f32,
+		z: f32,
+		w: f32,
+		weight: f32
+	) -> ak_result;
 	/**
 	 * Replaces every turn of one source at once, so a caller turning many joints (a hand of fingers) crosses
 	 * the boundary once. data holds size / 24 records, each little-endian: an int32 joint, then float32 x, y,
 	 * z, w and weight. Turns of other sources are kept. Nothing changes when size is not a multiple of 24 or
 	 * any record is invalid; records with no weight are skipped.
 	 */
-	extern fn ak_instance_set_joint_rotations(instance: ak_instance_handle, source: u32, data: ptr<const<u8>> @in_array("size"), size: u32) -> ak_result;
+	extern fn ak_instance_set_joint_rotations(
+		instance: ak_instance_handle,
+		source: u32,
+		data: ptr<const<u8>> @in_array("size"),
+		size: u32
+	) -> ak_result;
 	/**
 	 * Sets one of AK_MAX_LAYERS blend layers. A layer contributes when its clip is
 	 * valid and its weight is positive; weights are normalized across layers. Time
 	 * is in seconds and wraps when loop is non-zero, otherwise it clamps. With no
 	 * contributing layer the instance takes the rest pose.
 	 */
-	extern fn ak_instance_set_layer(instance: ak_instance_handle, layer: u32, clip: i32, time: f32, weight: f32, loop: u32) -> ak_result;
+	extern fn ak_instance_set_layer(
+		instance: ak_instance_handle,
+		layer: u32,
+		clip: i32,
+		time: f32,
+		weight: f32,
+		loop: u32
+	) -> ak_result;
 	/**
 	 * Returns this thread's last load failure, or an empty string.
 	 */
