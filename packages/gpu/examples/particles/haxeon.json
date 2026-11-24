@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-gpu-particles"
+  },
+  "entry": "Main",
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-gpu": {
+      "path": "../.."
+    }
+  },
+  "target": "host",
+  "outputDir": "build",
+  "app": {
+    "name": "Particles",
+    "id": "dev.haxeon.particles",
+    "platforms": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  }
+}

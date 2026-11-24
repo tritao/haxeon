@@ -44,6 +44,9 @@ unavailable on the current backend.
 [Triangle](examples/triangle/) is the smallest GPU app: one shader, one vertex
 buffer and one draw.
 
+[Particles](examples/particles/) moves 8,192 particles with a compute shader
+and draws them from the same storage buffer.
+
 [Circuit Run](examples/circuit-run/) is a Linux and WebGL2 maze-chase sample
 that submits a GPU maze and a retained UI HUD to one platform surface.
 
