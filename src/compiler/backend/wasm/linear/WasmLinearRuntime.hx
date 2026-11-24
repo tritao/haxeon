@@ -23,7 +23,7 @@ class WasmLinearRuntime {
 		for (native in program.natives)
 			if (used.exists(native.name))
 				switch native.symbol {
-					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
+					case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
 						"__math_exp", "__math_log",
 						"__sys_args", "sys_time", "__sys_monotonic_time", "sys_cpu_time",
 						"sys_thread_cpu_time", "sys_process_memory",
@@ -492,10 +492,11 @@ class WasmLinearRuntime {
 				Return
 			]));
 			case "fun_compare": addCompareMethods(module, native.name);
-			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
+			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
 				"__math_exp", "__math_log", "__sys_args":
 				runtimeImportIndex(module, native);
 			case "__math_floor", "__math_ceil", "__math_round": addMathRoundToInt(module, native.name, native.symbol);
+			case "__math_is_finite": addMathIsFinite(module, native.name);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "__math_sqrt": addMathSqrt(module, native.name);
 			case "__math_abs": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
@@ -4141,6 +4142,16 @@ class WasmLinearRuntime {
 				Return
 			])));
 	}
+
+	static function addMathIsFinite(module:WasmModule, name:String):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
+			[
+				LocalGet(0),
+				F64Abs,
+				F64Const(1.7976931348623157e308),
+				F64Le,
+				Return
+			]));
 
 	static function addMathIsNaN(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],

@@ -30,7 +30,7 @@ for inline in 0 1; do
       node - "$tmp/test.wasm" "$target" "$inline" "$fixture" "$census" <<'JS'
 const fs = require('fs');
 const [file, target, inline, fixture, census] = process.argv.slice(2);
-const imports = {std: {sys_time: () => 0}, env: {memory: new WebAssembly.Memory({initial: 256})}, haxeon_runtime: {__math_is_finite: Number.isFinite}};
+const imports = {std: {sys_time: () => 0}, env: {memory: new WebAssembly.Memory({initial: 256})}};
 const exports = new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(file)), imports).exports;
 const count = target === 'wasm32' ? exports['haxeon.memory.allocation_count'] : exports.__allocation_count;
 const setupBefore = count();

@@ -127,7 +127,7 @@ var HaxeonWasmHost = (() => {
           release(address);
         },
         __math_ceil: Math.ceil, __math_floor: Math.floor, __math_round: Math.round,
-        __math_is_finite: Number.isFinite, __math_is_nan: Number.isNaN,
+        __math_is_nan: Number.isNaN,
         __math_fmod: (left, right) => left % right, __math_pow: Math.pow, __math_sqrt: Math.sqrt,
         __math_sin: Math.sin, __math_cos: Math.cos, __math_tan: Math.tan, __math_atan2: Math.atan2,
         __math_log: Math.log, __math_exp: Math.exp, __math_abs: Math.abs, __math_min: Math.min, __math_max: Math.max
