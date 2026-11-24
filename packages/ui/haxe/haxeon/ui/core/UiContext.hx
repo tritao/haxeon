@@ -807,6 +807,8 @@ class UiContext implements Disposable {
 			accessibilityBridge.coordinateScale = platformCoordinateScale;
 			accessibilityBridge.update(next, focus.focusedId);
 		}
+		// Views composed before layout can observe the new focus on the next frame.
+		if (focusChanged && !verifying && onAnimationFrameRequested != null) onAnimationFrameRequested();
 		// Layout can move a different node under a stationary pointer, and a newly mounted focus trap chooses its target here.
 		// Settle those routed states before painting, using the same bounded feedback as viewport-dependent builds.
 		// This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
@@ -1156,6 +1158,14 @@ class UiContext implements Disposable {
 		var previous = focus.focusedId;
 		focus.focus(null);
 		dispatchFocusChange(previous, null);
+	}
+
+	/** Returns the eligible keyboard target retained across window deactivation. */
+	public function keyboardFocusTarget():Null<WidgetId> {
+		var active = focus.focusedId;
+		if (active != null) return active;
+		var suspended = focus.eligibleNode(focusBeforeWindowBlur);
+		return suspended == null ? null : suspended.id;
 	}
 
 	/** Routes a NativeKit platform accessibility action to the addressed semantic node. */
@@ -1824,8 +1834,10 @@ class UiContext implements Disposable {
 	}
 
 	function dispatchFocusChange(previous:Null<WidgetId>, next:Null<WidgetId>):Void {
-		if (previous != null && (next == null || !previous.equals(next))) events.focusEvent(previous, UiEventKind.Blur);
-		if (next != null && (previous == null || !previous.equals(next))) events.focusEvent(next, UiEventKind.Focus);
+		if (previous == null ? next == null : previous.equals(next)) return;
+		if (previous != null) events.focusEvent(previous, UiEventKind.Blur);
+		if (next != null) events.focusEvent(next, UiEventKind.Focus);
+		if (onAnimationFrameRequested != null) onAnimationFrameRequested();
 	}
 
 	function ensureLive():Void {

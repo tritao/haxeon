@@ -2811,6 +2811,7 @@ class FrameworkSmoke {
 
 		var returnFocusView = new Button("Return focus");
 		var returnFocusRoot = context.submit(returnFocusView, new LayoutFrame(256.0, 192.0));
+		context.windowFocusGained();
 		if (!context.focusWidget(returnFocusRoot.id)) return 69;
 		var dialogDismissals = 0;
 		var dialog = new Dialog("dialog-smoke", "Settings", new Button("Apply"), function() {
@@ -2822,6 +2823,8 @@ class FrameworkSmoke {
 				new StackChild("background", new Text("Background"), 0.0, 0.0, 0, LayoutAxis.grow(), LayoutAxis.grow()),
 				new StackChild("dialog-layer", dialog, 0.0, 0.0, 10, LayoutAxis.grow(), LayoutAxis.grow())
 			]);
+		var focusFrameRequests = 0;
+		context.onAnimationFrameRequested = function() focusFrameRequests++;
 		var dialogRoot = context.submit(modalStack, dialogFrame);
 		var dialogFocus:Null<WidgetId> = null;
 		dialogRoot.walk(function(node) {
@@ -2835,6 +2838,19 @@ class FrameworkSmoke {
 			|| dialogPanelGeometry.x < centeredDialogX - 0.1 || dialogPanelGeometry.x > centeredDialogX + 0.1
 			|| dialogPanelGeometry.y < centeredDialogY - 0.1
 			|| dialogPanelGeometry.y > centeredDialogY + 0.1) return 70;
+		if (focusFrameRequests == 0) throw "Initial dialog focus must request a frame";
+		var requestsBeforeBlur = focusFrameRequests;
+		context.windowFocusLost();
+		var suspendedFocus = context.keyboardFocusTarget();
+		if (context.focus.focusedId != null || suspendedFocus == null || !suspendedFocus.equals(dialogFocus))
+			throw "Window deactivation must retain the dialog keyboard target for inspection";
+		if (focusFrameRequests <= requestsBeforeBlur) throw "Window deactivation must request a frame";
+		var requestsBeforeActivation = focusFrameRequests;
+		context.windowFocusGained();
+		if (focusFrameRequests <= requestsBeforeActivation || context.focus.focusedId == null
+			|| !context.focus.focusedId.equals(dialogFocus))
+			throw "Window deactivation and activation must request frames for their focus changes";
+		context.onAnimationFrameRequested = null;
 		var modalSemantics = AccessibilityBridge.project(dialogRoot, dialogFocus);
 		for (semanticNode in modalSemantics) if (semanticNode.semantics.label == "Background") return 79;
 		context.key(UiEventKind.KeyDown, UiKey.Escape);

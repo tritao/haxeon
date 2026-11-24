@@ -220,8 +220,11 @@ class InspectorPanel {
 			var selected = InspectionOverlay.findSnapshot(records, explorer.state.inspector.selectedNodeId);
 			if (selected != null) return selected;
 		}
-		for (record in records) if (record.focused
-			&& InspectionOverlay.isRecordInPreview(explorer, record)) return record;
+		var focus = explorer.context.keyboardFocusTarget();
+		if (focus != null) {
+			var focused = InspectionOverlay.findSnapshot(records, focus.value);
+			if (focused != null && InspectionOverlay.isRecordInPreview(explorer, focused)) return focused;
+		}
 		for (record in records) if (record.visible
 			&& record.focusable && record.role != null && InspectionOverlay.isRecordInPreview(explorer,
 			record)) return record;
