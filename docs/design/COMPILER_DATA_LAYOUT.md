@@ -59,7 +59,7 @@ pages frees almost nothing yet: arenas wait until outputs and scratch are alloca
    symbol-state codecs, digests, runtime type discriminators. `HlSymbolTable` keeps its text-keyed `typeIndices`, which
    it persists, and answers lookups through an `IrTypeMap` index over it that is part of its copy-on-write state and is
    dropped when `renameTypes` rewrites the keys. A table of dense type ids (`IrTypeMap<Int>` handing out numbers) is the
-   next step once consumers want arrays indexed by type.
+   next step once consumers want arrays indexed by type: `INTEGER_IDENTITIES.md`, "Types".
 5. **Packed small fields.** Flags and small enums in one `Int`, behind an `abstract` with inline accessors: free in both
    builds. Struct bitfields are language work (`STRUCTS.md`) the compiler would use only under ADR 0006.
 6. **SSA built during IR generation.** `IrGenerator` reads and writes locals through the builder, which places phis

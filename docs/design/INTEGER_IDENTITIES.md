@@ -43,7 +43,7 @@ Each family gets one kind of id, one interner and one owner. Two scopes exist:
 |---|---|---|---|---|
 | Functions | global | `IrSymbol` | `IrSymbol.of` | calls carry it; definitions and consumers still by name |
 | Objects (IR classes and records) | global | `IrSymbol` of the object's name | `IrSymbol.of` | by name |
-| Types | global | `IrTypeMap` key, then a dense type id | `IrTypeMap` | structural map; no dense id yet |
+| Types | global | `IrTypeIds` id | `IrTypeIds.id` | bodies hold ids, one table per session; see "Types" below |
 | Declarations (classes, enums, abstracts, typedefs) | global | `DeclarationId` | a process-wide interner of qualified paths | by qualified name |
 | Members | per declaration | index into the declaration's member list | declaration indexing | by member name |
 | Bindings (a local's declaration) | local | dense `Int` per function body | `BindingWalker` | `name@offset` strings |
@@ -85,12 +85,75 @@ code touched; Wasm parity when a stage touches the typer or a pass the Wasm back
    start from source text (a type name in an annotation) resolve the text to an id once, at the name's resolution.
 4. **Members by index.** A declaration's members are a list, and `MemberAccess` finds a member by name once per call
    site, then holds its index.
-5. **Dense type ids**, once consumers want arrays indexed by type (`COMPILER_DATA_LAYOUT.md` step 4).
+5. **Type ids** for every consumer that has one, in the steps of "Types" below.
 6. **`CompilerType` carrying ids.** `TInstance(kind, name, arguments)` carries a name today, which every typer stage
    hashes. Carrying a `DeclarationId` touches every type match in the typer; it is its own design step after 3, sequenced
    with the typer's move onto the query engine (`QUERY_ENGINE.md` step 3).
 
 Stages 1 and 2 are independent and can go in either order; 3 comes before 4 and 6.
+
+## Types
+
+Status: step 1 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
+
+**What it is worth.** Sampled on the frozen input before step 1, the work done on an `IrType`'s structure (hashing and
+probing `IrTypeMap`, `IrTypeIdentity.same` and `sameList`, the `TypeKey` and `HlSymbolTable.typeKey` texts) was 2.9% of a
+cold compile, 3.0% of a signature edit and 3.0% of a body edit. Writing object field type names in `CanonicalIrCodec`
+(another 2.9% of a body edit) is text a digest needs, which no identity removes. The callers were few: HashLink lowering
+looking up each register's type twice (`HlSymbolTable.internType`, `HlRequestKeys`), the reachability edges building a
+`TypeKey` text per value, `IrBodyBuilder` numbering the types of a function it encodes, and `IrWalkRecord` comparing the
+type lists a kept walk was given.
+
+**Representation: ids only.** The `IrType` enum stays the form code builds and matches; the identity is an `Int` from
+`IrTypeIds`. Interned enum values cannot be the identity: in Haxeon a payload enum value has no reference identity (`==`
+on one is declared value equality and needs `Equatable`, `__reference_equal` takes no enum, and inline enum lowering may
+store a value unboxed), so equal canonical instances could not be told apart from equal copies. A class wrapper holding
+an id and the shape would have identity but turns every match into `switch type.shape`: about 150 files and 600
+construction sites, for at most the 3% above. With ids only, nothing that builds or matches a type changes. Bodies
+already hold their types as ids (`IR_CORE_COLUMNS.md`), and the hot consumers read types from bodies, so they key by the
+id they already have: an array read instead of a structural hash. A type that never enters a body keeps the structural
+`IrTypeMap`, which stays for that.
+
+**Construction.** Ids are given where a type enters a body, as today (`IrBodyBuilder`, a pass's `typeId`); no
+construction site goes through a pool. The table keeps the instance it was first given and hands it back for the id, so
+the types read from bodies are shared. Step 2 makes that instance the table's own (its parts the table's instances, its
+argument list copied), so a caller that changes a list it passed cannot change a key.
+
+**Lifetime and threads.** Today the session's inline cache owns the table every program body uses (`IrInlineCache.types`),
+and private builders make their own (`IrPassScratch`, `HlLowerScratch`, `HlcModule`, tests), so an id means something only
+with its table: a cache by id has to check the table, and bodies made with another table are refused
+(`IrFunction.bodyIn`, `IrStage.checkTables`, `IrInliner.sameTypeIds`). Step 2 makes the table process-wide, as `IrSymbol`
+is: ids only grow and always denote the same type, interning takes a lock (the compile and census threads both encode),
+and `type(id)` reads fixed-size chunks without one. A server then keeps ids across builds with nothing to translate. It
+grows by one entry per distinct type the process has seen; an edit that renumbers lambdas adds new names and so new
+types. Like `IrSymbol` it is never compacted, and its growth shows in the server's live data.
+
+**Output independence.** Ids are given in the order types are first seen, which differs between a one-shot compile and a
+server and changes with interning order, so rule 1 applies: ids index tables and never order output. What is written
+stays derived from the structure: names and keys from `IrTypeIdentity.text` and `TypeKey`, persisted types through
+`IrTypeCodec` (no codec writes a type id), runtime type discriminators from `IrTypeIdentity.id` (a hash of the text), and
+HashLink type indices from `HlSymbolTable` in the order lowering asks, which is program order; a cache by id only
+remembers an answer. The self-compile's bytes are the check for each step.
+
+**Steps.** Each lands alone and keeps the self-compile byte-identical.
+
+1. *Consumers of bodies key by the body's ids* (done): HashLink lowering keeps, per type id, a register type's HashLink
+   index and request number (`HlLower.internTypeId`); the reachability edges deduplicate the types values mention by
+   id instead of by `TypeKey` text. Three files. Body edit -2.2% and signature edit -2.3% main-thread instructions, cold
+   allocation -2.2%, one-shot self-compile -0.66% instructions.
+2. *One process-wide table.* `IrTypeIds` becomes static like `IrSymbol` and owns its instances; `IrBody.types`, the
+   table parameters and the table checks go. Mechanical, about 45 files, most of them a parameter removed.
+3. *Server caches by id.* `HlSymbolTable.typeIndex` (an array by id in its copy-on-write state, dropped by
+   `renameTypes`), `HlRequestKeys.types`, `references` and `typeKeys`, with step 1's per-lowering arrays moving there;
+   `RuntimeAbi.writeKey` and `IrSharedRuntimeCalls` by id. About six files.
+4. *Kept records by id.* The escape reach's stores and `IrWalkRecord`'s given types as id lists, so a kept walk
+   compares integers (`IrTypeIdentity.sameList` was 1.1% of a body edit), with `IrTypeAwareWalk` and `IrVerifyMemo`.
+   About six files.
+5. *Declarations by id* (`IrValue.type`, function results, object fields), only if a profile after step 4 still
+   shows structural type work: it is the IR core's declaration side and touches most passes.
+
+Separately from ids, the copies of type equality (`IrVerifier.sameType`, `HlModuleAssembler.sameType`, `Type.enumEq`
+on IR types) can become `IrTypeIdentity.same`.
 
 ## What it does not change
 
