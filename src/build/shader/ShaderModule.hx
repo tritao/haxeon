@@ -1,11 +1,11 @@
 package build.shader;
 
-import haxe.Json;
 import build.shader.ShaderSchema.Attribute;
 import build.shader.ShaderSchema.Member;
 import build.shader.ShaderSchema.Program;
 import build.shader.ShaderSchema.ShaderImage;
 import compiler.core.UsageError;
+import haxe.Json;
 
 class ShaderModule {
 	static final targets = [

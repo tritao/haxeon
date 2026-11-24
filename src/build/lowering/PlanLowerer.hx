@@ -13,8 +13,8 @@ import build.provider.CompilerProvider;
 import build.provider.FfiProvider;
 import build.provider.RuntimeProvider;
 import build.provider.ShaderProvider;
-import project.ShaderInputs;
 import compiler.core.InternalError;
+import project.ShaderInputs;
 
 /** Orchestrates provider lowering without owning provider-specific commands. */
 class PlanLowerer {

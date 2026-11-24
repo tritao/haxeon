@@ -15,8 +15,8 @@ import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import project.CompilerInputs;
 import project.PackageManifest;
-import project.ShaderInputs;
 import project.ProjectDiscovery;
+import project.ShaderInputs;
 import sys.FileSystem;
 import sys.io.File;
 

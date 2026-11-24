@@ -1,12 +1,12 @@
+import Circuit.CircuitEvent;
+import Circuit.Position;
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.App;
 import haxeon.platform.FrameRecorder;
 import haxeon.platform.FrameTick;
+import haxeon.platform.Runtime;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
-import Circuit.CircuitEvent;
-import Circuit.Position;
-import haxeon.platform.Runtime;
 import haxeon.platform.WindowOptions;
 import haxeon.ui.host.UiOverlay;
 import nativekit.ffi.NativeKitTypes;

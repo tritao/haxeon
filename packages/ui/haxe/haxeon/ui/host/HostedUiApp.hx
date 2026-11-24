@@ -11,9 +11,9 @@ import haxeon.platform.SurfaceFrame;
 import haxeon.platform.WindowOptions;
 import haxeon.platform.event.EventSubscription;
 import haxeon.ui.FontCollection;
+import haxeon.ui.host.UiHostSession.UiHostLifecycle;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.ui.host.UiHostSession.UiHostLifecycle;
 
 /** Adapts a UI application to the platform's acquired-frame loop. */
 class HostedUiApp implements App {

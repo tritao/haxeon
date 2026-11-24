@@ -11,7 +11,6 @@ import haxeon.ui.host.DesktopUiHostContext;
 import haxeon.ui.host.UiFontAsset;
 import haxeon.ui.host.UiFrameApplication;
 import haxeon.ui.host.UiHost;
-import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
 import nativekit.ffi.NativeKitTypes;
 

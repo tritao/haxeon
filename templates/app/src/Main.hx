@@ -3,6 +3,7 @@
 function main():Void
 	Sys.println("Hello from {{name}}");
 #else
+import haxeon.platform.AppLaunch;
 import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
@@ -13,7 +14,6 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiDiagnosticsProvider;
-import haxeon.platform.AppLaunch;
 import haxeon.ui.host.UiHost;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;

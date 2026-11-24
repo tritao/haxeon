@@ -323,7 +323,7 @@ class Showcase implements Disposable {
 			return;
 	}
 
-	function keep < T:NativeKitUIResource > (resource:T):T {
+	function keep<T:NativeKitUIResource>(resource:T):T {
 		resources.push(resource);
 		return resource;
 	}
