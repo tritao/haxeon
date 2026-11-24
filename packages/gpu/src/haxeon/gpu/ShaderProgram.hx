@@ -9,6 +9,8 @@ enum ShaderTarget {
 	Hlsl5;
 	MetalMacos;
 	MetalIos;
+	Glsl430;
+	Glsl310Es;
 }
 
 typedef ShaderAttribute = {
@@ -40,13 +42,31 @@ typedef ShaderTexture = {
 	final name:String;
 }
 
+typedef ShaderStorageBuffer = {
+	final view:Int;
+	final stage:ShaderStage;
+	final readonly:Bool;
+	final name:String;
+}
+
+/** The compute threadgroup size Metal needs. */
+typedef ShaderThreads = {
+	final x:Int;
+	final y:Int;
+	final z:Int;
+}
+
+/** One target's program: vertex and fragment sources, or a compute source. */
 typedef ShaderTargetProgram = {
 	final target:ShaderTarget;
-	final vertex:String;
-	final fragment:String;
+	final vertex:Null<String>;
+	final fragment:Null<String>;
+	final compute:Null<String>;
+	final threads:Null<ShaderThreads>;
 	final blocks:Array<ShaderBlock>;
 	final uniforms:Array<ShaderUniform>;
 	final textures:Array<ShaderTexture>;
+	final storageBuffers:Array<ShaderStorageBuffer>;
 }
 
 /** Reflected shader sources and bindings, grouped by native target. */
@@ -77,9 +97,18 @@ class ShaderProgram {
 				case Hlsl5: NativeShaderTarget.Hlsl5;
 				case MetalMacos: NativeShaderTarget.MetalMacos;
 				case MetalIos: NativeShaderTarget.MetalIos;
+				case Glsl430: NativeShaderTarget.Glsl430;
+				case Glsl310Es: NativeShaderTarget.Glsl310Es;
 			};
 			entry.vertex = target.vertex;
 			entry.fragment = target.fragment;
+			entry.compute = target.compute;
+			var threads = target.threads;
+			if (threads != null) {
+				entry.threads_x = threads.x;
+				entry.threads_y = threads.y;
+				entry.threads_z = threads.z;
+			}
 			entry.set_attributes(nativeAttributes);
 			entry.set_blocks([for (block in target.blocks) {
 				var row = new nkgpu_shader_table_block();
@@ -104,6 +133,14 @@ class ShaderProgram {
 				row.stage = texture.stage;
 				row.type = texture.type;
 				row.name = texture.name;
+				row;
+			}]);
+			entry.set_storage_buffers([for (buffer in target.storageBuffers) {
+				var row = new nkgpu_shader_table_storage_buffer();
+				row.view = buffer.view;
+				row.stage = buffer.stage;
+				row.readonly = buffer.readonly ? 1 : 0;
+				row.name = buffer.name;
 				row;
 			}]);
 			entry;

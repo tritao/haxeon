@@ -43,6 +43,20 @@ typedef ImageSampler = {
 	final name:String;
 }
 
+typedef StorageBuffer = {
+	final slot:Int;
+	final stage:String;
+	final name:String;
+	final readonly:Bool;
+}
+
+typedef Threads = {
+	final x:Int;
+	final y:Int;
+	final z:Int;
+}
+
+/** A graphics program has vertex and fragment sources; a compute program has only a compute source. */
 typedef Program = {
 	final name:String;
 	final variant:String;
@@ -50,8 +64,11 @@ typedef Program = {
 	final blocks:Array<Block>;
 	final images:Array<ShaderImage>;
 	final pairs:Array<ImageSampler>;
-	final vertex:String;
-	final fragment:String;
+	final storage:Array<StorageBuffer>;
+	final vertex:Null<String>;
+	final fragment:Null<String>;
+	final compute:Null<String>;
+	final threads:Null<Threads>;
 }
 
 /** The boundary between the NativeKit reflection document and typed shader generation. */
@@ -74,15 +91,19 @@ class ShaderSchema {
 	}
 
 	static function program(name:String, variant:String, target:String, data:Dynamic, sources:Dynamic):Program {
-		if (array(data, "storage_buffers").length > 0)
-			throw new UsageError("Unsupported shader table resource in " + name);
 		var stages = object(data, "stages"), entry = StringTools.startsWith(target, "metal_") ? "main0" : "main";
-		function source(stage:String):String {
+		function source(stage:String):Null<String> {
+			if (!Reflect.hasField(stages, stage))
+				return null;
 			var value = object(stages, stage);
 			if (string(value, "entry_point") != entry)
 				throw new UsageError('Expected entry point $entry for $stage in $name');
 			return string(sources, string(value, "source"));
 		}
+		var vertex = source("vertex"), fragment = source("fragment"), compute = source("compute");
+		if (compute == null ? vertex == null || fragment == null : vertex != null || fragment != null)
+			throw new UsageError('$name needs @vs and @fs stages or one @cs stage');
+		var threads = object(data, "threads");
 		for (sampler in array(data, "samplers")) {
 			integer(sampler, "slot");
 			string(sampler, "stage");
@@ -105,8 +126,20 @@ class ShaderSchema {
 				sampler:integer(pair, "sampler_slot"),
 				name:string(pair, "name")
 		}],
-			vertex: source("vertex"),
-			fragment: source("fragment")};
+			storage: [for (buffer in array(data, "storage_buffers")) {
+			slot:integer(buffer, "slot"),
+				stage:string(buffer, "stage"),
+				name:string(buffer, "name"),
+				readonly:boolean(buffer, "readonly")
+		}],
+			vertex: vertex,
+			fragment: fragment,
+			compute: compute,
+			threads: Reflect.hasField(threads, "x") ? {
+				x: integer(threads, "x"),
+				y: integer(threads, "y"),
+				z: integer(threads, "z")
+			} : null};
 	}
 
 	static function attribute(data:Dynamic):Attribute {

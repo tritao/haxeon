@@ -104,5 +104,49 @@ var shader = Quad.create(renderer, QuadVariant.Preview);
 A module with several programs declares one enum per program that has
 variants, named after the module and the program: program `quad` in
 `Effects.glsl` takes `EffectsQuadVariant`. The prefix keeps the names distinct
-when several shader modules are imported together. Programs and variants in
-the same module share its vertex layout.
+when several shader modules are imported together. Graphics programs and
+variants in the same module share its vertex layout.
+
+## Compute shaders
+
+A compute program has one `@cs` stage and declares its threadgroup size
+with `layout(local_size_x=N) in;`. Storage buffers hold a flexible array
+of a struct. Put shared structs in a `@block` and include it in each stage
+that reads them:
+
+```glsl
+@block particle
+struct particle {
+    vec2 position;
+    vec2 velocity;
+};
+@end
+
+@cs step_cs
+@include_block particle
+layout(local_size_x=64) in;
+layout(binding=0) buffer particles { particle items[]; };
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    items[index].position += items[index].velocity * 0.016;
+}
+@end
+
+@program step step_cs
+```
+
+A file with a compute stage compiles for GLSL 4.3 on desktop OpenGL and
+GLSL ES 3.1 on GLES, since earlier versions have no compute or storage
+buffers. Graphics programs in the same file compile for those versions
+too, so their vertex shaders can read the same storage buffers. Check
+`renderer.features().compute` before creating compute pipelines: WebGL2
+and OpenGL drivers older than 4.3 have none.
+
+A module with several programs exposes each one by name. Create the
+compute pipeline from `Shader.create(renderer, Particles.step)` with
+`Pipeline.beginCompute`. A graphics program that reads only storage
+buffers uses `VertexLayout.none`. Bind storage buffers with
+`CommandBuffer.applyStorageBuffer` and record `dispatch` in a batch's
+`computePass()`. [Particles](../../packages/gpu/examples/particles/) runs
+a compute step and draws the result each frame.

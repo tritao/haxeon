@@ -10,6 +10,9 @@ typedef VertexAttribute = {
 }
 
 class VertexLayout {
+	/** No vertex buffers: the shader reads its inputs from storage buffers or builtins. */
+	public static final none = new VertexLayout(0, []);
+
 	public final stride:Int;
 	final attributes:Array<VertexAttribute>;
 

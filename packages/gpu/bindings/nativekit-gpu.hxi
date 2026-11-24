@@ -432,12 +432,18 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 		 */
 		NKGPU_SHADERSTAGE_COMPUTE = 3;
 	}
+	/**
+	 * GLSL 4.3 and GLSL ES 3.1 add compute and storage buffers. A GL renderer uses
+	 * them when the table has them and otherwise falls back to GLSL 4.1 or ES 3.0.
+	 */
 	enum nkgpu_shader_target : c_int {
 		NKGPU_SHADER_TARGET_GLSL410 = 1;
 		NKGPU_SHADER_TARGET_GLSL300ES = 2;
 		NKGPU_SHADER_TARGET_HLSL5 = 3;
 		NKGPU_SHADER_TARGET_METAL_MACOS = 4;
 		NKGPU_SHADER_TARGET_METAL_IOS = 5;
+		NKGPU_SHADER_TARGET_GLSL430 = 6;
+		NKGPU_SHADER_TARGET_GLSL310ES = 7;
 	}
 	/**
 	 * Stencil operation used when a fragment passes or fails a test.
@@ -1069,8 +1075,9 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	/**
 	 * Starts building a pipeline for a shader.
 	 *
-	 * `stride` is the byte distance between vertices in vertex buffer slot zero.
-	 * The shader must belong to `renderer`. Add vertex attributes and, when
+	 * `stride` is the byte distance between vertices in vertex buffer slot zero,
+	 * or 0 for a pipeline without vertex buffers whose shader reads its inputs
+	 * from storage buffers or builtins. The shader must belong to `renderer`. Add vertex attributes and, when
 	 * needed, an index type before calling nkgpu_pipeline_end().
 	 */
 	extern fn nkgpu_pipeline_begin(
@@ -1954,18 +1961,36 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 		stage: nkgpu_shader_stage @offset(4);
 		size: u32 @offset(8);
 	}
-	struct nkgpu_shader_table_entry @layout(88, 8) {
+	/**
+	 * One target's program: vertex and fragment sources, or a compute source with
+	 * the others NULL. `threads_*` is the compute threadgroup size Metal needs.
+	 */
+	struct nkgpu_shader_table_entry @layout(128, 8) {
 		target: nkgpu_shader_target @offset(0);
-		vertex: utf8 @offset(8);
-		fragment: utf8 @offset(16);
-		attributes: ptr<const<nkgpu_shader_table_attribute>> @offset(24) @borrowed @length_field("attribute_count");
-		attribute_count: u32 @offset(32);
-		blocks: ptr<const<nkgpu_shader_table_block>> @offset(40) @borrowed @length_field("block_count");
-		block_count: u32 @offset(48);
-		uniforms: ptr<const<nkgpu_shader_table_uniform>> @offset(56) @borrowed @length_field("uniform_count");
-		uniform_count: u32 @offset(64);
-		textures: ptr<const<nkgpu_shader_table_texture>> @offset(72) @borrowed @length_field("texture_count");
-		texture_count: u32 @offset(80);
+		vertex: nullable<utf8> @offset(8);
+		fragment: nullable<utf8> @offset(16);
+		compute: nullable<utf8> @offset(24);
+		threads_x: u32 @offset(32);
+		threads_y: u32 @offset(36);
+		threads_z: u32 @offset(40);
+		attributes: ptr<const<nkgpu_shader_table_attribute>> @offset(48) @borrowed @length_field("attribute_count");
+		attribute_count: u32 @offset(56);
+		blocks: ptr<const<nkgpu_shader_table_block>> @offset(64) @borrowed @length_field("block_count");
+		block_count: u32 @offset(72);
+		uniforms: ptr<const<nkgpu_shader_table_uniform>> @offset(80) @borrowed @length_field("uniform_count");
+		uniform_count: u32 @offset(88);
+		textures: ptr<const<nkgpu_shader_table_texture>> @offset(96) @borrowed @length_field("texture_count");
+		texture_count: u32 @offset(104);
+		storage_buffers: ptr<const<nkgpu_shader_table_storage_buffer>> @offset(
+			112
+		) @borrowed @length_field("storage_buffer_count");
+		storage_buffer_count: u32 @offset(120);
+	}
+	struct nkgpu_shader_table_storage_buffer @layout(24, 8) {
+		view: u32 @offset(0);
+		stage: nkgpu_shader_stage @offset(4);
+		readonly: u32 @offset(8);
+		name: utf8 @offset(16);
 	}
 	struct nkgpu_shader_table_texture @layout(24, 8) {
 		view: u32 @offset(0);

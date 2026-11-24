@@ -13,7 +13,9 @@ class ShaderModule {
 		"glsl300es" => "Glsl300Es",
 		"hlsl5" => "Hlsl5",
 		"metal_macos" => "MetalMacos",
-		"metal_ios" => "MetalIos"
+		"metal_ios" => "MetalIos",
+		"glsl430" => "Glsl430",
+		"glsl310es" => "Glsl310Es"
 	];
 	static final types = [
 		"float" => "Float",
@@ -35,10 +37,12 @@ class ShaderModule {
 		for (program in entries) {
 			var attrs = program.attributes;
 			attrs.sort((a, b) -> a.slot - b.slot);
-			if (first == null)
-				first = attrs;
-			else if (Json.stringify(first) != Json.stringify(attrs))
-				throw new UsageError("Programs in a module require one vertex interface");
+			if (program.compute == null) {
+				if (first == null)
+					first = attrs;
+				else if (Json.stringify(first) != Json.stringify(attrs))
+					throw new UsageError("Graphics programs in a module require one vertex interface");
+			}
 			for (block in program.blocks) {
 				var fields = block.members;
 				var record = name + pascal(block.name);
@@ -59,9 +63,9 @@ class ShaderModule {
 			}
 			items.push({variant: program.variant, program: program});
 		}
-		if (first == null)
+		if (entries.length == 0)
 			throw new UsageError("Shader has no programs");
-		if (first.length > 0) {
+		if (first != null && first.length > 0) {
 			var offset = 0, fields = [], attributes = [];
 			for (attr in first) {
 				var field = camel(attr.name);
@@ -113,8 +117,14 @@ class ShaderModule {
 				throw new UsageError("Unsupported shader texture type");
 			textures.push('{view: ${image.slot}, sampler: ${pair.sampler}, stage: ShaderStage.${pascal(image.stage)}, type: ImageType.${images.get(image.type)}, name: ${Json.stringify(pair.name)}}');
 		}
-		var vertex = Json.stringify(program.vertex), fragment = Json.stringify(program.fragment);
-		return 'new ShaderProgram([${attrs.join(", ")}], [{\n\t\ttarget: ShaderTarget.${targets.get(target)},\n\t\tvertex: $vertex,\n\t\tfragment: $fragment,\n\t\tblocks: [${blocks.join(", ")}],\n\t\tuniforms: [${uniforms.join(", ")}],\n\t\ttextures: [${textures.join(", ")}]\n\t}])';
+		var storage = [for (buffer in program.storage)
+			'{view: ${buffer.slot}, stage: ShaderStage.${pascal(buffer.stage)}, readonly: ${buffer.readonly}, name: ${Json.stringify(buffer.name)}}'];
+		var threads = program.threads == null
+			? "null" : '{x: ${program.threads.x}, y: ${program.threads.y}, z: ${program.threads.z}}';
+		var vertex = Json.stringify(program.vertex),
+			fragment = Json.stringify(program.fragment),
+			compute = Json.stringify(program.compute);
+		return 'new ShaderProgram([${attrs.join(", ")}], [{\n\t\ttarget: ShaderTarget.${targets.get(target)},\n\t\tvertex: $vertex,\n\t\tfragment: $fragment,\n\t\tcompute: $compute,\n\t\tthreads: $threads,\n\t\tblocks: [${blocks.join(", ")}],\n\t\tuniforms: [${uniforms.join(", ")}],\n\t\ttextures: [${textures.join(", ")}],\n\t\tstorageBuffers: [${storage.join(", ")}]\n\t}])';
 	}
 
 	static function uniformRecord(name:String, size:Int, fields:Array<Member>):String {

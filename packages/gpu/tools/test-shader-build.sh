@@ -72,6 +72,16 @@ class Main {
 }
 HX
 
+cat > src/shaders/Step.glsl <<'GLSL'
+@cs step_cs
+layout(local_size_x=64) in;
+struct value { float x; };
+layout(binding=0) buffer values { value items[]; };
+void main() { items[gl_GlobalInvocationID.x].x *= 2.0; }
+@end
+@program step step_cs
+GLSL
+
 haxeon check --project haxeon.json
 output=build/host/generated
 first="$output/shaders/First.hx"
@@ -81,6 +91,13 @@ rg -q '^enum FirstAlternateQuadVariant \{' "$first"
 rg -q '^enum SecondVariant \{' "$second"
 rg -q 'target: ShaderTarget.Glsl410' "$first"
 ! rg -q 'target: ShaderTarget.(Glsl300Es|Hlsl5|MetalMacos|MetalIos)' "$first"
+# A compute stage needs GLSL 4.3, so only its file compiles for that target.
+step="$output/shaders/Step.hx"
+rg -q 'target: ShaderTarget.Glsl430' "$step"
+rg -q 'vertex: null' "$step"
+rg -qF 'storageBuffers: [{view: 0, stage: ShaderStage.Compute, readonly: false, name: "values"}]' "$step"
+rg -q 'public static function create' "$step"
+rm src/shaders/Step.glsl
 rg -qF "$project/includes/Colors.glsl" "$output/shaders.dependencies"
 rg -q '^enum LibraryQuadVariant \{' "$output/shaders/LibraryQuad.hx"
 
@@ -117,6 +134,11 @@ if haxeon check --project haxeon.json --diagnostic-format short > "$work/error.l
     exit 1
 fi
 rg '^includes/Colors.glsl:2:1: E4001:.*unknown_symbol' "$work/error.log"
+if haxeon check --project haxeon.json --diagnostic-format full > "$work/error.log" 2>&1; then
+    echo "Expected GLSL type checking to fail" >&2
+    exit 1
+fi
+rg -F 'includes/Colors.glsl:2:1: error[E4001]:' "$work/error.log"
 sed -i 's/return unknown_symbol/return 0.75/' includes/Colors.glsl
 rm src/shaders/Second.glsl
 sed -i 's/, "shaders.Second": {"default": \[\], "preview": \["PREVIEW"\]}//' haxeon.json
@@ -149,4 +171,4 @@ class Main {
 }
 HX
 "$root/.tools/haxe/haxe" -cp "$work/stock-haxe" -main Main --interp
-echo "PASS: project and library shader discovery, variants, target filtering, cache reuse, include invalidation, diagnostics, missing driver, and removal"
+echo "PASS: project and library shader discovery, variants, target filtering, compute targets, cache reuse, include invalidation, diagnostics, missing driver, and removal"

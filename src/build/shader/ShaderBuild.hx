@@ -36,7 +36,8 @@ class ShaderBuild {
 				identity.push(digest(bytecode));
 			for (name in names) {
 				var source = sources.get(name), path = Path.join([output, name.split(".").join("/") + ".hx"]);
-				var emitted = generate(driver, compiler, source, name, path, target, Reflect.field(variants, name),
+				var emitted = generate(driver, compiler, source, name, path, targetFor(source, target),
+					Reflect.field(variants, name),
 					identity, project, style, Path.join([output, ".shader-cache"]));
 				if (emitted == null)
 					return 1;
@@ -55,6 +56,18 @@ class ShaderBuild {
 		publish(manifest, lines(paths));
 		publish(Path.join([output, "shaders.dependencies"]), lines([for (path in dependencies.keys()) path]));
 		return 0;
+	}
+
+	/** Compute needs GLSL 4.3 or GLSL ES 3.1, so a file with a compute stage compiles for those on GL. */
+	static function targetFor(source:String, target:String):String {
+		var content = ~/\/\*[\s\S]*?\*\//g.replace(File.getContent(source), "");
+		if (!~/^\s*@cs(?:\s|$)/m.match(content))
+			return target;
+		return switch target {
+			case "glsl410": "glsl430";
+			case "glsl300es": "glsl310es";
+			case other: other;
+		};
 	}
 
 	static function discover(root:String, directory:String, sources:Map<String, String>):Void {
@@ -155,7 +168,7 @@ class ShaderBuild {
 			var base = Path.addTrailingSlash(Path.normalize(project)),
 				name = StringTools.startsWith(path, base) ? path.substr(base.length) : path;
 			var code = warning ? "W4001" : "E4001",
-				label = style == "short" ? code : (warning ? "warning" : "error") + "[$code]";
+				label = style == "short" ? code : (warning ? "warning" : "error") + '[$code]';
 			if (message.indexOf("non-opaque uniforms outside a block") >= 0)
 				message = "Declare numeric uniforms inside a layout(std140, binding=N) uniform block";
 			if (message.indexOf("'#version'") >= 0)

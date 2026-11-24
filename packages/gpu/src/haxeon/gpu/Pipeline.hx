@@ -32,8 +32,8 @@ class Pipeline implements Disposable {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
 			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline shader belongs to a different renderer");
-		if (stride <= 0)
-			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline vertex stride must be positive");
+		if (stride < 0)
+			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline vertex stride must not be negative");
 		var made = NativeKitGpu.nkgpu_pipeline_begin(renderer.nativeHandle(), shader.nativeHandle(), stride);
 		GpuResult.check(made.status, "pipeline.begin");
 		return new PipelineBuilder(renderer, made.out_builder);

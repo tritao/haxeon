@@ -75,11 +75,11 @@ static const nkgpu_shader_table_texture blur_default_metal_macos_textures[] = {
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry blur_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_blur_glsl300es_vertex, ui_shader_blur_glsl300es_fragment, blur_default_attributes, 2, blur_default_glsl300es_blocks, 2, blur_default_glsl300es_uniforms, 2, blur_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_blur_glsl410_vertex, ui_shader_blur_glsl410_fragment, blur_default_attributes, 2, blur_default_glsl410_blocks, 2, blur_default_glsl410_uniforms, 2, blur_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_blur_hlsl5_vertex, ui_shader_blur_hlsl5_fragment, blur_default_attributes, 2, blur_default_hlsl5_blocks, 2, NULL, 0, blur_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_blur_metal_ios_vertex, ui_shader_blur_metal_ios_fragment, blur_default_attributes, 2, blur_default_metal_ios_blocks, 2, NULL, 0, blur_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_blur_metal_macos_vertex, ui_shader_blur_metal_macos_fragment, blur_default_attributes, 2, blur_default_metal_macos_blocks, 2, NULL, 0, blur_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_blur_glsl300es_vertex, ui_shader_blur_glsl300es_fragment, NULL, 0, 0, 0, blur_default_attributes, 2, blur_default_glsl300es_blocks, 2, blur_default_glsl300es_uniforms, 2, blur_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_blur_glsl410_vertex, ui_shader_blur_glsl410_fragment, NULL, 0, 0, 0, blur_default_attributes, 2, blur_default_glsl410_blocks, 2, blur_default_glsl410_uniforms, 2, blur_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_blur_hlsl5_vertex, ui_shader_blur_hlsl5_fragment, NULL, 0, 0, 0, blur_default_attributes, 2, blur_default_hlsl5_blocks, 2, NULL, 0, blur_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_blur_metal_ios_vertex, ui_shader_blur_metal_ios_fragment, NULL, 0, 0, 0, blur_default_attributes, 2, blur_default_metal_ios_blocks, 2, NULL, 0, blur_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_blur_metal_macos_vertex, ui_shader_blur_metal_macos_fragment, NULL, 0, 0, 0, blur_default_attributes, 2, blur_default_metal_macos_blocks, 2, NULL, 0, blur_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute box_shadow_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -114,11 +114,11 @@ static const nkgpu_shader_table_block box_shadow_default_metal_macos_blocks[] = 
     {1, NKGPU_SHADERSTAGE_FRAGMENT, 64},
 };
 static const nkgpu_shader_table_entry box_shadow_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_box_shadow_glsl300es_vertex, ui_shader_box_shadow_glsl300es_fragment, box_shadow_default_attributes, 2, box_shadow_default_glsl300es_blocks, 2, box_shadow_default_glsl300es_uniforms, 2, NULL, 0},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_box_shadow_glsl410_vertex, ui_shader_box_shadow_glsl410_fragment, box_shadow_default_attributes, 2, box_shadow_default_glsl410_blocks, 2, box_shadow_default_glsl410_uniforms, 2, NULL, 0},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_box_shadow_hlsl5_vertex, ui_shader_box_shadow_hlsl5_fragment, box_shadow_default_attributes, 2, box_shadow_default_hlsl5_blocks, 2, NULL, 0, NULL, 0},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_box_shadow_metal_ios_vertex, ui_shader_box_shadow_metal_ios_fragment, box_shadow_default_attributes, 2, box_shadow_default_metal_ios_blocks, 2, NULL, 0, NULL, 0},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_box_shadow_metal_macos_vertex, ui_shader_box_shadow_metal_macos_fragment, box_shadow_default_attributes, 2, box_shadow_default_metal_macos_blocks, 2, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_box_shadow_glsl300es_vertex, ui_shader_box_shadow_glsl300es_fragment, NULL, 0, 0, 0, box_shadow_default_attributes, 2, box_shadow_default_glsl300es_blocks, 2, box_shadow_default_glsl300es_uniforms, 2, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_box_shadow_glsl410_vertex, ui_shader_box_shadow_glsl410_fragment, NULL, 0, 0, 0, box_shadow_default_attributes, 2, box_shadow_default_glsl410_blocks, 2, box_shadow_default_glsl410_uniforms, 2, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_box_shadow_hlsl5_vertex, ui_shader_box_shadow_hlsl5_fragment, NULL, 0, 0, 0, box_shadow_default_attributes, 2, box_shadow_default_hlsl5_blocks, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_box_shadow_metal_ios_vertex, ui_shader_box_shadow_metal_ios_fragment, NULL, 0, 0, 0, box_shadow_default_attributes, 2, box_shadow_default_metal_ios_blocks, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_box_shadow_metal_macos_vertex, ui_shader_box_shadow_metal_macos_fragment, NULL, 0, 0, 0, box_shadow_default_attributes, 2, box_shadow_default_metal_macos_blocks, 2, NULL, 0, NULL, 0, NULL, 0},
 };
 static const nkgpu_shader_table_attribute composite_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -168,11 +168,11 @@ static const nkgpu_shader_table_texture composite_default_metal_macos_textures[]
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry composite_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_composite_glsl300es_vertex, ui_shader_composite_glsl300es_fragment, composite_default_attributes, 2, composite_default_glsl300es_blocks, 2, composite_default_glsl300es_uniforms, 2, composite_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_composite_glsl410_vertex, ui_shader_composite_glsl410_fragment, composite_default_attributes, 2, composite_default_glsl410_blocks, 2, composite_default_glsl410_uniforms, 2, composite_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_composite_hlsl5_vertex, ui_shader_composite_hlsl5_fragment, composite_default_attributes, 2, composite_default_hlsl5_blocks, 2, NULL, 0, composite_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_composite_metal_ios_vertex, ui_shader_composite_metal_ios_fragment, composite_default_attributes, 2, composite_default_metal_ios_blocks, 2, NULL, 0, composite_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_composite_metal_macos_vertex, ui_shader_composite_metal_macos_fragment, composite_default_attributes, 2, composite_default_metal_macos_blocks, 2, NULL, 0, composite_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_composite_glsl300es_vertex, ui_shader_composite_glsl300es_fragment, NULL, 0, 0, 0, composite_default_attributes, 2, composite_default_glsl300es_blocks, 2, composite_default_glsl300es_uniforms, 2, composite_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_composite_glsl410_vertex, ui_shader_composite_glsl410_fragment, NULL, 0, 0, 0, composite_default_attributes, 2, composite_default_glsl410_blocks, 2, composite_default_glsl410_uniforms, 2, composite_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_composite_hlsl5_vertex, ui_shader_composite_hlsl5_fragment, NULL, 0, 0, 0, composite_default_attributes, 2, composite_default_hlsl5_blocks, 2, NULL, 0, composite_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_composite_metal_ios_vertex, ui_shader_composite_metal_ios_fragment, NULL, 0, 0, 0, composite_default_attributes, 2, composite_default_metal_ios_blocks, 2, NULL, 0, composite_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_composite_metal_macos_vertex, ui_shader_composite_metal_macos_fragment, NULL, 0, 0, 0, composite_default_attributes, 2, composite_default_metal_macos_blocks, 2, NULL, 0, composite_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute drop_shadow_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -222,11 +222,11 @@ static const nkgpu_shader_table_texture drop_shadow_default_metal_macos_textures
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry drop_shadow_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_drop_shadow_glsl300es_vertex, ui_shader_drop_shadow_glsl300es_fragment, drop_shadow_default_attributes, 2, drop_shadow_default_glsl300es_blocks, 2, drop_shadow_default_glsl300es_uniforms, 2, drop_shadow_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_drop_shadow_glsl410_vertex, ui_shader_drop_shadow_glsl410_fragment, drop_shadow_default_attributes, 2, drop_shadow_default_glsl410_blocks, 2, drop_shadow_default_glsl410_uniforms, 2, drop_shadow_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_drop_shadow_hlsl5_vertex, ui_shader_drop_shadow_hlsl5_fragment, drop_shadow_default_attributes, 2, drop_shadow_default_hlsl5_blocks, 2, NULL, 0, drop_shadow_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_drop_shadow_metal_ios_vertex, ui_shader_drop_shadow_metal_ios_fragment, drop_shadow_default_attributes, 2, drop_shadow_default_metal_ios_blocks, 2, NULL, 0, drop_shadow_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_drop_shadow_metal_macos_vertex, ui_shader_drop_shadow_metal_macos_fragment, drop_shadow_default_attributes, 2, drop_shadow_default_metal_macos_blocks, 2, NULL, 0, drop_shadow_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_drop_shadow_glsl300es_vertex, ui_shader_drop_shadow_glsl300es_fragment, NULL, 0, 0, 0, drop_shadow_default_attributes, 2, drop_shadow_default_glsl300es_blocks, 2, drop_shadow_default_glsl300es_uniforms, 2, drop_shadow_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_drop_shadow_glsl410_vertex, ui_shader_drop_shadow_glsl410_fragment, NULL, 0, 0, 0, drop_shadow_default_attributes, 2, drop_shadow_default_glsl410_blocks, 2, drop_shadow_default_glsl410_uniforms, 2, drop_shadow_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_drop_shadow_hlsl5_vertex, ui_shader_drop_shadow_hlsl5_fragment, NULL, 0, 0, 0, drop_shadow_default_attributes, 2, drop_shadow_default_hlsl5_blocks, 2, NULL, 0, drop_shadow_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_drop_shadow_metal_ios_vertex, ui_shader_drop_shadow_metal_ios_fragment, NULL, 0, 0, 0, drop_shadow_default_attributes, 2, drop_shadow_default_metal_ios_blocks, 2, NULL, 0, drop_shadow_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_drop_shadow_metal_macos_vertex, ui_shader_drop_shadow_metal_macos_fragment, NULL, 0, 0, 0, drop_shadow_default_attributes, 2, drop_shadow_default_metal_macos_blocks, 2, NULL, 0, drop_shadow_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute effect_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -276,11 +276,11 @@ static const nkgpu_shader_table_texture effect_default_metal_macos_textures[] = 
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry effect_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_effect_glsl300es_vertex, ui_shader_effect_glsl300es_fragment, effect_default_attributes, 2, effect_default_glsl300es_blocks, 2, effect_default_glsl300es_uniforms, 2, effect_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_effect_glsl410_vertex, ui_shader_effect_glsl410_fragment, effect_default_attributes, 2, effect_default_glsl410_blocks, 2, effect_default_glsl410_uniforms, 2, effect_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_effect_hlsl5_vertex, ui_shader_effect_hlsl5_fragment, effect_default_attributes, 2, effect_default_hlsl5_blocks, 2, NULL, 0, effect_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_effect_metal_ios_vertex, ui_shader_effect_metal_ios_fragment, effect_default_attributes, 2, effect_default_metal_ios_blocks, 2, NULL, 0, effect_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_effect_metal_macos_vertex, ui_shader_effect_metal_macos_fragment, effect_default_attributes, 2, effect_default_metal_macos_blocks, 2, NULL, 0, effect_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_effect_glsl300es_vertex, ui_shader_effect_glsl300es_fragment, NULL, 0, 0, 0, effect_default_attributes, 2, effect_default_glsl300es_blocks, 2, effect_default_glsl300es_uniforms, 2, effect_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_effect_glsl410_vertex, ui_shader_effect_glsl410_fragment, NULL, 0, 0, 0, effect_default_attributes, 2, effect_default_glsl410_blocks, 2, effect_default_glsl410_uniforms, 2, effect_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_effect_hlsl5_vertex, ui_shader_effect_hlsl5_fragment, NULL, 0, 0, 0, effect_default_attributes, 2, effect_default_hlsl5_blocks, 2, NULL, 0, effect_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_effect_metal_ios_vertex, ui_shader_effect_metal_ios_fragment, NULL, 0, 0, 0, effect_default_attributes, 2, effect_default_metal_ios_blocks, 2, NULL, 0, effect_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_effect_metal_macos_vertex, ui_shader_effect_metal_macos_fragment, NULL, 0, 0, 0, effect_default_attributes, 2, effect_default_metal_macos_blocks, 2, NULL, 0, effect_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute mask_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -335,11 +335,11 @@ static const nkgpu_shader_table_texture mask_default_metal_macos_textures[] = {
     {1, 1, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "mask_tex_mask_smp"},
 };
 static const nkgpu_shader_table_entry mask_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_mask_glsl300es_vertex, ui_shader_mask_glsl300es_fragment, mask_default_attributes, 2, mask_default_glsl300es_blocks, 2, mask_default_glsl300es_uniforms, 2, mask_default_glsl300es_textures, 2},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_mask_glsl410_vertex, ui_shader_mask_glsl410_fragment, mask_default_attributes, 2, mask_default_glsl410_blocks, 2, mask_default_glsl410_uniforms, 2, mask_default_glsl410_textures, 2},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_mask_hlsl5_vertex, ui_shader_mask_hlsl5_fragment, mask_default_attributes, 2, mask_default_hlsl5_blocks, 2, NULL, 0, mask_default_hlsl5_textures, 2},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_mask_metal_ios_vertex, ui_shader_mask_metal_ios_fragment, mask_default_attributes, 2, mask_default_metal_ios_blocks, 2, NULL, 0, mask_default_metal_ios_textures, 2},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_mask_metal_macos_vertex, ui_shader_mask_metal_macos_fragment, mask_default_attributes, 2, mask_default_metal_macos_blocks, 2, NULL, 0, mask_default_metal_macos_textures, 2},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_mask_glsl300es_vertex, ui_shader_mask_glsl300es_fragment, NULL, 0, 0, 0, mask_default_attributes, 2, mask_default_glsl300es_blocks, 2, mask_default_glsl300es_uniforms, 2, mask_default_glsl300es_textures, 2, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_mask_glsl410_vertex, ui_shader_mask_glsl410_fragment, NULL, 0, 0, 0, mask_default_attributes, 2, mask_default_glsl410_blocks, 2, mask_default_glsl410_uniforms, 2, mask_default_glsl410_textures, 2, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_mask_hlsl5_vertex, ui_shader_mask_hlsl5_fragment, NULL, 0, 0, 0, mask_default_attributes, 2, mask_default_hlsl5_blocks, 2, NULL, 0, mask_default_hlsl5_textures, 2, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_mask_metal_ios_vertex, ui_shader_mask_metal_ios_fragment, NULL, 0, 0, 0, mask_default_attributes, 2, mask_default_metal_ios_blocks, 2, NULL, 0, mask_default_metal_ios_textures, 2, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_mask_metal_macos_vertex, ui_shader_mask_metal_macos_fragment, NULL, 0, 0, 0, mask_default_attributes, 2, mask_default_metal_macos_blocks, 2, NULL, 0, mask_default_metal_macos_textures, 2, NULL, 0},
 };
 static const nkgpu_shader_table_attribute path_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -389,11 +389,11 @@ static const nkgpu_shader_table_texture path_default_metal_macos_textures[] = {
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry path_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_path_glsl300es_vertex, ui_shader_path_glsl300es_fragment, path_default_attributes, 2, path_default_glsl300es_blocks, 2, path_default_glsl300es_uniforms, 2, path_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_path_glsl410_vertex, ui_shader_path_glsl410_fragment, path_default_attributes, 2, path_default_glsl410_blocks, 2, path_default_glsl410_uniforms, 2, path_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_path_hlsl5_vertex, ui_shader_path_hlsl5_fragment, path_default_attributes, 2, path_default_hlsl5_blocks, 2, NULL, 0, path_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_path_metal_ios_vertex, ui_shader_path_metal_ios_fragment, path_default_attributes, 2, path_default_metal_ios_blocks, 2, NULL, 0, path_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_path_metal_macos_vertex, ui_shader_path_metal_macos_fragment, path_default_attributes, 2, path_default_metal_macos_blocks, 2, NULL, 0, path_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_path_glsl300es_vertex, ui_shader_path_glsl300es_fragment, NULL, 0, 0, 0, path_default_attributes, 2, path_default_glsl300es_blocks, 2, path_default_glsl300es_uniforms, 2, path_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_path_glsl410_vertex, ui_shader_path_glsl410_fragment, NULL, 0, 0, 0, path_default_attributes, 2, path_default_glsl410_blocks, 2, path_default_glsl410_uniforms, 2, path_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_path_hlsl5_vertex, ui_shader_path_hlsl5_fragment, NULL, 0, 0, 0, path_default_attributes, 2, path_default_hlsl5_blocks, 2, NULL, 0, path_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_path_metal_ios_vertex, ui_shader_path_metal_ios_fragment, NULL, 0, 0, 0, path_default_attributes, 2, path_default_metal_ios_blocks, 2, NULL, 0, path_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_path_metal_macos_vertex, ui_shader_path_metal_macos_fragment, NULL, 0, 0, 0, path_default_attributes, 2, path_default_metal_macos_blocks, 2, NULL, 0, path_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute solid_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -427,11 +427,11 @@ static const nkgpu_shader_table_block solid_default_metal_macos_blocks[] = {
     {1, NKGPU_SHADERSTAGE_FRAGMENT, 16},
 };
 static const nkgpu_shader_table_entry solid_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_solid_glsl300es_vertex, ui_shader_solid_glsl300es_fragment, solid_default_attributes, 1, solid_default_glsl300es_blocks, 2, solid_default_glsl300es_uniforms, 2, NULL, 0},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_solid_glsl410_vertex, ui_shader_solid_glsl410_fragment, solid_default_attributes, 1, solid_default_glsl410_blocks, 2, solid_default_glsl410_uniforms, 2, NULL, 0},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_solid_hlsl5_vertex, ui_shader_solid_hlsl5_fragment, solid_default_attributes, 1, solid_default_hlsl5_blocks, 2, NULL, 0, NULL, 0},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_solid_metal_ios_vertex, ui_shader_solid_metal_ios_fragment, solid_default_attributes, 1, solid_default_metal_ios_blocks, 2, NULL, 0, NULL, 0},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_solid_metal_macos_vertex, ui_shader_solid_metal_macos_fragment, solid_default_attributes, 1, solid_default_metal_macos_blocks, 2, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_solid_glsl300es_vertex, ui_shader_solid_glsl300es_fragment, NULL, 0, 0, 0, solid_default_attributes, 1, solid_default_glsl300es_blocks, 2, solid_default_glsl300es_uniforms, 2, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_solid_glsl410_vertex, ui_shader_solid_glsl410_fragment, NULL, 0, 0, 0, solid_default_attributes, 1, solid_default_glsl410_blocks, 2, solid_default_glsl410_uniforms, 2, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_solid_hlsl5_vertex, ui_shader_solid_hlsl5_fragment, NULL, 0, 0, 0, solid_default_attributes, 1, solid_default_hlsl5_blocks, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_solid_metal_ios_vertex, ui_shader_solid_metal_ios_fragment, NULL, 0, 0, 0, solid_default_attributes, 1, solid_default_metal_ios_blocks, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_solid_metal_macos_vertex, ui_shader_solid_metal_macos_fragment, NULL, 0, 0, 0, solid_default_attributes, 1, solid_default_metal_macos_blocks, 2, NULL, 0, NULL, 0, NULL, 0},
 };
 static const nkgpu_shader_table_attribute surface_mesh_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -459,11 +459,11 @@ static const nkgpu_shader_table_block surface_mesh_default_metal_macos_blocks[] 
     {0, NKGPU_SHADERSTAGE_VERTEX, 64},
 };
 static const nkgpu_shader_table_entry surface_mesh_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_surface_mesh_glsl300es_vertex, ui_shader_surface_mesh_glsl300es_fragment, surface_mesh_default_attributes, 2, surface_mesh_default_glsl300es_blocks, 1, surface_mesh_default_glsl300es_uniforms, 1, NULL, 0},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_surface_mesh_glsl410_vertex, ui_shader_surface_mesh_glsl410_fragment, surface_mesh_default_attributes, 2, surface_mesh_default_glsl410_blocks, 1, surface_mesh_default_glsl410_uniforms, 1, NULL, 0},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_surface_mesh_hlsl5_vertex, ui_shader_surface_mesh_hlsl5_fragment, surface_mesh_default_attributes, 2, surface_mesh_default_hlsl5_blocks, 1, NULL, 0, NULL, 0},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_surface_mesh_metal_ios_vertex, ui_shader_surface_mesh_metal_ios_fragment, surface_mesh_default_attributes, 2, surface_mesh_default_metal_ios_blocks, 1, NULL, 0, NULL, 0},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_surface_mesh_metal_macos_vertex, ui_shader_surface_mesh_metal_macos_fragment, surface_mesh_default_attributes, 2, surface_mesh_default_metal_macos_blocks, 1, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_surface_mesh_glsl300es_vertex, ui_shader_surface_mesh_glsl300es_fragment, NULL, 0, 0, 0, surface_mesh_default_attributes, 2, surface_mesh_default_glsl300es_blocks, 1, surface_mesh_default_glsl300es_uniforms, 1, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_surface_mesh_glsl410_vertex, ui_shader_surface_mesh_glsl410_fragment, NULL, 0, 0, 0, surface_mesh_default_attributes, 2, surface_mesh_default_glsl410_blocks, 1, surface_mesh_default_glsl410_uniforms, 1, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_surface_mesh_hlsl5_vertex, ui_shader_surface_mesh_hlsl5_fragment, NULL, 0, 0, 0, surface_mesh_default_attributes, 2, surface_mesh_default_hlsl5_blocks, 1, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_surface_mesh_metal_ios_vertex, ui_shader_surface_mesh_metal_ios_fragment, NULL, 0, 0, 0, surface_mesh_default_attributes, 2, surface_mesh_default_metal_ios_blocks, 1, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_surface_mesh_metal_macos_vertex, ui_shader_surface_mesh_metal_macos_fragment, NULL, 0, 0, 0, surface_mesh_default_attributes, 2, surface_mesh_default_metal_macos_blocks, 1, NULL, 0, NULL, 0, NULL, 0},
 };
 static const nkgpu_shader_table_attribute text_alpha_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -507,11 +507,11 @@ static const nkgpu_shader_table_texture text_alpha_default_metal_macos_textures[
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry text_alpha_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_text_alpha_glsl300es_vertex, ui_shader_text_alpha_glsl300es_fragment, text_alpha_default_attributes, 3, text_alpha_default_glsl300es_blocks, 1, text_alpha_default_glsl300es_uniforms, 1, text_alpha_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_text_alpha_glsl410_vertex, ui_shader_text_alpha_glsl410_fragment, text_alpha_default_attributes, 3, text_alpha_default_glsl410_blocks, 1, text_alpha_default_glsl410_uniforms, 1, text_alpha_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_text_alpha_hlsl5_vertex, ui_shader_text_alpha_hlsl5_fragment, text_alpha_default_attributes, 3, text_alpha_default_hlsl5_blocks, 1, NULL, 0, text_alpha_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_text_alpha_metal_ios_vertex, ui_shader_text_alpha_metal_ios_fragment, text_alpha_default_attributes, 3, text_alpha_default_metal_ios_blocks, 1, NULL, 0, text_alpha_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_text_alpha_metal_macos_vertex, ui_shader_text_alpha_metal_macos_fragment, text_alpha_default_attributes, 3, text_alpha_default_metal_macos_blocks, 1, NULL, 0, text_alpha_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_text_alpha_glsl300es_vertex, ui_shader_text_alpha_glsl300es_fragment, NULL, 0, 0, 0, text_alpha_default_attributes, 3, text_alpha_default_glsl300es_blocks, 1, text_alpha_default_glsl300es_uniforms, 1, text_alpha_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_text_alpha_glsl410_vertex, ui_shader_text_alpha_glsl410_fragment, NULL, 0, 0, 0, text_alpha_default_attributes, 3, text_alpha_default_glsl410_blocks, 1, text_alpha_default_glsl410_uniforms, 1, text_alpha_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_text_alpha_hlsl5_vertex, ui_shader_text_alpha_hlsl5_fragment, NULL, 0, 0, 0, text_alpha_default_attributes, 3, text_alpha_default_hlsl5_blocks, 1, NULL, 0, text_alpha_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_text_alpha_metal_ios_vertex, ui_shader_text_alpha_metal_ios_fragment, NULL, 0, 0, 0, text_alpha_default_attributes, 3, text_alpha_default_metal_ios_blocks, 1, NULL, 0, text_alpha_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_text_alpha_metal_macos_vertex, ui_shader_text_alpha_metal_macos_fragment, NULL, 0, 0, 0, text_alpha_default_attributes, 3, text_alpha_default_metal_macos_blocks, 1, NULL, 0, text_alpha_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute text_color_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -555,11 +555,11 @@ static const nkgpu_shader_table_texture text_color_default_metal_macos_textures[
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry text_color_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_text_color_glsl300es_vertex, ui_shader_text_color_glsl300es_fragment, text_color_default_attributes, 3, text_color_default_glsl300es_blocks, 1, text_color_default_glsl300es_uniforms, 1, text_color_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_text_color_glsl410_vertex, ui_shader_text_color_glsl410_fragment, text_color_default_attributes, 3, text_color_default_glsl410_blocks, 1, text_color_default_glsl410_uniforms, 1, text_color_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_text_color_hlsl5_vertex, ui_shader_text_color_hlsl5_fragment, text_color_default_attributes, 3, text_color_default_hlsl5_blocks, 1, NULL, 0, text_color_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_text_color_metal_ios_vertex, ui_shader_text_color_metal_ios_fragment, text_color_default_attributes, 3, text_color_default_metal_ios_blocks, 1, NULL, 0, text_color_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_text_color_metal_macos_vertex, ui_shader_text_color_metal_macos_fragment, text_color_default_attributes, 3, text_color_default_metal_macos_blocks, 1, NULL, 0, text_color_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_text_color_glsl300es_vertex, ui_shader_text_color_glsl300es_fragment, NULL, 0, 0, 0, text_color_default_attributes, 3, text_color_default_glsl300es_blocks, 1, text_color_default_glsl300es_uniforms, 1, text_color_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_text_color_glsl410_vertex, ui_shader_text_color_glsl410_fragment, NULL, 0, 0, 0, text_color_default_attributes, 3, text_color_default_glsl410_blocks, 1, text_color_default_glsl410_uniforms, 1, text_color_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_text_color_hlsl5_vertex, ui_shader_text_color_hlsl5_fragment, NULL, 0, 0, 0, text_color_default_attributes, 3, text_color_default_hlsl5_blocks, 1, NULL, 0, text_color_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_text_color_metal_ios_vertex, ui_shader_text_color_metal_ios_fragment, NULL, 0, 0, 0, text_color_default_attributes, 3, text_color_default_metal_ios_blocks, 1, NULL, 0, text_color_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_text_color_metal_macos_vertex, ui_shader_text_color_metal_macos_fragment, NULL, 0, 0, 0, text_color_default_attributes, 3, text_color_default_metal_macos_blocks, 1, NULL, 0, text_color_default_metal_macos_textures, 1, NULL, 0},
 };
 static const nkgpu_shader_table_attribute text_sdf_default_attributes[] = {
     {0, "position", "TEXCOORD", 0},
@@ -603,10 +603,10 @@ static const nkgpu_shader_table_texture text_sdf_default_metal_macos_textures[] 
     {0, 0, NKGPU_SHADERSTAGE_FRAGMENT, NKGPU_IMAGETYPE_2D, "tex_smp"},
 };
 static const nkgpu_shader_table_entry text_sdf_default_table[] = {
-    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_text_sdf_glsl300es_vertex, ui_shader_text_sdf_glsl300es_fragment, text_sdf_default_attributes, 3, text_sdf_default_glsl300es_blocks, 1, text_sdf_default_glsl300es_uniforms, 1, text_sdf_default_glsl300es_textures, 1},
-    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_text_sdf_glsl410_vertex, ui_shader_text_sdf_glsl410_fragment, text_sdf_default_attributes, 3, text_sdf_default_glsl410_blocks, 1, text_sdf_default_glsl410_uniforms, 1, text_sdf_default_glsl410_textures, 1},
-    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_text_sdf_hlsl5_vertex, ui_shader_text_sdf_hlsl5_fragment, text_sdf_default_attributes, 3, text_sdf_default_hlsl5_blocks, 1, NULL, 0, text_sdf_default_hlsl5_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_text_sdf_metal_ios_vertex, ui_shader_text_sdf_metal_ios_fragment, text_sdf_default_attributes, 3, text_sdf_default_metal_ios_blocks, 1, NULL, 0, text_sdf_default_metal_ios_textures, 1},
-    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_text_sdf_metal_macos_vertex, ui_shader_text_sdf_metal_macos_fragment, text_sdf_default_attributes, 3, text_sdf_default_metal_macos_blocks, 1, NULL, 0, text_sdf_default_metal_macos_textures, 1},
+    {NKGPU_SHADER_TARGET_GLSL300ES, ui_shader_text_sdf_glsl300es_vertex, ui_shader_text_sdf_glsl300es_fragment, NULL, 0, 0, 0, text_sdf_default_attributes, 3, text_sdf_default_glsl300es_blocks, 1, text_sdf_default_glsl300es_uniforms, 1, text_sdf_default_glsl300es_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, ui_shader_text_sdf_glsl410_vertex, ui_shader_text_sdf_glsl410_fragment, NULL, 0, 0, 0, text_sdf_default_attributes, 3, text_sdf_default_glsl410_blocks, 1, text_sdf_default_glsl410_uniforms, 1, text_sdf_default_glsl410_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, ui_shader_text_sdf_hlsl5_vertex, ui_shader_text_sdf_hlsl5_fragment, NULL, 0, 0, 0, text_sdf_default_attributes, 3, text_sdf_default_hlsl5_blocks, 1, NULL, 0, text_sdf_default_hlsl5_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, ui_shader_text_sdf_metal_ios_vertex, ui_shader_text_sdf_metal_ios_fragment, NULL, 0, 0, 0, text_sdf_default_attributes, 3, text_sdf_default_metal_ios_blocks, 1, NULL, 0, text_sdf_default_metal_ios_textures, 1, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, ui_shader_text_sdf_metal_macos_vertex, ui_shader_text_sdf_metal_macos_fragment, NULL, 0, 0, 0, text_sdf_default_attributes, 3, text_sdf_default_metal_macos_blocks, 1, NULL, 0, text_sdf_default_metal_macos_textures, 1, NULL, 0},
 };
 } // namespace shader_source
