@@ -35,16 +35,24 @@ export function repositorySource(path) {
   return `${projectRepo}/tree/${encodeURIComponent(sourceRef)}/${path}`;
 }
 
-// A section's README lists its pages in reading order; the README comes first, as the section's overview.
-function readmeOrder(directory) {
-  const readme = directory + 'README.md';
-  if (!publishedDocs.has(readme)) return [];
-  const text = readFileSync(new URL(readme, docsRoot), 'utf8');
+function linkedDocs(page, directory, prefix = directory) {
+  if (!publishedDocs.has(page)) return [];
+  const text = readFileSync(new URL(page, docsRoot), 'utf8');
   const linked = [...text.matchAll(/\]\(([^)#?\s]+\.md)\)/g)]
     .map(([, target]) => posix.join(directory, target))
-    .filter((path) => path.startsWith(directory) && publishedDocs.has(path));
-  return [readme, ...new Set(linked)];
+    .filter((path) => path.startsWith(prefix) && publishedDocs.has(path));
+  return [...new Set(linked)];
 }
+
+// A section's README lists its pages in reading order and serves as the first page.
+function readmeOrder(directory) {
+  const readme = directory + 'README.md';
+  return publishedDocs.has(readme) ? [readme, ...linkedDocs(readme, directory)] : [];
+}
+
+export const cliOverview = 'reference/CLI.md';
+export const cliDirectory = 'reference/cli/';
+export const cliGroupPages = linkedDocs(cliOverview, 'reference/', cliDirectory);
 
 // A group lists its pages, or a directory whose unlisted pages follow, or nested groups.
 const groups = [
@@ -69,7 +77,7 @@ const groups = [
           'reference/KEY_PATHS.md',
         ],
       ],
-      ['Tools', ['reference/CLI.md', 'reference/MANIFEST.md', 'reference/RELEASES.md', 'reference/PROFILING.md']],
+      ['Tools', [cliOverview, ...cliGroupPages, 'reference/MANIFEST.md', 'reference/RELEASES.md', 'reference/PROFILING.md']],
       [
         'Libraries',
         [

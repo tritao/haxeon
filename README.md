@@ -55,7 +55,7 @@ haxeon --help                    # every command; haxeon help build for one
 `run --watch` keeps one process alive and applies patches between application
 ticks when the entry class has static `start`, `tick`, `saveState`, `close`, and
 `restoreState` (the app template's does), and relaunches the program otherwise
-or with `--restart`; see [Project CLI](docs/reference/CLI.md).
+or with `--restart`; see [Project CLI](docs/reference/cli/build-run.md#watch-mode).
 
 | Platform | Status |
 |---|---|

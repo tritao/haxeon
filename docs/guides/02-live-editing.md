@@ -199,6 +199,6 @@ time and cannot be watched or patched.
 
 ## Next
 
-- [The CLI reference](../reference/CLI.md) lists the options of `haxeon run`, and the events file that `--watch` writes
+- [The run reference](../reference/cli/build-run.md#run) lists the options of `haxeon run`, and the events file that `--watch` writes
   for tools: each rebuild, patch, reload and refusal, one JSON object per line.
 - [Live patching](../reference/LIVE_PATCHING.md) describes in detail what a patch can change and why.

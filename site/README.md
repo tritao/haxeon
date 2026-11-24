@@ -35,7 +35,8 @@ read-only home directory.
 Starlight reads Markdown directly from `../docs/guides/`, `../docs/reference/`, `../docs/learn/` and
 `../docs/coming-from/`. Open pages with a Markdown heading or use Starlight frontmatter for metadata. Links can stay
 relative to the source files. The site rewrites links between published pages and links to guide examples in the
-repository. The CLI page appends command help generated from `../src/tools/CliHelp.hx` on each build.
+repository. The build appends the overview help to the CLI overview and inserts each command's help under its heading
+on the corresponding group page. The help and group order come from `../src/tools/CliHelp.hx`.
 
 The home, Language, UI, GPU, Build, Examples and About pages use `StarlightPage` with the `splash` template. Starlight owns
 page metadata, search and the theme switch. Its component overrides provide the shared site header and footer,

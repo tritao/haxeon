@@ -24,7 +24,7 @@ check as an early return.
 | Initialization macros | Unsupported except for the CLI's recognized `--macro nullSafety(...)` option. Use `nullSafety` in a manifest. |
 | `haxe.macro` APIs | Haxeon has no macro execution environment. If you keep a Haxe generation step, compile its output as ordinary `.hx` and check it against the supported subset. |
 
-[Haxe command lines](../reference/CLI.md#haxe-command-lines) · [Null safety](../reference/MANIFEST.md#null-safety)
+[Haxe command lines](../reference/cli/build-run.md#filehxml) · [Null safety](../reference/MANIFEST.md#null-safety)
 
 ## Build and dependency translation
 
@@ -71,7 +71,7 @@ An edit to the native runner or a compiler upgrade requires restarting the corre
 
 For desktop app releases, the runner builds a native executable. A Wasm module needs an engine and a host that supplies
 its imports. A browser UI runner and web packaging of app dependencies with C or C++ code are still missing from the
-project CLI. [Build targets](../reference/CLI.md#targets-and-backends) · [Shipping](../guides/05-shipping.md) · [WebAssembly](../reference/WASM_BACKEND.md)
+project CLI. [Build targets](../reference/cli/build-run.md#targets-and-backends) · [Shipping](../guides/05-shipping.md) · [WebAssembly](../reference/WASM_BACKEND.md)
 
 ## Move a small program
 

@@ -12,7 +12,7 @@ can be expressed as an enum with success and failure cases, or adapted to an API
 
 For an executable, a Haxeon desktop app's release runner compiles the generated C. The ordinary project build produces
 bytecode by default, which runs in Haxeon's VM. Go source packages and `go.mod` are specific to the Go toolchain. You
-can call a supported C interface with Haxeon's FFI. [Go module files](https://go.dev/doc/modules/gomod-ref) · [Build targets](../reference/CLI.md#targets-and-backends) · [C and C++ interop](../guides/04-calling-c-and-cpp.md)
+can call a supported C interface with Haxeon's FFI. [Go module files](https://go.dev/doc/modules/gomod-ref) · [Build targets](../reference/cli/build-run.md#targets-and-backends) · [C and C++ interop](../guides/04-calling-c-and-cpp.md)
 
 | In Go | In Haxeon |
 |---|---|

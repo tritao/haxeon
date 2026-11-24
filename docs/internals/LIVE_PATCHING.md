@@ -361,7 +361,7 @@ cold one, with no dead functions or constants. Frontend caches (parsing, typing,
 way, and HL assembly is about a tenth of a compile, so nothing meaningful is lost.
 
 - `haxeon run --watch` builds with `--live` for you when it patches the app, which it does when the entry class
-  declares the live host's entry points ([CLI.md](../reference/CLI.md)); `--restart` makes it relaunch the app instead, with
+  declares the live host's entry points ([Watch mode](../reference/cli/build-run.md#watch-mode)); `--restart` makes it relaunch the app instead, with
   artifact builds. `haxeon build --compiler-only --patchable` builds with `--live` for a host that applies the patches
   itself.
 - **A watch session keeps its compiler.** The worker whose session holds the patch history is chosen once, at

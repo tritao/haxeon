@@ -21,7 +21,7 @@ them. [Get started](../guides/00-get-started.md) walks through installing one.
 | `bin/hlprof-live` | The profiler's recorder, which `run --profile` runs. |
 | `bin/*.dll`, `*.hdll`, `*.so`, `*.dylib`, `*.lib` | Shared libraries beside the VM, if any (Linux has none), and on Windows the VM's import library, which native packages link against. |
 | `stdlib/` | The standard library. |
-| `templates/` | The project templates of `haxeon create` ([CLI.md](CLI.md)). |
+| `templates/` | The project templates of `haxeon create` ([Create](cli/project.md#create)). |
 | `registry/` | The `haxeon` registry ([MANIFEST.md](MANIFEST.md)): `index.json` and each first-party package at `NAME/VERSION/` (`ui`, `platform`, `nativekit`, ...). |
 | `lib/<target>/`, `include/`, `src/`, `cmake/` | The VM libraries, runtime headers, entry points and the CMake package that an app's runner, or any build of a program compiled ahead of time (`haxeon_add_c_executable`), finds with `find_package(Haxeon)`. |
 | `LICENSE`, `NOTICE`, `README.md` | |

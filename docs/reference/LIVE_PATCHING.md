@@ -95,4 +95,4 @@ history so future patches can apply to the running module.
 Use `haxeon run --watch --restart` to rebuild the artifact and relaunch on each edit. If your own
 host applies patches, use `haxeon build --compiler-only --patchable`. A watch session keeps the
 compiler it started with. Restart the session to pick up a compiler change. See the
-[CLI reference](CLI.md) for options and watch events.
+[Run reference](cli/build-run.md#run) for options and watch events.

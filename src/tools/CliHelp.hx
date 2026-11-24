@@ -331,6 +331,13 @@ class CliHelp {
 				if (command.name.indexOf(".") < 0) command.name
 		];
 
+	/** The group titles and command names in overview order. */
+	public static function commandGroups():Array<{title:String, commands:Array<String>}>
+		return [for (group in GROUPS)
+			{
+				title:group.title, commands:[for (command in group.commands) command.name]
+			}];
+
 	/** The overview: each group's commands with a line each. */
 	public static function overview():String {
 		var lines = ["Usage: haxeon <command> [options]", ""];

@@ -210,13 +210,13 @@ none of those can be, and no alias for any of them:
   `src/compiler/ir` into the packages `ir-layout.txt` names and fixes every reference, for a branch made before the move
   (`python3 scripts/apply-ir-layout.py .` after rebasing; it is idempotent).
 
-New scripts for this tree are Haxe, run by `haxeon` ([CLI.md](reference/CLI.md#scripts)): `scripts/check-self-hosting.hx`
+New scripts for this tree are Haxe, run by `haxeon` ([CLI scripts](reference/cli/build-run.md#scripthx)): `scripts/check-self-hosting.hx`
 and `tests/integration/test-haxeon-script.hx` are examples. They run the same on every platform, which the Bash scripts
 in `scripts/` and `tests/integration/` do not; those are ported as they are touched.
 
 ## Formatting
 
-Haxe sources are formatted by `haxeon fmt` ([CLI.md](reference/CLI.md)), with imports sorted by `haxeon lint`. This tree has no
+Haxe sources are formatted by `haxeon fmt` ([Formatter](reference/cli/test-quality.md#fmt)), with imports sorted by `haxeon lint`. This tree has no
 `format` setting, so it uses the standard style: tabs and 120 columns. `--check` covers every `.hx` file outside vendored code; a
 test file whose lines are part of the test carries `@formatter:off` at the end of its first line.
 

@@ -171,6 +171,6 @@ packages are rejected by the web runner.
 
 ## Next
 
-- [CLI.md](../reference/CLI.md): every `haxeon build` option.
+- [The build reference](../reference/cli/build-run.md#build): every `haxeon build` option.
 - [RELEASES.md](../reference/RELEASES.md): what a Haxeon release archive holds, and what it needs on the machine that
   builds your app.

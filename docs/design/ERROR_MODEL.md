@@ -20,7 +20,7 @@ This follows the decisions made earlier for exceptions:
   `compiler.core.InternalError` for every other failure in the compiler, and a subclass of its own where a caller tells
   failures apart. A catch of `haxe.Exception` therefore never wraps a value.
 - The lint rule `throw-non-exception` names a `throw` whose value is not a `haxe.Exception`
-  ([CLI.md](../reference/CLI.md)). It is opt-in, so code ported from Haxe that throws strings still builds.
+  ([CLI lint rules](../reference/cli/test-quality.md#lint)). It is opt-in, so code ported from Haxe that throws strings still builds.
 
 Code the compiler generates for a program (wire codecs, flags, FFI bindings) and the IR interpreter throw what the
 program's own code would; the policy does not apply to them.

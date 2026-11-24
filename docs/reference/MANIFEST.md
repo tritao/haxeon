@@ -92,7 +92,7 @@ Paths are relative to the manifest's directory.
 | `scopeSourceRoots` | boolean | `true` | A root holds only this package's modules. |
 | `unscopedSourceRoots` | array of strings | `[]` | Roots (listed in `sourceRoots`) that may hold any package. |
 | `sources` | array of strings | `[]` | Compile exactly these files instead of every file under the roots. |
-| `workspace` | array of strings | `[]` | Member package directories ([CLI.md](CLI.md)). |
+| `workspace` | array of strings | `[]` | Member package directories ([Workspace](cli/build-run.md#workspace)). |
 | `target` | string | `"host"` | `host`, `android`, `wasm32`, `wasm-gc` or `OS-ARCH`. |
 | `defines` | array of strings | `[]` | Conditional compilation defines, `NAME` or `NAME=VALUE`. |
 | `inline` | boolean | inlining on | `false` builds with `--no-inline`. |
@@ -102,8 +102,8 @@ Paths are relative to the manifest's directory.
 | `patch.REGISTRY.NAME` | table | | `{ path = "DIR" }`: resolve the registry package `NAME` from a local directory instead, without changing the dependencies that name it, as Cargo's `[patch]` (`[patch.haxeon]` below). Only the root project's patches apply. |
 | `native` | table | | C and C++ sources: `sources`, `includeDirs`, `std`, `targets`, or `cmake` (`source`, `target`, `inputs`, `library` or `libraries`). A CMake project finds those of the packages it depends on: in an app's graph their targets, otherwise their build directories in `CMAKE_PREFIX_PATH`, for `find_package` of a config each leaves there. |
 | `ffi` | table | | `imports`, `interfaces`, `projections`: FFI recipes and interface files ([C_HEADER_FFI.md](C_HEADER_FFI.md)). |
-| `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program, which builds to a module the VM runs; an app builds through its runner projects ([CLI.md](CLI.md)). |
-| `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([CLI.md](CLI.md)). |
+| `app` | table | | Makes the project an app: `name` (the package's by default), `id` (reverse-domain, required), `version` (`1.0.0`), `icon` and `platforms` (at least one of `linux`, `windows`, `macos`, `android`, `web`, `ios`). A project without it is a program, which builds to a module the VM runs; an app builds through its runner projects ([Build](cli/build-run.md#build)). |
+| `format` | table | tabs, 120 columns | `indent` (`"tabs"` or `"spaces"`), `indentWidth`, `lineWidth` ([Formatter](cli/test-quality.md#fmt)). |
 | `compatibility` | table | | `haxeon` (a version range), `targets`, `runtimeAbi`, `nativeRequirements`, `features`. |
 | `publish` | `false` or table | published whole | How the package is published into a registry: `false` keeps it out of the registry; `exclude` lists files and directories left out (tests, vendored code that does not build), `vendor` maps a path in the published package to a directory outside it that is copied in (`{ nativekit = "../../shared/nativekit" }`). |
 | `instrument` | table | everything | What `--profile=instrument` probes ([PROFILING.md](PROFILING.md)). |

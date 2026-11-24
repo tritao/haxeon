@@ -90,7 +90,7 @@ ok: Fontconfig development files (pkg-config fontconfig)
 ```
 
 A `missing:` line names what it did not find, and the end of the report prints the command above that installs it on
-your system. [The CLI reference](../reference/CLI.md) says what each check looks at.
+your system. [The doctor reference](../reference/cli/project.md#doctor) says what each check looks at.
 
 ## Debug in VS Code
 

@@ -6,7 +6,7 @@
 |---|---|
 | Syntax and types | Classes, interfaces, enums, abstracts, generics and pattern matching are in the subset below. See [Not yet supported](#not-yet-supported) for differences in typing, structure conversion and array access. |
 | Standard library and `sys` | See the supported operations below and the [standard library gaps](#not-yet-supported). Compile the modules you use for the intended output. |
-| Metadata and macros | Supported metadata includes `@:nullSafety`, `@:allow` and `@:hlNative`. See [Haxe command lines](CLI.md#haxe-command-lines) for the supported `nullSafety` option and macro restrictions. |
+| Metadata and macros | Supported metadata includes `@:nullSafety`, `@:allow` and `@:hlNative`. See [Haxe command lines](cli/build-run.md#filehxml) for the supported `nullSafety` option and macro restrictions. |
 | Conditional compilation | Use `#if` with a define passed as `-D` or through the project's [`defines` setting](MANIFEST.md#settings). Check the branch for each target. |
 | Platform APIs and externs | Check target-specific imports against the output you build. See [HashLink bindings](#source-declared-hashlink-bindings), [C header import](#c-header-import) and [WebAssembly](WASM_BACKEND.md). |
 
