@@ -101,24 +101,24 @@ const sample = record[0]
         <div class="head"><h2>How the API fits together</h2></div>
         <div class="split api">
           <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 268" role="img" aria-labelledby="gpu-api-title">
+            <svg class="drawing" viewBox="0 0 360 330" role="img" aria-labelledby="gpu-api-title">
               <title id="gpu-api-title">A Renderer creates buffers, images, samplers, shaders and pipelines. They are bound in a CommandBuffer, sealed into a Batch and submitted to a surface frame.</title>
-              <rect class="box" x="55" y="2" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="56" width="250" height="48" rx="6" />
-              <rect class="box" x="55" y="126" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="180" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="234" width="250" height="32" rx="6" />
-              <path class="acc" d="M180 34v20m-4-5 4 5 4-5M180 104v20m-4-5 4 5 4-5M180 158v20m-4-5 4 5 4-5M180 212v20m-4-5 4 5 4-5" />
-              <text x="190" y="49">creates</text>
-              <text x="190" y="119">bound in</text>
-              <text x="190" y="173">sealed in</text>
-              <text x="190" y="227">submitted to</text>
-              <a href={gpu('Renderer')}><text class="lnk" x="180" y="23" text-anchor="middle">Renderer</text></a>
-              <text x="180" y="76" text-anchor="middle"><a href={gpu('Buffer')}><tspan class="lnk">Buffer</tspan></a> · <a href={gpu('Image')}><tspan class="lnk">Image</tspan></a> · <a href={gpu('Sampler')}><tspan class="lnk">Sampler</tspan></a></text>
-              <text x="180" y="95" text-anchor="middle"><a href={gpu('Shader')}><tspan class="lnk">Shader</tspan></a> → <a href={gpu('Pipeline')}><tspan class="lnk">Pipeline</tspan></a></text>
-              <a href={gpu('CommandBuffer')}><text class="lnk" x="180" y="147" text-anchor="middle">CommandBuffer</text></a>
-              <a href={gpu('Batch')}><text class="lnk" x="180" y="201" text-anchor="middle">Batch</text></a>
-              <text class="ttl" x="180" y="255" text-anchor="middle">Surface frame</text>
+              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
+              <rect class="box" x="55" y="156" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="224" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="292" width="250" height="36" rx="6" />
+              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 192v30m-4-5 4 5 4-5M180 260v30m-4-5 4 5 4-5" />
+              <text x="192" y="59">creates</text>
+              <text x="192" y="145">bound in</text>
+              <text x="192" y="213">sealed in</text>
+              <text x="192" y="281">submitted to</text>
+              <a href={gpu('Renderer')}><text class="lnk" x="180" y="25" text-anchor="middle">Renderer</text></a>
+              <text x="180" y="93" text-anchor="middle"><a href={gpu('Buffer')}><tspan class="lnk">Buffer</tspan></a> · <a href={gpu('Image')}><tspan class="lnk">Image</tspan></a> · <a href={gpu('Sampler')}><tspan class="lnk">Sampler</tspan></a></text>
+              <text x="180" y="113" text-anchor="middle"><a href={gpu('Shader')}><tspan class="lnk">Shader</tspan></a> → <a href={gpu('Pipeline')}><tspan class="lnk">Pipeline</tspan></a></text>
+              <a href={gpu('CommandBuffer')}><text class="lnk" x="180" y="179" text-anchor="middle">CommandBuffer</text></a>
+              <a href={gpu('Batch')}><text class="lnk" x="180" y="247" text-anchor="middle">Batch</text></a>
+              <text class="ttl" x="180" y="315" text-anchor="middle">Surface frame</text>
             </svg>
           </Diagram>
           <div class="stack">
@@ -229,7 +229,8 @@ const sample = record[0]
     align-items: start;
   }
   .stack { display: grid; gap: var(--hx-space-5); }
-  .api { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .api { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: stretch; }
+  .api > :global(.figure) { display: grid; align-content: center; }
   .tables { display: grid; gap: var(--hx-space-5); }
   .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
   figure, .grid p, .stack p { margin: 0; }
