@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-home=${HAXEON_HOME:-$repo_dir}
-haxe=${HAXEON_HAXE:-"$home/.tools/haxe/haxe"}
+sdk=${HAXEON_SDK:-$repo_dir/out/sdk}
+haxe=${HAXEON_HAXE:-"$repo_dir/.tools/haxe/haxe"}
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-native-package.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
@@ -15,7 +15,7 @@ fi
 cp -R "$repo_dir/tests/fixtures/build/native-package/." "$project_dir/"
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
+	HAXEON_SDK="$sdk" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 # Applies a sed expression to a file in place, in the form GNU and BSD sed both take.
@@ -24,7 +24,7 @@ edit_file() {
 	rm -f "$2.bak"
 }
 
-plan_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json" --plan --explain --timings)
+plan_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.toml" --plan --explain --timings)
 [[ "$plan_output" == *"foo:NativeSharedLibrary"* ]]
 [[ "$plan_output" != *"foo:NativeStaticLibrary"* ]]
 [[ "$plan_output" == *"Compile C"* ]]
@@ -34,14 +34,14 @@ plan_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeo
 [[ "$plan_output" == *"inputs:"* && "$plan_output" == *"outputs:"* ]]
 [[ "$plan_output" == *"Timings:"* ]]
 
-run_cli build --verbosity normal --project "$project_dir/app/haxeon.json" --jobs 4
+run_cli build --verbosity normal --project "$project_dir/app/haxeon.toml" --jobs 4
 test -s "$project_dir/app/build/host/main.hl"
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 test -s "$project_dir/app/build/host/native/foo/foo.o"
 test -s "$project_dir/app/build/host/native/foo/extra.o"
 
 set +e
-run_cli run --verbosity normal --project "$project_dir/app/haxeon.json"
+run_cli run --verbosity normal --project "$project_dir/app/haxeon.toml"
 run_status=$?
 set -e
 if [[ $run_status -ne 42 ]]; then
@@ -50,12 +50,12 @@ if [[ $run_status -ne 42 ]]; then
 fi
 
 edit_file 's/return Foo.answer()/return Foo.answer() + 1/' "$project_dir/app/src/Main.hx"
-haxe_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
+haxe_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.toml")
 [[ "$haxe_edit_output" == *"native-compile:"*"clean (fingerprint match)"* ]]
 [[ "$haxe_edit_output" == *"native-link:"*"clean (fingerprint match)"* ]]
 
 edit_file 's/return FOO_ANSWER/return 41/' "$project_dir/foo/native/foo.c"
-native_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
+native_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.toml")
 [[ "$native_edit_output" == *"Compile C"* ]]
 [[ "$native_edit_output" == *"native/foo.c] Compile C"* ]]
 [[ "$native_edit_output" == *"native/extra.c] clean (fingerprint match)"* ]]
@@ -63,14 +63,14 @@ native_edit_output=$(run_cli build --verbosity normal --project "$project_dir/ap
 
 edit_file 's/return 41/return FOO_ANSWER/' "$project_dir/foo/native/foo.c"
 edit_file 's/#define FOO_ANSWER 42/#define FOO_ANSWER 43/' "$project_dir/foo/native/include/foo.h"
-header_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json")
+header_edit_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.toml")
 [[ "$header_edit_output" == *"native/foo.c] Compile C"* ]]
 [[ "$header_edit_output" == *"native/extra.c] clean (fingerprint match)"* ]]
 [[ "$header_edit_output" == *"Link shared library foo"* ]]
 
 edit_file 's/return FOO_ANSWER/return (/' "$project_dir/foo/native/foo.c"
 set +e
-native_failure_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.json" 2>&1)
+native_failure_output=$(run_cli build --verbosity normal --project "$project_dir/app/haxeon.toml" 2>&1)
 native_failure_status=$?
 set -e
 if [[ $native_failure_status -eq 0 ]]; then

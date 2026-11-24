@@ -69,7 +69,8 @@ class SourceManifestLoader {
 	static function packagedPath(relative:String, packagePrefix:String):String
 		return StringTools.startsWith(relative, packagePrefix) ? relative : packagePrefix + relative;
 
-	static function locate(path:String, canonicalFile:String, roots:Array<ResolvedRoot>, packageRoots:Array<ResolvedRoot>):String {
+	static function locate(path:String, canonicalFile:String, roots:Array<ResolvedRoot>,
+			packageRoots:Array<ResolvedRoot>):String {
 		for (root in packageRoots)
 			if (StringTools.startsWith(canonicalFile, root.prefix))
 				return packagedPath(canonicalFile.substring(root.prefix.length, canonicalFile.length),

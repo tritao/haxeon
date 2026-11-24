@@ -5,13 +5,13 @@ import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.core.Source.SourceSpan;
+import compiler.core.TextDigest;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.typing.HelperRequests.HelperRequest;
-import haxe.crypto.Sha256;
 
 /** Handwritten enum conformance methods lower to statically dispatched functions over the enum value. */
 class EnumConformanceMethods {
@@ -29,7 +29,7 @@ class EnumConformanceMethods {
 	public static inline final PREFIX = "$enum-custom:";
 
 	public static function name(type:CompilerType, method:String):String
-		return PREFIX + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0,
+		return PREFIX + method + ":" + TextDigest.sha256(compiler.semantic.SemanticSignature.type(type)).substr(0,
 			32);
 
 	/** Requests `method` of the enum `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */
@@ -38,6 +38,16 @@ class EnumConformanceMethods {
 		type = session.monomorphs.closeReached(type);
 		var key = name(type, method);
 		session.output.requests.add(EnumMethodHelper(key, {type: type, method: method, origin: origin, span: span}));
+		// The helper is typed from the enum's method as the program has it: asking for it reads that method.
+		switch type {
+			case TInstance(NominalKind.Enum, owner, _):
+				var recorder = session.declarations.reads;
+				if (recorder != null) {
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Signature, owner + "." + method);
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Body, owner + "." + method);
+				}
+			default:
+		}
 		return type;
 	}
 

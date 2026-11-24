@@ -14,9 +14,9 @@ import haxeon.gpu.Readback;
 import haxeon.gpu.RenderPassDesc;
 import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
-import haxeon.platform.Surface;
 import haxeon.gpu.Timestamp;
 import haxeon.gpu.Uniforms;
+import haxeon.platform.Surface;
 
 import haxeon.gpu.GpuResult;
 import nativekit.ffi.NativeKitGpu;
@@ -196,7 +196,7 @@ class Renderer implements Disposable {
 		desc.set_source_offset(sourceOffset);
 		desc.set_destination(destination.nativeHandle());
 		desc.set_destination_offset(destinationOffset);
-		desc.set_size(size);
+		desc.set_byteSize(size);
 		GpuResult.check(NativeKitGpu.nkgpu_buffer_copy(value, desc), "renderer.copyBuffer");
 	}
 

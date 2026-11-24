@@ -167,7 +167,7 @@ class StaticExtensions {
 	}
 
 	function isStatic(owner:StaticExtensionOwner, key:String, fn:AstFunction):Bool {
-		var info = session.methodInfo.get(key);
+		var info = session.methodInfoOf(key);
 		return switch owner.kind {
 			case ClassStatics: info != null && info.isStatic && info.owner == owner.name;
 			case AbstractStatics: fn.isStatic && fn.name != "new";

@@ -1,8 +1,9 @@
 # Query engine (design note)
 
-Status: proposed design for ADR 0003 M4a (the engine core), 2026-11-19. ADR 0003 decisions 1, 10 and 14 are the
-requirements; this note is how. It replaces the per-pass reuse mechanism sketched in `IR_PASS_INVENTORY.md` (Interface),
-whose rules it keeps: the pass framework (M2) is built on this engine.
+Status: step 1, the engine core, is in `compiler.query` (35dd6970c), unit-tested on synthetic queries; no compiler stage
+reads through it yet. The IR stages before the encode point get per-function reuse in pipeline order through their own memos
+(`IrFunctionPass`, `IrStageMemo`; `IR_CORE_COLUMNS.md`, session caching model). ADR 0003 decisions 1, 10 and 14 are the
+requirements; this note is how. The pass framework (M2) is built on this engine.
 
 ## Why now
 
@@ -10,8 +11,8 @@ A one-string edit of the compiler's own sources takes about 7 s in the compile s
 already incremental (5% of the edit); the IR passes rerun over all ~8,200 functions (66%), with no stage above 0.6 s
 (`IR_PASS_INVENTORY.md`, "Edit time"). The gain is one mechanism applied to every stage, not a faster stage.
 
-Today each reuse path has its own cache and rule: the typer's semantic edges and `DeclarationTypes` reads, the inline
-cache's dependency lists, the verifier memo, `LoweringView`, the program-level no-op shortcut, the pipeline snapshot. The
+Today each reuse path has its own cache and rule: the typer's recorded reads (`WARM_REBUILD_REUSE.md`), the inline
+cache's dependency lists, the verifier memo, `HlLoweringView`, the program-level no-op shortcut, the pipeline snapshot. The
 identity-keyed stage cache tried on 2026-11-18 never hit, because each build makes fresh table objects. The engine
 replaces them with one rule.
 

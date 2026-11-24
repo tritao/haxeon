@@ -25,10 +25,13 @@ class RuntimeLibrary {
 	public static function libraryPath(home:String):String
 		return build.HashLinkPath.executable(home);
 
-	/** Natives the sources define, in source order; empty when this checkout has no runtime sources. */
+	/** Natives the runtime sources of the SDK's checkout define, in source order; empty for a release, which has none. */
 	public static function definedNatives(home:String):Array<String> {
-		var files = [Path.join([home, "native", "runtime.c"])];
-		var directory = Path.join([home, "native", "runtime"]);
+		var source = build.HaxeonSdk.source(home);
+		if (source == null)
+			return [];
+		var files = [Path.join([source, "native", "runtime.c"])];
+		var directory = Path.join([source, "native", "runtime"]);
 		if (FileSystem.exists(directory) && FileSystem.isDirectory(directory)) {
 			var names = FileSystem.readDirectory(directory);
 			names.sort(Reflect.compare);
@@ -87,7 +90,7 @@ class RuntimeLibrary {
 		return [for (name in defined) if (!exported.exists(name)) name];
 	}
 
-	/** Natives the sources define that the built library lacks; empty when it is current, absent, or this checkout has no sources. */
+	/** Natives the sources define that the built library lacks; empty when it is current, absent, or the SDK has no sources. */
 	public static function missing(home:String):Array<String> {
 		var path = libraryPath(home);
 		if (!FileSystem.exists(path))
@@ -102,9 +105,13 @@ class RuntimeLibrary {
 		return 'the HashLink VM ${libraryPath(home)} is out of date: it lacks ${missing.length} function${missing.length == 1 ? "" : "s"} the runtime sources define ($shown). Rebuild it with: ${rebuildCommand(home)}';
 	}
 
-	/** The script that rebuilds the native runtime here: PowerShell's on Windows, bash's elsewhere. */
+	/** The script of the SDK's checkout that rebuilds the native runtime: PowerShell's on Windows, bash's elsewhere. */
 	public static function rebuildCommand(home:String):String {
-		return Path.join([home, "scripts", Sys.systemName() == "Windows" ? "build-native.ps1" : "build-native.sh"]);
+		return Path.join([
+			build.HaxeonSdk.requireSource(home, "Rebuilding the native runtime"),
+			"scripts",
+			Sys.systemName() == "Windows" ? "build-native.ps1" : "build-native.sh"
+		]);
 	}
 
 	/** Throws `describe` when the library is out of date. */

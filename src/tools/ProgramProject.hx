@@ -7,7 +7,7 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * A program the CLI builds with no haxeon.json of its own: a script (`haxeon script.hx`) or one compilation of a Haxe command
+ * A program the CLI builds with no manifest of its own: a script (`haxeon script.hx`) or one compilation of a Haxe command
  * line (`haxeon build.hxml`). Its manifest is made in memory (`PackageManifest.program`) and resolved in place, and its build
  * state lives in a directory of a cache the CLI keeps for such programs, named by what identifies the program, so its next
  * build is incremental. A directory not used for `UNUSED_SECONDS` is removed.
@@ -21,7 +21,10 @@ class ProgramProject {
 	/** Where the built module is copied (a Haxe command line's `--hl FILE`), or null to leave it in the build. */
 	public final publishTo:Null<String>;
 
-	public function new(root:String, manifest:PackageManifest, ?publishTo:String) {
+	public final scriptModule:Null<String>;
+
+	public function new(root:String, manifest:PackageManifest, ?publishTo:String, ?scriptModule:String) {
+		this.scriptModule = scriptModule;
 		this.root = root;
 		this.manifest = manifest;
 		this.publishTo = publishTo;
@@ -29,14 +32,14 @@ class ProgramProject {
 
 	/** Where the manifest is placed for resolution; nothing is read from or written to it. */
 	public function manifestPath():String
-		return Path.join([root, "haxeon.json"]);
+		return Path.join([root, PackageManifest.TOML_NAME]);
 
 	/**
 	 * The directory of the program `key` names in the cache `name` (`~/.haxeon/cache/NAME`, or the directory `variable` gives),
 	 * created and marked as used now. The cache's other programs that have not been used for `UNUSED_SECONDS` are removed.
 	 */
 	public static function directory(name:String, variable:String, key:String):String {
-		var root = cacheRoot(name, variable), directory = Path.join([root, key]);
+		var root = build.UserCache.directory(name, variable), directory = Path.join([root, key]);
 		// Parents too: the first program makes its cache.
 		if (!FileSystem.exists(directory))
 			FileSystem.createDirectory(directory);
@@ -65,15 +68,5 @@ class ProgramProject {
 					FileTree.remove(directory)
 				catch (_:Dynamic) {} // in use by another run, or already gone: the next run tries again
 		}
-	}
-
-	static function cacheRoot(name:String, variable:String):String {
-		var configured = Sys.getEnv(variable);
-		if (configured != null && configured != "")
-			return Path.normalize(configured);
-		var home = Sys.systemName() == "Windows" ? Sys.getEnv("USERPROFILE") : Sys.getEnv("HOME");
-		if (home == null || home == "")
-			home = Sys.getCwd();
-		return Path.join([home, ".haxeon", "cache", name]);
 	}
 }

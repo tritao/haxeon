@@ -20,9 +20,15 @@ class EmbeddedText {
 	public function new() {}
 
 	public function read(relative:String, span:SourceSpan):String {
-		if (relative.length == 0 || Path.isAbsolute(relative) || relative.indexOf("\x00") >= 0)
+		if (relative.length == 0 || Path.isAbsolute(relative))
 			throw error("Embed.text requires a nonempty relative path", span);
-		var path = try Path.normalize(FileSystem.absolutePath(Path.join([Path.directory(span.file.physicalPath), relative])))
+		for (index in 0...relative.length)
+			if (relative.charCodeAt(index) == 0)
+				throw error("Embed.text paths cannot contain NUL", span);
+		var path = try Path.normalize(FileSystem.absolutePath(Path.join([
+			Path.directory(span.file.physicalPath),
+			relative
+		])))
 			catch (_:Dynamic) throw error('Could not resolve embedded text "$relative"', span);
 		if (values == null)
 			values = new Map();

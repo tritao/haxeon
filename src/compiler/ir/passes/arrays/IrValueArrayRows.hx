@@ -12,6 +12,7 @@ import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
 
 /** Row reads and edits the value-array rewrites share, on IR bodies edited in place. */
+@:nullSafety(Strict)
 class IrValueArrayRows {
 	/** How many operands of linked rows read each value, in `table` (reused): phi inputs and terminators included. */
 	public static function countUses(body:IrBody, table:Array<Int>):Array<Int> {

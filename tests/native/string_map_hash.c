@@ -3,9 +3,15 @@
 
 /* A String type that declares an unnamed third field (vstring.hash) keeps the hash string maps compute for it: a key is
    hashed once, and a lookup with another String of the same text finds it and fills its own. A String of another type, as
-   stock Haxe output declares it, is hashed every time and never written. The `_s` and `_n` entry points agree on every key. */
+   stock Haxe output declares it, is hashed every time and never written. The map keeps the String it was given as the key,
+   and lists it as it is. */
 
-extern void *hl_hballoc( void );
+extern void *hl_hsalloc( void );
+extern void hl_hsset( void *map, vstring *key, vdynamic *value );
+extern bool hl_hsexists( void *map, vstring *key );
+extern vdynamic *hl_hsget( void *map, vstring *key );
+extern bool hl_hsremove( void *map, vstring *key );
+extern varray *hl_hskeys( void *map );
 
 static hl_type hashed_type, stock_type;
 static hl_obj_field hashed_fields[3], stock_fields[2], misnamed_fields[3];
@@ -53,24 +59,25 @@ int main( void ) {
 	hl_register_string_type(&hashed_type);
 	ok &= check(hl_string_hashes(),"the registered String type keeps hashes");
 
-	map = hl_hballoc();
+	map = hl_hsalloc();
 	hl_add_root(&map);
 	vdynamic *one = hl_make_dyn(&(int){1},&hlt_i32);
 	vstring key = string_of(&hashed_type,text_abc), same = string_of(&hashed_type,text_abc_copy),
 		other = string_of(&hashed_type,text_abd);
-	hl_hbset_s(map,&key,one);
+	hl_hsset(map,&key,one);
 	ok &= check(key.hash != 0,"setting a key keeps its hash");
-	ok &= check(same.hash == 0 && hl_hbget_s(map,&same) == one,"another String of the same text finds the entry");
+	ok &= check(same.hash == 0 && hl_hsget(map,&same) == one,"another String of the same text finds the entry");
 	ok &= check(same.hash == key.hash,"and keeps the same hash");
-	ok &= check(!hl_hbexists_s(map,&other),"a String of other text finds nothing");
-	ok &= check(hl_hbget_n(map,text_abc_copy,3) == one,"the length-given entry point finds a String key");
-	hl_hbset_n(map,text_abd,3,one);
-	ok &= check(hl_hbexists_s(map,&other),"a String finds a key set by length");
+	ok &= check(!hl_hsexists(map,&other),"a String of other text finds nothing");
+	hl_hsset(map,&same,one);
+	varray *keys = hl_hskeys(map);
+	ok &= check(keys->at == &hashed_type && keys->size == 1 && hl_aptr(keys,vstring*)[0] == &key,
+		"the keys are the Strings first set, not copies");
 
 	vstring stock = string_of(&stock_type,text_abc_copy);
-	ok &= check(hl_hbget_s(map,&stock) == one && stock.hash == 0,"a String of another type is found and not written");
+	ok &= check(hl_hsget(map,&stock) == one && stock.hash == 0,"a String of another type is found and not written");
 
-	ok &= check(hl_hbremove_s(map,&same) && !hl_hbexists_s(map,&key),"removing by an equal String removes the key");
+	ok &= check(hl_hsremove(map,&same) && !hl_hsexists(map,&key),"removing by an equal String removes the key");
 	if( ok ) printf("PASS: Strings keep their string-map hash; other String types are hashed each time\n");
 	return ok ? 0 : 1;
 }

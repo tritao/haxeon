@@ -49,7 +49,7 @@ Descriptor preparation and rare boxing refill are annotated as cold and placed i
 Linux x86-64 GCC-compatible builds. Other configurations keep ordinary allocation. This isolates newly added cold
 helper code from existing hot runtime text; it is not a promise of fixed addresses across arbitrary future builds.
 
-The [census](2026-10-allocation-census.md) found 14,985,902 integer boxes in merkletrees, 97,098 in LRU and 15,372,371 during
+A census found 14,985,902 integer boxes in merkletrees, 97,098 in LRU and 15,372,371 during
 compiler self-compilation. The representation is general even though workloads spend different amounts of time
 boxing. Arrays, float/pointer boxes and initialization-store elimination are outside this change.
 
@@ -115,7 +115,7 @@ checks were not repeated here. Other DAP tests, AArch64, Windows, 32-bit, Clang 
 
 ## Evidence
 
-The earlier rejection remains documented in [JIT_BOXED_ALLOCATION.md](2026-10-jit-boxed-allocation.md). Evidence for this
+Evidence for this
 follow-up is under `out/boxed-allocation/`: `isolate-final.json`, `cold-lru.json`, diagnostic profiles/counters,
 `cold-final-six.json`, `startup-jit.json`, `cold-validation.log`, suite logs, and `cold-final-hashes.json`. The final VM SHA-256 is
 `de6d0ff23543079c99d5a3074d7911d755d0377fcfe8530ab49b2a01e2954b91`, its library is

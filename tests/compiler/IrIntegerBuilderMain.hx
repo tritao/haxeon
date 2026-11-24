@@ -137,7 +137,7 @@ class IrIntegerBuilderMain {
 		IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42)
 			throw "IR interpreter lost high words, signed arithmetic or floating payload bits";
-		var root = Sys.getEnv("TMPDIR"), hashlink = Sys.getEnv("HAXEON_HASHLINK_DIR");
+		var root = Sys.getEnv("TMPDIR"), hashlink = TestHashLink.directory();
 		if (root == null) root = "/tmp";
 		for (target in [HashLink, Wasm32, WasmGc]) {
 			var path = root + '/wide-arithmetic-' + Std.random(0x7fffffff) + (target == HashLink ? ".hl" : ".wasm");

@@ -1,5 +1,6 @@
 package compiler.ir.passes.nullability;
 
+import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -14,6 +15,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 
 /** Logical optional copies stay explicit until nonescaping value flow has been planned. */
+@:nullSafety(Strict)
 class IrOptionalValueFlow {
 	static inline final COPY_PREFIX = "$optional-value:copy:";
 	static inline final BOX_PREFIX = "$optional-value:box:";
@@ -45,55 +47,60 @@ class IrOptionalValueFlow {
 
 	/**
 	 * `functions` followed by the copy, box and unbox helpers their calls name, built as functions. The calls are read from the
-	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none
-	 *.
+	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none.
 	 */
 	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, ?types:IrTypeIds,
 			?builder:IrBodyBuilder):Array<IrFunction> {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(functions);
+		var helpers = new IrOptionalHelpers();
+		for (fn in functions)
+			helpers.scan(fn.bodyIn(types, builder), null);
+		return helpers.append(functions, objects);
+	}
+
+	/** The kind of the optional value helper `name` (`IrOptionalHelpers`), or -1 when it is not one. */
+	public static function helperKind(name:String):Int
+		return StringTools.startsWith(name, COPY_PREFIX) ? IrOptionalHelpers.COPY : StringTools.startsWith(name,
+			BOX_PREFIX) ? IrOptionalHelpers.BOX : StringTools.startsWith(name, UNBOX_PREFIX)
+			? IrOptionalHelpers.UNBOX : -1;
+
+	/** The value class an optional value helper of kind `kind` named `name` is for. */
+	public static function helperValue(kind:Int, name:String):String
+		return name.substr((kind == IrOptionalHelpers.COPY ? COPY_PREFIX : kind == IrOptionalHelpers.BOX
+			? BOX_PREFIX : UNBOX_PREFIX)
+			.length);
+
+	/**
+	 * `functions` followed by the helpers of `needed`, `boxes` and `unboxes` (value class names), in name order of each. With
+	 * `derive`, each helper is made through it, from its name, its value class and what makes it.
+	 */
+	public static function appendHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, needed:Map<String, Bool>,
+			boxes:Map<String, Bool>, unboxes:Map<String, Bool>,
+			?derive:(name:String, value:String, make:() -> IrFunction) -> IrFunction):Array<IrFunction> {
+		var made = derive ?? (_, _, make) -> make();
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object];
-		var needed:Map<String, Bool> = [],
-			boxes:Map<String, Bool> = [],
-			unboxes:Map<String, Bool> = [];
-		for (fn in functions) {
-			var body = fn.bodyIn(types, builder);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.Call) {
-						var name = body.symbol(row).name;
-						if (StringTools.startsWith(name, COPY_PREFIX))
-							needed.set(name.substr(COPY_PREFIX.length), true);
-						else if (StringTools.startsWith(name, BOX_PREFIX))
-							boxes.set(name.substr(BOX_PREFIX.length), true);
-						else if (StringTools.startsWith(name, UNBOX_PREFIX))
-							unboxes.set(name.substr(UNBOX_PREFIX.length), true);
-					}
-					row = body.nextRow(row);
-				}
-			}
-		}
 		var names = [for (name in needed.keys()) name];
 		names.sort(Reflect.compare);
 		var result = functions.copy();
-		for (name in names) {
-			var builder = new IrBuilder(),
-				type:IrType = Nullable(Obj(name)),
-				value = builder.argument("value", type);
-			builder.returnValue(copyOptional(builder, value, name, declarations));
-			result.push(new IrFunction(copyName(name), builder.arguments, type, builder.blocks,
-				Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalCopy)));
-		}
+		for (name in names)
+			result.push(made(copyName(name), name, () -> {
+				var builder = new IrBuilder(),
+					type:IrType = Nullable(Obj(name)),
+					value = builder.argument("value", type);
+				builder.returnValue(copyOptional(builder, value, name, declarations));
+				new IrFunction(copyName(name), builder.arguments, type, builder.blocks,
+					Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalCopy));
+			}));
 		var shapes = new IrInlineValueLayout(IrObjectTable.of(declarations));
 		var allBoxes = [for (name in boxes.keys()) name];
 		allBoxes.sort(Reflect.compare);
 		for (name in allBoxes)
-			result.push(boxHelper(name, declarations, shapes));
+			result.push(made(boxName(name), name, () -> boxHelper(name, declarations, shapes)));
 		var allUnboxes = [for (name in unboxes.keys()) name];
 		allUnboxes.sort(Reflect.compare);
 		for (name in allUnboxes)
-			result.push(unboxHelper(name, declarations, shapes));
+			result.push(made(unboxName(name), name, () -> unboxHelper(name, declarations, shapes)));
 		return result;
 	}
 
@@ -135,7 +142,7 @@ class IrOptionalValueFlow {
 					}
 				} else
 					switch field.type {
-						case Obj(child) if (objects.exists(child) && objects.get(child).isValue):
+						case Obj(child) if (isValueIn(child, objects)):
 							builder.fieldSet(value, field.name, buildValue(child, fieldPath));
 						default:
 							var found = false;
@@ -211,14 +218,22 @@ class IrOptionalValueFlow {
 			Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalUnbox));
 	}
 
+	/** Whether `name` is a value class of `objects`. */
+	static function isValueIn(name:String, objects:Map<String, IrObject>):Bool {
+		var object = objects.get(name);
+		return object != null && object.isValue;
+	}
+
 	static function isOptionalValue(type:IrType, objects:Map<String, IrObject>):Bool
 		return switch type {
-			case Nullable(Obj(name)): objects.exists(name) && objects.get(name).isValue;
+			case Nullable(Obj(name)):
+				var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 
 	static function findField(objects:Map<String, IrObject>, type:IrType, field:String):IrObjectField {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: throw new InternalError("Invalid optional value field");
 		};
@@ -262,9 +277,9 @@ class IrOptionalValueFlow {
 		for (field in object.fields) {
 			var value = builder.fieldGet(source, field.name, field.type);
 			switch field.type {
-				case Obj(child) if (objects.exists(child) && objects.get(child).isValue):
+				case Obj(child) if (isValueIn(child, objects)):
 					value = copyValue(builder, value, child, objects);
-				case Nullable(Obj(child)) if (objects.exists(child) && objects.get(child).isValue):
+				case Nullable(Obj(child)) if (isValueIn(child, objects)):
 					value = copyOptional(builder, value, child, objects);
 				default:
 			}
@@ -272,4 +287,56 @@ class IrOptionalValueFlow {
 		}
 		return copy;
 	}
+}
+
+/** The optional value helpers a pass found called (`IrOptionalValueFlow.appendHelpers`), by kind and value class. */
+@:nullSafety(Strict)
+class IrOptionalHelpers {
+	public static inline final COPY = 0;
+	public static inline final BOX = 1;
+	public static inline final UNBOX = 2;
+
+	final copies:Map<String, Bool> = [];
+	final boxes:Map<String, Bool> = [];
+	final unboxes:Map<String, Bool> = [];
+
+	public function new() {}
+
+	public static function isHelper(name:String):Bool
+		return IrOptionalValueFlow.helperKind(name) >= 0;
+
+	/** The helper of `kind` for the value class `name` is called. */
+	public function add(kind:Int, name:String):Void (kind == COPY ? copies : kind == BOX ? boxes : unboxes).set(name,
+		true);
+
+	/**
+	 * The helpers `body` calls: asked for through `reader` when given (`IrFactReader.request`, which comes back to the pass that
+	 * adds them), else added.
+	 */
+	public function scan(body:IrBody, reader:Null<compiler.ir.reuse.IrFactReader>):Void {
+		var asked:Map<String, Bool> = [];
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call) {
+					var name = body.symbol(row).name, kind = IrOptionalValueFlow.helperKind(name);
+					if (kind >= 0) {
+						var value = IrOptionalValueFlow.helperValue(kind, name);
+						if (reader == null)
+							add(kind, value);
+						else if (!asked.exists(name)) {
+							asked.set(name, true);
+							reader.request(kind, Obj(value));
+						}
+					}
+				}
+				row = body.nextRow(row);
+			}
+		}
+	}
+
+	/** `functions` followed by the helpers found, made through `derive` when given (`IrOptionalValueFlow.appendHelpers`). */
+	public function append(functions:Array<IrFunction>, objects:Array<IrObject>,
+			?derive:(name:String, value:String, make:() -> IrFunction) -> IrFunction):Array<IrFunction>
+		return IrOptionalValueFlow.appendHelpers(functions, objects, copies, boxes, unboxes, derive);
 }

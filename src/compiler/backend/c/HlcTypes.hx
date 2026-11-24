@@ -36,7 +36,7 @@ class HlcTypes {
 	final code:HlCode;
 	final fieldCache:Map<Int, Array<HlcField>> = [];
 
-	/** Each object type's struct name (`HlcModule`), settled before any C is written. */
+	/** Each object type's struct name (`HlcModule`), settled before any C is written; null while the functions are collected. */
 	public var structNames:Null<Array<String>>;
 
 	/** Where the structs named are recorded: the text being written. */
@@ -121,8 +121,11 @@ class HlcTypes {
 	/** The struct of object type `index`, recorded as one the text being written names. */
 	public function structName(index:Int):String {
 		var names = structNames;
-		if (names == null || index >= names.length)
-			throw new InternalError('C backend: struct of HashLink type $index named before the names were settled');
+		// Collecting writes nothing (`HlcFunctionLower.collect`), so it is handed no name.
+		if (names == null)
+			return "";
+		if (index >= names.length)
+			throw new InternalError('C backend: struct of HashLink type $index interned after the names were settled');
 		if (usage != null)
 			usage.structs.set(index, true);
 		return names[index];

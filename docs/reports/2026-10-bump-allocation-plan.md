@@ -6,17 +6,14 @@ Stage 0 measured enough headroom to proceed. Stage 1 passed: binarytrees improve
 with essentially unchanged RSS and no regression in the other four benchmarks. The implementation remains opt-in
 with `HL_JIT_ALLOC_INLINE=1`; code-size and startup tradeoffs, exact validation coverage and known debugger failures
 are recorded in [JIT_INLINE_ALLOCATION.md](2026-10-jit-inline-allocation.md). Stage 2 was tested and dropped: the local
-initialization proof measured -1.67% on binarytrees against its 2% gate;
-[JIT_ALLOCATION_INITIALIZATION.md](2026-10-jit-allocation-initialization.md) records the experiment and skipped acceptance
-checks. The first Stage 3 prototype was dropped: integer boxing improved merkletrees about 20%, but repeated LRU
-comparisons regressed 1–2%. [JIT_BOXED_ALLOCATION.md](2026-10-jit-boxed-allocation.md) records that rejection. A follow-up
+initialization proof measured -1.67% on binarytrees against its 2% gate. The first Stage 3 prototype was dropped: integer boxing improved merkletrees about 20%, but repeated LRU
+comparisons regressed 1–2%. A follow-up
 isolates cold helpers from hot runtime text and removes the LRU regression: merkletrees improves 19.97%, with full
 correctness validation and all six benchmark comparisons complete. It remains opt-in with `HL_JIT_ALLOC_BOX=1`;
 final compiler and startup/JIT timings are pending, so the acceptance gate is not yet complete. See
-[JIT_BOXED_ALLOCATION_LAYOUT.md](2026-10-jit-boxed-allocation-layout.md). The broader census is in
-[ALLOCATION_CENSUS.md](2026-10-allocation-census.md). An array-specific follow-up counted 16.1 million compiler arrays,
+[JIT_BOXED_ALLOCATION_LAYOUT.md](2026-10-jit-boxed-allocation-layout.md). An array-specific follow-up counted 16.1 million compiler arrays,
 85.28% at lengths 0–3. Profiles found limited directly removable cost, so a small-array JIT expansion was not
-implemented. [ARRAY_ALLOCATION_PROFILE.md](2026-10-array-allocation-profile.md) records the no-go decision and evidence.
+implemented.
 The [compiler GC follow-up](2026-10-compiler-gc-marking.md) keeps an opt-in one-worker bitmap candidate after full
 correctness validation; its final performance gate remains pending.
 
@@ -64,7 +61,7 @@ been measured. The historical mark percentages do not prove it would lose. See "
 
 ## Stage 0: bound the prize before building
 
-Completed: [Stage 0 measurements](2026-10-bump-allocation-profile.md) supported the guarded Stage 1 prototype, which
+Completed: Stage 0's measurements supported the guarded Stage 1 prototype, which
 subsequently passed its measured gate; see the status above.
 
 1. Freeze the current VM, library, native HDLL, bytecode and hashes with allocation-volume retention enabled on both

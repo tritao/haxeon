@@ -58,7 +58,7 @@ typedef CompilerRequest = {
 
 	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be
-	 * patched (`haxeon run --watch --live`). Without it every compile assembles from scratch and its bytes are a
+	 * patched (`haxeon run --watch` of an app it patches). Without it every compile assembles from scratch and its bytes are a
 	 * function of the source alone, whatever the session compiled before.
 	 */
 	final live:Bool;
@@ -93,6 +93,12 @@ typedef CompilerRequest = {
 	final ffiInterfaces:Array<String>;
 	final ffiProjections:Array<String>;
 	final roots:Array<String>;
+
+	/**
+	 * The standard library (`--stdlib=`, default `stdlib` in the working directory, where the checkout's scripts and tools run):
+	 * the CLI names its SDK's (`build.HaxeonSdk.stdlib`), so a compile does not depend on where it runs.
+	 */
+	final stdlib:String;
 	final packageRoots:Array<PackageSourceRoot>;
 	final paths:Array<String>;
 }

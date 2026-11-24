@@ -1,6 +1,6 @@
 # Fasta byte-to-String conversion
 
-The preceding [fasta profile](2026-10-fasta-profile.md) identified UTF-8 decoding and stdout formatting as a smaller remaining cost after two hot-loop experiments failed their gates. This experiment changes the general native Bytes-to-String decoder, used by `Bytes.toString`, `Bytes.getString` and `BytesInput.readString`.
+A fasta profile identified UTF-8 decoding and stdout formatting as a smaller remaining cost after two hot-loop experiments failed their gates. This experiment changes the general native Bytes-to-String decoder, used by `Bytes.toString`, `Bytes.getString` and `BytesInput.readString`.
 
 ## Candidate and correctness
 

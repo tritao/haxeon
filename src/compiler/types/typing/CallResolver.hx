@@ -1,6 +1,8 @@
 package compiler.types.typing;
 
+import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
@@ -9,6 +11,7 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.ArrayLibrary;
+import compiler.runtime.MapLibrary;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstAbstract;
@@ -69,7 +72,9 @@ class CallResolver {
 	}
 
 	public function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope,
-			name:String):Array<TypedExpression> {
+			name:String, span:SourceSpan):Array<TypedExpression> {
+		if (arguments.length != expected.length)
+			fail("E1008", '"$name" expects ${expected.length} arguments, got ${arguments.length}', span);
 		var typed = [
 			for (i in 0...arguments.length)
 				bodyTyper.typeExpression(arguments[i], scope, expected[i])
@@ -213,10 +218,17 @@ class CallResolver {
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, contextualGenericArguments:Bool = true,
 			?declaredReceiver:TypedExpression):TypedExpression {
-		try
-			return typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
-				contextualGenericArguments)
-		catch (missing:MissingMember) {
+		try {
+			var dynamicMethod = DynamicMethods.read(session, receiver, name, span);
+			var call = dynamicMethod != null ? callDynamicMethod(dynamicMethod, name, arguments, span,
+				scope) : typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
+				contextualGenericArguments);
+			var declared = declaredReceiver == null ? receiver : declaredReceiver;
+			// The member's span is made only where the checker looks.
+			if (session.nullSafety.active())
+				session.nullSafety.checkReceiver(declared, name, NullSafety.memberSpan(declared.span, name, span));
+			return call;
+		} catch (missing:MissingMember) {
 			// Only this call's own member is missing (not one called among its arguments), and only a value takes an extension:
 			// `Class.name()` names a static, as Haxe's `using` applies to values.
 			if (missing.span != span || receiver.expression.match(TClassRef(_)))
@@ -268,7 +280,7 @@ class CallResolver {
 			if (expectedType != null && !sameType(expectedType, TVoid))
 				genericInstantiation.inferTypeParameters(fn.result, expectedType, parameters, preset, span);
 			var prepared = typeGenericCallArguments(fn, arguments, scope, span, [first], preset);
-			var info = session.methodInfo.get(key);
+			var info = session.methodInfoOf(key);
 			return genericInstantiation.specialize(key, fn, prepared.arguments, span, scope,
 				info == null ? null : info.owner, true, prepared.substitutions);
 		}
@@ -449,7 +461,7 @@ class CallResolver {
 		// A method written in Haxe is typed against its declaration once its module is loaded, which gives it optional arguments.
 		var declared = module == null ? null : session.signatures.get(method.nativeName);
 		var call = declared == null ? [receiver].concat(typeCallArguments(arguments, method.arguments, scope,
-			name)) : typeDeclaredCallArguments(arguments, declared, scope, method.nativeName, span, null, false,
+			name, span)) : typeDeclaredCallArguments(arguments, declared, scope, method.nativeName, span, null, false,
 			receiver);
 		if (!PlatformAbi.signalsOutsideBounds(method.nativeName))
 			return new TypedExpression(TCall(method.nativeName, call), method.result, span);
@@ -470,7 +482,7 @@ class CallResolver {
 		if (synthesized != null) {
 			if (arguments.length != synthesized.arguments.length)
 				fail("E1008", '$name expects ${synthesized.arguments.length} arguments, got ${arguments.length}', span);
-			typeCallArguments(arguments, synthesized.arguments, scope, name);
+			typeCallArguments(arguments, synthesized.arguments, scope, name, span);
 			return new TypedExpression(TCast(receiver), synthesized.result, span);
 		}
 		receiver = TypeParameterMembers.receiver(session, bodyTyper, receiver, name, span);
@@ -663,7 +675,20 @@ class CallResolver {
 		return declaration == "RawPtr" || StringTools.endsWith(declaration, ".RawPtr");
 
 	function typeExpressionValue(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
-		return bodyTyper.typeExpression(expression, scope, expectedType);
+		return typeCallArgument(expression, scope, expectedType);
+
+	/**
+	 * An argument of a call to a declared function or a builtin method. A lambda written as one is taken to run during the call, as
+	 * Haxe's null safety takes a callback the callee does not store (`TypingContext.nullSafetyClosure`).
+	 */
+	function typeCallArgument(argument:AstExpression, scope:Scope, ?expectedType:CompilerType,
+			inferDynamicLambdaResult:Bool = false):TypedExpression {
+		session.immediateLambda = switch argument {
+			case Lambda(_, _, _, span, _): span;
+			default: null;
+		};
+		return bodyTyper.typeExpression(argument, scope, expectedType, inferDynamicLambdaResult);
+	}
 
 	/**
 		Types a call's arguments against the callee's declared parameters, filling omitted ones. A virtual call
@@ -697,7 +722,7 @@ class CallResolver {
 			typed.push(bodyTyper.coerceArgument(leading, types[0], name, 1));
 		for (i in 0...arguments.length) {
 			var supplied = types[i + offset],
-				value = bodyTyper.typeExpression(arguments[i], scope, supplied);
+				value = typeCallArgument(arguments[i], scope, supplied);
 			typed.push(bodyTyper.coerceArgument(value, supplied, name, i + 1 + offset));
 		}
 		for (i in arguments.length + offset...parameters.length) {
@@ -785,7 +810,7 @@ class CallResolver {
 				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
 				expected = genericInstantiation.expectedArgumentType(fn, offset + index, declared, substitutions);
-			var argument = bodyTyper.typeExpression(arguments[index], scope, expected, expected != null);
+			var argument = typeCallArgument(arguments[index], scope, expected, expected != null);
 			genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type, parameters,
 				substitutions, argument.span);
 			typed.push(argument);
@@ -800,20 +825,20 @@ class CallResolver {
 						fallbacks);
 				if (expected == null && !lambdaParametersAnnotated(arguments[index]))
 					continue;
-				var argument = bodyTyper.typeExpression(arguments[index], scope, expected, expected != null);
+				var argument = typeCallArgument(arguments[index], scope, expected, expected != null);
 				genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type,
 					parameters,
 					substitutions, argument.span);
 				// A parameter only the callback's result fixes is the type variable its body filled (or left empty, which
 				// `settleTypeArguments` settles where only this callback carries it).
 				for (parameter => variable in opened)
-					if (!substitutions.exists(parameter))
+					if (isUninferredParameter(parameter, substitutions))
 						substitutions.set(parameter, variable);
 				typed[offset + index] = argument;
 				lambdas.remove(index);
 				progressed = true;
 			}
-			if (!progressed && !settleFallbacks()) {
+			if (!progressed && !settleFallbacks() && !genericInstantiation.settleNullArguments(substitutions)) {
 				// No callback supplies the missing parameter context. Preserve the
 				// ordinary inference diagnostic rather than assuming Dynamic.
 				var index = lambdas[0];
@@ -892,7 +917,7 @@ class CallResolver {
 			fallbacks:Array<String>):CompilerType {
 		var open = copyMap(substitutions), made:Map<String, CompilerType> = [];
 		for (parameter in parameters)
-			if (!open.exists(parameter)) {
+			if (isUninferredParameter(parameter, open)) {
 				var variable = session.monomorphs.create('the type parameter "$parameter" of a callback\'s result',
 					argumentSpan);
 				if (variable == null)
@@ -956,7 +981,7 @@ class CallResolver {
 	static function mentionsUnbound(type:AstType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>):Bool
 		return switch type {
-			case NamedType(name): parameters.indexOf(name) >= 0 && !substitutions.exists(name);
+			case NamedType(name): parameters.indexOf(name) >= 0 && isUninferredParameter(name, substitutions);
 			case AppliedType(_, arguments): anyMentionsUnbound(arguments, parameters, substitutions);
 			case ArrayType(element), NullableType(element): mentionsUnbound(element, parameters, substitutions);
 			case MapType(key, value): mentionsUnbound(key, parameters, substitutions)
@@ -986,7 +1011,7 @@ class CallResolver {
 	 */
 	function resolveDynamicMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope):TypedExpression {
-		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
 		var callee = new TypedExpression(TCall("Reflect.field", [
 			receiver,
 			new TypedExpression(TStringLiteral(name), TString, span)
@@ -1069,6 +1094,9 @@ class CallResolver {
 			if (method == null)
 				fail("E1007", 'Missing signature for method "$methodKey"', span);
 			MemberAccess.method(session, methodInfo.owner, name, span);
+			var generated = typeWireCall(methodKey, method, arguments, span, scope, expectedType);
+			if (generated != null)
+				return generated;
 			if (BodyTyper.functionTypeParameters(method).length > 0) {
 				var prepared = typeGenericCallArguments(method, arguments, scope, span);
 				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope,
@@ -1099,6 +1127,9 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
+		if (methodInfo.owner == RpcServiceTyping.CONNECTION && (method.name == "serve" || method.name == "of"))
+			return RpcServiceTyping.typeCall(session, bodyTyper, receiver, methodKey, method.name, arguments, span,
+				scope);
 		if (session.relations.isValueClass(receiver.type) && !session.isPureCall(methodKey)
 			&& !session.isReadOnlyReceiver(methodKey))
 			ValuePlaceRules.requireWritable(session, receiver, span);
@@ -1154,7 +1185,7 @@ class CallResolver {
 		if (rawDeclaration != null && FlagsGenerator.conforms(session, rawDeclaration)
 			&& FlagsGenerator.isMember(name, false)) {
 			var info = FlagsGenerator.signature(abstractName, name),
-				typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name);
+				typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name, span);
 			return new TypedExpression(TCall(FlagsGenerator.request(session, abstractName, name, span),
 				[receiver].concat(typed)), info.result, span);
 		}
@@ -1180,7 +1211,7 @@ class CallResolver {
 			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 		MemberAccess.method(session, abstractName, name, span);
 		var methodKey = abstractName + "." + name,
-			signature = requiredMapValue(session.signatures, methodKey),
+			signature = session.signatures.required(methodKey),
 			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
 				typeArguments);
 		if (declaration.isExtern == true || method.isExtern == true) {
@@ -1221,7 +1252,7 @@ class CallResolver {
 		if (declaration == null)
 			throw new InternalError('Missing abstract declaration "$abstractName"');
 		var methodKey = abstractName + "." + accessor,
-			signature = requiredMapValue(session.signatures, methodKey),
+			signature = session.signatures.required(methodKey),
 			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
 				typeArguments);
 		if (declaration.isExtern == true || signature.isExtern == true)
@@ -1421,8 +1452,14 @@ class CallResolver {
 		}) && arguments.length == 0 && switch callee {
 			case Lambda(lambdaArguments, _, _, _): lambdaArguments.length == 0;
 			default: false;
-		}, typedCallee = bodyTyper.typeExpression(callee, scope, discarded ? TFunction([], TVoid, []) : null),
-			functionType = switch typedCallee.type {
+		}, typedCallee = bodyTyper.typeExpression(callee, scope, discarded ? TFunction([], TVoid, []) : null);
+		// Where null safety checks, calling a nullable function value is its finding, as in Haxe; elsewhere it is no function.
+		if (session.nullSafety.active() && typedCallee.type.match(TNullable(TFunction(_, _, _)))) {
+			session.nullSafety.checkCallee(typedCallee);
+			typedCallee = unwrapNullable(typedCallee);
+		} else
+			session.nullSafety.checkCallee(typedCallee);
+		var functionType = switch typedCallee.type {
 			case TFunction(parameters, result, optional): {arguments: parameters, result: result, optional: optional};
 			default: null;
 		};
@@ -1539,19 +1576,33 @@ class CallResolver {
 			outerLocal, [known], session.isPureCall);
 	}
 
+	function callDynamicMethod(callee:TypedExpression, name:String, arguments:Array<AstExpression>,
+			span:SourceSpan, scope:Scope):TypedExpression {
+		return switch callee.type {
+			case TFunction(parameters, result, optional):
+				var typed = functionValueArguments(arguments, parameters, optional, null, scope, span,
+					'Function field "$name"', name);
+				session.invalidateUnknownCall(scope);
+				new TypedExpression(TClosureCall(callee, typed), result, span);
+			default: throw new InternalError("Dynamic method without a function type");
+		};
+	}
+
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):TypedExpression {
 		// A static method of a class or abstract by its qualified name (`C.m()`, or `m()` inside C); module functions have no info.
-		var calledMethod = session.methodInfo.get(name);
+		var calledMethod = session.methodInfoOf(name);
 		if (calledMethod != null)
 			MemberAccess.method(session, calledMethod.owner, name.substr(name.lastIndexOf(".") + 1), span);
 		var hasSignature = session.signatures.exists(name);
-		if (hasSignature && BodyTyper.functionTypeParameters(requiredMapValue(session.signatures, name)).length > 0) {
-			var signature = requiredMapValue(session.signatures, name),
+		if (hasSignature && session.signatures.required(name).isDynamic == true)
+			return typeClosureCall(Variable(name, span), arguments, span, scope, name);
+		if (hasSignature && BodyTyper.functionTypeParameters(session.signatures.required(name)).length > 0) {
+			var signature = session.signatures.required(name),
 				infoOwner:Null<String> = null,
 				infoStatic = true;
-			if (session.methodInfo.exists(name)) {
-				var resolvedInfo = requiredMapValue(session.methodInfo, name);
+			var resolvedInfo = session.methodInfoOf(name);
+			if (resolvedInfo != null) {
 				infoOwner = resolvedInfo.owner;
 				infoStatic = resolvedInfo.isStatic;
 			}
@@ -1562,7 +1613,7 @@ class CallResolver {
 		var expectedArguments:Array<CompilerType> = [],
 			result:CompilerType = TVoid;
 		if (hasSignature) {
-			var signature = requiredMapValue(session.signatures, name);
+			var signature = session.signatures.required(name);
 			expectedArguments = bodyTyper.argumentTypesOf(signature);
 			result = bodyTyper.functionResultType(signature, signature.span);
 		} else if (session.externals.exists(name)) {
@@ -1573,7 +1624,7 @@ class CallResolver {
 			var dot = name.lastIndexOf(".");
 			if (dot > 0 && isStaticOwner(name.substr(0, dot)))
 				throw MissingMember.field(staticOwner(name.substr(0, dot)), name.substr(dot + 1), span);
-			fail("E1007", 'Unknown function "$name"', span);
+			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedFunction, name, span));
 		}
 		// trace takes any value and any further values, as Haxe's `trace(v:Dynamic, ...rest)` does (the rest become the position's
 		// customParams), and prints a line in haxe.Log's form: "path/File.hx:12: v, p1, p2", each value as Std.string gives it and
@@ -1586,8 +1637,8 @@ class CallResolver {
 			fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}',
 				span);
 		var typed = traced ? [traceLine(arguments, scope, span)] : hasSignature ? typeDeclaredCallArguments(arguments,
-			requiredMapValue(session.signatures, name), scope, name,
-			span) : typeCallArguments(arguments, expectedArguments, scope, name);
+			session.signatures.required(name), scope, name,
+			span) : typeCallArguments(arguments, expectedArguments, scope, name, span);
 		var call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name,
 			typed), result, span);
 		session.invalidateCallEffects(name, scope);
@@ -1650,6 +1701,12 @@ class CallResolver {
 				methodInfo.isStatic,
 				prepared.substitutions, receiver);
 		}
+		if (DynamicMethods.isDynamic(session, method, methodInfo.owner)) {
+			if (methodInfo.isStatic)
+				return typeClosureCall(Variable(methodKey, span), arguments, span, scope, methodKey);
+			var callee = bodyTyper.typedMember(bodyTyper.implicitReceiver(span, scope), name, span);
+			return callDynamicMethod(callee, name, arguments, span, scope);
+		}
 		if (methodInfo.isStatic) {
 			var typed = typeDeclaredCallArguments(arguments, method, scope, methodKey, span);
 			return applyCallEffect(new TypedExpression(TCall(methodKey, typed),
@@ -1686,7 +1743,7 @@ class CallResolver {
 			if (declaration != null && FlagsGenerator.conforms(session, declaration)
 				&& FlagsGenerator.isMember(member, true)) {
 				var info = FlagsGenerator.signature(owner, member),
-					typed = typeCallArguments(arguments, info.arguments, scope, name);
+					typed = typeCallArguments(arguments, info.arguments, scope, name, span);
 				return new TypedExpression(TCall(FlagsGenerator.request(session, owner, member, span), typed),
 					info.result, span);
 			}
@@ -1823,6 +1880,12 @@ class CallResolver {
 			if (abstractValue != null)
 				return typeMethodCall(abstractValue, methodName, arguments, span, scope, expectedType, false, false);
 		}
+		var method = session.signatures.get(name);
+		if (method != null && method.isStatic) {
+			var generated = typeWireCall(name, method, arguments, span, scope, expectedType);
+			if (generated != null)
+				return generated;
+		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}
 
@@ -1861,7 +1924,14 @@ class CallResolver {
 		];
 		while (typedArguments.length < expected.length)
 			typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
-		typedArguments = coerceArguments(typedArguments, expected, name);
+		// As coerceArguments, with the parameters' names for the null-safety checker where it looks; an optional one may take null.
+		var checked = session.nullSafety.active();
+		typedArguments = [for (index in 0...typedArguments.length) {
+			var parameter = enumCase.params[index];
+			var use = checked && parameter != null
+				&& !parameter.optional ? NamedArgument(name, parameter.name ?? "") : Unchecked;
+			bodyTyper.coerceArgument(typedArguments[index], expected[index], name, index + 1, use);
+		}];
 		// The constructed enum's storage is named after its type arguments, so a literal's structure among them closes here.
 		var resultType:CompilerType = enumCase.aliasType ?? session.monomorphs.closeReached(instance);
 		if (enumCase.aliasType == null && enumInstanceOf(enumCase, expectedType) != null)
@@ -1923,7 +1993,8 @@ class CallResolver {
 			enumName = enumName(qualifiedType);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return null;
-		var declaration = requiredMapValue(session.enumDecls, enumName);
+		// A constructor named alone reads that constructor: its index and parameters, not the enum's other ones.
+		var declaration = session.enumConstructorDeclaration(enumName, caseName);
 		for (index in 0...declaration.cases.length)
 			if (declaration.cases[index].name == caseName)
 				return {
@@ -2028,7 +2099,7 @@ class CallResolver {
 		var owner = session.currentContext.lexicalOwner,
 			baseType:Null<AstType> = null;
 		if (owner != null && session.classDecls.exists(owner))
-			baseType = requiredMapValue(session.classDecls, owner).base;
+			baseType = session.classDecls.required(owner).base;
 		if (baseType == null)
 			fail("E1007", "super() requires a base-class constructor", span);
 		var baseInstance = session.declarations.resolve(baseType, span, session.currentContext.typeSubstitutions),
@@ -2049,10 +2120,10 @@ class CallResolver {
 				span);
 		MemberAccess.method(session, resolvedBase, "new", span);
 		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments,
-			requiredMapValue(session.signatures, constructorName), scope,
+			session.signatures.required(constructorName), scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope,
-			constructorName),
-			method = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
+			constructorName, span),
+			method = hasConstructor ? session.signatures.required(constructorName) : null,
 			physicalArguments = session.representation.adaptConstructorArguments(baseInstance, resolvedBase, method,
 				semanticArguments);
 		return new TypedExpression(TSuperCall(resolvedBase, physicalArguments), TVoid, span);
@@ -2064,7 +2135,7 @@ class CallResolver {
 		var owner = session.currentContext.lexicalOwner,
 			baseType:Null<AstType> = null;
 		if (owner != null && session.classDecls.exists(owner))
-			baseType = requiredMapValue(session.classDecls, owner).base;
+			baseType = session.classDecls.required(owner).base;
 		if (baseType == null)
 			fail("E1007", 'super.$name() requires a base class', span);
 		if (scope.receiverType() == null)
@@ -2081,6 +2152,8 @@ class CallResolver {
 		if (method == null || method.isExtern == true)
 			fail("E1007", 'Missing body for base method "$methodKey"', span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
+		if (DynamicMethods.isDynamic(session, method, methodInfo.owner))
+			fail("E1007", 'Cannot call super.$name since it\'s a dynamic method', span);
 		if (BodyTyper.functionTypeParameters(method).length > 0)
 			fail("E1016", 'super.$name() cannot call a generic method yet', span);
 		var receiver = typeExpressionValue(Variable("this", span), scope),
@@ -2114,6 +2187,72 @@ class CallResolver {
 			return new TypedExpression(TCall("runtime.RuntimeData.loadI32", [address]), TInt, span);
 		}
 		return null;
+	}
+
+	/** Lower calls to the stdlib declarations while retaining their identity for tooling. */
+	function typeWireCall(name:String, method:AstFunction, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope, expectedType:Null<CompilerType>):Null<TypedExpression> {
+		var json = switch name {
+			case "haxeon.wire.JsonWire.encode", "haxeon.wire.JsonWire.decode": true;
+			case "haxeon.wire.MessagePack.encode", "haxeon.wire.MessagePack.decode": false;
+			case "haxeon.rpc.RpcMethod.wire":
+				return typeRpcDescriptor(name, arguments, span, scope, expectedType, false);
+			default: return null;
+		};
+		if (arguments.length != 1)
+			fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
+		var format = json ? "JsonWire" : "MessagePack";
+		if (method.name == "encode") {
+			var value = typeExpressionValue(arguments[0], scope),
+				keyed = json ? WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span)
+					: WireCodecGenerator.request(session, value.type, session.currentContext.name, span),
+				encoder = json ? WireCodecGenerator.jsonEncodeName(keyed) : WireCodecGenerator.encodeName(keyed);
+			return new TypedExpression(TCall(encoder, [value]), json ? TString : TBytes, span, false, null, null, name);
+		}
+		var resultType = switch expectedType {
+			case null, TNull: throw new CompileError(new Diagnostic("E1009",
+				'$format.decode requires an expected result type', span));
+			case type: type;
+		};
+		var source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), json ? TString : TBytes,
+			'$format.decode input', "E1002"),
+			keyed = json ? WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span)
+				: WireCodecGenerator.request(session, resultType, session.currentContext.name, span),
+			decoder = json ? WireCodecGenerator.jsonDecodeName(keyed) : WireCodecGenerator.decodeName(keyed);
+		return new TypedExpression(TCall(decoder, [source]), resultType, span, false, null, null, name);
+	}
+
+	function typeRpcDescriptor(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>, serviceMethod:Bool):TypedExpression {
+		var count = serviceMethod ? 2 : 1;
+		if (arguments.length != count)
+			fail("E1008", 'Function "$name" expects $count argument(s), got ${arguments.length}', span);
+		var owner = RpcServiceTyping.METHOD;
+		switch expectedType {
+			case TInstance(NominalKind.Class, methodOwner, [request, response]) if (methodOwner == owner):
+				var id = bodyTyper.coerceArgument(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt, name,
+					1);
+				var constructorArguments = [id];
+				for (type in [request, response]) {
+					var keyed = WireCodecGenerator.request(session, type, session.currentContext.name, span);
+					constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.encodeName(keyed)),
+						TFunction([keyed], TBytes, []), span));
+					constructorArguments.push(new TypedExpression(TFunctionRef(WireCodecGenerator.decodeName(keyed)),
+						TFunction([TBytes], keyed, []), span));
+				}
+				var methodName = serviceMethod ? arguments[1] : NullLiteral(span);
+				constructorArguments.push(bodyTyper.coerceArgument(typeExpressionValue(methodName, scope),
+					TNullable(TString), name, 2));
+				var constructor = session.signatures.required(owner + ".new");
+				var typed = session.representation.adaptConstructorArguments(expectedType, owner, constructor,
+					constructorArguments);
+				session.invalidateUnknownCall(scope);
+				return new TypedExpression(TNew(owner, typed, true), expectedType, span, false, null, null,
+					serviceMethod ? null : name);
+			default:
+				throw new CompileError(new Diagnostic("E1009",
+					"RpcMethod.wire requires an expected RpcMethod<Request, Response> type", span));
+		}
 	}
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
@@ -2185,6 +2324,9 @@ class CallResolver {
 		if (EnumCreation.handles(name))
 			return bodyTyper.typeExpression(EnumCreation.expand(session, name, arguments, span, expectedType), scope,
 				expectedType);
+		if (TypeReflection.handles(name))
+			return TypeReflection.type(session, name, arguments, span,
+				expression -> bodyTyper.typeExpression(expression, scope, expectedType));
 		if (name == "Type.enumIndex" || name == "Type.enumConstructor" || name == "Type.enumParameters"
 			|| name == "Type.enumEq") {
 			if (arguments.length == 0)
@@ -2198,50 +2340,8 @@ class CallResolver {
 			if (typeFunction != null)
 				return typeBuiltinCall(typeFunction, arguments, span, scope, expectedType);
 		}
-		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var value = typeExpressionValue(arguments[0], scope);
-			var keyed = WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.jsonEncodeName(keyed), [value]), TString, span);
-		}
-		if (name == "JsonWire.decode" || name == "haxeon.wire.JsonWire.decode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var resultType = switch expectedType {
-				case null, TNull:
-					throw new CompileError(new Diagnostic("E1009", "JsonWire.decode requires an expected result type",
-						span));
-				case type: type;
-			};
-			var source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TString, "JsonWire.decode input",
-				"E1002");
-			var keyed = WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(keyed), [source]), resultType,
-				span);
-		}
-		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var value = typeExpressionValue(arguments[0], scope);
-			var keyed = WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.encodeName(keyed), [value]), TBytes, span);
-		}
-		if (name == "MessagePack.decode" || name == "haxeon.wire.MessagePack.decode") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var resultType = switch expectedType {
-				case null, TNull:
-					throw new CompileError(new Diagnostic("E1009",
-						"MessagePack.decode requires an expected result type", span));
-				case type:
-					type;
-			};
-			var bytes = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input",
-				"E1002");
-			var keyed = WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.decodeName(keyed), [bytes]), resultType, span);
-		}
+		if (name == "$rpc.method")
+			return typeRpcDescriptor(name, arguments, span, scope, expectedType, true);
 		if (name == "Std.isOfType" || name == "Std.isExactType") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);
@@ -2265,19 +2365,20 @@ class CallResolver {
 					if (!session.classDecls.exists(targetName)
 						&& !session.interfaceDecls.exists(targetName)
 						&& !session.enumDecls.exists(targetName))
-						fail("E1007", 'Unknown type "$targetName"', span);
+						throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedType, targetName,
+							span));
 					// Runtime type tests name a declaration, not an instantiation; generic arguments are erased here.
 					if (session.classDecls.exists(targetName)) TInstance(NominalKind.Class, targetName,
 						[
-							for (_ in requiredMapValue(session.classDecls, targetName).typeParameters)
+							for (_ in session.classDecls.required(targetName).typeParameters)
 								TDynamic
 						]);
 					else if (session.interfaceDecls.exists(targetName)) TInstance(NominalKind.Interface, targetName, [
-						for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters)
+						for (_ in session.interfaceDecls.required(targetName).typeParameters)
 							TDynamic
 					]);
 					else TInstance(NominalKind.Enum, targetName, [
-						for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters)
+						for (_ in session.enumDecls.required(targetName).typeParameters)
 							TDynamic
 					]);
 			};
@@ -2329,13 +2430,15 @@ class CallResolver {
 		if (name == "Math.ceil") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "Math.ceil" expects 1 argument, got ${arguments.length}', span);
-			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.ceil value", "E1002");
+			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.ceil value", "E1002",
+				NamedArgument("ceil", "v"));
 			return new TypedExpression(TCall("__math_ceil", [value]), TInt, span);
 		}
 		if (name == "Math.floor") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "Math.floor" expects 1 argument, got ${arguments.length}', span);
-			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.floor value", "E1002");
+			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TFloat, "Math.floor value", "E1002",
+				NamedArgument("floor", "v"));
 			return new TypedExpression(TCall("__math_floor", [value]), TInt, span);
 		}
 		if (name == "Std.int" || name == "Std.stdIntFloat") {
@@ -2386,6 +2489,14 @@ class CallResolver {
 		if (name == "String.fromCharCode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.fromCharCode" expects 1 argument, got ${arguments.length}', span);
+			// Where the runtime has no native for it (Wasm), the stdlib implements it in Haxe.
+			var library = session.signatures.get(RuntimeType.STRING_FROM_CHAR_CODE);
+			if (library != null) {
+				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STRING_CODES);
+				return new TypedExpression(TCall(RuntimeType.STRING_FROM_CHAR_CODE,
+					typeDeclaredCallArguments(arguments, library, scope, RuntimeType.STRING_FROM_CHAR_CODE, span)),
+					TString, span);
+			}
 			var code = ConversionResolver.plainValue(bodyTyper.typeExpression(arguments[0], scope, TInt),
 				bodyTyper);
 			if (!sameType(code.type, TInt))
@@ -2486,7 +2597,7 @@ class CallResolver {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.indexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var needle = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
-				"String.indexOf needle");
+				"String.indexOf needle", "E1009", NamedArgument("indexOf", "str"));
 			if (arguments.length == 1)
 				return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
 			var start = bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt,
@@ -2497,7 +2608,7 @@ class CallResolver {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.lastIndexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var needle = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
-				"String.lastIndexOf needle");
+				"String.lastIndexOf needle", "E1009", NamedArgument("lastIndexOf", "str"));
 			if (arguments.length == 1)
 				return new TypedExpression(TCall("__string_last_index_of", [receiver, needle]), TInt, span);
 			var start = bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt,
@@ -2507,7 +2618,9 @@ class CallResolver {
 		if (name == "substring" || name == "substr") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.$name" expects 1 or 2 arguments, got ${arguments.length}', span);
-			var start = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, 'String.$name start'),
+			var start = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, 'String.$name start',
+				"E1009",
+				NamedArgument(name, name == "substr" ? "pos" : "startIndex")),
 				end:Null<TypedExpression> = arguments.length == 1
 					? null : bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt, 'String.$name end');
 			if (name == "substr")
@@ -2518,20 +2631,22 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.charCodeAt" expects 1 argument, got ${arguments.length}', span);
 			var index = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt,
-				"String.charCodeAt index");
+				"String.charCodeAt index", "E1009", NamedArgument("charCodeAt", "index"));
 			return new TypedExpression(TStringCharCodeAt(receiver, index), TInt, span);
 		}
 		if (name == "charAt") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.charAt" expects 1 argument, got ${arguments.length}', span);
-			var index = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, "String.charAt index");
+			var index = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, "String.charAt index",
+				"E1009",
+				NamedArgument("charAt", "index"));
 			return new TypedExpression(TStringCharAt(receiver, index), TString, span);
 		}
 		if (name == "split") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.split" expects one argument, got ${arguments.length}', span);
 			var separator = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
-				"String.split separator");
+				"String.split separator", "E1009", NamedArgument("split", "delimiter"));
 			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
 		}
 		throw MissingMember.field("String", name, span);
@@ -2680,14 +2795,14 @@ class CallResolver {
 			&& compiler.types.Monomorphs.containsUnbound(element)) {
 			comparedValue = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element,
 				"array element",
-				"E1002");
+				"E1002", NamedArgument(name, "x"));
 			element = compiler.types.Monomorphs.resolve(element);
 		}
 		if (name == "push" || name == "add") {
 			if (arguments.length != 1)
 				fail("E1008", 'Array.$name expects one argument', span);
 			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
-				"E1002");
+				"E1002", NamedArgument(name, "x"));
 			return new TypedExpression(TArrayPush(receiver, value), TInt, span);
 		}
 		if (name == "exists") {
@@ -2695,7 +2810,7 @@ class CallResolver {
 				fail("E1008", "Array.exists expects one predicate", span);
 			var predicateType = CompilerType.TFunction([element], TBool, []);
 			var predicate = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, predicateType), predicateType,
-				"array predicate", "E1002");
+				"array predicate", "E1002", NamedArgument(name, "f"));
 			invalidateClosureWrites(arguments[0], null, scope);
 			scope.invalidateAllExpressions();
 			var context = session.currentContext.name;
@@ -2737,7 +2852,7 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", "Array.unshift expects one argument", span);
 			var value = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
-				"E1002");
+				"E1002", NamedArgument("unshift", "x"));
 			return new TypedExpression(TArrayUnshift(receiver, value), TInt, span);
 		}
 		if (name == "pop") {
@@ -2754,7 +2869,8 @@ class CallResolver {
 		if (name == "resize") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.resize expects one argument", span);
-			var length = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "array length", "E1002");
+			var length = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "array length", "E1002",
+				NamedArgument("resize", "len"));
 			return new TypedExpression(TCollectionCall(receiver, "resize", [length]), TVoid, span);
 		}
 		if (name == "remove") {
@@ -2765,7 +2881,7 @@ class CallResolver {
 				requestArrayValueEquality(element, span);
 			var value = comparedValue != null ? comparedValue
 				: bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
-				"E1002");
+				"E1002", NamedArgument("remove", "x"));
 			// On a type parameter's element, the equality the search uses is the representation's: the elaboration pass chooses it.
 			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("remove"), [receiver, value]),
 				TBool, span) : arraySearch("remove", receiver, value, span, false);
@@ -2773,9 +2889,10 @@ class CallResolver {
 		if (name == "insert") {
 			if (arguments.length != 2)
 				fail("E1008", "Array.insert expects a position and value", span);
-			var position = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "insert position", "E1002"),
+			var position = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "insert position", "E1002",
+				NamedArgument("insert", "pos")),
 				value = bodyTyper.coerce(typeExpressionValue(arguments[1], scope, element), element, "array element",
-					"E1002");
+					"E1002", NamedArgument("insert", "x"));
 			return new TypedExpression(TCollectionCall(receiver, "insert", [position, value]), TVoid, span);
 		}
 		if (name == "reverse") {
@@ -2793,13 +2910,14 @@ class CallResolver {
 				fail("E1008", "Array.concat expects one argument", span);
 			// Coerced as any argument is: a nullable array is read as the array, as in Haxe (null throws at run time).
 			var other = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TArray(element)), TArray(element),
-				"Array.concat argument", "E1002");
+				"Array.concat argument", "E1002", NamedArgument("concat", "a"));
 			return new TypedExpression(TCollectionCall(receiver, "concat", [other]), TArray(element), span);
 		}
 		if (name == "slice") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", "Array.slice expects a start and optional end", span);
-			var start = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "slice start", "E1002"),
+			var start = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "slice start", "E1002",
+				NamedArgument("slice", "pos")),
 				end = arguments.length == 2 ? bodyTyper.coerce(typeExpressionValue(arguments[1], scope), TInt,
 					"slice end",
 					"E1002") : new TypedExpression(TArrayLength(receiver), TInt, span);
@@ -2808,8 +2926,10 @@ class CallResolver {
 		if (name == "splice") {
 			if (arguments.length != 2)
 				fail("E1008", "Array.splice expects a position and length", span);
-			var position = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "splice position", "E1002"),
-				length = bodyTyper.coerce(typeExpressionValue(arguments[1], scope), TInt, "splice length", "E1002");
+			var position = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TInt, "splice position", "E1002",
+				NamedArgument("splice", "pos")),
+				length = bodyTyper.coerce(typeExpressionValue(arguments[1], scope), TInt, "splice length", "E1002",
+					NamedArgument("splice", "len"));
 			return new TypedExpression(TCollectionCall(receiver, "splice", [position, length]), TArray(element), span);
 		}
 		if (name == "sort") {
@@ -2817,7 +2937,7 @@ class CallResolver {
 				fail("E1008", "Array.sort expects one comparator", span);
 			var comparatorType = CompilerType.TFunction([element, element], TInt, []),
 				comparator = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, comparatorType), comparatorType,
-					"array comparator", "E1002");
+					"array comparator", "E1002", NamedArgument("sort", "f"));
 			invalidateClosureWrites(arguments[0], null, scope);
 			scope.invalidateAllExpressions();
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
@@ -2827,7 +2947,7 @@ class CallResolver {
 				fail("E1008", "Array.join expects one separator", span);
 			var separator = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
 				"join separator",
-				"E1002");
+				"E1002", NamedArgument("join", "sep"));
 			return new TypedExpression(TCollectionCall(receiver, "join", [separator]), TString, span);
 		}
 		if (name == "indexOf") {
@@ -2845,7 +2965,7 @@ class CallResolver {
 				requestArrayValueEquality(element, span);
 			var value = comparedValue != null ? comparedValue
 				: bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
-				"E1002");
+				"E1002", NamedArgument("indexOf", "x"));
 			// On a type parameter's element, the equality the search uses is the representation's: the elaboration pass chooses it.
 			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("indexOf"), [receiver, value]),
 				TInt, span) : arraySearch("indexOf", receiver, value, span, false);
@@ -2858,12 +2978,13 @@ class CallResolver {
 				requestArrayValueEquality(element, span);
 			var value = comparedValue != null ? comparedValue
 				: bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
-				"E1002");
+				"E1002", NamedArgument("contains", "x"));
 			// On a type parameter's element, the equality the search uses is the representation's: the elaboration pass chooses it.
 			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("contains"), [receiver, value]),
 				TBool, span) : arraySearch("contains", receiver, value, span, false);
 		}
-		var library = typeLibraryArrayMethod(receiver, name, arguments, span, scope);
+		var library = ArrayLibrary.provides(name) ? typeLibraryMethod(ArrayLibrary.CLASS_NAME, "Array", receiver, name,
+			arguments, span, scope) : null;
 		if (library != null)
 			return library;
 		throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
@@ -2883,21 +3004,22 @@ class CallResolver {
 			default: false;
 		};
 
-	/** `values.name(arguments)` as `haxeon.ArrayMethods.name(values, arguments)`, when the library defines it. */
-	function typeLibraryArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
-			span:SourceSpan, scope:Scope):Null<TypedExpression> {
-		if (!ArrayLibrary.provides(name))
-			return null;
-		var methodKey = ArrayLibrary.CLASS_NAME + "." + name,
+	/**
+	 * `receiver.name(arguments)` as `library.name(receiver, arguments)` when the stdlib class `library` defines it, for the array
+	 * and map methods written in Haxe (`ArrayLibrary`, `MapLibrary`); `kind` names the receiver's type in errors.
+	 */
+	function typeLibraryMethod(library:String, kind:String, receiver:TypedExpression, name:String,
+			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		var methodKey = library + "." + name,
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			return null;
 		if (arguments.length + 1 > method.arguments.length)
-			fail("E1008", 'Array.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}',
+			fail("E1008", '$kind.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}',
 				span);
 		var prepared = typeGenericCallArguments(method, arguments, scope, span, [receiver]);
-		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope,
-			ArrayLibrary.CLASS_NAME, true, prepared.substitutions);
+		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, library, true,
+			prepared.substitutions);
 	}
 
 	function iterator(values:TypedExpression, element:CompilerType, span:SourceSpan):TypedExpression {
@@ -2937,7 +3059,7 @@ class CallResolver {
 			case TInstance(Class, className, []):
 				var found = false;
 				if (session.classDecls.exists(className)) {
-					var classDecl = requiredMapValue(session.classDecls, className);
+					var classDecl = session.classDecls.required(className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = true;
@@ -2950,6 +3072,14 @@ class CallResolver {
 			default: false;
 		};
 
+	public function stringifyMap(receiver:TypedExpression, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		// Implicit conversion sites are identified by typing, so use the already seeded Std module.
+		var call = typeLibraryMethod(RuntimeType.STD, "Map", receiver, "stringifyMap", [], span, scope);
+		if (call != null)
+			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STD);
+		return call;
+	}
+
 	public function typeMapMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope):TypedExpression {
 		var mapType = switch receiver.type {
@@ -2961,10 +3091,10 @@ class CallResolver {
 			if (arguments.length != 2)
 				fail("E1008", "Map.set expects a key and value", span);
 			var key = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, mapType.key), mapType.key, "map key",
-				"E1002"),
+				"E1002", NamedArgument("set", "k")),
 				value = bodyTyper.coerce(typeExpressionValue(arguments[1], scope, mapType.value), mapType.value,
 					"map value",
-					"E1002");
+					"E1002", NamedArgument("set", "v"));
 			var entryPath = FlowAnalysis.mapEntryPath(receiver, key);
 			if (entryPath != null)
 				scope.refineExpression(entryPath, mapType.value, FlowAnalysis.entryFactsSurviveCalls(scope, receiver));
@@ -3006,12 +3136,22 @@ class CallResolver {
 				fail("E1008", "Map.size expects no arguments", span);
 			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
 		}
-		if (name != "exists" && name != "remove" && name != "get")
+		if (name == "toString" && session.signatures.exists(RuntimeType.STD + ".stringifyMap")) {
+			if (arguments.length != 0)
+				fail("E1008", "Map.toString expects no arguments", span);
+			return stringifyMap(receiver, span, scope);
+		}
+		if (name != "exists" && name != "remove" && name != "get") {
+			var library = MapLibrary.provides(name) ? typeLibraryMethod(MapLibrary.CLASS_NAME, "Map", receiver, name,
+				arguments, span, scope) : null;
+			if (library != null)
+				return library;
 			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
+		}
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, mapType.key), mapType.key, "map key",
-			"E1002");
+			"E1002", NamedArgument(name, "k"));
 		return switch name {
 			case "exists": new TypedExpression(TCollectionCall(receiver, "exists", [key]), TBool, span);
 			case "remove":
@@ -3038,7 +3178,7 @@ class CallResolver {
 	public function typeInferredClassConstruction(typeName:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
-		var declaration = requiredMapValue(session.classDecls, typeName),
+		var declaration = session.classDecls.required(typeName),
 			parameters = declaration.typeParameters,
 			substitutions:Map<String, CompilerType> = [];
 		var constructorExpectation = switch expectedType {
@@ -3059,15 +3199,13 @@ class CallResolver {
 
 		var constructorName = typeName + ".new",
 			hasConstructor = session.signatures.exists(constructorName),
-			implicitConstructor = !hasConstructor && [
-				for (field in declaration.fields)
-					if (!field.isStatic && field.initializer != null) field
-			].length > 0;
+			implicitConstructor = !hasConstructor
+				&& compiler.semantic.ImplicitConstructors.hasInstanceInitializers(declaration);
 		if (!hasConstructor) {
 			if (arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
 		} else {
-			var constructor = requiredMapValue(session.signatures, constructorName),
+			var constructor = session.signatures.required(constructorName),
 				required = constructor.arguments.length;
 			while (required > 0 && AstPredicates.isOptionalArgument(constructor.arguments[required - 1]))
 				required--;
@@ -3079,7 +3217,7 @@ class CallResolver {
 		}
 
 		var typed:Array<TypedExpression> = [],
-			constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null;
+			constructor = hasConstructor ? session.signatures.required(constructorName) : null;
 		for (index in 0...arguments.length) {
 			var expectedArgument:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions) && constructor != null)
@@ -3094,6 +3232,7 @@ class CallResolver {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "$typeName"', span);
+		genericInstantiation.settleNullArguments(substitutions);
 		validateTypeParameterConstraints(typeName, declaration.typeConstraints, substitutions, span);
 
 		if (constructor != null) {
@@ -3127,20 +3266,18 @@ class CallResolver {
 			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope, expectedType);
 		if (hasExplicitTypeArguments) {
 			if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
-				fail("E1007", 'Unknown class "$typeName"', span);
-			var classDecl = requiredMapValue(session.classDecls, typeName),
+				throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedClass, typeName, span));
+			var classDecl = session.classDecls.required(typeName),
 				valueType = session.representation.semanticType(AppliedType(typeName, typeArguments), span,
 					session.currentContext.typeSubstitutions),
 				substitutions = session.representation.nominalSubstitutions(valueType),
 				constructorName = typeName + ".new",
 				hasConstructor = session.signatures.exists(constructorName),
-				implicitConstructor = !hasConstructor && [
-					for (field in classDecl.fields)
-						if (!field.isStatic && field.initializer != null) field
-				].length > 0;
+				implicitConstructor = !hasConstructor
+					&& compiler.semantic.ImplicitConstructors.hasInstanceInitializers(classDecl);
 			if (!hasConstructor && arguments.length != 0)
 				fail("E1008", 'Constructor "$typeName" expects 0 arguments, got ${arguments.length}', span);
-			var constructor = hasConstructor ? requiredMapValue(session.signatures, constructorName) : null,
+			var constructor = hasConstructor ? session.signatures.required(constructorName) : null,
 				semanticArguments = constructor == null ? [] : typeDeclaredCallArguments(arguments,
 					constructor, scope, constructorName, span,
 					substitutions),
@@ -3150,18 +3287,16 @@ class CallResolver {
 		}
 		if ((!session.classDecls.exists(typeName) && !PlatformAbi.isType(typeName))
 			|| session.interfaceDecls.exists(typeName))
-			fail("E1007", 'Unknown class "$typeName"', span);
-		var classDecl = session.classDecls.exists(typeName) ? requiredMapValue(session.classDecls, typeName) : null;
+			throw new CompileError(Diagnostic.unresolved("E1007", UnresolvedNameKind.WantedClass, typeName, span));
+		var classDecl = session.classDecls.exists(typeName) ? session.classDecls.required(typeName) : null;
 		if (classDecl != null && classDecl.typeParameters.length > 0)
 			return typeInferredClassConstruction(typeName, arguments, span, scope, expectedType);
 		var constructorName = typeName + ".new",
 			hasConstructor = session.signatures.exists(constructorName),
-			implicitConstructor = !hasConstructor && classDecl != null && [
-				for (field in classDecl.fields)
-					if (!field.isStatic && field.initializer != null) field
-			].length > 0;
-		var expected = hasConstructor ? bodyTyper.argumentTypesOf(requiredMapValue(session.signatures,
-			constructorName)) : PlatformAbi.constructorArguments(typeName),
+			implicitConstructor = !hasConstructor && classDecl != null
+				&& compiler.semantic.ImplicitConstructors.hasInstanceInitializers(classDecl);
+		var expected = hasConstructor ? bodyTyper.argumentTypesOf(session.signatures.required(constructorName))
+			: PlatformAbi.constructorArguments(typeName),
 			resolvedExpected:Array<CompilerType> = [];
 		if (expected != null)
 			resolvedExpected = expected;
@@ -3169,8 +3304,8 @@ class CallResolver {
 			fail("E1008",
 				'Constructor "$typeName" expects ${resolvedExpected.length} arguments, got ${arguments.length}', span);
 		var typed = hasConstructor ? typeDeclaredCallArguments(arguments,
-			requiredMapValue(session.signatures, constructorName), scope,
-			constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName),
+			session.signatures.required(constructorName), scope,
+			constructorName, span) : typeCallArguments(arguments, resolvedExpected, scope, constructorName, span),
 			nativeConstructor = PlatformAbi.constructorNative(typeName),
 			valueType = PlatformAbi.valueType(typeName);
 		return nativeConstructor == null
@@ -3180,7 +3315,7 @@ class CallResolver {
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var decl = requiredMapValue(session.declarations.abstracts, name),
+		var decl = session.declarations.abstracts.required(name),
 			constructorName = name + ".new",
 			constructor = session.signatures.get(constructorName);
 		if (constructor == null)
@@ -3254,7 +3389,7 @@ class CallResolver {
 				for (index in 0...parameters.length)
 					if (index < values.length) {
 						var inferred = substitutions.get(parameters[index]);
-						if (inferred == null)
+						if (isUninferredParameter(parameters[index], substitutions))
 							substitutions.set(parameters[index], values[index]);
 						else if (Monomorphs.follow(inferred).match(TMonomorph(_))) {
 							// An argument that left it open (`[]`) takes it, as a type variable unifies.
@@ -3267,6 +3402,7 @@ class CallResolver {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "${decl.name}"', span);
+		genericInstantiation.settleNullArguments(substitutions);
 		validateTypeParameterConstraints(decl.name, decl.typeConstraints, substitutions, span);
 		return {
 			type: TAbstract(decl.name, [for (parameter in parameters) requiredMapValue(substitutions, parameter)],
@@ -3275,9 +3411,15 @@ class CallResolver {
 		};
 	}
 
+	static function isUninferredParameter(parameter:String, substitutions:Map<String, CompilerType>):Bool
+		return switch substitutions.get(parameter) {
+			case null | TNull: true;
+			default: false;
+		};
+
 	static function allTypeParametersBound(parameters:Array<String>, substitutions:Map<String, CompilerType>):Bool {
 		for (parameter in parameters)
-			if (!substitutions.exists(parameter))
+			if (isUninferredParameter(parameter, substitutions))
 				return false;
 		return true;
 	}

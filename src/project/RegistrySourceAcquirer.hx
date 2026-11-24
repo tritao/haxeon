@@ -2,27 +2,58 @@ package project;
 
 import build.execution.ProcessRunner;
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
+import project.RegistryIndex.MissingRelease;
 import sys.FileSystem;
 import sys.io.File;
 
-/** Resolves immutable registry releases from a content-addressed local cache. */
+/**
+ * Resolves registry releases: immutable ones, unpacked below their registry's index and checked against its checksum, and live
+ * ones, which a checkout's haxeon registry resolves from the package's own directory (docs/design/SDK_LAYOUT.md). A registry's
+ * directory is in the content-addressed source cache, except the `haxeon` registry's packages that the SDK's registry has.
+ */
 class RegistrySourceAcquirer implements SourceAcquirer {
 	final cacheRoot:String;
+	final sdkRegistry:Null<String>;
 
-	public function new(cacheRoot:String)
+	/** `sdkRegistry` is the SDK's registry directory (`build.HaxeonSdk.registryRoot`), consulted first for the `haxeon` registry. */
+	public function new(cacheRoot:String, ?sdkRegistry:String) {
 		this.cacheRoot = Path.normalize(cacheRoot);
+		this.sdkRegistry = sdkRegistry;
+	}
+
+	/** The directory of `registry` that holds `name`: the SDK's for the haxeon registry when its index has the package. */
+	public function directory(registry:String, name:String):String {
+		if (registry == PackageSourceCodec.DEFAULT_REGISTRY && sdkRegistry != null) {
+			var index = RegistryIndex.load(sdkRegistry);
+			if (index != null && index.packages.exists(name))
+				return sdkRegistry;
+		}
+		return Path.join([cacheRoot, TextDigest.sha256(registry)]);
+	}
+
+	/** The index of `registry` that `name` resolves from. */
+	public function index(registry:String, name:String):RegistryIndex {
+		var registryDirectory = directory(registry, name), index = RegistryIndex.load(registryDirectory);
+		if (index == null)
+			throw new compiler.core
+				.UsageError('The "$registry" registry is not available: no index at ${Path.join([registryDirectory, "index.json"])}');
+		return index;
+	}
 
 	public function acquire(source:PackageSource, ownerRoot:String, packageId:PackageId):AcquiredSource
 		return switch source {
 			case PackageSource.Registry(registry, name, range):
-				var registryDirectory = Path.join([cacheRoot, Sha256.encode(registry)]),
-					indexPath = Path.join([registryDirectory, "index.json"]);
-				if (!FileSystem.exists(indexPath))
-					throw new InternalError('Registry index for "$registry" is not in the Haxeon cache: $indexPath');
-				var index = RegistryIndex.parse(indexPath, File.getContent(indexPath)),
-					release = index.resolve(name, range),
+				var registryDirectory = directory(registry, name),
+					index = RegistryIndex.load(registryDirectory);
+				if (index == null)
+					throw new InternalError('Registry index for "$registry" is not in the Haxeon cache: ${Path.join([registryDirectory, "index.json"])}');
+				var live = index.live(name);
+				if (live != null)
+					return acquireLive(registry, name, range, live, index);
+				var release = index.resolve(name, range),
 					destination = Path.join([registryDirectory, name, release.version]);
 				if (!FileSystem.exists(destination))
 					publishArchive(registryDirectory, name, release.version, release.checksum, destination, packageId);
@@ -35,6 +66,26 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 			case _:
 				throw new InternalError('Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the registry acquirer');
 		};
+
+	/**
+	 * A live package: its directory, with its manifest as publishing writes it (`RegistryPublisher.publishedManifest`). A range must
+	 * hold the package's version; an exact version, a lockfile's, is taken as it is, so the lockfile's entry stays the same whichever
+	 * SDK resolves it.
+	 */
+	function acquireLive(registry:String, name:String, range:String, live:RegistryIndex.RegistryVersion,
+			index:RegistryIndex):AcquiredSource {
+		var exact = RegistryIndex.isExactVersion(range);
+		if (!exact && !PackageCompatibility.satisfiesVersionRange(range, live.version))
+			throw new MissingRelease('Registry has no release of "$name" matching "$range" (this Haxeon\'s is ${live.version})');
+		var manifestPath = PackageManifest.find(live.path);
+		if (manifestPath == null)
+			throw new InternalError('Registry package "$name" has no ${PackageManifest.TOML_NAME} or ${PackageManifest.JSON_NAME} in ${live.path}');
+		var version = exact ? range : live.version,
+			manifest = PackageManifest.parse(manifestPath,
+				RegistryPublisher.publishedManifest(manifestPath, name, live.version, index.liveDirectories()));
+		return new AcquiredSource(live.path, PackageSource.Registry(registry, name, version), version, null,
+			live.compatibility, manifest, true);
+	}
 
 	function publishArchive(registryDirectory:String, name:String, version:String, checksum:String, destination:String,
 			packageId:PackageId):Void {
@@ -57,7 +108,7 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 			throw new InternalError('Could not extract registry release "$packageId"');
 		var sourceRoot = findManifestRoot(temporary);
 		if (sourceRoot == null)
-			throw new InternalError('Registry release "$packageId" does not contain haxeon.json');
+			throw new InternalError('Registry release "$packageId" does not contain ${PackageManifest.TOML_NAME} or ${PackageManifest.JSON_NAME}');
 		FileSystem.rename(sourceRoot, destination);
 		if (sourceRoot != temporary)
 			FileSystem.deleteDirectory(temporary);
@@ -71,11 +122,11 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 	}
 
 	function findManifestRoot(root:String):Null<String> {
-		if (FileSystem.exists(Path.join([root, "haxeon.json"])))
+		if (PackageManifest.find(root) != null)
 			return root;
 		for (entry in FileSystem.readDirectory(root)) {
 			var path = Path.join([root, entry]);
-			if (FileSystem.isDirectory(path) && FileSystem.exists(Path.join([path, "haxeon.json"])))
+			if (FileSystem.isDirectory(path) && PackageManifest.find(path) != null)
 				return path;
 		}
 		return null;

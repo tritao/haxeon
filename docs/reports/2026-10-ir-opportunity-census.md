@@ -99,6 +99,5 @@ reciprocal is not eligible for strength reduction. NaN, infinity and non-powers 
 The material counted-loop reads justified an experiment, but its nine-pair timing gate failed: no benchmark
 reached 3%, and fasta regressed consistently. The bounds pass was discarded; this census and its read-only proof
 analysis remain. GC profiling likewise led to three independent experiments, none of which reached the 5% tree
-gate. See [bounds results](2026-10-bounds-check-elimination.md), [GC profile and results](2026-10-gc-profile.md), and the
-[execution report](2026-10-optimization-next-results.md). Fused writes were never implemented because the census gate
+gate ([BENCHMARKS.md](../internals/BENCHMARKS.md#tried-and-rejected)). Fused writes were never implemented because the census gate
 provided no material hot-loop target in the required benchmarks.

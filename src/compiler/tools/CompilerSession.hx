@@ -32,6 +32,14 @@ class CompilerSession {
 	var requestSources:Map<String, String> = [];
 
 	/**
+	 * Each source file's text as the session last read it, with the file's version then (`FileVersion`): a request whose file
+	 * still has that version takes the text without reading the file. A version is trusted once a later request has read the
+	 * file at it again, so a write that left the version as it was (the same size, within the file system's timestamp
+	 * resolution of the read) is read by that later request.
+	 */
+	var sourceReads:Map<String, {version:Bytes, text:String, settled:Bool}> = [];
+
+	/**
 	 * The build of the compiler its live history is keyed by: the running program's fingerprint
 	 * (`CodeIdentityTable.compilerVersion`) unless one is given.
 	 */
@@ -61,39 +69,62 @@ class CompilerSession {
 		encodedModule = null;
 		functionMap = new IndexText();
 		functionIds = new IndexText();
+		sourceReads = [];
 	}
 
 	/**
 	 * The bytes of the module last written, with the module they encode. Encoding is a function of the module alone, so a build
 	 * that reuses the module (see `PipelineSnapshot`) writes the same bytes without validating and encoding it again.
 	 */
-	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes}>;
+	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>}>;
 
-	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes {
+	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes
+		return encoded(code).bytes;
+
+	function encoded(code:HlCode):{code:HlCode, bytes:haxeon.io.SegmentedBytes, buildId:Null<String>} {
 		var known = encodedModule;
 		if (known == null || known.code != code) {
 			var session = compiler;
 			known = {
 				code: code,
-				bytes: HlWriter.encode(code, writerCache, session != null && session.options.checkReuse)
+				bytes: HlWriter.encode(code, writerCache, session != null && session.options.checkReuse),
+				buildId: null
 			};
 			encodedModule = known;
 		}
-		return known.bytes;
+		return known;
+	}
+
+	/** The build id of `code`'s module: the SHA-256 of the bytes `writeHashLink` writes, worked out once for them. */
+	public function hashLinkBuildId(code:HlCode):String {
+		var known = encoded(code), id = known.buildId;
+		if (id == null) {
+			id = build.execution.ContentDigest.makeHex(known.bytes.flatten());
+			known.buildId = id;
+		}
+		return id;
 	}
 
 	public function writeHashLink(code:HlCode, path:String):Void
 		HlWriter.saveSegments(encodeHashLink(code), path);
 
-	/** Wasm guests import their host services through this stdlib interface. */
-	static function hostInterfaces(target:Null<BackendTarget>):{interfaces:Array<String>,
-		projections:Array<String>} return switch target {
-			case Wasm32 | WasmGc: {
-				interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"],
-				projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]
-			};
-			case _: {interfaces: [], projections: []};
+	/** Wasm guests import their host services through this interface of the standard library at `stdlib`. */
+	static function hostInterfaces(target:Null<BackendTarget>, stdlib:String):{
+		interfaces:Array<String>,
+		projections:Array<String>
+	} return switch target {
+		case Wasm32 | WasmGc: {
+			interfaces: [
+				Path.join([stdlib, "haxeon/wasm/HaxeonHost.hxi"]),
+				Path.join([stdlib, "haxeon/wasm/HaxeonCrypto.hxi"])
+			],
+			projections: [
+				Path.join([stdlib, "haxeon/wasm/HaxeonHost.hxmap"]),
+				Path.join([stdlib, "haxeon/wasm/HaxeonCrypto.hxmap"])
+			]
 		};
+		case _: {interfaces: [], projections: []};
+	};
 
 	/**
 	 * Stdlib modules a Wasm host calls into, compiled into every guest that shares linear memory with its host
@@ -101,8 +132,8 @@ class CompilerSession {
 	 */
 	static function hostSources(request:CompilerRequest):Array<String>
 		return switch BackendTargets.parse(request.target) {
-			case Wasm32: ["stdlib/haxeon/wasm/HostError.hx"];
-			case WasmGc if (request.importMemory == true): ["stdlib/haxeon/wasm/HostError.hx"];
+			case Wasm32: [Path.join([request.stdlib, "haxeon/wasm/HostError.hx"])];
+			case WasmGc if (request.importMemory == true): [Path.join([request.stdlib, "haxeon/wasm/HostError.hx"])];
 			case _: [];
 		};
 
@@ -118,7 +149,7 @@ class CompilerSession {
 		writtenBaseline = null;
 		// Every consumer of a source in this request sees the same bytes.
 		requestSources = [];
-		var host = hostInterfaces(BackendTargets.parse(request.target)),
+		var host = hostInterfaces(BackendTargets.parse(request.target), request.stdlib),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
 		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {
@@ -139,6 +170,7 @@ class CompilerSession {
 				// Another set of passes or checks is another session: caches (inlining, pipeline, lowering) hold their results.
 				options: request.options.key(),
 				roots: request.roots,
+				stdlib: request.stdlib,
 				packageRoots: request.packageRoots,
 				paths: request.paths,
 				interfaces: interfaces,
@@ -201,7 +233,7 @@ class CompilerSession {
 					compiler.addFfiInterface(source.path, source.text);
 				}
 			}
-			compiler.addStandardLibrarySourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot(request.stdlib);
 			for (root in request.roots)
 				compiler.addSourceRoot(root);
 			for (root in request.packageRoots)
@@ -222,9 +254,9 @@ class CompilerSession {
 		SourceManifestLoader.load(compiler, request.roots, request.paths, request.packageRoots, readChanged);
 		// Wasm guests always carry the stdlib modules their host calls into.
 		var hostModules = hostSources(request);
-		SourceManifestLoader.load(compiler, ["stdlib"], hostModules, null, readChanged);
+		SourceManifestLoader.load(compiler, [request.stdlib], hostModules, null, readChanged);
 		for (path in hostModules)
-			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, ["stdlib"])));
+			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, [request.stdlib])));
 		compiler.setExportedFunctions(request.exports);
 		return compiler;
 	}
@@ -253,9 +285,11 @@ class CompilerSession {
 		var record = LiveRefusal.parse(text);
 		if (record == null || record.identity != marker.substring(0, marker.lastIndexOf(":")))
 			return;
-		if (active.retractPublication(record.running))
+		if (active.retractPublication(record.running)) {
+			// The published marker still names the refused revision, which the retracted history no longer describes.
+			unrecordedPublication = null;
 			report('live host refused revision ${record.refused}; patching from revision ${record.running}, which it runs');
-		else
+		} else
 			report('live host runs revision ${record.running}, which this compiler no longer holds; restart the live session to patch again');
 	}
 
@@ -307,8 +341,20 @@ class CompilerSession {
 			bytes = Bytes.alloc(key.length + state.length);
 		bytes.blit(0, key, 0, key.length);
 		bytes.blit(key.length, state, 0, state.length);
-		File.saveBytes(output + ".live.state.tmp", bytes);
-		CompilerDriver.replaceFile(output + ".live.state.tmp", output + ".live.state");
+		var temporary = output + ".live.state.tmp." + Std.string(Std.random(0x3fffffff));
+		try {
+			File.saveBytes(temporary, bytes);
+			// A different compiler can finish publishing while this one encodes its history.
+			if (File.getContent(output + ".live.full") != publication.marker) {
+				FileSystem.deleteFile(temporary);
+				return false;
+			}
+			CompilerDriver.replaceFile(temporary, output + ".live.state");
+		} catch (error:haxe.Exception) {
+			if (FileSystem.exists(temporary))
+				FileSystem.deleteFile(temporary);
+			throw error;
+		}
 		return true;
 	}
 
@@ -372,7 +418,20 @@ class CompilerSession {
 		var cached = requestSources.get(key);
 		if (cached != null)
 			return cached;
-		var text = FileVersion.readSource(key);
+		var known = sourceReads.get(key), text:String;
+		var current = known != null && known.settled ? FileVersion.of(key) : null;
+		if (known != null && current != null && current.compare(known.version) == 0)
+			text = known.text;
+		else {
+			var read = FileVersion.readVersionedSource(key);
+			// The same text keeps the String the modules hold, which they then find unchanged without reading it.
+			text = known != null && known.text == read.text ? known.text : read.text;
+			sourceReads.set(key, {
+				version: read.version,
+				text: text,
+				settled: known != null && known.version.compare(read.version) == 0
+			});
+		}
 		requestSources.set(key, text);
 		return text;
 	}

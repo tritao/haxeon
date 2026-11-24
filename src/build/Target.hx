@@ -26,6 +26,7 @@ enum TargetAbi {
 	Darwin;
 	Android;
 	Wasm;
+	WasmGc;
 	System;
 }
 
@@ -86,7 +87,7 @@ class Target {
 	 * `wasm32`, `wasm-gc`) follows from it (`project.CompilerInputs.compilerTarget`). Architectures are spelled `x86_64` and
 	 * `arm64`, as `toString` writes them; `aarch64`, `amd64`, `x64` and the i386 family are read too.
 	 */
-	public static final NAMES = "host, android, wasm32, or OS-ARCH[-ABI] such as linux-x86_64 or macos-arm64";
+	public static final NAMES = "host, android, wasm32, wasm-gc, or OS-ARCH[-ABI] such as linux-x86_64 or macos-arm64";
 
 	/** Parse the stable target names accepted by manifests and the CLI. */
 	public static function parse(value:String):Target {
@@ -101,6 +102,8 @@ class Target {
 		if (["js", "cpp", "cs", "java", "jvm", "python", "lua", "php", "neko", "swf", "flash", "interp", "eval"]
 			.indexOf(normalized) >= 0)
 			throw new InternalError('Unknown target "$value": Haxeon builds HashLink and WebAssembly programs. Valid: $NAMES');
+		if (normalized == "wasm-gc")
+			return new Target(TargetOs.Wasm, TargetArch.Wasm32, TargetAbi.WasmGc);
 		if (normalized == "wasm32" || normalized == "wasm32-wasi")
 			return new Target(TargetOs.Wasm, TargetArch.Wasm32, TargetAbi.Wasm);
 		if (normalized == "wasm64" || normalized == "wasm64-wasi")
@@ -150,7 +153,7 @@ class Target {
 
 	public function toString():String
 		return switch os {
-			case TargetOs.Wasm: "wasm32";
+			case TargetOs.Wasm: abi == TargetAbi.WasmGc ? "wasm-gc" : "wasm32";
 			case TargetOs.Android: '${osName(os)}-${archName(arch)}';
 			case TargetOs.MacOS: '${osName(os)}-${archName(arch)}';
 			case _: '${osName(os)}-${archName(arch)}-${abiName(abi)}';
@@ -182,6 +185,7 @@ class Target {
 			case TargetAbi.Darwin: "darwin";
 			case TargetAbi.Android: "android";
 			case TargetAbi.Wasm: "wasm";
+			case TargetAbi.WasmGc: "wasm-gc";
 			case TargetAbi.System: "system";
 		};
 

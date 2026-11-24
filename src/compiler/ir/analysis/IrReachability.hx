@@ -26,6 +26,7 @@ import compiler.semantic.SemanticSignature;
  * through a class or interface type, or reflection by field name) reaches a class's methods only once a reached function constructs
  * that class (rapid type analysis): a class nothing constructs has no instance to receive the call.
  */
+@:nullSafety(Strict)
 class IrReachability {
 	/** The functions reachable from `entry` and `additionalRoots` by calls, closures and method calls. */
 	public static function functions(program:IrProgram, entry:String,
@@ -51,8 +52,8 @@ class IrReachability {
 	/** `withGeneratedRuntimeRoots`, with the finished walk: what it reached, the natives it calls and the classes it mentions. */
 	public static function walkWithGeneratedRuntimeRoots(program:IrProgram, entry:String,
 			?additionalRoots:Array<String>,
-			keepLiveClasses = false):IrReachabilityWalk {
-		var walk = new IrReachabilityWalk(program, keepLiveClasses);
+			keepLiveClasses = false, ?memo:IrFunctionMemo<IrBodyEdges>):IrReachabilityWalk {
+		var walk = new IrReachabilityWalk(program, keepLiveClasses, memo);
 		walk.visit(entry);
 		if (additionalRoots != null)
 			for (root in additionalRoots)
@@ -346,6 +347,90 @@ class IrReachability {
 }
 
 /** What `IrReachability.trimTables` reads of one function: whether a block of it ends unreachable, and the globals and classes it names. */
+/**
+ * What `IrReachabilityWalk` reads of a body, in row order (`IrBodyEdges.of`): the walk replays it instead of reading the rows, so
+ * a session that keeps it while the function is the same object (`IrFunctionMemo`) reads only the bodies an edit made. A type
+ * mentioned again, a class constructed again and a dispatch made again change nothing in a walk, so each is listed once.
+ */
+@:nullSafety(Strict)
+class IrBodyEdges {
+	public static inline final MENTION = 0;
+	public static inline final CONSTRUCT = 1;
+	public static inline final CALL = 2;
+	public static inline final STATIC_CLOSURE = 3;
+	public static inline final INSTANCE_CLOSURE = 4;
+	public static inline final DYNAMIC_ITERATION = 5;
+	public static inline final CLASS_DISPATCH = 6;
+	public static inline final INTERFACE_DISPATCH = 7;
+
+	/** Each event's kind. */
+	public final kinds:Array<Int> = [];
+
+	/** Each event's name: the function, class or receiver type; "" for a mention or a dynamic iteration. */
+	public final names:Array<String> = [];
+
+	/** A mention's type, a dispatch's method name (as `IrType.Obj`); null otherwise. */
+	public final details:Array<Null<IrType>> = [];
+
+	function new() {}
+
+	public static function of(body:IrBody):IrBodyEdges {
+		var summary = new IrBodyEdges(), seen:Map<String, Bool> = [];
+		function add(kind:Int, name:String, detail:Null<IrType>):Void {
+			summary.kinds.push(kind);
+			summary.names.push(name);
+			summary.details.push(detail);
+		}
+		function once(key:String):Bool {
+			if (seen.exists(key))
+				return false;
+			seen.set(key, true);
+			return true;
+		}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block), terminator = body.terminatorRow(block);
+			while (row >= 0 && row != terminator) {
+				var output = body.output(row), opcode = body.opcode(row);
+				if (output.exists()) {
+					var type = body.valueType(output);
+					if (once(compiler.ir.model.TypeKey.of(type).toString()))
+						add(MENTION, "", type);
+				}
+				switch opcode {
+					case IrOpcode.NewObject:
+						var name = body.symbol(row).name;
+						if (once("new " + name))
+							add(CONSTRUCT, name, null);
+					case IrOpcode.Call:
+						add(CALL, body.symbol(row).name, null);
+					case IrOpcode.StaticClosure:
+						add(STATIC_CLOSURE, body.symbol(row).name, null);
+					case IrOpcode.InstanceClosure:
+						add(INSTANCE_CLOSURE, body.symbol(row).name, null);
+					case IrOpcode.IteratorNext if ((switch (body.valueType(output)) {
+						case Dyn: true;
+						default: false;
+					})): add(DYNAMIC_ITERATION, "", null);
+					case IrOpcode.MethodCall:
+						var method = body.symbol(row).name;
+						switch body.valueType(body.operand(row, 0)) {
+							case Obj(typeName):
+								if (once(typeName + "\u0001" + method))
+									add(CLASS_DISPATCH, typeName, Obj(method));
+							case Virtual(interfaceName):
+								if (once(interfaceName + "\u0002" + method))
+									add(INTERFACE_DISPATCH, interfaceName, Obj(method));
+							default:
+						}
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return summary;
+	}
+}
+
 typedef IrTrimSummary = {
 	final fatal:Bool;
 	final globals:Array<String>;
@@ -353,6 +438,7 @@ typedef IrTrimSummary = {
 }
 
 /** One walk over a program that takes more roots as they appear. */
+@:nullSafety(Strict)
 class IrReachabilityWalk {
 	public final reachable:Map<String, Bool> = [];
 
@@ -385,9 +471,13 @@ class IrReachabilityWalk {
 	 * (`Reflect.field`). A class nothing mentions has no instance, so its methods go. Every value a function uses is defined by an
 	 * argument or an instruction output, so the types of those are all the types it mentions.
 	 */
-	public function new(program:IrProgram, keepLiveClasses = false) {
+	/** The walk summaries of the bodies, kept by a session while each function is the same object; null to read every body. */
+	final memo:Null<IrFunctionMemo<IrBodyEdges>>;
+
+	public function new(program:IrProgram, keepLiveClasses = false, ?memo:IrFunctionMemo<IrBodyEdges>) {
 		index = IrProgramIndex.of(program);
 		this.keepLiveClasses = keepLiveClasses;
+		this.memo = memo;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
 		nativeResults = IrConstructed.nativeResults(program);
@@ -397,6 +487,8 @@ class IrReachabilityWalk {
 		var pending = [root];
 		while (pending.length > 0) {
 			var name = pending.pop();
+			if (name == null)
+				break;
 			if (reachable.exists(name))
 				continue;
 			var fn = byName.get(name);
@@ -411,7 +503,17 @@ class IrReachabilityWalk {
 			}
 			var body = fn.body;
 			if (body != null) {
-				visitBody(body, pending);
+				var known = memo;
+				if (known == null) {
+					visitBody(body, pending);
+					continue;
+				}
+				var summary = known.get(fn);
+				if (summary == null) {
+					summary = IrBodyEdges.of(body);
+					known.set(fn, summary);
+				}
+				replay(summary, pending);
 				continue;
 			}
 			for (block in fn.blocks)
@@ -497,6 +599,43 @@ class IrReachabilityWalk {
 				row = body.nextRow(row);
 			}
 		}
+
+	/** `visitBody` from a body's summary: the same steps in the same order. */
+	function replay(summary:IrBodyEdges, pending:Array<String>):Void {
+		var kinds = summary.kinds, names = summary.names, details = summary.details;
+		for (index in 0...kinds.length) {
+			var name = names[index];
+			switch kinds[index] {
+				case IrBodyEdges.MENTION:
+					var type = details[index];
+					if (keepLiveClasses && type != null)
+						mention(type, pending);
+				case IrBodyEdges.CONSTRUCT:
+					construct(name, pending);
+				case IrBodyEdges.CALL:
+					var made = nativeResults.get(name);
+					if (made != null)
+						construct(made, pending);
+					used.set(name, true);
+					pending.push(name);
+				case IrBodyEdges.STATIC_CLOSURE:
+					used.set(name, true);
+					pending.push(name);
+				case IrBodyEdges.INSTANCE_CLOSURE:
+					pending.push(name);
+				case IrBodyEdges.DYNAMIC_ITERATION:
+					used.set("__array_get_any", true);
+				case IrBodyEdges.CLASS_DISPATCH | IrBodyEdges.INTERFACE_DISPATCH:
+					if (!keepLiveClasses)
+						switch details[index] {
+							case Obj(method):
+								dispatch(name, kinds[index] == IrBodyEdges.INTERFACE_DISPATCH, method, pending);
+							default:
+						}
+				default:
+			}
+		}
+	}
 
 	function dispatch(typeName:String, isInterface:Bool, method:String, pending:Array<String>):Void {
 		var key = typeName + (isInterface ? "\u0002" : "\u0001") + method;
@@ -601,6 +740,7 @@ class IrReachabilityWalk {
  * native, std native or FFI native bound by the project allocates an object of a class its declaration does not name (`__reflect_copy` copies an
  * instance of its argument's own class, which its caller already constructed).
  */
+@:nullSafety(Strict)
 class IrConstructed {
 	/** Whether the class has instances without any function constructing them. `object` is its table entry, or null when there is none. */
 	public static function withoutConstruction(typeName:String, object:Null<IrObject>):Bool
@@ -647,6 +787,7 @@ class IrConstructed {
  * type-aware walk (`IrTypeAwareWalk.compare`). The step 1 diagnostic of `docs/design/REACHABILITY_WALK.md`: it changes nothing and is off unless the
  * variable is set. The roots are the entry and every `@:keep` / `@:expose` function.
  */
+@:nullSafety(Strict)
 class IrReachabilityReport {
 	public static function enabled():Bool {
 		var path = Sys.getEnv("HAXEON_REACHABILITY_REPORT");

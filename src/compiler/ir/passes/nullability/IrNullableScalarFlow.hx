@@ -11,6 +11,12 @@ import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.scalars.IrScalarArguments;
+import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -20,28 +26,77 @@ import compiler.ir.model.IrFunction;
 
 /**
  * Keep nonescaping nullable scalars in presence/payload SSA form across control-flow joins. Runs on bodies
- * (docs/design/IR_CORE_COLUMNS.md): each function is read as its body, and one that changes is rebuilt into a body this pass
- * owns, so a function nothing changes stays the same object.
+ * (docs/design/IR_CORE_COLUMNS.md), per function (`IrFunctionPass`): each function is read as its body, and one that changes is
+ * rebuilt into a body this pass owns, so a function nothing changes stays the same object.
+ *
+ * The candidates, functions whose nullable scalar arguments every caller can pass split, are chosen over the whole program. The
+ * rewrite of a function reads, for each function it calls, whether it is a candidate and with which arguments (`CANDIDATE`), and
+ * asks for the require and equality helpers it calls. The candidates' specializations and the helpers are made in `finish`
+ * (`IrFunctionStages.derived`), so a session reuses them too.
  */
-class IrNullableScalarFlow {
+@:nullSafety(Strict)
+class IrNullableScalarFlow implements IrFunctionPass {
 	public static inline final PREFIX = "$nullable-scalar:require:";
 	public static inline final EQUAL_PREFIX = "$nullable-scalar:equal:";
 	public static inline final CALL_PREFIX = "$nullable-scalar:arguments:";
 
+	static inline final STAGE = "nullable-scalar-flow";
+
+	/** The fact of a function by name: 0 when it is not a candidate, else its arity and nullable scalar arguments. */
+	public static inline final CANDIDATE = 0;
+
+	// The helper kinds (`request`).
+	public static inline final REQUIRE = 0;
+	public static inline final EQUAL = 1;
+
+	final program:IrProgram;
+	final types:IrTypeIds;
+	final scratch:IrPassScratch;
+	final lineage:Null<IrLineage>;
+	final checks:Bool;
+	final candidates:Map<String, IrFunction> = [];
+	final helpers:Map<String, IrType> = [];
+	var originals:Array<IrFunction> = [];
+	var flow:Null<IrBodyNullableScalars> = null;
+
+	/** By candidate, the version of the function its specialization is made from. */
+	final inputs:Map<String, Int> = [];
+
+	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch, lineage:Null<IrLineage>,
+			checks:Bool) {
+		this.program = program;
+		this.types = types;
+		this.scratch = scratch;
+		this.lineage = lineage;
+		this.checks = checks;
+	}
+
 	/**
-	 * Rewrites `program`'s functions, reading them as bodies made with `types` (`IrTypeIds.ofFunctions` when not given): a
-	 * function that changes becomes its edited body, owned by the next stage (`IrFunction.ofOwnedBody`).
+	 * Rewrites `program`'s functions, reading them as bodies made with `types` (`IrTypeIds.ofFunctions` when not given), without a
+	 * memo: a function that changes becomes its edited body, owned by the next stage (`IrFunction.ofOwnedBody`).
 	 */
 	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
-		if (scratch == null)
-			scratch = new IrPassScratch();
+		program.functions = IrFunctionStages.apply(STAGE,
+			new IrNullableScalarFlow(program, types, scratch == null ? new IrPassScratch() : scratch, null, false),
+			program.functions);
+	}
+
+	function analysis():IrBodyNullableScalars {
+		var known = flow;
+		if (known == null)
+			throw new InternalError("The nullable scalar flow is not prepared");
+		return known;
+	}
+
+	public function summarize(fn:IrFunction):Int
+		return 0;
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
+		originals = functions;
 		var builder = scratch.bodyBuilder;
-		var checks:Map<String, IrType> = [],
-			originals = program.functions.copy(),
-			candidates:Map<String, IrFunction> = [];
-		for (fn in originals) {
+		for (fn in functions) {
 			var hasArgument = false;
 			for (arg in fn.arguments)
 				if (inner(arg.type) != null)
@@ -49,58 +104,109 @@ class IrNullableScalarFlow {
 			if (hasArgument && inner(fn.result) == null && !isSpecialization(fn.name))
 				candidates.set(fn.name, fn);
 		}
-		var flow = new IrBodyNullableScalars(scratch, candidates, checks);
+		var made = new IrBodyNullableScalars(scratch, candidates, helpers);
+		flow = made;
 		var changed = true;
 		while (changed) {
 			changed = false;
-			for (name in [for (name in candidates.keys()) name])
-				if (!flow.analyze(candidates.get(name).bodyIn(types, builder), true)) {
-					candidates.remove(name);
+			for (fn in [for (fn in candidates) fn])
+				if (!made.analyze(fn.bodyIn(types, builder), true)) {
+					candidates.remove(fn.name);
 					changed = true;
 				}
 		}
-		program.functions = [for (fn in originals) rewritten(flow, fn, types, builder, false)];
+		var known = lineage;
+		if (known != null)
+			for (name in candidates.keys())
+				inputs.set(name, known.version(name));
+	}
+
+	public function fact(kind:Int, key:String):Int {
+		var called = candidates.get(key);
+		if (called == null)
+			return 0;
+		var count = called.arguments.length;
+		if (count > 22)
+			return IrFacts.UNKNOWN;
+		var shape = 1 | count << 1;
+		for (index in 0...count)
+			if (inner(called.arguments[index].type) != null)
+				shape |= 1 << (index + 9);
+		return shape;
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		var flow = analysis();
+		flow.reader = reader;
+		var result = rewritten(flow, fn, types, scratch.bodyBuilder, false);
+		flow.reader = null;
+		return result;
+	}
+
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
+		helpers.set(helperName(kind, type), type);
+
+	public static function helperName(kind:Int, type:IrType):String
+		return (kind == EQUAL ? EQUAL_PREFIX : PREFIX) + IrTypeIdentity.text(type);
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
+		var result = functions.copy(), flow = analysis(), builder = scratch.bodyBuilder;
 		for (fn in originals)
-			if (candidates.exists(fn.name))
-				program.functions.push(rewritten(flow, fn, types, builder, true));
-		var names = [for (name in checks.keys()) name];
+			if (candidates.exists(fn.name)) {
+				var input = inputs.get(fn.name) ?? 0;
+				result.push(IrFunctionStages.derived(STAGE, specializationName(fn.name), this, input, lineage, checks,
+					types, builder, reader -> {
+						flow.reader = reader;
+						var made = rewritten(flow, fn, types, builder, true);
+						flow.reader = null;
+						made;
+					}));
+			}
+		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
-			var type = checks.get(name),
-				builder = new IrBuilder(),
-				present = builder.argument("present", Bool),
-				payload = builder.argument("payload", type);
-			if (StringTools.startsWith(name, EQUAL_PREFIX)) {
-				var otherPresent = builder.argument("other-present", Bool),
-					otherPayload = builder.argument("other-payload", type),
-					same = builder.createBlock(),
-					different = builder.createBlock(),
-					absent = builder.createBlock(),
-					compare = builder.createBlock();
-				builder.branch(builder.equal(present, otherPresent), same, different);
-				builder.select(different);
-				builder.returnValue(builder.constBool(false));
-				builder.select(same);
-				builder.branch(present, compare, absent);
-				builder.select(absent);
-				builder.returnValue(builder.constBool(true));
-				builder.select(compare);
-				builder.returnValue(builder.equal(payload, otherPayload));
-				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks,
-					Provider(TypeKey.of(type),
-					ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "equal"))));
-			} else {
-				var yes = builder.createBlock(), no = builder.createBlock();
-				builder.branch(present, yes, no);
-				builder.select(yes);
-				builder.returnValue(payload);
-				builder.select(no);
-				builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks,
-					Provider(TypeKey.of(type),
-					ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "require"))));
-			}
+			var type = helpers.get(name);
+			if (type != null)
+				result.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, lineage, checks,
+					types,
+					builder, _ -> helper(name, type)));
 		}
+		return result;
+	}
+
+	/** The require or equality helper `name` for the scalar `type`. */
+	static function helper(name:String, type:IrType):IrFunction {
+		var builder = new IrBuilder(),
+			present = builder.argument("present", Bool),
+			payload = builder.argument("payload", type);
+		if (StringTools.startsWith(name, EQUAL_PREFIX)) {
+			var otherPresent = builder.argument("other-present", Bool),
+				otherPayload = builder.argument("other-payload", type),
+				same = builder.createBlock(),
+				different = builder.createBlock(),
+				absent = builder.createBlock(),
+				compare = builder.createBlock();
+			builder.branch(builder.equal(present, otherPresent), same, different);
+			builder.select(different);
+			builder.returnValue(builder.constBool(false));
+			builder.select(same);
+			builder.branch(present, compare, absent);
+			builder.select(absent);
+			builder.returnValue(builder.constBool(true));
+			builder.select(compare);
+			builder.returnValue(builder.equal(payload, otherPayload));
+			return new IrFunction(name, builder.arguments, Bool, builder.blocks,
+				Provider(TypeKey.of(type),
+				ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "equal")));
+		}
+		var yes = builder.createBlock(), no = builder.createBlock();
+		builder.branch(present, yes, no);
+		builder.select(yes);
+		builder.returnValue(payload);
+		builder.select(no);
+		builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
+		return new IrFunction(name, builder.arguments, type, builder.blocks,
+			Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "require")));
 	}
 
 	/** `fn` with its nullable scalars split, or its specialization (`clone`); `fn` itself when nothing changes. */
@@ -141,6 +247,7 @@ class IrNullableScalarFlow {
  * A candidate is a nullable scalar whose every use can read a presence flag and a payload instead: a null constant, a scalar
  * boxed to its nullable type, a phi of candidates, and, in a specialization, an argument.
  */
+@:nullSafety(Strict)
 class IrBodyNullableScalars {
 	static inline final CANDIDATE = 1;
 	static inline final NULL = 2;
@@ -148,6 +255,9 @@ class IrBodyNullableScalars {
 	final scratch:IrPassScratch;
 	final functions:Map<String, IrFunction>;
 	final checks:Map<String, IrType>;
+
+	/** The reader of the rewrite being made, through which it reads the candidates and asks for helpers; null to only analyze. */
+	public var reader:Null<IrFactReader> = null;
 
 	/** By value id: CANDIDATE while it is one, NULL when a null constant defines it. */
 	var states:Array<Int>;
@@ -159,7 +269,6 @@ class IrBodyNullableScalars {
 	var parts:Array<Int>;
 
 	var substitutions:Array<Int>;
-	var body:IrBody;
 	var changed = false;
 
 	public function new(scratch:IrPassScratch, functions:Map<String, IrFunction>, checks:Map<String, IrType>) {
@@ -170,7 +279,6 @@ class IrBodyNullableScalars {
 		order = scratch.pendingIds;
 		parts = scratch.secondInts;
 		substitutions = scratch.thirdInts;
-		body = null;
 	}
 
 	inline function isCandidate(value:IrValueId):Bool
@@ -194,8 +302,7 @@ class IrBodyNullableScalars {
 	 * Finds the candidates of `body` (its nullable arguments too for a specialization, `clone`) and rejects those with a use
 	 * that needs the box; whether the function stays eligible, which only a specialization can fail.
 	 */
-	public function analyze(source:IrBody, clone:Bool):Bool {
-		body = source;
+	public function analyze(body:IrBody, clone:Bool):Bool {
 		IrPassScratch.filledInts(states, body.valueLimit(), 0);
 		order.resize(0);
 		if (clone)
@@ -234,7 +341,7 @@ class IrBodyNullableScalars {
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
-					rejectUses(row);
+					rejectUses(body, row);
 					row = body.nextRow(row);
 				}
 			}
@@ -257,19 +364,36 @@ class IrBodyNullableScalars {
 	}
 
 	/** The candidate function a call row targets, when it passes as many arguments as that function takes, or null. */
-	function calledCandidate(row:Int):Null<IrFunction> {
-		var called = functions.get(body.symbol(row).name);
+	function calledCandidate(body:IrBody, row:Int):Null<IrFunction> {
+		var called = candidate(body.symbol(row).name);
 		return called != null && called.arguments.length == body.operandCount(row) ? called : null;
 	}
 
-	function isEqualityOfNullables(row:Int):Bool {
+	/** The candidate `name`, read as a fact while a function is rewritten. */
+	function candidate(name:String):Null<IrFunction> {
+		var current = reader;
+		if (current != null)
+			current.read(IrNullableScalarFlow.CANDIDATE, name);
+		return functions.get(name);
+	}
+
+	/** Asks for the helper of `kind`, named `name`, for the scalar `type`. */
+	function need(kind:Int, name:String, type:IrType):Void {
+		var current = reader;
+		if (current != null)
+			current.request(kind, type);
+		else
+			checks.set(name, type);
+	}
+
+	function isEqualityOfNullables(body:IrBody, row:Int):Bool {
 		if (body.symbol(row).name != "__dynamic_equal" || body.operandCount(row) != 2)
 			return false;
 		var left = body.valueType(body.operand(row, 0));
 		return Type.enumEq(left, body.valueType(body.operand(row, 1))) && IrNullableScalarFlow.inner(left) != null;
 	}
 
-	function rejectUses(row:Int):Void {
+	function rejectUses(body:IrBody, row:Int):Void {
 		var count = body.operandCount(row);
 		switch body.opcode(row) {
 			case IrOpcode.Phi:
@@ -282,8 +406,8 @@ class IrBodyNullableScalars {
 					for (index in 0...count)
 						reject(body.operand(row, index));
 				}
-			case IrOpcode.Call if (functions.exists(body.symbol(row).name)):
-				var called = calledCandidate(row), eligible = called != null;
+			case IrOpcode.Call if (candidate(body.symbol(row).name) != null):
+				var called = calledCandidate(body, row), eligible = called != null;
 				if (called != null)
 					for (index in 0...count)
 						if (IrNullableScalarFlow.inner(called.arguments[index].type) != null
@@ -292,7 +416,7 @@ class IrBodyNullableScalars {
 				if (!eligible)
 					for (index in 0...count)
 						reject(body.operand(row, index));
-			case IrOpcode.Call if (isEqualityOfNullables(row)):
+			case IrOpcode.Call if (isEqualityOfNullables(body, row)):
 				if (!isCandidate(body.operand(row, 0)) || !isCandidate(body.operand(row, 1))) {
 					reject(body.operand(row, 0));
 					reject(body.operand(row, 1));
@@ -304,23 +428,31 @@ class IrBodyNullableScalars {
 			case opcode:
 				for (index in 0...count) {
 					var value = body.operand(row, index);
-					if (isCandidate(value) && !allowedUse(opcode, row, index, value))
+					if (isCandidate(value) && !allowedUse(body, opcode, row, index, value))
 						reject(value);
 				}
 		}
 	}
 
-	function allowedUse(opcode:IrOpcode, row:Int, index:Int, value:IrValueId):Bool
+	function allowedUse(body:IrBody, opcode:IrOpcode, row:Int, index:Int, value:IrValueId):Bool
 		return switch opcode {
 			case IrOpcode.SafeCast:
-				index == 0
-					&& Type.enumEq(body.valueType(body.output(row)), IrNullableScalarFlow.inner(body.valueType(value)));
+				var inner = IrNullableScalarFlow.inner(body.valueType(value));
+				index == 0 && inner != null && Type.enumEq(body.valueType(body.output(row)), inner);
 			case IrOpcode.Equal:
 				var left = body.operand(row, 0), right = body.operand(row, 1);
 				(left == value && isNull(right)) || (right == value && isNull(left));
 			default:
 				false;
 		};
+
+	/** The scalar that `value`, a candidate, holds when present. */
+	static function scalarOf(body:IrBody, value:IrValueId):IrType {
+		var scalar = IrNullableScalarFlow.inner(body.valueType(value));
+		if (scalar == null)
+			throw new InternalError("A nullable scalar candidate holds no scalar");
+		return scalar;
+	}
 
 	inline function present(value:IrValueId):IrValueId
 		return IrValueId.of(parts[value]);
@@ -335,8 +467,7 @@ class IrBodyNullableScalars {
 	 * The body of the last analysis with its candidates split, made with `builder`: for the function itself, or for its
 	 * specialization (`clone`), which takes each nullable argument as a flag and a payload under its own name.
 	 */
-	public function build(source:IrBody, builder:IrBodyBuilder, clone:Bool):IrBody {
-		body = source;
+	public function build(body:IrBody, builder:IrBodyBuilder, clone:Bool):IrBody {
 		var next = body.valueLimit();
 		builder.startFrom(body);
 		var boolType = body.typeId(Bool);
@@ -348,7 +479,7 @@ class IrBodyNullableScalars {
 			parts[value] = next;
 			builder.defineValue(IrValueId.of(next++), "$nullable-present", boolType);
 			builder.defineValue(IrValueId.of(next++), "$nullable-payload",
-				body.typeId(IrNullableScalarFlow.inner(body.valueType(id))));
+				body.typeId(scalarOf(body, id)));
 		}
 		IrPassScratch.filledInts(substitutions, next, -1);
 		for (block in 0...body.blockCount()) {
@@ -374,7 +505,7 @@ class IrBodyNullableScalars {
 			builder.beginBlock(body.blockId(block));
 			var row = body.firstRow(block);
 			while (row >= 0) {
-				next = buildRow(builder, row, next, boolType);
+				next = buildRow(body, builder, row, next, boolType);
 				row = body.nextRow(row);
 			}
 		}
@@ -392,12 +523,12 @@ class IrBodyNullableScalars {
 	}
 
 	/** Appends `row` rewritten, or as it is; the next new value's id after it. */
-	function buildRow(builder:IrBodyBuilder, row:Int, next:Int, boolType:Int):Int {
+	function buildRow(body:IrBody, builder:IrBodyBuilder, row:Int, next:Int, boolType:Int):Int {
 		var where = body.provenance(row), out = body.output(row);
 		switch body.opcode(row) {
-			case IrOpcode.Call if (functions.exists(body.symbol(row).name)):
-				var called = calledCandidate(row), name = body.symbol(row).name;
-				if (called == null || !expands(row, called)) {
+			case IrOpcode.Call if (candidate(body.symbol(row).name) != null):
+				var called = calledCandidate(body, row), name = body.symbol(row).name;
+				if (called == null || !expands(body, row, called)) {
 					builder.copyRow(body, row);
 					return next;
 				}
@@ -410,13 +541,13 @@ class IrBodyNullableScalars {
 						builder.operandId(argument);
 				}
 				builder.row(IrOpcode.Call, out, IrSymbol.of(IrNullableScalarFlow.specializationName(name)).id, where);
-			case IrOpcode.Call if (isEqualityOfNullables(row) && isCandidate(body.operand(row, 0))
+			case IrOpcode.Call if (isEqualityOfNullables(body, row) && isCandidate(body.operand(row, 0))
 				&& isCandidate(body.operand(row, 1))):
 				var left = body.operand(row, 0),
 					right = body.operand(row, 1),
-					type = IrNullableScalarFlow.inner(body.valueType(left)),
-					name = IrNullableScalarFlow.EQUAL_PREFIX + IrTypeIdentity.text(type);
-				checks.set(name, type);
+					type = scalarOf(body, left),
+					name = IrNullableScalarFlow.helperName(IrNullableScalarFlow.EQUAL, type);
+				need(IrNullableScalarFlow.EQUAL, name, type);
 				builder.operandId(present(left));
 				builder.operandId(payload(left));
 				builder.operandId(present(right));
@@ -454,12 +585,12 @@ class IrBodyNullableScalars {
 			case IrOpcode.SafeCast if (isCandidate(body.operand(row, 0))):
 				var value = body.operand(row, 0),
 					type = body.valueType(out),
-					name = IrNullableScalarFlow.PREFIX + IrTypeIdentity.text(type);
-				checks.set(name, type);
+					name = IrNullableScalarFlow.helperName(IrNullableScalarFlow.REQUIRE, type);
+				need(IrNullableScalarFlow.REQUIRE, name, type);
 				builder.operandId(present(value));
 				builder.operandId(payload(value));
 				builder.row(IrOpcode.Call, out, IrSymbol.of(name).id, where);
-			case IrOpcode.Equal if (nullComparison(row)):
+			case IrOpcode.Equal if (nullComparison(body, row)):
 				var left = body.operand(row, 0),
 					right = body.operand(row, 1),
 					value = isNull(left) && isCandidate(right) ? right : left,
@@ -476,7 +607,7 @@ class IrBodyNullableScalars {
 	}
 
 	/** Whether a call of candidate `called` passes each of its nullable arguments as a candidate, so it calls the specialization. */
-	function expands(row:Int, called:IrFunction):Bool {
+	function expands(body:IrBody, row:Int, called:IrFunction):Bool {
 		for (index in 0...body.operandCount(row))
 			if (IrNullableScalarFlow.inner(called.arguments[index].type) != null
 				&& !isCandidate(body.operand(row, index)))
@@ -484,7 +615,7 @@ class IrBodyNullableScalars {
 		return true;
 	}
 
-	function nullComparison(row:Int):Bool {
+	function nullComparison(body:IrBody, row:Int):Bool {
 		var left = body.operand(row, 0), right = body.operand(row, 1);
 		return (isCandidate(left) && isNull(right)) || (isCandidate(right) && isNull(left));
 	}

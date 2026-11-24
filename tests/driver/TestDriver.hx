@@ -35,6 +35,10 @@ class TestDriver {
 		}
 		removeTemporaryDirectory(temporary);
 		Sys.putEnv("TMPDIR", previous);
+		// Sys.exit does not flush, and on Windows CI stdout is a pipe: without this a failing run printed nothing past the
+		// named cases, not even which case failed.
+		Sys.stdout().flush();
+		Sys.stderr().flush();
 		if (status != 0)
 			Sys.exit(status);
 	}

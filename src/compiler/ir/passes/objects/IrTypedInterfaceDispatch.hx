@@ -32,7 +32,13 @@ typedef IrTypedInterfaceRequest = {
 }
 
 /** Closed-world typed entry points for value interface calls and specialized generic contracts. */
+@:nullSafety(Strict)
 class IrTypedInterfaceDispatch {
+	/** The typed interface dispatchers each function calls (`generate`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final REQUESTS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<IrTypedInterfaceRequest>>("interface-requests");
+
 	public static inline final PREFIX = "$typed-interface:";
 	public static inline final ADAPTER_PREFIX = "$typed-interface-entry:";
 
@@ -114,7 +120,7 @@ class IrTypedInterfaceDispatch {
 	public static function callName(interfaceName:String, method:String, arguments:Array<IrType>,
 			result:IrType):String {
 		var signature = IrTypeIdentity.listText(arguments) + ":" + IrTypeIdentity.text(result);
-		return PREFIX + interfaceName + ":" + method + ":" + haxe.crypto.Sha256.encode(signature).substr(0, 32);
+		return PREFIX + interfaceName + ":" + method + ":" + compiler.core.TextDigest.sha256(signature).substr(0, 32);
 	}
 
 	/**
@@ -126,7 +132,7 @@ class IrTypedInterfaceDispatch {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return readRequests(fn);
-		var memo = lineage.memos.interfaceRequests, known = memo.get(version);
+		var memo = lineage.memos.contribution(REQUESTS), known = memo.get(version);
 		if (known == null) {
 			known = readRequests(fn);
 			memo.keep(version, known);
@@ -158,9 +164,10 @@ class IrTypedInterfaceDispatch {
 	static function readRequests(fn:IrFunction):Array<IrTypedInterfaceRequest> {
 		var found:Null<Array<IrTypedInterfaceRequest>> = null;
 		function request(name:String, arguments:Array<IrType>, result:IrType):Void {
-			if (found == null)
-				found = [];
-			found.push({name: name, arguments: arguments, result: result});
+			var list = found;
+			if (list == null)
+				found = list = [];
+			list.push({name: name, arguments: arguments, result: result});
 		}
 		function closureRequest(name:String, output:IrType, receiver:IrType):Void
 			switch output {
@@ -266,11 +273,13 @@ class IrTypedInterfaceDispatch {
 		}
 		function carriersCompatible(a:IrType, b:IrType):Bool
 			return IrVerifier.sameType(a, b) || (isManagedReference(a) && isManagedReference(b));
-		var names = [for (name in requests.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names) {
-			var parts = name.substr(PREFIX.length).split(":"), signature = requests.get(name);
-			if (parts.length != 3 || signature == null
+		var sorted = [for (name => signature in requests) {
+			name:name, signature:signature
+		}];
+		sorted.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in sorted) {
+			var name = entry.name, signature = entry.signature, parts = name.substr(PREFIX.length).split(":");
+			if (parts.length != 3
 				|| signature.arguments.length == 0) throw new InternalError('Invalid typed interface dispatch "$name"');
 			var interfaceName = parts[0], method = parts[1], receiverType = signature.arguments[0];
 			if (!IrVerifier.sameType(receiverType, Virtual(interfaceName)))
@@ -360,6 +369,7 @@ class IrTypedInterfaceDispatch {
  * `IrTypedInterfaceDispatch.rewriteValueCalls` per function (`IrFunctionPass`): the rewrite reads, for each object a call's types
  * name, whether it is a value object (`VALUE`), and for each method value's interface whether it is one (`CONTRACT`).
  */
+@:nullSafety(Strict)
 class IrTypedInterfaceCalls implements IrFunctionPass {
 	static inline final VALUE = 0;
 	static inline final CONTRACT = 1;
@@ -418,7 +428,7 @@ class IrTypedInterfaceCalls implements IrFunctionPass {
 		return IrFunctionRewrite.instructions(fn, replacement);
 	}
 
-	public function request(kind:Int, type:IrType):Void {}
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;

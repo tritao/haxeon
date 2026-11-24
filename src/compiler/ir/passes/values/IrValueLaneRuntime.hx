@@ -11,6 +11,7 @@ import compiler.ir.verify.IrVerifier;
  * physical addressing; these functions own bounds, growth, overlap, validity and publication order.
  * The same SSA functions are consumed by Wasm and the native-runtime C generator.
  */
+@:nullSafety(Strict)
 class IrValueLaneRuntime {
 	public static inline final PREFIX = "$lane-runtime:";
 	public static inline final PRIMITIVE = "$lane-storage:";
@@ -421,16 +422,17 @@ class IrValueLaneRuntime {
 			done = b.createBlock();
 		b.branch(primitive(b, "has-validity", [a], Bool), withBitmap, withoutBitmap);
 		function swaps(validity:Bool):Void loop(b, b.constInt(0), end, left -> {
-			var right = b.sub(b.sub(size, b.constInt(1)), left), l:Null<IrValue> = null, r:Null<IrValue> = null;
+			var right = b.sub(b.sub(size, b.constInt(1)), left);
 			if (validity) {
-				l = primitive(b, "read-validity", [a, left], Bool);
-				r = primitive(b, "read-validity", [a, right], Bool);
-			}
-			primitive(b, "swap-scalars", [a, left, right], Void);
-			primitive(b, "swap-references", [a, left, right], Void);
-			if (validity) {
+				var l = primitive(b, "read-validity", [a, left], Bool),
+					r = primitive(b, "read-validity", [a, right], Bool);
+				primitive(b, "swap-scalars", [a, left, right], Void);
+				primitive(b, "swap-references", [a, left, right], Void);
 				primitive(b, "write-validity", [a, left, r], Void);
 				primitive(b, "write-validity", [a, right, l], Void);
+			} else {
+				primitive(b, "swap-scalars", [a, left, right], Void);
+				primitive(b, "swap-references", [a, left, right], Void);
 			}
 		});
 		b.select(withBitmap);

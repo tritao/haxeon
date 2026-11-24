@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
@@ -72,7 +73,8 @@ class StringConversion {
 			present = nullable ? hold("__haxeon_string_present", new TypedExpression(TCast(whole.local), abstractType,
 				span)) : whole,
 			call =
-				bodyTyper.coerce(bodyTyper.typeExpression(PrivateAccessExpression(MethodCall(TemporaryVariable(present.temporary,
+				bodyTyper.coerce(bodyTyper.typeExpression(AnnotatedExpression(PrivateAccess,
+				MethodCall(TemporaryVariable(present.temporary,
 				span), "toString", [], span), span), inner, TString), TString, "string conversion", "E1010");
 		if (!nullable)
 			return new TypedExpression(TBlockExpression([whole.statement], call), TString, span);
@@ -88,6 +90,14 @@ class StringConversion {
 	/** `value`, whose type mentions no type parameter, as a String. */
 	public static function convertValue(session:TypingSession, value:TypedExpression,
 			bodyTyper:BodyTyping):TypedExpression {
+		// A native map handle does not retain its source key and value types.
+		switch value.type {
+			case TMap(_, _) | TNullable(TMap(_, _)):
+				var mapString = bodyTyper.stringifyMap(value);
+				if (mapString != null)
+					return mapString;
+			default:
+		}
 		var named = name(session, value);
 		if (named != null)
 			return named;
@@ -101,7 +111,7 @@ class StringConversion {
 		}
 		var dynamicValue = bodyTyper.coerce(value, TDynamic, "string conversion", "E1010");
 		if (TypeRelations.equals(value.type, TFloat) || TypeRelations.equals(value.type, TDynamic)) {
-			session.runtimeDependencyTracker.record(session.currentContext.name, "Std");
+			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.STD);
 			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
 		}
 		return new TypedExpression(TCall("__std_string", [dynamicValue]), TString, value.span);

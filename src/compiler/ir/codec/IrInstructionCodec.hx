@@ -13,6 +13,7 @@ import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
+@:nullSafety(Strict)
 class IrInstructionCodec {
 	static inline final VERSION = 10;
 	static final CONSTRUCTORS:Map<String, Bool> = [

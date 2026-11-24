@@ -9,6 +9,7 @@ import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.verify.IrVerifier;
 
 /** Resolve typed inline-enum requests through declared providers at an escape boundary. */
+@:nullSafety(Strict)
 class IrInlineEnumRequests {
 	public static function resolve(program:IrProgram, functions:Array<IrFunction>):Array<IrFunction> {
 		var providers = new IrInlineEnumProviders(program),
@@ -35,7 +36,7 @@ class IrInlineEnumRequests {
 					if (replacement != null) {
 						if (instructions == null)
 							instructions = block.instructions.slice(0, index);
-						instructions.push(new Located(replacement, located.provenance));
+						instructions.push(new Located<IrInstruction>(replacement, located.provenance));
 					} else if (instructions != null)
 						instructions.push(located);
 				}
@@ -66,13 +67,14 @@ class IrInlineEnumRequests {
 		if (replacements != null)
 			program.functions = [
 				for (fn in program.functions)
-					replacements.exists(fn.name) ? replacements.get(fn.name) : fn
+					replacements.get(fn.name) ?? fn
 			];
 		return result == null ? functions : result;
 	}
 }
 
 /** The provider an inline-enum request resolves to, checked against the enum's declared storage and the provider's signature. */
+@:nullSafety(Strict)
 class IrInlineEnumProviders {
 	final program:IrProgram;
 	var rows:Null<Map<String, String>> = null;

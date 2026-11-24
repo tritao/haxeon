@@ -50,22 +50,27 @@ class TypingWarnings {
 			var stored = state.typingWarnings,
 				byKey = typedNow.get(name),
 				next:Map<String, Array<Diagnostic>> = [],
-				declared = declarations(state, entryModule),
+				declared:Null<Map<String, Bool>> = null,
 				pruned = false;
-			for (key => warnings in stored)
+			for (key => warnings in stored) {
+				if (declared == null)
+					declared = declarations(state, entryModule);
 				if (declared.exists(declarationOf(key)))
 					next.set(key, warnings);
 				else
 					pruned = true;
+			}
 			if (byKey != null)
 				for (key => warnings in byKey)
 					next.set(key, warnings);
-			var warnings = unique(next).concat(state.generationWarnings),
+			// Typed again to the warnings it had (every build types the generated helpers and the initializers of the classes
+			// it refreshes), the stored ones stand for them.
+			var kept = !pruned && (byKey == null || sameWarningsByKey(stored, next));
+			var warnings = unique(kept ? stored : next).concat(state.generationWarnings),
 				errors = [for (diagnostic in state.diagnostics) if (!isWarning(diagnostic)) diagnostic];
-			// Nothing typed again or deleted, and the diagnostics already list these warnings: leave the module as it is.
-			if (byKey == null
-				&& !pruned
-				&& sameWarnings([for (diagnostic in state.diagnostics) if (isWarning(diagnostic)) diagnostic],
+			// Nothing typed again to other warnings or deleted, and the diagnostics already list these: leave the module as it
+			// is, so a build copies only the modules whose warnings changed.
+			if (kept && sameWarnings([for (diagnostic in state.diagnostics) if (isWarning(diagnostic)) diagnostic],
 				warnings))
 				continue;
 			state = context.state.writableState(name, rollbackModules);
@@ -161,6 +166,31 @@ class TypingWarnings {
 		for (index in 0...left.length)
 			if (left[index] != right[index])
 				return false;
+		return true;
+	}
+
+	/**
+	 * Whether `next` holds the warnings `stored` does, key by key (a key without warnings is the same as no key), each raised again
+	 * in the same text of its file: the module's diagnostics, made from `stored`, then already list them.
+	 */
+	static function sameWarningsByKey(stored:Map<String, Array<Diagnostic>>, next:Map<String, Array<Diagnostic>>):Bool {
+		for (key => warnings in next)
+			if (!sameInSameText(stored.get(key) ?? [], warnings))
+				return false;
+		for (key => warnings in stored)
+			if (warnings.length > 0 && !next.exists(key))
+				return false;
+		return true;
+	}
+
+	static function sameInSameText(left:Array<Diagnostic>, right:Array<Diagnostic>):Bool {
+		if (!equalWarnings(left, right))
+			return false;
+		for (index in 0...left.length) {
+			var a = left[index].span.file, b = right[index].span.file;
+			if (a != b && a.text != b.text)
+				return false;
+		}
 		return true;
 	}
 }

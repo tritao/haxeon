@@ -1,12 +1,11 @@
 package compiler.ir.reuse;
 
-import compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrFunction;
-import compiler.ir.passes.objects.IrTypedInterfaceDispatch.IrTypedInterfaceRequest;
 import compiler.ir.pipeline.IrFunctionPass.IrStageRequest;
 
 /** What one stage made of one function in a build, and what that rested on (`IrStageMemo`). */
+@:nullSafety(Strict)
 class IrStageEntry {
 	/** The version of the function the stage was given (`IrLineage`); 0 for one the stage added. */
 	public final input:Int;
@@ -45,6 +44,7 @@ class IrStageEntry {
  * (`IrStageEntry`). An entry reused is not written again; one the stage did not use in its last run is dropped as the next run
  * starts, so a function the program lost drops out one build later.
  */
+@:nullSafety(Strict)
 class IrStageMemo {
 	final entries:Map<String, IrStageEntry> = [];
 
@@ -96,6 +96,7 @@ class IrStageMemo {
  * session state share them: an entry holds only while its input version and the prints of its facts are the ones it recorded,
  * and neither is ever given twice, so what a rolled-back build left is never wrongly reused.
  */
+@:nullSafety(Strict)
 class IrStageMemos {
 	public final facts = new IrFacts();
 	public final versions:IrFunctionVersions;
@@ -105,14 +106,33 @@ class IrStageMemos {
 
 	final stages:Map<String, IrStageMemo> = [];
 
-	/** What each function gives the type-aware walks (`IrWalkSummary`), shared by the dispatch walk and the entry prune. */
-	public final walkSummaries = new IrContributionMemo<IrWalkSummary>();
+	/** The contribution memos the stages registered (`contribution`), by name, each begun with every build. */
+	final contributions:Map<String, IrContributionMemo<Dynamic>> = [];
 
-	/** The typed interface dispatchers each function calls (`IrTypedInterfaceDispatch.generate`). */
-	public final interfaceRequests = new IrContributionMemo<Array<IrTypedInterfaceRequest>>();
+	/** The session's memo of `key`, registered the first time a stage asks for it. */
+	public function contribution<T>(key:IrContributionKey<T>):IrContributionMemo<T> {
+		var memo = contributions.get(key.name);
+		if (memo == null) {
+			memo = new IrContributionMemo<Dynamic>();
+			memo.begin(build);
+			contributions.set(key.name, memo);
+		}
+		return cast memo;
+	}
 
-	/** The specialized enums each function names (`IrEnumRuntimeSpecializations.materialize`). */
-	public final enumMentions = new IrContributionMemo<Array<String>>();
+	/** The whole-program results the stages keep (`lastResult`), by key. */
+	final results:Map<String, Dynamic> = [];
+
+	/**
+	 * The whole-program result the session keeps under `key` from the last build that kept one, or null. It holds what it was worked
+	 * out from, which its stage compares with what the program gives now before it reuses it: no build is trusted to have left it.
+	 */
+	public function lastResult<T>(key:IrContributionKey<T>):Null<T>
+		return results.get(key.name);
+
+	/** Keeps `value` as the result under `key` (`lastResult`). */
+	public function keepResult<T>(key:IrContributionKey<T>, value:T):Void
+		results.set(key.name, value);
 
 	/** The build the stages run for, counted by `startBuild`. */
 	public var build(default, null) = 0;
@@ -143,11 +163,11 @@ class IrStageMemos {
 	/** Starts an assembly run. */
 	public function startBuild():Void {
 		build++;
+		facts.startBuild();
 		helpers = keptHelpers;
 		keptHelpers = [];
-		walkSummaries.begin(build);
-		interfaceRequests.begin(build);
-		enumMentions.begin(build);
+		for (memo in contributions)
+			memo.begin(build);
 	}
 
 	/** The memo of `stage`, started for this build. */
@@ -163,6 +183,7 @@ class IrStageMemos {
 }
 
 /** A function's place in the lineage: the function a name stands for in this build, and its version. */
+@:nullSafety(Strict)
 class IrLineageCell {
 	public var fn:IrFunction;
 	public var version:Int;
@@ -184,9 +205,13 @@ class IrLineageCell {
  * what it made, or a new one. The session keeps one (`IrStageMemos.lineage`), whose cells each build updates in place; a version
  * names one function object, so a cell left from another build is never wrong.
  */
+@:nullSafety(Strict)
 class IrLineage {
 	@:processWide("a shared empty list of facts, only ever read")
 	public static final NO_FACTS:Array<Int> = [];
+
+	/** What a stage's memo of the functions it derives (`IrFunctionStages.derived`) is named after the stage. */
+	public static inline final DERIVED = ":derived";
 
 	/** The name the input's settling is metered and memoized under. */
 	public static inline final INPUT = "assembly-input";
@@ -195,6 +220,17 @@ class IrLineage {
 
 	/** `--check-reuse`: what a contribution memo reuses is computed again and compared. */
 	public var checks(default, null) = false;
+
+	/**
+	 * Past the encode point: the stages read and edit bodies, and what a memo keeps is frozen. A function a stage without a memo
+	 * hands on in place of the one its name stood for is then not compared with last build's (no cache compares after it
+	 * computes): it takes a new version.
+	 */
+	public var bodies(default, null) = false;
+
+	/** From here the stages read bodies (`bodies`). */
+	public function enterBodies():Void
+		bodies = true;
 
 	final cells:Map<String, IrLineageCell> = [];
 	var cellCount = 0;
@@ -218,6 +254,7 @@ class IrLineage {
 		memos.startBuild();
 		var lineage = memos.lineage, memo = memos.stage(INPUT);
 		lineage.checks = checks;
+		lineage.bodies = false;
 		lineage.live = 0;
 		if (lineage.cellCount > functions.length * 2)
 			lineage.sweep();
@@ -296,7 +333,12 @@ class IrLineage {
 		var memo:Null<IrStageMemo> = null, mark = ++settling;
 		for (index in 0...functions.length) {
 			var fn = functions[index], cell = cells.get(fn.name);
-			if (cell == null || cell.fn != fn || cell.build != memos.build) {
+			if (bodies) {
+				if (cell == null || cell.fn != fn || cell.build != memos.build) {
+					set(fn, memos.versions.next());
+					cell = cells.get(fn.name);
+				}
+			} else if (cell == null || cell.fn != fn || cell.build != memos.build) {
 				if (memo == null)
 					memo = memos.stage(stage);
 				functions[index] = settleOne(memo, fn, version(fn.name));
@@ -326,7 +368,20 @@ class IrLineage {
 	}
 }
 
+/**
+ * The name a stage registers a contribution memo under (`IrStageMemos.contribution`), typed with what the memo keeps: a stage
+ * declares its key once, so no two stages share a memo by accident.
+ */
+@:nullSafety(Strict)
+class IrContributionKey<T> {
+	public final name:String;
+
+	public function new(name:String)
+		this.name = name;
+}
+
 /** A contribution a memo keeps, with the last build that used it. */
+@:nullSafety(Strict)
 class IrContribution<T> {
 	public final value:T;
 	public var used:Int;
@@ -342,6 +397,7 @@ class IrContribution<T> {
  * gives the same version has the same contribution, so it is not read again. A version names one function, so the versions a
  * function has at different stages are different entries. What a build did not use is dropped when the next one starts.
  */
+@:nullSafety(Strict)
 class IrContributionMemo<T> {
 	final entries:Map<Int, IrContribution<T>> = [];
 	var build = 0;

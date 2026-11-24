@@ -1,9 +1,9 @@
 package haxeon.ui.host;
 
+import haxeon.platform.Surface;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
-import haxeon.platform.Surface;
 import haxeon.ui.core.UiContext;
 
 /** Reuses the layout frame and render target for every callback on one surface. */

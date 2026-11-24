@@ -8,11 +8,12 @@ import compiler.service.ImportOrder;
 import compiler.service.UnusedImports;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.service.UnusedImports.UnusedImport;
+import compiler.syntax.Ast.AstMetadata;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import haxe.Json;
 import haxe.io.Path;
+import project.PackageManifest;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -22,8 +23,8 @@ import sys.io.File;
  * `unbound-local`, `module-namespace` and `throw-non-exception` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
  * through `typedRules`, which runs it in a tool that links the compiler.
  *
- * Each file's imports resolve against its own project: the source roots of the nearest haxeon.json and of its path dependencies, the
- * directory its package declaration implies, Haxeon's standard library, and any manifest given with `--manifest`. Never against the
+ * Each file's imports resolve against its own project: the source roots of the nearest manifest (haxeon.toml or haxeon.json) and
+ * of its path dependencies, the directory its package declaration implies, Haxeon's standard library, and any manifest given with `--manifest`. Never against the
  * other files of the run, so a file gets the same answer alone or with the whole tree. An import that resolves nowhere is assumed
  * used, so a missing manifest makes the check quieter, never wrong. `--fix` deletes the
  * statements, sorts the runs that can be sorted without changing what a name means, and reformats a file that was formatted before.
@@ -45,7 +46,8 @@ class LintCommand {
 
 	/**
 	 * Lints the files `arguments` names. `typedRules` runs a typed rule on the expanded files and returns its status: the
-	 * command line runs them in the `LintMain` tool, a test in its own process.
+	 * command line runs them in a program that links the compiler (its `lint` role, or the `LintMain` tool), a test in its own
+	 * process.
 	 */
 	public static function run(arguments:Array<String>, ?standardLibrary:String,
 			?typedRules:(rule:String, files:Array<String>) -> Int):Int {
@@ -55,12 +57,17 @@ class LintCommand {
 			index = 0,
 			checkUnused = true,
 			checkOrder = true,
-			typedRule:Null<String> = null;
+			typedRule:Null<String> = null,
+			pinWire:Null<String> = null;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--fix")
 				fix = true;
-			else if (argument == "--only") {
+			else if (argument == "--pin-wire") {
+				if (index >= arguments.length || pinWire != null)
+					throw new InternalError("Option --pin-wire requires one type name");
+				pinWire = arguments[index++];
+			} else if (argument == "--only") {
 				if (index >= arguments.length)
 					throw new InternalError('Option "--only" requires a rule: $RULES');
 				switch arguments[index++] {
@@ -84,6 +91,12 @@ class LintCommand {
 		}
 		if (paths.length == 0)
 			throw new InternalError("haxeon lint requires at least one file");
+		if (pinWire != null) {
+			if (!fix || paths.length != 1 || !checkUnused || !checkOrder || manifests.length != 0)
+				throw new InternalError("Usage: haxeon lint --fix --pin-wire TYPE FILE");
+			pinWireIds(SourceFiles.requireFile(paths[0]), pinWire);
+			return 0;
+		}
 		if (typedRule != null) {
 			if (fix)
 				throw new InternalError(switch typedRule {
@@ -143,6 +156,109 @@ class LintCommand {
 		return found > 0 && !fix ? 1 : 0;
 	}
 
+	static function pinWireIds(path:String, name:String):Void {
+		var file = new SourceFile(path, File.getContent(path)),
+			tokens = new Lexer(file).tokenize(),
+			program = new Parser(tokens).parseProgram();
+		var members:Array<{offset:Int, metadata:Array<AstMetadata>}> = [];
+		var metadata:Array<AstMetadata> = [], start = -1, service = false;
+		for (declaration in program.interfaces)
+			if (declaration.name == name) {
+				compiler.syntax.RpcServiceDeclaration.validate(declaration, (message, _) -> {
+					throw new InternalError(message);
+				});
+				start = declaration.span.start;
+				service = true;
+				for (method in declaration.methods)
+					members.push({offset: method.span.start, metadata: method.metadata ?? []});
+			}
+		for (record in program.classes)
+			if (record.name == name && record.typeParameters.length == 0 && record.base == null
+				&& record.isExtern != true) {
+				start = record.span.start;
+				metadata = record.metadata;
+				for (field in record.fields)
+					if (!field.isStatic)
+						members.push({offset: (field.declarationSpan ?? field.span).start, metadata: field.metadata});
+			}
+		for (declaration in program.enums)
+			if (declaration.name == name && declaration.typeParameters.length == 0) {
+				start = declaration.span.start;
+				metadata = declaration.metadata;
+				for (constructor in declaration.cases)
+					members.push({offset: constructor.span.start, metadata: constructor.metadata});
+			}
+		for (alias in program.aliases)
+			if (alias.name == name && alias.typeParameters.length == 0)
+				switch alias.type {
+					case AnonymousType(fields):
+						start = alias.span.start;
+						metadata = alias.metadata;
+						for (field in fields)
+							members.push({offset: field.span.start, metadata: field.metadata});
+					default:
+				}
+		if (start < 0 || members.length == 0)
+			throw new InternalError('Type "$name" must be a nonempty concrete record, enum, or RPC service interface declared in "$path"');
+
+		var numbered = 0;
+		for (member in members)
+			for (annotation in member.metadata)
+				if (annotation.name == "id") {
+					numbered++;
+					break;
+				}
+		if (numbered != 0 && numbered != members.length)
+			throw new InternalError('Type "$name" mixes named and numbered members');
+
+		var edits:Map<Int, String> = [], marked = service;
+		for (annotation in metadata)
+			if (annotation.name == "wire")
+				marked = true;
+		if (!marked) {
+			for (index in 0...tokens.length)
+				if (tokens[index].offset == start) {
+					var declaration = index;
+					while (declaration > 0 && switch tokens[declaration - 1].kind {
+						case Private | Public: true;
+						default: false;
+					})
+						declaration--;
+					edits.set(tokens[declaration].offset, "@:wire ");
+					break;
+				}
+		}
+		if (numbered == 0) {
+			var index = 0;
+			for (memberIndex in 0...members.length) {
+				while (tokens[index].offset < members[memberIndex].offset)
+					index++;
+				var field = index;
+				while (field > 0 && switch tokens[field - 1].kind {
+					case Question | Final | Var | Function | Public | Private | Inline | Static: true;
+					default: false;
+				})
+					field--;
+				edits.set(tokens[field].offset, '@:id(${memberIndex + 1}) ');
+			}
+		}
+		var offsets = [for (offset in edits.keys()) offset];
+		if (offsets.length == 0)
+			return;
+		offsets.sort(Reflect.compare);
+		var result = new StringBuf(), cursor = 0;
+		for (offset in offsets) {
+			result.add(file.slice(cursor, offset));
+			result.add(edits.get(offset));
+			cursor = offset;
+		}
+		result.add(file.slice(cursor, file.bytes.length));
+		var edited = result.toString(), config = new ProjectFormat().forFile(path);
+		if (Formatter.format(file.text, config) == file.text)
+			edited = Formatter.format(edited, config) ?? edited;
+		File.saveContent(path, edited);
+	}
+
 	/** The roots `path` resolves against: its package root, its project's source roots, then the shared ones. */
 	function rootsFor(path:String, tokens:Array<compiler.syntax.Token>):Array<String> {
 		var roots:Array<String> = [], root = packageRoot(path, tokens), manifest = nearestManifest(path);
@@ -156,12 +272,12 @@ class LintCommand {
 		return roots;
 	}
 
-	/** The haxeon.json in the file's directory or the nearest one above it. */
+	/** The manifest (haxeon.toml or haxeon.json) in the file's directory or the nearest one above it. */
 	static function nearestManifest(path:String):Null<String> {
 		var directory = Path.directory(FileSystem.absolutePath(path));
 		while (true) {
-			var manifest = Path.join([directory, "haxeon.json"]);
-			if (FileSystem.exists(manifest))
+			var manifest = PackageManifest.find(directory);
+			if (manifest != null)
 				return manifest;
 			var parent = Path.directory(directory);
 			if (parent == directory || parent == "")
@@ -180,7 +296,7 @@ class LintCommand {
 		visiting.push(key);
 		var roots:Array<String> = [], directory = Path.directory(key), raw:Dynamic = null;
 		try
-			raw = Json.parse(File.getContent(key))
+			raw = PackageManifest.decode(key, File.getContent(key))
 		catch (_:Dynamic) {}
 		if (raw != null) {
 			var sourceRoots:Array<String> = raw.sourceRoots == null ? ["src"] : raw.sourceRoots;
@@ -192,11 +308,11 @@ class LintCommand {
 					var dependency:Dynamic = Reflect.field(dependencies, name);
 					var location:Null<String> = dependency == null ? null : dependency.path;
 					if (location != null) {
-						var dependencyManifest = Path.join([
-							Path.isAbsolute(location) ? location : Path.join([directory, location]),
-							"haxeon.json"
-						]);
-						if (FileSystem.exists(dependencyManifest))
+						var dependencyManifest = PackageManifest.find(Path.isAbsolute(location) ? location : Path.join([
+							directory,
+							location
+						]));
+						if (dependencyManifest != null)
 							for (root in manifestRoots(dependencyManifest, visiting))
 								addTo(roots, root);
 					}

@@ -1,10 +1,13 @@
 foreach(dependency IN ITEMS harfbuzz sheenbidi libunibreak skribidi)
-    if(NOT EXISTS "${NKUI_VENDOR_DIR}/${dependency}/.git")
+    # A submodule in a checkout, its files in a published package: either way, not an empty directory.
+    file(GLOB _nkui_vendored "${NKUI_VENDOR_DIR}/${dependency}/*")
+    if(NOT _nkui_vendored)
         message(FATAL_ERROR
             "${dependency} submodule is missing; run git submodule update --init")
     endif()
 endforeach()
-if(NKUI_ENABLE_BUDOUX AND NOT EXISTS "${NKUI_VENDOR_DIR}/budouxc/.git")
+file(GLOB _nkui_vendored "${NKUI_VENDOR_DIR}/budouxc/*")
+if(NKUI_ENABLE_BUDOUX AND NOT _nkui_vendored)
     message(FATAL_ERROR
         "budouxc submodule is missing; run git submodule update --init")
 endif()

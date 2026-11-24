@@ -8,12 +8,17 @@ import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrSymbol;
+import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.passes.values.IrInlineValueLayout;
 import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -39,17 +44,67 @@ private typedef OptionalMethodRequest = {
 /**
  * Plans inline optional fields and builds their storage accessors. Logical value copies are made only at the accessor
  * boundary; the holder itself contains a flag and recursively flattened payload slots, including managed references.
+ *
+ * Per function (`IrFunctionPass`): a rewrite reads, for each class whose fields it reads or writes, the plans along its bases
+ * (`RECEIVER`), and asks for the value methods its calls specialize to a field path (`METHOD`). The accessors are derived from
+ * their plan (`PLAN`), the specialized methods from the value method they clone and the value declarations (`DECLARATIONS`), so a
+ * session reuses them too (`IrFunctionStages.derived`).
  */
-class IrOptionalFieldStorage {
+@:nullSafety(Strict)
+class IrOptionalFieldStorage implements IrFunctionPass {
+	public static inline final STAGE = "optional-field-storage";
+
+	// Facts.
+
+	/** The plans along a class and its bases, by the class's name. */
+	static inline final RECEIVER = 0;
+
+	/** What a plan's accessors are made of (`planText`), by the plan's key. */
+	static inline final PLAN = 1;
+
+	/** The plans and the value objects' declarations, methods included: what a specialized method reads. */
+	static inline final DECLARATIONS = 2;
+
+	/** The kind of a request for a value method specialized to a field path, by its name. */
+	static inline final METHOD = 0;
+
+	// Summaries.
+	static inline final ACCESSES = 1;
+
+	final declarations:Array<IrObject>;
 	final objects:Map<String, IrObject>;
 	final layouts:IrInlineValueLayout;
+	final lineage:Null<IrLineage>;
+	final checks:Bool;
+	var types:Null<IrTypeIds>;
+	var builder:Null<IrBodyBuilder>;
+
+	/** The functions the stage is given, in program order: the value methods are specialized from them. */
+	var originals:Array<IrFunction> = [];
+
+	var originalIndex:Null<IrFunctionIndex> = null;
+
+	/** The specialized methods asked for, in the order they were first asked for. */
+	final methods:Array<String> = [];
+
+	final asked:Map<String, Bool> = [];
 
 	/** The plans by owner, then field: a lookup builds no key string. `key` is only for names and for the order plans are emitted in. */
 	final plans:Map<String, Map<String, OptionalFieldPlan>> = [];
 
 	var planCount = 0;
 
-	public function new(declarations:Array<IrObject>) {
+	/** The plans by `key`. */
+	final byKey:Map<String, OptionalFieldPlan> = [];
+
+	/** With `lineage`, the session's memo derives the helpers, and `types` and `builder` read the bodies. */
+	public function new(declarations:Array<IrObject>, ?lineage:IrLineage, checks = false, ?types:IrTypeIds,
+			?builder:IrBodyBuilder) {
+		this.declarations = declarations;
+		this.lineage = lineage;
+		this.checks = checks;
+		this.types = types;
+		this.builder = builder;
 		objects = [for (object in declarations) object.name => object];
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
 		for (object in declarations)
@@ -75,6 +130,7 @@ class IrOptionalFieldStorage {
 		if (!fields.exists(plan.field))
 			planCount++;
 		fields.set(plan.field, plan);
+		byKey.set(key(plan.owner, plan.field), plan);
 	}
 
 	function planFor(owner:String, field:String):Null<OptionalFieldPlan> {
@@ -84,6 +140,19 @@ class IrOptionalFieldStorage {
 
 	public function hasFields():Bool
 		return planCount > 0;
+
+	/** Whether `declarations` have an optional value field to plan: a field of a nullable value object. */
+	public static function hasPlans(declarations:Array<IrObject>):Bool {
+		var values:Map<String, Bool> = [for (object in declarations) if (object.isValue) object.name => true];
+		for (object in declarations)
+			for (field in object.fields)
+				switch field.type {
+					case Nullable(Obj(name)) if (values.exists(name)):
+						return true;
+					default:
+				}
+		return false;
+	}
 
 	/** The physical field declarations; field order remains deterministic. */
 	public function physicalObjects(declarations:Array<IrObject>):Array<IrObject> {
@@ -116,14 +185,74 @@ class IrOptionalFieldStorage {
 	}
 
 	/**
-	 * Replace logical reads and writes, including generated reflection operations, with field-specific accessors. On IR bodies
-	 * (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the functions' bodies when not given): a function
-	 * that changes becomes its edited body, owned by the next stage. The accessors and the value methods specialized to a field path (still cloned from their decoding) are built as
-	 * functions and encoded.
+	 * Replace logical reads and writes, including generated reflection operations, with field-specific accessors, without a memo.
+	 * On IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the functions' bodies when not given):
+	 * a function that changes becomes its edited body, owned by the next stage. The accessors and the value methods specialized
+	 * to a field path are built as functions and encoded.
 	 */
 	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(functions);
+		this.types = types ?? IrTypeIds.ofFunctions(functions);
+		this.builder = builder;
+		return IrFunctionStages.apply(STAGE, this, functions);
+	}
+
+	function bodyTypes():IrTypeIds {
+		var known = types;
+		if (known == null)
+			throw new InternalError("The optional field storage reads bodies with the program's types");
+		return known;
+	}
+
+	public function summarize(fn:IrFunction):Int {
+		var body = fn.bodyIn(bodyTypes(), builder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.FieldGet, IrOpcode.FieldSet:
+						return ACCESSES;
+					case IrOpcode.Call:
+						var name = body.symbol(row).name;
+						if (StringTools.startsWith(name, COPY_PREFIX) || StringTools.startsWith(name, METHOD_PREFIX))
+							return ACCESSES;
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void
+		originals = functions;
+
+	public function fact(kind:Int, key:String):Int {
+		var known = lineage;
+		if (known == null)
+			return 0;
+		return known.memos.facts.intern(switch kind {
+			case RECEIVER: receiverText(key);
+			case PLAN:
+				var plan = byKey.get(key);
+				plan == null ? "" : planText(plan);
+			case _: declarationsText();
+		});
+	}
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
+		return summary == 0 ? fn : rewritten(fn, reader);
+
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
+		if (name != null && !asked.exists(name)) {
+			asked.set(name, true);
+			methods.push(name);
+		}
+
+	/**
+	 * The rewritten functions, then for each plan in key order its accessors and place getters and setters, then the value methods
+	 * specialized to a field path, in the order they were asked for.
+	 */
+	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var all = functions.copy();
 		var ordered = [for (fields in plans)
 			for (plan in fields)
@@ -132,53 +261,163 @@ class IrOptionalFieldStorage {
 			}];
 		ordered.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in ordered) {
-			var plan = entry.plan;
-			all.push(accessor(plan, false));
-			all.push(accessor(plan, true));
+			var plan = entry.plan, planKey = entry.name;
+			// A helper of `plan` named `name`, which `make` builds, rewritten as the program's functions are.
+			function helper(name:String, make:() -> IrFunction):Void
+				all.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, lineage, checks,
+					bodyTypes(),
+					builder, reader -> {
+						reader.read(PLAN, planKey);
+						rewritten(make(), reader);
+					}));
+			helper(accessorName(plan, false), () -> accessor(plan, false));
+			helper(accessorName(plan, true), () -> accessor(plan, true));
 			var element = switch plan.type {
 				case Nullable(Obj(value)): value;
 				default: throw new InternalError("Invalid optional field plan");
 			};
-			var rootReader = new IrBuilder(),
-				rootOwner = rootReader.argument("owner", Obj(plan.owner));
-			rootReader.returnValue(readValue(rootReader, plan, rootOwner, Obj(element), []));
-			all.push(new IrFunction(placeGetterName(plan.owner, plan.field, []), rootReader.arguments, Obj(element),
-				rootReader.blocks,
-				Provider(TypeKey.of(Obj(plan.owner)),
-				ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
-				placeGetterName(plan.owner, plan.field, [])))));
-			appendPlaceSetters(all, plan, Obj(element), []);
+			var rootName = placeGetterName(plan.owner, plan.field, []);
+			helper(rootName, () -> {
+				var rootReader = new IrBuilder(),
+					rootOwner = rootReader.argument("owner", Obj(plan.owner));
+				rootReader.returnValue(readValue(rootReader, plan, rootOwner, Obj(element), []));
+				new IrFunction(rootName, rootReader.arguments, Obj(element), rootReader.blocks,
+					Provider(TypeKey.of(Obj(plan.owner)),
+					ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, rootName)));
+			});
+			appendPlaceSetters(helper, plan, Obj(element), []);
 		}
-		var originals = new IrFunctionIndex("optional-field-storage", functions),
-			generated:Map<String, Bool> = [];
 		var index = 0;
-		while (index < all.length) {
-			var body = all[index++].bodyIn(types, builder);
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					if (body.opcode(row) == IrOpcode.Call) {
-						var name = body.symbol(row).name, request = methodRequest(name);
-						if (request != null && !generated.exists(name)) {
-							generated.set(name, true);
-							var original = originals.get(request.method);
-							if (original == null)
-								throw new InternalError('Missing value method "${request.method}" for optional field');
-							all.push(specializeMethod(name, request, original));
+		while (index < methods.length) {
+			var name = methods[index++], request = methodRequest(name);
+			if (request == null)
+				continue;
+			var original = inputIndex().get(request.method);
+			if (original == null)
+				throw new InternalError('Missing value method "${request.method}" for optional field');
+			var known = lineage, input = known == null ? 0 : known.versionOf(original), method:IrFunction = original;
+			all.push(IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, bodyTypes(), builder,
+				reader -> {
+					reader.read(DECLARATIONS, "");
+					rewritten(specializeMethod(name, request, method), reader);
+				}));
+		}
+		return all;
+	}
+
+	/** The functions the stage was given, by name: a value method is specialized from its form before this stage. */
+	function inputIndex():IrFunctionIndex {
+		var known = originalIndex;
+		if (known == null)
+			originalIndex = known = new IrFunctionIndex(STAGE, originals);
+		return known;
+	}
+
+	/**
+	 * `fn` with its reads and writes of planned fields and its optional field copies replaced by accessor calls, reading the plans of
+	 * the classes it accesses through `reader` and asking for the specialized methods it calls; `fn` itself when it has none.
+	 */
+	function rewritten(fn:IrFunction, reader:IrFactReader):IrFunction {
+		var body = fn.bodyIn(bodyTypes(), builder), changes = false, specialized:Null<Map<String, Bool>> = null;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.Call:
+						var name = body.symbol(row).name;
+						if (StringTools.startsWith(name, COPY_PREFIX)) {
+							var fields:Array<String> = haxe.Json.parse(name.substr(COPY_PREFIX.length));
+							if (fields.length == 4) {
+								reader.read(RECEIVER, fields[0]);
+								reader.read(RECEIVER, fields[2]);
+							}
+							changes = true;
+						} else if (StringTools.startsWith(name, METHOD_PREFIX)) {
+							var known = specialized;
+							if (known == null)
+								specialized = known = [];
+							if (!known.exists(name)) {
+								known.set(name, true);
+								reader.request(METHOD, Void, name);
+							}
 						}
-					}
-					row = body.nextRow(row);
+					case IrOpcode.FieldGet, IrOpcode.FieldSet:
+						switch body.valueType(body.operand(row, 0)) {
+							case Obj(owner):
+								reader.read(RECEIVER, owner);
+								if (find(Obj(owner), body.symbol(row).name) != null)
+									changes = true;
+							default:
+						}
+					default:
 				}
+				row = body.nextRow(row);
 			}
 		}
-		return [for (fn in all) {
-			var body = fn.bodyIn(types, builder);
-			if (needsRewrite(body)) {
-				var edited = body.forEditing(builder);
-				rewriteBody(edited);
-				IrFunction.ofOwnedBody(edited);
-			} else fn;
-		}];
+		if (!changes)
+			return fn;
+		var edited = body.forEditing(builder);
+		rewriteBody(edited);
+		return IrFunction.ofOwnedBody(edited);
+	}
+
+	/** The text of the plans along `name` and its bases: what `find` reads of a class. */
+	function receiverText(name:String):String {
+		var parts:Array<String> = [], current:Null<String> = name;
+		while (current != null) {
+			var fields = plans.get(current);
+			if (fields != null) {
+				var names = [for (field in fields.keys()) field];
+				names.sort(Reflect.compare);
+				for (field in names) {
+					var plan = fields.get(field);
+					if (plan != null)
+						parts.push(planText(plan));
+				}
+			}
+			var object = objects.get(current);
+			current = object == null ? null : object.base;
+			if (current != null)
+				parts.push('base $current');
+		}
+		return parts.join("\n");
+	}
+
+	/** The text of what `plan`'s accessors are made of: its slots and the declarations of the values it holds. */
+	function planText(plan:OptionalFieldPlan):String {
+		var parts = ['plan ${plan.owner} ${plan.field} ${IrTypeIdentity.text(plan.type)}'];
+		for (slot in plan.slots)
+			parts.push('slot ${slot.path.join(".")} ${IrTypeIdentity.text(slot.type)} ${slot.isPresence} '
+				+ '${Std.string(slot.nativeLayout)} ${Std.string(slot.scalarStorage)} ${Std.string(slot.nullableScalarStorage)}');
+		var seen:Map<String, Bool> = [];
+		function values(type:IrType):Void
+			switch type {
+				case Obj(name), Nullable(Obj(name)) if (isValue(name) && !seen.exists(name)):
+					seen.set(name, true);
+					var object = objects.get(name);
+					if (object != null)
+						for (field in object.fields) {
+							parts.push('value $name ${field.name} ${IrTypeIdentity.text(field.type)}');
+							values(field.type);
+						}
+				default:
+			}
+		values(plan.type);
+		return parts.join("\n");
+	}
+
+	/** The text of every plan and of the value objects' declarations, their methods included. */
+	function declarationsText():String {
+		var parts = [IrInlineValueLayout.valueDeclarations(declarations)];
+		for (object in declarations)
+			if (object.isValue)
+				for (method in object.methods)
+					parts.push('method ${object.name} ${method.name} ${method.functionName.name}');
+		var keys = [for (fields in plans) for (plan in fields) plan];
+		keys.sort((a, b) -> Reflect.compare(key(a.owner, a.field), key(b.owner, b.field)));
+		for (plan in keys)
+			parts.push(planText(plan));
+		return parts.join("\n");
 	}
 
 	/** Clone a value method with its receiver represented by an owner and field path. */
@@ -190,6 +429,13 @@ class IrOptionalFieldStorage {
 			next = fn.nextValueId(),
 			owner = new IrValue(next++, "$optional-owner", Obj(request.owner)),
 			aliases:Map<Int, Array<String>> = [receiver.id => request.path];
+		// The path of a value a guard found among the aliases.
+		function aliasPath(id:Int):Array<String> {
+			var path = aliases.get(id);
+			if (path == null)
+				throw new InternalError('Missing optional field place alias $id');
+			return path;
+		}
 		// A receiver projection remains a place across SSA blocks. A cast only unwraps a nullable projection; the original
 		// null check remains in the cloned body.
 		var changed = true;
@@ -200,11 +446,11 @@ class IrOptionalFieldStorage {
 					switch located.value {
 						case FieldGet(out, object,
 							field) if (aliases.exists(object.id) && isComposite(out.type) && !aliases.exists(out.id)):
-							aliases.set(out.id, aliases.get(object.id).concat([field]));
+							aliases.set(out.id, aliasPath(object.id).concat([field]));
 							changed = true;
 						case SafeCast(out,
 							value) if (aliases.exists(value.id) && isComposite(out.type) && !aliases.exists(out.id)):
-							aliases.set(out.id, aliases.get(value.id));
+							aliases.set(out.id, aliasPath(value.id));
 							changed = true;
 						default:
 					}
@@ -222,14 +468,14 @@ class IrOptionalFieldStorage {
 				switch instruction {
 					case FieldGet(out, object, field) if (aliases.exists(object.id)):
 						var nested = nestedPhysicalField(object.type, field),
-							path = aliases.get(object.id).concat(nested == null ? [field] : nested.path);
+							path = aliasPath(object.id).concat(nested == null ? [field] : nested.path);
 						instruction = nested == null
 							&& isComposite(out.type) ? Call(out, IrSymbol.of(getterFor(plan, path, out.type)),
 							[owner]) : FieldGet(out, owner, physical(plan, path, nested != null && nested.presence));
 						handled = true;
 					case FieldSet(object, field, value) if (aliases.exists(object.id)):
 						var nested = nestedPhysicalField(object.type, field),
-							path = aliases.get(object.id).concat(nested == null ? [field] : nested.path),
+							path = aliasPath(object.id).concat(nested == null ? [field] : nested.path),
 							actual = materializeAlias(value, aliases, plan, owner, target, located, next);
 						next = actual.next;
 						if (nested == null && isComposite(value.type)) {
@@ -251,7 +497,7 @@ class IrOptionalFieldStorage {
 							args.push(actual.value);
 						}
 						instruction = Call(out,
-							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliases.get(object.id), resolved)),
+							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliasPath(object.id), resolved)),
 							args);
 						handled = true;
 					case Call(out, called, arguments)
@@ -264,7 +510,7 @@ class IrOptionalFieldStorage {
 							args.push(actual.value);
 						}
 						instruction = Call(out,
-							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliases.get(arguments[0].id),
+							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliasPath(arguments[0].id),
 							called.name)), args);
 						handled = true;
 					default:
@@ -279,7 +525,7 @@ class IrOptionalFieldStorage {
 						}
 					if (substitutions.keys().hasNext())
 						instruction = IrInliner.remap(instruction,
-							value -> substitutions.exists(value.id) ? substitutions.get(value.id) : value, id -> id);
+							value -> substitutions.get(value.id) ?? value, id -> id);
 				}
 				target.instructions.push(new Located(instruction, located.provenance));
 			}
@@ -360,7 +606,7 @@ class IrOptionalFieldStorage {
 	}
 
 	function methodName(type:IrType, method:String):String {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: throw new InternalError('Invalid value method receiver');
 		};
@@ -394,11 +640,12 @@ class IrOptionalFieldStorage {
 		return null;
 	}
 
-	function appendPlaceSetters(functions:Array<IrFunction>, plan:OptionalFieldPlan, type:IrType,
+	/** The place getters and setters of `plan` below `path`, each made through `helper` by its name. */
+	function appendPlaceSetters(helper:(String, () -> IrFunction) -> Void, plan:OptionalFieldPlan, type:IrType,
 			path:Array<String>):Void {
 		switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
-				appendPlaceSetters(functions, plan, Obj(name), path);
+				appendPlaceSetters(helper, plan, Obj(name), path);
 			case Obj(name) if (isValue(name)):
 				var object = objects.get(name);
 				if (object == null)
@@ -406,39 +653,43 @@ class IrOptionalFieldStorage {
 				for (field in object.fields) {
 					var childPath = path.concat([field.name]);
 					if (isComposite(field.type)) {
-						var reader = new IrBuilder(),
-							source = reader.argument("owner", Obj(plan.owner));
-						reader.returnValue(readValue(reader, plan, source, field.type, childPath));
-						functions.push(new IrFunction(placeGetterName(plan.owner, plan.field, childPath),
-							reader.arguments, field.type, reader.blocks,
-							Provider(TypeKey.of(Obj(plan.owner)),
-							ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
-							placeGetterName(plan.owner, plan.field, childPath)))));
+						var getter = placeGetterName(plan.owner, plan.field, childPath);
+						helper(getter, () -> {
+							var reader = new IrBuilder(),
+								source = reader.argument("owner", Obj(plan.owner));
+							reader.returnValue(readValue(reader, plan, source, field.type, childPath));
+							new IrFunction(getter, reader.arguments, field.type, reader.blocks,
+								Provider(TypeKey.of(Obj(plan.owner)),
+								ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, getter)));
+						});
 						switch field.type {
 							case Nullable(Obj(child)) if (isValue(child)):
-								var unwrapped = new IrBuilder(),
-									sourceOwner = unwrapped.argument("owner", Obj(plan.owner));
-								unwrapped.returnValue(readValue(unwrapped, plan, sourceOwner, Obj(child), childPath));
-								functions.push(new IrFunction(placeUnwrappedGetterName(plan.owner, plan.field,
-									childPath), unwrapped.arguments, Obj(child),
-									unwrapped.blocks,
-									Provider(TypeKey.of(Obj(plan.owner)),
-									ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
-									placeUnwrappedGetterName(plan.owner, plan.field, childPath)))));
+								var unwrappedGetter = placeUnwrappedGetterName(plan.owner, plan.field, childPath);
+								helper(unwrappedGetter, () -> {
+									var unwrapped = new IrBuilder(),
+										sourceOwner = unwrapped.argument("owner", Obj(plan.owner));
+									unwrapped.returnValue(readValue(unwrapped, plan, sourceOwner, Obj(child),
+										childPath));
+									new IrFunction(unwrappedGetter, unwrapped.arguments, Obj(child), unwrapped.blocks,
+										Provider(TypeKey.of(Obj(plan.owner)),
+										ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
+										unwrappedGetter)));
+								});
 							default:
 						}
-						var builder = new IrBuilder(),
-							owner = builder.argument("owner", Obj(plan.owner)),
-							value = builder.argument("value", field.type);
-						writeValue(builder, plan, owner, field.type, childPath, value);
-						builder.returnValue(builder.constVoid());
-						functions.push(new IrFunction(placeSetterName(plan.owner, plan.field, childPath),
-							builder.arguments, Void, builder.blocks,
-							Provider(TypeKey.of(Obj(plan.owner)),
-							ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
-							placeSetterName(plan.owner, plan.field, childPath)))));
+						var setter = placeSetterName(plan.owner, plan.field, childPath);
+						helper(setter, () -> {
+							var builder = new IrBuilder(),
+								owner = builder.argument("owner", Obj(plan.owner)),
+								value = builder.argument("value", field.type);
+							writeValue(builder, plan, owner, field.type, childPath, value);
+							builder.returnValue(builder.constVoid());
+							new IrFunction(setter, builder.arguments, Void, builder.blocks,
+								Provider(TypeKey.of(Obj(plan.owner)),
+								ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, setter)));
+						});
 					}
-					appendPlaceSetters(functions, plan, field.type, childPath);
+					appendPlaceSetters(helper, plan, field.type, childPath);
 				}
 			default:
 		}
@@ -484,9 +735,9 @@ class IrOptionalFieldStorage {
 							throw new InternalError('Invalid optional field copy "$name"');
 						var target = planFor(fields[0], fields[1]),
 							source = planFor(fields[2], fields[3]);
-						if (target == null
-							|| source == null
-							|| !Type.enumEq(target.type, source.type)
+						if (target == null || source == null)
+							throw new InternalError('Incompatible optional field copy "$name"');
+						if (!Type.enumEq(target.type, source.type)
 							|| target.slots.length != source.slots.length)
 							throw new InternalError('Incompatible optional field copy "$name"');
 						var destination = body.operand(row, 0),
@@ -541,24 +792,6 @@ class IrOptionalFieldStorage {
 				row = following;
 			}
 		}
-	}
-
-	function needsRewrite(body:IrBody):Bool {
-		for (block in 0...body.blockCount()) {
-			var row = body.firstRow(block);
-			while (row >= 0) {
-				switch body.opcode(row) {
-					case IrOpcode.Call if (StringTools.startsWith(body.symbol(row).name, COPY_PREFIX)):
-						return true;
-					case IrOpcode.FieldGet, IrOpcode.FieldSet:
-						if (find(body.valueType(body.operand(row, 0)), body.symbol(row).name) != null)
-							return true;
-					default:
-				}
-				row = body.nextRow(row);
-			}
-		}
-		return false;
 	}
 
 	function accessor(plan:OptionalFieldPlan, write:Bool):IrFunction {
@@ -662,7 +895,7 @@ class IrOptionalFieldStorage {
 		};
 
 	function find(type:IrType, field:String):Null<OptionalFieldPlan> {
-		var name = switch type {
+		var name:Null<String> = switch type {
 			case Obj(value): value;
 			default: return null;
 		};

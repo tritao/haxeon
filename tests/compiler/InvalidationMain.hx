@@ -40,12 +40,72 @@ class InvalidationMain {
 		expectInvalidated(inferred.invalidations, ["Inferred.value", "Inferring.value", "main"]);
 
 		var structural = new Compiler();
-		structural.update("model/Value.hx", "package model; class Value {}");
-		structural.update("Main.hx", "class Holder { public var value:model.Value; } function main():Int return 0;");
+		structural.update("model/Value.hx",
+			"package model; class Value { public var kept:Int; public function new() kept = 1; }");
+		structural.update("Main.hx",
+			"class Holder { public var value:model.Value; public function new() value = new model.Value(); }\n"
+			+ "function kept(holder:Holder):Int return holder.value.kept;\n"
+			+ "function main():Int return kept(new Holder()) + (Holds.holds(new Holder()) ? 1 : 0);");
+		structural.update("Holds.hx", "function holds(holder:Main.Holder):Bool return holder.value != null;");
 		structural.compile("Main");
-		structural.update("model/Value.hx", "package model; class Value { public var changed:Int; }");
+		structural.update("model/Value.hx",
+			"package model; class Value { public var kept:Int; public var changed:Int; public function new() kept = 1; }");
 		var layout = structural.compile("Main");
-		expectReason(layout.invalidations, "Holder", StructuralDependency, "model.Value");
+		// A function that reads a member of the class is typed again; one that only holds a value of it is not.
+		expectReason(layout.invalidations, "Main.kept", StructuralDependency, "model.Value");
+		for (entry in layout.invalidations)
+			expect(entry.artifact != "Holds.holds", "a function that reads none of a class's members was typed again: "
+				+ layout.invalidations);
+
+		// A call through a local still reads the method it resolves to: a change to its signature retypes the caller.
+		var methods = new Compiler();
+		methods.update("demo/Box.hx",
+			"package demo; class Box { public var value:Int = 1; public function new() {} public function read():Int return value; }");
+		methods.update("Main.hx",
+			"import demo.Box; function main():Int { var box:Box = new Box(); return box.read(); }");
+		methods.compile("Main");
+		methods.update("demo/Box.hx",
+			"package demo; class Box { public var value:Int = 1; public function new() {} public function read(?unused:Int = 0):Int return value; }");
+		var methodEdit = methods.compile("Main");
+		expect(methodEdit.retyped.indexOf("main") >= 0, "a method's signature change did not retype its caller: "
+			+ methodEdit.retyped);
+
+		// A class's members name its methods; each method's signature is a fact of its own. A signature edit retypes the callers of
+		// that method, not the readers of the class's other members.
+		var members = new Compiler();
+		members.update("Box.hx",
+			"class Box { public function new() {} public function a():Int return 1; public function b():Int return 2; }");
+		members.update("UsesA.hx", "function useA(box:Box):Int return box.a();");
+		members.update("UsesB.hx", "function useB(box:Box):Int return box.b();");
+		members.update("Main.hx", "function main():Int return UsesA.useA(new Box()) + UsesB.useB(new Box());");
+		members.compile("Main");
+		members.update("Box.hx",
+			"class Box { public function new() {} public function a():Int return 1; public function b(?extra:Int = 0):Int return 2 + extra; }");
+		var memberEdit = members.compile("Main");
+		expect(memberEdit.retyped.indexOf("UsesB.useB") >= 0 && memberEdit.retyped.indexOf("UsesA.useA") < 0,
+			"a method's signature edit retyped readers of the class's other members: " + memberEdit.retyped);
+
+		// Same-named declarations in other packages are other facts: a change to one retypes none of the other's readers.
+		var collision = new Compiler();
+		collision.update("left/Box.hx", "package left; class Box { public function new() {} }");
+		collision.update("right/Box.hx", "package right; class Box {}");
+		collision.update("LeftUse.hx", "function consume(box:left.Box):Int return 42;");
+		collision.update("RightUse.hx", "function unused(box:right.Box):Int return 0;");
+		collision.update("Main.hx", "import RightUse; function main():Int return LeftUse.consume(new left.Box());");
+		collision.compile("Main");
+		collision.update("right/Box.hx", "package right; class Box { public var added:Int; }");
+		var unrelated = collision.compile("Main");
+		expect(unrelated.retyped.indexOf("LeftUse.consume") < 0 && unrelated.retyped.indexOf("main") < 0,
+			"a change to one Box retyped the readers of another: " + unrelated.retyped);
+
+		// An argument renamed with its uses is a signature change: a build that kept the validated signature would type the new
+		// body against the old name.
+		var renamed = new Compiler();
+		renamed.update("Lib.hx", "function twice(value:Int):Int return value * 2;");
+		renamed.update("Main.hx", "function main():Int return Lib.twice(21);");
+		renamed.compile("Main");
+		renamed.update("Lib.hx", "function twice(input:Int):Int return input * 2;");
+		renamed.compile("Main");
 
 		compiler.update("Leaf.hx", "function value(:Int return 0;");
 		try {
@@ -70,7 +130,27 @@ class InvalidationMain {
 		wire.compile("messagepack-wire");
 		wire.update("messagepack-wire.hx", wireSource + "\n// a comment\n");
 		var commented = wire.compile("messagepack-wire");
-		expect(commented.retyped.length == 0, "a comment-only edit retyped " + commented.retyped);
+		expect(commented.retyped.length == 0,
+			"a comment-only edit retyped " + commented.retyped + ": " + commented.invalidations);
+
+		// The typer counts a generated flags helper as pure. The drift check must count it the same way, or a body that calls one
+		// looks drifted whenever purity is inferred again: on every edit anywhere.
+		var flags = new Compiler();
+		CompilerIntrinsics.register(flags);
+		flags.addStandardLibrarySourceRoot("stdlib");
+		flags.update("Perm.hx", "enum abstract Perm(Int) implements Flags { var Read = 1; var Write = 2; }");
+		// A call the typer knows is pure keeps what a check narrowed: `name` stays a String across `contains`.
+		flags.update("Uses.hx", "class Uses { var name:Null<String> = \"a\"; public function new() {}\n"
+			+ "public function allowed(p:Perm):Int { if (name != null && p.contains(Perm.Read)) return name.length; return 0; } }");
+		var flagsMain = (value:Int) -> "function other():Int return " + value + ";\n"
+			+ "function main():Int return new Uses().allowed(Perm.Read) + other();";
+		flags.update("Main.hx", flagsMain(1));
+		flags.compile("Main");
+		flags.update("Main.hx", flagsMain(2));
+		var flagsEdit = flags.compile("Main");
+		for (name in flagsEdit.retyped)
+			expect(!StringTools.startsWith(name, "Uses."), "an edit elsewhere retyped a caller of a flags helper: "
+				+ flagsEdit.retyped);
 
 		// A lambda is retyped with the function it is written in, and only then: editing `run` retypes the lambda inside it, while
 		// editing `other` leaves it alone.

@@ -15,18 +15,19 @@ import compiler.ir.model.IrValueId;
  *
  * Every read of an object type goes through `object`, so a caller that records what it reads (`HlLoweringView`) sees each one.
  */
+@:nullSafety(Strict)
 class IrScalarValuePlaces {
 	final valid:Map<Int, Bool> = [];
 
 	public function new(body:IrBody, object:String->Null<IrObject>) {
-		var roots:Map<Int, String> = [];
+		var roots:Map<Int, IrObject> = [];
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.ValueInit) {
-					var out = body.output(row), name = IrTypeTools.valueObjectName(body.valueType(out));
-					if (object(name) != null && scalarFields(object(name), object)) {
-						roots.set(out, name);
+					var out = body.output(row), descriptor = object(IrTypeTools.valueObjectName(body.valueType(out)));
+					if (descriptor != null && scalarFields(descriptor, object)) {
+						roots.set(out, descriptor);
 						valid.set(out, true);
 					}
 				}
@@ -38,13 +39,12 @@ class IrScalarValuePlaces {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				for (index in 0...body.operandCount(row)) {
-					var input = body.operand(row, index);
-					if (roots.exists(input)) {
+					var input = body.operand(row, index), root = roots.get(input);
+					if (root != null) {
 						var allowed = switch body.opcode(row) {
-							case IrOpcode.FieldGet: index == 0
-								&& hasField(object(roots.get(input)), body.symbol(row).name);
+							case IrOpcode.FieldGet: index == 0 && hasField(root, body.symbol(row).name);
 							case IrOpcode.FieldSet: index == 0 && (body.operand(row, 1):Int) != (input:Int)
-								&& hasField(object(roots.get(input)), body.symbol(row).name);
+								&& hasField(root, body.symbol(row).name);
 							default: false;
 						};
 						if (!allowed)

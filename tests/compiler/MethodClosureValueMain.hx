@@ -44,6 +44,8 @@ class MethodClosureValueMain {
 				c.configure("method-" + target + inlining, "method",
 					CompilerDriver.targetDefines(target));
 				c.options = new CompileOptions({inlining: inlining});
+				// A plain build: a live one reflects whenever `Reflect` is loaded, as it is in every program with a stdlib, and boxes.
+				c.livePatching = false;
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/closure-method-value-arguments.hx"));
 				var result = c.compile("Main");
 				if (target == "wasm32" && !inlining)

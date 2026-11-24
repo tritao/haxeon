@@ -9,8 +9,10 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.passes.arrays.IrValueArrayProgramRewrite.IrValueArrayRequests;
 
 /** Typed element boundaries, lowered to scalar call components when the backend supports them. */
+@:nullSafety(Strict)
 class IrValueArrayElements {
 	public static inline final PREFIX = "$value-array:element:";
 	final element:IrType;
@@ -40,7 +42,15 @@ class IrValueArrayElements {
 	public function iteratorArrayName():String return PREFIX + "iterator-array:" + suffix;
 	public function iteratorAdvanceName():String return PREFIX + "iterator-advance:" + suffix;
 	public function iteratorNextName():String return PREFIX + "iterator-next:" + suffix;
-	public function useIterator():Void iteratorUsed = true;
+	/** Told when a rewrite uses the iterator (`IrValueArrayRequests`), while a memoized rewrite runs. */
+	public var observer:Null<IrValueArrayRequests> = null;
+
+	public function useIterator():Void {
+		var observe = observer;
+		if (observe != null)
+			observe.iterator();
+		iteratorUsed = true;
+	}
 	public function natives():Array<IrNative> return !iteratorUsed ? [] : [
 		{
 			name: iteratorNewName(),

@@ -1,7 +1,8 @@
 # AOT backend: C from Haxeon's IR on the HashLink runtime
 
-Status: proposed; milestones 1 to 5 implemented (`--target=hlc`). Depends on the columnar IR (`IR_CORE_COLUMNS.md`): the backend
-reads the inliner's bodies as `HlLower` does.
+Status: milestones 1 to 5 are done (`--target=hlc`, the compiler built with `hlc`; see State); milestone 6, values
+unboxed across calls, is open. Depends on the columnar IR (`IR_CORE_COLUMNS.md`): the backend reads the inliner's bodies
+as `HlLower` does.
 
 ## Problem
 
@@ -91,8 +92,14 @@ failure, never silent corruption.
 
 The sources go to `OUTPUT.c/`:
 
-- `hlc.h`: what every file shares, and only that: `#include <hl.h>`, the section and inlining macros, the runtime
-  helpers (`hlc_new`, the value array view).
+- `hlc.h`: what every file shares, and only that. What is the same for every program is a real header of the SDK,
+  `hlc_prelude.h` (`native/aot/hlc_prelude.h`, copied into the SDK's `include/` by the `haxeon-sdk` target): `#include <hl.h>`,
+  the warning pragmas, the section and inlining macros (`HLC_FUNCTION`), `hlc_signature`, `hlc_f64`, the native symbol
+  macros (`HLC_SYMBOL`) and the inline allocation helper `hlc_new`. The generated `hlc.h` defines the program's options
+  before it includes the prelude (`HLC_INLINE_ALLOCATION` with `CompileOptions.inlineAllocation`) and adds only what
+  depends on the program after it: the value array view, which calls the program's own functions. The entry point
+  (`hlc_main.c`) includes the prelude for `hlc_signature`. The C build recompiles every file when the prelude is newer
+  than its object, as when `hlc.h` is.
 - One `.c` file per Haxe source file (each function goes with the source most of its rows come from, so inlined code
   does not move it), so C builds run in parallel and an edit recompiles only the files whose text changed: the writer
   leaves an unchanged file untouched, so its timestamp stays. Measured on the compiler with `hl2c`, per-module files
@@ -104,10 +111,11 @@ The sources go to `OUTPUT.c/`:
   index), the type descriptors, globals and allocation descriptors it reads, the natives it calls and the prototypes of
   the functions it names, each kind sorted by name. So no file parses the whole program's declarations (one header of all
   of them was 3 MB, parsed by each of 517 files), and a declaration's change rebuilds only the files that use it.
-- `image.c`: the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
+- `image.c` (`HlcImage`): the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
   table (function pointers by slot), the generated functions by C name, the layouts to check, and the pointers the files
   name with their table positions (below). It is the one file that depends on table positions.
-- `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them.
+- `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them: `haxeon_app_run`,
+  which the SDK's entry points (`src/haxeon_app.c`, the same an app's development build starts from) call.
 
 Every C name is derived from what it names, never from a table position, so a file's text depends only on what it uses
 and an added class does not rewrite the files that do not use it (`HlcStableNames`):
@@ -121,11 +129,13 @@ and an added class does not rewrite the files that do not use it (`HlcStableName
 
 A name part longer than 64 characters is cut and given a digest of the whole. Names that come out the same get a
 digest of what each item is (a type's fields, a global's type), and items that are the same in that too are numbered in
-table order. The names are settled before any C is written: a collection pass (`HlcFunctionLower.collect`) walks every
-function's IR in slot order and interns what its lowering will use (every value's type, the scalar locals' types, String
-literal and cached enum constant globals, the runtime header of the byte fast paths, the typed interface keys, the types
-allocated inline). Lowering then only reads the tables and writes final names; a type or global it would intern is the
-collection's bug and stops the build (`HlcModule.typeIndex` and the others). While a file is written the names it uses are
+table order. The names are settled before any C is written: every function is first collected, in slot order
+(`HlcFunctionLower.collect`): it is lowered as it will be written, but with no output, so whatever its lowering uses is
+interned (the values' and scalar locals' types, String literal and cached enum constant globals, the runtime header of
+the byte fast paths, the typed interface keys, the types allocated inline) and no C name is handed out (`HlcModule` gives
+empty names while it collects). Proofs that only drop checks from the text (non-null facts, loop bounds) are skipped
+then. There is one lowering, so collection cannot miss what writing uses; writing then only reads the tables, and a type
+or global it would intern still stops the build (`HlcModule.typeIndex` and the others). While a file is written the names it uses are
 recorded (`HlcUsage`: structs, descriptors, globals, natives, allocation descriptors, functions), and its declarations are
 made from that record, each kind sorted by name. The descriptors,
 globals and natives are pointers (`hl_type *hlc_t_Point`, `void *hlc_g_Main_count`, `void *hlc_np_…`) that `image.c`
@@ -216,7 +226,7 @@ from. Whether it inlines generated functions into each other follows the build m
   is named. Reading all of `.debug_info` at the first throw cost the AOT-built compiler half a second at start-up, as it
   throws early and catches.
 
-**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/reference/HLB_DEBUG_SECTIONS.md`) are written on
+**Compression.** Haxeon's own formats use LZ4: the HL debug sections (`docs/internals/HLB_DEBUG_SECTIONS.md`) are written on
 every development rebuild and decoded at every load, where speed matters. Platform formats use the platform's standard codec, so
 standard tools keep working: an ELF executable's DWARF is compressed with zlib (`SHF_COMPRESSED`, `ELFCOMPRESS_ZLIB`), which
 gdb, perf and addr2line read; a PDB stays as the linker writes it, uncompressed (DbgHelp and debuggers read no other form; a
@@ -231,8 +241,7 @@ drops the symbol table and `.debug_aranges` (`objcopy --strip-all`, keeping the 
 from the module image and read only the line tables and inline records, and gdb and addr2line find functions from the
 DWARF. A development build keeps all of it, uncompressed.
 
-Each mode keeps its objects (`OUTPUT.c/obj-development`, `obj-release`), made again when the compiler or its flags change;
-the C text is the same. Where the C compiler has the flag (gcc), it compiles with `-fno-crossjumping`: it would otherwise
+The mode is the C build's (`haxeon_add_c_executable`'s `DEVELOPMENT`, see Building the C); the C text is the same. Where the C compiler has the flag (gcc), it compiles with `-fno-crossjumping`: it would otherwise
 merge identical calls of different Haxe lines, throws most often, also in inlined copies of one function, into one call
 of one line, losing the others' lines and inlined frames.
 
@@ -254,7 +263,7 @@ Platforms:
   (the fork's `hl.h` lets it be defined), so references to libhl are direct rather than through a DLL's import table, and
   its entry point is `wmain` (`-municode`), as the runtime's arguments are UTF-16 there. Checked by cross-building with
   MinGW and running the six stack programs under wine in both build modes, against the JIT on Linux.
-- **Windows with MSVC** (an SDK built with MSVC; `--toolchain=clang-cl`, the default, or `cl`): MSVC writes no DWARF; its line tables and inline records are in
+- **Windows with MSVC** (an SDK built with MSVC, the C built with clang-cl or `cl`): MSVC writes no DWARF; its line tables and inline records are in
   the PDB the link writes beside the executable (`OUTPUT.pdb`). The section scheme is MinGW's
   (`__declspec(code_seg(".text$hlc.2"))` on each generated function's declaration and definition, the markers in
   `.text$hlc.1` and `.text$hlc.3`; link.exe and lld-link sort `.text$` groups as GNU ld does), and the frames come from
@@ -291,53 +300,59 @@ functions by C name with their slots (`hlc_function_names`, sorted), which needs
 rows are sorted stably (several rows share an address, and the last is its line), by a merge sort of its own, as `qsort`
 is not stable in every C library.
 
-## Driver and target selection
+## Building the C
 
 `--target=hlc` selects the backend as `--target=wasm32` does (`BackendTargets.parse` gives `HashLinkC`). The compile writes
-the C sources into the directory `--output` names plus `.c` (`out/main.c/`). With the SDK it links against, a
-typed option on the request (`CompileOptions.cSdk`, `--c-sdk=DIR`: the native build's `hlc-sdk` directory, made by the
-`haxeon-hlc-sdk` target, with the runtime headers in `include/`, `libhl.a` (the VM library without the JIT) and `libffi.a` in
-`lib/`, the entry point in `src/`, and in `target` the target it was built for), the driver builds with a toolchain
-(`CompileOptions.toolchain`, `--toolchain=NAME|PATH`): `gcc`, `clang`, `clang-cl` or `cl`, or a path to one, which chooses the
-compiler, the linker, the flag style, the debug format and the C runtime together. Without it the toolchain is the default of
-the SDK's target (`HlcBuild.toolchain`), whose ABI the compile cannot know otherwise: the compiler knows the backend and the
-host, and the SDK records what it was built for (`linux-x86_64-gnu`, `macos-arm64`, `windows-x86_64-msvc`, as `build.Target`
-spells them): `cc` for `linux-*-gnu` and `macos-*`, `clang-cl` for `windows-*-msvc`, MinGW's gcc for `windows-*-gnu`. A
-toolchain of the other ABI (`cl` or `clang-cl` for a GNU target, gcc or clang for MSVC's) is a usage error, before anything
-compiles. The driver compiles each C
-file that changed (as many at once as there are processors, the largest first; `-O2 -g1 -fwrapv -fno-strict-aliasing
--fno-optimize-sibling-calls`, in a development build `-O0 -g1 ... -DHLC_EXACT_FRAMES`: see Debug information; Haxe's
-`Int` wraps, and objects are read through each other's structs; `-g1` keeps the line tables and inline records the stack
-traces read and leaves out the variables and types, most of the debug information's compile time), links the executable at `--output` with the whole VM library (the loader resolves natives by
-their `hlp_` symbols in the executable itself), and reports the C compiler's diagnostics as a compile error. Neither option is read from the environment or from defines. They change
-no IR or C text, so `CompileOptions.key` leaves them out.
+the C sources into the directory `--output` names plus `.c` (`out/main.c/`), rewriting only the files whose text changed, and
+does nothing more: the compiler has no C compiler driver. The C is built with CMake and Haxeon's SDK
+([SDK_LAYOUT.md](SDK_LAYOUT.md), which a checkout's native build stages in `out/sdk`: the runtime headers in `include/`, the
+VM library without the JIT (`libhl-aot`) and `libffi` in `lib/<target>/`, the entry point and stack capture in `src/`, and
+the CMake package in `cmake/`). After `find_package(Haxeon)`,
 
-The toolchain's name says which command line it takes (`HlcBuild.driverOf`): `cl` and `clang-cl` (LLVM's compiler with MSVC's
-command line and ABI) are MSVC's, wherever they run; `cc`, gcc and clang (versioned or prefixed, as `gcc-14` or MinGW's
-`x86_64-w64-mingw32-gcc`) are gcc's, and the gcc-style flags and link follow the SDK's OS. With MSVC's, the SDK is a native build with MSVC (the `windows-msvc` preset):
-`libhl.lib` and `libffi.lib`, built with the DLL C runtime. Each file is compiled with `/std:c11 /O2 /Z7 /MD` (`/Od` and
-`/DHLC_EXACT_FRAMES` in a development build) and `/DHL_IMPORT=extern`; `/Z7` keeps the CodeView records in each object, so
-parallel compiles share no PDB, and clang-cl keeps only line tables and inline sites (`-gline-tables-only`, as `-g1`) and
-takes gcc's `-fwrapv`, `-fno-strict-aliasing` and `-fno-optimize-sibling-calls` (`/clang:`). The link, through the same
-driver, makes `OUTPUT.exe` and `OUTPUT.pdb` with `/DEBUG /INCREMENTAL:NO /OPT:REF /OPT:NOICF /STACK:8388608` and
-`/WHOLEARCHIVE` of `libhl.lib`, whose objects export the natives the loader finds by name. The generated C needs no GCC
-extension there: `hlc.h` spells the section and `noinline` as `__declspec(code_seg)` and `__declspec(noinline)`, and a native
-of the VM or runtime is bound to its symbol by the linker (`#pragma comment(linker, "/alternatename:...")`) instead of an asm
-label. Plain `cl` has no flag for wrapping arithmetic or for keeping sibling calls: it relies on MSVC not exploiting signed
-overflow, and a release build may lose the frame of a function that ends in a tail call, which clang-cl keeps; clang-cl is
-the compiler the Windows release uses.
+    haxeon_add_c_executable(<target> SOURCES_DIR <dir> [DEVELOPMENT])
+
+(`cmake/sdk/HaxeonApp.cmake`) makes the executable from the C in `<dir>`: an app's release build through its runner
+(`haxeon_add_app`, [PROJECT_BUILDS.md](PROJECT_BUILDS.md)), and anything else through `cmake/aot`, a project of a few lines
+that takes the sources directory, the output and the mode on its command line (`haxeon dev aot`, `tests/aot`). The C compiler
+is CMake's choice (`CC`, `-DCMAKE_C_COMPILER`, a toolchain file for MinGW), as is the parallelism and the rebuild of only
+what changed; the SDK's target (`linux-x86_64-gnu`, `macos-arm64`, `windows-x86_64-msvc`, as `build.Target` spells them)
+follows from the compiler, so a compiler of the other ABI finds no libraries.
+
+The release flags are `-O2 -g1 -fwrapv -fno-strict-aliasing -fno-optimize-sibling-calls -fvisibility=hidden` with
+`-std=gnu11`; `DEVELOPMENT` has `-O0` and `HLC_EXACT_FRAMES` (see Debug information). Haxe's `Int` wraps, and objects are read
+through each other's structs; `-g1` keeps the line tables and inline records the stack traces read and leaves out the
+variables and types, most of the debug information's compile time. The executable links the whole VM library (the loader
+resolves natives by their `hlp_` symbols in the executable itself) and exports its dynamic symbols. On Linux a release build
+then links with `--compress-debug-sections=zlib` and drops the symbol table (`objcopy`, see Debug information); with MinGW
+the entry point is `wmain` (`-municode`) and the main thread gets an 8 MB stack. A configuration with a build type other than
+Release or none would add its own optimization flags; the function's come last, but MSVC's Debug checks (`/RTC1`) do not
+combine with `/O2`.
+
+With MSVC's command line (`cl`, and `clang-cl`, LLVM's compiler with MSVC's command line and ABI), the SDK is a native build
+with MSVC (the `windows-msvc` preset): `libhl-aot.lib` and `libffi.lib`, built with the DLL C runtime. Each file is compiled
+with `/std:c11 /O2 /Z7 /MD` (`/Od` and `/DHLC_EXACT_FRAMES` in a development build) and `/DHL_IMPORT=extern`; `/Z7` keeps the
+CodeView records in each object, so parallel compiles share no PDB, and clang-cl keeps only line tables and inline sites
+(`-gline-tables-only`, as `-g1`) and takes gcc's `-fwrapv`, `-fno-strict-aliasing` and `-fno-optimize-sibling-calls`
+(`/clang:`). The link makes `OUTPUT.exe` and `OUTPUT.pdb` with `/DEBUG /INCREMENTAL:NO /OPT:REF /OPT:NOICF /STACK:8388608`
+and `/WHOLEARCHIVE` of the VM library, whose objects export the natives the loader finds by name. The generated C needs no
+GCC extension there: `hlc.h` spells the section and `noinline` as `__declspec(code_seg)` and `__declspec(noinline)`, and a
+native of the VM or runtime is bound to its symbol by the linker (`#pragma comment(linker, "/alternatename:...")`) instead of
+an asm label. Plain `cl` has no flag for wrapping arithmetic or for keeping sibling calls: it relies on MSVC not exploiting
+signed overflow, and a release build may lose the frame of a function that ends in a tail call, which clang-cl keeps;
+clang-cl is the compiler the Windows release uses.
 
 ## Shipping the compiler and the CLI
 
 The CLI (`haxeon`, the VM running `haxeon-cli.hl`) runs the compiler in three roles: one compile (`compiler.tools.HaxeonCompiler`,
 the one-shot fallback), a compile server per project (`compiler.tools.CompilerServer`, which `build.execution.CompilerClient`
-starts and reuses) and the language server (`LspMain`, `haxeon lsp`). Under the JIT each is a bytecode build of its own, made from
+starts and reuses), and the tools that carry the compiler: the language server (`LspMain`, `haxeon lsp`), the typed lint rules
+(`LintMain`) and the FFI tools (`FfiImportMain`, `FfiAuditMain`). Under the JIT each is a bytecode build of its own, made from
 the checkout's sources with the pinned Haxe and cached (the session directory, `out/tools`), and every start of one JITs all of its
 functions first (about a second for the compiler, and over a second for the CLI itself, on every command).
 
-Built ahead of time, the CLI and the three roles are one executable, `haxeon-aot` beside the VM (`HashLinkPath.directory`), whose
-entry point `tools.CompilerExecutable` takes the role from its first argument (`cli ARGUMENTS`, `serve STATE`, `lsp`, else the
-compiler's own arguments): ahead of time, code a role does not use costs nothing at start-up, and one file is what a release
+Built ahead of time, the CLI and the roles are one executable, `haxeon-aot` beside the VM (`HashLinkPath.directory`), whose
+entry point `tools.CompilerExecutable` takes the role from its first argument (`cli ARGUMENTS`, `serve STATE`, `lsp`, `lint`,
+`ffi-import`, `ffi-audit`, else the compiler's own arguments): ahead of time, code a role does not use costs nothing at start-up, and one file is what a release
 ships. One executable rather than a CLI beside a compiler: the CLI's sources are the compiler's (`src` and `lib/haxeon-io`, and
 the CLI imports much of the compiler), so the two are always current together and one stamp covers both; a second executable
 would double the build (about two minutes) and the size for no case where one is current without the other. `build.AotCompiler`
@@ -353,7 +368,8 @@ says where it is and whether it is current, and each place that would start the 
   (`compiler-session-v9:aot`), so a bytecode worker of the same sources is not reused once the executable is installed. A worker
   profiled with `HAXEON_COMPILER_PROFILE_PORT` stays on the VM, whose diagnostics port it is.
 - `CompilerClient.runOneShot` runs `haxeon-aot ARGUMENTS` instead of `hl compiler.hl ARGUMENTS`, on every platform.
-- `haxeon lsp` runs `haxeon-aot lsp`.
+- `haxeon lsp`, the typed rules of `haxeon lint` and `haxeon ffi` run `haxeon-aot lsp`, `lint`, `ffi-import` or `ffi-audit`
+  (`HaxeonCli.runCompilerRole`).
 
 The executable was `haxeon-compiler` before it held the CLI. It has a new name because the launcher cannot ask an executable which
 roles it has: an older one would take `cli ARGUMENTS` for a compile's arguments, and every `haxeon` command, `haxeon dev aot`
@@ -364,7 +380,7 @@ built from the sources the CLI would otherwise build to bytecode. Its stamp, `ha
 sources (`CompilerSources.roots` and the standard library, by relative path and content, so it does not depend on where the files
 are unpacked); when the executable or the stamp is missing, or the digest differs, the CLI and the compiler run on the VM as
 before. So an edit in a checkout never runs an older CLI or compiler. A release ships no compiler sources, as its compiler cannot
-change: its marker (`haxeon-release.txt`, `build.HaxeonRelease`) records the digest of the sources it was made from, and the stamps
+change: its marker (`haxeon-release.txt`, `build.HaxeonSdk`) records the digest of the sources it was made from, and the stamps
 are matched against that, so a release always runs what it ships. `haxeon doctor` says which: ok, stale or not built. A build with
 a stale executable says so once, with the command that rebuilds it. Every command asks, so each file's digest comes from the
 user's store of content digests (`build.execution.DigestStore`, behind every `ContentDigestCache`), kept with the file's stat
@@ -372,13 +388,15 @@ signature (device, inode, size and times) and reused while it holds: the check t
 its digest by a few seconds, since timestamps are whole seconds.
 
 A release ships the executable and its stamp for each platform in the VM's directory, so a user needs no C compiler
-(docs/reference/RELEASES.md). It also ships the compiler's roles as bytecode with a stamp of its own (`haxeon-compiler.hl`), which
-`AotCompiler.program` runs on the VM when there is no current executable, as the launcher then runs the CLI's bytecode
+(docs/reference/RELEASES.md). It also ships the compiler's roles as bytecode with a stamp of its own (`haxeon-compiler.hl`, one of
+the programs `AotCompiler.shipped` names, with the live development host), which `AotCompiler.program` runs on the VM when there
+is no current executable, as the launcher then runs the CLI's bytecode
 (`haxeon-cli.hl`): a release has no pinned Haxe to build them from its sources, and the Windows release does not build the
 executable yet. The executable is made by `haxeon dev aot [--toolchain=NAME]` (`tools.dev.AotBuild`): the native build (for the hlc SDK), the checkout's compiler
-built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`) with the SDK's
-default toolchain or the one given, then the executable published by rename (`cmake/haxeon-replace.cmake`, so a running worker,
-or the running CLI, keeps its file) and the stamp written last. The C sources and objects stay in `out/aot`, so a rebuild
+built to bytecode, `--target=hlc` of `tools.CompilerExecutable` in release mode (`HaxeonBuild.TOOL_BUILD_MODE`), the C built
+through `cmake/aot` with the C compiler given (`CMAKE_C_COMPILER`), else CMake's, or clang-cl for an SDK built with MSVC, then
+the executable (and its PDB with MSVC) published by rename (`cmake/haxeon-replace.cmake`, so a running worker, or the running
+CLI, keeps its file) and the stamp written last. The C sources and CMake's build stay in `out/aot`, so a rebuild
 compiles only the C files that changed. The hlc build links libhl statically, so the executable needs nothing beside it; the stack
 traces read its own DWARF (`-g1`), which is most of its size. On Linux the CLI with the executable builds a one-file project cold
 (CLI start, compile server start, compile) in 1.2 s against 2.3 s with the bytecode worker, and a language server session starts
@@ -386,14 +404,13 @@ in 0.6 s against 2.1 s. With the CLI in it too, `haxeon --version` takes 0.13 s 
 perf guard's small project 7.2 G instructions against 14.0 G (its check 3.3 G against 9.8 G). The `aot-compiler` suite builds it,
 checks each role and runs the suites that compile through the CLI with it.
 
-On Windows the release builds the executable with clang-cl (the default toolchain of an MSVC SDK, MSVC's ABI and C runtime, as the VM is
+On Windows the release builds the executable with clang-cl (`haxeon dev aot`'s default for an MSVC SDK, MSVC's ABI and C runtime, as the VM is
 built), and ships its PDB, `haxeon-aot.pdb`, beside it. Without the PDB a trace names each frame's function from the module
 image but gives no file and line, and loses the frames of the functions the C compiler inlined, where the other platforms give
 both from the DWARF their executables keep: a trace of an internal error is what a user sends back, so it is worth the size.
 The PDB keeps only line tables and inline sites (clang-cl's `-gline-tables-only`): built from this tree, about 21 MB beside a
 14 MB executable, 5 MB compressed in the archive. DbgHelp finds it in the executable's directory. `haxeon dev aot`
-publishes the executable only (in a checkout the PDB is found where the link wrote it, by the path the executable records), so
-the release copies `out/aot/haxeon-aot.pdb` beside the published executable.
+publishes it beside the executable, where the release package takes it from.
 
 ## Testing
 
@@ -426,16 +443,17 @@ the release copies `out/aot/haxeon-aot.pdb` beside the published executable.
 
 Milestones 1 to 5 are done. `tests/aot/test-aot-programs.sh --all` passes all 645 programs of `tests/programs` with the
 JIT's exact exit code, stdout and stderr, stack traces included; `tests/aot/programs.txt` lists them and is the runner's
-default, and the `ci` suite `aot-programs` runs it. No IR construct of the programs is unsupported.
+default, and the `ci` suite `aot-programs` runs it; `aot-programs-release` runs it on a release build, and `aot-programs-sanitized`
+with AddressSanitizer and UndefinedBehaviorSanitizer (`--sanitize`). No IR construct of the programs is unsupported.
 
 Milestone 2: the C lowering writes what `HlLower` writes inline, from the same decisions
-(`HlLower`'s value array constants and read selection, `HlLower.cNativeInvocation`): the array push and byte read and write
+(`HlLoweringDecisions`: the value array constants and read selection, `cNativeInvocation`): the array push and byte read and write
 fast paths, also at calls of their shared helpers (`IrSharedRuntimeCalls` saves the JIT start-up time, which C does not pay);
 value array reads from the scalar lane with the view resolved where the array value is defined; the typed interface method
 table prologue of dispatch functions; ordinary C function calls (`CNativeCall`) through the runtime's dispatch. Array bounds
-checks are inline compares, dropped where an earlier check in the block still holds (`HlLower.keepsArrayBounds`) or the loop
-proves the index in range (`IrLoopBounds`). Objects are allocated by `hl_alloc_obj`, as the JIT allocates them by default. The JIT's inline
-allocation is opt-in on both: the JIT's with `HL_JIT_ALLOC_INLINE=1` in the VM, the C backend's with the typed option
+checks are inline compares, dropped where an earlier check in the block still holds (`IrLoopBounds.keepsArrays`) or the loop
+proves the index in range (`IrLoopBounds`). Objects are allocated by `hl_alloc_obj`. The JIT allocates small objects inline
+on Linux x86-64 and AArch64; the C backend does with the typed option
 `CompileOptions.inlineAllocation` (`--inline-allocation`), which allocates by `hlc_new` from the collector's own descriptor
 (`hl_jit_alloc_prepare`, filled at start-up). A cast from `Null<T>` to `T` reads the box inline, as the JIT's
 `emit_dyn_cast` does, instead of calling `hl_dyn_casti`.
@@ -455,7 +473,7 @@ this machine's noise but worth the milestone 5 measurement of inlining with DWAR
 Milestone 4: the executable initializes its module with `hl_module_init_aot` and calls through generated trampolines; the
 JIT is never initialized, and since this round not linked either. The SDK's `libhl.a` is `hlvm_aot` (`libhl-aot.a` in the
 build): `hlvm`'s objects but for the JIT's (`jit*.c`), whose entry points the fork's `jit_none.c` gives for a VM without
-it (`HL_NO_JIT_SOURCES` in `cmake/hl-sources.cmake`): `hl_jit_alloc` returns nothing, so a bytecode module cannot be
+it (`HL_NO_JIT_SOURCES` in `vendor/hashlink/cmake/hl-sources.cmake`): `hl_jit_alloc` returns nothing, so a bytecode module cannot be
 initialized or patched, and nothing writes code. `hl_jit_null_field_access`, which compiled code of both kinds calls,
 moved from `jit.c` to `module.c`. The default `hlvm` and `hl` are unchanged. PCRE's own JIT is not compiled in either
 library. Measured: a hello-world executable's code goes from 1.78 MB to 1.60 MB (stripped file 1.82 MB to 1.65 MB), the
@@ -540,8 +558,8 @@ builds a release's: the C build's compile from 17.1 s to 14.8 s, main-thread ins
 the same sources: 10.4 s, 44 G). What is left of the difference: the C emission (3.9 s built ahead of time), and the bytecode
 lowering of function bodies the C backend does not read (1.4 s), which needs `HlLower` to intern without lowering (the types,
 constants and natives a body names are interned as it is lowered). The `haxeon dev aot` build of `tools.CompilerExecutable` also
-pays a frontend restart (graph 8.6 s against 1.5 s) for standard library modules only typing finds (`haxe.io.BytesHex`,
-`haxeon.DynamicOps`); that is the frontend's, not the C backend's.
+paid a frontend restart (graph 8.6 s against 1.5 s) for standard library modules only typing found (`haxe.io.BytesHex`,
+`haxeon.DynamicOps`); the graph now has them before typing (docs/design/FRONTEND_RESTART.md).
 
 Per-function C emission in parallel (designed, a later track). Each function lowers into its own text and files are joined in
 slot order, so the output stays deterministic; declarations are per file and independent once lowering is done. What is shared

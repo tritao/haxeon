@@ -21,6 +21,7 @@ import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 /** Stable target-neutral container for the complete verified Haxeon IR. */
+@:nullSafety(Strict)
 class CanonicalIrCodec {
 	public static inline final VERSION:Int = 22;
 	static inline final MAGIC = "HIR";

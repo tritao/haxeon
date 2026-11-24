@@ -26,10 +26,7 @@ class RuntimeProvider {
 				Path.join([root, "cmake"]),
 				Path.join([root, "vendor", "hashlink", "CMakeLists.txt"])
 			],
-			hashlinkRoot = Path.join([
-				buildDirectory,
-				"hashlink-runtime"
-			]),
+			hashlinkRoot = build.HashLinkPath.directory(build.HaxeonSdk.ofCheckout(root, preset)),
 			programSuffix = environment.target.os == TargetOs.Windows ? ".exe" : "",
 			// One file: libhl and the runtime are compiled into the VM.
 			hashlink = Path.join([hashlinkRoot, "hl" + programSuffix]),

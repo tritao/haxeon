@@ -1,9 +1,13 @@
 package compiler.ir.tools;
 
 import compiler.ir.analysis.IrLoopBounds;
+import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.Ir;
+import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;
+import compiler.ir.model.IrTypeIds;
+import compiler.ir.model.IrValueId;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.passes.objects.IrGenericOwnerErasure;
@@ -146,8 +150,16 @@ class IrOpportunityCensus {
 
 	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>, objects:Map<String, IrObject>, allowInline:Bool,
 			?smallFunctions:Map<String, Bool>):CensusRow {
-		var bounds = new IrLoopBounds(fn, pureCalls),
+		var body = IrBodyBuilder.encode(fn, IrTypeIds.ofFunctions([fn])),
+			bounds = new IrLoopBounds(pureCalls).reset(body, new IrBodyGraph().reset(body)),
+			definitions:Map<Int, IrInstruction> = [],
 			allocations:Array<CensusAllocation> = [];
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null)
+					definitions.set(output.id, located.value);
+			}
 		var counts:Array<Int> = [for (_ in labels) 0],
 			weighted:Array<Float> = [for (_ in labels) 0.0],
 			opcodes:Map<String, Int> = [],
@@ -235,7 +247,7 @@ class IrOpportunityCensus {
 					}
 				switch instruction {
 					case Call(_, name, arguments) if (name.name == IrReceiverCheck.NAME && arguments.length == 1):
-						switch bounds.definition(arguments[0].id) {
+						switch definitions.get(arguments[0].id) {
 							case NewObject(_, _), ValueInit(_), StaticClosure(_, _),
 								InstanceClosure(_, _, _): count(14);
 							default:
@@ -250,7 +262,7 @@ class IrOpportunityCensus {
 							case ArrayGet(_, _, _): 0;
 							default: 1;
 						});
-						if (bounds.proven(array, index, block.id))
+						if (bounds.proven(IrValueId.of(array.id), IrValueId.of(index.id), block.id))
 							count(2);
 					case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), IntToFloat(_, _), FloatToInt(_, _),
 						FloatToFloat(_, _), IntToInt64(_, _):
@@ -268,12 +280,12 @@ class IrOpportunityCensus {
 						allocations.push(allocationInfo(fn, out, objects, allowInline));
 					default:
 				}
-				if ((pureArithmetic(instruction) && bounds.invariantInputs(instruction, block.id))
-					|| constantField(fn, bounds, instruction, block.id, pureCalls))
+				if ((pureArithmetic(instruction) && bounds.invariantInputs(inputIds(instruction), block.id))
+					|| constantField(fn, bounds, definitions, instruction, block.id, pureCalls))
 					count(7);
 				switch instruction {
 					case Div(_, _, divisor), Mod(_, _, divisor):
-						var value:Null<Float> = switch bounds.definition(divisor.id) {
+						var value:Null<Float> = switch definitions.get(divisor.id) {
 							case ConstInt(_, n): n;
 							case ConstFloat(_, n): n;
 							default: null;
@@ -305,7 +317,7 @@ class IrOpportunityCensus {
 			if (block.terminator != null)
 				switch block.terminator.value {
 					case Branch(condition, _, _), Switch(condition, _, _):
-						switch bounds.definition(condition.id) {
+						switch definitions.get(condition.id) {
 							case ConstBool(_, _): count(11);
 							default:
 						}
@@ -336,6 +348,9 @@ class IrOpportunityCensus {
 			case Nullable(Obj(name)): compiler.semantic.SemanticSignature.isAnonymousName(name) ? 1 : 2;
 			default: 0;
 		};
+
+	static function inputIds(instruction:IrInstruction):Array<IrValueId>
+		return [for (input in IrOperands.inputs(instruction)) IrValueId.of(input.id)];
 
 	static function pureArithmetic(instruction:IrInstruction):Bool {
 		return switch instruction {
@@ -371,8 +386,8 @@ class IrOpportunityCensus {
 	}
 
 	/** Count only a constant scalar field of a fresh, unpublished object, initialized outside every loop. */
-	static function constantField(fn:IrFunction, bounds:IrLoopBounds, instruction:IrInstruction, at:Int,
-			pureCalls:Map<String, Bool>):Bool {
+	static function constantField(fn:IrFunction, bounds:IrLoopBounds, definitions:Map<Int, IrInstruction>,
+			instruction:IrInstruction, at:Int, pureCalls:Map<String, Bool>):Bool {
 		if (bounds.depth(at) == 0)
 			return false;
 		var receiver:IrValue, field:String;
@@ -387,7 +402,7 @@ class IrOpportunityCensus {
 			default:
 				return false;
 		}
-		switch bounds.definition(receiver.id) {
+		switch definitions.get(receiver.id) {
 			case NewObject(_, _) | ValueInit(_):
 			default:
 				return false;
@@ -400,7 +415,7 @@ class IrOpportunityCensus {
 				switch located.value {
 					case FieldSet(object, name, value) if (object.id == receiver.id && name == field):
 						writes++;
-						switch bounds.definition(value.id) {
+						switch definitions.get(value.id) {
 							case ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _),
 								ConstString(_, _): initialized = block.id;
 							default: return false;

@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
+import compiler.core.TextDigest;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
-import haxe.crypto.Sha256;
 
 /**
  * The names of generated helpers (equality, hashing) for one compilation, by prefix and the spelled type they are for. A
@@ -33,5 +33,5 @@ class HelperNames {
 		return spelled(prefix, SemanticSignature.type(type));
 
 	static function spelled(prefix:String, signature:String):String
-		return prefix + Sha256.encode(signature).substr(0, 32);
+		return prefix + TextDigest.sha256(signature).substr(0, 32);
 }

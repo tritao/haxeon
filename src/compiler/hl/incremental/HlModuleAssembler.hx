@@ -488,14 +488,35 @@ class HlModuleAssembler {
 	static function describeDropped(name:String, fn:Null<IrFunction>):String {
 		if (!LambdaName.is(name))
 			return '$name was deleted';
-		if (fn != null)
-			for (block in fn.blocks)
-				for (instruction in block.instructions) {
-					var location = instruction.provenance.location;
-					if (location != null)
-						return 'a deleted lambda at ${location.path}:${location.line}';
-				}
+		var location = fn == null ? null : firstLocation(fn);
+		if (location != null)
+			return 'a deleted lambda at ${location.path}:${location.line}';
 		return 'a deleted lambda in ${LambdaName.outermost(name)}';
+	}
+
+	/**
+	 * Lets the IR of function `name` go, keeping its signature (`HlFunctionCache.vacate`); its lowered code stays, since the
+	 * module this assembler writes has it in the slot.
+	 */
+	function vacate(name:String):Void {
+		var vacant = cache.vacate(name), lowered = published.entries.get(name);
+		if (vacant != null && lowered != null)
+			published.setEntry(name, lowered.from(vacant));
+	}
+
+	/**
+	 * Where `fn`'s code starts. A cached function is read from its body's rows: decoding its blocks would leave them cached on a
+	 * function no build lowers again.
+	 */
+	static function firstLocation(fn:IrFunction):Null<compiler.ir.model.SourceProvenance.SourceLocation> {
+		var body = fn.body;
+		if (body != null)
+			return body.firstLocation();
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				if (instruction.provenance.location != null)
+					return instruction.provenance.location;
+		return null;
 	}
 
 	/**
@@ -766,13 +787,26 @@ class HlModuleAssembler {
 		return result;
 	}
 
+	/** Of the regenerated functions, those that differ from their form in the resumed module, or that it does not have. */
+	static function changedSinceResumed(regenerated:Array<String>, program:IrProgram,
+			resumed:Map<String, haxe.io.Bytes>):Array<String> {
+		var current:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn];
+		return [for (name in regenerated) {
+			var old = resumed.get(name), next = current.get(name);
+			if (old == null || next == null
+				|| old.compare(compiler.ir.codec.IrFunctionStateCodec.encode(next)) != 0) name;
+		}];
+	}
+
 	/**
 	 * `dispatched`: the functions object prototypes dispatch to (`PatchPlanner.dispatchedFunctions`), which keep their slots
-	 * when their signatures change; described from `program` when not given.
+	 * when their signatures change; described from `program` when not given. `resumed`: the functions of the module a session resumed
+	 * from (`SessionState.rehydrationBaseline`), encoded as this assembler's cache held them; a regenerated function equal to its
+	 * resumed form is not a change.
 	 */
 	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision,
 			?relocated:Array<String>,
-			?dispatched:Map<String, Bool>):HlAssemblyResult {
+			?dispatched:Map<String, Bool>, ?resumed:Map<String, haxe.io.Bytes>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
 		// has not published yet is new code, which a patch must carry.
@@ -780,7 +814,8 @@ class HlModuleAssembler {
 			loweredCache == null ? null : loweredCache.sharedCalls),
 			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
 		program = shared.program;
-		regenerated = regenerated.copy();
+		// The cache holds each function as this rewrite left it, so a resumed function is compared in that form.
+		regenerated = resumed == null ? regenerated.copy() : changedSinceResumed(regenerated, program, resumed);
 		for (name in shared.helpers)
 			if (!slotted.exists(name) && regenerated.indexOf(name) < 0)
 				regenerated.push(name);
@@ -811,6 +846,11 @@ class HlModuleAssembler {
 					regenerate(name);
 			guards = moves.guards.concat(dropGuards(program, [for (name in moves.adapted) name => true]));
 		}
+		// Once this patch applies, no closure the running module holds reaches a guard: the runtime refuses the patch while one
+		// does, and the new code calls none. So a guard keeps its slot, stable ID, signature and the code the module has in the
+		// slot, but not its IR.
+		for (guard in guards)
+			vacate(guard.name);
 		var publishedSlots = cache.slots.length;
 		cache.update(program.functions);
 		var ordered = new IrProgram(program.entryPoint);

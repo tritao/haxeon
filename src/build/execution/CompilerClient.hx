@@ -1,9 +1,10 @@
 package build.execution;
 
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import compiler.tools.CompilerServerProtocol;
+import haxe.Json;
 import haxe.SysTools;
-import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -21,26 +22,31 @@ private typedef Connection = {
  */
 class CompilerClient {
 	/**
-	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
-	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one. A worker the
-	 * compiler built ahead of time runs (`aot`, `build.AotCompiler`) has a version of its own, so a bytecode worker of the same
-	 * sources is not reused once the executable is installed.
+	 * The compiler build that names a worker program. A watch memoizes its choice to keep the same compiler across edits.
+	 * Fingerprint installed programs as well as source inputs so replacing an executable selects a new worker.
 	 */
-	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String,
+	public static function workerVersion(command:String, compilerSource:Null<String>, home:String, buildRoot:String,
 			profilePort:Null<String>,
-			?session:build.BuildSession, aot:Bool = false):String {
+			?session:build.BuildSession, ?program:build.AotCompiler.CompilerProgram):String {
 		// A request states its passes and checks (`CompileOptions`), so one worker serves every combination of them.
-		var identity = new ExecutionAction(new ActionId("compiler-session-v9"
-			+ (profilePort == null ? "" : ":profile:" + profilePort) + (aot ? ":aot" : "")), [],
-			build.CompilerSources.roots(compilerSource).concat([Path.join([
-				home,
-				"stdlib"
-			])]), [], "",
-			ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
-			new Map()));
+		var roots = compilerRoots(compilerSource),
+			programFiles = program == null ? [build.HashLinkPath.executable(home)] : program.command,
+			identity = new ExecutionAction(new ActionId("compiler-session-v10"
+				+ (profilePort == null ? "" : ":profile:" + profilePort)
+				+ (program != null && program.native ? ":aot" : "")), [],
+				roots.concat([build.HaxeonSdk.stdlib(home)]).concat(programFiles), [], "",
+				ExecutionAction.ActionKind.Process(command, roots, home, new Map()));
 		if (session == null)
 			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
-		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
+		var memoKey = Json.stringify([
+			identity.id.key(),
+			command,
+			compilerSource,
+			home,
+			buildRoot,
+			Sys.systemName(),
+			programFiles
+		]);
 		return session.workerVersion(memoKey, () -> {
 			var version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), [], session.digests);
 			Sys.println('haxeon: compiler worker version $version (kept for this watch session)');
@@ -48,8 +54,12 @@ class CompilerClient {
 		});
 	}
 
-	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String,
-			buildRoot:String, projectRoot:String,
+	/**
+	 * Compiles `arguments` in the project's worker. `command` is the pinned Haxe that builds the compiler from `compilerSource`,
+	 * which is null for a release: it has only the compiler it ships (`build.AotCompiler.program`).
+	 */
+	public static function run(command:String, compilerSource:Null<String>, arguments:Array<String>, home:String,
+			buildRoot:String, projectRoot:String, output:String, target:String,
 			fallback:Void->Int, ?session:build.BuildSession, background:Bool = false):Int {
 		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
 		// compiled CLI uses one there.
@@ -57,111 +67,136 @@ class CompilerClient {
 			|| (Sys.systemName() != "Linux" && Sys.systemName() != "Mac"
 			&& Sys.systemName() != "Windows") #if eval || Sys.systemName() == "Windows" #end)
 			return fallback();
-		var connection:Null<Connection> = null;
-		try {
-			var profilePort = ProcessRunner.environmentValue("HAXEON_COMPILER_PROFILE_PORT");
-			if (profilePort != null
-				&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1
-				|| Std.parseInt(profilePort) > 65535))
-				throw new InternalError("HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535");
-			var directory = preparedSessionDirectory();
-			// The compiler built ahead of time serves when it is current, else a release's compiler bytecode
-			// (`build.AotCompiler.program`). A profiled worker runs bytecode built here, with the VM's diagnostics port.
-			var prebuilt = profilePort == null ? build.AotCompiler.program(home, compilerSource,
-				session == null ? null : session.digests) : null;
-			// Changes to the compiler, runtime sources, or launch environment select a new worker.
-			// The worker program depends only on the compiler, so every project shares one artifact; each
-			// project (and build root) gets its own worker process so it keeps its incremental compiler state.
-			var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session,
-				prebuilt != null && prebuilt.native),
-				key = version + "-" + Sha256.encode(projectRoot + "\n" + buildRoot).substr(0, 16),
+		var retried = false;
+		while (true) {
+			var connection:Null<Connection> = null;
+			var release:Null<Void->Void> = null;
+			var statePath:Null<String> = null, received = false;
+			try {
+				var profilePort = ProcessRunner.environmentValue("HAXEON_COMPILER_PROFILE_PORT");
+				if (profilePort != null
+					&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1
+					|| Std.parseInt(profilePort) > 65535))
+					throw new InternalError("HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535");
+				var directory = preparedSessionDirectory();
+				// The compiler built ahead of time serves when it is current, else a release's compiler bytecode
+				// (`build.AotCompiler.program`). A profiled worker runs bytecode built here, with the VM's diagnostics port.
+				var prebuilt = profilePort == null ? build.AotCompiler.program(home, compilerSource,
+					session == null ? null : session.digests) : null;
+				// Changes to the compiler, runtime sources, or launch environment select a new worker.
+				// Only bytecode is shared between projects. A worker's patch baseline belongs to one output.
+				var version = workerVersion(command, compilerSource, home, buildRoot, profilePort, session,
+					prebuilt),
+					key = version + "-"
+						+ TextDigest.sha256(Json.stringify([projectRoot, buildRoot, output, target])).substr(0, 16);
 				statePath = Path.join([directory, key + ".json"]);
-			connection = connect(statePath);
-			if (connection == null) {
-				var logPath = Path.join([directory, key + ".log"]),
-					// The worker program, to which the state path is the last argument.
-					program:Array<String>;
-				if (prebuilt != null)
-					program = prebuilt.command.concat(["serve"]);
-				else {
-					var workerArtifact = Path.join([directory, version + ".hl"]);
-					ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
-					program = [build.HashLinkPath.executable(home)];
-					if (profilePort != null) {
-						program.push("--diagnostics");
-						program.push(profilePort);
+				release = lockSessions(directory);
+				connection = connect(statePath);
+				if (connection == null) {
+					var logPath = Path.join([directory, key + ".log"]),
+						// The worker program, to which the state path is the last argument.
+						program:Array<String>;
+					if (prebuilt != null)
+						program = prebuilt.command.concat(["serve"]);
+					else {
+						var workerArtifact = Path.join([directory, version + ".hl"]);
+						ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
+						program = [build.HashLinkPath.executable(home)];
+						if (profilePort != null) {
+							program.push("--diagnostics");
+							program.push(profilePort);
+						}
+						program.push(workerArtifact);
 					}
-					program.push(workerArtifact);
+					if (Sys.systemName() == "Windows") {
+						if (startWindowsWorker(home, program.concat([statePath]), logPath) != 0)
+							throw new InternalError("Could not start compiler worker");
+					} else {
+						var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
+							libraryPath = build.HashLinkPath.libraryPath(home)
+								.concat([ProcessRunner.environmentValue(libraryVariable)])
+								.filter(value -> value != null && value.length > 0)
+								.join(":"),
+							launch = program.concat([statePath]).map(SysTools.quoteUnixArg).join(" ");
+						// The shell redirects its own three streams first, so neither the worker nor the subshell that
+						// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
+						// worker) can keep the caller's pipes open after the build exits.
+						var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
+							status = Sys.command("sh", [
+								"-c",
+								"exec < /dev/null > " + SysTools.quoteUnixArg(logPath) + " 2>&1; umask 077; cd "
+									+ SysTools.quoteUnixArg(home)
+									+ " && export "
+									+ libraryVariable
+									+ "="
+									+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
+									// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
+									// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
+									// The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
+									// binary such as nohup starts, and the worker would start without the runtime's library path.
+									+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
+									+ detach
+									+ launch
+									+ " &"
+							]);
+						if (status != 0)
+							throw new InternalError("Could not start compiler worker");
+					}
+					var deadline = Sys.time() + 30;
+					while (connection == null && Sys.time() < deadline) {
+						Sys.sleep(0.05);
+						connection = connect(statePath);
+					}
+					if (connection == null)
+						throw new InternalError("Compiler worker did not become ready; see " + logPath);
 				}
-				if (Sys.systemName() == "Windows") {
-					if (startWindowsWorker(home, program.concat([statePath]), logPath) != 0)
-						throw new InternalError("Could not start compiler worker");
-				} else {
-					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
-						libraryPath = [
-							Path.join([home, "out"]),
-							build.HashLinkPath.directory(home),
-							ProcessRunner.environmentValue(libraryVariable)
-						].filter(value -> value != null && value.length > 0).join(":"),
-						launch = program.concat([statePath]).map(SysTools.quoteUnixArg).join(" ");
-					// The shell redirects its own three streams first, so neither the worker nor the subshell that
-					// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
-					// worker) can keep the caller's pipes open after the build exits.
-					var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
-						status = Sys.command("sh", [
-							"-c",
-							"exec < /dev/null > " + SysTools.quoteUnixArg(logPath) + " 2>&1; umask 077; cd "
-								+ SysTools.quoteUnixArg(home)
-								+ " && export "
-								+ libraryVariable
-								+ "="
-								+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
-								// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
-								// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-								// The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
-								// binary such as nohup starts, and the worker would start without the runtime's library path.
-								+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
-								+ detach
-								+ launch
-								+ " &"
-						]);
-					if (status != 0)
-						throw new InternalError("Could not start compiler worker");
+				if (session != null && !session.workerPings.exists(statePath))
+					session.workerPings.set(statePath, Sys.time());
+				var socket = connection.socket;
+				socket.setTimeout(600);
+				CompilerServerProtocol.writeRequest(socket.output, connection.token,
+					background ? Background(arguments) : Compile(arguments));
+				release();
+				release = null;
+				while (true) {
+					var response = CompilerServerProtocol.readResponse(socket.input);
+					received = true;
+					switch response {
+						case Message(text):
+							build.BuildOutput.line(text);
+						case Diagnostics(text):
+							build.BuildOutput.error(text);
+						case Status(code):
+							socket.close();
+							connection = null;
+							try {
+								release = lockSessions(directory);
+								retireWorkers(directory, version, key);
+							} catch (_:Dynamic) {}
+							if (release != null)
+								release();
+							return code;
+					}
 				}
-				var deadline = Sys.time() + 30;
-				while (connection == null && Sys.time() < deadline) {
-					Sys.sleep(0.05);
-					connection = connect(statePath);
+			} catch (error:Dynamic) {
+				if (release != null)
+					release();
+				if (connection != null)
+					try
+						connection.socket.close()
+					catch (_:Dynamic) {}
+				// A connection queued at idle shutdown closes after the worker drops its rendezvous and saves history.
+				if (!retried && !received && connection != null && statePath != null) {
+					var state = readState(statePath);
+					if (state == null || state.token != connection.token) {
+						retried = true;
+						continue;
+					}
 				}
-				if (connection == null)
-					throw new InternalError("Compiler worker did not become ready; see " + logPath);
+				build.BuildOutput.line("Compiler session unavailable; using one-shot compilation: "
+					+ Std.string(error));
+				return fallback();
 			}
-			retireWorkers(directory, version, key);
-			markUsed(statePath);
-			if (session != null && !session.workerPings.exists(statePath))
-				session.workerPings.set(statePath, Sys.time());
-			var socket = connection.socket;
-			socket.setTimeout(600);
-			CompilerServerProtocol.writeRequest(socket.output, connection.token,
-				background ? Background(arguments) : Compile(arguments));
-			while (true)
-				switch CompilerServerProtocol.readResponse(socket.input) {
-					case Message(text):
-						build.BuildOutput.line(text);
-					case Diagnostics(text):
-						build.BuildOutput.error(text);
-					case Status(code):
-						socket.close();
-						markUsed(statePath);
-						return code;
-				}
-		} catch (error:Dynamic) {
-			if (connection != null)
-				try
-					connection.socket.close()
-				catch (_:Dynamic) {}
-			build.BuildOutput.line("Compiler session unavailable; using one-shot compilation: " + Std.string(error));
-			return fallback();
 		}
 	}
 
@@ -205,8 +240,6 @@ class CompilerClient {
 			catch (_:Dynamic) {}
 			return null;
 		}
-		// The worker this session uses stays the most recently used, so retirement takes others first.
-		markUsed(statePath);
 		return Math.max(0.25, idleSeconds / 3);
 	}
 
@@ -216,9 +249,9 @@ class CompilerClient {
 		return text == null ? null : CompilerServerProtocol.decodeState(text);
 	}
 
-	static function connect(statePath:String):Null<Connection> {
+	static function connect(statePath:String, retirement:Bool = false):Null<Connection> {
 		var state = readState(statePath);
-		if (state == null)
+		if (state == null || (retirement && !state.canRetire))
 			return null;
 		var socket:Null<Socket> = null;
 		try {
@@ -235,48 +268,54 @@ class CompilerClient {
 		}
 	}
 
-	#if (target.threaded && !eval)
-	static final artifactMutex = new sys.thread.Mutex();
+	#if hl
+	@:hlNative("haxeon_runtime", "__host_file_lock_acquire")
+	static function acquireSessionLock(path:String):Null<hl.Abstract<"realtime_file_lock">>
+		return null;
+
+	@:hlNative("haxeon_runtime", "__host_file_lock_release")
+	static function releaseSessionLock(lock:hl.Abstract<"realtime_file_lock">):Void {}
 	#end
 
-	/**
-	 * Compiles one compiler program once per compiler version; concurrent callers wait for the first to finish.
-	 * On Linux and macOS each use refreshes its modification time, so stale-file cleanup only removes programs nobody
-	 * runs. Windows has no touch, so there an unused program is removed by age; the current version's program and any a
-	 * running worker uses are always kept.
-	 */
-	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String,
-			mainClass:String):Void {
-		#if (target.threaded && !eval)
-		artifactMutex.acquire();
+	/** One OS lock serializes startup and cleanup. Keep its file so callers always lock the same inode. */
+	static function lockSessions(directory:String):Void->Void {
+		#if hl
+		var path = Path.join([directory, "sessions.lock"]), deadline = Sys.time() + 120;
+		while (true) {
+			var lock = acquireSessionLock(path);
+			if (lock != null)
+				return () -> releaseSessionLock(lock);
+			if (Sys.time() >= deadline)
+				throw new InternalError("Timed out waiting for compiler session startup or cleanup");
+			Sys.sleep(0.05);
+		}
+		#else
+		return () -> {};
 		#end
+	}
+
+	/** Publish complete worker bytecode while holding the session lock. */
+	static function ensureArtifact(command:String, compilerSource:Null<String>, artifact:String, home:String,
+			mainClass:String):Void {
+		if (FileSystem.exists(artifact)) {
+			if (Sys.systemName() != "Windows")
+				Sys.command("touch", ["-c", artifact]);
+			return;
+		}
+		var sources = buildableSources(compilerSource, home),
+			temporary = artifact + ".tmp." + Std.string(Std.random(0x3fffffff));
 		try {
-			if (FileSystem.exists(artifact)) {
-				if (Sys.systemName() != "Windows")
-					Sys.command("touch", ["-c", artifact]);
-			} else {
-				// Build beside the target and rename, so another Haxeon process never sees a partial file.
-				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
-					compileStatus = ProcessRunner.run(command, build.CompilerSources.classPath(compilerSource).concat([
-						"-hl",
-						temporary,
-						"-main",
-						mainClass
-					]), home,
-						new Map());
-				if (compileStatus != 0)
-					throw new InternalError("Could not compile " + mainClass);
-				FileSystem.rename(temporary, artifact);
-			}
+			var status = ProcessRunner.run(command, build.CompilerSources.classPath(sources).concat([
+				"-hl", temporary, "-main", mainClass
+			]), home, new Map());
+			if (status != 0)
+				throw new InternalError("Could not compile " + mainClass);
+			FileSystem.rename(temporary, artifact);
 		} catch (error:haxe.Exception) {
-			#if (target.threaded && !eval)
-			artifactMutex.release();
-			#end
+			if (FileSystem.exists(temporary))
+				FileSystem.deleteFile(temporary);
 			throw error;
 		}
-		#if (target.threaded && !eval)
-		artifactMutex.release();
-		#end
 	}
 
 	/**
@@ -288,27 +327,37 @@ class CompilerClient {
 	 * compiler, else in the compiler interpreted by the pinned Haxe (`haxe`). The arguments are the compiler's own
 	 * (`CompilerArguments`).
 	 */
-	public static function compile(haxe:String, compilerSource:String, arguments:Array<String>, home:String,
+	public static function compile(haxe:String, compilerSource:Null<String>, arguments:Array<String>, home:String,
 			buildRoot:String,
-			projectRoot:String, ?session:build.BuildSession):Int
-		return run(haxe, compilerSource, arguments, home, buildRoot, projectRoot,
+			projectRoot:String, output:String, target:String, ?session:build.BuildSession):Int
+		return run(haxe, compilerSource, arguments, home, buildRoot, projectRoot, output, target,
 			() -> runOneShot(haxe, compilerSource, arguments, home, buildRoot, runtimeLibraryEnvironment(home),
-			() -> ProcessRunner.run(haxe, build.CompilerSources.classPath(compilerSource).concat([
+			() -> ProcessRunner.run(haxe,
+			build.CompilerSources.classPath(buildableSources(compilerSource, home)).concat([
 				"--run",
 				"compiler.tools.HaxeonCompiler"
 			]).concat(arguments), home, new Map())), session);
 
+	/** The roots of the compiler's sources, none for a release. */
+	static function compilerRoots(compilerSource:Null<String>):Array<String>
+		return compilerSource == null ? [] : build.CompilerSources.roots(compilerSource);
+
+	/** The compiler's sources, to build it from; a release has none, so only the compiler it ships runs there. */
+	static function buildableSources(compilerSource:Null<String>, home:String):String {
+		if (compilerSource == null)
+			throw new InternalError('This Haxeon release has no current compiler to run (${build.AotCompiler.bytecode(home)}); '
+				+ "install the release again");
+		return compilerSource;
+	}
+
 	/** The environment a compiler run by HashLink needs to find its native libraries. */
-	public static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {
+	public static function runtimeLibraryEnvironment(home:String):Map<String, String> {
 		var variable = switch Sys.systemName() {
 			case "Windows": "PATH";
 			case "Mac": "DYLD_LIBRARY_PATH";
 			case _: "LD_LIBRARY_PATH";
 		};
-		var directories = [
-			haxe.io.Path.join([compilerHome, "out"]),
-			build.HashLinkPath.directory(compilerHome)
-		],
+		var directories = build.HashLinkPath.libraryPath(home),
 			existing = Sys.getEnv(variable);
 		if (existing != null && existing.length > 0)
 			directories.push(existing);
@@ -317,7 +366,7 @@ class CompilerClient {
 		return environment;
 	}
 
-	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String,
+	public static function runOneShot(command:String, compilerSource:Null<String>, arguments:Array<String>, home:String,
 			buildRoot:String,
 			environment:Map<String, String>, fallback:Void->Int):Int {
 		// The compiler built ahead of time, or a release's bytecode, when it is current, on every platform.
@@ -334,17 +383,21 @@ class CompilerClient {
 				throw new InternalError("missing " + hashlink);
 			var directory = preparedSessionDirectory(),
 				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [],
-					build.CompilerSources.roots(compilerSource).concat([Path.join([
-						home,
-						"stdlib"
-					])]), [], "",
-					ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
-					new Map()));
+					compilerRoots(compilerSource).concat([build.HaxeonSdk.stdlib(home)]), [], "",
+					ExecutionAction.ActionKind.Process(command, compilerRoots(compilerSource), home, new Map()));
 			artifact = Path.join([
 				directory,
 				ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []) + ".hl"
 			]);
-			ensureArtifact(command, compilerSource, artifact, home, "compiler.tools.HaxeonCompiler");
+			var release = lockSessions(directory);
+			try {
+				ensureArtifact(command, compilerSource, artifact, home, "compiler.tools.HaxeonCompiler");
+				removeStaleFiles(directory);
+			} catch (error:haxe.Exception) {
+				release();
+				throw error;
+			}
+			release();
 		} catch (error:Dynamic) {
 			build.BuildOutput.line("Compiled one-shot compiler unavailable; interpreting the compiler: "
 				+ Std.string(error));
@@ -359,11 +412,10 @@ class CompilerClient {
 	**/
 	static function startWindowsWorker(home:String, launchArguments:Array<String>, logPath:String):Int {
 		var quote = (value:String) -> '"' + value + '"';
-		var path = [
-			Path.join([home, "out"]),
-			build.HashLinkPath.directory(home),
-			ProcessRunner.environmentValue("PATH")
-		].filter(value -> value != null && value.length > 0).join(";");
+		var path = build.HashLinkPath.libraryPath(home)
+			.concat([ProcessRunner.environmentValue("PATH")])
+			.filter(value -> value != null && value.length > 0)
+			.join(";");
 		var launch = launchArguments.map(quote);
 		var threshold = ProcessRunner.environmentValue("HL_GC_MARK_THRESHOLD");
 		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='
@@ -378,7 +430,7 @@ class CompilerClient {
 	/** The session directory, created private to this user. */
 	static function preparedSessionDirectory():String {
 		var directory = sessionDirectory(), configured = ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR");
-		FileSystem.createDirectory(directory);
+		Directories.ensure(directory);
 		if (Sys.systemName() != "Windows") {
 			if (Sys.command("chmod", ["700", directory]) != 0)
 				throw new InternalError("Could not make the compiler session directory private");
@@ -395,7 +447,7 @@ class CompilerClient {
 			]) != 0)
 				throw new InternalError("Could not make the compiler session directory private");
 		}
-		return directory;
+		return FileSystem.fullPath(directory);
 	}
 
 	/** The per-user directory holding worker programs, connection metadata, and logs. */
@@ -425,39 +477,37 @@ class CompilerClient {
 	 * Retires workers that can never be reused (another compiler version for this same project), then the
 	 * least recently used workers until at most `HAXEON_COMPILER_WORKERS` stay resident and, where resident
 	 * memory is observable, their total stays within `HAXEON_COMPILER_MEMORY_MB`. The current worker always
-	 * stays and counts against both limits. Workers are never probed with a bare connection: one that drops
-	 * without a request makes the worker reset its incremental state.
+	 * stays and counts against both limits. Live workers retain their normal idle window so an unrelated build cannot
+	 * interrupt an edit's patch baseline.
 	 */
 	static function retireWorkers(directory:String, version:String, currentKey:String):Void {
-		var projectSuffix = currentKey.substr(version.length),
+		var outputSuffix = currentKey.substr(version.length),
 			resident:Array<{statePath:String, modified:Float, memory:Float}> = [],
-			liveVersions = [version => true],
 			currentMemory = 0.0;
+		var stateName = stateFileName();
 		for (entry in FileSystem.readDirectory(directory)) {
-			if (!StringTools.endsWith(entry, ".json"))
+			if (!stateName.match(entry))
 				continue;
 			var statePath = Path.join([directory, entry]),
 				memory = workerMemory(statePath);
-			if (memory == null) {
-				// The recorded process is gone, so nothing will ever answer on this state file.
+			if (memory == null && !workerListening(statePath)) {
+				// A PID may be invisible in this client's process namespace even while its worker is serving.
 				try
 					FileSystem.deleteFile(statePath)
 				catch (_:Dynamic) {}
 				continue;
 			}
 			if (entry == currentKey + ".json") {
-				currentMemory = memory;
+				currentMemory = memory == null ? 0 : memory;
 				continue;
 			}
-			if (!StringTools.startsWith(entry, version + "-") && StringTools.endsWith(entry, projectSuffix + ".json")) {
-				shutdownWorker(statePath);
+			if (StringTools.endsWith(entry, outputSuffix + ".json") && requestRetirement(statePath))
 				continue;
-			}
 			try
 				resident.push({
 					statePath: statePath,
 					modified: FileSystem.stat(statePath).mtime.getTime(),
-					memory: memory
+					memory: memory == null ? 0 : memory
 				})
 			catch (_:Dynamic) {}
 		}
@@ -469,15 +519,14 @@ class CompilerClient {
 		for (worker in resident)
 			total += worker.memory;
 		for (worker in resident) {
-			if (count <= limit && total <= budget) {
-				liveVersions.set(Path.withoutExtension(Path.withoutDirectory(worker.statePath)).split("-")[0], true);
-				continue;
+			if (count <= limit && total <= budget)
+				break;
+			if (requestRetirement(worker.statePath)) {
+				count--;
+				total -= worker.memory;
 			}
-			shutdownWorker(worker.statePath);
-			count--;
-			total -= worker.memory;
 		}
-		removeStaleFiles(directory, liveVersions);
+		removeStaleFiles(directory);
 	}
 
 	/**
@@ -531,49 +580,64 @@ class CompilerClient {
 		}
 	}
 
-	/** Drops compiler programs no worker runs and nobody used for a day, and logs of workers gone for a day. */
-	static function removeStaleFiles(directory:String, liveVersions:Map<String, Bool>):Void {
-		var cutoff = (Sys.time() - 24 * 60 * 60) * 1000;
-		for (entry in FileSystem.readDirectory(directory)) {
+	static function stateFileName():EReg
+		return ~/^[0-9a-f]{64}-[0-9a-f]{16}\.json$/;
+
+	/** Drops abandoned session files after a day. */
+	static function removeStaleFiles(directory:String):Void {
+		var entries = FileSystem.readDirectory(directory),
+			stateName = stateFileName(),
+			programName = ~/^[0-9a-f]{64}\.hl$/,
+			logName = ~/^[0-9a-f]{64}-[0-9a-f]{16}\.log$/,
+			temporaryName = ~/^[0-9a-f]{64}(\.hl\.tmp\.[0-9]+|-[0-9a-f]{16}\.json\.([0-9a-f]{64}\.tmp|touch\.[0-9]+))$/,
+			liveVersions:Map<String, Bool> = [],
+			cutoff = (Sys.time() - 24 * 60 * 60) * 1000;
+		for (entry in entries) {
+			if (!stateName.match(entry))
+				continue;
 			var path = Path.join([directory, entry]);
 			try {
-				var extension = Path.extension(entry),
-					stale = (extension == "hl" && !liveVersions.exists(Path.withoutExtension(entry)))
-						|| (extension == "log" && !FileSystem.exists(Path.withExtension(path, "json")));
+				if (FileSystem.stat(path).mtime.getTime() < cutoff && !workerListening(path)) {
+					FileSystem.deleteFile(path);
+					continue;
+				}
+				liveVersions.set(entry.split("-")[0], true);
+			} catch (_:Dynamic) {}
+		}
+		for (entry in entries) {
+			var path = Path.join([directory, entry]);
+			try {
+				var stale = (programName.match(entry) && !liveVersions.exists(Path.withoutExtension(entry)))
+					|| (logName.match(entry) && !FileSystem.exists(Path.withExtension(path, "json")))
+					|| temporaryName.match(entry);
 				if (stale && FileSystem.stat(path).mtime.getTime() < cutoff)
 					FileSystem.deleteFile(path);
 			} catch (_:Dynamic) {}
 		}
 	}
 
-	/** Refreshes a worker's state file so retirement can order workers by last use. */
-	static function markUsed(statePath:String):Void {
-		// Replace atomically: a reader that saw a half-written state file would think the worker is gone.
-		try {
-			var temporary = statePath + ".touch." + Std.string(Std.random(1000000));
-			File.saveContent(temporary, File.getContent(statePath));
-			FileSystem.rename(temporary, statePath);
-		} catch (_:Dynamic) {}
+	static function workerListening(statePath:String):Bool {
+		var connection = connect(statePath);
+		if (connection == null)
+			return false;
+		connection.socket.close();
+		return true;
 	}
 
-	static function shutdownWorker(statePath:String):Void {
-		var connection = connect(statePath);
-		if (connection == null) {
-			// Nothing is listening, so this state file was left by a worker that already exited.
-			try
-				FileSystem.deleteFile(statePath)
-			catch (_:Dynamic) {}
-			return;
-		}
+	static function requestRetirement(statePath:String):Bool {
+		var connection = connect(statePath, true);
+		if (connection == null)
+			return false;
+		var retired = false;
 		try {
-			CompilerServerProtocol.writeRequest(connection.socket.output, connection.token, Shutdown);
+			CompilerServerProtocol.writeRequest(connection.socket.output, connection.token, Retire);
 			connection.socket.setTimeout(1);
-			connection.socket.input.readLine();
-			connection.socket.close();
-		} catch (_:Dynamic) {
-			try
-				connection.socket.close()
-			catch (_:Dynamic) {}
-		}
+			retired = switch CompilerServerProtocol.readResponse(connection.socket.input) {
+				case Status(0): true;
+				case _: false;
+			};
+		} catch (_:Dynamic) {}
+		connection.socket.close();
+		return retired;
 	}
 }

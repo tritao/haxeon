@@ -8,6 +8,7 @@ class RpcRequestState {
 	public var finished(default, null):Bool = false;
 
 	final clock:Void->Float;
+	@:allow(haxeon.rpc.RpcContext) var onCancel:Null<Void->Void>;
 
 	public function new(id:Int, deadline:Float, clock:Void->Float) {
 		this.id = id;
@@ -24,5 +25,9 @@ class RpcRequestState {
 	public function finish(cancelled:Bool):Void {
 		this.finished = true;
 		this.cancelled = cancelled;
+		var notify = onCancel;
+		onCancel = null;
+		if (cancelled && notify != null)
+			notify();
 	}
 }

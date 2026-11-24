@@ -17,28 +17,51 @@ interface NativeKitFilesystem @target("portable-abi64") @library("nativekit_file
 	 * entry. At end, `out_end` is set and no entry is written. Invalid native UTF-8
 	 * names are returned as explicit unsupported-name entries with an empty name.
 	 */
-	extern fn nk_filesystem_directory_next(cursor: nk_filesystem_handle, out_entry: ptr<nk_filesystem_entry> @out, name: nullable<ptr<c_char>> @out_buffer("inout_name_size"), inout_name_size: ptr<u32> @inout, out_end: ptr<nk_bool> @out) -> nk_result;
+	extern fn nk_filesystem_directory_next(
+		cursor: nk_filesystem_handle,
+		out_entry: ptr<nk_filesystem_entry> @out,
+		name: nullable<ptr<c_char>> @out_buffer("inout_name_size"),
+		inout_name_size: ptr<u32> @inout,
+		out_end: ptr<nk_bool> @out
+	) -> nk_result;
 	/**
 	 * Open a directory relative to root. A final symlink is followed only in-root.
 	 */
-	extern fn nk_filesystem_directory_open(root: nk_filesystem_handle, relative_path: utf8, out_cursor: ptr<nk_filesystem_handle> @out) -> nk_result;
+	extern fn nk_filesystem_directory_open(
+		root: nk_filesystem_handle,
+		relative_path: utf8,
+		out_cursor: ptr<nk_filesystem_handle> @out
+	) -> nk_result;
 	extern fn nk_filesystem_file_close(file: nk_filesystem_handle) -> nk_result;
 	/**
 	 * Read the opened file's current identity and metadata. The handle pins its original file
 	 * identity.
 	 */
-	extern fn nk_filesystem_file_info(file: nk_filesystem_handle, out_entry: ptr<nk_filesystem_entry> @out) -> nk_result;
+	extern fn nk_filesystem_file_info(
+		file: nk_filesystem_handle,
+		out_entry: ptr<nk_filesystem_entry> @out
+	) -> nk_result;
 	/**
 	 * Open an in-root regular file for bounded positional reads. Final symlinks are followed only
 	 * in-root.
 	 */
-	extern fn nk_filesystem_file_open(root: nk_filesystem_handle, relative_path: utf8, out_file: ptr<nk_filesystem_handle> @out) -> nk_result;
+	extern fn nk_filesystem_file_open(
+		root: nk_filesystem_handle,
+		relative_path: utf8,
+		out_file: ptr<nk_filesystem_handle> @out
+	) -> nk_result;
 	/**
 	 * Read at most `requested_bytes` from an absolute file offset. A null buffer
 	 * with zero capacity queries the required size; a short buffer is not written.
 	 * Requests are capped at NK_FILESYSTEM_MAX_READ_BYTES. EOF returns zero bytes.
 	 */
-	extern fn nk_filesystem_file_read(file: nk_filesystem_handle, offset: u64, requested_bytes: u32, out_bytes: nullable<ptr<u8>> @out_buffer("inout_bytes"), inout_bytes: ptr<u32> @inout) -> nk_result;
+	extern fn nk_filesystem_file_read(
+		file: nk_filesystem_handle,
+		offset: u64,
+		requested_bytes: u32,
+		out_bytes: nullable<ptr<u8>> @out_buffer("inout_bytes"),
+		inout_bytes: ptr<u32> @inout
+	) -> nk_result;
 	/**
 	 * Thread-local diagnostic for the most recent filesystem call.
 	 */
@@ -58,7 +81,11 @@ interface NativeKitFilesystem @target("portable-abi64") @library("nativekit_file
 	 * as a symlink entry, while intermediate links are followed only when contained
 	 * by root. The output struct_size must be set to sizeof(nk_filesystem_entry).
 	 */
-	extern fn nk_filesystem_stat(root: nk_filesystem_handle, relative_path: utf8, out_entry: ptr<nk_filesystem_entry> @out) -> nk_result;
+	extern fn nk_filesystem_stat(
+		root: nk_filesystem_handle,
+		relative_path: utf8,
+		out_entry: ptr<nk_filesystem_entry> @out
+	) -> nk_result;
 	/**
 	 * Metadata returned by stat and directory iteration. Sizes and timestamps are byte/ns values.
 	 */

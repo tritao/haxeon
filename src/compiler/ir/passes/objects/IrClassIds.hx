@@ -14,6 +14,7 @@ import compiler.core.InternalError;
  * because the state carries them; the check that a warm build equals a cold one therefore starts the cold build from the same state
  * (`IrClassIds.assign` with the warm build's state), and a separate check compares a state-free cold build with another for determinism.
  */
+@:nullSafety(Strict)
 class IrClassIds {
 	/** The ids of `classes` given the `previous` assignment (null for a cold build) and the next free id it had reached. */
 	public static function assign(previous:Null<IrClassIdState>, classes:Array<String>):IrClassIdState {

@@ -56,7 +56,7 @@ enum HlSymbolRequest {
  * where an object type with these fields keeps them, on 32- and 64-bit alike.
  */
 enum abstract HlRuntimeHeader(Int) {
-	/** `realtime_bytes`: the finalizer word, then `data` (field 0) and `length` (field 1). */
+	/** `realtime_bytes`: the finalizer word, then `data` (field 0) and `length` (field 1); `vstring` is laid out the same. */
 	var BytesHeader = 0;
 
 	/** `varray`: the type word, the element type (field 0), then `size` (field 1) and `capacity` (field 2). */
@@ -74,16 +74,26 @@ class HlRemap {
 
 	public function new() {}
 
-	/** Notes that index `from` of `table` is `to` in this build. */
-	public function note(table:Int, from:Int, to:Int):Void (switch table {
-		case HlRequestKeys.INTS: ints;
-		case HlRequestKeys.FLOATS: floats;
-		case HlRequestKeys.STRINGS: strings;
-		case HlRequestKeys.TYPES: types;
-		case HlRequestKeys.GLOBALS: globals;
-		case HlRequestKeys.FUNCTIONS: functions;
-		default: throw new compiler.core.InternalError('HashLink link: table $table has no indices');
-	}).set(from, to);
+	/**
+	 * Notes that index `from` of `table` is `to` in this build; false when `from` is already another index, which no remap gives.
+	 * Two requests share an index when their answers were equal, as a scalar enum tag's type is I32's, and can part when a build
+	 * answers them apart (the enum gets a boxed descriptor).
+	 */
+	public function note(table:Int, from:Int, to:Int):Bool {
+		var map = switch table {
+			case HlRequestKeys.INTS: ints;
+			case HlRequestKeys.FLOATS: floats;
+			case HlRequestKeys.STRINGS: strings;
+			case HlRequestKeys.TYPES: types;
+			case HlRequestKeys.GLOBALS: globals;
+			case HlRequestKeys.FUNCTIONS: functions;
+			default: throw new compiler.core.InternalError('HashLink link: table $table has no indices');
+		}, known = map.get(from);
+		if (known != null)
+			return known == to;
+		map.set(from, to);
+		return true;
+	}
 
 	/** The index of `type`, the way lowering asks for it. */
 	public static function typeIndex(symbols:HlSymbolTable, type:IrType):Int

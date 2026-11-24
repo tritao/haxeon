@@ -12,6 +12,7 @@ import haxe.ds.ObjectMap;
  * Entries live one build past their last use (`endBuild`), so a long session holds what the last build had, not every function an
  * edit replaced. A failed build only leaves entries of functions that exist, which are as good as any.
  */
+@:nullSafety(Strict)
 class IrFunctionMemo<V> {
 	var current = new ObjectMap<IrFunction, V>();
 	var last = new ObjectMap<IrFunction, V>();
@@ -30,6 +31,12 @@ class IrFunctionMemo<V> {
 
 	public inline function set(fn:IrFunction, value:V):Void
 		current.set(fn, value);
+
+	/** Forgets every entry, for a compile that keeps no session: their keys would keep the functions alive. */
+	public function clear():Void {
+		current = new ObjectMap();
+		last = new ObjectMap();
+	}
 
 	/** Drops what the build that just ended did not ask for. */
 	public function endBuild():Void {

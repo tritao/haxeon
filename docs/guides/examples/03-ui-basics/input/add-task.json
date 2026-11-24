@@ -1,0 +1,12 @@
+{"version": 1, "events": [
+  {"at": 0.5, "kind": "move", "x": 100, "y": 167},
+  {"at": 0.6, "kind": "down", "x": 100, "y": 167},
+  {"at": 0.7, "kind": "up", "x": 100, "y": 167},
+  {"at": 1.0, "kind": "move", "x": 100, "y": 445},
+  {"at": 1.1, "kind": "down", "x": 100, "y": 445},
+  {"at": 1.2, "kind": "up", "x": 100, "y": 445},
+  {"at": 1.5, "kind": "text", "text": "Water plants"},
+  {"at": 2.0, "kind": "move", "x": 290, "y": 445},
+  {"at": 2.1, "kind": "down", "x": 290, "y": 445},
+  {"at": 2.2, "kind": "up", "x": 290, "y": 445}
+]}

@@ -55,6 +55,16 @@ class FileVersion {
 		return null;
 	}
 
+	/** `readSource`, with the version the file held still at while it was read. */
+	public static function readVersionedSource(path:String):{text:String, version:Bytes} {
+		for (_ in 0...READ_ATTEMPTS) {
+			var before = of(path), text = sys.io.File.getContent(path), after = of(path);
+			if (before != null && after != null && before.compare(after) == 0)
+				return {text: text, version: before};
+		}
+		throw new InternalError('Source changed while being read: $path');
+	}
+
 	#if hl
 	@:hlNative("haxeon_runtime", "__sys_file_version")
 	static function fileVersion(path:hl.Bytes, version:hl.Bytes):Bool

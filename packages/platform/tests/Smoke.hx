@@ -1,6 +1,6 @@
+import haxeon.async.Outcome;
+import haxeon.async.Promise;
 import haxeon.platform.Runtime;
-import haxeon.platform.async.Outcome;
-import haxeon.platform.async.Promise;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.internal.event.EventBytes;
 import nativekit.ffi.NativeKitTypes.FileDialogOptions as NativeFileDialogOptions;

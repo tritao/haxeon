@@ -193,7 +193,7 @@ class SuiteRunner {
 		// Set before any suite starts: no thread reads or writes the environment after this.
 		for (variable in resolved.keys())
 			Sys.putEnv(variable, resolved.get(variable));
-		Sys.putEnv("HAXEON_HASHLINK_DIR", build.HashLinkPath.directory(home));
+		Sys.putEnv("HAXEON_SDK", build.HaxeonSdk.ofCheckout(home));
 		Sys.putEnv("HAXEON_NATIVE_READY", "1");
 		// The suites that require Wasmtime run the one found here, wherever it was found.
 		var wasmtime = wasmtimePath();

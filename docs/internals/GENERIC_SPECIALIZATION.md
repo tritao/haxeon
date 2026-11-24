@@ -1,0 +1,533 @@
+# Generic specialization invariants
+
+Generic calls retain their semantic type arguments while emitted bodies use a deterministic representation chosen per parameter.
+
+- `shape` shares a body when a parameter occurs only in ABI-erased positions.
+- `layout` keeps the concrete type when it appears inside arrays, maps, functions, nullable values, anonymous records, or applied types.
+- `constrained` keeps the concrete type so constrained operations and dispatch remain valid.
+
+An unconstrained struct argument also uses `layout`, including a struct with managed references that has no native
+layout. Its fields and value calling convention depend on the declared struct, so two different structs do not share
+the erased reference body even when their current fields have the same shapes. Ordinary class arguments continue to
+share the `shape` body unless a constraint requires their concrete conformance. Generic owners with struct arguments
+also specialize their stored fields and methods, as described below.
+
+With inlining disabled, a managed `struct` with a null reference field passed through `identity<T>(value:T):T` allocates
+zero times for 1,024 calls on Wasm GC and 2,048 times on Wasm32. The equivalent class allocates 1,024 times on either
+target. Those numbers describe the earlier function-only checkpoint. The shared Wasm scalar-result ABI now keeps value
+lanes in locals on both targets. A regression test keeps a non-null managed object in the value and passes it through
+instance and static typed closures: both Wasm targets allocate zero objects for 8 and 1,024 calls, with inlining on
+and off. The Wasm32 test also uses stress GC to check that the reference lanes stay live.
+
+Nullable primitive argument expansion composes with the scalar argument/result ABI. A function such as
+`make(value:Null<Int>):Pair` and a forwarding caller keep their scalar result slots when nullable flow replaces the
+argument with presence/payload components. The specialized function retains the outer scalar-ABI namespace in both its
+definition and call sites; the verifier's stack-reference escape rules are unchanged. Previously the nullable prefix hid
+that ABI and verification failed with `A scalar stack reference cannot escape its call`. The regression fixture checks
+both present and absent values, scalar-only and managed-reference results, on HashLink, Wasm32 and Wasm GC, with
+inlining enabled and disabled. Managed-reference cases require an explicitly exported Wasm setup function and reject a
+null owner, so the reference leaves carry a real object. All 8/1,024-call censuses allocate zero objects (HashLink uses
+the exact allocation census).
+This composes existing passes; it does not add scalar generic specialization or change the planned scalar stage.
+
+The initial editor measurement after this policy change reported 12.6 KiB for `hover-field`, versus 12.4 KiB at the
+starting baseline and in a build made with the committed pre-change compiler. In matched 60-cycle allocation censuses,
+both builds recorded 533,935 allocations and identical instrumented action medians. Two alternating pairs using the
+same uninstrumented capture path measured 12,704/12,712 and 12,704/12,704 bytes for control/current respectively.
+This evidence is consistent with capture accounting variability; the source of the initial 224-byte difference is not
+established, and it does not justify a lower budget ceiling. An isolated census of the hover-other/hover-field sequence
+recorded 101,358 allocations in each build with equal per-action medians; total allocation sizes were 8,109,824 bytes
+for control and 8,109,608 for current, with the entire difference in byte buffers.
+
+The same-machine selection-stress census was 342,354 allocations, compared with 342,877 at the starting baseline.
+The 120-frame fixed-time Wasm GC Showcase counts were 5,896, 5,896, 5,896 and 12,835 for full, static, text-heavy and
+editing, matching the baseline. In nine alternating control/current 500-cycle headless captures, median RSS window
+growth was respectively [30.00, 3.75, 0.78, 4.84] and [30.16, 3.75, 0.78, 4.84] MiB. The original baseline medians
+were [30.47, 4.06, 0.94, 4.69] MiB; all captures passed the memory gate. The 0.16 MiB first-window difference against
+the paired control is retained here rather than treated as a demonstrated improvement.
+
+The subsequent member-resolution fix measured 342,353 selection-stress allocations and Wasm GC Showcase counts of
+5,896, 5,894, 5,896 and 12,835. Its nine paired headless runs had median RSS windows [30.16, 3.59, 0.78, 4.84] MiB for
+the preceding compiler and [30.31, 3.59, 0.94, 4.84] MiB for the fix. All runs passed the memory gate, but the first and
+third medians are 0.15–0.16 MiB higher in that pairing. A matching 30-cycle allocation census recorded 149,815
+allocations in both builds, with the fixed build using 32 more bytes, all in byte buffers; sampled stacks include the
+benchmark's JSON timeline serialization. This does not determine the cause of the RSS differences. The original
+baseline windows were [30.47, 4.06, 0.94, 4.69] MiB, and the fourth window was 4.84 MiB in both paired builds.
+An additional matched 30-cycle census sampled every allocation stack: it recorded 149,816/149,817 allocations and
+11,980,904/11,981,160 bytes for control/fix. All differences in byte-buffer stacks were in the benchmark's own
+`JsonPrinter` or `HeadlessEditorProfile` string construction; the net 256-byte difference came from serialization.
+This isolates the observed allocation difference in that capture, but does not prove the cause of the RSS medians.
+
+The policy label and representation signature are both part of the generated function name and persisted registry
+key. Changing policy therefore creates a new identity instead of reusing an incompatible body.
+
+Generated bodies are owned by the module declaring their generic origin. Incremental compilation regenerates them
+when a generic body changes and prunes them when that owner becomes unreachable or the specialization is no longer
+requested.
+
+Constraints are semantic signatures. Changing a function or owner constraint invalidates dependent callers even when the runtime ABI shape is unchanged.
+
+## Generic owners with value arguments
+
+Owner specialization limits selected representation nesting to 64 levels and its expanded type arguments to 4,096
+nodes; arguments erased to a shared shape do not contribute their source type nesting. A request beyond either limit reports `E1028` at the owner declaration, identifying the owner and suggesting polymorphic
+recursion. This bounds programs such as
+`Box<T>.wrap():Box<Box<T>>` whose specialized methods would otherwise enqueue owners without reaching a fixed point.
+Recursive anonymous records are visited only once on each active path, so their cycles do not consume the limit.
+The limits apply to one owner request, not to the total number of independent specializations.
+
+For the 2026-11-03 editor check, adding the limit left the headless bytecode byte-for-byte identical. Nine paired
+30-cycle selection censuses had medians of 342,097 and 342,098 allocations (paired median difference zero). Nine
+paired 500-cycle RSS captures had control/candidate window medians [29.84, 3.59, 0.78, 5.00] /
+[30.00, 3.75, 0.78, 4.84] MiB and paired median differences [0.00, -0.16, 0.00, 0.00] MiB. Wasm GC Showcase
+full/static/text-heavy/editing counted 5,896 / 5,894 / 5,896 / 12,620 objects, within the previously measured
+2-object variation. Per-action allocation medians were unchanged.
+
+After restricting the guard to selected representations, the editor bytecode was still identical. A further nine
+selection-census pairs had equal group medians of 342,097 and a paired median difference of +1 allocation. RSS group
+medians were [30.62, 3.59, 0.78, 5.00] / [29.84, 3.91, 0.78, 5.00] MiB, with zero paired median differences in all
+four windows. One unpaired sensors-to-hierarchy sample measured 78.4 KiB versus the earlier 78.1 KiB median; both
+occurred in earlier pairs of identical builds. The remaining action allocations matched the preceding medians. The
+final Wasm GC Showcase counts were 5,896 / 5,896 / 5,896 / 12,622 objects in the same scenario order.
+
+The compiler specializes generic class owners for concrete struct arguments and retains the source owner identity
+through erased views. Typed fields, methods, inherited owners, constrained calls, and typed closures use the concrete
+layout; converting a struct to an interface creates a value-copy box at that boundary. Incremental builds retain
+specializations used by unchanged callers and retire unused layouts. HashLink, Wasm32 and Wasm GC scalarize supported
+typed closure calls; conversion to or from Dynamic uses a boundary adapter. The generic map described below replaces
+the earlier compiler-generated hashable-map object.
+
+Wasm closure boundary lowering closes the dependency graph of generated bodies before planning signatures and table
+slots. Escape and restoration helpers can introduce further function casts, including a class callback parameter
+of a struct-taking function. Those casts receive the same checks and varargs adapters as source casts. Generated
+helpers are memoized and processed once; Wasm32 and Wasm GC reuse one varargs adapter per semantic target signature.
+The `scalar-closure-nested-callback` fixture covers this combination and a variadic factory returning a callback.
+
+HashLink also bridges ordinary functions whose nested callback arguments or results
+use scalar struct carriers. Whether the outer function itself can use scalar
+arguments is independent of whether its callback needs a Dynamic boundary adapter.
+Restoration preserves that outer ABI, erases nested callbacks before crossing the
+Dynamic boundary, and restores function results to their physical signature.
+The same fixture covers a boxed outer struct call with a struct-taking callback
+and a variadic factory returning that callback, with inlining off/on. Previously
+the former threw `Can't cast (dynamic (dynamic)) to (void (i32,Anchor,ref<i32>,ref<Anchor>))`
+on HashLink. Ordinary typed calls retain their allocation-free carrier ABI.
+
+
+The UI snapshot regression was introduced by `ac5c2f79`; its parent `9e4819ae` compiles the fixture, while
+`ac5c2f79`, pre-cleanup `aed2c2db`, the cleanup merge `ba9a332e` and `efd3a87d` report
+`Unknown Wasm function "__haxeon_varargs_adapter_Function([Obj(haxeon.ui.Canvas)],Void)"` on Wasm GC.
+Reverting only Canvas's cleanup port also reproduces it. The generated scalar escape wrapper added that callback
+cast after the initial varargs scan. `tests/wasm/test-wasm-parity.sh` now runs
+`packages/ui/tools/test-value-snapshot-parity.hx` on all three targets with inlining enabled and disabled. The ten
+other UI scripts exercise HashLink; the Showcase uses a different reachable graph and did not cover this fixture.
+
+Wasm exports that accept or return a scalar struct closure adapt it at the host boundary. The internal closure keeps
+its scalar calling convention even when the same signature is exported: a 1,024-call typed loop allocates no objects
+on Wasm32 or Wasm GC, and exported closure arguments and results round-trip through the host. Without the boundary
+adapter, merely exporting the signature forced the loop to allocate once per call on Wasm GC.
+A matching escape or restore adapter unwraps to its stored closure, so a typed-to-Dynamic-to-typed round trip preserves
+closure identity and repeated round trips do not accumulate adapter frames. The inverse round trip preserves a genuine
+Dynamic closure as well. The runtime receiver query matches the compiler-generated adapter target before exposing its
+environment; arbitrary closure receivers are not treated as adapter environments. HashLink uses a static closure marker,
+Wasm32 uses its tagged static target, and Wasm GC resolves the generated target slot directly without allocating a
+marker closure. After initial setup, recognizing an existing adapter allocates zero objects on all three targets.
+An unobserved `Signal<S>` holding an immutable struct with a managed reference also performs 1,024 distinct updates and
+reads without allocation on HashLink, Wasm32 and Wasm GC; the Wasm tests cover both 8 and 1,024 updates and both
+inlining modes. `packages/ui/tools/test-struct-allocations.sh` checks the same workload through a real
+`State<S>` and `StateStore` on all three targets, including managed-reference identity and both inlining modes.
+
+The semantic identity of a generic class remains its source declaration and type arguments. Its physical owner is
+specialized when an argument needs a struct layout or raw-pointer carrier; every stored field, constructor, instance
+method and inherited generic base must use that same substitution. Other arguments follow the existing shape, layout
+and constrained policies; an unconstrained owner with no value or raw-pointer argument keeps its current shared
+representation. Specialization identities include the exact value arguments and the representation policy, so
+distinct structs cannot silently share an incompatible layout.
+Static fields belong to the source declaration and are not duplicated by a
+specialization. Discover specializations to a fixed point, including those requested by generated method bodies, and
+retain and invalidate them with their declaring module and the value layouts they depend on.
+
+A generic owner with a constrained parameter is specialized for each concrete constrained argument even when it is a
+reference or scalar. Its instance bodies are templates checked with the selected substitutions, so operations such as
+`Hashing.hash(key)` and declared equality resolve to the static conformance instead of attempting to hash `Dynamic`.
+`Equatable` and `Hashable` are value-only bounds: structs, enums and built-in values can satisfy them, while classes
+and interface-typed views cannot. Ordinary custom interface bounds still admit conforming classes. The ordinary generic
+`HashMap<K:Hashable, V>` handles declared value keys without a compiler-generated map object; class identity keys use
+`haxe.ds.ObjectMap`. A class cannot select value-key behavior by declaring either value capability.
+Boxed generic enums require the full semantic type arguments in their canonical runtime type descriptor, even when
+multiple specializations share one physical payload layout. An `Array<E<T>>` can be viewed through `Array<Dynamic>`
+after it has been populated, and an enum case may contain no `T` payload from which to infer the type. Generic bodies
+that construct or erase `E<T>` therefore retain the concrete enum specialization under the layout policy; generic owners
+whose fields or instance signatures contain `E<T>` likewise specialize the relevant parameter even when it is a reference
+type. They must not collapse it to the nominal enum or infer it from a payload. The descriptor is shared per concrete type and the existing
+boxed enum carries it without a separate per-value allocation or side table. Inline enum storage uses the concrete
+static layout; conversion to Dynamic, reflection, or a native boxed representation materializes the corresponding
+runtime descriptor at that boundary. Generic enum constructors without a contextual enum type do not yet infer their type
+arguments from payloads; that existing compiler gap requires a separate fix. A concrete typed binding preserves the
+specialization before an erased boundary.
+
+A generic owner whose instance fields or annotated method signatures hold a parameter inside a structure
+(`iterator():Iterator<T>`, `get():{value:T}`, a field `{key:T}`) is specialized for that parameter too. A structure is a
+class per field set, so the record a shared body makes (`{value:Dynamic}`) is not the one a caller at `T = String` reads
+(`{value:String}`), and no cast turns one into the other. The rule goes once a structure is a view of its record
+([STRUCTURE_VALUES.md](../design/STRUCTURE_VALUES.md)). A member whose type is inferred from its body is not looked at.
+
+Concrete non-recursive enum descriptors retain every constructor's resolved payload types before erasure, including
+constructors such as `Code(Int)` or `Empty` which do not mention the type parameter. IR completion requires those
+descriptors rather than reconstructing them by copying an erased template. Incremental metadata retains the source
+declaration and semantic arguments so cached callers can regenerate descriptors after an enum edit.
+An enum used only in a generic function's local, a captured closure, an owner's instance body or a generic typedef
+still makes that parameter layout-dependent; a `Dynamic` result does not erase the type before construction.
+This is an enum-layout dependency, not general scalar generic specialization.
+
+Layout recursion is classified from semantic declarations before payload erasure. Its finite dependency graph follows
+stored type parameters through enums, value structs and nullable values; reference containers, closures and managed
+objects break the path. Phantom arguments do not create dependencies. The decision is retained in canonical IR and
+invalidated with the enum declaration. The existing boxed generic transport has a separate descriptor dependency
+relation: it must bound families such as `E<T> -> Array<E<Array<T>>>` even though they have finite inline size. That
+transport still erases cyclic generic payload schemas at this checkpoint; it never marks a reference cycle recursive by
+value or rejects its inline layout. Transporting concrete value leaves belongs to the remaining source enum-storage
+lowering; these metadata and logical-array helper steps do not activate source inline enums.
+
+The IR keeps a registered enum's logical identity separate from its private lane record. Array and iterator
+accessors transport record leaves while their public descriptors retain the enum type; Dynamic/native adapters
+materialize or unpack the nominal enum. Canonical IR, nullable erasure and closure ABI rewriting preserve that
+association. Source `Null<E>` already lowers to the same null-capable enum IR type. The all-target helper tests
+allocate zero objects for typed copies and four objects for either 8 or 1,024 elements plus iteration. Public
+source closure/field/reflection adapters remain part of the pending source lowering; the storage association
+must also participate in live-patch ABI checks before activation. See STRUCTS.md for the
+representation contract.
+
+An explicitly erased view of a constructed owner remains a Dynamic boundary. Constructing a constrained owner with
+`Dynamic` as the constrained argument is rejected: no concrete conformance exists to select for its instance bodies.
+
+The generic map allocates its dense key, value, hash and bucket arrays on first insertion. An empty map therefore
+costs one object, including when its arguments are structs; 128 empty maps allocate 128 objects on each Wasm
+target, compared with 1,283 before lazy storage. Empty reads, removal, iteration, copying and clearing preserve
+ordinary map behavior. After insertion, it uses dense key, value and hash arrays with an open-addressed integer
+bucket array. A removal moves the
+last dense entry into the gap and updates its bucket, so removed managed references are released and no default value
+of `K` or `V` is needed. Tombstones are rehashed before they fill the bucket table, reusing its capacity when live
+entries do not require growth. This keeps struct keys and values in the existing inline array lanes and avoids boxing
+a hash or bucket index on each lookup. Repeated updates and lookups of maps with struct keys and values allocate zero
+objects after setup for 8 and 1,024 operations on all three targets, with inlining on and off. Growing three maps
+(struct keys and values, integer keys with struct values, and struct keys with integer values) to 512, 1,024 and 2,048
+entries allocated 287, 331 and 384 objects respectively on both Wasm targets. The increments follow backing-array and
+bucket growth, rather than allocating an object for each inserted struct. A HashLink allocation census of the same
+three-map workload recorded 458, 529 and 617 allocations respectively: three map objects, one byte buffer and arrays,
+with no `MapKey` or `MapValue` objects at any size.
+
+**Map-key specialization and floating-point keys.**
+
+The typer chooses the physical map owner once and publishes that choice for IR lowering; lowering consumes the chosen
+owner instead of repeating a separate key classifier. Ordinary specialized `HashMap<K,V>` handles supported keys,
+including concrete scalar keys and nullable enum keys. A nullable enum retains absence separately
+from its case tag, including when a nullary enum uses an integer tag. Payload enums still require `Hashable`.
+
+Hash maps require a reflexive key equivalence. For Float keys, two NaNs are equivalent, positive and negative zero are
+equivalent, and all other keys use ordinary numeric equality. This key equivalence does not change IEEE `==` elsewhere.
+Hash Float keys by their IEEE bits after canonicalizing every NaN to one bit pattern and both zero signs to zero; the
+same bit hashing handles infinities and large finite values without a trapping numeric conversion. The target supplies
+an allocation-free bit reinterpretation. The hash used by synthesized `Hashable` values follows the same canonical
+Float hashing, and equal keys must always have equal hashes. The compiler-generated Float hash implements this
+bit-based rule on all targets; the duplicated arithmetic helpers have been removed. Nullable nullary enum keys retain
+their nullable enum representation in the generic map, preserving absence separately from every case; non-null enum
+keys can use their existing integer representation. The compiler records the chosen specialized owner against the
+source `Map` type, including across incremental compilation, so an explicitly used `HashMap<K,V>` cannot accidentally
+change a separate native `Map<K,V>` representation.
+
+Cross-target tests cover Float, Bool, Int64, UInt32, nullable Float and nullable enum keys, custom reference equality,
+NaNs, signed zero, infinities and large finite values. Updating and looking up a Float-keyed map of structs allocates
+zero objects after setup for 8 and 1,024 operations on HashLink, Wasm32 and Wasm GC, with inlining on and off.
+
+An explicitly erased `G<Dynamic>` view is a real Dynamic boundary. It must refer to the same generic object as its
+concrete source: reads materialize values for Dynamic, writes check and copy them back to the concrete field, and
+identity, aliases, exceptions and inherited dispatch remain observable. A view cannot be implemented by copying the
+owner or by keeping an independently mutable Dynamic field beside the inline field. The normal typed `G<S>` path must
+not allocate a box or a per-instance bridge; erasure work belongs at the explicit boundary and its operations.
+The representation for an erased owner is the original object reference carried as `Dynamic`. Generated
+operation dispatchers test the actual owner layout and call its physical field or method, checking and copying a struct
+payload at the boundary. They preserve identity without a wrapper and need no additional storage in ordinary instances.
+Numeric erased writes require the exact runtime kind: Int, Float, Bool and Int64 are distinct, including nullable
+values. In particular, a Dynamic Float cannot be truncated into an Int field, and a Dynamic Int is not implicitly
+widened into a Float field at this boundary. A rejected write leaves the existing field unchanged. Typed numeric
+conversions retain their normal rules. String, enum and interface writes likewise check their runtime type before
+changing storage and permit null. Array writes check the array kind and the concrete element storage before the
+store; a Dynamic array can be validated and retyped in place, while mismatched scalar, reference and struct-lane
+layouts are rejected without changing the destination. Function writes check the closure's arity and recorded
+signature before the store. HashLink and Wasm GC retain semantic function signatures; a scalar struct closure crossing
+Dynamic is recognized by its signature-specific adapter without boxing its ordinary typed calls.
+
+Interface checks require declared conformance, including inherited base interfaces; a matching method shape does not
+establish conformance. HashLink records a virtual cache for each declared interface and every base interface. Runtime
+checks match those exact cache types and unwrap an interface view before checking its concrete object. Across a full
+module reload, virtual types retain a stable nominal identity: the interface name plus a fingerprint of its declared
+methods and base-interface contracts. The identity lives in type metadata, in both development and release modules;
+it adds no fields to instances or interface wrappers. A pointer match remains the fast path within a generation.
+HashLink's structural virtual-prefix cast is not a conformance test: it would accept an unrelated sibling interface with fewer
+methods. This distinction also applies to interface values carried through Dynamic.
+
+HashLink stores function-valued data globals in typed nullable closure-reference slots (`HNULL(HFUN)`). The VM's raw
+`HFUN` global slots initialize with a code pointer and cannot hold the default-null state of a source closure field.
+The nullable slot stores the existing closure pointer and retains its full signature; registers and typed calls keep
+the ordinary function ABI. Clearing and restoring a callback, including across GC, does not create a wrapper.
+
+Wasm32 records the semantic signature separately from the calling representation. A static closure refers to a shared
+immutable module descriptor containing its function slot and signature; a bound closure keeps the signature in its
+existing header. A Dynamic cast to another signature creates a checked adapter, including when both signatures use the
+same machine representation. This keeps distinct views distinct while a matching cast and ordinary typed calls do not
+allocate. The module interns full semantic signatures to distinct identifiers, avoiding hash collisions. Array value
+bridges and reflection use the same static descriptor representation as ordinary calls.
+
+After literal warmup, 8 and 1,024 matching static and bound closure casts and calls allocate zero objects on Wasm32 and
+Wasm GC with inlining on and off; HashLink's allocated-byte counter likewise stays unchanged. The two Wasm GC objects
+used to materialize the first string literals occur in both the control and candidate before warmup.
+
+Managed byte buffers and native map abstracts check their runtime kind too. Wasm32 gives strings and managed bytes
+distinct type ids in their existing headers, including byte views, stream results and native aggregate buffers. Its
+iterator header retains the semantic `Iterator<T>` descriptor in an existing word while the collector continues to
+scan the common iterator layout. Erased writes therefore reject the wrong byte kind or iterator element type. Wasm GC
+and the interpreter also distinguish runtime iterator element types. HashLink's runtime iterator type test still
+exposes only the common iterator kind; source-level structural iterator adapters can have stricter checks. HashLink
+currently lowers every `Iterator<T>` type value to one abstract type, and the underlying array's physical element
+type cannot distinguish nested semantic shapes such as `Array<Int>` and `Array<String>`. Exact checks there require
+carrying an interned semantic descriptor through iterator construction and erased type tests without enlarging the
+iterator allocation; deriving it from the physical array alone would accept mismatched nested shapes.
+
+The header changes add no allocations: in paired Wasm32 and Wasm GC censuses with inlining on and off, creating 8 /
+1,024 escaped iterators used 8 / 1,024 objects on each side. Allocating 8 / 1,024 managed byte buffers used 8 / 1,024
+objects on Wasm32 and 16 / 2,048 on Wasm GC, unchanged from the control.
+
+Raw pointers specialize generic owners and functions to their scalar pointer representation and remain unboxed in
+typed code. At a genuine Dynamic escape, each Wasm target uses a distinct pointer box, preserving null and checking
+the kind on unbox; an Int cannot be written through an erased view of a concrete pointer field. Dynamic pointer boxes
+compare their contained addresses, including null. Erased generic interface argument and result adapters use the same
+checked box. Typed pointer access performs no allocations on HashLink, Wasm32 or Wasm GC, with inlining on or off. A raw-pointer box
+is a GC leaf: on Wasm32, a managed object is reclaimed even when its address is held as a raw pointer.
+
+Typed generic interface calls and bound methods retain their semantic argument and result carriers. The compiler
+generates a typed dispatch entry for each used interface method signature, calls the matching implementation with its
+physical carriers, and keeps struct leaves in scalar and reference slots. Generic implementors specialize scalar
+carriers where an inherited interface requires them. A struct converted to an interface is boxed at that conversion;
+calls through it retain the boxed receiver as a mutable place. Erased interface views and reflection continue to use
+checked Dynamic conversions.
+
+Casting an existing interface view back to its concrete struct copies scalar and reference leaves through the same
+result ABI. The generated interface-unbox helper participates in scalar argument/result lowering; inspecting its
+result does not create another value box. The interface's original box remains the genuine escape allocation.
+`struct-interface-unbox-census` keeps a managed reference live across collection and checks both leaves. With
+inlining enabled and disabled, 8 / 1,024 casts allocate 0 / 0 objects on HashLink (unchanged), and 0 / 0 on Wasm32
+and Wasm GC (previously 8 / 1,024 on each). The Wasm parity gate checks those allocation counters directly.
+
+With inlining enabled and disabled, the cross-target census performs 8 and 1,024 calls with zero allocations for
+`hl.Bytes`, `Int`, `Float`, and a struct containing an `Int` and a managed reference, through both concrete and generic
+implementations. This includes a `PointerSource<hl.Bytes>.get()` result, struct interface receivers, and captured
+methods. On Wasm32, the pointer getter previously allocated 1,024 times per 1,024 calls (the earlier pre-pointer-box
+compiler allocated zero); it now allocates zero. A paired HashLink argument-and-result census over 1,024 calls changed
+from 0, 16,384, 32,768 and 81,920 allocated bytes respectively for those four carriers to zero for each.
+
+A separate owner-policy gap remains when a reference field's type argument uses a shared shape: its physical field is
+`Dynamic`, and the erased setter has no semantic type descriptor with which to reject a mismatched value. For example,
+`Box<Anchor, String>` accepts an Int through `Box<Dynamic, Dynamic>`. Giving that owner an `Array<T>` field forces a
+concrete layout and makes the setter reject the write. The owner must retain enough semantic type information to check
+shape-erased fields without conflating it with the pointer box representation.
+
+The descriptor cannot be recovered solely at the owner allocation: in
+`make<T>(value:T):Dynamic { return new Box<Anchor,T>(new Anchor(1), value); }`,
+the shape-shared body has already replaced `T` with `Dynamic` before lowering the
+allocation. Both this factory and a plain `Box<String>` accept an `Int` through
+an erased view on HashLink, Wasm32 and Wasm GC. The remaining runtime change must
+carry semantic descriptors through shape-shared function and method calls,
+forwarding and captured closures, and retain them on the owner for checked
+erased writes. It must preserve shared code and typed-call allocation counts;
+deriving a descriptor from the physical field or only from a direct construction
+would leave the factory case unsound.
+
+Native callback handles and runtime type handles have distinct Dynamic representations. Typed Wasm calls retain
+their unboxed word carriers; a callback or type handle is boxed only at a Dynamic boundary, and recovery checks the
+handle kind. HashLink compares erased callback handles by their underlying value. With inlining enabled and disabled,
+8 and 1,024 typed callback calls allocate zero times on Wasm32 and Wasm GC before and after the change; the paired
+HashLink census allocates zero bytes on both sides.
+On Wasm32, the collector treats both boxes as leaves: a numeric handle that happens to equal a managed object's
+address does not keep that object alive. The GC-stress regression covers callback and type handles, as well as raw
+pointers, and exercises callback boxes with inlining both enabled and disabled.
+
+A closure in a specialized generic field carries a struct's scalar and traced reference leaves through its typed
+argument and result. In a Wasm GC census, the apparent 16 / 2,048 allocations for 8 / 1,024 calls came from evaluating
+a string literal in the loop: its byte array and string wrapper were rebuilt on every iteration. Immutable literals
+are now rooted and reused per module. A previously unseen literal allocates its two objects once; after setup, the
+managed-reference struct closure performs 8 and 1,024 calls with zero allocations on all three targets, with inlining
+on and off.
+These dispatchers must cover inherited members, captured methods, reflection and exceptions on all targets; generic
+owners are not complete until those paths and incremental invalidation are tested.
+Reflection reads copy a value out of its specialized field, and writes check the supplied payload before changing the
+field. The cross-target reflection tests cover direct and generic owners, optional payloads, null and invalid writes,
+reference identity within the copied value, and both inlining modes.
+
+Generated methods participate in the same dependency completion as source bodies. In particular, a handwritten enum
+equality method may first request a specialized owner, whose methods request hashing or captured closures. Owners,
+closures, key paths, reflection adapters, codecs, equality and hashing helpers are completed together until no new
+requests remain; collecting each category once in phase order leaves valid programs with missing IR declarations.
+`enum-generated-dependencies` covers that chain on all three targets with inlining enabled and disabled, and
+`GeneratedDependencyCompletionMain` checks interpreter execution and cold, cached and edited builds.
+
+
+### Value carriers in nongeneric interface contracts
+
+Interface calls with physical value arguments or results use the same typed dispatcher as specialized generic
+contracts, even when the declared and instantiated signatures are identical. The common IR normalization runs after
+physical value layouts are known and before scalar-call ABI selection. It also normalizes bound interface methods,
+including inherited contracts, without changing reference-only or scalar-only interface calls. This applies equally
+to structs and to the physical value storage registered for eligible inline enums.
+
+Normalization preserves the cached source IR. Dispatcher generation checks an existing signature and rebuilds its
+body from the current implementations, replacing that definition rather than appending a duplicate. Removing or adding
+an implementation therefore cannot leave a stale dispatch tree. Invalid receivers retain the checked throwing path;
+Dynamic/reflection escapes keep their semantic adapters.
+
+
+### Constant-time typed interface dispatch
+
+The `ccf4a141` dispatch tree removes value boxes but tests implementations in sequence. Before inline enum activation,
+class-owned typed method entries replace this selection. Public methods retain their semantic signatures for
+Dynamic and reflection; private entries carry the complete scalar/reference ABI. A missing compatible entry keeps
+checked dispatch rather than calling a function with an unchecked signature.
+
+The source audit uses this worktree at `ccf4a141` and editor revision `46044a2712525a635588feb4572fa0f2053dc06c`.
+Of the 16 UI and seven editor interfaces, only `haxeon.ui.core.ViewportContent.paint(Canvas, Rect)` currently crosses
+this path: its one implementation is `GraphicsSurfaceViewportContent`. `View` has 104 transitive concrete implementers,
+but `build` currently returns the class `RenderNode`, so it does not yet select a value ABI. Neither does any editor-only
+interface in this revision. The emitted UI framework function map confirms the single `ViewportContent.paint` dispatcher.
+
+| Source contract | Concrete implementers | Typed value entry |
+| --- | ---: | --- |
+| `haxeon.ui.semantics.SemanticsValueSource` | 1 | No |
+| `haxeon.ui.properties.PropertyEditorExtension` | 4 | No |
+| `haxeon.ui.host.DesktopUiApplication` | 1 | No |
+| `haxeon.ui.host.UiDiagnosticsProvider` | 0 | No |
+| `haxeon.ui.host.UiApplication` | 1 | No |
+| `haxeon.ui.core.View` | 104 | No |
+| `haxeon.ui.core.ViewportContent` | 1 | `paint(Canvas, Rect)` |
+| `haxeon.ui.docking.DockWorkspacePersistence` | 1 | No |
+| `haxeon.ui.animation.RetainedAnimation` | 3 | No |
+| `haxeon.ui.animation.DelayedAnimation` | 2 | No |
+| `haxeon.ui.animation.Animation` | 11 | No |
+| `haxeon.ui.widgets.collections.TreeViewModel` | 4 | No |
+| `haxeon.ui.widgets.collections.ListViewModel` | 2 | No |
+| `haxeon.ui.widgets.collections.ListViewItemMetadata` | 1 | No |
+| `haxeon.ui.widgets.commands.SearchPickerModel` | 1 | No |
+| `haxeon.ui.LayoutContent` | 3 | No |
+| `app.SessionMember` | 16 | No |
+| `app.SceneAssemblyDrag` | 2 | No |
+| `app.SessionParticipant` | 1 | No |
+| `app.PreparedSceneStore` | 1 | No |
+| `app.CadSessionModel` | 4 | No |
+| `app.SetupScript` | 1 | No |
+| `app.editor.ObjectKindProvider` | 3 | No |
+
+The 1/8/32 benchmark selects the base-class receiver after every deeper subclass, so it is the last candidate regardless
+of lexical tie ordering. Each call returns a packet containing an integer and a managed reference, checks its contents,
+and accumulates a result. All implementations remain reachable. Three alternating process pairs, five samples per
+process, 100,000 calls per sample, CPU 2, after warmup; both inlining modes are measured. Times are median ns/call.
+The three compilers are the pre-`ccf4a141` compiler (`6f816201`), the reviewed chain (`ccf4a141`), and the
+typed-table replacement. Every cell is old path → chain → table, from the same final three-way paired run:
+
+| Target | Inlining | 1 implementation | 8 implementations | 32 implementations |
+| --- | --- | --- | --- | --- |
+| HashLink | off | 47.10 → 15.83 → 14.86 | 47.19 → 80.77 → 14.74 | 46.83 → 305.27 → 14.75 |
+| HashLink | on | 47.85 → 14.81 → 14.91 | 47.50 → 81.81 → 14.85 | 47.39 → 299.39 → 14.27 |
+| Wasm32 | off | 2.78 → 12.69 → 10.46 | 3.22 → 49.25 → 12.68 | 5.80 → 312.16 → 18.33 |
+| Wasm32 | on | 2.78 → 10.34 → 8.28 | 3.23 → 47.23 → 11.03 | 5.81 → 307.58 → 18.08 |
+| Wasm GC | off | 0.50 → 11.56 → 9.73 | 9.06 → 74.91 → 14.16 | 35.86 → 465.55 → 22.94 |
+| Wasm GC | on | 0.50 → 11.90 → 4.38 | 9.00 → 76.06 → 16.41 | 29.98 → 454.96 → 18.91 |
+
+HashLink's control allocates exactly 256/32,768 bytes for 8/1,024 calls in every case; `ccf4a141` allocates zero.
+Both Wasm controls already flatten this fixture through their older scalar-virtual lowering: their nominal boxed source
+path therefore allocates zero too, and already has linear selection. The new chain also allocates zero on both Wasm
+targets. Calling the Wasm control a boxed runtime implementation would be incorrect.
+
+The chain has an implementer-count regression. Table selection performs a bounded number of probes independent
+of implementation count; bucket shape and indirect-call costs still affect the measured times. The single-entry Wasm
+case checks the complete class ID and calls its entry directly. For small Wasm contracts the old path can still be faster
+(the one-entry GC control is 0.50 ns/call); the replacement removes the unbounded chain rather than claiming a universal
+micro-benchmark speedup.
+
+
+The typed table keeps an ordinary semantic method and a separate private entry per implementing class and used
+value signature. HashLink stores the entries in class runtime metadata; a cached semantic slot selects a cached static
+closure directly. The closure lives in the class module's metadata arena and refers to the ordinary patchable code
+entry, so it adds no instance bytes or per-call objects. Runtime class metadata has one lazy table pointer; entries and
+cached closures are constructed only when used. Private entries are excluded from source method lookup and reflection.
+Appending an implementation must validate this metadata in a patch as well as in a full module.
+
+Wasm uses the existing class ID to index static typed entries. A deterministic two-level perfect hash selects a
+function-table index with at most two `br_table` operations; a full ID comparison rejects an unknown receiver. The
+indirect call requires the complete canonical function type, including reference leaves and multi-value results.
+This preserves the class header and avoids allocating GC vtable objects or adding a field to every instance. It also
+avoids adding a linear memory merely to hold metadata in a GC-only module. These static class entries provide the
+constant-time selection without growing the managed representation. The checked chain is reached only if the receiver
+has no compatible entry. The interpreter uses the checked IR path.
+
+All table cases allocate zero bytes on HashLink and zero objects on both Wasm targets at 8/1,024 calls, with inlining
+on and off. Private adapters remain outlined so the backend can select their entries. Optional-flow and scalar-argument
+wrappers retain the entry's identity, including a struct argument with a nullable struct result. Canonical physical Wasm
+function types, not reference-record identity, decide entry compatibility. The 128-class lookup test checks every entry,
+10,000 unknown IDs and an incompatible result signature. The 32-class source fixture checks distinct implementation
+results, inherited contracts, ordinary scalar methods, bound calls, Dynamic restoration and reflection on all targets.
+The HashLink patch test appends an implementation, edits it after its entry is cached, and verifies module retirement.
+
+One existing value-ABI gap is distinct from method selection: a bound closure returning `Null<S>` still uses a boxed
+logical result ABI on HashLink. Its correctness is covered outside the component-call zero-byte census. Carrying its
+presence/scalar/reference leaves through the escaping closure ABI remains required before the no-box port is complete.
+
+The boxed and table dispatch were compared by `scripts/benchmark-typed-interface-dispatch.py` (with
+`tests/bench/typed-interface-dispatch.template.hx`), which regenerated the 1/8/32 sources and recorded every paired process
+sample, allocation count and guest build log; the boxed path's source is `6f816201`, the reviewed chain `ccf4a141`. Both
+files were removed once the boxed path was gone; take them from git history to compare two dispatch builds again.
+
+### Typed callbacks passed through methods
+
+A function reference keeps its typed value ABI when passed to a class or interface method if every possible receiver
+implementation accepts the exact callback signature at that argument position. The Wasm scalar-closure planner checks
+those contracts through the existing subtype/implementer index; unknown targets, arity mismatches and differing callback
+signatures remain outside that ABI. This is a compile-time check; method dispatch and closure calls retain their
+existing constant-time runtime paths.
+
+Previously the planner's safe-use list omitted `MethodCall`. It therefore kept a callback taking a value struct (or a
+newly inline enum packet) on the boxed ABI. Wasm32's closure-cast planner then generated same-arity conversion adapters
+against unrelated casts. `rpc-lifecycle` exposed this when a `RpcConnectResult -> Void` callback was paired with a
+`ManagedBytes -> Bytes` decoder: the adapter tried to cast Dynamic to the private enum packet and the verifier correctly
+rejected it. Recognizing the verified typed method argument keeps that callback scalar and removes it from the boxed
+adapter source set. No Dynamic conversion or verifier exception was added.
+
+The regression fixture includes inherited, overridden, concrete and interface methods, prepared enum/struct callbacks,
+and an unrelated Dynamic function cast of the same arity. A forged differing override must not be admitted. With both
+inlining modes, each typed method path at 8/1,024 iterations changes from 16/2,048 Wasm32 and Wasm GC allocations to zero;
+HashLink remains at zero bytes. `rpc-lifecycle` returns 42 on all three targets in both modes. Logical enum descriptors
+at genuine Dynamic/reflection callable boundaries remain E7 widening work in STRUCTS.md.
+
+### Scalar map storage in an opaque generic owner (a2)
+
+A map created and used inside a shared generic body keeps the body's erased storage consistently. In particular,
+the original `UiHostPendingResources<String>` smoke test and its Bool counterpart work on HashLink, Wasm32 and Wasm GC,
+with inlining off/on. This was reproduced with the pre-diagnostic compiler at `093617bb`; neither owner is rejected.
+
+The unsupported operation is a **storage-changing ABI crossing**, such as passing a concrete `Map<String, V>` into
+`ReadView<V>` whose constructor expects the erased reference-map representation. Before the diagnostic, the Bool
+probe failed on HashLink with `Can't cast map_string_bool to map_string_ref`. The String probe fails on HashLink with
+`Can't cast map_string_bytes to map_string_ref` and on Wasm GC with `RuntimeError: illegal cast`, in both inlining modes;
+Wasm32 accepts that String probe. Those String results were reproduced with `093617bb`.
+
+The compiler rejects these crossings with **E1009**, naming the concrete owner when available and both boundary types:
+`scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary`. It compares
+actual runtime map kinds through aliases and containers at ABI adaptation, rather than banning generic fields or
+instantiations. Null arguments, consistently erased owned maps, concrete fields and compatible specialized storage
+remain supported. The negative probes and the original String/Bool pending-resource runtime positives run on all three
+targets with inlining off/on. **a2 deletes this diagnostic and its rejection tests** when typed standard-map storage and
+scalar owner specialization preserve these crossings. This does not implement scalar specialization.
+
+The compiler's read-only verifier tables now accept typed lookup and membership
+callbacks instead of owning an erased map: each callback reads its concrete map kind, and the generic view preserves
+its nullable result type. The `generic-map-read-view` fixture checks false, true, missing keys and reference values on
+all three targets with both inlining settings. This does not add scalar specialization or claim allocation-free
+nullable scalar map reads.

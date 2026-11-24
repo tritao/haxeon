@@ -15,7 +15,7 @@ write_dependency() {
 	printf 'class Dependency { public static function answer():Int return %s; }\n' "$1" > "$project_dir/src/Dependency.hx"
 }
 build_project() {
-	HAXEON_HOME="$root_dir" HAXEON_COMPILER_SOURCE="$root_dir/src" "$haxe" --cwd "$root_dir" -cp "$root_dir/src" --run tools.HaxeonCli build --verbosity normal --project "$project_dir/haxeon.json"
+	HAXEON_SDK="$root_dir/out/sdk" HAXEON_COMPILER_SOURCE="$root_dir/src" "$haxe" --cwd "$root_dir" -cp "$root_dir/src" --run tools.HaxeonCli build --verbosity normal --project "$project_dir/haxeon.json"
 }
 check_exit() {
 	local status=0

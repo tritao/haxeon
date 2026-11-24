@@ -13,14 +13,11 @@ import haxeon.ui.widgets.text.Text;
 
 /** Phone design tokens (docs/phone-ui/CONTRACTS.md) and small node builders shared by the navigation widgets. */
 class NavUi {
-	public static final ground:Color = rgb(0xf4f5f7);
 	public static final surface:Color = rgb(0xffffff);
 	public static final text:Color = rgb(0x16181d);
 	public static final secondary:Color = rgb(0x555b66);
 	public static final accent:Color = rgb(0x2f55c7);
-	public static final attention:Color = rgb(0xd97706);
 	public static final idle:Color = rgb(0x9aa0aa);
-	public static final border:Color = rgb(0xe2e4e9);
 	public static final rowBorder:Color = rgb(0xeceef2);
 	public static final chipFill:Color = rgb(0xeceef2);
 	public static final chipActiveFill:Color = rgb(0x16181d);

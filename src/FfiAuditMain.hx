@@ -53,7 +53,7 @@ class FfiAuditMain {
 			else
 				paths.push(argument);
 		if (paths.length != 1 || targets.length < 2 || (format != "text" && format != "json"))
-			throw new InternalError("Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>");
+			throw new InternalError(tools.CliHelp.FFI_AUDIT_USAGE);
 		var dependencyInterfaces:Array<HxiInterface> = [];
 		for (path in dependencyPaths) {
 			var model = HxiParser.parse(path, File.getContent(path));

@@ -1,8 +1,8 @@
 package build.execution;
 
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import haxe.Json;
-import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -27,7 +27,7 @@ private class FingerprintFields {
 		add(value);
 
 	public function digest():String
-		return Sha256.encode(buffer.toString());
+		return TextDigest.sha256(buffer.toString());
 }
 
 /** Conservative project-local fingerprints for process actions. */
@@ -146,6 +146,13 @@ class ActionFingerprint {
 		File.saveContent(path, Json.stringify({fingerprint: fingerprint}) + "\n");
 	}
 
+	/** Drops the recorded fingerprint, so no build takes outputs it is about to replace for up to date. */
+	public static function forget(buildRoot:String, action:ExecutionAction):Void {
+		var path = recordPath(buildRoot, action);
+		if (FileSystem.exists(path))
+			FileSystem.deleteFile(path);
+	}
+
 	public static function outputsExist(action:ExecutionAction):Bool {
 		if (action.outputs.length == 0)
 			return false;
@@ -156,7 +163,7 @@ class ActionFingerprint {
 	}
 
 	static function recordPath(buildRoot:String, action:ExecutionAction):String
-		return Path.join([buildRoot, ".haxeon", "actions", Sha256.encode(action.id.key()) + ".json"]);
+		return Path.join([buildRoot, ".haxeon", "actions", TextDigest.sha256(action.id.key()) + ".json"]);
 
 	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>,
 			buildRoot:String, digests:ContentDigestCache):Void {

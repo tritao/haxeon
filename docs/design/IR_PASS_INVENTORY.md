@@ -1,10 +1,12 @@
 # IR pass inventory and pass interface (ADR 0003, M2)
 
-Status: proposal; the pass order of the frontend is in one place (`compiler.ir.pipeline.IrPipeline`), the per-pass interface below is not
-written yet. Since 2026-11-19 it is built on the query engine ([QUERY_ENGINE.md](QUERY_ENGINE.md), ADR 0003 M4a): `view`
-is the engine's read interface, and contributions, summaries and rewrites are query kinds. Builds on section B of [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) (pass interface, name families,
-file:line evidence). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
-Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so they will change first).
+Status: the pass order is in one place (`compiler.ir.pipeline.IrPipeline`), and the passes are in subpackages by layer
+and family (`compiler.ir.passes.*`). The per-function interface exists as `IrFunctionPass` (summarize, prepare, transform
+through `IrFactReader`, finish), with eight passes on it: constant branches, the enum and value dynamic dispatch, enum tag
+lowering, override bridges, value interface boxes, typed interface dispatch and checked dynamic casts. What a warm build
+reuses today is in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md). This document adds the measured edit-build cost per
+pass and the order. Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so
+they will change first).
 
 ## Internal marker migration (a1)
 
@@ -100,8 +102,7 @@ Rules both drivers follow:
 The outer app comparison had three matching control failures: the cosmetic-thread material rebuild, CAD collision
 bounds and panel-flows inspection-camera label. The rebased editor and Web comparisons retained identical normalized
 functions; the exact allocation windows matched. One-shot typing and memory measurements were noisy under concurrent
-builds. The complete control, per-run measurements, module hashes and accepted baseline messages are preserved in the
-[November 2026 gate history](../history/ir-pass-inventory-2026-11.md).
+builds.
 
 On outer `8ced7e09a`, the app suite also stopped at `Worker document tests failed: schema v17 is unsupported;
 expected v18`. The same message occurs with the unchanged `124b72aa0` control compiler in the same outer worktree;
@@ -194,27 +195,27 @@ The "label" of a measured span can cover two passes where the code runs them bac
 
 | pass | class | summary (what it is a function of) | the rewrite may read | edit cost | share |
 |---|---|---|---|---|---|
-| IrInliner | (c), memoized | per callee: transitive dependency list (`InlineMemo.dependencies`) | callee bodies, object table | 31.2M | 25.4% |
+| IrInliner | (c), memoized | per callee: what the caller read of it (`FORM`, `CANDIDATE`, `COMPONENT` facts) | callee forms, object table | 31.2M | 25.4% |
 | IrScalarClosures | (b) | set of scalar closure function types, from all bodies and natives, minus excluded | existence of the `$scalar-arguments:` clone of a closure target | 11.2M | 9.1% |
 | IrEnumRuntimeSpecializations + IrInlineEnumLowering (+Eligibility, Escapes) | (b) | concrete enum specializations; `allowed` enums = union of per-function escape facts, closed over the type graph | method signatures | 11.2M | 9.1% |
 | IrScalarArguments | (c) | `candidates`: functions whose value arguments/results travel as scalars; greatest fixpoint over the call graph | callee candidacy, signatures | 9.2M | 7.5% |
-| IrValueArrayProgramRewrite | (b) | concrete value-array element types (objects, enums, interfaces, statics, natives, all bodies) | place-method bodies (cloned), helper bodies inlined by `ScalarLowering` | 8.7M | 7.1% |
+| IrValueArrayProgramRewrite | (b), per-function memos, done | concrete value-array element types (objects, enums, interfaces, statics, natives, all bodies); per element, the print of its layout | place-method bodies (cloned), helper bodies inlined by `ScalarLowering` (by their versions) | 8.7M | 7.1% |
 | IrScalarReplacement | (a) | none | none | 7.6M | 6.1% |
 | IrNullableScalarFlow | (c) | `candidates`, pruned by trial rewrite until stable | callee candidacy | 5.7M | 4.7% |
 | IrVerifier (verification, not a rewrite) | per-function memo, done | reads recorded through `IrVerifyTable`s | tables | 4.2M | 3.5% |
 | IrValueConstructors | (b), bounded | small `.new` value constructors (<= 16 blocks, <= 64 instructions) | the bodies of those constructors (inlines them) | 3.7M | 3.0% |
 | IrEnumDynamicDispatch | (b) | enum box descriptors; `needsEqual/Reflect/Compare` flags merged from per-function call names | bodies only for reachability pruning of `$enum-reflect-equals:*` | 3.5M | 2.8% |
-| IrValueInterfaceBoxes | (b) | value objects with interfaces and the implementation signatures | signatures | 3.5M | 2.8% |
+| IrValueInterfaceBoxes | (b), per-function memo, helpers derived, done | value objects with interfaces and the implementation signatures; a box's methods read the text of its plan, a cast the values it tests | signatures | 3.5M | 2.8% |
 | IrTypedInterfaceDispatch (`rewriteValueCalls`: (a); `generate`: (b) generator) | mixed | helper set = f(`$typed-interface:` names) | signatures | 3.4M | 2.8% |
-| IrCheckedDynamicCasts | (a) | none (helpers keyed by type) | names | 3.4M | 2.7% |
+| IrCheckedDynamicCasts | (a), per-function memo, helpers derived, done | none (helpers keyed by type, reading the declaration they test); the reflection helpers' casts are derived per helper | names | 3.4M | 2.7% |
 | IrValueDynamicDispatch | (b) | suffix set from value objects and `$value$equality:` names | names only | 3.4M | 2.7% |
-| IrOptionalFieldStorage + IrNullableScalarFields | (b) / (a) | `plans` from the object table only | value-method bodies (cloned per owner/field/path) | 3.0M | 2.4% |
+| IrOptionalFieldStorage + IrNullableScalarFields | (b), per-function memo, helpers derived, done / (a) | `plans` from the object table only; a rewrite reads the plans along each class it accesses, an accessor its plan | value-method bodies (cloned per owner/field/path, derived by version and the value declarations) | 3.0M | 2.4% |
 | IrValuePhiScalarization (twice) | (a) | none | none | 2.4M + 0.9M | 2.6% |
 | runtime-surface detection and the rest of `assemble` | (b) | which runtime helpers any call needs (a union of per-function facts) | none | 2.2M | 1.8% |
-| IrObjectReflection.generate | (b) generator | helper set = f(declared natives, reflectable objects) | signatures | 1.9M | 1.5% |
-| IrOptionalScalarFlow + IrOptionalValueFlow.addHelpers | (c) fixpoint + (a) generator | `candidates` = greatest set such that each `eligible(fn)` holds given the others | callee bodies (`snapshotOnlyReceiver`), method resolution | 1.0M | 0.8% |
-| IrStaticNullChecks | (b) | functions reachable from `__init` (call graph) | bodies of the reachable functions | 0.4M | 0.3% |
-| IrGenericOwnerErasure.generate | (b) generator | helper set = f(call names, objects) | callee signatures | 0.01M | 0.0% |
+| IrObjectReflection.generate | (b) generator, helpers derived, done | helper set = f(declared natives, reflectable objects); each helper reads the prints of its native and layouts | signatures | 1.9M | 1.5% |
+| IrOptionalScalarFlow + IrOptionalValueFlow.addHelpers | (c) fixpoint + (a) generator, per-function memo, scalar forms and helpers derived, done | `candidates` = greatest set such that each `eligible(fn)` holds given the others; a rewrite reads candidacy, classes, slots, resolved methods and the callees it passes a place to as facts | callee bodies (`snapshotOnlyReceiver`, as a fact per callee), method resolution | 1.0M | 0.8% |
+| IrStaticNullChecks | (b), per-function memo, done | functions reachable from `__init` (call graph of per-function summaries) | none | 0.4M | 0.3% |
+| IrGenericOwnerErasure.generate (+ IrMethodReferences) | (b) generator, helpers derived, done | helper set = f(call names, objects); an operation reads the text of what it dispatches to, a type test its classes, a method reference the method it calls | callee signatures | 0.01M | 0.0% |
 
 Counting the table's rows, about 7 passes are (a), 12 are (b) and 4 are (c) (`IrInliner`, `IrScalarArguments`, `IrNullableScalarFlow`, `IrOptionalScalarFlow`; the
 last three are the candidate-pruning fixpoints). The inliner is already memoized and is left for last.
@@ -283,7 +284,7 @@ By edit cost, with what must come first:
    `IrGenericOwnerErasure`, runtime-surface detection, `StaticNullChecks`: 2% to 3% each; their gain is that the helpers become derived from
    summaries. If the floor of step 0 is fixed, the remaining edit cost of these is small, and they can be ported by need (name
    families, M3) rather than by cost.
-9. **IrInliner** last: it moves onto the shared view and `IrInlineCache.memo/cleaned/instrumented` are deleted. Its 31.2M is the
+9. **IrInliner** last: done, its entries are stage memo entries keyed by source version, with the facts it read; `IrInlineCache.memo` and its identity checks are deleted. Its 31.2M is the
    largest single item, but it already memoizes, so the question is why 625 changed functions cost 31M; that should be profiled
    before the port (the span also holds the per-build setup: object table, fingerprints, cleanup of every function).
 
@@ -291,8 +292,8 @@ By edit cost, with what must come first:
 
 - Is the 3.4M floor one shared helper? (Step 0 answers it.)
 - The inliner span: how much of its 31.2M is per-build setup that scales with the program, not with the edit?
-- `IrStaticNullChecks` keeps its own `__init` reachability fixpoint (`IrInitializationCalls`); is that a (c) pass or a (b) pass over a
-  call-graph summary? Its cost (0.4M) does not decide the order, but the interface does.
+- `IrStaticNullChecks` is a (b) pass over a call-graph summary: each function gives what it calls and where its closures and
+  arguments flow (`IrInitCalls`, kept by version), and the `__init` reachability is solved from those each build.
 
 ## Enum escape reach and array factories
 

@@ -1,0 +1,5 @@
+distance: 5
+moved to: 4, 5
+bytes in "héllo": 6
+path length: 6.4031242374328485
+circle area: 12.566370614359172

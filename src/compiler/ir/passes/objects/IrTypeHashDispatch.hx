@@ -5,6 +5,7 @@ import compiler.ir.model.Ir.IrValue;
 import compiler.ir.model.IrBuilder;
 
 /** Balanced dispatch on stable type hashes. Arms must resolve hash collisions by exact type tests. */
+@:nullSafety(Strict)
 class IrTypeHashDispatch {
 	public static function emit(builder:IrBuilder, hash:IrValue, hashes:Array<Int>, arm:Int->Void,
 			missing:IrBlock):Void {

@@ -72,7 +72,10 @@ class MemberAccess {
 		return null;
 	}
 
-	static function member<V>(table:Map<String, Map<String, V>>, owner:String, name:String):Null<V> {
+	static function member<V>(session:TypingSession, table:Map<String, Map<String, V>>, owner:String,
+			name:String):Null<V> {
+		// A lookup of one member reads that member: its signature, which says whether it is there.
+		session.readSignature(owner + "." + name);
 		var members = table.get(owner);
 		return members == null ? null : members.get(name);
 	}
@@ -93,7 +96,7 @@ class MemberAccess {
 	}
 
 	static function findMethod(session:TypingSession, className:String, name:String):Null<SemanticMethodInfo> {
-		var info = member(session.methodsByOwner, className, name);
+		var info = member(session, session.methodsByOwner, className, name);
 		if (info != null)
 			return info;
 		var classDecl = session.classDecls.get(className);
@@ -179,7 +182,7 @@ class MemberAccess {
 	}
 
 	static function declaredMethod(session:TypingSession, owner:String, name:String):Null<DeclaredMember> {
-		var declared = member(session.signaturesByOwner, owner, name);
+		var declared = member(session, session.signaturesByOwner, owner, name);
 		return declared == null ? null : {
 			owner: owner,
 			name: name,
@@ -240,7 +243,7 @@ class MemberAccess {
 			seen:Map<String, Bool> = [];
 		while (current != null && !seen.exists(current)) {
 			seen.set(current, true);
-			var declared = member(session.signaturesByOwner, current, name);
+			var declared = member(session, session.signaturesByOwner, current, name);
 			if (declared != null && (declared.isPublic != null || declared.isOverride != true))
 				return declared.isPublic == true;
 			var base = session.classDecls.get(current);
@@ -311,10 +314,11 @@ class MemberAccess {
 			return true;
 		for (method in declaration.methods) {
 			var name = method.name.indexOf(".") >= 0 ? method.name : caller + "." + method.name;
-			if (name == session.currentContext.sourceFunctionName
-				&& method.metadata != null
-				&& grants(method.metadata, "access", owner, owner + "." + member))
-				return true;
+			if (name == session.currentContext.sourceFunctionName) {
+				session.readSignature(name);
+				if (method.metadata != null && grants(method.metadata, "access", owner, owner + "." + member))
+					return true;
+			}
 		}
 		return false;
 	}

@@ -1,6 +1,7 @@
 package compiler.ir.passes.enums;
 
 import compiler.ir.analysis.IrEnumEscapeReach;
+import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -19,7 +20,23 @@ private typedef EnumUseNode = {
 }
 
 /** Conservative first source subset. A rejected enum keeps its nominal storage everywhere in the program. */
+@:nullSafety(Strict)
 class IrInlineEnumEligibility {
+	/** What each function lets escape or keeps in value form (`IrInlineEnumUses`). */
+	/** The escape reach of the reflected layouts, which a session keeps (`IrEnumEscapeReach.collectKept`). */
+	@:processWide("a kept reach's key, only ever read")
+	public static final REFLECTED =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("inline-enum-reflected-reach");
+
+	/** The escape reach of the escape reasons, which a session keeps (`IrEnumEscapeReach.collectEach`). */
+	@:processWide("a kept reach's key, only ever read")
+	public static final ESCAPES =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("inline-enum-escape-reach");
+
+	@:processWide("a contribution memo's key, only ever read")
+	public static final USES =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInlineEnumUses>("inline-enum-uses");
+
 	public final allowed:Map<String, Bool> = [];
 	public final reasons:Map<String, String> = [];
 	/** Type descriptors that describe a verified callable boundary for a selected enum. */
@@ -30,6 +47,7 @@ class IrInlineEnumEligibility {
 	final declarations:Map<String, IrEnum>;
 	final planner:IrInlineEnumLayout;
 	final reflectionReach:IrEnumEscapeReach;
+	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
 	final enumNodes:Map<String, Int> = [];
 	final objectNodes:Map<String, Int> = [];
 	final interfaceNodes:Map<String, Int> = [];
@@ -39,18 +57,22 @@ class IrInlineEnumEligibility {
 	final nodes:Array<EnumUseNode> = [];
 	final words:Int;
 	final rejected:Array<Int>;
-	/** The constants null of the function `scan` reads. */
-	final nulls:Map<Int, Bool> = [];
 
 	/**
 	 * The enums of `program` that may be lowered to value packets, reading the functions' bodies made with `types` (those of the
 	 * functions' bodies when not given), encoding a function that has none.
 	 */
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
-			?types:IrTypeIds, ?builder:IrBodyBuilder) {
+			?types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.planner = planner;
+		this.lineage = lineage;
 		var bodyTypes = types == null ? IrTypeIds.ofFunctions(program.functions) : types;
-		reflectionReach = new IrEnumEscapeReach(program);
+		// What each function lets escape or keeps in value form, read once per version in a session (`IrInlineEnumUses`); the
+		// reach follows the closures and map stores the records name.
+		var uses = [for (fn in program.functions) IrInlineEnumUses.of(fn, bodyTypes, builder, lineage)];
+		reflectionReach = new IrEnumEscapeReach(program, _ -> false);
+		for (record in uses)
+			record.follow(reflectionReach, bodyTypes);
 		declarations = [for (declaration in program.enums) declaration.name => declaration];
 		objects = [for (object in program.objects) object.name => object];
 		contracts = [for (contract in program.interfaces) contract.name => contract];
@@ -164,172 +186,109 @@ class IrInlineEnumEligibility {
 				escape(argument, "C native signature");
 			escape(native.result, "C native signature");
 		}
-		for (fn in program.functions)
-			scan(fn, fn.bodyIn(bodyTypes, builder), program.entryPoint);
-		for (reason in escapeOrder)
-			for (name in reflectionReach.collect(escapeRoots.get(reason), supportsCallableEscape).keys()) block(name,
-				reason);
+		for (index in 0...program.functions.length)
+			replay(program.functions[index], uses[index], bodyTypes, program.entryPoint);
+		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
+		var rooted = [for (reason in escapeOrder) if (escapeRoots.get(reason) != null) reason],
+			reachedEach = reflectionReach.collectEach(ESCAPES, [for (reason in rooted) escapeRoots.get(reason) ?? []],
+				supportsCallableEscape, lineage),
+			reached:Map<String, Bool> = [];
+		for (index in 0...rooted.length)
+			for (name in reachedEach[index].keys())
+				if (!reached.exists(name)) {
+					reached.set(name, true);
+					block(name, rooted[index]);
+				}
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
 	}
 
-	/** What one function's rows let escape or keep in value form, and its verified callable descriptors. */
-	function scan(fn:IrFunction, body:IrBody, entryPoint:String):Void {
+	/** What one function's rows let escape or keep in value form (its record, `IrInlineEnumUses`), and its verified callable descriptors. */
+	function replay(fn:IrFunction, uses:IrInlineEnumUses, types:IrTypeIds, entryPoint:String):Void {
 		if (fn.retention == Expose || fn.name == entryPoint) {
 			for (argument in fn.arguments)
 				escape(argument.type, "host signature");
 			escape(fn.result, "host signature");
 		}
-		// Descriptors are rare: their tables are made for a function that has one.
-		var descriptors:Null<Map<Int, IrType>> = null;
-		nulls.clear();
-		for (block in 0...body.blockCount()) {
-			var row = body.firstRow(block);
-			while (row >= 0) {
-				switch body.opcode(row) {
-					case IrOpcode.TypeValue:
-						if (descriptors == null)
-							descriptors = [];
-						descriptors.set(body.output(row), body.typeOperand(row));
-					case IrOpcode.ConstNull:
-						nulls.set(body.output(row), true);
-					default:
-				}
-				row = body.nextRow(row);
-			}
-		}
-		var arrayDescriptors:Map<Int, Bool> = descriptors == null ? null : [],
-			callableDescriptorUses:Map<Int, Bool> = descriptors == null ? null : [],
-			referenceTypeDescriptorUses:Map<Int, Bool> = descriptors == null ? null : [],
-			logicalEnumDescriptorUses:Map<Int, Bool> = descriptors == null ? null : [],
-			descriptorUses:Map<Int, Int> = descriptors == null ? null : [],
-			otherDescriptors:Map<Int, Bool> = descriptors == null ? null : [];
-		for (block in 0...body.blockCount()) {
-			var row = body.firstRow(block);
-			while (row >= 0) {
-				var opcode = body.opcode(row);
-				if (opcode.isTerminator()) {
-					switch opcode {
-						case IrOpcode.Throw, IrOpcode.Rethrow:
-							escape(body.valueType(body.operand(row, 0)), "exception escape");
-						case IrOpcode.Return, IrOpcode.Branch, IrOpcode.Switch
-							if (descriptors != null && descriptors.exists(body.operand(row, 0))):
-							otherDescriptors.set(body.operand(row, 0), true);
-						default:
+		var events = uses.events, index = 0;
+		while (index < events.length) {
+			var kind = events[index],
+				type = types.type(events[index + 1]),
+				reason = IrInlineEnumUses.REASONS[events[index + 2]];
+			switch kind {
+				case IrInlineEnumUses.ESCAPE:
+					escape(type, reason);
+				case IrInlineEnumUses.ESCAPE_MAP:
+					escapeMapReference(type, reason);
+				case IrInlineEnumUses.DYNAMIC:
+					if (!supportsCallableEscape(type))
+						escape(type, reason);
+				case IrInlineEnumUses.CAST:
+					var out = types.type(events[index + 3]);
+					if (!((switch type {
+						case Dyn: true;
+						default: false;
+					}) && supportsCallableEscape(out))) {
+						escape(out, reason);
+						escape(type, reason);
 					}
-					row = body.nextRow(row);
-					continue;
-				}
-				if (descriptors != null && opcode != IrOpcode.Phi)
-					for (inputIndex in 0...body.operandCount(row)) {
-						var input:Int = body.operand(row, inputIndex);
-						if (descriptors.exists(input)) {
-							descriptorUses.set(input,
-								(descriptorUses.exists(input) ? descriptorUses.get(input) : 0) + 1);
-							var callTarget = opcode == IrOpcode.Call && body.operandCount(row) == 2
-								&& body.operand(row, 1) == input ? body.symbol(row).name : null;
-							if (callTarget == "__closure_is_of_type" && supportsCallableEscape(descriptors.get(input)))
-								callableDescriptorUses.set(input, true);
-							else if ((callTarget == "__std_is_exact_type" || callTarget == "__std_is_of_type")
-								&& isReferenceTypeDescriptor(descriptors.get(input)))
-								referenceTypeDescriptorUses.set(input, true);
-							else if (callTarget == "__array_alloc_typed_ref")
-								arrayDescriptors.set(input, true);
-							else if ((callTarget == "__std_is_exact_type" || callTarget == "__std_is_of_type")
-								&& logicalEnumDescriptorFunction(fn.name)
-								&& isSelectedEnumDescriptor(descriptors.get(input)))
-								logicalEnumDescriptorUses.set(input, true);
-							else
-								otherDescriptors.set(input, true);
-						}
-					}
-				switch opcode {
-					case IrOpcode.Call:
-						var name = body.symbol(row).name;
-						if (StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")) {
-							var count = body.operandCount(row);
-							switch name.substr(name.lastIndexOf("_ref_") + 5) {
-								case "set" if (count >= 3):
-									// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;
-									// a direct enum or value struct still needs its nominal boxed representation here.
-									escapeMapReference(body.valueType(body.operand(row, count - 1)),
-										"native reference map storage");
-								case "get" | "values" | "handles":
-									escapeMapReference(body.valueType(body.output(row)),
-										"native reference map storage");
-								default:
-							}
-						}
-					case IrOpcode.ToDyn:
-						var value = body.valueType(body.operand(row, 0));
-						if (!supportsCallableEscape(value))
-							escape(value, "Dynamic escape");
-					case IrOpcode.SafeCast:
-						var value = body.valueType(body.operand(row, 0)), out = body.valueType(body.output(row));
-						if (!((switch value {
-							case Dyn: true;
-							default: false;
-						}) && supportsCallableEscape(out))) {
-							escape(out, "checked escape");
-							escape(value, "checked escape");
-						}
-					case IrOpcode.Phi if (descriptors != null):
-						for (index in 0...body.operandCount(row)) {
-							var input:Int = body.operand(row, index);
-							if (descriptors.exists(input)) {
-								descriptorUses.set(input,
-									(descriptorUses.exists(input) ? descriptorUses.get(input) : 0) + 1);
-								otherDescriptors.set(input, true);
-							}
-						}
-					case IrOpcode.MethodCall:
-						// Interface packets have a verified typed table; ordinary value calls do not yet share it.
-						var receiver = body.valueType(body.operand(row, 0));
-						switch receiver {
-							case Virtual(_):
-							default:
-								value(receiver, "ordinary method receiver");
-								value(body.valueType(body.output(row)), "ordinary method result");
-								for (index in 1...body.operandCount(row))
-									value(body.valueType(body.operand(row, index)), "ordinary method argument");
-						}
-					case IrOpcode.InstanceClosure:
-						var receiver = body.valueType(body.operand(row, 0));
-						switch receiver {
-							case Virtual(_):
-							case Obj(name) if (StringTools.startsWith(name,
-								compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
-							default:
-								value(receiver, "bound value receiver");
-								callableValue(body.valueType(body.output(row)), "bound value method", true);
-						}
-					case IrOpcode.Equal:
-						var left = body.operand(row, 0), right = body.operand(row, 1);
-						if (!nulls.exists(left) && !nulls.exists(right)) {
-							value(body.valueType(left), "unlowered enum comparison");
-							value(body.valueType(right), "unlowered enum comparison");
-						}
-					default:
-				}
-				var out = body.output(row);
-				if (out.exists())
-					containerCallable(body.valueType(out));
-				row = body.nextRow(row);
+				case IrInlineEnumUses.VALUE:
+					value(type, reason);
+				case IrInlineEnumUses.CALLABLE_VALUE:
+					callableValue(type, reason, true);
+				case IrInlineEnumUses.CONTAINER:
+					containerCallable(type);
+				default:
+					throw new compiler.core.InternalError('Unknown inline enum use $kind');
 			}
+			index += kind == IrInlineEnumUses.CAST ? 4 : 3;
 		}
-		if (descriptors == null)
+		var descriptors = uses.descriptors;
+		if (descriptors.length == 0)
 			return;
-		var validCallableDescriptors:Map<Int, Bool> = [];
-		for (id => type in descriptors) {
-			var singleUse = descriptorUses.get(id) == 1 && !otherDescriptors.exists(id);
-			if (referenceTypeDescriptorUses.exists(id) && singleUse && isReferenceTypeDescriptor(type))
+		var logical = logicalEnumDescriptorFunction(fn.name),
+			validCallableDescriptors:Map<Int, Bool> = [];
+		index = 0;
+		while (index < descriptors.length) {
+			var id = descriptors[index],
+				type = types.type(descriptors[index + 1]),
+				closures = descriptors[index + 2],
+				tests = descriptors[index + 3],
+				arrays = descriptors[index + 4],
+				others = descriptors[index + 5],
+				escapes = descriptors[index + 6] != 0;
+			index += IrInlineEnumUses.DESCRIPTOR;
+			// The uses of the descriptor, classified as the scan of the rows does: a type test or a closure test that does not
+			// verify the descriptor counts as another use.
+			var uses = closures + tests + arrays + others,
+				callableUse = false,
+				referenceUse = false,
+				logicalUse = false,
+				arrayUse = arrays > 0,
+				other = escapes || others > 0;
+			if (closures > 0) {
+				if (supportsCallableEscape(type))
+					callableUse = true;
+				else
+					other = true;
+			}
+			if (tests > 0) {
+				if (isReferenceTypeDescriptor(type))
+					referenceUse = true;
+				else if (logical && isSelectedEnumDescriptor(type))
+					logicalUse = true;
+				else
+					other = true;
+			}
+			var singleUse = uses == 1 && !other;
+			if (referenceUse && singleUse && isReferenceTypeDescriptor(type))
 				continue;
-			if (logicalEnumDescriptorUses.exists(id) && singleUse && isSelectedEnumDescriptor(type))
+			if (logicalUse && singleUse && isSelectedEnumDescriptor(type))
 				continue;
-			if (callableDescriptorUses.exists(id) && singleUse && supportsCallableEscape(type))
+			if (callableUse && singleUse && supportsCallableEscape(type))
 				validCallableDescriptors.set(id, true);
-			else if (!arrayDescriptors.exists(id) || otherDescriptors.exists(id) || descriptorUses.get(id) != 1)
+			else if (!arrayUse || other || uses != 1)
 				escape(type, "runtime type descriptor");
 		}
 		if (validCallableDescriptors.keys().hasNext())
@@ -491,7 +450,7 @@ class IrInlineEnumEligibility {
 
 	function reflectedUnsupportedEnums(reflected:Map<String, Bool>):Map<String, Bool> {
 		var roots:Array<IrType> = [for (name in reflected.keys()) Obj(name)];
-		return reflectionReach.collect(roots, supportsCallableEscape);
+		return reflectionReach.collectKept(REFLECTED, roots, supportsCallableEscape, lineage);
 	}
 
 	function block(name:String, reason:String):Void {
@@ -570,4 +529,220 @@ class IrInlineEnumEligibility {
 				containerCallable(inner);
 			default:
 		}
+}
+
+/**
+ * What one function's rows let escape or keep in value form, for the inline enum eligibility (`IrInlineEnumEligibility`), by type
+ * ids of the body's table: a list of uses, each a kind, a type and a reason (`REASONS`), kept once each in the order the rows give
+ * them; its type descriptors with their uses by kind; and the closures it makes and its map stores, which the escape reach follows.
+ * It depends on the body alone, so a session keeps it by the function's version (`IrStageMemos.inlineEnumUses`).
+ */
+@:nullSafety(Strict)
+class IrInlineEnumUses {
+	public static inline final ESCAPE = 0;
+	public static inline final ESCAPE_MAP = 1;
+
+	/** A value turned `Dyn`: an escape unless a callable the enum escape adapters support. */
+	public static inline final DYNAMIC = 2;
+
+	/** A checked cast, from the type to the next one (four entries): an escape of both unless a callable out of `Dyn`. */
+	public static inline final CAST = 3;
+
+	public static inline final VALUE = 4;
+	public static inline final CALLABLE_VALUE = 5;
+	public static inline final CONTAINER = 6;
+
+	/** The entries of a descriptor: its value id, its type, its closure tests, type tests, array allocations, other uses, escape. */
+	public static inline final DESCRIPTOR = 7;
+
+	@:processWide("the reasons a use names, by number, only ever read")
+	public static final REASONS = [
+		"exception escape", "native reference map storage", "Dynamic escape", "checked escape",
+		"ordinary method receiver",
+		"ordinary method result", "ordinary method argument", "bound value receiver", "bound value method",
+		"unlowered enum comparison", ""
+	];
+
+	public final events:Array<Int> = [];
+	public final descriptors:Array<Int> = [];
+
+	/** Pairs of a closure's type and its receiver's. */
+	public final closures:Array<Int> = [];
+
+	/** Triples of a map's type, the key's and the value's. */
+	public final mapStores:Array<Int> = [];
+
+	final kept:Map<Int, Bool> = [];
+
+	function new() {}
+
+	public static function of(fn:IrFunction, types:IrTypeIds, builder:Null<IrBodyBuilder>,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInlineEnumUses {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return read(fn.bodyIn(types, builder));
+		var memo = lineage.memos.contribution(IrInlineEnumEligibility.USES), known = memo.get(version);
+		if (known == null) {
+			known = read(fn.bodyIn(types, builder));
+			memo.keep(version, known);
+		} else if (lineage.checks && !known.same(read(fn.bodyIn(types, builder))))
+			throw new compiler.core
+				.InternalError('--check-reuse: the inline enum uses reused for ${fn.name} differ from its body');
+		return known;
+	}
+
+	function same(other:IrInlineEnumUses):Bool
+		return events.join(",") == other.events.join(",") && descriptors.join(",") == other.descriptors.join(",")
+			&& closures.join(",") == other.closures.join(",") && mapStores.join(",") == other.mapStores.join(",");
+
+	/** Gives `reach` the closures and map stores of the function. */
+	public function follow(reach:IrEnumEscapeReach, types:IrTypeIds):Void {
+		var index = 0;
+		while (index < closures.length) {
+			reach.closureEnvironment(types.type(closures[index]), types.type(closures[index + 1]));
+			index += 2;
+		}
+		index = 0;
+		while (index < mapStores.length) {
+			reach.mapContent(types.type(mapStores[index]), types.type(mapStores[index + 1]),
+				types.type(mapStores[index + 2]));
+			index += 3;
+		}
+	}
+
+	/** Records a use of `kind` for the type of id `type`, once: a use repeated changes nothing the eligibility decides. */
+	function use(kind:Int, type:Int, reason:Int):Void {
+		var key = (kind << 28) | (reason << 24) | type;
+		if (type < 1 << 24) {
+			if (kept.exists(key))
+				return;
+			kept.set(key, true);
+		}
+		events.push(kind);
+		events.push(type);
+		events.push(reason);
+	}
+
+	/** Whether a container use of the type of id `type` can block an enum (`IrInlineEnumEligibility.containerCallable`). */
+	static function container(type:IrType):Bool
+		return switch type {
+			case Array(_), Iterator(_): true;
+			case Nullable(inner): container(inner);
+			default: false;
+		};
+
+	static function read(body:IrBody):IrInlineEnumUses {
+		var uses = new IrInlineEnumUses(), types = body.types;
+		var descriptors:Null<Map<Int, Int>> = null, nulls:Map<Int, Bool> = [];
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.TypeValue:
+						if (descriptors == null)
+							descriptors = [];
+						var out:Int = body.output(row);
+						descriptors.set(out, uses.descriptors.length);
+						for (entry in [out, body.aux(row), 0, 0, 0, 0, 0])
+							uses.descriptors.push(entry);
+					case IrOpcode.ConstNull:
+						nulls.set(body.output(row), true);
+					case IrOpcode.InstanceClosure:
+						uses.closures.push(body.valueTypeId(body.output(row)));
+						uses.closures.push(body.valueTypeId(body.operand(row, 0)));
+					case IrOpcode.Call if (body.operandCount(row) >= 3
+						&& IrEnumEscapeReach.mapSetter(body.symbol(row).name)):
+						var count = body.operandCount(row);
+						uses.mapStores.push(body.valueTypeId(body.operand(row, 0)));
+						uses.mapStores.push(body.valueTypeId(body.operand(row, 1)));
+						uses.mapStores.push(body.valueTypeId(body.operand(row, count - 1)));
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var opcode = body.opcode(row);
+				if (opcode.isTerminator()) {
+					switch opcode {
+						case IrOpcode.Throw, IrOpcode.Rethrow:
+							uses.use(ESCAPE, body.valueTypeId(body.operand(row, 0)), 0);
+						case IrOpcode.Return, IrOpcode.Branch, IrOpcode.Switch
+							if (descriptors != null && descriptors.exists(body.operand(row, 0))):
+							uses.descriptors[(descriptors.get(body.operand(row, 0)) ?? 0) + 6] = 1;
+						default:
+					}
+					row = body.nextRow(row);
+					continue;
+				}
+				if (descriptors != null)
+					for (inputIndex in 0...body.operandCount(row)) {
+						var input:Int = body.operand(row, inputIndex), at = descriptors.get(input);
+						if (at == null)
+							continue;
+						// Closure tests, type tests, array allocations, then other uses (a phi's among them).
+						var callTarget = opcode == IrOpcode.Call && body.operandCount(row) == 2
+							&& body.operand(row, 1) == input ? body.symbol(row).name : null;
+						var slot = opcode == IrOpcode.Phi ? 5 : callTarget == "__closure_is_of_type" ? 2 : callTarget
+							== "__std_is_exact_type"
+							|| callTarget == "__std_is_of_type" ? 3 : callTarget == "__array_alloc_typed_ref" ? 4 : 5;
+						uses.descriptors[at + slot]++;
+					}
+				switch opcode {
+					case IrOpcode.Call:
+						var name = body.symbol(row).name;
+						if (StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")) {
+							var count = body.operandCount(row);
+							switch name.substr(name.lastIndexOf("_ref_") + 5) {
+								case "set" if (count >= 3):
+									uses.use(ESCAPE_MAP, body.valueTypeId(body.operand(row, count - 1)), 1);
+								case "get" | "values" | "handles":
+									uses.use(ESCAPE_MAP, body.valueTypeId(body.output(row)), 1);
+								default:
+							}
+						}
+					case IrOpcode.ToDyn:
+						uses.use(DYNAMIC, body.valueTypeId(body.operand(row, 0)), 2);
+					case IrOpcode.SafeCast:
+						uses.events.push(CAST);
+						uses.events.push(body.valueTypeId(body.operand(row, 0)));
+						uses.events.push(3);
+						uses.events.push(body.valueTypeId(body.output(row)));
+					case IrOpcode.MethodCall:
+						// Interface packets have a verified typed table; ordinary value calls do not yet share it.
+						switch body.valueType(body.operand(row, 0)) {
+							case Virtual(_):
+							default:
+								uses.use(VALUE, body.valueTypeId(body.operand(row, 0)), 4);
+								uses.use(VALUE, body.valueTypeId(body.output(row)), 5);
+								for (index in 1...body.operandCount(row))
+									uses.use(VALUE, body.valueTypeId(body.operand(row, index)), 6);
+						}
+					case IrOpcode.InstanceClosure:
+						switch body.valueType(body.operand(row, 0)) {
+							case Virtual(_):
+							case Obj(name) if (StringTools.startsWith(name,
+								compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
+							default:
+								uses.use(VALUE, body.valueTypeId(body.operand(row, 0)), 7);
+								uses.use(CALLABLE_VALUE, body.valueTypeId(body.output(row)), 8);
+						}
+					case IrOpcode.Equal:
+						var left = body.operand(row, 0), right = body.operand(row, 1);
+						if (!nulls.exists(left) && !nulls.exists(right)) {
+							uses.use(VALUE, body.valueTypeId(left), 9);
+							uses.use(VALUE, body.valueTypeId(right), 9);
+						}
+					default:
+				}
+				var out = body.output(row);
+				if (out.exists() && container(body.valueType(out)))
+					uses.use(CONTAINER, body.valueTypeId(out), 10);
+				row = body.nextRow(row);
+			}
+		}
+		return uses;
+	}
 }

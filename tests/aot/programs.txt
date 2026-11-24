@@ -22,6 +22,8 @@ array-expression-mutation
 array-field-mutation
 array-filter-map-join
 array-fused-boundaries
+array-nullable-scalar-search
+array-read-out-of-range
 array-fused-elements
 array-fused-growth-alias
 array-fused-shrink
@@ -36,6 +38,7 @@ array-key-value-iteration
 array-last-index-of
 array-literal
 array-mutation
+array-native-null-access
 array-object-mutation
 array-remove
 array-resize
@@ -126,6 +129,7 @@ dynamic-equal-unused-and-used-struct
 dynamic-field-access
 dynamic-increment
 dynamic-method-call
+dynamic-methods
 dynamic-modulo
 dynamic-number-cast
 dynamic-object-empty-array
@@ -332,6 +336,7 @@ map-for-in
 map-hash-index
 map-int
 map-key-value-for-in
+map-key-value-iterator
 map-literal
 map-nested-values
 map-nullable-get
@@ -382,6 +387,9 @@ nested-call-stack
 nested-mutable-capture
 nested-value-scalar-replace
 non-null-facts
+null-check-facts
+null-access-throws
+anonymous-local-null
 nullable-abstract-cast
 nullable-abstract-places
 nullable-abstract-value
@@ -421,6 +429,7 @@ optional-argument-forwarding
 optional-enum-parameter
 override-method
 package-stack-trace
+pattern-capture-names
 phi-parallel-moves
 postfix-increment
 prefix-increment
@@ -459,7 +468,12 @@ reflect-delete-typed-field
 reflect-object-dispatch
 reflect-string-fields
 reflect-typed-objects
+async-Future
 rpc-lifecycle
+rpc-service
+rpc-service-pinned
+rpc-wire-method
+rpc-wire-named-method
 same-package-module-type
 scalar-closure-boundaries
 scalar-closure-identity
@@ -642,6 +656,12 @@ wasm-scalar-closure-census
 wasm-type-id-collision
 while-arithmetic
 wire-final-record
+wire-named-record
+wire-pinned-record
 wire-nested-value
 xml-edit-errors
 xml-urdf
+float-to-int-range
+loop-bounds-replaced-array
+generic-null-argument
+map-to-string

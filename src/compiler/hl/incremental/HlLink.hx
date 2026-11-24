@@ -50,13 +50,16 @@ class HlLink {
 		var before = lowered.fn;
 		if (!moved && own == before.functionIndex)
 			return {fn: before, reason: null};
-		var remap = new HlRemap();
-		var rebased = [for (index in 0...keys.length) {
+		var remap = new HlRemap(), rebased:Array<Int> = [];
+		for (index in 0...keys.length) {
 			var key = keys[index], answer = answers.answer(key), table = requests.table(key);
-			if (table != HlRequestKeys.CHECK)
-				remap.note(table, recorded[index], answer);
-			answer;
-		}];
+			if (table != HlRequestKeys.CHECK && !remap.note(table, recorded[index], answer))
+				return {
+					fn: null,
+					reason: describe(requests.request(key)) + ", which shared an index with another request"
+				};
+			rebased.push(answer);
+		}
 		var fn = new HlFunction(index(remap.types, before.type, "function type"), own,
 			[for (register in before.registers) index(remap.types, register, "register type")],
 			[for (instruction in before.opcodes) rewrite(instruction, remap)], before.debugLocations,

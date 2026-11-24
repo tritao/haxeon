@@ -16,7 +16,7 @@ class DependencyScanner {
 	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>,
 			?typeParameters:Array<String>):Void
 		switch s {
-			case PrivateAccessStatement(inner, _):
+			case AnnotatedStatement(_, inner, _):
 				scanStatement(inner, dependencies, typeParameters);
 			case ErrorStatement(_):
 			case UninitializedDeclaration(_, type, _):
@@ -97,7 +97,7 @@ class DependencyScanner {
 	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>,
 			?typeParameters:Array<String>):Void
 		switch e {
-			case PrivateAccessExpression(inner, _):
+			case AnnotatedExpression(_, inner, _):
 				scanExpression(inner, dependencies, typeParameters);
 			case Add(a, b, _):
 				scanExpression(a, dependencies, typeParameters);
@@ -186,13 +186,18 @@ class DependencyScanner {
 			case Variable(name, _):
 				scanQualifiedDependency(name, dependencies);
 			case MethodCall(object, name, args, _):
-				scanArrayLibraryMethod(name, dependencies);
+				scanLibraryMethod(name, dependencies);
 				scanExpression(object, dependencies, typeParameters);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
 			case Call(name, args, _):
 				if (compiler.runtime.ArrayLibrary.providesLastOf(name))
 					dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+				if (compiler.runtime.MapLibrary.providesLastOf(name))
+					dependencies.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
+				// The stdlib may implement it in Haxe (`RuntimeType.STRING_FROM_CHAR_CODE`).
+				if (name == "String.fromCharCode")
+					dependencies.set(OPTIONAL_PREFIX + compiler.runtime.RuntimeType.STRING_CODES, true);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
@@ -232,10 +237,13 @@ class DependencyScanner {
 			default:
 		}
 
-	/** A call that may be an array method implemented in the stdlib needs that module loaded. */
-	static function scanArrayLibraryMethod(methodName:String, dependencies:Map<String, Bool>):Void
+	/** A call that may be an array or map method implemented in the stdlib needs that module loaded. */
+	static function scanLibraryMethod(methodName:String, dependencies:Map<String, Bool>):Void {
 		if (compiler.runtime.ArrayLibrary.provides(methodName))
 			dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+		if (compiler.runtime.MapLibrary.provides(methodName))
+			dependencies.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
+	}
 
 	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
 		addQualifiedOwner(name, dependencies);

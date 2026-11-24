@@ -11,6 +11,7 @@ import compiler.ir.model.TypeKey;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Per-element constructors for inline arrays and checked dynamic-array conversions. */
+@:nullSafety(Strict)
 class IrValueArrayFactory {
 	public final element:IrType;
 	public final layout:IrValueArrayLayout;

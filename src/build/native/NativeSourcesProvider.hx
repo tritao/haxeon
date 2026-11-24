@@ -22,8 +22,8 @@ class NativeSourcesProvider {
 			environment = context.environment,
 			layout = context.layout,
 			toolchain = new NativeToolchain(environment, context.compilerHome),
-			hashlinkIncludes = Path.join([context.compilerHome, "vendor", "hashlink", "src"]),
-			includeDirs = library.includeDirs.concat([hashlinkIncludes]),
+			// The runtime's headers as the SDK installs them, in a release as in a checkout.
+			includeDirs = library.includeDirs.concat([build.HaxeonSdk.includeDirectory(context.compilerHome)]),
 			actions:Array<ExecutionAction> = [],
 			artifactActions:Map<String, Array<ActionId>> = [],
 			objectPaths:Map<String, String> = [];

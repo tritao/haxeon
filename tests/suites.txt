@@ -1,7 +1,7 @@
 # The test suites, in the order they run: `scripts/haxeon dev test quick|wave|ci|full` (scripts/test.sh, `ci` by default, the
 # others). Before the first suite the runner builds the native runtime and resolves the compiler entry point, the compiler, the build tool
 # and the CLI from the tool cache, and exports them (HAXEON_MAIN_HL, HAXEON_COMPILER_HL, HAXEON_COMPILER_SERVER_HL, HAXEON_BUILD_HL,
-# HAXEON_HASHLINK_DIR) with
+# HAXEON_SDK) with
 # HAXEON_NATIVE_READY=1, so every suite of one run uses the same builds.
 #
 #   <name> <groups> [options] -- <command>
@@ -27,9 +27,12 @@
 # combinable but is not.
 
 format-check                     ci          unless-env=SKIP_FORMAT_CHECK -- scripts/haxeon dev format --check
-# Every module of the compiler and the build tool type-checks, not only the ones the entry point reaches: a switch over an IR enum in a
-# module only tests compile (IrInterpreter) once broke the wave.
-type-check-all                   quick       -- .tools/haxe/haxe --cwd . common.hxml -cp tests/compiler --macro "include('compiler')" --macro "include('build')" -hl out/type-check-all.hl --no-output -main Main
+# Every module of the compiler and the build tool, and every tests/compiler main, type-checks with stock Haxe, not only what the
+# entry point reaches (tests/integration/test-type-check-all.sh).
+type-check-all                   quick       -- bash tests/integration/test-type-check-all.sh
+# The compiler as stock Haxe builds it compiles the compiler's own sources (tools.CompilerExecutable): a change only the compiler's
+# own checks reject (a null check moved into a helper, E1005) passed every stock-Haxe check and broke `haxeon dev aot`.
+self-build                       quick,ci    -- bash tests/integration/test-self-build.sh
 checkout-hashlink                ci          fresh-native -- bash tests/integration/test-checkout-hashlink.sh
 hashlink-launchers               ci          fresh-native -- bash tests/integration/test-hashlink-launchers.sh
 gc-root-index                    ci          -- tests/integration/test-gc-root-index.sh
@@ -48,6 +51,15 @@ haxeon-script                    ci          -- scripts/haxeon tests/integration
 haxe-command-line                ci          -- scripts/haxeon tests/integration/test-haxe-command-line.hx
 # haxeon check, test and clean on a project.
 project-verbs                    ci          -- scripts/haxeon tests/integration/test-project-verbs.hx
+# haxeon.toml and haxeon.json: init writes TOML, migrate converts JSON, both in one directory are refused, add keeps comments.
+project-manifests                ci          -- scripts/haxeon tests/integration/test-project-manifests.hx
+project-templates                ci          -- scripts/haxeon tests/integration/test-project-templates.hx
+# The guides (docs/guides/README.md): each code block is in the guide's example project, no guide or reference page links
+# outside what the site publishes, and each example builds and runs, the app of "Live editing" taking the guide's edits
+# under run --watch.
+docs-guides                      ci          -- scripts/haxeon tests/integration/test-docs-guides.hx
+# nullSafety in haxeon.toml (init writes strict; strict fails, warn warns, off and absent stay quiet) and --macro nullSafety(...).
+null-safety-setting              ci          -- scripts/haxeon tests/integration/test-null-safety-setting.hx
 hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh
 messagepack-interop              ci          -- bash tests/integration/test-messagepack-interop.sh
 run-output                       ci          -- bash tests/integration/test-run-output.sh
@@ -58,6 +70,7 @@ wasm-runtime-boundaries          ci          -- bash tests/integration/test-wasm
 build-executor                   ci          -- bash tests/integration/test-build-executor.sh
 # The compile server: reuse, retirement limits, error recovery, sidecars, disconnect cancellation, restart and the one-shot fallback.
 compiler-server                  ci          -- bash tests/integration/test-compiler-server.sh
+live-session-isolation           ci          -- bash tests/integration/test-live-session-isolation.sh
 exception-stack                  ci          -- python3 tests/integration/test-exception-stack.py
 hlb-debug-sections               ci          -- bash tests/integration/test-hlb-debug-sections.sh
 hld3                             ci          -- bash tests/integration/test-hld3.sh
@@ -83,6 +96,11 @@ driver-default                   quick,ci    -- scripts/test-driver.sh {jobs}
 # The C backend (docs/design/AOT_BACKEND.md): each program of tests/aot/programs.txt compiled for hl and for hlc must give the
 # same exit code, stdout and stderr.
 aot-programs                     ci          -- TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh
+# The same in a release build, the -O2 C a release ships, which only the compiler's own build ran otherwise.
+aot-programs-release             ci          -- HLC_BUILD_MODE=release TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh
+# The same with AddressSanitizer and UndefinedBehaviorSanitizer: undefined behaviour in the generated C, which an optimizer may
+# turn into a wrong result on another compiler or version, fails a program here.
+aot-programs-sanitized           ci          -- TEST_JOBS={jobs} bash tests/aot/test-aot-programs.sh --sanitize
 # Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
 ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
 example-builds                   quick       -- python3 tests/integration/check-example-builds.py
@@ -99,6 +117,7 @@ formatter-integration            ci          -- tests/integration/test-haxeon-fo
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh
 native-cmake-library             ci          -- bash tests/integration/test-native-cmake-library.sh
 native-cmake-libraries           ci          -- bash tests/integration/test-native-cmake-libraries.sh
+native-cmake-dependency          ci          -- bash tests/integration/test-native-cmake-dependency.sh
 native-call-integration          ci          -- tests/integration/test-native-call.sh
 hxi-call-integration             ci          -- tests/integration/test-hxi-call.sh
 world-native-record-layout-integration ci    -- tests/integration/test-world-native-record-layout.sh
@@ -159,6 +178,11 @@ binary-size-report               ci          -- python3 tests/integration/test-b
 # The compiler compiling itself, once and incrementally in a compile server, costs no more than tests/perf/self-compile-baseline.json
 # and tests/perf/incremental-baseline.json allow (Linux x86-64; docs/DEVELOPMENT.md, "Performance guard").
 perf-guard                       ci          -- python3 scripts/perf-guard.py
+# The last commits that change src/compiler replayed as edits in one compile server session with the reuse checks, each warm
+# build the bytes of a fresh one: the byte-identical self-compile never builds warm.
+edit-replay                      ci          -- python3 tests/integration/test-edit-replay.py
+# The same with the last two commits, in the wave: a warm build that differs from a fresh one shows before CI.
+edit-replay-short                wave        -- python3 tests/integration/test-edit-replay.py 2
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py
 jit-stack-probe                  ci          -- python3 tests/integration/test-jit-stack-probe.py
 jit-catch-registers              ci          -- python3 tests/integration/test-jit-catch-registers.py

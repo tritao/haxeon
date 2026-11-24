@@ -4,6 +4,7 @@ import compiler.ir.model.Ir.IrObjectField;
 import compiler.ir.model.Ir.IrScalarStorage;
 
 /** Scalar width applies to managed fields as well as fields with an enclosing C layout. */
+@:nullSafety(Strict)
 class IrFieldStorage {
 	public static function scalar(field:IrObjectField):Null<IrScalarStorage> {
 		if (field.scalarStorage != null) return field.scalarStorage;

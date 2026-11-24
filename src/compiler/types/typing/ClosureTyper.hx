@@ -49,7 +49,7 @@ class ClosureTyper {
 			outerContext:TypingContext, scope:Scope,
 			filled:Array<String>):compiler.types.analysis.BodyResolution.LambdaFacts {
 		var resolution = outerContext.resolution,
-			resolved = resolution == null ? null : resolution.lambdaFacts(span.start);
+			resolved = resolution == null || span.generatedReason != null ? null : resolution.lambdaFacts(span.start);
 		if (resolved == null)
 			return BodyResolution.of(arguments, body, scope.visibleDeclarations()).bodyFacts();
 		for (declaration in filled)
@@ -62,6 +62,8 @@ class ClosureTyper {
 			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool,
 			outerContext:TypingContext):TypedExpression {
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
+		if (span.generatedReason != null)
+			lambdaKey += ':${span.end}:${span.generatedReason}';
 		var expectedFunction = expectedFunctionType(expectedType),
 			inferContextualResult = expectedFunction != null && (switch (expectedFunction.result) {
 				case TDynamic: true;
@@ -246,6 +248,9 @@ class ClosureTyper {
 		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, capturedIdentity),
 			lambdaContext = session.enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
+		if (session.immediateLambda != span)
+			context.nullSafetyClosure = true;
+		session.immediateLambda = null;
 		context.scope = typedBodyScope;
 		context.receiver = typedBodyScope.receiverType();
 		// A result that is an empty type variable (a callback's `T`, `CallResolver.openResult`) is the body's, as an unannotated
@@ -267,7 +272,8 @@ class ClosureTyper {
 		for (declaration in lambdaAssignments.keys())
 			context.assignedDeclarations.set(declaration, true);
 		var outerResolution = outerContext.resolution,
-			lambdaStorage = outerResolution == null ? null : StorageRequirements.ofLambda(outerResolution, span.start,
+			lambdaStorage = outerResolution == null
+				|| span.generatedReason != null ? null : StorageRequirements.ofLambda(outerResolution, span.start,
 				session.mayHoldValue, session.mayBeKeyPath);
 		// Syntax the typer built has no place in the body's resolution.
 		if (lambdaStorage == null)

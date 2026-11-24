@@ -197,6 +197,28 @@ class Std {
 		return stdString(value);
 	}
 
+	public static function stringifyMap<K, V>(map:Null<Map<K, V>>):String
+		return map == null ? "null" : formatMapEntries(map.keys(), map.iterator());
+
+	/** Read both projections before formatting, since an entry's toString can mutate the map. */
+	public static function formatMapEntries<K, V>(keys:Iterator<K>, values:Iterator<V>):String {
+		var output = new StringBuf();
+		output.add("[");
+		var first = true;
+		while (keys.hasNext()) {
+			if (!first)
+				output.add(", ");
+			first = false;
+			var key = Std.string(keys.next());
+			output.add(key == null ? "null" : key);
+			output.add(" => ");
+			var value = Std.string(values.next());
+			output.add(value == null ? "null" : value);
+		}
+		output.add("]");
+		return output.toString();
+	}
+
 	#if wasm
 	/** Arrays print as Haxe's Array.toString does, and as HashLink does here: `[a,b]`. */
 	static function arrayString(values:Array<Dynamic>):String {

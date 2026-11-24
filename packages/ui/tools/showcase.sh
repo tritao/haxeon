@@ -95,7 +95,6 @@ fi
     "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/async/Requests.hx" \
-    "$haxeon_dir/packages/platform/src/haxeon/platform/async/Outcome.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/Window.hx" \
     "$haxeon_dir/packages/platform/src/haxeon/platform/WebView.hx")
 

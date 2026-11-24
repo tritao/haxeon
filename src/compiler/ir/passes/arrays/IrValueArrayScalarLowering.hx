@@ -10,17 +10,43 @@ import compiler.ir.model.IrTypeIds;
 
 /**
  * Expand compiler-generated array element boundaries before scalar replacement on every target, on bodies: each call of a helper
- * is expanded as the inliner expands a call (`IrBodyCallExpansion`).
+ * is expanded as the inliner expands a call (`IrBodyCallExpansion`). Per function (`IrFunctionPass`): a function that calls a
+ * helper of the element reads, for each, the version the helper had as the stage started (`HELPER`), so it is expanded again
+ * only when it or a helper it calls changed.
  */
-class IrValueArrayScalarLowering {
+@:nullSafety(Strict)
+class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass {
+	static inline final HELPER = 0;
+
+	/** A function's summary: it calls a function named as one of the element's helpers. */
+	static inline final CALLS = 1;
+
+	final prefix = IrValueArrayElements.PREFIX;
+	final suffix:String;
+	final helpers:Map<String, IrBody>;
+	final types:IrTypeIds;
+	final scratch:IrPassScratch;
+	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
+	final versions:Map<String, Int> = [];
+
+	function new(suffix:String, helpers:Map<String, IrBody>, types:IrTypeIds, scratch:IrPassScratch,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>) {
+		this.suffix = suffix;
+		this.helpers = helpers;
+		this.types = types;
+		this.scratch = scratch;
+		this.lineage = lineage;
+	}
+
 	/**
-	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s. A function that
-	 * changes becomes its edited body, edited in place when the stage owns it, else on a copy.
+	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s; in a session with
+	 * `lineage`, reusing what it made of each function whose version and helpers are unchanged. A function that changes becomes
+	 * its edited body, edited in place when the stage owns it, else on a copy.
 	 */
 	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool, types:IrTypeIds,
-			scratch:IrPassScratch):Void {
+			scratch:IrPassScratch, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		var builder = scratch.bodyBuilder;
-		// The helpers as they are before any expansion: a helper's own body may be expanded in place below.
+		// The helpers as they are before any expansion: a helper's own body may be expanded below.
 		var helpers:Map<String, IrBody> = [];
 		var suffix = ":" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element));
 		for (fn in program.functions)
@@ -34,15 +60,61 @@ class IrValueArrayScalarLowering {
 			}
 		if (!helpers.keys().hasNext())
 			return;
-		var functions = program.functions;
-		for (index in 0...functions.length) {
-			var fn = functions[index],
-				body = fn.bodyIn(types, builder),
-				edited = rewriteBody(body, helpers, scratch);
-			if (edited != body)
-				functions[index] = IrFunction.ofOwnedBody(edited);
-		}
+		program.functions = compiler.ir.pipeline.IrFunctionStages.run("value-array-scalar:"
+			+ compiler.ir.model.IrTypeIdentity.text(element),
+			new IrValueArrayScalarLowering(suffix, helpers, types, scratch, lineage), program.functions, lineage,
+			lineage != null && lineage.checks, builder);
 	}
+
+	/** Whether `name` is named as one of the element's helpers, expanded or not. */
+	inline function helperName(name:String):Bool
+		return StringTools.startsWith(name, prefix) && StringTools.endsWith(name, suffix);
+
+	public function summarize(fn:IrFunction):Int {
+		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call && helperName(body.symbol(row).name))
+					return CALLS;
+				row = body.nextRow(row);
+			}
+		}
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
+			names:compiler.ir.pipeline.IrFunctionIndex):Void {
+		var known = lineage;
+		if (known != null)
+			for (name in helpers.keys())
+				versions.set(name, known.version(name));
+	}
+
+	public function fact(kind:Int, key:String):Int
+		return helpers.exists(key) ? versions.get(key) ?? 0 : -1;
+
+	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
+		if (summary != CALLS)
+			return fn;
+		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call && helperName(body.symbol(row).name))
+					reader.read(HELPER, body.symbol(row).name);
+				row = body.nextRow(row);
+			}
+		}
+		var edited = rewriteBody(body, helpers, scratch);
+		return edited == body ? fn : IrFunction.ofOwnedBody(edited);
+	}
+
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
+		throw new compiler.core.InternalError("The value array scalar lowering asks for no helper");
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions;
 
 	/** A call row of `body` to one of `helpers` other than itself, with as many operands as it takes arguments: the helper. */
 	static function helperCall(body:IrBody, row:Int, helpers:Map<String, IrBody>):Null<IrBody> {

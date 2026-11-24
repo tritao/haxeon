@@ -292,7 +292,7 @@ newtype StableTypeId(Int) {
   not silent ones.
 
 This also simplifies the type system. Implicit conversions interact with overload-free call checking, generic
-inference and `Null<T>`; [../reference/SEMANTIC_TYPE_CONTRACT.md](../reference/SEMANTIC_TYPE_CONTRACT.md) already limits
+inference and `Null<T>`; [../internals/SEMANTIC_TYPE_CONTRACT.md](../internals/SEMANTIC_TYPE_CONTRACT.md) already limits
 them deliberately, and newtypes remove the abstract case altogether. Abstracts with operator overloading over another
 type's representation (Haxe's "abstract as a view") become a newtype plus declared operators.
 

@@ -59,7 +59,8 @@ class Clip implements Disposable {
 	/** Creates a clip from complete, interleaved mono or stereo PCM frames. */
 	public static function fromPcm(data:Bytes, sampleRate:Int, channels:Int, format:PcmFormat):Clip {
 		if (data == null || data.length == 0 || format == null || sampleRate <= 0 || (channels != 1 && channels != 2))
-			throw BindingError.invalidArgument("Clip.fromPcm", "PCM data, sample rate, channel count, or format is invalid");
+			throw BindingError.invalidArgument("Clip.fromPcm",
+				"PCM data, sample rate, channel count, or format is invalid");
 		var sampleSize = switch format {
 			case Unsigned8: 1;
 			case Signed16LE: 2;

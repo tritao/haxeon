@@ -20,8 +20,8 @@ class BindingAnalysisMain {
 	static function main():Void {
 		var span = new SourceFile("PrivateAccess.hx", "binding").span(0, 7);
 		var inner:AstExpression = Variable("binding", span);
-		var wrapped:AstExpression = PrivateAccessExpression(inner, span);
-		var statement:AstStatement = PrivateAccessStatement(Expression(inner, span), span);
+		var wrapped:AstExpression = AnnotatedExpression(PrivateAccess, inner, span);
+		var statement:AstStatement = AnnotatedStatement(PrivateAccess, Expression(inner, span), span);
 		var collector = new ChildCollector();
 		AstChildren.visit(wrapped, collector);
 		expect(collector.children.length == 1

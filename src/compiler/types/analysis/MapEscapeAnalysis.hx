@@ -17,8 +17,18 @@ import compiler.types.analysis.BindingWalker.BindingKind;
  * lambda variable, is a different map.
  */
 class MapEscapeAnalysis {
-	public static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator",
-		"copy"];
+	public static final MAP_OPERATIONS = [
+		"get",
+		"set",
+		"exists",
+		"remove",
+		"clear",
+		"keys",
+		"size",
+		"iterator",
+		"keyValueIterator",
+		"copy"
+	];
 
 
 	public static function analyze(arguments:Array<AstArgument>, body:Array<AstStatement>):MapPrivacy

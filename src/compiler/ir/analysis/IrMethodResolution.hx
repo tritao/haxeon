@@ -11,6 +11,7 @@ import compiler.ir.model.Ir.IrObject;
  * that extends it runs the same function. A table is valid for one list of objects; `of` hands back the cached table while the
  * objects are the same instances in the same order, and builds a new one when a pass has replaced or added a class.
  */
+@:nullSafety(Strict)
 class IrMethodResolution {
 	final source:Array<IrObject>;
 	final objects:Map<String, IrObject> = [];
@@ -60,6 +61,10 @@ class IrMethodResolution {
 		return true;
 	}
 
+	/** The class named `name`, or null. */
+	public function object(name:String):Null<IrObject>
+		return objects.get(name);
+
 	/** The function `typeName` runs for `method`, looking through its bases; null when there is none or the class is unknown. */
 	public function find(typeName:String, method:String):Null<String> {
 		var table = methodsOf(typeName, 0);
@@ -104,6 +109,8 @@ class IrMethodResolution {
 			var pending = [typeName], visited:Map<String, Bool> = [];
 			while (pending.length > 0) {
 				var name = pending.pop();
+				if (name == null)
+					break;
 				if (visited.exists(name))
 					continue;
 				visited.set(name, true);

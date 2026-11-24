@@ -62,7 +62,13 @@ class IrPipelineContext {
 
 	// Check mode of the early prune (`IrEntryPrune`).
 
-	/** The build prunes the program from its entry (`IrEntryPrune.run`). */
+	/**
+	 * The build decides from what its entry reaches (`IrEntryPrune.walk`): every build but a live HashLink one, whose host can call any function (Wasm has no live host).
+	 * Which natives reached code calls decides whether the program reflects over object layouts (`IrObjectReflection.usedByProgram`).
+	 */
+	public var walkFromEntry:Bool = false;
+
+	/** The build also prunes the program from its entry (`IrEntryPrune.run`); it then walks from it too. */
 	public var pruneFromEntry:Bool = false;
 
 	/** What the prune removed; empty without it. */

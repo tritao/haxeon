@@ -14,6 +14,7 @@ import compiler.ir.passes.scalars.IrScalarReplacement.IrBodyScalarReplacement;
  * (the inliner, a backend's lowering) and passes it to each; a pass uses it for the length of its run, and what it leaves
  * there means nothing to the next one. Not for sharing between threads.
  */
+@:nullSafety(Strict)
 class IrPassScratch {
 	/** Value ids marked during a pass. */
 	public final marked = new IrValueMarks();
@@ -79,6 +80,7 @@ class IrPassScratch {
 }
 
 /** A set of small non-negative ids that is emptied in constant time: an id is in it when its stamp is the current one. */
+@:nullSafety(Strict)
 class IrValueMarks {
 	final stamps:Array<Int> = [];
 	var stamp = 1;
@@ -110,6 +112,7 @@ class IrValueMarks {
 }
 
 /** The per-value and per-block rows of `IrNonNullFacts`, kept between functions. */
+@:nullSafety(Strict)
 class IrNonNullScratch {
 	public final positions:Array<Int> = [];
 	public final nulls:Array<Bool> = [];
@@ -120,6 +123,7 @@ class IrNonNullScratch {
 	public final incoming:Array<Int> = [];
 	public final outgoing:Array<Int> = [];
 	public final fresh:Array<Int> = [];
+	public final fromFields:Array<Bool> = [];
 
 	/** The facts of the last analysis (`IrNonNullFacts.has`). */
 	public final provenStart:Array<Int> = [];

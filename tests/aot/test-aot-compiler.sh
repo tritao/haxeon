@@ -89,6 +89,16 @@ assert result.returncode == 0 and '"capabilities"' in output and '"id":2' in out
     result.stderr.decode()[-2000:])
 PY
 
+# The executable compiles programs for hlc as the VM's compiler does. Haxeon built it, while the aot-programs suite compiles with
+# the compiler stock Haxe built, so this is where the C backend's code runs as Haxeon compiles it (an out-of-range read there once
+# threw only here).
+if ! AOT_PROGRAMS_COMPILER=$executable HAXEON_AOT_OUTPUT_DIR=$work/programs TEST_JOBS=$jobs bash "$root_dir/tests/aot/test-aot-programs.sh" \
+	benchmarks/cross-lang/nbody/1.hx array-read-out-of-range exception-structured > "$work/programs.log" 2>&1; then
+	cat "$work/programs.log"
+	echo "FAIL: the compiler built ahead of time does not compile programs for hlc as the compiler on the VM does" >&2
+	exit 1
+fi
+
 # Suites that compile through the CLI, now with the executable current.
 "$root_dir/scripts/haxeon" dev test ci --jobs "$jobs" --only \
 	compiler-server,haxeon-script,run-output,process-pipes-integration,native-cmake-library,native-cmake-libraries,cmake-native-package,cxx-project-ffi-cmake

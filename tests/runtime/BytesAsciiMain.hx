@@ -10,7 +10,7 @@ import sys.io.File;
 class BytesAsciiMain {
 	static function main():Void {
 		var nativePath = "out/bytes_decode_guards.hdll";
-		var hashlink = Sys.getEnv("HAXEON_HASHLINK_DIR");
+		var hashlink = TestHashLink.directory();
 		// The VM loads the guard library, which takes the VM's API from it: hl.lib, the executable's import library, with MSVC
 		// (the VM is built with MSVC on Windows, from the Visual Studio environment CI sets up), and nothing elsewhere.
 		var built = Sys.systemName() == "Windows" ? Sys.command("cl", [
@@ -78,7 +78,7 @@ function main():Int {
 }');
 		var path = "out/bytes-ascii-edge.hl";
 		File.saveBytes(path, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
-		var status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
+		var status = Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile(nativePath);
 		if (status != 42)

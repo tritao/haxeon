@@ -42,7 +42,7 @@ class InlineEnumReflectionReachMain {
 			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "entry";
 			sys.io.File.saveBytes(module, new HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes);
-			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
+			var vm = TestHashLink.directory(),
 				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [module]),
 				error = process.stderr.readAll().toString(),
 				status = process.exitCode();

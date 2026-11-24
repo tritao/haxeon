@@ -156,7 +156,7 @@ var HaxeonWasmHost = (() => {
     for (const entry of WebAssembly.Module.imports(module)) {
       if (entry.kind !== "function" || imports[entry.module]?.[entry.name]) continue;
       const table = imports[entry.module] ??= {};
-      const hosted = emscripten["_" + entry.name];
+      const hosted = emscripten?.["_" + entry.name];
       if (typeof hosted === "function" && !["haxeon_host", "std", "haxeon_runtime"].includes(entry.module)) {
         table[entry.name] = wrap ? wrap(entry.module, entry.name, hosted) : hosted;
         continue;
@@ -166,8 +166,45 @@ var HaxeonWasmHost = (() => {
     }
     const instance = await WebAssembly.instantiate(module, imports);
     exports = instance.exports;
+    memory ??= exports.memory;
     return {instance, exports, unavailable: [...unavailable].sort()};
   }
 
-  return {instantiate, memoryContract, HaxeonExit};
+  function emscriptenContract(Module, hostMemory) {
+    const contract = {
+      version: Module["_nkui_haxeon_memory_contract_version"](),
+      pageSize: Module["_nkui_haxeon_memory_contract_page_size"](),
+      hostBase: Module["_nkui_haxeon_memory_contract_host_base"](),
+      hostLimit: Module["_nkui_haxeon_memory_contract_host_limit"](),
+      guestBase: Module["_nkui_haxeon_memory_contract_guest_base"](),
+      guestLimit: Module["_nkui_haxeon_memory_contract_guest_limit"](),
+      memorySize: Module["_nkui_haxeon_memory_contract_memory_size"]()
+    };
+    const status = Module["_nkui_haxeon_memory_contract_status"]();
+    if (contract.version !== 1)
+      throw new Error("unsupported memory contract version " + contract.version);
+    if (status !== 0)
+      throw new Error("native heap crossed the Haxeon guest boundary");
+    if (contract.hostBase !== 0 || contract.hostLimit !== contract.guestBase ||
+        contract.guestBase >= contract.guestLimit || contract.guestLimit !== contract.memorySize ||
+        contract.pageSize !== 65536 || contract.memorySize % contract.pageSize !== 0)
+      throw new Error("native memory partition is invalid");
+    if (!hostMemory || hostMemory.buffer.byteLength !== contract.memorySize)
+      throw new Error("shared memory size does not match the Haxeon contract");
+    return contract;
+  }
+
+
+  async function instantiateEmscripten(url, imports, onBytes = () => {}) {
+    const response = await fetch(url);
+    if (!response.ok)
+      throw new Error(`Could not fetch ${url}: HTTP ${response.status}`);
+    const bytes = await response.arrayBuffer();
+    onBytes(bytes);
+    const {instance} = await WebAssembly.instantiate(bytes, imports);
+    const memory = Object.values(instance.exports).find(value => value instanceof WebAssembly.Memory);
+    return {instance, memory};
+  }
+
+  return {instantiate, memoryContract, emscriptenContract, instantiateEmscripten, HaxeonExit};
 })();

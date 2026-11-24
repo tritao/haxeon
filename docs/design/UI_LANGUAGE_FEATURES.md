@@ -84,7 +84,7 @@ writes through temporary values, scalar-replaces eligible values and their calle
 on Wasm GC. Dynamic and otherwise escaping values still box; the measured UI scenarios allocate none of the five
 value types after setup. See
 [STRUCTS.md](STRUCTS.md) for the compiler rules and
-measurements and [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for the UI boundary and retention changes.
+measurements and [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for which UI types are values.
 
 ### 5. Purity contracts (deferred)
 

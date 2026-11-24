@@ -8,29 +8,42 @@ var text = JsonWire.encode(value);
 var restored:MyRecord = JsonWire.decode(text);
 ```
 
-The generator uses the same `@:wire` declarations, `@:id(n)` assignments,
-required-field checks, optional defaults, and unknown-field skipping as the
-MessagePack codec. Both formats use constructor IDs for enums and field IDs
-for records. JSON field keys carry a readable name after the ID; the ID is
-authoritative when decoding. Renaming a field without changing its ID remains
-compatible.
+Codecs are inferred from those calls, including the supported types nested in
+records, enums, arrays, and maps. JSON uses the same key mode, defaults and
+required-field rules as [MessagePack](MESSAGEPACK.md). Unknown record members
+are skipped as complete values, including nested values.
 
-Version 1 JSON is an object with `version` and `value` members. Arrays are
-JSON arrays. Records, enums, and maps are arrays of `[key, value]` pairs so
-integer and enum map keys retain their types. A record looks like this:
+The envelope has `version: 1` and a `value` member. Arrays are JSON arrays.
+Name-keyed records are JSON objects, with members written in declaration order.
+Structurally identical unannotated typedefs use the same schema and field
+order. Records without a declaration use the compiler's canonical field order.
+Name-keyed enums are one-property objects from the
+constructor name to an array of its arguments:
+
+```json
+{"version":1,"value":{"name":"motor","state":{"Moving":[[2,3]]}}}
+```
+
+Numbered records and enums keep the frozen v1 array-of-pairs shape. The ID in
+each `"id:name"` key is authoritative, so the readable name may change:
 
 ```json
 {"version":1,"value":[["1:name","motor"],["2:state",[["2:Moving",[[2,3]]]]]]}
 ```
 
-Unknown record pairs are skipped as complete values, including nested values.
-Fields required by the MessagePack schema fail when missing; missing nullable fields use `null`. The decoder
-rejects unsupported versions. `Int64` and binary values use `i64:` and
-`base64:` tagged strings. Nonfinite floats use `float:` tagged strings.
+Each declaration chooses its own shape, so a named record can contain a
+numbered enum or vice versa. Maps of any supported key type are arrays of
+pairs. Enum map keys are constructor names for named enums and integers for
+numbered enums. The decoder rejects unsupported envelope versions. `Int64`
+and binary values use `i64:` and `base64:` tagged strings. Nonfinite floats
+use `float:` tagged strings. Recursive schemas remain unsupported.
 
-The generated JSON and MessagePack profiles support `@:wire` classes, enums,
-and structural typedefs whose fields have `@:id(n)`, plus arrays, supported
-maps, abstracts over supported values, and the supported primitive types.
-Missing fields follow the same defaults and required-field rules as class
-records. Two `@:wire` typedefs with the same structural type are ambiguous
-and rejected. Recursive wire schemas remain unsupported.
+## Data that must last: pin IDs
+
+Run `haxeon lint --fix --pin-wire TYPE FILE` to write explicit IDs and add
+`@:wire`. Pinned records and enums encode as numbered arrays of pairs and
+also decode existing name-keyed objects by matching the current field and
+constructor names. Pinned enum map keys also accept constructor names on
+input. Keep names in use by stored name-keyed data until those values have
+been rewritten with IDs. The same structural typedef ambiguity rule applies
+in both formats.

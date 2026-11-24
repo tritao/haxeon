@@ -7,46 +7,92 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrTypeIds;
+import compiler.ir.pipeline.IrFunctionIndex;
+import compiler.ir.pipeline.IrFunctionPass;
+import compiler.ir.pipeline.IrFunctionStages;
+import compiler.ir.reuse.IrFactReader;
+import compiler.ir.reuse.IrFacts;
+import compiler.ir.reuse.IrStageMemo.IrLineage;
 
 /**
  * Expand bounded value constructors so newly constructed places can remain scalar. On IR bodies (docs/design/IR_CORE_COLUMNS.md,
  * migration): a straight-line constructor's rows are copied in place of its call, a branching one is expanded as the inliner
- * expands a call (`IrBodyCallExpansion`).
+ * expands a call (`IrBodyCallExpansion`). Per function (`IrFunctionPass`): a function's summary says whether it calls a function
+ * named as a constructor (`.new`); its rewrite reads, for each one it calls, the form a call of it expands to (`CONSTRUCTOR`): 0
+ * when it is not expanded, else the version of the constructor, whose body is the form, or never stated when the form expands
+ * other constructors too.
  */
-class IrValueConstructors {
+@:nullSafety(Strict)
+class IrValueConstructors implements IrFunctionPass {
+	static inline final CONSTRUCTOR = 0;
+
+	/** The summary of a function that calls a function named as a constructor. */
+	static inline final CALLS_CONSTRUCTOR = 1;
+
+	static inline final SUFFIX = ".new";
+
+	final program:IrProgram;
+	final types:IrTypeIds;
 	final scratch:IrPassScratch;
+	final lineage:Null<IrLineage>;
 
 	/** By callee value id, its value in the body a straight-line constructor is copied into. */
 	final calleeValues:Array<Int> = [];
 
+	var prepared:Map<String, IrBody> = [];
+	final branches:Map<String, IrBody> = [];
+
+	/** By constructor, the fact of its form (`CONSTRUCTOR`). */
+	final forms:Map<String, Int> = [];
+
 	/**
 	 * Expands `program`'s value constructor calls, on bodies made with `types` (those of the program's bodies when not given,
-	 * `IrTypeIds.ofFunctions`). A function that changes becomes its
-	 * edited body, owned by the next stage: edited in place, or a copy when a cache holds the body.
+	 * `IrTypeIds.ofFunctions`), without a memo. A function that changes becomes its edited body, owned by the next stage: edited in
+	 * place, or a copy when a cache holds the body.
 	 */
 	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
 		if (types == null)
 			types = IrTypeIds.ofFunctions(program.functions);
-		new IrValueConstructors(scratch == null ? new IrPassScratch() : scratch).run(program, types);
+		program.functions = IrFunctionStages.apply("value-constructors",
+			new IrValueConstructors(program, types, scratch == null ? new IrPassScratch() : scratch, null),
+			program.functions);
 	}
 
-	function new(scratch:IrPassScratch)
+	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch, lineage:Null<IrLineage>) {
+		this.program = program;
+		this.types = types;
 		this.scratch = scratch;
+		this.lineage = lineage;
+	}
 
-	function run(program:IrProgram, types:IrTypeIds):Void {
+	public function summarize(fn:IrFunction):Int {
+		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Call && StringTools.endsWith(body.symbol(row).name, SUFFIX))
+					return CALLS_CONSTRUCTOR;
+				row = body.nextRow(row);
+			}
+		}
+		return 0;
+	}
+
+	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var builder = scratch.bodyBuilder;
-		var bodies = [for (fn in program.functions) fn.bodyIn(types, builder)];
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		// Callees are frozen, or copies: the functions they were made from are edited in place below.
 		var constructors:Map<String, IrBody> = [],
 			straight:Map<String, IrBody> = [];
-		for (body in bodies) {
-			var owner = switch body.types.type(body.result) {
+		for (fn in functions) {
+			var owner = switch fn.result {
 				case Obj(name): objects.get(name);
 				default: null;
 			};
-			if (owner == null || !owner.isValue || body.name != owner.name + ".new" || body.blockCount() == 0
-				|| body.blockCount() > 16)
+			if (owner == null || !owner.isValue || fn.name != owner.name + SUFFIX)
+				continue;
+			var body = fn.bodyIn(types, builder);
+			if (body.blockCount() == 0 || body.blockCount() > 16)
 				continue;
 			var safe = true, count = 0;
 			for (block in 0...body.blockCount()) {
@@ -75,16 +121,45 @@ class IrValueConstructors {
 		}
 		// Prepare nested straight-line bodies first. Expanding only the caller once leaves constructor calls
 		// introduced by an outer constructor boxed even when the complete value never escapes.
-		var prepared = prepareStraightLine(straight),
-			branches:Map<String, IrBody> = [];
+		prepared = prepareStraightLine(straight);
 		for (name => body in constructors)
 			branches.set(name, expandStraightLine(body, prepared, true));
-		program.functions = [for (index in 0...bodies.length) {
-			var source = bodies[index],
-				body = expand(expandStraightLine(source, prepared, false), branches);
-			body == source ? program.functions[index] : IrFunction.ofOwnedBody(body);
-		}];
+		var known = lineage;
+		if (known != null) {
+			for (name => body in prepared)
+				forms.set(name, body == straight.get(name) ? known.version(name) : IrFacts.UNKNOWN);
+			for (name => body in branches)
+				forms.set(name, body == constructors.get(name) ? known.version(name) : IrFacts.UNKNOWN);
+		}
 	}
+
+	public function fact(kind:Int, key:String):Int
+		return forms.get(key) ?? 0;
+
+	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
+		if (summary != CALLS_CONSTRUCTOR)
+			return fn;
+		var source = fn.bodyIn(types, scratch.bodyBuilder);
+		for (block in 0...source.blockCount()) {
+			var row = source.firstRow(block);
+			while (row >= 0) {
+				if (source.opcode(row) == IrOpcode.Call) {
+					var name = source.symbol(row).name;
+					if (name != source.name && StringTools.endsWith(name, SUFFIX))
+						reader.read(CONSTRUCTOR, name);
+				}
+				row = source.nextRow(row);
+			}
+		}
+		var body = expand(expandStraightLine(source, prepared, false), branches);
+		return body == source ? fn : IrFunction.ofOwnedBody(body);
+	}
+
+	public function request(kind:Int, type:IrType, name:Null<String>):Void
+		throw new InternalError("The value constructor expansion asks for no helper");
+
+	public function finish(functions:Array<IrFunction>):Array<IrFunction>
+		return functions;
 
 	/** `body`, or a copy of it when it is not frozen. */
 	function snapshot(body:IrBody):IrBody

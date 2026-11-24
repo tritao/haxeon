@@ -18,14 +18,14 @@ set(NKUI_NATIVEKIT_DIR "${NATIVEKIT_DIR}" CACHE PATH "NativeKit source for UI" F
 add_subdirectory("${HAXEON_ROOT}/packages/ui" ui)
 
 if(HAXEON_NATIVE_OUTPUT_DIR)
-    foreach(runtime IN ITEMS nativekit nativekit_gpu nativekit_ui)
+    foreach(runtime IN ITEMS nativekit nativekit_audio nativekit_gpu nativekit_ui)
         set_target_properties(${runtime} PROPERTIES
             LIBRARY_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
             RUNTIME_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}"
             ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_NATIVE_OUTPUT_DIR}")
     endforeach()
 endif()
-add_custom_target(circuit_run_native DEPENDS nativekit nativekit_gpu nativekit_ui)
+add_custom_target(circuit_run_native DEPENDS nativekit nativekit_audio nativekit_gpu nativekit_ui)
 
 if(EMSCRIPTEN)
     set(circuit_run_web_dir "${CMAKE_CURRENT_SOURCE_DIR}/web")
@@ -74,7 +74,7 @@ if(EMSCRIPTEN)
     add_dependencies(circuit_run circuit_run_guest)
     set(plex_font "${HAXEON_ROOT}/packages/ui/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf")
     set_property(TARGET circuit_run APPEND PROPERTY LINK_DEPENDS "${host_exports}" "${plex_font}")
-    target_link_libraries(circuit_run PRIVATE NativeKit::ui NativeKit::nativekit
+    target_link_libraries(circuit_run PRIVATE NativeKit::ui NativeKit::nativekit NativeKit::audio
         NativeKit::wasm_host_allocator)
     target_link_options(circuit_run PRIVATE
         "-sINITIAL_MEMORY=${NKUI_HAXEON_MEMORY_LIMIT}" "-sALLOW_MEMORY_GROWTH=0"

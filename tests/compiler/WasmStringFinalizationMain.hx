@@ -79,7 +79,7 @@ class WasmStringFinalizationMain {
 			context.enumStringDescriptors = new EnumStringDescriptors(program, ["Sample" => true], program.enums);
 			context.enumStringTable = 256;
 			context.enumStringRows = 1;
-			WasmLinearRuntime.register(context);
+			WasmLinearRuntime.register(context, [for (native in program.natives) native.name => true]);
 			WasmLinearRuntime.finalizeDynamicString(context);
 			return module.functions[functions.get("__std_string")].body.length;
 		}
@@ -309,7 +309,7 @@ class WasmStringFinalizationMain {
 					reflectionBytes: null
 				});
 		context.allocatorFunction = allocator;
-		WasmLinearRuntime.register(context);
+		WasmLinearRuntime.register(context, [for (native in program.natives) native.name => true]);
 		var slot = functions.get("__std_string"),
 			count = module.functions.length;
 		if (slot == null)

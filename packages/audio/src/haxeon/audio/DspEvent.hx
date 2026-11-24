@@ -1,7 +1,7 @@
 package haxeon.audio;
 
-import haxeon.audio.DspEnums.DspParameter;
 import haxeon.audio.DspEnums.DspOscillatorParameter;
+import haxeon.audio.DspEnums.DspParameter;
 
 import haxeon.platform.BindingError;
 

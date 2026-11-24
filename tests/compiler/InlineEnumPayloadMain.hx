@@ -165,9 +165,7 @@ class InlineEnumPayloadMain {
 			"forward"))));
 		compiler.ir.verify.IrVerifier.verify(p);
 		// Raw host pointers are intentionally not interpreted in target-independent IR.
-		p.functions = new compiler.ir.passes.nullability.IrOptionalScalarFlow(p.objects).rewrite(p.objects,
-			p.functions);
-		p.functions = compiler.ir.passes.nullability.IrOptionalValueFlow.addHelpers(p.functions, p.objects);
+		p.functions = new compiler.ir.passes.nullability.IrOptionalScalarFlow(p.objects).rewrite(p.functions);
 		compiler.ir.passes.values.IrValueConstructors.rewrite(p);
 		compiler.ir.passes.values.IrValuePhiScalarization.rewrite(p);
 		compiler.ir.passes.scalars.IrScalarArguments.rewrite(p, target != HashLink);

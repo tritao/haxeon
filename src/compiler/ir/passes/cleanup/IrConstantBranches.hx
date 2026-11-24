@@ -19,6 +19,7 @@ import compiler.ir.reuse.IrFactReader;
  * (`IrFunctionPass`): a function's summary is the constant it returns, and the rewrite reads, for each callee a branch
  * condition calls, the constant that callee returns (`CONSTANT`).
  */
+@:nullSafety(Strict)
 class IrConstantBranches implements IrFunctionPass {
 	/** The fact of a callee: 1 when it returns true, 0 false, -1 when it is not a constant function. */
 	static inline final CONSTANT = 0;
@@ -65,7 +66,7 @@ class IrConstantBranches implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction
 		return fold(fn, reader);
 
-	public function request(kind:Int, type:IrType):Void {}
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction>
 		return functions;

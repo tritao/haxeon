@@ -24,6 +24,7 @@ private typedef OptionalBox = {
 }
 
 /** Keep optional-scalar wrappers in components when they cross a typed array boundary, on a body edited in place. */
+@:nullSafety(Strict)
 class IrValueArrayOptionalRewrite {
 	/** Whether `body` changed; `uses` is a table this reuses. Positions are rows' places in their blocks, blocks their indices. */
 	/** `fn` rewritten on a copy, or `fn` when nothing changes: for a pass run on its own (a test). */
@@ -137,8 +138,8 @@ class IrValueArrayOptionalRewrite {
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.SafeCast) {
 					var out = body.output(row), value = body.operand(row, 0);
-					if (IrValueArrayRows.typed(body, out, elementType) && anyReads.exists(value) && uses[value] == 1) {
-						var read = anyReads.get(value);
+					var read = anyReads.get(value);
+					if (read != null && IrValueArrayRows.typed(body, out, elementType) && uses[value] == 1) {
 						if (read.block == block && read.position < position) {
 							reads.set(out, read);
 							castSources.set(out, value);
@@ -160,8 +161,9 @@ class IrValueArrayOptionalRewrite {
 						var source = body.operand(row, 0), read = readAt(source);
 						if (read.block == block && read.position < position) {
 							unboxes.set(source, out);
-							if (castSources.exists(source))
-								rawReads.set(castSources.get(source), source);
+							var castSource = castSources.get(source);
+							if (castSource != null)
+								rawReads.set(castSource, source);
 						}
 					case IrOpcode.ArraySet if (IrValueArrayRows.typed(body, body.operand(row, 0), arrayType)
 						&& boxes.exists(body.operand(row, 2)) && uses[body.operand(row, 2)] == 1):

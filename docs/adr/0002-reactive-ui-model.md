@@ -316,7 +316,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `CustomEffectDefinition`, and the app's presentation/telemetry snapshots are structs with declared conformances.
    Nullable fields use inline presence flags, eligible temporaries stay scalar, and Wasm GC flattens supported fields.
    `LayoutStyle` remains a class because its measured struct form allocated more. See
-   [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for the alias audit and measurements. The interaction,
+   [UI value types](../../packages/ui/docs/VALUE_TYPES.md) for which UI types are values. The interaction,
    tab-matrix and selection-stress censuses allocate none of the five geometric value types after setup; genuine Dynamic
    and reflection escapes still box.
 1. **Signals and Observable models — implemented together.** `Signal<T>`, `Derived<T>` and `Effect` use push
@@ -365,7 +365,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    A paired Wasm GC Showcase rerun of the saved baseline and current artifacts measured 5,896 objects for each full,
    static and text-heavy run, and 12,835 for editing, over 120 measured frames after 120 warmup frames. Three
    additional paired editing runs also matched, including their per-function counts. The earlier 12,833-object editing
-   capture lies within the two-object run variation recorded in VALUE_TYPES.md; the paired comparison shows no
+   capture lies within the two-object run variation; the paired comparison shows no
    item-4 allocation increase in any Showcase scenario. A fresh build after the Observable write-guard cleanup measured
    5,896 full, 5,894 static, 5,896 text-heavy and 12,835 editing objects, again within or below the paired baseline.
 2. **Shared node store prototype.** Move one channel (paint) into flat records shared with native, keeping `RenderNode`
@@ -484,8 +484,10 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    hide/remount; `panel-flows` exercises telemetry physics steps and worker zones. Use identical seeded inputs and
    warmed state for the three implementations, and add isolated windows around the triggering input or simulation
    step through the submitted frame. The existing `submit` timer starts after those triggers, so preserve separate
-   input and frame timings rather than treating it as total action time. Calibrate each census window with the marker
-   and byte-sum checks described in `../reports/2026-10-allocation-census.md`; exclude only that marker. A panel-flow baseline failure
+   input and frame timings rather than treating it as total action time. Calibrate each census window: `hl.Gc.censusStart(1)` samples
+   every byte and gives the first allocation one extra weighted byte, so allocate one warmed marker object right after the
+   start, check its stack weight is its requested bytes plus one, and after removing it check that the stack bytes sum to
+   the exact per-type bytes; exclude only that marker. A panel-flow baseline failure
    must be reproduced on control before it is classified as the known failure, and must not stand in for live-update
    measurements.
 4. **Conditional compiler support.** Result builders and lazy parameters need separate designs and target tests only

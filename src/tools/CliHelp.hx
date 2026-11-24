@@ -18,8 +18,8 @@ private typedef CommandGroup = {
 /** The CLI's help: the global overview, grouped by task, and each command's own (`haxeon help build`, `haxeon build --help`). */
 class CliHelp {
 	static final BUILD_OPTIONS = [
-		"  --project PATH               The haxeon.json to build (default: the one in this directory)",
-		"  --target TARGET              host, android, wasm32 or OS-ARCH (default: the project's; see haxeon platforms)",
+		"  --project PATH               The manifest to build, or its directory (default: this directory's haxeon.toml or haxeon.json)",
+		"  --target TARGET              host, android, wasm32, wasm-gc or OS-ARCH (default: the project's; see haxeon platforms)",
 		"  --build-mode MODE            development (default) or release",
 		"  --define NAME[=VALUE]        Add a conditional compilation define (repeatable)",
 		"  --output PATH                Write the module to PATH",
@@ -30,18 +30,49 @@ class CliHelp {
 		"  --self-hosted                Compile with bootstrap/compiler.hl",
 	];
 
+	public static final FFI_IMPORT_USAGE =
+		"Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+	public static final FFI_AUDIT_USAGE =
+		"Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+	public static final HEAP_INSPECT_USAGE = "Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR";
+
+	static final WORKSPACE_COMMANDS = ["plan", "build", "test"];
+
+	static final SUBCOMMAND_HELP = [
+		"package check" => "Usage: haxeon package check [--project PATH]",
+		"heap inspect" => HEAP_INSPECT_USAGE,
+		"ffi import" => FFI_IMPORT_USAGE,
+		"ffi audit" => FFI_AUDIT_USAGE
+	];
+
 	static final GROUPS:Array<CommandGroup> = [
 		{
 			title: "Project",
 			commands: [
 				{
-					name: "init",
-					summary: "Create haxeon.json and src/Main.hx in this directory",
+					name: "create",
+					summary: "Create a project from a template, or add what one lacks",
 					details: [
-						"Usage: haxeon init [--entry Main] [--target host|wasm32|android]",
+						"Usage: haxeon create DIRECTORY [-t|--template app|console] [--platforms LIST] [--org PREFIX]",
 						"",
-						"  --entry NAME                 The entry module (default Main)",
-						"  --target TARGET              host (default), wasm32 or android"
+						"  DIRECTORY                    A new directory, or . to add the template's missing files here",
+						"  -t, --template NAME          app (default: a window, with an [app] section) or console (a console program)",
+						"  --platforms LIST             An app's platforms, comma-separated (default: every platform the template has a runner for)",
+						"  --org PREFIX                 The app identifier's prefix (default com.example)",
+						"",
+						"  Existing files are never overwritten."
+					]
+				},
+				{
+					name: "migrate",
+					summary: "Turn the project's haxeon.json into haxeon.toml",
+					details: [
+						"Usage: haxeon migrate [--dry-run] [--project PATH]",
+						"",
+						"Writes haxeon.toml with the same settings, checks that it reads back to them, and removes haxeon.json.",
+						"",
+						"  --dry-run                    Print the haxeon.toml instead of writing it",
+						"  --project PATH               The haxeon.json, or its directory (default: this directory)"
 					]
 				},
 				{
@@ -56,7 +87,7 @@ class CliHelp {
 				},
 				{
 					name: "doctor",
-					summary: "Check the local compiler, HashLink runtime and Android tools",
+					summary: "Check the installation, the C and C++ toolchain, and Android tools",
 					details: ["Usage: haxeon doctor"]
 				},
 				{
@@ -76,7 +107,7 @@ class CliHelp {
 			commands: [
 				{
 					name: "build",
-					summary: "Build the project in haxeon.json",
+					summary: "Build the project in haxeon.toml (or haxeon.json)",
 					details: [
 						"Usage: haxeon build [options]",
 						""
@@ -85,7 +116,9 @@ class CliHelp {
 						"  --explain                    With --plan, say why each artifact is there",
 						"  --timings                    Print where the build's time went, and the compiler's reports",
 						"  --compiler-only              Run only the Haxe compile",
-						"  --gradle-inputs FILE         Android: build what Gradle packages and describe it in FILE"
+						"  --patchable                  With --compiler-only, build a module the next builds publish patches",
+						"                               of (.hlp and .live.* beside it), for a host that applies them itself",
+						"  --gradle-inputs FILE         Android: prepare the Gradle runner and describe its inputs in FILE"
 					])
 				},
 				{
@@ -106,13 +139,18 @@ class CliHelp {
 					details: [
 						"Usage: haxeon run [options] [-- PROGRAM ARGUMENTS]",
 						"       haxeon run SCRIPT.hx [ARGUMENTS]",
+						"",
+						"  Desktop UI app arguments after --: --frames=N (stop after N rendered frames, even while idle),",
+						"  --capture=DIR (write diagnostics and, on X11, an image of the app window).",
 						""
 					].concat(BUILD_OPTIONS).concat([
 						"  --quiet                      Print the build only if it fails",
 						"  --device SERIAL              The Android device to run on",
-						"  --watch                      Rebuild and relaunch on source edits",
-						"  --watch --live               Patch the running host module instead of relaunching",
-						"  --strict-live                With --live, report an edit that cannot patch instead of reloading",
+						"  --watch                      On source edits, patch the running app when its entry class has the",
+						"                               live entry points (start, tick, saveState, restoreState, close),",
+						"                               else rebuild and relaunch it",
+						"  --restart                    With --watch, rebuild and relaunch even an app that can be patched",
+						"  --strict-live                With --watch, report an edit that cannot patch instead of reloading",
 						"  --profile[=SOURCES]          Record a profile: instrument (default), sampling, alloc",
 						"  --profile-output PATH        Where the capture goes (implies --profile)",
 						"  --profile-start=launch|manual, --profile-duration=SEC, --profile-max-size=MIB,",
@@ -140,7 +178,7 @@ class CliHelp {
 					name: "workspace",
 					summary: "Build or test many projects as one build graph",
 					details: [
-						"Usage: haxeon workspace plan|build|test [options]",
+						"Usage: haxeon workspace " + WORKSPACE_COMMANDS.join("|") + " [options]",
 						"",
 						"  --workspace PATH             The workspace file (default materia.workspace.json)",
 						"  --skip-tag TAG, --only NAME  Choose the projects",
@@ -156,11 +194,11 @@ class CliHelp {
 			commands: [
 				{
 					name: "test",
-					summary: "Build the project's tests (tests/haxeon.json) and run them",
+					summary: "Build the project's tests (the project in tests/) and run them",
 					details: [
 						"Usage: haxeon test [options] [-- TEST ARGUMENTS]",
 						"",
-						"Builds and runs tests/haxeon.json beside the project (or the project itself in a directory named tests),",
+						"Builds and runs the project in tests/ beside the project (or the project itself in a directory named tests),",
 						"and exits with 0 when the tests pass and 1 when they fail.",
 						""
 					].concat(BUILD_OPTIONS.filter(line -> line.indexOf("--target") < 0)).concat([
@@ -176,7 +214,7 @@ class CliHelp {
 						"",
 						"  --check                      Report files that would change instead of rewriting them",
 						"  --stdin                      Format standard input to standard output",
-						"The style comes from the \"format\" section of haxeon.json (default: tabs, 120 columns)."
+						"The style comes from the [format] section of haxeon.toml or haxeon.json (default: tabs, 120 columns)."
 					]
 				},
 				{
@@ -188,7 +226,8 @@ class CliHelp {
 						"  --fix                        Remove unused imports and sort them",
 						"  --only RULE                  unused-imports, import-order; opt-in: unbound-local, module-namespace,",
 						"                               throw-non-exception",
-						"  --manifest FILE              A haxeon.json whose source roots resolve imports"
+						"  --manifest FILE              A haxeon.toml or haxeon.json whose source roots resolve imports",
+						"  --fix --pin-wire TYPE FILE   Add permanent wire IDs to one declaration"
 					]
 				}
 			]
@@ -198,8 +237,12 @@ class CliHelp {
 			commands: [
 				{
 					name: "add",
-					summary: "Add a Git package dependency",
-					details: ["Usage: haxeon add --git URL --rev REF [NAME] [--project PATH]"]
+					summary: "Add a package dependency",
+					details: [
+						"Usage: haxeon add NAME [--version RANGE] [--registry NAME] [--project PATH]",
+						"       haxeon add --git URL --rev REF [NAME] [--project PATH]",
+						"  NAME alone adds the latest release from the haxeon registry, written as NAME = \"^VERSION\""
+					]
 				},
 				{
 					name: "install",
@@ -229,7 +272,7 @@ class CliHelp {
 				{
 					name: "package",
 					summary: "Validate the resolved package graph",
-					details: ["Usage: haxeon package check [--project PATH]"]
+					details: [SUBCOMMAND_HELP.get("package check")]
 				}
 			]
 		},
@@ -246,13 +289,13 @@ class CliHelp {
 					summary: "Import C or C++ headers as HXI, or audit their ABI across targets",
 					details: [
 						"Usage: haxeon ffi import ...   (docs/reference/C_HEADER_FFI.md)",
-						"       haxeon ffi audit ... [--capture DIR] [--report PATH]"
+						"       haxeon ffi audit ..."
 					]
 				},
 				{
 					name: "heap",
 					summary: "Inspect a HashLink heap snapshot",
-					details: ["Usage: haxeon heap inspect BYTECODE DUMP"]
+					details: [HEAP_INSPECT_USAGE]
 				},
 				{
 					name: "identity-path",
@@ -302,6 +345,14 @@ class CliHelp {
 
 	/** A command's own help, or null when there is no such command. */
 	public static function command(name:String):Null<String> {
+		var words = name.split(" ");
+		if (words[0] == "dev")
+			return words.length <= 2 ? tools.dev.DevCommand.help(words[1]) : null;
+		if (words.length == 2) {
+			if (words[0] == "workspace" && WORKSPACE_COMMANDS.indexOf(words[1]) >= 0)
+				return StringTools.replace(command("workspace"), WORKSPACE_COMMANDS.join("|"), words[1]);
+			return SUBCOMMAND_HELP.get(name);
+		}
 		for (group in GROUPS)
 			for (command in group.commands)
 				if (command.name == name)

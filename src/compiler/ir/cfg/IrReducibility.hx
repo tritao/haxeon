@@ -11,6 +11,7 @@ import compiler.ir.model.IrFunction;
  * In reverse postorder, an edge whose target is not later than its source is a retreating edge, one that closes a cycle; the
  * graph is reducible exactly when every such edge's target dominates its source, which makes the target the cycle's header.
  */
+@:nullSafety(Strict)
 class IrReducibility {
 	public static function verify(fn:IrFunction, graph:IrGraph):Void {
 		var order = graph.order, rank:Array<Int> = [];

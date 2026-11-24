@@ -1,0 +1,11 @@
+version = 1
+entry = "app.Main"
+sourceRoots = ["src"]
+target = "host"
+outputDir = "build"
+
+[package]
+name = "app"
+
+[dependencies]
+foo = { path = "../foo" }

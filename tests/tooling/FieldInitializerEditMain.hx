@@ -40,7 +40,7 @@ class FieldInitializerEditMain {
 			var output = root + "/" + name + ".hl";
 			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output]).concat(paths)), _ -> {},
 				session);
-			return Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [output]);
+			return Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [output]);
 		}
 		for (shape => router in shapes) {
 			var session = new CompilerSession();

@@ -118,6 +118,7 @@ compiler_args=(
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net-wasm.hxi"
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit-net.hxmap"
 	--ffi-interface="$module_dir/bindings/nativekit-ui-wasm.hxi"
+	--ffi-interface="$module_dir/bindings/nativekit-ui-browser-wasm.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui.hxmap"
 	--ffi-interface="$module_dir/bindings/nativekit-ui-showcase-wasm.hxi"
 	--ffi-projection="$module_dir/bindings/nativekit-ui-showcase.hxmap"
@@ -162,7 +163,6 @@ compiler_args=(
 	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ServiceEventDecoder.hx"
 	"$haxeon_dir/packages/platform/src/haxeon/platform/internal/event/ResourceEventDecoder.hx"
 	"$haxeon_dir/packages/platform/src/haxeon/platform/async/Requests.hx"
-	"$haxeon_dir/packages/platform/src/haxeon/platform/async/Outcome.hx"
 	"$haxeon_dir/packages/platform/src/haxeon/platform/Window.hx"
 	"$haxeon_dir/packages/platform/src/haxeon/platform/WebView.hx"
 )

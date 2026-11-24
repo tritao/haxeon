@@ -11,7 +11,7 @@ source "$root_dir/scripts/lib/haxeon-compiler.sh"
 
 # The committed C runtime every wasm32 module links must match native/wasm (docs/design/WASM_LINEAR_RUNTIME.md); the check
 # says it is skipped without a clang that targets wasm32.
-cmake --build "$(dirname "$("$root_dir/scripts/hashlink-path.sh")")" --target haxeon-wasm-runtime-check
+cmake --build "$("$root_dir/scripts/hashlink-path.sh" --build-dir)" --target haxeon-wasm-runtime-check
 "$haxe_bin" --cwd "$root_dir" common.hxml -cp tests -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/tests/wasm/test-wasm-shared-memory.sh"
 bash "$root_dir/tests/wasm/test-wasm32-gc-reuse.sh"

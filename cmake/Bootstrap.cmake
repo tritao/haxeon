@@ -58,29 +58,9 @@ endfunction()
 run_checked("Submodule initialization"
   "${GIT_EXECUTABLE}" submodule update --init vendor/hashlink vendor/hashlink-debugger vendor/utest vendor/libffi)
 
-if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
-  find_program(CTEST_EXECUTABLE ctest REQUIRED)
-  foreach(libffi_config IN ITEMS Release Debug)
-    string(TOLOWER "${libffi_config}" libffi_config_lower)
-    set(libffi_build_dir "${HAXEON_ROOT}/out/libffi/msvc-x64-static-${libffi_config_lower}")
-    set(libffi_install_dir "${HAXEON_ROOT}/.tools/libffi-static/msvc-${libffi_config_lower}")
-    run_checked("Configure pinned libffi ${libffi_config}"
-      "${CMAKE_COMMAND}" -S "${HAXEON_ROOT}/cmake/libffi" -B "${libffi_build_dir}"
-      -G Ninja
-      "-DCMAKE_BUILD_TYPE=${libffi_config}"
-      "-DCMAKE_INSTALL_PREFIX=${libffi_install_dir}")
-    run_checked("Build pinned libffi ${libffi_config}"
-      "${CMAKE_COMMAND}" --build "${libffi_build_dir}" --parallel)
-    run_checked("Test pinned libffi ${libffi_config}"
-      "${CTEST_EXECUTABLE}" --test-dir "${libffi_build_dir}" --output-on-failure -C "${libffi_config}")
-    run_checked("Install pinned libffi ${libffi_config}"
-      "${CMAKE_COMMAND}" --install "${libffi_build_dir}")
-  endforeach()
-else()
-  find_program(BASH_EXECUTABLE bash REQUIRED)
-  run_checked("Build pinned libffi"
-    "${BASH_EXECUTABLE}" "${HAXEON_ROOT}/scripts/build-libffi.sh")
-endif()
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+include(libffi)
+build_pinned_libffi("${HAXEON_ROOT}" "${TOOLS_DIR}/libffi-static")
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
   set(haxe_archive "${TOOLS_DIR}/haxe-${HAXE_VERSION}-win64.zip")
@@ -200,20 +180,9 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" AND "$ENV{PROCESSOR_ARCHITECTURE}" 
   endif()
 endif()
 
-# The checkout-built VM lives where cmake/hashlink-output-paths.txt says, the same table
-# scripts/hashlink-path.sh and build.HashLinkPath read. The version check below fails if
-# CMakeLists.txt ever builds it somewhere else.
-file(STRINGS "${HAXEON_ROOT}/cmake/hashlink-output-paths.txt" hashlink_output_paths)
-set(hashlink_output_dir "")
-foreach(entry IN LISTS hashlink_output_paths)
-  if(entry MATCHES "^${native_preset}=(.+)$")
-    string(STRIP "${CMAKE_MATCH_1}" hashlink_output_dir)
-  endif()
-endforeach()
-if(hashlink_output_dir STREQUAL "")
-  message(FATAL_ERROR "Missing HashLink output path for ${native_preset} in cmake/hashlink-output-paths.txt")
-endif()
-set(hashlink_executable "${HAXEON_ROOT}/${hashlink_output_dir}/hl")
+# The checkout-built VM is in the bin of the checkout's SDK, where scripts/hashlink-path.sh and build.HashLinkPath find it. The
+# version check below fails if CMakeLists.txt ever builds it somewhere else.
+set(hashlink_executable "${HAXEON_ROOT}/out/sdk/bin/hl")
 if(CMAKE_HOST_WIN32)
   string(APPEND hashlink_executable ".exe")
 endif()

@@ -1,6 +1,6 @@
 # Resolve a body once, type it, then decide storage
 
-Status (revised 2026-11-19: closure conversion becomes one stage after typing): step 1's check mode is in (`--check-resolution`); step 2 in progress (assigned declarations, map privacy, loops and lambdas read the resolution). Order changed: step 2 before the typer reads the resolver, since step 2 is where the time is and the check mode already holds the two resolvers equal. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
+Status (revised 2026-11-19: closure conversion becomes one stage after typing): step 1's check mode is in (`--check-resolution`); step 2 in progress (assigned declarations, map privacy, loops and lambdas read the resolution). Order changed: step 2 before the typer reads the resolver, since step 2 is where the time is and the check mode already holds the two resolvers equal. Replaces an earlier plan for a cheaper second resolver. Stage 2 of `INTEGER_IDENTITIES.md`
 (function-local names as numbers) and, for storage, ADR 0003's layering (representation decisions after typing).
 
 ## Problem

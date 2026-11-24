@@ -18,6 +18,12 @@ private class FactTables {
 	/** The keys whose refinement an invalidation removed from these tables, made with the first; for explaining a lost check. */
 	public var cleared:Null<Map<String, Bool>> = null;
 
+	/**
+	 * The refinements a call or a store to a same-named field removed from these tables, with their types, made with the first:
+	 * Loose null safety still trusts them, as Haxe's does (`resolveAcrossCalls`).
+	 */
+	public var callCleared:Null<Map<String, CompilerType>> = null;
+
 	public function new() {}
 }
 
@@ -126,6 +132,7 @@ class FlowFacts {
 		if (StringTools.startsWith(bindingId, EXPRESSION_PREFIX))
 			expressionRefinements++;
 		facts.invalidated.remove(bindingId);
+		forgetCallCleared(facts, bindingId);
 		if (stable) {
 			facts.refinedTypes.remove(bindingId);
 			facts.stableRefinedTypes.set(bindingId, type);
@@ -141,6 +148,7 @@ class FlowFacts {
 		var facts = own();
 		forgetRefined(facts, bindingId);
 		forgetStable(facts, bindingId);
+		forgetCallCleared(facts, bindingId);
 		facts.invalidated.set(bindingId, true);
 	}
 
@@ -294,6 +302,11 @@ class FlowFacts {
 			for (bindingId in facts.stableRefinedTypes.keys())
 				if (isUnder(bindingId, prefix))
 					forgetStable(facts, bindingId);
+		var callCleared = facts.callCleared;
+		if (callCleared != null)
+			for (bindingId in [for (key in callCleared.keys()) key])
+				if (isUnder(bindingId, prefix))
+					callCleared.remove(bindingId);
 		facts.invalidatedPrefixes.push(prefix);
 	}
 
@@ -304,7 +317,7 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (StringTools.startsWith(bindingId, prefix))
-					forgetRefined(facts, bindingId);
+					forgetRefinedByCall(facts, bindingId);
 		// Every unknown call forgets the same namespace again; once recorded, it is recorded.
 		if (facts.invalidatedNamespaces.indexOf(prefix) < 0)
 			facts.invalidatedNamespaces.push(prefix);
@@ -323,6 +336,11 @@ class FlowFacts {
 			for (bindingId in facts.stableRefinedTypes.keys())
 				if (StringTools.startsWith(bindingId, prefix))
 					forgetStable(facts, bindingId);
+		var callCleared = facts.callCleared;
+		if (callCleared != null)
+			for (bindingId in [for (key in callCleared.keys()) key])
+				if (StringTools.startsWith(bindingId, prefix))
+					callCleared.remove(bindingId);
 		facts.erasedNamespaces.push(prefix);
 	}
 
@@ -339,6 +357,11 @@ class FlowFacts {
 			for (bindingId in facts.stableRefinedTypes.keys())
 				if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
 					forgetStable(facts, bindingId);
+		var callCleared = facts.callCleared;
+		if (callCleared != null)
+			for (bindingId in [for (key in callCleared.keys()) key])
+				if (bindingId.indexOf(fragment) >= 0)
+					callCleared.remove(bindingId);
 		facts.erasedMentions.push(fragment);
 	}
 
@@ -383,7 +406,7 @@ class FlowFacts {
 		if (hasTypes(facts.refinedTypes))
 			for (bindingId in facts.refinedTypes.keys())
 				if (mentionsField(bindingId, field))
-					forgetRefined(facts, bindingId);
+					forgetRefinedByCall(facts, bindingId);
 		facts.invalidatedFields.push(field);
 	}
 
@@ -407,6 +430,53 @@ class FlowFacts {
 			}
 			from = at + 1;
 		}
+	}
+
+	/** Removes a refinement a call may have falsified, keeping its type for `resolveAcrossCalls`. */
+	static function forgetRefinedByCall(facts:FactTables, bindingId:String):Void {
+		var type = facts.refinedTypes.get(bindingId);
+		if (type == null)
+			return;
+		var callCleared = facts.callCleared;
+		if (callCleared == null)
+			callCleared = facts.callCleared = [];
+		callCleared.set(bindingId, type);
+		forgetRefined(facts, bindingId);
+	}
+
+	static function forgetCallCleared(facts:FactTables, bindingId:String):Void {
+		var callCleared = facts.callCleared;
+		if (callCleared != null)
+			callCleared.remove(bindingId);
+	}
+
+	/**
+	 * What `bindingId` resolves to when calls and stores to other objects' fields of its name are taken to change nothing, as Haxe's
+	 * Loose null safety takes them: the refinement a call cleared still holds, until an assignment to the path itself.
+	 */
+	public function resolveAcrossCalls(bindingId:String):Null<CompilerType> {
+		var facts = tables;
+		if (facts != null) {
+			if (facts.refinedTypes.exists(bindingId))
+				return facts.refinedTypes.get(bindingId);
+			if (facts.stableRefinedTypes.exists(bindingId))
+				return facts.stableRefinedTypes.get(bindingId);
+			var callCleared = facts.callCleared;
+			if (callCleared != null && callCleared.exists(bindingId))
+				return callCleared.get(bindingId);
+			for (prefix in facts.invalidatedPrefixes)
+				if (isUnder(bindingId, prefix))
+					return null;
+			if (facts.invalidated.exists(bindingId))
+				return null;
+			for (prefix in facts.erasedNamespaces)
+				if (StringTools.startsWith(bindingId, prefix))
+					return null;
+			if (mentionsErased(facts, bindingId))
+				return null;
+		}
+		var outer = parent;
+		return outer == null ? null : outer.resolveAcrossCalls(bindingId);
 	}
 
 	/** Removes a refinement an assignment or call may have falsified, remembering that it was there. */

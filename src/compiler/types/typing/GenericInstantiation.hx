@@ -50,6 +50,7 @@ class GenericInstantiation {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+		settleNullArguments(substitutions);
 		settleTypeArguments(baseName, fn, arguments, substitutions, span);
 		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
 		for (parameter in [for (parameter in substitutions.keys()) parameter])
@@ -112,9 +113,9 @@ class GenericInstantiation {
 				fn.arguments[index].span))) {
 				// The value's element meets the parameter's, as a coerced argument's type does: `Lambda.has([], 3)` makes `[]` an
 				// Array<Int>.
-				var iterates = IterationProtocol.name(expected) == "Iterable",
-					actualElement = IterationProtocol.element(session.declarations, argument.type, iterates),
-					expectedElement = IterationProtocol.element(session.declarations, expected, iterates);
+				var protocol = IterationProtocol.name(expected),
+					actualElement = IterationProtocol.protocolElement(session.declarations, argument.type, protocol),
+					expectedElement = IterationProtocol.protocolElement(session.declarations, expected, protocol);
 				if (actualElement != null && expectedElement != null)
 					Monomorphs.unify(actualElement, expectedElement);
 				if (!session.relations.isAssignable(argument.type, expected))
@@ -291,7 +292,7 @@ class GenericInstantiation {
 	 * so a body nothing calls is typed for its errors and never merged.
 	 */
 	public function typeMemberBody(baseName:String, fn:AstFunction, owner:String, instanceMember:Bool):Void {
-		var underlying = instanceMember ? requiredMapValue(session.declarations.abstracts, owner).underlying : null,
+		var underlying = instanceMember ? session.declarations.abstracts.required(owner).underlying : null,
 			representation = session.representation.genericFunction(fn, [], underlying),
 			specialization = session.genericSpecializations.request(baseName, [], representation.policies),
 			constants:Map<String, String> = [];
@@ -410,10 +411,27 @@ class GenericInstantiation {
 		}
 	}
 
+	public function settleNullArguments(substitutions:Map<String, CompilerType>):Bool {
+		var settled = false;
+		for (name => type in substitutions)
+			if (type.match(TNull)) {
+				substitutions.set(name, TDynamic);
+				settled = true;
+			}
+		return settled;
+	}
+
 	function bindTypeParameter(name:String, actual:CompilerType, substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
 		if (substitutions.exists(name)) {
 			var previous = requiredMapValue(substitutions, name);
+			// Like monomorph unification, null leaves other evidence intact. A null-only binding stays provisional.
+			if (Monomorphs.follow(actual).match(TNull))
+				return;
+			if (previous.match(TNull)) {
+				substitutions.set(name, actual);
+				return;
+			}
 			// A type variable meets the type inferred before, as Haxe unifies them: `Lambda.concat([1], [])` fills the element of `[]`
 			// with Int, and `Lambda.concat([], [2])` the first one's.
 			if (Monomorphs.containsUnbound(previous) || Monomorphs.containsUnbound(actual)) {
@@ -479,6 +497,18 @@ class GenericInstantiation {
 					if (element != null)
 						inferTypeParameters(patternArguments[0], element, parameters, substitutions, span);
 				}
+				// A key-value iterator's entries fix its key and value types: `{key:K, value:V}`.
+				if ((name == "KeyValueIterator" || name == "KeyValueIterable") && patternArguments.length == 2) {
+					var entry = IterationProtocol.protocolElement(session.declarations, actual,
+						name == "KeyValueIterator" ? "Iterator" : name);
+					if (entry != null)
+						for (index => field in ["key", "value"]) {
+							var found = IterationProtocol.method(session.declarations, entry, field);
+							if (found != null)
+								inferTypeParameters(patternArguments[index], found.type, parameters, substitutions,
+									span);
+						}
+				}
 				var projected = session.declarations.inheritance.project(actual, name);
 				if (projected != null)
 					actual = projected;
@@ -525,7 +555,7 @@ class GenericInstantiation {
 		}
 
 	function abstractReceiverType(name:String, substitutions:Map<String, CompilerType>):CompilerType {
-		var decl = requiredMapValue(session.declarations.abstracts, name),
+		var decl = session.declarations.abstracts.required(name),
 			arguments = [
 				for (parameter in decl.typeParameters)
 					requiredMapValue(substitutions, parameter)

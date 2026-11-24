@@ -1,6 +1,5 @@
 package compiler.types.typing;
 
-import compiler.core.Source.SourceFile;
 import compiler.types.Type.AnonymousField;
 
 /** How many of each lint fact a `UnitRecords` holds: see `UnitRecords.lintFactCounts`. */
@@ -27,17 +26,10 @@ class UnitAnonymousUses {
 	public function new() {}
 }
 
-/** The source snapshots one unit copied default arguments from, by path; a class for the same reason as `UnitAnswers`. */
-class UnitSources {
-	public final files:Map<String, SourceFile> = [];
-
-	public function new() {}
-}
-
 /**
- * What each typed unit relied on, for the next incremental build. A unit is a function body or a field initializer
- * (`Class.__init.x`); the query records are kept by the body that asked, a lambda's own name included. An unchanged body
- * is typed again when one of its answers changes (the drift check in `SemanticAssembly`).
+ * What each typed unit produced besides its code, for the program and the next incremental build: the anonymous types it
+ * registered, the key path literals it uses, and the lint facts. A unit is a function body or a field initializer
+ * (`Class.__init.x`). What a unit read is recorded apart (`DeclarationReads`).
  */
 class UnitRecords {
 	/**
@@ -47,28 +39,17 @@ class UnitRecords {
 	 */
 	final anonymousUnits:Map<String, UnitAnonymousUses> = [];
 
+	/**
+	 * The anonymous types of the units this build did not type again, as the program an earlier build listed them
+	 * (`keepAnonymousUnit`): the program lists them as they are.
+	 */
+	final keptAnonymousUnits:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> = [];
+
 	/** The units whose bodies this session typed. */
 	public final typedUnits:Map<String, Bool> = [];
 
-	/** Purity answers each body asked about, keyed by that body's name. */
-	final purityQueries:Map<String, UnitAnswers> = [];
-
-	final noReturnQueries:Map<String, UnitAnswers> = [];
-
 	/** The key path literals (`$keypath.literal:...`) each body uses. */
 	final keyPathUses:Map<String, UnitAnswers> = [];
-
-	/** Constants substituted into each typed body, including its omitted call arguments. */
-	final inlineConstantDependencies:Map<String, UnitAnswers> = [];
-
-	/**
-	 * The unannotated declarations whose inferred type each unit read (through `DeclarationTypes`), keyed by that unit's name. They
-	 * become the unit's `DeclarationType` edges: an edit that may change one of those types retypes the unit.
-	 */
-	final declarationTypeReads:Map<String, UnitAnswers> = [];
-
-	/** Source snapshots copied into callers when omitted arguments use declaration syntax. */
-	final defaultArgumentSources:Map<String, UnitSources> = [];
 
 	/**
 	 * The locals whose type nothing fixed, in the order their bodies settled. A body whose typing fails takes back what it added
@@ -82,38 +63,36 @@ class UnitRecords {
 	public function new() {}
 
 	/** Each record by unit, its answers as a map: the shapes the build publishes. */
-	public function purityQueriesByUnit():Map<String, Map<String, Bool>>
-		return answersByUnit(purityQueries);
-
-	public function noReturnQueriesByUnit():Map<String, Map<String, Bool>>
-		return answersByUnit(noReturnQueries);
-
 	public function keyPathUsesByUnit():Map<String, Map<String, Bool>>
 		return answersByUnit(keyPathUses);
 
-	public function inlineConstantDependenciesByUnit():Map<String, Map<String, Bool>>
-		return answersByUnit(inlineConstantDependencies);
-
-	public function declarationTypeReadsByUnit():Map<String, Map<String, Bool>>
-		return answersByUnit(declarationTypeReads);
-
-	public function defaultArgumentSourcesByUnit():Map<String, Map<String, SourceFile>>
-		return [for (unit => sources in defaultArgumentSources) unit => sources.files];
-
-	/** The anonymous types each unit registered, by name. */
-	public function anonymousUnitsByUnit():Map<String, Map<String, Array<AnonymousField>>>
-		return [for (unit => uses in anonymousUnits) unit => uses.types];
+	/** The anonymous types each unit registered, by unit, each unit's ordered by name. */
+	public function orderedAnonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> {
+		var result = keptAnonymousUnits.copy();
+		for (unit => uses in anonymousUnits) {
+			// A kept unit may record a type again (its signature's, `TypedProgramAssembler.registerProgramTypes`).
+			var types = uses.types, kept = result.get(unit);
+			if (kept != null) {
+				types = types.copy();
+				for (entry in kept)
+					if (!types.exists(entry.name))
+						types.set(entry.name, entry.fields);
+			}
+			var names = [for (name in types.keys()) name];
+			names.sort(Reflect.compare);
+			result.set(unit, [for (name in names) {
+				name:name, fields:types.get(name)
+			}]);
+		}
+		return result;
+	}
 
 	public function hasAnonymousUnit(unit:String):Bool
-		return anonymousUnits.exists(unit);
+		return anonymousUnits.exists(unit) || keptAnonymousUnits.exists(unit);
 
-	/** Keeps the anonymous types an earlier build recorded for `unit`, which this one does not type again. */
-	public function keepAnonymousUnit(unit:String, types:Map<String, Array<AnonymousField>>):Void {
-		var uses = new UnitAnonymousUses();
-		for (name => fields in types)
-			uses.types.set(name, fields);
-		anonymousUnits.set(unit, uses);
-	}
+	/** Keeps the anonymous types an earlier build listed for `unit`, which this one does not type again. */
+	public function keepAnonymousUnit(unit:String, types:Array<compiler.types.TypedAst.TypedAnonymous>):Void
+		keptAnonymousUnits.set(unit, types);
 
 	static function answersByUnit(records:Map<String, UnitAnswers>):Map<String, Map<String, Bool>>
 		return [for (unit => record in records) unit => record.answers];
@@ -142,45 +121,6 @@ class UnitRecords {
 	public function recordKeyPathUse(user:String, literal:String):Void
 		mark(keyPathUses, user, literal);
 
-	/** The reads of the reader recorded last: a body reads many declaration types in a row. */
-	var lastReader:Null<String>;
-
-	var lastReads:Null<UnitAnswers>;
-
-	public function recordDeclarationTypeRead(reader:String, declaration:String):Void {
-		var reads = lastReader == reader ? lastReads : null;
-		if (reads == null) {
-			reads = declarationTypeReads.get(reader);
-			if (reads == null) {
-				reads = new UnitAnswers();
-				declarationTypeReads.set(reader, reads);
-			}
-			lastReader = reader;
-			lastReads = reads;
-		}
-		reads.answers.set(declaration, true);
-	}
-
-	public function recordInlineConstantDependency(caller:String, constant:String):Void
-		mark(inlineConstantDependencies, caller, constant);
-
-	/** Records that `caller` substituted a default argument, and the declaration source it was copied from, if any. */
-	public function recordDefaultArgumentSource(caller:String, file:Null<SourceFile>):Void {
-		var sources = defaultArgumentSources.get(caller);
-		if (sources == null) {
-			sources = new UnitSources();
-			defaultArgumentSources.set(caller, sources);
-		}
-		if (file != null)
-			sources.files.set(file.path, file);
-	}
-
-	public function recordPurity(caller:String, name:String, answer:Bool):Void
-		answerQuery(purityQueries, caller, name, answer);
-
-	public function recordNoReturn(caller:String, name:String, answer:Bool):Void
-		answerQuery(noReturnQueries, caller, name, answer);
-
 	/** Adds these records to `target`. */
 	public function mergeInto(target:UnitRecords):Void {
 		for (unit => uses in anonymousUnits)
@@ -192,20 +132,7 @@ class UnitRecords {
 			target.unboundLocals.push(local);
 		for (thrown in nonExceptionThrows)
 			target.nonExceptionThrows.push(thrown);
-		mergeQueries(purityQueries, target.purityQueries);
-		mergeQueries(noReturnQueries, target.noReturnQueries);
 		mergeQueries(keyPathUses, target.keyPathUses);
-		mergeQueries(inlineConstantDependencies, target.inlineConstantDependencies);
-		mergeQueries(declarationTypeReads, target.declarationTypeReads);
-		for (caller => sources in defaultArgumentSources) {
-			var merged = target.defaultArgumentSources.get(caller);
-			if (merged == null) {
-				merged = new UnitSources();
-				target.defaultArgumentSources.set(caller, merged);
-			}
-			for (path => file in sources.files)
-				merged.files.set(path, file);
-		}
 	}
 
 	static function mergeQueries(records:Map<String, UnitAnswers>, target:Map<String, UnitAnswers>):Void

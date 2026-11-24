@@ -21,6 +21,7 @@ import compiler.ir.verify.IrVerifier;
  * Select a boxed struct's declared equality at a Dynamic boundary. Per function (`IrFunctionPass`): a function's summary says
  * whether it calls `__dynamic_equal`, and the rewrite of one that does reads whether any struct registers (`REGISTERED`).
  */
+@:nullSafety(Strict)
 class IrValueDynamicDispatch implements IrFunctionPass {
 	static inline final EQUAL = "$value-dynamic-equal";
 	static inline final EQUALITY_PREFIX = "$value$equality:";
@@ -35,7 +36,8 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 	final unreached:Null<Map<String, Bool>>;
 	final createdClasses:Null<Map<String, Bool>>;
 	var requests:Map<String, IrType> = [];
-	var suffixes:Array<String> = [];
+	/** The requests in the order of their suffixes. */
+	var requested:Array<{suffix:String, type:IrType}> = [];
 	var needsEqual = false;
 	var names:Null<IrFunctionIndex> = null;
 	var objectsByName:Map<String, IrObject> = [];
@@ -109,12 +111,14 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 		for (object in objects) if (object.isValue && !registeredValues.exists(object.name)
 			&& (createdClasses == null || createdClasses.exists(object.name)))
 			register("$reflected:" + object.name, Obj(object.name));
-		suffixes = [for (suffix in requests.keys()) suffix];
-		suffixes.sort(Reflect.compare);
+		requested = [for (suffix => type in requests) {
+			suffix:suffix, type:type
+		}];
+		requested.sort((a, b) -> Reflect.compare(a.suffix, b.suffix));
 	}
 
 	public function fact(kind:Int, key:String):Int
-		return suffixes.length > 0 ? 1 : 0;
+		return requested.length > 0 ? 1 : 0;
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != CALLS_EQUAL || reader.read(REGISTERED, "") == 0)
@@ -129,12 +133,12 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 			default: null;
 		};
 
-	public function request(kind:Int, type:IrType):Void {}
+	public function request(kind:Int, type:IrType, name:Null<String>):Void {}
 
 	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		var index = names;
-		if (needsEqual && suffixes.length > 0 && index != null)
-			functions.push(dispatcher(suffixes, requests, index, declaredEquatable));
+		if (needsEqual && requested.length > 0 && index != null)
+			functions.push(dispatcher(requested, index, declaredEquatable));
 		return functions;
 	}
 
@@ -152,25 +156,26 @@ class IrValueDynamicDispatch implements IrFunctionPass {
 		return false;
 	}
 
-	static function dispatcher(suffixes:Array<String>, requests:Map<String, IrType>, names:IrFunctionIndex,
+	static function dispatcher(requested:Array<{suffix:String, type:IrType}>, names:IrFunctionIndex,
 			declaredEquatable:IrType->Bool):IrFunction {
 		var builder = new IrBuilder(), left = builder.argument("left", Dyn), right = builder.argument("right", Dyn);
-		var byId:Map<Int, Array<String>> = [];
-		for (suffix in suffixes) {
-			var id = IrTypeIdentity.id(requests.get(suffix)), group = byId.get(id);
+		var byId:Map<Int, Array<{suffix:String, type:IrType}>> = [];
+		for (request in requested) {
+			var id = IrTypeIdentity.id(request.type), group = byId.get(id);
 			if (group == null) byId.set(id, group = []);
-			group.push(suffix);
+			group.push(request);
 		}
 		var ids = [for (id in byId.keys()) id];
 		var actual = builder.call("__dynamic_object_type_id", [left], I32), fallback = builder.createBlock();
 		IrTypeHashDispatch.emit(builder, actual, ids, function(id) {
-			for (suffix in byId.get(id)) {
-				var type = requests.get(suffix),
+			// Every id is one of byId's.
+			for (request in byId.get(id) ?? []) {
+				var type = request.type,
 					matched = builder.createBlock(),
 					next = builder.createBlock(),
 					same = builder.createBlock(),
 					different = builder.createBlock(),
-					equality = EQUALITY_PREFIX + suffix;
+					equality = EQUALITY_PREFIX + request.suffix;
 				builder.branch(builder.call("__std_is_exact_type", [left, builder.typeValue(type)], Bool), matched,
 					next);
 				builder.select(matched);

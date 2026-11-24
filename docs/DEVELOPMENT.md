@@ -70,31 +70,56 @@ and taken back six times, and an optional argument added to `InternalError`'s co
 gates allocated bytes and the functions retyped, artifacts invalidated and functions regenerated (the `HAXEON_EXPLAIN_INVALIDATION`
 counts); wall is printed. A heap census at the end of every build gives the session's live data after the last body edit and its
 growth over the last two, which stays near zero unless the session keeps something from every build. A second session of the
-server, without those reports, gates edit latency: main-thread `instructions:u` of the body edit and of the signature edit, from
-`perf stat --per-thread` attached to the server around each build (skipped where perf is not available). This part adds about
-three minutes.
+server, without those reports, gates what an edit costs: main-thread `instructions:u` of a no-op rebuild (the floor every build
+pays), of the body edit and of the signature edit, from `perf stat --per-thread` attached to the server around each build, each
+build starting once the server has settled from the one before (skipped where perf is not available), and the collections inside
+a body edit and their milliseconds (`body_edit_collections`, `body_edit_collection_ms`, means of three, from the runtime's
+collection count and mark time), which the instructions leave out; per build it prints wall and the server's peak resident set.
+A third session prints edit wall on the server built ahead of time, with the collector marking on its threads as a user's does,
+never compared. The guard builds `haxeon-aot` for it and for the small project's aot mode when it is not current
+(`haxeon dev aot`), and removes it again at the end, so a checkout that had none current is left without one. This part adds
+about three minutes, and a stale `haxeon-aot` its build.
+
+`--quick` runs only that second session, without its signature edit: the cold build, the no-ops and the three body edits,
+compared on the same metrics and tolerances (the no-op and body-edit instructions, the body edit's collections). It takes a
+few minutes, and is the check for a change to the IR, the backends or the typer between full runs.
 
 The small-project part runs the CLI as a user does: a cold `haxeon build` and `haxeon check` of `tests/perf/small-project`, from
 no compile server running to the server's exit, so the CLI's start, the server's start and the compile all count. It gates the
 instructions of every process the command starts and the bytes the server allocated for the request; the CLI's wall is printed.
-`--only=self-compile`, `--only=incremental` or `--only=small-project` runs one part.
+The live part runs `haxeon run --watch` as a user does, on `tests/perf/live-project` (three files) and on the app template
+(`haxeon create`, a window on haxeon-ui, run under `xvfb-run`; skipped without it), with the server and CLI a user's edits run on:
+`haxeon-aot` (built when it is not current), which names the metrics (`aot_`). Each edit is timed from its save to the
+running app's `patch-applied` event (the watch-events file), and split into the watch's settle, the CLI's work before the request,
+the compile up to the published patch, the host's pickup and the runtime's apply. It gates the median body edit and the signature
+edit with a wide tolerance (wall varies with load; it catches a wait added on the path), the functions each patch carries, and, from
+a second session whose builds each end with a full collection, the server's live data after the edits and its growth over them.
+The first run builds haxeon-ui's native libraries, which takes minutes; later runs keep them.
+`--only=self-compile`, `--only=incremental`, `--only=small-project` or `--only=live` runs one part. The `edit-replay-short` suite (`wave`)
+replays the last two commits that change `src/compiler` as warm builds in one server, each checked against a fresh build;
+`edit-replay` (`ci`) replays four.
 
 Every metric fails the run beyond its tolerance, but the primary ones are what the compiler is optimized for, in this order:
-edit latency in the compile server, startup (the small project's cold build and check), and the server's live data, weighted
+edit latency in the compile server (the no-op floor, the body edit, the signature edit), startup (the small project's cold build and check), and the server's live data, weighted
 above the one-shot peak. They are marked `*` and summed up in the first line of the summary the run ends with. The cold
 self-compile (instructions, wall, peak, allocation, live data) and the incremental allocation and function counts are regression
 guards.
 
 Each metric is compared with `tests/perf/self-compile-baseline.json`, `tests/perf/incremental-baseline.json` or
-`tests/perf/small-project-baseline.json`, which hold its
+`tests/perf/small-project-baseline.json` or `tests/perf/live-baseline.json`, which hold its
 value and tolerance and why the tolerance is what it is. Above the tolerance the suite fails; below it the suite passes and asks
-for the baseline to be updated, so a gain is locked in. Moving `input_revision` (when the old sources no longer compile, or to
-follow the compiler's growth) re-baselines every metric in the same commit. A change that moves the values on purpose (a feature that costs memory, an optimization) updates the baseline in the same
-commit, from a quiet Linux x86-64 machine:
+for the baseline to be updated, so a gain is locked in. A baseline never moves up by itself: `--update` writes only the
+metrics that improved beyond their tolerance, so a metric that got worse within it stays where it was and a series of updates
+cannot ratchet it up. A cost taken on purpose (a feature that costs memory) is raised by name, with its reason, which the
+baseline keeps beside the value (`raise_reason`) until the metric improves again. Moving `input_revision` (when the old sources
+no longer compile, or to follow the compiler's growth) re-baselines in the same commit: `--update`, and `--raise` for each metric
+that went up, with the move as its reason. Measure from a quiet Linux x86-64 machine, and commit the baseline with the change:
 
 ```sh
-python3 scripts/perf-guard.py            # measure and compare
-python3 scripts/perf-guard.py --update   # write the measured values into the baselines; tolerances are kept
+python3 scripts/perf-guard.py                                   # measure and compare
+python3 scripts/perf-guard.py --quick                           # the edit-cost session alone, a few minutes
+python3 scripts/perf-guard.py --update                          # also write the metrics that improved; tolerances are kept
+python3 scripts/perf-guard.py --raise=server_live_bytes=REASON  # also write this higher value, with why
 ```
 
 The incremental edits are anchored on a line of `HaxeonCompiler.main` and on `InternalError`'s constructor (`BODY_EDIT` and
@@ -106,8 +131,9 @@ Say in the commit message what moved and why. A tolerance is changed by editing 
 
 Setup is two CMake invocations, wrapped by a script per shell. Everything after that is the `haxeon` command, spelled the
 same everywhere. It is a native executable the build puts beside `hl`: the same VM, running the CLI's bytecode, which the
-build compiles with the pinned Haxe and publishes next to it (`native/haxeon_main.c`). It belongs to the checkout it was built
-in, which it names in `HAXEON_HOME`, and needs no library path, so its directory can go on `PATH`.
+build compiles with the pinned Haxe and publishes next to it (`native/haxeon_main.c`). It belongs to the SDK the build stages in
+`out/sdk`, which it names in `HAXEON_SDK` and whose manifest names the checkout as its `source` (`build.HaxeonSdk`), and needs
+no library path, so its directory can go on `PATH`.
 
 `scripts/haxeon` (Unix) and `scripts\haxeon` (`haxeon.cmd`, `haxeon.ps1`; Windows) run it after bringing it and the CLI's
 bytecode up to date with `cmake --build <build> --target haxeon-command`, so an edit to the CLI is in the next command. That
@@ -140,8 +166,8 @@ A command of this tree is a `haxeon` command (`haxeon dev ...`, `haxeon lsp`, `h
 none of those can be, and no alias for any of them:
 
 - what runs before `haxeon` exists: `bootstrap-tools.sh`/`setup.ps1`, `build-native.sh`/`.ps1`, `bootstrap-compiler.sh`
-  (the checked-in compiler, with the pinned Haxe only), and `build-libffi.sh` with `libffi-libtool-compat.m4`, which
-  `cmake/Bootstrap.cmake` runs;
+  (the checked-in compiler, with the pinned Haxe only); the pinned libffi is built by `cmake/libffi.cmake`, which
+  `cmake/Bootstrap.cmake` includes;
 - the launchers of the checkout's builds: `haxeon` (`haxeon.cmd`, `haxeon.ps1`), `hl`, `hlprof-live`, with
   `hashlink-launch.sh` and `hashlink-path.sh` under them; `android-env.sh`, sourced to put the Android tools on `PATH`;
 - the test entry points: `test.sh`, `test-driver.sh`, `check-self-hosting.hx`, `perf-guard.py`, `smoke-test-release.sh`,
@@ -237,11 +263,14 @@ Haxeon uses CMake for its cross-platform native build and Ninja as the default
 backend. The VM is one file, `hl`: HashLink from the pinned `vendor/hashlink`
 submodule with libhl and the Haxeon runtime (`native/runtime.c`) compiled in. It
 needs no library path, and it exports the VM's API to the libraries it loads, so
-those link nothing of HashLink's. It is placed in
-`out/cmake/<preset>/hashlink-runtime` (`scripts/hashlink-path.sh` prints the
-directory), with `haxeon` and the CLI's bytecode `haxeon-cli.hl`, `hlprof-live`,
-and `libhl.a` (`libhl.lib` with MSVC): the same VM without `main.c`, which
-`haxeon` and C test programs that host the VM themselves link.
+those link nothing of HashLink's. It is placed in the `bin` of the checkout's
+SDK, `out/sdk/bin` ([SDK_LAYOUT.md](design/SDK_LAYOUT.md); another preset's
+build stages its own in `out/cmake/<preset>/sdk/bin`, and
+`scripts/hashlink-path.sh` prints the directory), with `haxeon`, the CLI's
+bytecode `haxeon-cli.hl` and `hlprof-live`. The SDK's `lib/<target>`
+(`scripts/hashlink-path.sh --lib-dir`, `build.HashLinkPath.libraryDirectory`)
+holds `libhl.a` (`hl.lib` with MSVC), the same VM without `main.c`, which C test
+programs that host the VM themselves link, and the profiler's function hooks.
 
 The build links the programs in `hashlink-staging` and publishes them by rename
 (`cmake/haxeon-replace.cmake`), never writing over the file in place. A process
@@ -283,9 +312,94 @@ launchers for that shared bootstrap rather than separate installers.
 
 `scripts/haxeon dev aot` builds the CLI and the compiler ahead of time beside the VM,
 which the CLI runs while it is built from the current sources; after a compiler
-edit, builds say once that it is stale and `haxeon doctor` reports it. A release
-archive for this platform is `scripts/haxeon dev package`, checked with
-`scripts/smoke-test-release.sh`: see [RELEASES.md](reference/RELEASES.md).
+edit, builds say once that it is stale and `haxeon doctor` reports it (below).
+
+## Releases
+
+What a release archive holds and how a user installs it is in [RELEASES.md](reference/RELEASES.md). This section is how
+one is made, and how the CLI finds what it runs.
+
+### How the CLI finds its SDK and its compiler
+
+`bin/haxeon` (`native/haxeon_main.c`) finds its own path (`/proc/self/exe`, `_NSGetExecutablePath` or
+`GetModuleFileNameW`, symbolic links resolved). The directory above `bin` is its SDK (docs/design/SDK_LAYOUT.md), which
+must hold `haxeon-sdk.toml`: the launcher names it in `HAXEON_SDK`, and the CLI finds everything else from it and its
+manifest (`build.HaxeonSdk`): `bin` is the VM's directory (`build.HashLinkPath`), `bin/haxeon-cli.hl` is the CLI, and the
+manifest's `[roots]` name the standard library, the templates and the registry. A checkout's `out/sdk/bin/haxeon` is found
+the same way; its manifest's `source` names the checkout, whose tools and sources the commands that need them read there
+(`HaxeonSdk.requireSource`). A release's manifest has no `source`: that is what makes the directory a release. A
+release's archive directory is laid out as a checkout's `out/sdk`.
+
+The CLI runs the compiler as `build.AotCompiler.program` says: the executable (docs/design/AOT_BACKEND.md) when its stamp
+matches, else the bytecode on the VM when its stamp matches, else (in a checkout) bytecode it builds from the sources with
+the pinned Haxe. A checkout matches the stamps against the digest of its `src/`, `lib/haxeon-io/` and `stdlib/`. A release
+ships no compiler sources, as its compiler cannot change: it matches them against the digest its manifest records
+(`compiler-sources`), so the pinned Haxe is never needed, and `haxeon doctor` does not ask for it.
+
+Every program a checkout builds from the compiler's sources when a command needs it is prebuilt in a release, beside the
+VM with its stamp (`AotCompiler.shipped`): the compiler and the tools that carry it (`haxeon lsp`, the typed rules of
+`haxeon lint`, `haxeon ffi`), and the live development hosts (`tools.LiveHost`). A release keeps the shared trees of
+native packages' CMake builds, which a checkout keeps in `out/native-cache`, under the user's cache
+(`~/.haxeon/cache/native`). Android builds need the checkout's `android/` host and its SDK under `.tools` until their
+runner lands in the SDK (`platforms/android`, docs/design/SDK_LAYOUT.md).
+
+### Making one
+
+From a checkout with the native build done (`scripts/build-native.sh`, or `scripts/setup.ps1` on Windows):
+
+```sh
+scripts/haxeon dev aot                         # optional: the CLI and compiler built ahead of time, included when current
+scripts/haxeon dev package [--version=V] [--output=DIR] [--no-archive]
+scripts/smoke-test-release.sh out/release/haxeon-V-PLATFORM.tar.gz --aot   # --no-aot for an archive without it
+```
+
+`haxeon dev package` (`tools.dev.ReleasePackage`) stages the directory in `out/release` in three steps. It installs the
+checkout's `out/sdk` as the native build staged it (the `haxeon-sdk` target and the VM's directory in CMakeLists.txt, the one
+definition of the layout), without its manifest and live registry; it materializes the roots that manifest names (the standard
+library, the templates, and the registry with each package published, its path dependencies on the others as version
+ranges, its submodules' files in it and its `publish.exclude` left out); and it adds what only a release has: the programs
+built from the compiler's sources (the compiler's bytecode with the pinned Haxe, `tools.CompilerExecutable` through the
+tool cache, and both live hosts with Haxeon, `tools.LiveHostBuild`), each stamped with the sources' digest, LICENSE,
+NOTICE and README.md, and the manifest recording that digest. It checks that the sources still have that digest, and
+archives the directory with `cmake -E tar`. The compiler's sources are not shipped. It changes nothing in the checkout's
+VM directory. A stale `haxeon-aot` is an error, since the release would never run it: rebuild it or remove it. The
+version defaults to the CLI's (`project.PackageCompatibility.CURRENT_HAXEON`).
+
+`scripts/smoke-test-release.sh` unpacks the archive outside the checkout with a home directory of its own, so every cache
+starts cold, and runs `--version`, `doctor`, `init` + `build` + `run` + `check` of a new project and a script, a typed lint
+rule, `haxeon ffi audit` (with clang), `haxeon dev`'s refusal, and a program under `run --watch` that it edits while it
+runs, checking that the running program prints the new value and that the edit applied as a patch. Where the app template has a
+runner for the platform it also creates the app, whose UI package comes from the release's registry, builds it through its runner
+in development and release mode, running each for three frames with a capture (a C toolchain, and on Linux GTK's development
+files, are needed), patches the app running under `run --watch` (headless under `xvfb-run` on Linux; not on Windows), and
+builds and runs programs with `nativekit` and with `filesystem` from the same registry, checking that NativeKit was built once. It
+checks that no compiler was built from sources and, on Linux and macOS, that the resident compile server is the expected compiler.
+With `--aot` it times the same cold build without `bin/haxeon-aot`, which also exercises the bytecode fallback.
+
+### The release workflow
+
+`.github/workflows/release.yml` runs on `v*` tags and by hand (workflow_dispatch). One job per platform (Linux, Windows,
+macOS) builds the VM and the CLI in release mode and the compiler ahead of time where supported, packages, smoke-tests the
+archive and uploads it. It runs no test suites; the macOS job may fail without failing the run. A final job downloads the
+archives and writes `SHA256SUMS`. For a tag it then checks that the tagged commit is on `main` and has a successful
+`ci.yml` run, and creates the GitHub release with the archives and checksums, or uploads them to the release if it exists.
+Run by hand, it stops before that: the archives are the run's artifacts. A tag's version must be the CLI's version,
+optionally with a suffix (`v0.3.0`, `v0.3.0-rc.1`).
+
+The Windows job builds with MSVC, as `ci.yml` does, and does not build the compiler ahead of time until the MSVC AOT build
+has passed on CI. Turning it on is `aot: true` for the job in `release.yml`: `haxeon dev package` takes the executable,
+and its `haxeon-aot.pdb`, whenever they are built.
+
+### A checkout's stale compiler
+
+In a checkout the executable is current only until the sources change. A build with a stale one prints one line,
+
+```
+note: haxeon-aot is older than the sources, so the CLI and the compiler run on the VM (a slower start); rebuild it with "haxeon dev aot"
+```
+
+unless it prints no progress (`--quiet`, `--verbosity quiet`, a script), and `haxeon doctor` reports it as stale with the
+same remedy. Nothing rebuilds it automatically.
 
 ## API documentation
 

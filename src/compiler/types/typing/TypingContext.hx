@@ -7,6 +7,9 @@ import compiler.types.analysis.Scope;
 
 /** Mutable state owned by one function or lambda while its body is checked. */
 class TypingContext {
+	/** Whether this body is a unit's outermost, which records the unit's reads until it is left (`TypingSession.enterBody`). */
+	public var recordsReads = false;
+
 	public final functionName:String;
 	/** Source function whose body is being typed; generated bodies keep their declaration identity. */
 	public final sourceFunctionName:String;
@@ -63,6 +66,33 @@ class TypingContext {
 
 	/** Nesting depth of an explicit `@:privateAccess` expression or statement. */
 	public var privateAccessDepth:Int = 0;
+
+	/** The null-safety mode the body is checked in (`NullSafety.enter`); a lambda's is its function's. */
+	public var nullSafetyMode:compiler.NullSafetyRule.NullSafetyMode = Off;
+
+	/** Whether the body's null-safety findings are warnings: its package's setting is `warn`. */
+	public var nullSafetyWarns = false;
+
+	/** Nesting depth of an expression or statement marked `@:nullSafety(Off)`, which is not checked. */
+	public var nullSafetyOffDepth:Int = 0;
+
+	/**
+	 * Whether the body is a lambda, or is in one, that may run later than where it is written: a function value not passed
+	 * straight to a call. Strict trusts no narrowing of a local it captures.
+	 */
+	public var nullSafetyClosure = false;
+
+	/** Enters (`delta` 1) or leaves (-1) a statement or expression with `metadata` (`@:privateAccess`, `@:nullSafety(Off)`). */
+	public function scopeMetadata(metadata:compiler.syntax.Ast.ScopeMetadata, delta:Int):Void
+		switch metadata {
+			case PrivateAccess:
+				privateAccessDepth += delta;
+			case NullSafetyOff:
+				nullSafetyOffDepth += delta;
+		}
+
+	/** The scope of the expression being typed, whose flow facts the null-safety checker reads. */
+	public var flowScope:Null<compiler.types.analysis.Scope> = null;
 
 	public var expectedReturnType:CompilerType = TVoid;
 	public var inferredResult:Null<CompilerType>;

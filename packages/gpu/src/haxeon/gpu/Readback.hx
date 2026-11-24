@@ -58,7 +58,7 @@ class Readback implements Disposable {
 		desc.set_struct_size(nkgpu_buffer_readback_desc.size());
 		desc.set_buffer(buffer.nativeHandle());
 		desc.set_offset(offset);
-		desc.set_size(size);
+		desc.set_byteSize(size);
 		var made = NativeKitGpu.nkgpu_readback_begin_buffer(renderer.nativeHandle(), desc);
 		GpuResult.check(made.status, "readback.beginBuffer");
 		return new Readback(renderer, made.out_readback);
@@ -125,6 +125,6 @@ class ReadbackInfo {
 
 	@:allow(haxeon.gpu.Readback)
 	static function fromNative(value:nkgpu_readback_info):ReadbackInfo
-		return new ReadbackInfo(value.get_state(), value.get_size(), value.get_row_pitch(),
+		return new ReadbackInfo(value.get_state(), value.get_byteSize(), value.get_row_pitch(),
 			value.get_width(), value.get_height());
 }

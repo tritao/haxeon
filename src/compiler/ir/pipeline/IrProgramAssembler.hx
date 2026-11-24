@@ -3,6 +3,7 @@ package compiler.ir.pipeline;
 import compiler.ir.passes.arrays.IrArrayFactory;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.passes.enums.IrEnumRuntimeSpecializations;
 import compiler.ir.analysis.IrExactTypeFacts;
@@ -42,6 +43,11 @@ import compiler.ir.model.Ir.IrStaticField;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
+	/** What each function needs of the runtime surface (`IrRuntimeNeeds`). */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final RUNTIME_NEEDS =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrRuntimeNeeds>("runtime-needs");
+
 	/** The function a live build adds to initialize an object's added fields on existing instances. */
 	public static inline final LIVE_INITIALIZER:String = "__liveinit";
 
@@ -111,19 +117,22 @@ class IrProgramAssembler {
 	 */
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram,
 			classOrder:Null<Array<String>>,
-			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>):Array<IrFunction> {
+			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>,
+			?references:compiler.ir.reuse
+		.IrFunctionMemo<StaticInitializationOrder.IrStaticReferences>):Array<IrFunction> {
 		var probes:Map<String, IrFunction> = [];
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				if (field.isStatic && !field.isInline && initializer != null) {
+				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && initializer != null) {
 					var global = classDecl.name + "." + field.name;
 					probes.set(global, initializerFunction(generator, "__init$probe", [
 						TStaticFieldAssign(classDecl.name, field.name, initializer, field.span)
 					], field.span));
 				}
 			}
-		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program),
+		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program,
+			references),
 			classes = initialization.order,
 			defined:Map<String, Bool> = [for (fn in program) fn.name => true],
 			inits = [
@@ -134,31 +143,43 @@ class IrProgramAssembler {
 		if (warnings != null)
 			for (classDecl in initialization.loops)
 				warnings.push(StaticInitializationOrder.loopWarning(classDecl));
-		var statements:Array<TypedStatement> = [],
+		var bindings = new IrBuilder(),
+			lastCall:Null<IrValue> = null,
+			functions:Array<IrFunction> = [],
+			statements:Array<TypedStatement> = [],
 			spans:Array<compiler.core.Source.SourceSpan> = [];
+		// Static method closures must exist when class initialization begins, including calls from __init__.
+		for (classDecl in classes)
+			for (field in classDecl.fields)
+				if (field.isStatic && field.isDynamicMethod == true && field.initializer != null) {
+					var name = "__init$method" + functions.length;
+					functions.push(initializerFunction(generator, name, [
+						TStaticFieldAssign(classDecl.name, field.name, field.initializer, field.span)
+					], field.span));
+					lastCall = bindings.call(name, [], Void);
+				}
 		for (classDecl in classes)
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
-				if (field.isStatic && !field.isInline && initializer != null) {
+				if (field.isStatic && !field.isInline && field.isDynamicMethod != true && initializer != null) {
 					spans.push(field.span);
 					statements.push(TStaticFieldAssign(classDecl.name, field.name, initializer, field.span));
 				}
 			}
-		if (statements.length == 0 && inits.length == 0)
+		if (statements.length == 0 && inits.length == 0 && functions.length == 0)
 			return [];
-		var functions:Array<IrFunction> = [];
+		var bindingCount = functions.length;
 		for (offset in 0...Std.int((statements.length + 7) / 8)) {
 			var start = offset * 8;
 			functions.push(initializerFunction(generator, "__init$part" + offset, statements.slice(start, start + 8),
 				spans[start]));
 		}
-		var boot = new IrBuilder(), lastCall:Null<IrValue> = null;
 		for (name in inits)
-			lastCall = boot.call(name, [], Void);
-		for (fn in functions)
-			lastCall = boot.call(fn.name, [], Void);
-		boot.returnValue(lastCall);
-		functions.unshift(new IrFunction("__init", [], Void, boot.blocks, Ordinary));
+			lastCall = bindings.call(name, [], Void);
+		for (index in bindingCount...functions.length)
+			lastCall = bindings.call(functions[index].name, [], Void);
+		bindings.returnValue(lastCall);
+		functions.unshift(new IrFunction("__init", [], Void, bindings.blocks, Ordinary));
 		return functions;
 	}
 
@@ -377,6 +398,14 @@ class IrProgramAssembler {
 						name: "$haxeonObservableState",
 						type: generator.lowerType(TInstance(NominalKind.Class, "haxeon.reactive.ObservableSource", []))
 					});
+				var dynamicSlots:Map<String, Bool> = [];
+				var current = classDecl;
+				while (current != null) {
+					for (field in current.fields)
+						if (!field.isStatic && field.isDynamicMethod == true)
+							dynamicSlots.set(field.name, true);
+					current = current.base == null ? null : classesByName.get(current.base);
+				}
 				var methods:Array<IrObjectMethod> = [];
 				for (methodDecl in classDecl.methods)
 					if (!methodDecl.isStatic && !methodDecl.isConstructor) {
@@ -385,7 +414,8 @@ class IrProgramAssembler {
 						var methodName = functionName.substring(separator + 1, functionName.length);
 						// A method slot holds the method's dispatch entry when it has one (`DefaultArguments`).
 						methods.push({
-							name: methodName,
+							name: dynamicSlots.exists(methodName)
+								? compiler.ir.gen.IrMethodReferences.dynamicSlot(methodName) : methodName,
 							functionName: compiler.ir.model.IrSymbol.of(methodDecl.dispatchEntry == null
 								? functionName : methodDecl.dispatchEntry)
 						});
@@ -580,6 +610,10 @@ class IrProgramAssembler {
 		return lastSeparatorCode(value, 46);
 	}
 
+	/** The index of the last `_` in `value`, or -1. */
+	public static inline function lastUnderscore(value:String):Int
+		return lastSeparatorCode(value, 95);
+
 	static function lastSeparatorCode(value:String, separator:Int):Int {
 		var index = value.length - 1;
 		while (index >= 0 && value.charCodeAt(index) != separator)
@@ -606,7 +640,7 @@ class IrProgramAssembler {
 			?inlineCache:IrInlineCache,
 			?valueTarget:compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget,
 			?exportedFunctions:Array<String>,
-			pruneFromEntry = false,
+			walkFromEntry = false, pruneFromEntry = false,
 			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions,
 			?meter:compiler.core.IrPassMeter, ?stageMemos:compiler.ir.reuse.IrStageMemo.IrStageMemos,
 			?generatedVersion:String->Int):IrProgram {
@@ -638,15 +672,14 @@ class IrProgramAssembler {
 		context.inlineCache = inlineCache;
 		context.exportedFunctions = exportedFunctions;
 		context.canonicalObjects = canonicalObjects;
+		context.walkFromEntry = walkFromEntry || pruneFromEntry;
 		context.pruneFromEntry = pruneFromEntry;
 		// What a plain build's prune keeps (docs/design/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
 		// exported functions.
 		var pruneRoots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
-		if (staticInitializers != null && staticInitializers.length > 0) {
-			pruneRoots.push("__init");
+		if (staticInitializers != null)
 			for (initializer in staticInitializers)
 				pruneRoots.push(initializer.name);
-		}
 		if (exportedFunctions != null)
 			for (name in exportedFunctions)
 				pruneRoots.push(name);
@@ -707,87 +740,59 @@ class IrProgramAssembler {
 			throw new InternalError("The runtime surface reads bodies, whose type ids are the inline cache's");
 		var types = cache.types,
 			builder = context.passScratch.bodyBuilder;
+		var lineage = context.lineage, cNativeKey = [for (native in program.cNatives) native.name].join("\n");
 		for (index in 0...allFunctions.length) {
-			var body = allFunctions[index].bodyIn(types, builder), callsCNatives = false;
-			for (block in 0...body.blockCount()) {
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					switch body.opcode(row) {
-						case IrOpcode.Call:
-							var name = body.symbol(row).name;
-							if (cNativeNames.exists(name))
-								callsCNatives = true;
-							if (name == "haxe.Int64.toInt")
-								needsInt64ToInt = true;
-							if (name == "__exception_matches")
-								needsExceptionRuntime = true;
-							if (name == "__std_is_of_type")
-								needsTypeTestRuntime = true;
-							if (name == "__closure_is_of_type")
-								needsClosureTypeTestRuntime = true;
-							if (name == "__dynamic_equal")
-								needsDynamicEquality = true;
-							if (name == "__dynamic_object_type_id")
-								needsDynamicObjectTypeId = true;
-							if (name == "__std_is_exact_type")
-								needsExactTypeTestRuntime = true;
-							if (name == IrExactTypeFacts.TEST)
-								needsObjectExactTypeTest = true;
-							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
-								needsDynamicObjectRuntime = true;
-							if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
-								needsArrayRuntime = true;
-							if (name == "__array_alloc_typed_ref")
-								needsTypedRefArrayRuntime = true;
-							if (name == "__array_check_cast")
-								needsArrayCastRuntime = true;
-							if (StringTools.startsWith(name, "__array_")
-								&& StringTools.endsWith(name, "_any"))
-								needsAnyArrayRuntime = true;
-							if (name == "__string_concat" || name == "__string_length"
-								|| name == "__string_equal"
-								|| name == "__string_index_of"
-								|| name == "__string_char_at" || name == "__string_char_code_at"
-								|| name == "__string_from_char_code"
-								|| name == "__string_substring" || name == "__string_to_lower_case"
-								|| name == "__string_to_upper_case")
-								needsStringRuntime = true;
-							if (name == "__string_from_int"
-								|| name == "__string_from_f64"
-								|| StringTools.startsWith(name, "__string_concat")
-								&& name != "__string_concat")
-								stringFastPathNames.set(name, true);
-							if (StringTools.startsWith(name, "__map_")) {
-								var operationStart = lastSeparatorCode(name, 95);
-								if (operationStart > 0) {
-									mapRuntimeNames.set(name.substring(2, operationStart), true);
-									if (name.substring(operationStart + 1) == "handles")
-										mapHandleListings.set(name.substring(2, operationStart), true);
-								}
-							}
-						// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
-						case IrOpcode.IteratorNext if (IrTypeTools.isDynamic(body.valueType(body.output(row)))):
-							needsArrayRuntime = true;
-							needsAnyArrayRuntime = true;
-						case IrOpcode.Unreachable:
-							needsUnreachable = true;
-						default:
-					}
-					row = body.nextRow(row);
-				}
-			}
-			if (callsCNatives) {
+			var fn = allFunctions[index],
+				needs = IrRuntimeNeeds.of(fn, types, builder, cNativeNames, cNativeKey, lineage),
+				flags = needs.flags;
+			if (flags & IrRuntimeNeeds.INT64_TO_INT != 0)
+				needsInt64ToInt = true;
+			if (flags & IrRuntimeNeeds.EXCEPTION != 0)
+				needsExceptionRuntime = true;
+			if (flags & IrRuntimeNeeds.TYPE_TEST != 0)
+				needsTypeTestRuntime = true;
+			if (flags & IrRuntimeNeeds.CLOSURE_TYPE_TEST != 0)
+				needsClosureTypeTestRuntime = true;
+			if (flags & IrRuntimeNeeds.DYNAMIC_EQUALITY != 0)
+				needsDynamicEquality = true;
+			if (flags & IrRuntimeNeeds.DYNAMIC_OBJECT_TYPE_ID != 0)
+				needsDynamicObjectTypeId = true;
+			if (flags & IrRuntimeNeeds.EXACT_TYPE_TEST != 0)
+				needsExactTypeTestRuntime = true;
+			if (flags & IrRuntimeNeeds.OBJECT_EXACT_TYPE_TEST != 0)
+				needsObjectExactTypeTest = true;
+			if (flags & IrRuntimeNeeds.DYNAMIC_OBJECT != 0)
+				needsDynamicObjectRuntime = true;
+			if (flags & IrRuntimeNeeds.ARRAY != 0)
+				needsArrayRuntime = true;
+			if (flags & IrRuntimeNeeds.TYPED_REF_ARRAY != 0)
+				needsTypedRefArrayRuntime = true;
+			if (flags & IrRuntimeNeeds.ARRAY_CAST != 0)
+				needsArrayCastRuntime = true;
+			if (flags & IrRuntimeNeeds.ANY_ARRAY != 0)
+				needsAnyArrayRuntime = true;
+			if (flags & IrRuntimeNeeds.STRING != 0)
+				needsStringRuntime = true;
+			if (flags & IrRuntimeNeeds.UNREACHABLE != 0)
+				needsUnreachable = true;
+			for (name in needs.fastPaths)
+				stringFastPathNames.set(name, true);
+			for (name in needs.maps)
+				mapRuntimeNames.set(name, true);
+			for (name in needs.mapHandles)
+				mapHandleListings.set(name, true);
+			if (flags & IrRuntimeNeeds.C_NATIVES != 0) {
 				// The function stops being the one the assembly holds, whose array may be a cache's.
 				if (allFunctions == assembly.functions)
 					allFunctions = allFunctions.copy();
-				allFunctions[index] = cNativeCalls(body, cNativeNames, builder);
+				allFunctions[index] = cNativeCalls(fn.bodyIn(types, builder), cNativeNames, builder);
 			}
 		}
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
 			objects == null ? [] : objects,
 			staticFields == null ? [] : staticFields, natives == null ? [] : natives,
-			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives);
+			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives, lineage);
 		program.staticFields = staticFields == null ? [] : staticFields;
 		program.natives.push({
 			name: "__exit",
@@ -1107,7 +1112,8 @@ class IrProgramAssembler {
 		if (mainFunction == null)
 			throw new InternalError('IR program has no executable entry point "${entryPoint == null ? "main" : entryPoint}"');
 		var entry = new IrBuilder();
-		if (staticInitializers != null && staticInitializers.length > 0)
+		// The initializers can be a live build's field migrations alone, with no static initialization to run (`__init`).
+		if (staticInitializers != null && Lambda.exists(staticInitializers, fn -> fn.name == "__init"))
 			entry.call("__init", [], Void);
 		var result = entry.call(mainFunction.name, [], mainFunction.result);
 		if ((switch (mainFunction.result) {
@@ -1349,5 +1355,130 @@ class IrProgramAssembler {
 			if (native.name == name)
 				return true;
 		return false;
+	}
+}
+
+/**
+ * What one function needs of the runtime surface (`IrProgramAssembler.finish`): which runtime natives its calls and instructions
+ * need, the string fast paths and map runtimes it names, and whether it calls a C native, which `finish` rewrites. It depends on
+ * the function's body and the program's C natives, so a session keeps it by the function's version (`IrStageMemos.runtimeNeeds`).
+ */
+class IrRuntimeNeeds {
+	public static inline final INT64_TO_INT = 1;
+	public static inline final EXCEPTION = 2;
+	public static inline final TYPE_TEST = 4;
+	public static inline final CLOSURE_TYPE_TEST = 8;
+	public static inline final DYNAMIC_EQUALITY = 16;
+	public static inline final DYNAMIC_OBJECT_TYPE_ID = 32;
+	public static inline final EXACT_TYPE_TEST = 64;
+	public static inline final OBJECT_EXACT_TYPE_TEST = 128;
+	public static inline final DYNAMIC_OBJECT = 256;
+	public static inline final ARRAY = 512;
+	public static inline final TYPED_REF_ARRAY = 1024;
+	public static inline final ARRAY_CAST = 2048;
+	public static inline final ANY_ARRAY = 4096;
+	public static inline final STRING = 8192;
+	public static inline final UNREACHABLE = 16384;
+	public static inline final C_NATIVES = 32768;
+
+	public var flags(default, null) = 0;
+	public final fastPaths:Array<String> = [];
+	public final maps:Array<String> = [];
+	public final mapHandles:Array<String> = [];
+
+	/** The C natives the program had when this was read: what `C_NATIVES` was decided against. */
+	public final cNativeKey:String;
+
+	function new(cNativeKey:String)
+		this.cNativeKey = cNativeKey;
+
+	public static function of(fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder, cNativeNames:Map<String, Bool>,
+			cNativeKey:String, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrRuntimeNeeds {
+		var version = lineage == null ? 0 : lineage.versionOf(fn);
+		if (lineage == null || version == 0)
+			return read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
+		var memo = lineage.memos.contribution(IrProgramAssembler.RUNTIME_NEEDS), known = memo.get(version);
+		if (known == null || known.cNativeKey != cNativeKey) {
+			known = read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
+			memo.keep(version, known);
+		} else if (lineage.checks) {
+			var now = read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
+			if (now.flags != known.flags || now.fastPaths.join(",") != known.fastPaths.join(",")
+				|| now.maps.join(",") != known.maps.join(",") || now.mapHandles.join(",") != known.mapHandles.join(","))
+				throw new InternalError('--check-reuse: the runtime needs reused for ${fn.name} differ from its body');
+		}
+		return known;
+	}
+
+	static function once(list:Array<String>, name:String):Void
+		if (list.indexOf(name) < 0)
+			list.push(name);
+
+	static function read(body:compiler.ir.model.IrBody, cNativeNames:Map<String, Bool>,
+			cNativeKey:String):IrRuntimeNeeds {
+		var needs = new IrRuntimeNeeds(cNativeKey), flags = 0;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				switch body.opcode(row) {
+					case IrOpcode.Call:
+						var name = body.symbol(row).name;
+						if (cNativeNames.exists(name))
+							flags |= C_NATIVES;
+						if (name == "haxe.Int64.toInt")
+							flags |= INT64_TO_INT;
+						if (name == "__exception_matches")
+							flags |= EXCEPTION;
+						if (name == "__std_is_of_type")
+							flags |= TYPE_TEST;
+						if (name == "__closure_is_of_type")
+							flags |= CLOSURE_TYPE_TEST;
+						if (name == "__dynamic_equal")
+							flags |= DYNAMIC_EQUALITY;
+						if (name == "__dynamic_object_type_id")
+							flags |= DYNAMIC_OBJECT_TYPE_ID;
+						if (name == "__std_is_exact_type")
+							flags |= EXACT_TYPE_TEST;
+						if (name == IrExactTypeFacts.TEST)
+							flags |= OBJECT_EXACT_TYPE_TEST;
+						if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
+							flags |= DYNAMIC_OBJECT;
+						if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
+							flags |= ARRAY;
+						if (name == "__array_alloc_typed_ref")
+							flags |= TYPED_REF_ARRAY;
+						if (name == "__array_check_cast")
+							flags |= ARRAY_CAST;
+						if (StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_any"))
+							flags |= ANY_ARRAY;
+						if (name == "__string_concat" || name == "__string_length" || name == "__string_equal"
+							|| name == "__string_index_of" || name == "__string_char_at"
+							|| name == "__string_char_code_at"
+							|| name == "__string_from_char_code" || name == "__string_substring"
+							|| name == "__string_to_lower_case" || name == "__string_to_upper_case")
+							flags |= STRING;
+						if (name == "__string_from_int" || name == "__string_from_f64"
+							|| StringTools.startsWith(name, "__string_concat") && name != "__string_concat")
+							once(needs.fastPaths, name);
+						if (StringTools.startsWith(name, "__map_")) {
+							var operationStart = IrProgramAssembler.lastUnderscore(name);
+							if (operationStart > 0) {
+								once(needs.maps, name.substring(2, operationStart));
+								if (name.substring(operationStart + 1) == "handles")
+									once(needs.mapHandles, name.substring(2, operationStart));
+							}
+						}
+					// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
+					case IrOpcode.IteratorNext if (IrTypeTools.isDynamic(body.valueType(body.output(row)))):
+						flags |= ARRAY | ANY_ARRAY;
+					case IrOpcode.Unreachable:
+						flags |= UNREACHABLE;
+					default:
+				}
+				row = body.nextRow(row);
+			}
+		}
+		needs.flags = flags;
+		return needs;
 	}
 }

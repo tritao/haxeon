@@ -9,7 +9,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 source "$root/scripts/lib/env.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-boundary-thunk.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+library=$("$root/scripts/hashlink-path.sh" --lib-dir)
 if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]] || ! command -v "${CC:-cc}" >/dev/null 2>&1; then
 	echo "SKIP: the boundary thunk test is Linux x86-64 only"
 	exit 0

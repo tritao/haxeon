@@ -3,7 +3,7 @@ package compiler.modules;
 import compiler.compilation.CompilationContext;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
-import haxe.crypto.Sha256;
+import compiler.core.TextDigest;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -40,7 +40,8 @@ class CodeIdentityTable {
 		if (text == state.source.text)
 			return;
 		state = context.state.writableState(MODULE, rollback);
-		state.render(new SourceFile(state.source.path, text, state.source.isStandardLibrarySource, state.source.physicalPath));
+		state.render(new SourceFile(state.source.path, text, state.source.isStandardLibrarySource,
+			state.source.physicalPath));
 		context.parse(state, entry, body, signatures, structural);
 		context.moduleAnalyzer.addTypeDependencies(state);
 	}
@@ -185,7 +186,7 @@ class CodeIdentityTable {
 		dependencies.sort(Reflect.compare);
 		for (identity in dependencies)
 			text.add("\nneeds " + identity);
-		return Sha256.encode(text.toString()).substr(0, 32);
+		return TextDigest.sha256(text.toString()).substr(0, 32);
 	}
 
 	static function requiredState(source:Map<String, ModuleState>, name:String):ModuleState {
@@ -235,7 +236,7 @@ class CodeIdentityTable {
 		} catch (error:Dynamic) {
 			hashes.push("unreadable:" + program);
 		}
-		known = Sha256.encode(hashes.join("\n")).substr(0, 32);
+		known = TextDigest.sha256(hashes.join("\n")).substr(0, 32);
 		cachedVersion = known;
 		return known;
 	}

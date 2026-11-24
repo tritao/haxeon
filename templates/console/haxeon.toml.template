@@ -1,0 +1,10 @@
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+nullSafety = "strict"
+
+[package]
+name = "{{package}}"
+
+[compatibility]
+haxeon = "^{{haxeon_version}}"

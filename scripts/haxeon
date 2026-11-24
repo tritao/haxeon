@@ -6,7 +6,7 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
-build_dir=$(dirname "$hashlink_dir")
+build_dir=$("$root_dir/scripts/hashlink-path.sh" --build-dir)
 
 if [[ ${HAXEON_NATIVE_READY:-0} != 1 ]]; then
 	if [[ ! -f $build_dir/CMakeCache.txt ]]; then

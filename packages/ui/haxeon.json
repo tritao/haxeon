@@ -17,14 +17,45 @@
     },
     "haxeon-editor": {
       "path": "../editor"
+    },
+    "haxeon-nativekit": {
+      "path": "../nativekit"
+    }
+  },
+  "native": {
+    "cmake": {
+      "source": ".",
+      "target": "nativekit_ui",
+      "library": "nativekit_ui"
     }
   },
   "ffi": {
     "interfaces": [
       "bindings/nativekit-ui.hxi"
     ],
+    "wasmInterfaces": ["bindings/nativekit-ui-wasm.hxi", "bindings/nativekit-ui-browser-wasm.hxi"],
     "projections": [
       "bindings/nativekit-ui.hxmap"
+    ]
+  },
+  "publish": {
+    "exclude": [
+      "tests",
+      "examples",
+      "bench",
+      "tools",
+      "docs",
+      "vendor/harfbuzz/test",
+      "vendor/harfbuzz/perf",
+      "vendor/harfbuzz/docs",
+      "vendor/skribidi/example",
+      "vendor/skribidi/screenshots",
+      "vendor/skribidi/test",
+      "vendor/sheenbidi/Tools",
+      "vendor/sheenbidi/Tests",
+      "vendor/clay/examples",
+      "vendor/clay/bindings",
+      "vendor/nanovg/example"
     ]
   },
   "target": "host"

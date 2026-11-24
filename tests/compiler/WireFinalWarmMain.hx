@@ -45,9 +45,7 @@ class WireFinalWarmMain {
 				throw "Warm and cold wire modules differ";
 			File.saveBytes(warmPath, warmBytes);
 			File.saveBytes(coldPath, coldBytes);
-			var dir = Sys.getEnv("HAXEON_HASHLINK_DIR");
-			if (dir == null || dir == "")
-				throw "HAXEON_HASHLINK_DIR is required";
+			var dir = TestHashLink.directory();
 			var hl = Path.join([dir, Sys.systemName() == "Windows" ? "hl.exe" : "hl"]);
 			var warmStatus = Sys.command(hl, [warmPath]),
 				coldStatus = Sys.command(hl, [coldPath]);

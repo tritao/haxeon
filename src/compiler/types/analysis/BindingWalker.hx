@@ -240,7 +240,7 @@ class BindingWalker implements AstChildVisitor {
 
 	function statement(value:AstStatement):Void {
 		switch value {
-			case PrivateAccessStatement(inner, _):
+			case AnnotatedStatement(_, inner, _):
 				statement(inner);
 			case VarDeclaration(name, type, initializer, span):
 				switch initializer {
@@ -256,8 +256,8 @@ class BindingWalker implements AstChildVisitor {
 							height: bindingNames.length,
 							lambdaDepth: lambdaDepth
 						});
-					case Lambda(_, _, _, _):
-						// A local function can call itself, so its name is visible in its own body.
+					case Lambda(_, _, _, _, _, true):
+						// A named local function can call itself, so its name is visible in its own body.
 						declare(name, span, Local, type, initializer);
 						expression(initializer);
 					default:
@@ -466,7 +466,9 @@ class BindingWalker implements AstChildVisitor {
 	function bindPattern(pattern:AstExpression, span:SourceSpan):Void {
 		switch pattern {
 			case Variable(name, variableSpan):
-				declare(name, variableSpan, Pattern);
+				var capture = compiler.syntax.AstPredicates.patternCaptureName(name, variableSpan);
+				if (capture != null)
+					declare(capture, variableSpan, Pattern);
 			case TemporaryVariable(local, variableSpan):
 				declare(local.name, variableSpan, Pattern);
 			case Capture(name, inner, captureSpan):

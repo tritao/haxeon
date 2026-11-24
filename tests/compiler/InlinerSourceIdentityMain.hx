@@ -27,56 +27,38 @@ class InlinerSourceIdentityMain {
 	}
 
 	static function main():Void {
-		var cache = new IrInlineCache(), first = program(1);
-		IrInliner.run(first, cache, compiler.ir.pipeline.TargetProfile.wasm);
-		var memo = cache.memo.get("caller0");
+		var session = new InlinerSession(), first = program(1);
+		session.run(first);
+		var entry = session.entry("caller0");
+		if (entry == null)
+			throw "The inliner kept no entry for caller0";
 		var again = program(1),
-			before = AllocationMeter.sample(),
-			cpu = Sys.cpuTime(),
-			wall = Sys.time();
-		var changed = IrInliner.run(again, cache, compiler.ir.pipeline.TargetProfile.wasm);
-		var bytes = AllocationMeter.sample().bytes - before.bytes,
-			used = Sys.cpuTime() - cpu,
-			elapsed = Sys.time() - wall;
-		if (cache.memo.get("caller0") != memo || changed.length != 0)
+			before = AllocationMeter.sample();
+		var changed = session.run(again);
+		var bytes = AllocationMeter.sample().bytes - before.bytes;
+		if (session.entry("caller0") != entry || changed.length != 0)
 			throw "Regenerated identical input must reuse the inlining memo";
 		if (bytes > 8 * 1024 * 1024)
 			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
-		var fork = cache.copy();
 		var edited = program(2);
-		IrInliner.run(edited, fork, compiler.ir.pipeline.TargetProfile.wasm);
+		changed = session.copy().run(edited);
+		if (changed.length != 201)
+			throw 'A callee edit changed ${changed.length} functions, not the callee and its 200 callers';
 		var fresh = program(2);
 		IrInliner.run(fresh, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
-		for (i in 0...fresh.functions.length)
-			if (IrFunctionStateCodec.encode(edited.functions[i])
-				.compare(IrFunctionStateCodec.encode(fresh.functions[i])) != 0)
-				throw "Callee edit differs from a cold inlining run";
-		var unchanged = program(1);
-		IrInliner.run(unchanged, cache, compiler.ir.pipeline.TargetProfile.wasm);
-		if (cache.memo.get("caller0") != memo)
-			throw "A speculative cache copy changed its parent's inputs";
-		var placements = new IrInlineCache();
-		var original = located("x", 0),
-			equal = located("x", 0),
-			rehashed = located("x // comment", 0),
-			moved = located(" x", 1);
-		if (placements.stableSources([original])[0] != original || placements.stableSources([equal])[0] != original)
-			throw "Equal input should keep its immutable identity";
-		if (placements.stableSources([rehashed])[0] != rehashed || placements.stableSources([moved])[0] != moved)
-			throw "Changed source hashes or offsets must keep their fresh provenance";
-		placements.stableSources([]);
-		if (placements.stableSources([equal])[0] != equal)
-			throw "Removed inputs should be pruned";
-		Sys.println("PASS: regenerated IR reuses inlining while callee edits and provenance invalidate safely");
+		same(edited, fresh, "Callee edit differs from a cold inlining run");
+		var unchanged = program(1), cold = program(1);
+		session.run(unchanged);
+		IrInliner.run(cold, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
+		same(unchanged, cold,
+			"The program before the edit, built again after a speculative copy, differs from a cold run");
+		Sys.println("PASS: regenerated IR reuses inlining while callee edits invalidate its callers");
 	}
 
-	static function located(text:String, start:Int):IrFunction {
-		var b = new IrBuilder();
-		b.returnValue(b.constInt(42));
-		var block = b.blocks[0], term = block.terminator;
-		block.terminator = new compiler.ir.model.SourceProvenance.Located(term.value,
-			compiler.ir.model.SourceProvenance.user(new compiler.core.Source.SourceFile("same.hx", text).span(start,
-			start + 1)));
-		return new IrFunction("located", b.arguments, I32, b.blocks, Ordinary);
+	static function same(left:IrProgram, right:IrProgram, message:String):Void {
+		for (i in 0...right.functions.length)
+			if (IrFunctionStateCodec.encode(left.functions[i])
+				.compare(IrFunctionStateCodec.encode(right.functions[i])) != 0)
+				throw message;
 	}
 }

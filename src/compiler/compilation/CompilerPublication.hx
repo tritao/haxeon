@@ -127,7 +127,7 @@ class CompilerPublication {
 
 	/**
 	 * Takes back the acknowledged publications after `revision`, which the host still runs because it refused them (`haxeon
-	 * run --watch --live --strict-live` does not reload). Returns the publication that was built on `revision`, whose snapshot
+	 * run --watch --strict-live` does not reload). Returns the publication that was built on `revision`, whose snapshot
 	 * and assembler describe it, or null when it is not among the last few or a newer build is pending.
 	 */
 	public function retract(revision:Int):Null<PendingPublication> {

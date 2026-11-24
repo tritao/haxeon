@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
+import compiler.runtime.RuntimeType;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -80,8 +81,8 @@ class HashGenerator {
 			case TInt64:
 				statements.push(TReturn(new TypedExpression(TCall("haxe.Int64.toInt", [value]), TInt, span), span));
 			case TFloat:
-				session.runtimeDependencyTracker.record(req.origin, "runtime.FloatBits");
-				session.runtimeDependencyTracker.record(req.origin, "haxe.Int64");
+				session.runtimeDependencyTracker.record(req.origin, RuntimeType.FLOAT_BITS);
+				session.runtimeDependencyTracker.record(req.origin, RuntimeType.INT64);
 				statements = floatHashStatements(value, span);
 			case TString:
 				statements = stringHashStatements(value, span);

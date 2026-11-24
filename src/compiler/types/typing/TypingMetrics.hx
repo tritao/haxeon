@@ -36,26 +36,12 @@ typedef MeasuredTypedProgram = {
 		var target:String;
 	}>;
 
-	/** Purity/no-return answers each freshly typed function's body depended on, keyed by that
-	 * function's own name. See `TypingSession.purityQueries`/`noReturnQueries`.
-	 */
-	final purityQueries:Map<String, Map<String, Bool>>;
-
-	final noReturnQueries:Map<String, Map<String, Bool>>;
-
 	/** The key path literals each freshly typed function uses, by function name. */
 	final keyPathUses:Map<String, Map<String, Bool>>;
-
-	final inlineConstantDependencies:Map<String, Map<String, Bool>>;
-
-	/** The unannotated declarations whose inferred type each typed unit read, by unit name (see `UnitRecords`). */
-	final declarationTypeReads:Map<String, Map<String, Bool>>;
 
 	/** The units this typing typed: function bodies, and field initializers (`Class.__init.x`). */
 	final typedUnits:Map<String, Bool>;
 
 	/** The signatures of the unannotated functions whose bodies this typing typed, by key (`DeclarationTypeTable.typedSignatures`). */
 	final inferredSignatures:Map<String, compiler.types.DeclarationTypes.InferredSignature>;
-
-	final defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;
 }

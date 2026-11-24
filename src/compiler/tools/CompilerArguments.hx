@@ -17,7 +17,8 @@ class CompilerArguments {
 		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
 		"--ffi-projection", "--define", "--dump-function", "--session", "--verbosity", "--diagnostic-format", "--color",
-		"--diagnostic-directory", "--wasm-memory-base", "--wasm-memory-contract", "--export"
+		"--diagnostic-directory", "--stdlib", "--wasm-memory-base", "--wasm-memory-contract", "--export",
+		"--null-safety"
 	];
 
 	public static function parse(arguments:Array<String>):CompilerRequest {
@@ -50,6 +51,7 @@ class CompilerArguments {
 			ffiInterfaces:Array<String> = [],
 			ffiProjections:Array<String> = [],
 			roots:Array<String> = [],
+			stdlib = "stdlib",
 			defines:Array<String> = [],
 			paths:Array<String> = [],
 			optionFlags:Array<String> = [],
@@ -92,6 +94,8 @@ class CompilerArguments {
 				entryIdOutput = value(argument, "--entry-id-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
+			else if (StringTools.startsWith(argument, "--stdlib="))
+				stdlib = value(argument, "--stdlib=");
 			else if (StringTools.startsWith(argument, "--sources-file=")) {
 				var manifest = File.getContent(value(argument, "--sources-file="));
 				for (path in manifest.split("\n")) {
@@ -214,14 +218,10 @@ class CompilerArguments {
 			throw new UsageError("--wasm-memory-contract requires --wasm-import-memory");
 		if (memoryContract != null && memoryBase != 0)
 			throw new UsageError("--wasm-memory-contract and --wasm-memory-base are mutually exclusive");
+		// XML is emitted after compilation and still needs the parsed declarations.
+		if (xmlOutput != null)
+			optionFlags = optionFlags.filter(flag -> flag != compiler.CompileOptions.NO_KEEP_SESSION);
 		var options = compiler.CompileOptions.fromArguments(optionFlags);
-		if ((options.toolchain != null || options.cSdk != null) && backend != HashLinkC)
-			throw new UsageError("--toolchain and --c-sdk require --target=hlc");
-		if (options.toolchain != null && options.cSdk == null)
-			throw new UsageError("--toolchain requires --c-sdk");
-		// A toolchain of the other ABI than the SDK's is a usage error, found before anything compiles.
-		if (options.cSdk != null)
-			compiler.backend.c.HlcBuild.toolchain(options.cSdk, options.toolchain);
 		return {
 			target: target,
 			buildMode: buildMode,
@@ -257,6 +257,7 @@ class CompilerArguments {
 			ffiInterfaces: ffiInterfaces,
 			ffiProjections: ffiProjections,
 			roots: roots,
+			stdlib: stdlib,
 			packageRoots: packageRoots,
 			paths: paths
 		};

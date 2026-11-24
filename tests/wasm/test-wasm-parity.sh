@@ -33,6 +33,7 @@ inline_cases=(
 	q3-enum-observers
 	q3-nullary-enum-string
 	q3-dynamic-array-boundaries
+	array-read-out-of-range
 	q3-dynamic-equality-fallbacks
 	generic-map-read-view
 	map-null-string-keys

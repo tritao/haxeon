@@ -1,0 +1,294 @@
+---
+import CodeCard from '../CodeCard.astro';
+
+const examples = [
+  {
+    id: 'values',
+    title: 'Value types',
+    description:
+      'A <code>struct</code> is a value: <code>==</code> compares its fields and it works as a map key. The compiler writes the equality and hashing.',
+    code: `struct Point implements Hashable {
+	public final x:Int;
+	public final y:Int;
+	public function new(x:Int, y:Int) {
+		this.x = x;
+		this.y = y;
+	}
+}
+
+final names = [new Point(0, 0) => "origin"];
+Sys.println(new Point(1, 2) == new Point(1, 2));
+Sys.println(names[new Point(0, 0)]);`,
+    output: `true
+origin`,
+  },
+  {
+    id: 'enums',
+    title: 'Enums and matching',
+    description:
+      'Enums carry data, and <code>switch</code> takes them apart. Miss a case and the compiler names it.',
+    code: `enum Shape {
+	Circle(radius:Float);
+	Rect(w:Float, h:Float);
+}
+
+function area(s:Shape):Float
+	return switch s {
+		case Circle(r): Math.PI * r * r;
+		case Rect(w, h): w * h;
+	}
+
+Sys.println(area(Rect(2, 3)));`,
+    output: `6`,
+  },
+  {
+    id: 'nulls',
+    title: 'Null safety',
+    description:
+      'With null safety enabled, a value that can be null says so in its type. After the check, the compiler knows it is not.',
+    code: `@:nullSafety(Strict)
+function greet(name:Null<String>):String {
+	if (name == null)
+		return "Hello, stranger";
+	// name is a String from here on
+	return 'Hello, $name (\${name.length} letters)';
+}
+
+Sys.println(greet("Ada"));`,
+    output: `Hello, Ada (3 letters)`,
+  },
+  {
+    id: 'defer',
+    title: 'Cleanup with defer',
+    description:
+      '<code>defer</code> runs when the block exits, however it exits: a return, a break or an exception.',
+    code: `function work() {
+	Sys.println("open");
+	defer Sys.println("closed");
+	Sys.println("working");
+}
+
+work();`,
+    output: `open
+working
+closed`,
+  },
+  {
+    id: 'json',
+    title: 'Typed wire',
+    description:
+      'Pass any type to <a href="https://msgpack.org">MessagePack</a> or JSON and the compiler writes its codec: no annotations, no reflection. When the data must last, <code>haxeon lint --fix --pin-wire</code> numbers its fields so renames stay compatible, and old data still reads.',
+    code: `import haxeon.wire.JsonWire;
+import haxeon.wire.MessagePack;
+
+typedef Task = {title:String, done:Bool};
+
+final task:Task = {title: "Buy milk", done: false};
+final bytes = MessagePack.encode(task);
+final json = JsonWire.encode(task);
+final back:Task = MessagePack.decode(bytes);
+Sys.println('\${bytes.length} bytes: \${back.title}');
+Sys.println(json);`,
+    output: `22 bytes: Buy milk
+{"version":1,"value":{"title":"Buy milk","done":false}}`,
+  },
+  {
+    id: 'rpc',
+    title: 'Typed RPC',
+    description:
+      'Declare a service as an interface: the compiler writes the server dispatch, a typed client stub and the codecs. Methods are named on the wire, and numbered once with <code>haxeon lint --fix --pin-wire</code> when a protocol must stay stable. Handshake, cancellation and reconnect are built in; any transport carries it.',
+    code: `import haxeon.rpc.MemoryTransport;
+import haxeon.rpc.RpcConnection;
+
+typedef Query = {name:String};
+typedef Answer = {text:String};
+
+interface Greeter {
+	function greet(request:Query):Answer;
+}
+
+class Hello implements Greeter {
+	public function new() {}
+	public function greet(request:Query):Answer
+		return {text: 'Hello, \${request.name}'};
+}
+
+final pair = MemoryTransport.pair();
+final server = new RpcConnection(pair.server, () -> 0.0);
+final client = new RpcConnection(pair.client, () -> 0.0);
+server.serve(Greeter, new Hello());
+
+client.of(Greeter).greet({name: "Ada"}).onComplete(outcome -> switch outcome {
+	case Success(answer): Sys.println(answer.text);
+	case Failure(error): Sys.println(error.message);
+	case Cancelled | Stopped:
+});
+
+server.poll();
+client.poll();`,
+    output: `Hello, Ada`,
+  },
+  {
+    id: 'dynamic',
+    title: 'Static, or dynamic',
+    description:
+      'Everything is checked statically, and <code>Dynamic</code> is there when data has no schema: parsed JSON, plugins, scripts.',
+    code: `final data:Dynamic = haxe.Json.parse(
+	'{"name": "Ada", "langs": ["Haxeon", "C"]}');
+Sys.println(data.name);
+Sys.println(data.langs.length);`,
+    output: `Ada
+2`,
+  },
+  {
+    id: 'abstracts',
+    title: 'Zero-cost types',
+    description:
+      'An abstract gives a value a meaning and methods, and compiles to the plain value underneath.',
+    code: `abstract Meters(Float) from Float {
+	public inline function toFeet():Float
+		return this * 3.28084;
+}
+
+final height:Meters = 1.8;
+Sys.println(height.toFeet());`,
+    output: `5.905512`,
+  },
+];
+---
+
+<section>
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">The language</span>
+      <h2>Typed, expressive, and quick to write.</h2>
+      <p class="lede">
+        Static types with inference, value types, pattern matching, null safety and deterministic
+        cleanup, compiled fast enough to edit while it runs.
+      </p>
+    </div>
+    <language-tour class="tour">
+      <div class="tabs" role="tablist" aria-label="Language features">
+        {
+          examples.map(({ id, title }, index) => (
+            <button
+              type="button"
+              class="tab"
+              role="tab"
+              id={`tab-${id}`}
+              aria-controls={`pane-${id}`}
+              aria-selected={index === 0 ? 'true' : 'false'}
+              tabindex={index === 0 ? 0 : -1}
+            >
+              {title}
+            </button>
+          ))
+        }
+      </div>
+      <div class="panes">
+        {
+          examples.map(({ id, description, code, output }, index) => (
+            <div
+              class="pane"
+              role="tabpanel"
+              id={`pane-${id}`}
+              aria-labelledby={`tab-${id}`}
+              tabindex="0"
+              hidden={index !== 0}
+            >
+              <p class="lede" set:html={description} />
+              <CodeCard lang="haxe" {code} {output} example={id} />
+            </div>
+          ))
+        }
+      </div>
+    </language-tour>
+  </div>
+</section>
+
+<script>
+  class LanguageTour extends HTMLElement {
+    connectedCallback() {
+      const tabs = [...this.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+      const panels = tabs.map(
+        (tab) => document.getElementById(tab.getAttribute('aria-controls')!)!,
+      );
+      const select = (index: number) => {
+        tabs.forEach((tab, i) => {
+          tab.setAttribute('aria-selected', String(i === index));
+          tab.tabIndex = i === index ? 0 : -1;
+          panels[i].hidden = i !== index;
+        });
+      };
+
+      tabs.forEach((tab, i) => {
+        tab.addEventListener('click', () => select(i));
+        tab.addEventListener('keydown', (event) => {
+          const next = {
+            ArrowRight: (i + 1) % tabs.length,
+            ArrowDown: (i + 1) % tabs.length,
+            ArrowLeft: (i + tabs.length - 1) % tabs.length,
+            ArrowUp: (i + tabs.length - 1) % tabs.length,
+            Home: 0,
+            End: tabs.length - 1,
+          }[event.key];
+          if (next === undefined) return;
+          event.preventDefault();
+          select(next);
+          tabs[next].focus();
+        });
+      });
+    }
+  }
+
+  customElements.define('language-tour', LanguageTour);
+</script>
+
+<style>
+  .tour {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .tabs {
+    display: grid;
+    gap: 6px;
+  }
+  .tab {
+    text-align: left;
+    font: 600 0.95rem var(--sl-font);
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: none;
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+  }
+  .tab[aria-selected='true'] {
+    background: var(--sl-color-bg-sidebar);
+    border-color: var(--sl-color-gray-5);
+    color: var(--sl-color-white);
+    box-shadow: inset 3px 0 0 var(--sl-color-accent);
+  }
+  .pane {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+  }
+  @media (max-width: 900px) {
+    .tour {
+      grid-template-columns: 1fr;
+    }
+    .tabs {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  .tabs {
+    align-content: start;
+  }
+
+  .pane[hidden] {
+    display: none;
+  }
+</style>

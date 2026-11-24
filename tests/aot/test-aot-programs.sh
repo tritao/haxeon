@@ -2,21 +2,30 @@
 # The C backend's parity test (docs/design/AOT_BACKEND.md): each program listed in tests/aot/programs.txt (or named on the
 # command line) is compiled for `hl` and for `hlc`, both are run, and their exit codes, stdout and stderr must match. A compile
 # the C backend stops with "C backend:" counts as unsupported, not as a failure.
-#   tests/aot/test-aot-programs.sh [-v] [--all] [NAME...]
+#   tests/aot/test-aot-programs.sh [-v] [--all] [--sanitize] [NAME...]
 # NAME is a tests/programs file without .hx, or a path to a .hx file; --all takes every program of expected-exits.tsv.
-# TEST_JOBS programs run at once (default 4); TOOLCHAIN is the hlc build's --toolchain (gcc, clang, clang-cl, cl; default the
-# hlc SDK's target's);
-# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines).
+# --sanitize builds the C with AddressSanitizer and UndefinedBehaviorSanitizer, and the check of a float converted out of its
+# target's range, which `undefined` leaves out (gcc or clang); a report stops the program, so it fails the comparison.
+# The C is built through cmake/aot with the SDK's CMake package (HAXEON_SDK, default out/sdk). TEST_JOBS programs run at once
+# (default 4); TOOLCHAIN is the C compiler CMake builds with (gcc, clang, clang-cl, cl, or a path; default CMake's choice, CC);
+# HLC_BUILD_MODE is the hlc build's mode (default development, whose frames are exact; release inlines). AOT_PROGRAMS_COMPILER, when
+# set, is a compiler executable that does both compiles instead of the compiler on the VM, which stock Haxe built: the aot-compiler
+# suite sets it to the compiler built ahead of time, so the C backend's own code also runs as Haxeon compiles it.
 set -uo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 source "$root_dir/scripts/lib/env.sh"
 source "$root_dir/scripts/lib/haxeon-compiler.sh"
+if [[ -n ${AOT_PROGRAMS_COMPILER:-} ]]; then
+	haxeon_compile() { (cd "$root_dir" && "$AOT_PROGRAMS_COMPILER" "$@"); }
+fi
 verbose=0
+sanitize=0
 programs=()
 while (($# > 0)); do
 	case $1 in
 	-v) verbose=1 ;;
+	--sanitize) sanitize=1 ;;
 	--all) mapfile -t -O "${#programs[@]}" programs < <(grep -v '^#' "$root_dir/tests/programs/expected-exits.tsv" | cut -f1 | sed '/^$/d') ;;
 	*) programs+=("$1") ;;
 	esac
@@ -26,11 +35,38 @@ if ((${#programs[@]} == 0)); then
 	mapfile -t programs < <(grep -v '^#' "$root_dir/tests/aot/programs.txt" | sed '/^$/d')
 fi
 out_dir=${HAXEON_AOT_OUTPUT_DIR:-$haxeon_suite_out/aot-tests}
-sdk=${HAXEON_HLC_SDK:-$(dirname "$hashlink_dir")/hlc-sdk}
+sdk=${HAXEON_SDK:-$root_dir/out/sdk}
 toolchain=${TOOLCHAIN:-}
 build_mode=${HLC_BUILD_MODE:-development}
 jobs=${TEST_JOBS:-4}
+ninja=ninja
+for pinned in "$root_dir/.tools/ninja/ninja" "$root_dir/.tools/ninja/ninja.exe"; do
+	if [[ -x $pinned ]]; then ninja=$pinned; fi
+done
+development=$([[ $build_mode == development ]] && echo ON || echo OFF)
+sanitizer_flags=()
+if ((sanitize)); then
+	sanitizers="-fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=all -fno-omit-frame-pointer"
+	sanitizer_flags=(-DCMAKE_C_FLAGS="$sanitizers" -DCMAKE_EXE_LINKER_FLAGS="$sanitizers")
+	# The collector scans the native stack for references: a frame AddressSanitizer moved to the heap would hide them.
+	export ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=0
+	export UBSAN_OPTIONS=print_stacktrace=1
+fi
+# Why a sanitized build cannot run program NAME, or nothing.
+sanitize_skip() {
+	case $1 in
+	gc-dump-paths) echo "a heap dump writes the native stack as it is, AddressSanitizer's poisoned redzones included" ;;
+	esac
+}
 mkdir -p "$out_dir"
+
+# Builds the executable WORK/NAME from the C in WORK/NAME.c.
+build_c() {
+	local work=$1 name=$2
+	cmake -S "$root_dir/cmake/aot" -B "$work/build" -G Ninja -DCMAKE_MAKE_PROGRAM="$ninja" -DHaxeon_DIR="$sdk/cmake" \
+		-DC_SOURCES="$work/$name.c" -DOUTPUT="$work/$name" -DDEVELOPMENT="$development" ${toolchain:+-DCMAKE_C_COMPILER="$toolchain"} "${sanitizer_flags[@]}" \
+		&& cmake --build "$work/build"
+}
 export TZ=Asia/Kolkata
 
 # Compiles and runs one program both ways; writes its verdict to WORK/result: ok, FAIL ..., UNSUPPORTED ... or SKIP ...
@@ -41,6 +77,10 @@ check_program() {
 	work="$out_dir/$name"
 	rm -rf "$work"
 	mkdir -p "$work"
+	if ((sanitize)) && [[ -n $(sanitize_skip "$name") ]]; then
+		echo "SKIP $name (sanitized: $(sanitize_skip "$name"))" > "$work/result"
+		return
+	fi
 	run() {
 		local prefix=$1
 		shift
@@ -52,13 +92,17 @@ check_program() {
 		return
 	fi
 	run hl "$haxeon_hl" "$work/$name.hl"
-	if ! haxeon_compile --target=hlc --build-mode="$build_mode" ${toolchain:+--toolchain="$toolchain"} --c-sdk="$sdk" --output="$work/$name" --entry="$name" --root="$root" \
+	if ! haxeon_compile --target=hlc --build-mode="$build_mode" --output="$work/$name" --entry="$name" --root="$root" \
 		--root=stdlib "$source_file" > "$work/hlc.log" 2>&1; then
 		if grep -q "C backend:" "$work/hlc.log"; then
 			echo "UNSUPPORTED $name: $(grep -o 'C backend: .*' "$work/hlc.log" | head -1 | cut -c1-160)" > "$work/result"
 		else
 			echo "FAIL $name (hlc compile: $(grep -m1 'Uncaught\|failed' "$work/hlc.log" | cut -c1-160))" > "$work/result"
 		fi
+		return
+	fi
+	if ! build_c "$work" "$name" > "$work/c-build.log" 2>&1; then
+		echo "FAIL $name (C build: $(grep -m1 'error' "$work/c-build.log" | cut -c1-160); $work/c-build.log)" > "$work/result"
 		return
 	fi
 	run hlc "$work/$name"

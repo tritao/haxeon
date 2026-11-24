@@ -29,8 +29,11 @@ module, and what differed was the helper's span (`Hashing.hash(value)` in `LateB
 `Value.equals`); with the span taken from `Key` the builds agree.
 
 The same shape is in every first-wins registry: `valueEqualityRequests`, `enumEqualityRequests`, `wireCodecRequests`,
-`jsonCodecRequests`, `enumMethodRequests`, `enumInterfaceAdapters`, `dynamicStructureConversions`. The sweep exercises only the hash
-one. (`keyPathDefinitions` was last-wins and is fixed: its span is now a function of the path.)
+`jsonCodecRequests`, `enumMethodRequests`, `enumInterfaceAdapters`, `dynamicStructures`. The sweep exercises only the hash
+one. (`keyPathDefinitions` was last-wins and is fixed: its span is now a function of the path.) The `Dynamic` to structure copies
+were named per requesting function until 2026-11-18, so one type had a copy per requester and broke the provider model's one function
+per operation and type (`--check-reuse`); they are one helper per type now (`DynamicStructureGenerator`), with the first-wins origin of
+the others.
 
 ## Principle (what is left: origins)
 

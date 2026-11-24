@@ -6,27 +6,34 @@ haxeon_dir=${HAXEON_DIR:-"$(cd "$package_dir/../.." && pwd)"}
 nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
 platform_dir="$haxeon_dir/packages/platform"
 gpu_dir="$haxeon_dir/packages/gpu"
-output="$gpu_dir/bindings/nativekit-gpu.hxi"
+profile=portable-abi64
+targets=(--target=x86_64-linux-gnu --target=x86_64-w64-windows-gnu
+    --target=x86_64-apple-darwin --target=arm64-apple-darwin)
+suffix=
+if [[ ${1:-} == "--wasm" ]]; then
+    shift
+    profile=portable-abi32
+    targets=(--target=wasm32-unknown-wasi --target=wasm32-unknown-emscripten)
+    suffix=-wasm
+fi
+output="$gpu_dir/bindings/nativekit-gpu$suffix.hxi"
 destination=$output
 
 if [[ ${1:-} == "--check" ]]; then
     destination=$(mktemp)
     trap 'rm -f -- "$destination"' EXIT
 elif [[ $# -ne 0 ]]; then
-    echo "usage: tools/update-haxeon-hxi.sh [--check]" >&2
+    echo "usage: tools/update-haxeon-hxi.sh [--wasm] [--check]" >&2
     exit 2
 fi
 
 "$haxeon_dir/scripts/haxeon" ffi audit \
-    --target=x86_64-linux-gnu \
-    --target=x86_64-w64-windows-gnu \
-    --target=x86_64-apple-darwin \
-    --target=arm64-apple-darwin \
-    --profile=portable-abi64 \
+    "${targets[@]}" \
+    --profile="$profile" \
     --library=nativekit_gpu \
     --interface=NativeKitGpu \
     --depends=NativeKit \
-    --dependency-hxi="$platform_dir/bindings/nativekit.hxi" \
+    --dependency-hxi="$platform_dir/bindings/nativekit$suffix.hxi" \
     --include="$nativekit_dir/modules/gpu/include" \
     --include="$gpu_dir/bindings" \
     --include="$nativekit_dir/include" \

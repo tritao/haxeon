@@ -27,7 +27,14 @@ table (`HL_PATCH_TYPE_RESERVE`, a non-moving arena). A patch appends to them:
 
 - **Functions**, after the module's last slot. A removed function keeps its
   slot and last body; the new code does not call it, and the patch applies only
-  when no stored closure still reaches it (see "Stored closures").
+  when no stored closure still reaches it (see "Stored closures"). So once the
+  patch applies nothing can call it, and the compiler keeps only what the slot
+  needs: its name, stable ID and signature, and the code the module file carries
+  in it. It lets the function's IR go (`HlFunctionCache.vacate`), so a session
+  whose edits drop functions, renamed lambdas among them, does not grow with them.
+  The IR left is a body that throws null, which a session resumed from the
+  recorded history lowers into the slot: it needs no native or constant the
+  running module may lack.
 - **Types** (HLP 11): function, abstract, reference, null and packed types, and
   object, struct and virtual types with their layout. So an edit that adds a
   class (plain, a subclass of a loaded class, or an implementation of a loaded
@@ -88,7 +95,7 @@ A method an object dispatches to through its prototype keeps its slot: the proto
 running module's types never change. A changed signature of such a method (`Point.sum()` given a parameter, an
 override, an interface implementation) still reloads with `function_signature_changed` (`PatchPlanner.plan`).
 
-A fresh module (a reload) drops the retired functions and their stable IDs (`BackendAssembly.freshLayout`), since only
+A fresh module (a reload) drops the retired functions and their stable IDs (`HlModuleAssembler`), since only
 closures of the module it replaces call them.
 
 ### Stored closures
@@ -198,7 +205,7 @@ patch applies when no stored closure still holds it (see "Stored closures").
 
 ### Strict mode
 
-`haxeon run --watch --live --strict-live` refuses an edit that cannot patch
+`haxeon run --watch --strict-live` refuses an edit that cannot patch
 instead of reloading. The host records the refusal in `<module>.live.refused`
 (`<identity>:<running revision>:<refused revision>`), and before the next build
 the compiler takes the refused publications back (a live session keeps the last
@@ -232,7 +239,7 @@ place, so the edit patches instead of reloading.
 
 ### Design: reserved slots
 
-A live build (`--live`) gives every class that can take fields later `BackendAssembly.liveFieldReserve` (4) **reserved
+A live build (`--live`) gives every class that can take fields later `Compiler.liveFieldReserve` (4) **reserved
 slots**: unnamed `Dynamic` fields after the class's own fields and interface caches. Every instance is allocated with
 them, zeroed. A patch that adds a field gives it the class's first free slot: the patch names the slot and gives it the
 field's type (HLP section 7), and code addresses it like any field.
@@ -350,7 +357,10 @@ function of the source alone: a warm session that compiled other revisions first
 cold one, with no dead functions or constants. Frontend caches (parsing, typing, IR) stay incremental either
 way, and HL assembly is about a tenth of a compile, so nothing meaningful is lost.
 
-- `haxeon run --watch --live` builds with `--live` for you.
+- `haxeon run --watch` builds with `--live` for you when it patches the app, which it does when the entry class
+  declares the live host's entry points ([CLI.md](CLI.md)); `--restart` makes it relaunch the app instead, with
+  artifact builds. `haxeon build --compiler-only --patchable` builds with `--live` for a host that applies the patches
+  itself.
 - **A watch session keeps its compiler.** The worker whose session holds the patch history is chosen once, at
   the first build (`haxeon: compiler worker version <hash> (kept for this watch session)`), and every rebuild
   uses it. Edits to Haxeon's own compiler sources do not reach a running session, and nothing warns about

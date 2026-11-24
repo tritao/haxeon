@@ -27,6 +27,7 @@ private typedef NestedAlias = {
 
 /** Scalar-replace a non-escaping value and recursively inline its value fields into independent SSA fields. */
 @:allow(compiler.ir.passes.scalars.IrBodyNestedScalarReplacement)
+@:nullSafety(Strict)
 class IrNestedScalarReplacement {
 	/** Expand copies of a fresh value into inline fields, snapshot their leaves, and scalar-replace the source.
 	 * Publish the expansion only when all uses can be replaced; genuine escapes keep their original ABI.
@@ -121,11 +122,13 @@ class IrNestedScalarReplacement {
 				for (located in block.instructions)
 					switch located.value {
 						case FieldGet(out, object, field) if (aliases.exists(object.id) && !aliases.exists(out.id)):
-							var parent = aliases.get(object.id), declared = findField(objects, parent.typeName, field);
+							var parent = aliasAt(aliases, object.id),
+								declared = findField(objects, parent.typeName, field);
 							if (declared == null) return nextValue;
 							var nested = valueName(declared.type, objects);
 							if (nested != null) {
-								aliases.set(out.id, {path: parent.path.concat([field]), typeName: nested});
+								// Haxe's checker types a literal's field by its value's declared type, not by the test above.
+								aliases.set(out.id, {path: parent.path.concat([field]), typeName: (nested: String)});
 								changed = true;
 							}
 						default:
@@ -162,11 +165,11 @@ class IrNestedScalarReplacement {
 				var instruction = located.value;
 				switch instruction {
 					case FieldGet(out, object, field) if (aliases.exists(object.id)):
-						var alias = aliases.get(object.id), path = alias.path.concat([field]);
+						var alias = aliasAt(aliases, object.id), path = alias.path.concat([field]);
 						if (!aliases.exists(out.id)) copy.instructions
 							.push(new Located(FieldGet(out, root, slotName(path)), located.provenance));
 					case FieldSet(object, field, value) if (aliases.exists(object.id)):
-						var alias = aliases.get(object.id),
+						var alias = aliasAt(aliases, object.id),
 							path = alias.path.concat([field]),
 							declared = findField(objects, alias.typeName, field);
 						if (declared == null) return nextValue;
@@ -251,8 +254,9 @@ class IrNestedScalarReplacement {
 				&& !graph.dominates(home.id, block.id)) return false;
 			switch instruction {
 				case FieldSet(target, _, _) if (aliases.exists(target.id)):
-					if (!writes.exists(block.id)) writes.set(block.id, []);
-					writes.get(block.id).push(position);
+					var positions = writes.get(block.id);
+					if (positions == null) writes.set(block.id, positions = []);
+					positions.push(position);
 				case BeginTry(_, _, _): handlers.push({block: block.id, position: position});
 				default:
 			}
@@ -309,6 +313,14 @@ class IrNestedScalarReplacement {
 		return true;
 	}
 
+	/** The alias of value `id`, which a guard found among `aliases`. */
+	static function aliasAt(aliases:Map<Int, NestedAlias>, id:Int):NestedAlias {
+		var alias = aliases.get(id);
+		if (alias == null)
+			throw new InternalError("Nested scalar replacement asked for a value that is not an alias");
+		return alias;
+	}
+
 	static function hasFiniteKnownLayout(name:String, objects:IrObjectTable, visiting:Array<String>):Bool {
 		if (visiting.indexOf(name) >= 0) return false;
 		var object = objects.get(name);
@@ -362,6 +374,7 @@ class IrNestedScalarReplacement {
  * when it does not.
  */
 @:allow(compiler.ir.passes.scalars.IrBodyScalarReplacement)
+@:nullSafety(Strict)
 class IrBodyNestedScalarReplacement {
 	/** The values that are the root or a value field of it, with the path of each from the root and its type's name. */
 	final aliased = new IrValueMarks();
@@ -403,7 +416,7 @@ class IrBodyNestedScalarReplacement {
 	/** `IrNestedScalarReplacement.constructInPlace`; whether the copies of `root` were expanded and `root` replaced. */
 	function constructInPlace(pass:IrBodyScalarReplacement, root:IrValueId, typeName:String, home:Int,
 			allocation:Int):Bool {
-		var body = pass.body, objects = pass.objects;
+		var body = pass.requireBody(), objects = pass.requireObjects();
 		if (!IrNestedScalarReplacement.hasFiniteKnownLayout(typeName, objects, []))
 			return false;
 		var stores = 0;
@@ -528,13 +541,29 @@ class IrBodyNestedScalarReplacement {
 		aliasIds.push(value);
 	}
 
+	/** The path from the root of `value`, which is one of the aliases. */
+	function aliasPath(value:IrValueId):Array<String> {
+		var path = aliasPaths[value];
+		if (path == null)
+			throw new InternalError("Nested scalar replacement asked for the path of a value that is not an alias");
+		return path;
+	}
+
+	/** The type name of `value`, which is one of the aliases. */
+	function aliasType(value:IrValueId):String {
+		var name = aliasTypes[value];
+		if (name == null)
+			throw new InternalError("Nested scalar replacement asked for the type of a value that is not an alias");
+		return name;
+	}
+
 	/**
 	 * `IrNestedScalarReplacement.tryReplace`; whether `root` was replaced. In its own trial when `ownTrial`, else in the
 	 * caller's, which the caller rolls back when this gives up.
 	 */
 	function tryReplace(pass:IrBodyScalarReplacement, root:IrValueId, typeName:String, home:Int, allocation:Int,
 			hasHandlers:Bool, forcePhis:Bool, ownTrial:Bool):Bool {
-		var body = pass.body, objects = pass.objects;
+		var body = pass.requireBody(), objects = pass.requireObjects();
 		if (!IrNestedScalarReplacement.hasFiniteKnownLayout(typeName, objects, []))
 			return false;
 		release();
@@ -550,12 +579,12 @@ class IrBodyNestedScalarReplacement {
 						&& !aliased.has(body.output(row))) {
 						var object = body.operand(row, 0),
 							field = IrSymbol.at(body.aux(row)).name,
-							declared = IrNestedScalarReplacement.findField(objects, aliasTypes[object], field);
+							declared = IrNestedScalarReplacement.findField(objects, aliasType(object), field);
 						if (declared == null)
 							return false;
 						var nested = IrNestedScalarReplacement.valueName(declared.type, objects);
 						if (nested != null) {
-							addAlias(body.output(row), aliasPaths[object].concat([field]), nested);
+							addAlias(body.output(row), aliasPath(object).concat([field]), nested);
 							changed = true;
 						}
 					}
@@ -611,14 +640,14 @@ class IrBodyNestedScalarReplacement {
 					var object = body.operand(row, 0),
 						provenance = body.provenance(row),
 						field = IrSymbol.at(body.aux(row)).name,
-						path = aliasPaths[object].concat([field]);
+						path = aliasPath(object).concat([field]);
 					if (opcode == IrOpcode.FieldGet) {
 						var out = body.output(row);
 						if (!aliased.has(out))
 							linkLoad(body, block, row, out, root, slotSymbol(path), provenance);
 					} else {
 						var value = body.operand(row, 1),
-							declared = IrNestedScalarReplacement.findField(objects, aliasTypes[object], field);
+							declared = IrNestedScalarReplacement.findField(objects, aliasType(object), field);
 						if (declared == null)
 							return false;
 						var nested = IrNestedScalarReplacement.valueName(declared.type, objects);
@@ -648,7 +677,7 @@ class IrBodyNestedScalarReplacement {
 				var relative = slot.path.slice(path.length), leaf:IrValueId;
 				if (aliased.has(value)) {
 					leaf = body.newValue(body.valueName(value) + ".field", body.typeId(slot.type));
-					linkLoad(body, block, row, leaf, root, slotSymbol(aliasPaths[value].concat(relative)), provenance);
+					linkLoad(body, block, row, leaf, root, slotSymbol(aliasPath(value).concat(relative)), provenance);
 				} else {
 					var current = value, currentName = nested;
 					for (part in relative) {
@@ -715,6 +744,8 @@ class IrBodyNestedScalarReplacement {
 					work.push(graph.successor(block, index));
 			while (work.length > 0) {
 				var id = work.pop();
+				if (id == null)
+					break;
 				if (id == homeId || seen[id] == mark)
 					continue;
 				seen[id] = mark;

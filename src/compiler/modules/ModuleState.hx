@@ -11,30 +11,6 @@ import compiler.syntax.TokenTable;
 import compiler.types.DeclarationTypes.InferredSignature;
 import compiler.types.TypedAst.TypedFunction;
 
-/** Artifact boundary at which a dependent declaration observes a change. */
-enum abstract SemanticDependencyKind(String) {
-	var Signature = "signature";
-	var Body = "body";
-	var Layout = "layout";
-	var Initializer = "initializer";
-	var InlineConstant = "inline-constant";
-
-	/**
-	 * The owner read the inferred type of an unannotated declaration (its field type or its signature), so it is typed against
-	 * that type: when the declaration's body or initializer changes, so may the type (`LAZY_DECLARATION_TYPING.md`, "Invalidation").
-	 */
-	var DeclarationType = "declaration-type";
-}
-
-/** Dependency edge from one declaration artifact to another declaration. */
-typedef SemanticDependency = {
-	final kind:SemanticDependencyKind;
-	final target:String;
-
-	/** Revision-independent semantic identity when the edge was emitted by resolution. */
-	final ?targetId:String;
-}
-
 /**
  * Incremental artifacts and last-known-good state owned by one source module.
  * Failed edits may update diagnostics but must not replace the last good tree.
@@ -65,7 +41,6 @@ class ModuleState {
 	public var dependencies:Array<String> = [];
 	public var conditionalDefines:Array<String> = [];
 	public var embeddedInputs:Array<compiler.core.EmbeddedText.EmbeddedInput> = [];
-	public var semanticDependencies:Map<String, Array<SemanticDependency>> = [];
 	public var diagnostics:Array<Diagnostic> = [];
 	public var signatureFingerprints:Map<String, String> = [];
 	public var interfaceFingerprints:Map<String, String> = [];
@@ -106,19 +81,14 @@ class ModuleState {
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var typedSourceRevisions:Map<String, Int> = [];
 
-	/** Purity/no-return answers each cached typed function's body relied on, keyed by that
-	 * function's own name. Compared against a fresh recomputation on every compile so a caller
-	 * whose depended-upon answer changed elsewhere gets retyped even though its own body did not.
+	/**
+	 * What each unit of this module read when it was last typed (`DeclarationFacts`), by unit: a function, a field initializer
+	 * (`Class.__init.x`) or a shared unit. A unit is typed again when a fact it read changed after it was typed.
 	 */
-	public var purityQueries:Map<String, Map<String, Bool>> = [];
+	public var unitReads:Map<String, compiler.semantic.DeclarationFacts.UnitReads> = [];
 
 	/** The key path literals each typed function uses; a literal's helpers stay only while one is used. */
 	public var keyPathUses:Map<String, Map<String, Bool>> = [];
-
-	public var noReturnQueries:Map<String, Map<String, Bool>> = [];
-
-	/** Foreign default-argument syntax embedded in each cached function, by source snapshot. */
-	public var defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>> = [];
 
 	/** Typed functions changed by analysis and awaiting build-time IR lowering. */
 	public var pendingIrFunctions:Map<String, Bool> = [];
@@ -145,12 +115,16 @@ class ModuleState {
 	public var canonicalAbstracts:Array<compiler.syntax.Ast.AstAbstract> = [];
 	public var canonicalInterfaces:Array<compiler.syntax.Ast.AstInterface> = [];
 	public var canonicalClasses:Array<compiler.syntax.Ast.AstClass> = [];
-	public var canonicalGenericOrigins:Array<String> = [];
 	public var canonicalGeneratedFunctions:Array<String> = [];
 	public var canonicalRevision:Int = 0;
 	public var canonicalEntry:String = "";
 	public var canonicalAliasKey:String = "";
-	public var canonicalCalls:Map<String, Array<String>> = [];
+
+	/**
+	 * What the module's canonical declarations were resolved in, besides their own text (`SemanticAssembly.scopeKey`): the names
+	 * every module sees and the module's imports and declarations.
+	 */
+	public var canonicalScope:String = "";
 
 	/**
 	 * The key of the static extensions the module's bodies were typed with (`StaticExtensionTable.keyOfModule`): when it changes,
@@ -220,7 +194,6 @@ class ModuleState {
 		result.dependencies = dependencies.copy();
 		result.conditionalDefines = conditionalDefines.copy();
 		result.embeddedInputs = embeddedInputs.copy();
-		result.semanticDependencies = copyDependencyMap(semanticDependencies);
 		result.diagnostics = diagnostics.copy();
 		result.typingWarnings = [for (key => warnings in typingWarnings) key => warnings.copy()];
 		result.generationWarnings = generationWarnings.copy();
@@ -238,10 +211,8 @@ class ModuleState {
 		result.inferredSignatures = copyMap(inferredSignatures);
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
-		result.purityQueries = copyNestedMap(purityQueries);
+		result.unitReads = copyMap(unitReads);
 		result.keyPathUses = copyNestedMap(keyPathUses);
-		result.noReturnQueries = copyNestedMap(noReturnQueries);
-		result.defaultArgumentSources = copyNestedMap(defaultArgumentSources);
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);
 		result.irSourceRevisions = copyMap(irSourceRevisions);
@@ -257,12 +228,11 @@ class ModuleState {
 		result.canonicalAbstracts = canonicalAbstracts;
 		result.canonicalInterfaces = canonicalInterfaces;
 		result.canonicalClasses = canonicalClasses;
-		result.canonicalGenericOrigins = canonicalGenericOrigins;
 		result.canonicalGeneratedFunctions = canonicalGeneratedFunctions;
 		result.canonicalRevision = canonicalRevision;
 		result.canonicalEntry = canonicalEntry;
 		result.canonicalAliasKey = canonicalAliasKey;
-		result.canonicalCalls = canonicalCalls;
+		result.canonicalScope = canonicalScope;
 		result.staticExtensionKey = staticExtensionKey;
 		return result;
 	}
@@ -271,13 +241,6 @@ class ModuleState {
 		var result:Map<String, T> = [];
 		for (name => value in source)
 			result.set(name, value);
-		return result;
-	}
-
-	static function copyDependencyMap(source:Map<String, Array<SemanticDependency>>):Map<String, Array<SemanticDependency>> {
-		var result:Map<String, Array<SemanticDependency>> = [];
-		for (name => dependencies in source)
-			result.set(name, dependencies.copy());
 		return result;
 	}
 

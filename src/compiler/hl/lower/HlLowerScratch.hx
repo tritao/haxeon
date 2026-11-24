@@ -17,6 +17,7 @@ import compiler.ir.model.IrTypeIds;
  * dense within a function's body. A function's results are copied out at their final length; `release` drops what refers to the
  * function, so none stays reachable from the tables once it is lowered. One function at a time: lowering never nests.
  */
+@:nullSafety(Strict)
 class HlLowerScratch {
 	/** The function's graph, shared by the analyses of it, and the analyses. */
 	public final graph = new IrBodyGraph();

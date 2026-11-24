@@ -41,7 +41,49 @@ class HxiParserMain {
 		return compiler;
 	}
 
+	static function checkWriterLayout():Void {
+		var signature = "extern fn geo_distance(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;",
+			source =
+				'interface Geometry @target("x86_64-linux-gnu") {
+				extern fn version() -> i32;
+				$signature
+			}',
+			model = HxiParser.parse("geometry.hxi", source),
+			fitWidth = signature.length + 4,
+			flat = HxiWriter.write(model, null, null, fitWidth),
+			width = fitWidth - 1,
+			wrapped = HxiWriter.write(model, null, null, width);
+		expect(flat.indexOf('\t$signature\n') >= 0, "a declaration at the column limit should stay on one line");
+		expect(wrapped.indexOf("\textern fn geo_distance(\n\t\ta: ptr<const<geo_point>>,\n\t\tb: ptr<const<geo_point>>\n\t) -> f64;\n")
+			>= 0,
+			"an overflowing signature should wrap its parameters and keep nested pointer types intact");
+		expect(wrapped.indexOf("\textern fn version() -> i32;\n") >= 0, "short declarations should stay on one line");
+		for (text in [flat, wrapped]) {
+			var reparsed = HxiParser.parse("geometry.hxi", text);
+			expect(HxiWriter.write(reparsed, null, null, fitWidth) == flat
+				&& HxiWriter.write(reparsed, null, null, width) == wrapped, "both layouts should round-trip");
+		}
+
+		var lists = HxiParser.parse("lists.hxi",
+			'interface Lists @target("x86_64-linux-gnu")
+			@depends("dependency_one", "dependency_two", "dependency_three") {
+			callback distance = fn(a: ptr<const<geo_point>>, b: ptr<const<geo_point>>) -> f64;
+			struct points @layout(512, 8) { values: array<ptr<const<geo_point>>, 64> @offset(0); }
+		}'),
+			narrow = HxiWriter.write(lists, null, null, 45);
+		expect(narrow.indexOf('@depends(\n\t\t"dependency_one",\n\t\t"dependency_two",\n\t\t"dependency_three"\n\t) {')
+			>= 0,
+			"metadata arguments should wrap one per line");
+		expect(narrow.indexOf("callback distance = fn(\n\t\ta: ptr<const<geo_point>>,") >= 0,
+			"callback parameters should wrap like function parameters");
+		expect(narrow.indexOf("values: array<\n\t\t\tptr<const<geo_point>>,\n\t\t\t64\n\t\t> @offset(0);") >= 0,
+			"generic arguments should wrap from the field's indentation");
+		expect(HxiWriter.write(HxiParser.parse("lists.hxi", narrow)) == HxiWriter.write(lists),
+			"multiline metadata, callbacks and generics should retain their model");
+	}
+
 	static function main():Void {
+		checkWriterLayout();
 		var rawSource = 'interface raw @target("x86_64-linux-gnu") { extern fn invalid(value: i32 @out) -> void; }',
 			raw = HxiParser.parse("raw.hxi", rawSource);
 		switch raw.declarations[0] {
@@ -268,7 +310,8 @@ class HxiParserMain {
 			&& layoutTypes.source.indexOf("import nativekit.ffi.style as style;") >= 0
 			&& layoutTypes.source.indexOf("import nativekit.ffi.Types;") < 0
 			&& layoutTypes.source.indexOf("nativekit.ffi.Types.") < 0
-			&& layoutTypes.source.indexOf("set_kind(value:Kind)") >= 0
+			&& layoutTypes.source.indexOf("var kind(get, set):Kind") >= 0
+			&& layoutTypes.source.indexOf("set_kind(value:Kind):Kind") >= 0
 			&& layoutConstants != null
 			&& layoutConstants.source.indexOf("class StyleConstants") >= 0
 			&& layoutNatives[0].name == "nativekit.ffi.style.lib_check_value",
@@ -278,7 +321,7 @@ class HxiParserMain {
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
 		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
 		layoutCompiler.update("LayoutMain.hx",
-			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Types.Kind = Types.Kind.Primary; point.set_textValue(42); point.set_kind(kind); return point.get_textValue(); }");
+			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Types.Kind = Types.Kind.Primary; point.kind = kind; return (point.textValue = 42) == point.textValue ? point.textValue : 0; }");
 		layoutCompiler.analyze("LayoutMain");
 		layoutCompiler.update("QualifiedLayoutMain.hx",
 			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.Primary; return kind.rawValue(); }");
@@ -783,7 +826,7 @@ class HxiParserMain {
 		abiBooleanCompiler.addFfiInterface("abi_bool.hxi",
 			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options @layout(8, 4) { struct_size: u32 @offset(0) @struct_size; enabled: nk_bool @offset(4); } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; }');
 		abiBooleanCompiler.update("AbiBoolMain.hx",
-			"import abi_bool; function main():Int { var value:options = cast haxe.io.Bytes.alloc(8); value.set_enabled(true); return value.get_enabled() ? 1 : 0; }");
+			"import abi_bool; function main():Int { var value:options = cast haxe.io.Bytes.alloc(8); value.enabled = true; return value.enabled ? 1 : 0; }");
 		abiBooleanCompiler.compile("AbiBoolMain");
 		var opaqueCompiler = newCompiler();
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
@@ -961,13 +1004,21 @@ class HxiParserMain {
 		expect(projection != null
 			&& projection.source.text.indexOf("abstract nk_options(haxe.io.Bytes) from haxe.io.Bytes to haxe.io.Bytes")
 			>= 0
-			&& projection.source.text.indexOf("function set_flags") >= 0
+			&& projection.source.text.indexOf("var flags(get, set):") >= 0
 			&& projection.source.text.indexOf('@:cNative("nativekit", "nk_open_v1", "11>6")') >= 0
 			&& projection.source.text.indexOf('extern function nk_version():Int;') >= 0,
 			"compiler should expose bridgeable HXI functions through a generated source module");
 		var nested = parseValidated("nested.hxi",
 			'interface nested @target("x86_64-linux-gnu") @library("nested") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct box @layout(16, 4) { start: point @offset(0); end: point @offset(8); } }');
 		var nestedSource = HxiProjection.source(nested);
+		var readOnly = parseValidated("readonly.hxi",
+			'interface readonly @target("x86_64-linux-gnu") @library("readonly") { type fixed = const<i32>; struct sample @layout(8, 4) { value: fixed @offset(0); size: i32 @offset(4); } }');
+		var readOnlySource = HxiProjection.source(readOnly);
+		expect(readOnlySource.indexOf("var value(get, never):Int") >= 0
+			&& readOnlySource.indexOf("function get_value():Int") >= 0
+			&& readOnlySource.indexOf("function set_value(value:Int)") < 0
+			&& readOnlySource.indexOf("var __hxi_field_size(get, set):Int") >= 0,
+			"const scalar fields should project a read-only property");
 		expect(nestedSource.indexOf("function get_start():point") >= 0
 			&& nestedSource.indexOf("__hxi_struct_copy") >= 0,
 			"nested fixed-layout structs should project typed copy accessors");
@@ -978,7 +1029,7 @@ class HxiParserMain {
 			case _:
 				throw "borrowed pointer field policy was not retained";
 		}
-		expect(HxiProjection.source(pointerFields).indexOf("function set_context") >= 0,
+		expect(HxiProjection.source(pointerFields).indexOf("var context(get, set):") >= 0,
 			"borrowed opaque pointer fields should project typed accessors");
 		var arrays = parseValidated("arrays.hxi",
 			'interface arrays @target("x86_64-linux-gnu") @library("arrays") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } struct values @layout(24, 4) { bytes: array<u8, 4> @offset(0); numbers: array<i32, 3> @offset(4); points: array<point, 1> @offset(16); } }');

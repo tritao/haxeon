@@ -4,9 +4,9 @@ import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
 import compiler.ir.passes.inlining.IrInliner;
-import compiler.ir.passes.inlining.IrInliner.InlineMemo;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.passes.scalars.IrScalarArguments;
+import compiler.ir.reuse.IrStageMemo.IrStageEntry;
 import compiler.ir.verify.IrVerifier;
 
 class InlinerMain {
@@ -140,8 +140,8 @@ class InlinerMain {
 		var before:Map<String, IrFunction> = [];
 		for (fn in program.functions)
 			before.set(fn.name, fn);
-		var originals = program.functions.copy(), cache = new IrInlineCache();
-		var changed = IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length;
+		var originals = program.functions.copy(), cache = new InlinerSession();
+		var changed = cache.run(program).length;
 		IrVerifier.verify(program);
 		var after:Map<String, IrFunction> = [];
 		for (fn in program.functions)
@@ -246,8 +246,8 @@ class InlinerMain {
 			+ "function main():Int { var a = new Box(2); var b = new Box(3); return pureCaller(a) + writeCaller(a) + escapeCaller(a) + storeCaller(a, b) + gapCaller(a); }");
 		var elisionProgram = Frontend.compile(elisionSource(readsOnlyBody));
 		var elisionOriginals = elisionProgram.functions.copy(),
-			elisionCache = new IrInlineCache();
-		IrInliner.run(elisionProgram, elisionCache, compiler.ir.pipeline.TargetProfile.wasm);
+			elisionCache = new InlinerSession();
+		elisionCache.run(elisionProgram);
 		IrVerifier.verify(elisionProgram);
 		expect(allocations(programFunction(elisionProgram, "pureCaller")) == 0,
 			"a read-only, store-free callee gets the source itself");
@@ -259,7 +259,7 @@ class InlinerMain {
 		for (fn in elisionOriginals)
 			elisionHybrid.push(fn.name == "readsOnly" ? programFunction(editedElision, "readsOnly") : fn);
 		elisionProgram.functions = elisionHybrid;
-		var elisionChanged = IrInliner.run(elisionProgram, elisionCache, compiler.ir.pipeline.TargetProfile.wasm);
+		var elisionChanged = elisionCache.run(elisionProgram);
 		expect(elisionChanged.indexOf("pureCaller") >= 0,
 			"a caller whose callee started writing its parameter is reported as changed");
 		expect(allocations(programFunction(elisionProgram, "pureCaller")) == 1,
@@ -275,22 +275,19 @@ class InlinerMain {
 		// not reported as changed; one whose positions shift or whose code changes still is.
 		var editBase =
 			"function stay(x:Int):Int return x + 1; function edit(x:Int):Int return x + 2; function main():Int return stay(1) + edit(1);";
-		var editCache = new IrInlineCache();
-		IrInliner.run(Frontend.compile(editBase), editCache, compiler.ir.pipeline.TargetProfile.wasm);
-		var tailEdit = IrInliner.run(Frontend.compile(editBase + " function extra():Int return 5;"), editCache,
-			compiler.ir.pipeline.TargetProfile.wasm);
+		var editCache = new InlinerSession();
+		editCache.run(Frontend.compile(editBase));
+		var tailEdit = editCache.run(Frontend.compile(editBase + " function extra():Int return 5;"));
 		expect(tailEdit.indexOf("stay") < 0 && tailEdit.indexOf("edit") < 0,
 			"an edit after a function leaves it unchanged");
 		expect(tailEdit.indexOf("extra") >= 0, "an added function is reported as changed");
-		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2",
-			"x + 3") + " function extra():Int return 5;"), editCache,
-			compiler.ir.pipeline.TargetProfile.wasm);
+		var bodyEdit = editCache.run(Frontend.compile(StringTools.replace(editBase, "x + 2",
+			"x + 3") + " function extra():Int return 5;"));
 		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
 		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
-		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase,
+		var shifted = editCache.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase,
 			"x + 2", "x + 3")
-			+ " function extra():Int return 5;"),
-			editCache, compiler.ir.pipeline.TargetProfile.wasm);
+			+ " function extra():Int return 5;"));
 		expect(shifted.indexOf("stay") >= 0,
 			"a function whose positions shifted is reported as changed so its line information is refreshed");
 		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
@@ -299,22 +296,22 @@ class InlinerMain {
 function stay(x:Int):Int return x + 1;
 function main():Int return stay(1);
 ";
-		var lineCache = new IrInlineCache();
-		IrInliner.run(Frontend.compile(linesFor("// a")), lineCache, compiler.ir.pipeline.TargetProfile.wasm);
+		var lineCache = new InlinerSession();
+		lineCache.run(Frontend.compile(linesFor("// a")));
 		var offsetProgram = Frontend.compile(linesFor("// a longer comment"));
-		var offsetEdit = IrInliner.run(offsetProgram, lineCache, compiler.ir.pipeline.TargetProfile.wasm);
+		var offsetEdit = lineCache.run(offsetProgram);
 		expect(offsetEdit.indexOf("stay") < 0,
 			"a function whose lines and columns held is unchanged when only byte offsets moved");
-		expect(lineCache.relocated.indexOf("stay") >= 0, "a function that only moved within its file is lowered again");
+		expect(lineCache.cache.relocated.indexOf("stay") >= 0,
+			"a function that only moved within its file is lowered again");
 		// It keeps the new positions, so a warm build names the same source snapshot as a cold one.
 		var coldProgram = Frontend.compile(linesFor("// a longer comment"));
 		IrInliner.run(coldProgram, new IrInlineCache(), compiler.ir.pipeline.TargetProfile.wasm);
 		expect(IrFunctionStateCodec.encode(programFunction(offsetProgram, "stay"))
 			.compare(IrFunctionStateCodec.encode(programFunction(coldProgram, "stay"))) == 0,
 			"a function that only moved carries the positions a cold compile gives it");
-		var lineEdit = IrInliner.run(Frontend.compile(linesFor("// a
-// b")), lineCache,
-			compiler.ir.pipeline.TargetProfile.wasm);
+		var lineEdit = lineCache.run(Frontend.compile(linesFor("// a
+// b")));
 		expect(lineEdit.indexOf("stay") >= 0, "a function whose line number moved is reported as changed");
 		// A lambda's code fingerprint is remembered by its IR function, also in the copy a compile runs on, and taken again
 		// for a new function object or a different set of C natives.
@@ -368,9 +365,10 @@ function main():Int return stay(1);
 			+ "function main():Int return viaBase(new Derived(1)) + viaLeaf(new LeafChild(2));");
 		var grownPristine = grown.functions.copy(),
 			grownObjects = grown.objects.copy(),
-			grownCache = new IrInlineCache();
-		IrInliner.run(grown, grownCache, compiler.ir.pipeline.TargetProfile.wasm);
-		var memosBefore:Map<String, InlineMemo> = [for (name => memo in grownCache.memo) name => memo];
+			grownCache = new InlinerSession();
+		grownCache.run(grown);
+		var memosBefore:Map<String, Null<IrStageEntry>> =
+			[for (fn in grown.functions) fn.name => grownCache.entry(fn.name)];
 		grown.functions = grownPristine.copy();
 		grown.objects = grownObjects.concat([
 			{
@@ -382,10 +380,10 @@ function main():Int return stay(1);
 				methods: []
 			}
 		]);
-		expect(IrInliner.run(grown, grownCache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
+		expect(grownCache.run(grown).length == 0,
 			"a new class changes no function");
 		for (name => memo in memosBefore)
-			expect(grownCache.memo.get(name) == memo, 'a new class that $name never looked at must not redo it');
+			expect(grownCache.entry(name) == memo, 'a new class that $name never looked at must not redo it');
 		// A stored scalar's width affects forwarding even when the IR register type is unchanged.
 		var narrowProgram = Frontend.compile('struct NarrowValue { public var text:String; public var value:UInt8; '
 			+ 'public function new() { text = "x"; value = 0; } } '
@@ -393,9 +391,9 @@ function main():Int return stay(1);
 			+ 'function main():Int return writeAndRead(new NarrowValue(), 257);'),
 			narrowFunctions = narrowProgram.functions.copy(),
 			narrowObjects = narrowProgram.objects.copy(),
-			narrowCache = new IrInlineCache();
-		IrInliner.run(narrowProgram, narrowCache, compiler.ir.pipeline.TargetProfile.wasm);
-		var narrowMemo = narrowCache.memo.get("writeAndRead");
+			narrowCache = new InlinerSession();
+		narrowCache.run(narrowProgram);
+		var narrowMemo = narrowCache.entry("writeAndRead");
 		expect(narrowMemo != null, "the narrow-field function should be memoized");
 		narrowProgram.functions = narrowFunctions.copy();
 		narrowProgram.objects = [for (object in narrowObjects)
@@ -414,8 +412,8 @@ function main():Int return stay(1);
 							scalarStorage:{size:1, signed:true}
 					}]
 			}];
-		IrInliner.run(narrowProgram, narrowCache, compiler.ir.pipeline.TargetProfile.wasm);
-		expect(narrowCache.memo.get("writeAndRead") != narrowMemo,
+		narrowCache.run(narrowProgram);
+		expect(narrowCache.entry("writeAndRead") != narrowMemo,
 			"a width or signedness change must invalidate forwarding");
 
 		// A new subclass that overrides a method resolved through its base changes the functions that looked at that base, and only those.
@@ -430,23 +428,23 @@ function main():Int return stay(1);
 				methods: [{name: "twice", functionName: compiler.ir.model.IrSymbol.of("Override.twice")}]
 			}
 		]);
-		var overridden = IrInliner.run(grown, grownCache, compiler.ir.pipeline.TargetProfile.wasm);
+		var overridden = grownCache.run(grown);
 		expect(overridden.indexOf("viaBase") >= 0,
 			"a function that resolved a method through the base is redone when a subclass overrides it");
 		expect(callsIn(programFunction(grown, "viaBase")).indexOf("twice") >= 0,
 			"an overridden method is no longer inlined");
-		expect(grownCache.memo.get("viaLeaf") == memosBefore.get("viaLeaf"),
+		expect(grownCache.entry("viaLeaf") == memosBefore.get("viaLeaf"),
 			"a function that never looked at the base is not redone");
 		expect(overridden.indexOf("viaLeaf") < 0, "a function that never looked at the base is not reported");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
 		var inlinedMain = after.get("main"),
-			cleanedMain = cache.memo.get("main").cleaned;
+			cleanedMain = cache.entry("main").output;
 		program.functions = originals.copy();
-		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
+		expect(cache.run(program).length == 0,
 			"an unchanged program must report no changed functions");
 		expect(programFunction(program, "main") == inlinedMain, "an unchanged caller keeps its inlined identity");
-		expect(cleanedMain != null && cache.memo.get("main").cleaned == cleanedMain
-			&& cache.copy().memo.get("main").cleaned == cleanedMain,
+		expect(cleanedMain != null && cache.entry("main").output == cleanedMain
+			&& cache.copy().entry("main").output == cleanedMain,
 			"unchanged cleanup is reused and retained when copying the incremental cache");
 		// Editing a callee changes exactly the functions that inlined it.
 		var edited = Frontend.compile(StringTools.replace(source, "function twice(x:Int):Int return x + x;",
@@ -455,7 +453,7 @@ function main():Int return stay(1);
 		for (fn in originals)
 			hybrid.push(fn.name == "twice" ? programFunction(edited, "twice") : fn);
 		program.functions = hybrid;
-		var names = IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm);
+		var names = cache.run(program);
 		expect(names.indexOf("twice") >= 0, "the edited callee is reported as changed");
 		expect(names.indexOf("main") >= 0, "a caller that inlined the edited callee is reported as changed");
 		expect(names.indexOf("fib") < 0 && names.indexOf("loops") < 0,
@@ -466,16 +464,16 @@ function main():Int return stay(1);
 			&& !(IrFunctionStateCodec.encode(editedMain).compare(IrFunctionStateCodec.encode(inlinedMain)) == 0),
 			"the inlined caller carries the edited callee");
 		program.functions = hybrid;
-		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
+		expect(cache.run(program).length == 0,
 			"a repeated compile of the edit reports no changed functions");
 		expect(programFunction(program, "main") == editedMain,
 			"the caller keeps the identity of the edited inlined form");
 		// A rolled-back candidate must not disturb the published cache.
 		var branch = cache.copy();
 		program.functions = originals.copy();
-		IrInliner.run(program, branch, compiler.ir.pipeline.TargetProfile.wasm);
+		branch.run(program);
 		program.functions = hybrid;
-		expect(IrInliner.run(program, cache, compiler.ir.pipeline.TargetProfile.wasm).length == 0,
+		expect(cache.run(program).length == 0,
 			"the published cache is unaffected by a discarded copy");
 		Sys.println("PASS: inliner replaces small calls, keeps recursion and handlers, verifies, and leaves cached IR alone");
 	}

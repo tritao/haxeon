@@ -38,7 +38,7 @@ set_target_properties(jit_native_properties PROPERTIES
 # The C programs and HashLink libraries the GC and JIT integration tests run (tests/integration/test-gc-*.sh and
 # test-jit-*-allocation.sh), built with the VM so they take its compile settings: its C runtime with MSVC, its headers, its
 # optimization. A program hosts the VM itself and links the static core; a library is loaded into hl and takes the VM's API
-# from it. They land in <build>/native-tests, beside hashlink-runtime.
+# from it. They land in <build>/native-tests.
 set(HAXEON_NATIVE_TEST_DIR "${CMAKE_BINARY_DIR}/native-tests")
 set(HAXEON_NATIVE_TEST_PROGRAMS
   gc_allocation_paths gc_census gc_empty_pages gc_owner_pages gc_owner_tlab gc_owner_classes gc_arenas gc_arena_free gc_mark_completion

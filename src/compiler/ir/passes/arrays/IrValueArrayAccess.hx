@@ -9,6 +9,7 @@ import compiler.ir.passes.values.IrValueLaneReference;
 import compiler.ir.verify.IrVerifier;
 
 /** Emit typed access to one leaf of an inline array element without materializing the containing value. */
+@:nullSafety(Strict)
 class IrValueArrayAccess {
 	final wordBits:Int;
 	final declarations:Map<String, IrNative> = [];
@@ -91,9 +92,9 @@ class IrValueArrayAccess {
 	}
 
 	public function natives():Array<IrNative> {
-		var names = [for (name in declarations.keys()) name];
-		names.sort(Reflect.compare);
-		return [for (name in names) declarations.get(name)];
+		var natives = [for (native in declarations) native];
+		natives.sort((a, b) -> Reflect.compare(a.name, b.name));
+		return natives;
 	}
 
 	function scalarOffset(slot:IrValueLaneSlot):Int {

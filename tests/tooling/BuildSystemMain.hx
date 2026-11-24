@@ -33,6 +33,7 @@ import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
 import build.native.NativeToolchain;
+import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import haxeon.io.FileTree;
@@ -44,15 +45,19 @@ import project.PackageLockfile.PackageLockEntry;
 import project.PackageManifest;
 import project.PackageManifest.InstrumentManifest;
 import project.PackageResolver;
+import project.PackageSourceCodec;
 import project.PackageSourceTools;
 import project.PathSourceAcquirer;
 import project.ProjectDiscovery;
+import project.ProjectSourceAcquirer;
+import project.RegistryIndex;
 import project.RegistryPublisher;
 import project.RegistrySourceAcquirer;
 import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
 import tools.DirectoryWatcher;
+import tools.LiveHostBuild;
 import tools.WatchEventLines;
 import tools.WatchEvents;
 import tools.WatchRun;
@@ -63,6 +68,12 @@ import sys.thread.Thread;
 #end
 
 class BuildSystemMain {
+	/** The SDK the builds lower against: the test driver's (`HAXEON_SDK`), else the checkout's. */
+	static function sdk():String {
+		var current = build.HaxeonSdk.current();
+		return current != null ? current : build.HaxeonSdk.ofCheckout(Sys.getCwd());
+	}
+
 	static function main():Void {
 		// testWatchBuildsSavesMadeDuringABuild launches this program as its watched app.
 		var args = Sys.args();
@@ -87,8 +98,10 @@ class BuildSystemMain {
 		testDigestStore();
 		testSharedDigestsAcrossExecutions();
 		testWorkerVersionMemo();
+		testIdleWork();
 		testWatchChangeClassification();
 		testWatchSnapshot();
+		testLiveEntryPoints();
 		testWatchEventsFile();
 		testDirectoryWatcher();
 		#if (target.threaded && !eval)
@@ -108,7 +121,11 @@ class BuildSystemMain {
 		testPackageCompatibility();
 		testHaxelibAdapter();
 		testRegistryAdapter();
+		testDefaultRegistryShorthand();
 		testRegistryPublisher();
+		testLiveRegistry();
+		testRegistryRepick();
+		testRegistryPatch();
 		testResolverDelegatesAcquisition();
 		testAlternateRootManifest();
 		testLockfileRoundTrip();
@@ -126,7 +143,7 @@ class BuildSystemMain {
 			for (shared in [false, true]) {
 				var target = Target.parse(triple),
 					environment = new BuildEnvironment(root, root + "/build", BuildProfile.Debug, target),
-					context = new LoweringContext(environment, null, project, null, root, null, false, shared),
+					context = new LoweringContext(environment, null, project, null, sdk(), null, false, shared),
 					artifact = new Artifact(new ArtifactId("aggregate", ArtifactKind.NativeSharedLibrary, target)),
 					lowered = build.native.NativeCMakeProvider.lowerPackage(project.rootPackage, [artifact], context),
 					action = lowered.actions[1],
@@ -292,7 +309,7 @@ class BuildSystemMain {
 			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug,
 				linux, info, instrument), home);
 		}
-		var home = Sys.getCwd(),
+		var home = sdk(),
 			clang = toolchain(true, scope, home),
 			gcc = toolchain(false, scope, home),
 			plain = toolchain(true, null, home),
@@ -315,7 +332,7 @@ class BuildSystemMain {
 			"sources outside the native scope, or excluded from it, are left alone");
 		expect(clang.compileArguments("native/a.c", "a.o", []).indexOf("-finstrument-functions-after-inlining") < 0,
 			"a source without an instrument root is left alone");
-		var hooks = Path.join([build.HashLinkPath.directory(home), "libhlprof_hooks.a"]),
+		var hooks = Path.join([build.HashLinkPath.libraryDirectory(home), "libhlprof_hooks.a"]),
 			link = clang.sharedArguments("a.so", ["a.o"], ["-lm"]);
 		expect(clang.instrumentHooks() == hooks && link.indexOf(hooks) > link.indexOf("a.o")
 			&& link.indexOf(hooks) > link.indexOf("-lm"),
@@ -855,6 +872,41 @@ class BuildSystemMain {
 		FileTree.remove(root);
 	}
 
+	/**
+		A watch's edit build leaves work for when the watch is idle (`BuildSession.whenIdle`): the latest under each key, in the order
+		first left, once. It drops the action's recorded fingerprint first (`ActionFingerprint.forget`), so a build in between reruns
+		the action rather than taking outputs it did not see for up to date.
+	**/
+	static function testIdleWork():Void {
+		var session = new BuildSession(), ran:Array<String> = [];
+		session.whenIdle("a", () -> ran.push("a1"));
+		session.whenIdle("b", () -> ran.push("b"));
+		session.whenIdle("a", () -> ran.push("a2"));
+		session.runIdleWork();
+		session.runIdleWork();
+		expect(ran.join(",") == "a2,b",
+			'idle work runs the latest under each key, in first order, once: ${ran.join(",")}');
+		var root = temporaryDirectory("idle-work"),
+			buildRoot = Path.join([root, "build"]),
+			source = Path.join([root, "input.txt"]),
+			output = Path.join([root, "output.txt"]),
+			runs = 0;
+		File.saveContent(source, "input\n");
+		var environment = new BuildEnvironment(root, buildRoot),
+			action = new ExecutionAction(new ActionId("idle-work"), [], [source], [output], "write output",
+				Compiler("compiler", [], root, new Map(), () -> {
+					runs++;
+					File.saveContent(output, "built\n");
+					return 0;
+				}));
+		var execute = () -> new Executor(environment, 1, _ -> {}, session.digests).execute(new ExecutionPlan([action]));
+		execute();
+		expect(execute().actions[0].skipped && runs == 1, "a recorded fingerprint skips the action");
+		ActionFingerprint.forget(buildRoot, action);
+		expect(!execute().actions[0].skipped && runs == 2, "a forgotten fingerprint reruns the action");
+		FileTree.remove(root);
+	}
+
 	static function testWorkerVersionMemo():Void {
 		var session = new BuildSession(), computed = 0, compute = () -> "version-" + (++computed);
 		expect(session.workerVersion("identity-a", compute) == "version-1"
@@ -866,7 +918,8 @@ class BuildSystemMain {
 		var root = temporaryDirectory("worker-memo"),
 			source = Path.join([root, "compiler"]),
 			home = Path.join([root, "home"]);
-		FileSystem.createDirectory(home);
+		FileSystem.createDirectory(Path.join([home, "stdlib"]));
+		File.saveContent(Path.join([home, build.HaxeonSdk.MANIFEST]), '[roots]\nstdlib = "stdlib"\n');
 		FileSystem.createDirectory(source);
 		File.saveContent(Path.join([source, "A.hx"]), "class A {}
 ");
@@ -881,6 +934,46 @@ class BuildSystemMain {
 			"without a session the version follows the sources");
 		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one,
 			"a profile port selects a different worker");
+		FileTree.remove(root);
+	}
+
+	/**
+	 * `haxeon run --watch` patches an app live when its entry class declares the live host's entry points as static functions,
+	 * read from the entry module's source: in a class named like the module or at module level, under conditional compilation.
+	 */
+	static function testLiveEntryPoints():Void {
+		var root = temporaryDirectory("live-entry-points");
+		writePackage(root, '{"version":1,"package":{"name":"entry"},"entry":"app.Main","sourceRoots":["src"]}', []);
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])),
+			main = Path.join([root, "src", "app", "Main.hx"]);
+		function missing(source:Null<String>):String {
+			if (source != null) {
+				ensureDirectory(Path.directory(main));
+				File.saveContent(main, source);
+			}
+			return LiveHostBuild.missingEntryPoints(project).join(",");
+		}
+		var all = "start,tick,saveState,restoreState,close";
+		expect(missing(null) == all, "an entry module the source roots do not hold has none of the entry points");
+		var points = "static function start(arguments:String):Void {}\n\tstatic function tick():Int return 0;\n"
+			+ "\tstatic function saveState():String return \"\";\n\tstatic function restoreState(state:String):Void {}\n"
+			+ "\tstatic function close():Int return 0;\n";
+		expect(missing('package app;\nclass Main {\n\tstatic function main() {}\n\t$points}\n') == "",
+			"an entry class with every entry point can be patched live");
+		expect(missing('package app;\nclass Main {\n\tstatic function main() {}\n\t${StringTools.replace(points, "tick", "step")}}\n')
+			== "tick", "an entry class without tick is relaunched, and tick is named");
+		expect(missing('package app;\nclass Main {\n\tfunction new() {}\n\tstatic function main() {}\n\t'
+			+ StringTools.replace(points, "static function close", "function close") + '}\n') == "close",
+			"an instance close is not the entry point");
+		expect(missing('package app;\nclass Other {\n\t$points}\nclass Main {\n\tstatic function main() {}\n}\n')
+			== all,
+			"another class's entry points are not the entry class's");
+		expect(missing('package app;\nfunction main() {}\n' + StringTools.replace(points, "static ", "") + '\n') == "",
+			"module-level functions are the entry class's static functions");
+		expect(missing('package app;\nclass Main {\n\tstatic function main() {}\n#if never\n\t$points#end\n}\n') == all,
+			"entry points left out by conditional compilation are missing");
+		expect(missing("package app;\nclass Main {") == all,
+			"an entry module that does not parse has none of the entry points");
 		FileTree.remove(root);
 	}
 
@@ -907,9 +1000,15 @@ class BuildSystemMain {
 			"the snapshot holds the manifest and the Haxe files, not directories or other files: " + names.join(","));
 		for (path => stamp in files) {
 			var stat = FileSystem.stat(path);
-			expect(stamp == '${stat.mtime.getTime()}:${stat.size}',
+			expect(StringTools.startsWith(stamp, '${stat.mtime.getTime()}:${stat.size}'),
 				"a snapshot entry is the file's modification time and size");
 		}
+		expect(WatchRun.same(files, WatchRun.snapshot(project)), "files nobody wrote keep their snapshot");
+		// The time has a resolution of a second: a same-size save just after the snapshot differs only in its content.
+		var main = Path.join([root, "src", "Main.hx"]), text = File.getContent(main);
+		File.saveContent(main, text.substr(0, text.length - 1) + (text.charAt(text.length - 1) == "x" ? "y" : "x"));
+		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "a same-size save right after a snapshot changes it");
+		File.saveContent(main, text);
 		File.saveContent(Path.join([root, "src", "Main.hx"]), "class Main { static function main() {} }
 ");
 		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "an edit changes the snapshot");
@@ -956,7 +1055,7 @@ class BuildSystemMain {
 					default:
 						return null;
 				}
-			});
+			}, compiler.tools.Verbosity.Minimal);
 		expect(status == 0, "the watched app exits normally");
 		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
 		expect(builds[2] == File.getContent(source), "the last build saw the last save");
@@ -1072,7 +1171,8 @@ class BuildSystemMain {
 		FileSystem.createDirectory(Path.join([root, "src"]));
 		var target = Path.join([root, "src", "A.hx"]);
 		File.saveContent(target, "one");
-		var watcher = DirectoryWatcher.create([{path: root, recursive: true}]);
+		FileSystem.createDirectory(Path.join([root, "build"]));
+		var watcher = DirectoryWatcher.create([{path: root, recursive: true}], [Path.join([root, "build"])]);
 		if (watcher == null) {
 			FileTree.remove(root);
 			return;
@@ -1090,6 +1190,15 @@ class BuildSystemMain {
 		while (watcher.wait(0.05)) {}
 		File.saveContent(Path.join([root, "src", "B.hx"]), "new");
 		expect(watcher.wait(2.0), "a new file is reported");
+		while (watcher.wait(0.05)) {}
+		FileSystem.createDirectory(Path.join([root, "src", "late", "deeper"]));
+		expect(watcher.wait(2.0), "a new directory is reported");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(Path.join([root, "src", "late", "deeper", "C.hx"]), "nested");
+		expect(watcher.wait(2.0), "a file in a directory created after the watch started is reported");
+		while (watcher.wait(0.05)) {}
+		File.saveContent(Path.join([root, "build", "out.hl"]), "output");
+		expect(!watcher.wait(0.2), "a change in an excluded directory is not reported");
 		watcher.close();
 		FileTree.remove(root);
 	}
@@ -1214,7 +1323,7 @@ class BuildSystemMain {
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
 				new LoweringContext(environment, null, project,
-				new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+				new TargetLayout(environment).hashLinkModulePath("main"), sdk())),
 			executionText = execution.toDebugString();
 		expect(plan.toExplainString().indexOf("reason: requested output") >= 0
 			&& plan.toExplainString().indexOf("detail library: foo") >= 0,
@@ -1250,7 +1359,7 @@ class BuildSystemMain {
 				new TargetLayout(environment).hashLinkModulePath("main"),
 				[for (action in execution.actions) action.id]),
 				tests = WorkspaceBuild.withTests(new LoweredWorkspace(environment, execution, [member],
-					execution.actions.length, new Map()), Sys.getCwd()),
+					execution.actions.length, new Map()), sdk()),
 				testAction = [
 					for (action in tests.actions)
 						if (StringTools.startsWith(action.id.key(), "test:")) action
@@ -1270,7 +1379,7 @@ class BuildSystemMain {
 			};
 		}, liveExecution = PlanLowerer.lower(plan,
 			new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"),
-			project.root, null, false, false, true));
+			sdk(), null, false, false, true));
 		expect(compilerArguments(execution).indexOf("--live") < 0,
 			"an ordinary build must not request live compiler history");
 		expect(compilerArguments(liveExecution).indexOf("--live") >= 0,
@@ -1362,12 +1471,12 @@ class BuildSystemMain {
 		expectThrows(() -> FfiImportManifest.parse("/tmp/direct.ffi.json",
 			'{"version":1,"name":"direct","language":"c++","profile":"direct","header":"fixture.hpp","library":"fixture","cxxThunks":true}'),
 			"direct C++ FFI profiles should reject generated thunks");
-		// The compiler home is the checkout: the FFI import runs its own `haxeon`, found through its HashLink path table.
+		// The compiler home is the checkout's SDK: the FFI import runs its own `haxeon`, in the SDK's bin.
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
 				new LoweringContext(environment, null, project,
-				new TargetLayout(environment).hashLinkModulePath("main"), Sys.getCwd())),
+				new TargetLayout(environment).hashLinkModulePath("main"), sdk())),
 			planText = plan.toDebugString(),
 			executionText = execution.toDebugString();
 		expect(planText.indexOf("app:FfiInterface") >= 0
@@ -1434,7 +1543,7 @@ class BuildSystemMain {
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			execution = PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, environment.target,
 				NativeArtifactDemand.Shared),
-				new LoweringContext(environment, null, project, hostLayout.hashLinkModulePath("main"), Sys.getCwd())),
+				new LoweringContext(environment, null, project, hostLayout.hashLinkModulePath("main"), sdk())),
 			arguments = switch compilerAction(execution).action {
 				case Compiler(_, arguments, _, _, _): arguments;
 				case _: [];
@@ -1460,7 +1569,7 @@ class BuildSystemMain {
 		function androidCompile(?baseline:String):ExecutionAction
 			return compilerAction(PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, androidTarget,
 				NativeArtifactDemand.Shared),
-				new LoweringContext(androidEnvironment, null, project, module, Sys.getCwd(), null, null, null, null,
+				new LoweringContext(androidEnvironment, null, project, module, sdk(), null, null, null, null,
 				null, null,
 				false, baseline)));
 		function compilerArguments(action:ExecutionAction):Array<String>
@@ -1641,6 +1750,35 @@ class BuildSystemMain {
 		FileTree.remove(root);
 	}
 
+	/** A dependency written as a bare version range comes from the registry named `haxeon`, in a JSON and in a TOML manifest. */
+	static function testDefaultRegistryShorthand():Void {
+		var root = temporaryDirectory("registry-shorthand"),
+			cache = Path.join([root, "cache"]),
+			registryDirectory = Path.join([cache, Sha256.encode("haxeon")]),
+			foo = Path.join([registryDirectory, "foo", "1.1.0"]),
+			checksum = "release-checksum";
+		ensureDirectory(Path.join([foo, "src"]));
+		File.saveContent(Path.join([foo, "haxeon.json"]), '{"package":{"name":"foo"},"sourceRoots":["src"]}\n');
+		File.saveContent(Path.join([foo, "src", "Foo.hx"]), "class Foo {}\n");
+		File.saveContent(Path.join([foo, ".haxeon-checksum"]), checksum + "\n");
+		File.saveContent(Path.join([registryDirectory, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"1.1.0","checksum":"$checksum"}]}}}\n');
+		var json = Path.join([root, "json"]), toml = Path.join([root, "toml"]);
+		writePackage(json, '{"package":{"name":"app"},"dependencies":{"foo":"^1.0"}}', []);
+		ensureDirectory(Path.join([toml, "src"]));
+		File.saveContent(Path.join([toml, "haxeon.toml"]), '[package]\nname = "app"\n\n[dependencies]\nfoo = "^1.0"\n');
+		var resolver = new PackageResolver(new RegistrySourceAcquirer(cache));
+		for (manifest in [Path.join([json, "haxeon.json"]), Path.join([toml, "haxeon.toml"])]) {
+			var entry = resolver.resolve(manifest).lockfile.get("foo");
+			expect(entry != null && entry.resolvedRevision == "1.1.0" && entry.checksum == checksum,
+				'a bare version range in $manifest should resolve from the haxeon registry');
+			expect(entry != null
+				&& PackageSourceCodec.equal(entry.source, project.PackageSource.Registry("haxeon", "foo", "^1.0")),
+				'a bare version range in $manifest should lock as a haxeon registry source');
+		}
+		FileTree.remove(root);
+	}
+
 	static function testRegistryPublisher():Void {
 		var root = temporaryDirectory("registry-publish"),
 			packageRoot = Path.join([root, "package"]),
@@ -1648,14 +1786,119 @@ class BuildSystemMain {
 		writePackage(packageRoot,
 			'{"package":{"name":"published"},"sourceRoots":["src"],"compatibility":{"targets":["host"]}}',
 			["src/Published.hx"]);
-		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
-			registryRoot),
-			destination = Path.join([registryRoot, Sha256.encode("local"), "published", "1.0.0"]);
+		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), registryRoot, "published",
+			"1.0.0",
+			[]),
+			destination = Path.join([registryRoot, "published", "1.0.0"]);
 		expect(checksum.length == 64 && FileSystem.exists(Path.join([destination, ".haxeon-checksum"])),
 			"registry publication should create a checksum-marked immutable release");
-		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
-			registryRoot),
+		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), registryRoot, "published",
+			"1.0.0", []),
 			"registry publication should reject replacing an existing version");
+		FileTree.remove(root);
+	}
+
+	/**
+	 * A checkout's haxeon registry: live entries resolve from the package's directory under their registry name, with path
+	 * dependencies between them as registry dependencies, as publishing writes them; a lockfile entry in range is kept as it is.
+	 */
+	static function testLiveRegistry():Void {
+		var root = temporaryDirectory("live-registry"),
+			registry = Path.join([root, "sdk", "registry"]),
+			foo = Path.join([root, "packages", "foo"]),
+			bar = Path.join([root, "packages", "bar"]),
+			app = Path.join([root, "app"]);
+		writePackage(foo,
+			'{"package":{"name":"repo-foo"},"dependencies":{"repo-bar":{"path":"../bar"}},"publish":{"exclude":["tests"]}}',
+			["src/Foo.hx", "tests/FooTest.hx"]);
+		writePackage(bar, '{"package":{"name":"repo-bar"}}', ["src/Bar.hx"]);
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":"^0.3"}}', []);
+		ensureDirectory(registry);
+		File.saveContent(Path.join([registry, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"0.3.0","path":"../../packages/foo"}]},'
+			+ '"bar":{"versions":[{"version":"0.3.0","path":"../../packages/bar"}]}}}\n');
+		var resolver = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]), registry)),
+			manifest = Path.join([app, "haxeon.json"]),
+			project = resolver.resolve(manifest),
+			entry = project.lockfile.get("foo");
+		expect(project.packages.get("foo") != null && project.packages.get("bar") != null
+			&& project.packages.get("foo").root == Path.normalize(FileSystem.fullPath(foo)),
+			"a live registry package should resolve from its directory under its registry name, with its path dependency");
+		expect(entry != null && entry.resolvedRevision == "0.3.0" && entry.checksum == null
+			&& entry.dependencies.length == 1 && entry.dependencies[0].name == "bar",
+			"a live registry package should lock its version, no checksum, and its dependencies by registry name");
+		var released = new PackageLockfile([
+			for (locked in project.lockfile.entries)
+				locked.id.name == "foo" ? new PackageLockEntry(locked.id, locked.source, "0.3.7", "released-checksum",
+				locked.dependencies) : locked
+		]),
+			kept = resolver.resolve(manifest, released, true).lockfile.get("foo");
+		expect(kept.resolvedRevision == "0.3.7" && kept.checksum == "released-checksum",
+			"a live registry package should keep a lockfile's entry in range as it is");
+		var published = Json.parse(RegistryPublisher.publishedManifest(Path.join([foo, "haxeon.json"]), "foo", "0.3.0",
+			RegistryIndex.load(registry).liveDirectories()));
+		expect(Reflect.field(published, "package").name == "foo"
+			&& Reflect.field(published, "package").version == "0.3.0"
+			&& Reflect.field(published.dependencies, "bar") == "^0.3" && Reflect.field(published, "publish") == null,
+			"publishing should rename the package and turn its path dependency into a registry range");
+		var release = Path.join([root, "release-registry"]),
+			directories = RegistryIndex.load(registry).liveDirectories();
+		RegistryPublisher.publish(Path.join([bar, "haxeon.json"]), release, "bar", "0.3.0", directories);
+		RegistryPublisher.publish(Path.join([foo, "haxeon.json"]), release, "foo", "0.3.0", directories);
+		expect(FileSystem.exists(Path.join([release, "foo", "0.3.0", "src", "Foo.hx"]))
+			&& !FileSystem.exists(Path.join([release, "foo", "0.3.0", "tests"])),
+			"publishing should copy the package less its publish.exclude");
+		var fromRelease = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]),
+			release)).resolve(manifest);
+		expect(fromRelease.lockfile.get("foo").checksum != null
+			&& fromRelease.lockfile.get("bar").resolvedRevision == "0.3.0",
+			"the published packages should resolve from the release's registry, with checksums");
+		FileTree.remove(root);
+	}
+
+	/** A locked registry version an upgrade removed is picked again within the range, unless the resolution is strict. */
+	static function testRegistryRepick():Void {
+		var root = temporaryDirectory("registry-repick"),
+			registry = Path.join([root, "registry"]),
+			app = Path.join([root, "app"]),
+			foo = Path.join([registry, "foo", "1.1.0"]);
+		writePackage(foo, '{"package":{"name":"foo"}}', []);
+		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "new\n");
+		File.saveContent(Path.join([registry, "index.json"]),
+			'{"version":1,"packages":{"foo":{"versions":[{"version":"1.1.0","checksum":"new"}]}}}\n');
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":"^1.0"}}', []);
+		var manifest = Path.join([app, "haxeon.json"]),
+			resolver = new PackageResolver(new RegistrySourceAcquirer(Path.join([root, "cache"]), registry)),
+			current = resolver.resolve(manifest).lockfile,
+			old = new PackageLockfile([
+				for (entry in current.entries)
+					entry.id.name == "foo" ? new PackageLockEntry(entry.id, entry.source, "1.0.0", "old",
+					entry.dependencies) : entry
+			]);
+		expect(resolver.resolve(manifest, old, true).lockfile.get("foo").resolvedRevision == "1.1.0",
+			"a locked registry version that is gone should be picked again within the range");
+		expectThrows(() -> resolver.resolve(manifest, old, true, null, null, true),
+			"a strict resolution should refuse a locked registry version that is gone");
+		FileTree.remove(root);
+	}
+
+	/** `[patch.haxeon]` resolves a registry dependency from a directory, without changing the dependency. */
+	static function testRegistryPatch():Void {
+		var root = temporaryDirectory("registry-patch"),
+			app = Path.join([root, "app"]),
+			local = Path.join([root, "local-foo"]);
+		writePackage(local, '{"package":{"name":"foo"}}', ["src/Foo.hx"]);
+		ensureDirectory(Path.join([app, "src"]));
+		File.saveContent(Path.join([app, "haxeon.toml"]),
+			'[package]\nname = "app"\n\n[dependencies]\nfoo = "^1.0"\n\n[patch.haxeon]\nfoo = { path = "../local-foo" }\n');
+		var project = new PackageResolver(new ProjectSourceAcquirer(Path.join([root, "cache"]), null,
+			Path.join([root, "registry"]))).resolve(Path.join([
+				app,
+				"haxeon.toml"
+			]));
+		expect(project.packages.get("foo") != null
+			&& project.packages.get("foo").root == Path.normalize(FileSystem.fullPath(local)),
+			"[patch.haxeon] should resolve the package from its directory");
 		FileTree.remove(root);
 	}
 

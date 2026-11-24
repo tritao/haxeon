@@ -8,7 +8,7 @@ import compiler.hl.HlWriter;
 import compiler.hl.lower.HlLower;
 import compiler.hl.patch.HlPatchReader;
 import compiler.ir.passes.inlining.IrInliner;
-import compiler.modules.ModuleState.SemanticDependencyKind;
+import compiler.semantic.DeclarationFacts.FactAspect;
 import compiler.types.Type.CompilerType;
 import sys.io.File;
 
@@ -30,15 +30,9 @@ class ModuleMain {
 			|| noOp.changedFunctions.length != 0
 			|| noOp.artifact.hashLink().patchBytes != null)
 			throw "Unchanged compilation did not reuse the last successful build";
-		var mainDependencies = compiler.modules.get("Main").semanticDependencies.get("main"),
-			hasBodyDependency = false;
-		for (dependency in mainDependencies)
-			if (dependency.kind == Body && dependency.target == "Math.add")
-				hasBodyDependency = true;
-		if (!hasBodyDependency)
-			throw "Semantic dependency graph did not record the imported body call";
-		if (mainDependencies.length != 1)
-			throw 'Typed dependency publication retained provisional edges: $mainDependencies';
+		var facts = compiler.state.declarationFacts, mainReads = compiler.modules.get("Main").unitReads.get("main");
+		if (mainReads == null || mainReads.facts.indexOf(facts.existing(FactAspect.Signature, "Math.add")) < 0)
+			throw "Typing did not record that main read the signature of the function it calls";
 		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1
 			|| first.metrics.elapsedMs < 0.0)
 			throw 'Compile metrics did not describe the initial module build: modules=${first.metrics.modules}, retyped=${first.metrics.retypedFunctions}, natives=${first.metrics.moduleNatives}, elapsed=${first.metrics.elapsedMs}';

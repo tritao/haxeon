@@ -24,14 +24,14 @@ import sys.io.File;
 /** Owns the complete NativeKit desktop lifecycle for one UIKit application. */
 class DesktopUiHost {
 	public static function run(options:DesktopUiHostOptions,
-			create:DesktopUiHostContext->DesktopUiApplication):Int {
+			create:DesktopUiHostContext->UiApplication):Int {
 		var host = open(options, create);
 		EventLoop.run(host.tick);
 		return host.close();
 	}
 
 	public static function open(options:DesktopUiHostOptions,
-			create:DesktopUiHostContext->DesktopUiApplication):DesktopUiHostSession {
+			create:DesktopUiHostContext->UiApplication):DesktopUiHostSession {
 		if (options == null || create == null)
 			throw "Desktop UI host requires options and an application factory";
 		options.validate();
@@ -66,10 +66,7 @@ class DesktopUiHost {
 			try {
 				var appState:Dynamic = null;
 				try {
-					if (runtime != null && runtime.app() != null) {
-						var recordedApp:DesktopUiApplication = cast runtime.app();
-						appState = recordedApp.diagnosticState();
-					}
+					if (runtime != null) appState = DesktopFrameRecorder.diagnosticState(runtime.app());
 				} catch (_:Dynamic) {}
 				File.appendContent(recordPath, Json.stringify({
 					kind: "failure",
@@ -417,7 +414,7 @@ class DesktopUiHost {
 									recorder.finishFrame(liveRuntime, repaintOnly, frameFinishedAt);
 									if (session.state == UiHostLifecycle.Failed) active = false;
 									if (recorder.reachedFrameLimit()) {
-										recorder.write(liveRuntime);
+										if (recorder.enabled) recorder.write(window, liveRuntime);
 										session.stop();
 									}
 									var continueFrames = options.continuousFrames;
@@ -468,7 +465,7 @@ class DesktopUiHost {
 					at: Sys.time(),
 					scheduledAt: activeScript.scheduledAt,
 					delivered: activeScript.delivered,
-					appState: (cast liveRuntime.app(): DesktopUiApplication).diagnosticState()
+					appState: DesktopFrameRecorder.diagnosticState(liveRuntime.app())
 				}) + "\n");
 			};
 			var beforeScriptedInput = function(at:Float):Void {
@@ -506,7 +503,7 @@ class DesktopUiHost {
 				recorder.endBackground();
 				if (session.state == UiHostLifecycle.Failed) throw session.error;
 				if (active && recorder.elapsed() && (script == null || script.complete && scriptedCount == 0)) {
-					recorder.write(liveRuntime);
+					if (recorder.enabled) recorder.write(window, liveRuntime);
 					session.stop();
 				}
 				if (active && surfaceAvailable && nextCaretFrameAt >= 0.0 && Sys.time() >= nextCaretFrameAt) {

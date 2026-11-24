@@ -84,7 +84,7 @@ pages frees almost nothing yet: arenas wait until outputs and scratch are alloca
 
 Flat records (step 7) are written so the source still builds with stock Haxe: a record is declared once as a struct
 under `#if haxeon` and as a final class otherwise, in one package, immutable and compared by `equals`, never by identity,
-so both builds behave the same and only their layout differs (proposed amendment to ADR 0006, `docs/adr/0006`).
+so both builds behave the same and only their layout differs (proposed amendment to [ADR 0006](../adr/0006-haxeon-only-compiler-source.md)).
 
 Rejected: per-object structs as the first step (records are 15%, and struct array elements are still boxed), arenas
 released without a liveness check (ADR 0004 §6), and a faster array growth factor (tried; fails the UI memory rule,

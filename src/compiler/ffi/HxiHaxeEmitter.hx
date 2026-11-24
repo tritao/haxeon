@@ -869,7 +869,8 @@ class HxiHaxeEmitter {
 					var projectedStruct = Lambda.find(plan.structures, value -> value.nativeName == name);
 					if (projectedStruct == null)
 						throw new InternalError('Missing projected structure "$name"');
-					var projectedName = projectedStruct.name,
+					var fieldNames = [for (field in projectedStruct.fields) field.name],
+						projectedName = projectedStruct.name,
 						rootSlots = Std.int(Math.ceil(size / pointerSize)),
 						pointerFree = pointerFreeValue(Named(name), declarations, []);
 					emitDocumentation(output, model, name);
@@ -1031,16 +1032,20 @@ class HxiHaxeEmitter {
 						var value = project(abi.classify(field.type), false, profile);
 						if (value != null && value.code == 15) {
 							structAccesses.set("I32", {type: "Int", setterType: "Int"});
-							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_$fieldName():Bool return ${model.name}.__hxi_struct_getI32(this, $fieldOffset) != 0;\n');
-							output.add('\tpublic inline function set_$fieldName(value:Bool):Void ${model.name}.__hxi_struct_setI32(this, $fieldOffset, value ? 1 : 0);\n');
+							emitScalarProperty(output, model, name, field, scalarPropertyName(fieldName, fieldNames),
+								"Bool",
+								'${model.name}.__hxi_struct_getI32(this, $fieldOffset) != 0',
+								'${model.name}.__hxi_struct_setI32(this, $fieldOffset, value ? 1 : 0)',
+								declarations);
 							continue;
 						}
 						if (value != null && value.code == 13) {
 							usesUtf8Fields = true;
-							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return cast ${model.name}.__hxi_struct_get_utf8(this, $fieldOffset, ${value.nullable});\n');
-							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_utf8(this, $fieldOffset, value, ${value.nullable});\n');
+							emitScalarProperty(output, model, name, field, scalarPropertyName(fieldName, fieldNames),
+								value.haxeType,
+								'cast ${model.name}.__hxi_struct_get_utf8(this, $fieldOffset, ${value.nullable})',
+								'${model.name}.__hxi_struct_set_utf8(this, $fieldOffset, value, ${value.nullable})',
+								declarations);
 							continue;
 						}
 						if (value != null && value.code == 11 && value.nativePointer && (switch (field.ownership) {
@@ -1048,9 +1053,11 @@ class HxiHaxeEmitter {
 							default: false;
 						})) {
 							usesPointerFields = true;
-							emitDocumentation(output, model, '$name.${field.name}', "\t");
-							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return cast ${model.name}.__hxi_struct_get_pointer(this, $fieldOffset, ${value.nullable});\n');
-							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_pointer(this, $fieldOffset, cast value, ${value.nullable});\n');
+							emitScalarProperty(output, model, name, field, scalarPropertyName(fieldName, fieldNames),
+								value.haxeType,
+								'cast ${model.name}.__hxi_struct_get_pointer(this, $fieldOffset, ${value.nullable})',
+								'${model.name}.__hxi_struct_set_pointer(this, $fieldOffset, cast value, ${value.nullable})',
+								declarations);
 							continue;
 						}
 						if (value == null || value.code == 11)
@@ -1076,9 +1083,11 @@ class HxiHaxeEmitter {
 							type: structAccessHaxeType(access),
 							setterType: structAccessHaxeType(access)
 						});
-						emitDocumentation(output, model, '$name.${field.name}', "\t");
-						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return $readExpression;\n');
-						output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, $fieldOffset, $writeExpression);\n');
+						emitScalarProperty(output, model, name, field, scalarPropertyName(fieldName, fieldNames),
+							value.haxeType,
+							readExpression,
+							'${model.name}.__hxi_struct_set${access}(this, $fieldOffset, $writeExpression)',
+							declarations);
 					}
 					output.add('}\n');
 					if (pointerFree) {
@@ -2495,6 +2504,18 @@ class HxiHaxeEmitter {
 		return mapped == null ? profile.fieldCase == "camel" ? camelCase(value) : value : mapped;
 	}
 
+	public static function scalarPropertyName(name:String, fields:Array<String>):String {
+		// Stock Haxe abstracts share one namespace for instance properties and generated helpers.
+		var accessor = StringTools.startsWith(name, "get_") || StringTools.startsWith(name, "set_"),
+			accessed = accessor ? name.substr(4) : "";
+		return isHaxeKeyword(name)
+			|| name == "size"
+			|| name == "array"
+			|| accessor && Lambda.exists(fields, field -> accessed == field || accessed == field + "_bytes"
+			|| accessed == field + "_packed")
+			|| StringTools.startsWith(name, "__hxi_") ? '__hxi_field_$name' : name;
+	}
+
 	static function stripPrefix(value:String, prefix:Null<String>):String
 		return prefix != null && StringTools.startsWith(value, prefix) ? value.substr(prefix.length) : value;
 
@@ -3208,6 +3229,27 @@ class HxiHaxeEmitter {
 					case _: null;
 				}
 			case _: null;
+		};
+
+	static function emitScalarProperty(output:StringBuf, model:HxiInterface, recordName:String, field:HxiField,
+			name:String, type:String, read:String, write:String, declarations:Map<String, HxiDeclaration>):Void {
+		var writable = !isConstFieldType(field.type, declarations);
+		emitDocumentation(output, model, '$recordName.${field.name}', "\t");
+		output.add('\tpublic var $name(get, ${writable ? "set" : "never"}):$type;\n');
+		output.add('\tpublic inline function get_$name():$type return $read;\n');
+		if (writable)
+			output.add('\tpublic inline function set_$name(value:$type):$type { $write; return value; }\n');
+	}
+
+	static function isConstFieldType(type:HxiType, declarations:Map<String, HxiDeclaration>):Bool
+		return switch type {
+			case Const(_): true;
+			case Named(name):
+				switch declarations.get(name) {
+					case Alias(_, target, _): isConstFieldType(target, declarations);
+					case _: false;
+				}
+			case _: false;
 		};
 
 	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,

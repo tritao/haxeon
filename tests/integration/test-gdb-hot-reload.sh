@@ -4,7 +4,7 @@ set -euo pipefail
 repo_dir="$(cd "$(dirname "$0")/../.." && pwd)"
 hashlink_dir="$("$repo_dir/scripts/hashlink-path.sh")"
 # The hot reload test runs the JIT support helper from the HashLink directory this names, also under GDB below.
-export HAXEON_HASHLINK_DIR="$hashlink_dir"
+export HAXEON_SDK="$(dirname "$hashlink_dir")"
 gdb_commands="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch.XXXXXX")"
 gdb_output="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch-output.XXXXXX")"
 symbol_commands="$(mktemp "${TMPDIR:-/tmp}/hashlink-gdb-patch-symbols.XXXXXX")"

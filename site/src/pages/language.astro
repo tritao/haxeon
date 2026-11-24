@@ -1,0 +1,58 @@
+---
+import { getCollection } from 'astro:content';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import LanguageTour from '../components/home/LanguageTour.astro';
+import { docsUrl } from '../../docs.mjs';
+
+const lessons = (
+  await getCollection(
+    'docs',
+    ({ id, data }) => (id === 'learn' || id.startsWith('learn/')) && !data.draft,
+  )
+).sort(
+  (a, b) =>
+    (a.data.sidebar?.order ?? Infinity) - (b.data.sidebar?.order ?? Infinity) ||
+    a.id.localeCompare(b.id),
+);
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Language',
+    template: 'splash',
+    prev: false,
+    next: false,
+    description: 'Explore Haxeon’s types, pattern matching, null safety and deterministic cleanup.',
+  }}
+>
+  <div class="landing-content">
+    <section class="page-intro paper">
+      <div class="wrap head">
+        <h1 id="_top" tabindex="-1">Language</h1>
+        <p class="lede">
+          Static types with inference, value types, pattern matching, null safety and deterministic
+          cleanup.
+        </p>
+        {
+          lessons.length ? (
+            <div class="prose">
+              <h2>Learn the language</h2>
+              <ul>
+                {lessons.map(({ id, data }) => (
+                  <li>
+                    <a href={`/${id}/`}>{data.title}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p>
+              <a href={docsUrl('reference/LANGUAGE_SUPPORT.md')}>Read the language reference</a>
+            </p>
+          )
+        }
+      </div>
+    </section>
+    <LanguageTour />
+  </div>
+</StarlightPage>

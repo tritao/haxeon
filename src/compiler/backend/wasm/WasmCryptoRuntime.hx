@@ -7,29 +7,18 @@ import compiler.ir.model.Ir.IrProgram;
 /** Object-model-neutral C kernels linked through the existing C ABI, on both browser backends. */
 class WasmCryptoRuntime {
 	public static inline var LIBRARY = "haxeon_crypto";
-	@:processWide("the bytes of a runtime shipped with the compiler, read once")
-	static var runtime:Null<haxe.io.Bytes>;
-	@:processWide("the bytes of a runtime shipped with the compiler, read once")
-	static var runtimeNeutral:Null<haxe.io.Bytes>;
 
+	/** Links the kernels `program` uses from the runtime in the standard library at `standardLibrary` (`BackendOptions`). */
 	public static function link(module:WasmModule, functions:Map<String, Int>, program:IrProgram,
-			used:Map<String, Bool>, ?fuelChargeFunction:Int):Void {
+			used:Map<String, Bool>, standardLibrary:Null<String>, ?fuelChargeFunction:Int):Void {
 		var needed = [
 			for (native in program.cNatives)
 				if (native.library == LIBRARY && used.exists(native.name)) native
 		];
 		if (needed.length == 0)
 			return;
-		var runtimeBytes:haxe.io.Bytes;
-		if (fuelChargeFunction == null) {
-			if (runtime == null)
-				runtime = sys.io.File.getBytes("stdlib/haxeon/wasm/crypto-runtime.wasm");
-			runtimeBytes = runtime;
-		} else {
-			if (runtimeNeutral == null)
-				runtimeNeutral = sys.io.File.getBytes("stdlib/haxeon/wasm/crypto-runtime-neutral.wasm");
-			runtimeBytes = runtimeNeutral;
-		}
+		var runtimeBytes = WasmRuntimeLinker.shipped(standardLibrary,
+			fuelChargeFunction == null ? "crypto-runtime.wasm" : "crypto-runtime-neutral.wasm");
 		var exports = WasmRuntimeLinker.link(module, runtimeBytes, name -> switch name {
 			case "fuel_charge" if (fuelChargeFunction != null): fuelChargeFunction;
 			default: throw new InternalError('Unexpected crypto guest import "$name"');

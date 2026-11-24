@@ -137,7 +137,8 @@ class WasmBackend implements Backend {
 			wasmRuntimeNeutral: options.wasmRuntimeNeutral, wasmLegacyExceptions: options.wasmLegacyExceptions,
 			checkReuse: options.checkReuse,
 			exports: options.exports,
-			wasmLinearRuntime: options.wasmLinearRuntime
+			wasmLinearRuntime: options.wasmLinearRuntime,
+			standardLibrary: options.standardLibrary
 		};
 
 	function compileInternal(program:IrProgram, options:BackendOptions,

@@ -1,0 +1,84 @@
+---
+import Card from '../Card.astro';
+import Command from '../Command.astro';
+import { docsUrl } from '../../../docs.mjs';
+---
+
+<section class="start" id="start">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">Start building</span>
+      <h2>Three steps to a running app.</h2>
+    </div>
+    <ol>
+      <Card as="li">
+        <h3>Install</h3><p class="lede" style="font-size:0.95rem">
+          Unpack <a href={docsUrl('reference/RELEASES.md')}>a release</a> and put its <code
+            >bin</code
+          > on your PATH. <code>haxeon doctor</code> checks your C toolchain.
+        </p>
+      </Card>
+      <Card as="li">
+        <h3>Create</h3><Command command="haxeon create my_app" /><p
+          class="lede"
+          style="font-size:0.95rem"
+        >
+          A windowed app for Linux, macOS and Windows.
+        </p>
+      </Card>
+      <Card as="li">
+        <h3>Run and edit</h3><Command command="haxeon run --watch" /><p
+          class="lede"
+          style="font-size:0.95rem"
+        >
+          Run from <code>my_app</code>. Change <code>src/Main.hx</code> and watch the app update.
+        </p>
+      </Card>
+    </ol>
+    <div class="ctas">
+      <a class="btn primary" href={docsUrl('guides/00-get-started.md')}>Get started</a><a
+        class="btn ghost"
+        href="/examples/"
+      >
+        Browse examples
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .start ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--hx-space-4);
+    counter-reset: s;
+  }
+  .start :global(li) {
+    counter-increment: s;
+  }
+  .start :global(li) h3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .start :global(li) h3::before {
+    content: counter(s);
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--sl-color-accent);
+    color: var(--sl-color-text-invert);
+    font: 700 0.9rem/1 var(--sl-font-mono);
+  }
+  @media (max-width: 900px) {
+    .start ol {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

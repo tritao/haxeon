@@ -1,7 +1,7 @@
 # Arenas
 
-Status: the runtime is in the fork (below); the compiler types each class in an arena of its own behind
-`--typing-arenas` (`CompileOptions.typingArenas`, off by default). Measured on the frozen self-compile input.
+Status: the runtime is in the fork (below); the typing pilot, which typed each class in an arena of its own behind
+`--typing-arenas`, stopped, and the option is gone. Measured on the frozen self-compile input.
 
 This is region-based memory management with a checked release. We call a region an **arena** at every layer: the fork's
 API (`hl_gc_arena_*`, std primitives `gc_arena_*`), its diagnostics (`HL_GC_ARENA_*`), and the compiler's `Arena`.
@@ -170,8 +170,8 @@ release, the fallback, and diagnostics naming each escape by holder.
 
 ## The typing pilot
 
-`ProgramTyper.typeClassMethods` per class runs in `Arena.unit` with `--typing-arenas`: the typed methods, the units'
-`TypingOutput`s and the shared units typed with them are copied out at the finish; function, specialization, anonymous
+`ProgramTyper.typeClassMethods` per class ran in `Arena.unit` with `--typing-arenas`: the typed methods, the units'
+`TypingOutput`s and the shared units typed with them were copied out at the finish; function, specialization, anonymous
 type, dynamic-structure and generic-enum-use names are interned; the default-argument resolution cache is made outside.
 The session's tables hold typed values made outside the arena: a unit's records are classes (`UnitAnswers`,
 `UnitAnonymousUses`, `UnitSources`) instead of maps stored in maps, as are the runtime dependency targets
@@ -194,7 +194,8 @@ evacuation kept to known layouts, 539 arenas released, but by rewriting words of
 pointers, which a release must never do.) The escape check is to build the compiler with Haxeon, compile it again plainly
 and with `--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, and require that no arena is kept (`HL arena reference` lines
 name each reference by holder field and allocation site) and that the two outputs are identical. The script that did it,
-`scripts/check-typing-arenas.sh`, was removed when the pilot stopped; take it from git history to revive the pilot.
+`scripts/check-typing-arenas.sh`, was removed when the pilot stopped, and the option with it; take both from git history
+to revive the pilot. The data rules above stay in the typer.
 
 What `strict` still names, largest first: normalized abstract constructors aliased in the declaration type table (a
 fresh normalized copy per call, `CallResolver.typeAbstractConstruction`, which another track is changing); typed
@@ -315,8 +316,8 @@ without them; made without arenas, the same 1.1 GB of temporaries cost a 4th col
    the typed program after the IR tables and the incremental-only module records. Output identical, peak unchanged; the
    front-end arena needs them.
 1. **Runtime:** done (above), except packing.
-2. **Typing per class:** in place behind `--typing-arenas` (above): 477 of 539 classes release, 470 without evacuation;
-   peak unchanged, wall +1.1 s. Off by default: the typing temporaries are not what sets the peak.
+2. **Typing per class:** tried behind `--typing-arenas` (above): 477 of 539 classes released, 470 without evacuation;
+   peak unchanged, wall +1.1 s. Removed: the typing temporaries are not what sets the peak.
 3. **HL lowering per batch of functions:** instructions and debug locations flat or built in the build arena (an
    instruction's argument arrays too), HL types and strings interned there (the symbol table's methods run in its arena),
    `fieldSlots` filled outside. A sampled prototype with only the symbol table and finish moved out still kept every unit

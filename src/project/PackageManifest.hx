@@ -1,9 +1,15 @@
 package project;
 
 import build.Target;
+import compiler.NullSafetyRule;
+import compiler.NullSafetyRule.NullSafetyMode;
 import compiler.core.InternalError;
+import compiler.core.UsageError;
 import haxe.Json;
 import haxe.io.Path;
+import sys.FileSystem;
+import toml.TomlParser;
+import toml.TomlPrinter;
 
 class NativeManifest {
 	public final sources:Array<String>;
@@ -51,10 +57,63 @@ class FfiManifest {
 	public final interfaces:Array<String>;
 	public final projections:Array<String>;
 
-	public function new(imports:Array<String>, interfaces:Array<String>, projections:Array<String>) {
+	public final wasmInterfaces:Array<String>;
+
+	public function new(imports:Array<String>, interfaces:Array<String>, projections:Array<String>,
+			wasmInterfaces:Array<String>) {
+		this.wasmInterfaces = wasmInterfaces.copy();
 		this.imports = imports.copy();
 		this.interfaces = interfaces.copy();
 		this.projections = projections.copy();
+	}
+}
+
+/**
+ * How a package is published into a registry (`publish` in the manifest; RegistryPublisher): `publish = false` keeps it out of
+ * registries, the haxeon registry of a checkout included. `exclude` names files and directories, relative to the published
+ * package, that are left out, such as tests and the parts of vendored code that do not build; `vendor` names directories
+ * outside the package, relative to it, that are copied into it under the given path, as `{ nativekit = "../../vendor/nativekit" }`.
+ */
+class PublishManifest {
+	public final enabled:Bool;
+	public final exclude:Array<String>;
+	public final vendor:Map<String, String>;
+
+	public function new(enabled:Bool, ?exclude:Array<String>, ?vendor:Map<String, String>) {
+		this.enabled = enabled;
+		this.exclude = exclude == null ? [] : exclude.copy();
+		this.vendor = vendor == null ? [] : vendor.copy();
+	}
+}
+
+/**
+ * What makes a project an app: its `[app]` section. An app builds through its runner projects, one per platform it names;
+ * a project without the section is a program (docs/design/PROJECT_BUILDS.md).
+ */
+class AppManifest {
+	/** The platforms an app can name, each with a runner project of its own (docs/design/PROJECT_BUILDS.md). */
+	public static final PLATFORMS = ["linux", "windows", "macos", "android", "web", "ios"];
+
+	/** The name people see: the window title, the launcher label, the page title. */
+	public final name:String;
+
+	/** The reverse-domain identifier: Android's applicationId, the macOS bundle identifier. */
+	public final id:String;
+
+	public final version:String;
+
+	/** The icon's image, relative to the manifest, or null for the template's. */
+	public final icon:Null<String>;
+
+	/** The platforms the app builds for, each with its runner directory beside the manifest. */
+	public final platforms:Array<String>;
+
+	public function new(name:String, id:String, version:String, icon:Null<String>, platforms:Array<String>) {
+		this.name = name;
+		this.id = id;
+		this.version = version;
+		this.icon = icon;
+		this.platforms = platforms.copy();
 	}
 }
 
@@ -102,7 +161,10 @@ class InstrumentManifest {
 	}
 }
 
-/** Parsed package metadata. Paths remain package-relative until acquisition. */
+/**
+ * Parsed package metadata, from a project's haxeon.toml or haxeon.json: one schema, the TOML file's tables being the JSON file's
+ * objects (docs/reference/MANIFEST.md). Paths remain package-relative until acquisition.
+ */
 class PackageManifest {
 	public final version:Int;
 	public final packageName:String;
@@ -122,25 +184,47 @@ class PackageManifest {
 	/** Explicit project choice; `false` builds with `--no-inline`, null keeps the default (inlining on). */
 	public final inlineEnabled:Null<Bool>;
 
+	/** The package's null-safety mode (`nullSafety`): Off when the manifest says nothing, as for a Haxelib package without one. */
+	public final nullSafety:NullSafetyMode;
+
+	/**
+	 * Rules stated beside the package's mode, as a Haxe command line's `--macro nullSafety(...)` states them; only a program's
+	 * manifest made in memory (`program`) has any.
+	 */
+	public final nullSafetyRules:Array<NullSafetyRule>;
+
 	public final outputDir:String;
 	public final dependencies:Map<String, PackageDependency>;
 	public final native:Null<NativeManifest>;
 	public final ffi:Null<FfiManifest>;
-	public final androidApplicationId:String;
-	public final androidAppLabel:String;
 	public final compatibility:PackageCompatibility;
 
 	/** The instrumented build's scope; the defaults instrument everything. */
 	public final instrument:InstrumentManifest;
+
+	/** The `[app]` section, which makes the project an app; null for a program. */
+	public final app:Null<AppManifest>;
+
+	/** `package.version`, which publishing writes; null for a package that has not been published. */
+	public final packageVersion:Null<String>;
+
+	public final publish:PublishManifest;
+
+	/**
+	 * `[patch.REGISTRY]`: for each registry, the packages a project resolves from a local directory instead (`NAME = { path = ... }`,
+	 * relative to the manifest), without changing the dependencies that name them. Only the root project's patches apply.
+	 */
+	public final patches:Map<String, Map<String, String>>;
 
 	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>,
 			sourceRoots:Array<String>,
 			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String,
 			defines:Array<String>, outputDir:String,
 			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>,
-			androidApplicationId:String,
-			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
-			?instrument:InstrumentManifest) {
+			compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
+			nullSafety:NullSafetyMode, nullSafetyRules:Array<NullSafetyRule>, ?instrument:InstrumentManifest,
+			?app:AppManifest, ?packageVersion:String, ?publish:PublishManifest,
+			?patches:Map<String, Map<String, String>>) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -153,29 +237,124 @@ class PackageManifest {
 		this.target = target;
 		this.defines = defines.copy();
 		this.inlineEnabled = inlineEnabled;
+		this.nullSafety = nullSafety;
+		this.nullSafetyRules = nullSafetyRules.copy();
 		this.outputDir = outputDir;
 		this.dependencies = dependencies;
 		this.native = native;
 		this.ffi = ffi;
-		this.androidApplicationId = androidApplicationId;
-		this.androidAppLabel = androidAppLabel;
 		this.compatibility = compatibility;
 		this.instrument = instrument == null ? new InstrumentManifest() : instrument;
+		this.app = app;
+		this.packageVersion = packageVersion;
+		this.publish = publish == null ? new PublishManifest(true) : publish;
+		this.patches = patches == null ? [] : patches;
 	}
 
-	public static function parse(path:String, content:String):PackageManifest {
+	/** The manifest `haxeon create` writes and every lookup prefers. */
+	public static inline final TOML_NAME = "haxeon.toml";
+
+	/** The original manifest format, still read everywhere a TOML one is. */
+	public static inline final JSON_NAME = "haxeon.json";
+
+	/** Whether a file named `name` is a project manifest. */
+	public static function isManifestName(name:String):Bool
+		return name == TOML_NAME || name == JSON_NAME;
+
+	/**
+	 * The manifest in `directory`: its haxeon.toml or its haxeon.json, or null when it has neither. A directory with both is a usage
+	 * error, as nothing says which one is the project.
+	 */
+	public static function find(directory:String):Null<String> {
+		var toml = Path.join([directory, TOML_NAME]),
+			json = Path.join([directory, JSON_NAME]),
+			hasToml = FileSystem.exists(toml),
+			hasJson = FileSystem.exists(json);
+		if (hasToml && hasJson)
+			throw new UsageError('$directory has both $TOML_NAME and $JSON_NAME; keep one');
+		return hasToml ? toml : hasJson ? json : null;
+	}
+
+	/** `find`, else where a new project's manifest goes (its haxeon.toml), the path a missing project is reported at. */
+	public static function pathIn(directory:String):String {
+		var found = find(directory);
+		return found != null ? found : Path.join([directory, TOML_NAME]);
+	}
+
+	/** The objects and arrays a manifest holds: TOML for a `.toml` file, else JSON. Syntax errors say where. */
+	public static function decode(path:String, content:String):Dynamic {
 		var raw:Dynamic;
 		try {
-			raw = Json.parse(content);
+			raw = isToml(path) ? TomlParser.parse(content) : Json.parse(content);
 		} catch (error:Dynamic) {
 			throw new InternalError('Could not parse $path: ${Std.string(error)}');
 		}
 		if (!isObject(raw))
 			throw new InternalError('$path must contain a JSON object');
-		var rawVersion:Dynamic = Reflect.field(raw, "version"),
+		return raw;
+	}
+
+	public static function isToml(path:String):Bool
+		return Path.extension(path).toLowerCase() == "toml";
+
+	/** The order a written manifest's keys take, the schema's (version, entry, sources, ...); other keys follow alphabetically. */
+	static final FIELD_ORDER = [
+		"version", "name", "entry", "sources", "sourceRoots", "unscopedSourceRoots", "scopeSourceRoots", "workspace",
+		"target",
+		"defines", "inline", "nullSafety", "outputDir", "package", "app", "dependencies", "patch", "native", "ffi",
+		"format", "compatibility", "publish", "instrument"
+	];
+
+	/** A manifest's objects (`decode`, or made by `haxeon create`) as a haxeon.toml's text. */
+	public static function toToml(raw:Dynamic):String
+		return TomlPrinter.print(raw, FIELD_ORDER);
+
+	/**
+	 * The haxeon.toml that says what the haxeon.json at `path` says. The result is checked: it must read back to the same values
+	 * (a JSON null, which TOML cannot write, means what a missing key means) and to a manifest the loader accepts.
+	 */
+	public static function migrateToToml(path:String, content:String):String {
+		parse(path, content);
+		var raw = decode(path, content), text = toToml(raw), tomlPath = Path.withExtension(path, "toml");
+		if (!sameValue(raw, TomlParser.parse(text)))
+			throw new InternalError('$path cannot be written as TOML without changing it');
+		parse(tomlPath, text);
+		return text;
+	}
+
+	static function sameValue(json:Dynamic, toml:Dynamic):Bool {
+		if (Std.isOfType(json, Array)) {
+			if (!Std.isOfType(toml, Array))
+				return false;
+			var left:Array<Dynamic> = json, right:Array<Dynamic> = toml;
+			if (left.length != right.length)
+				return false;
+			for (index in 0...left.length)
+				if (!sameValue(left[index], right[index]))
+					return false;
+			return true;
+		}
+		if (isObject(json) && !Std.isOfType(json, String)) {
+			if (!isObject(toml) || Std.isOfType(toml, String))
+				return false;
+			var fields = [for (field in Reflect.fields(json)) if (Reflect.field(json, field) != null) field];
+			if (fields.length != Reflect.fields(toml).length)
+				return false;
+			for (field in fields)
+				if (!Reflect.hasField(toml, field)
+					|| !sameValue(Reflect.field(json, field), Reflect.field(toml, field)))
+					return false;
+			return true;
+		}
+		return json == toml;
+	}
+
+	public static function parse(path:String, content:String):PackageManifest {
+		var raw = decode(path, content),
+			rawVersion:Dynamic = Reflect.field(raw, "version"),
 			version = rawVersion == null ? 1 : Std.int(rawVersion);
 		if (version != 1)
-			throw new InternalError('Unsupported haxeon.json version "$rawVersion"');
+			throw new InternalError('$path has an unsupported version "$rawVersion" (the manifest format is version 1)');
 		var packageData:Dynamic = Reflect.field(raw, "package"),
 			packageName = packageData == null
 				? Path.withoutDirectory(Path.directory(path)) : requiredString(packageData, "name", path),
@@ -210,9 +389,15 @@ class PackageManifest {
 			var dependencyNames = Reflect.fields(rawDependencies);
 			dependencyNames.sort(Reflect.compare);
 			for (name in dependencyNames) {
-				var dependency:Dynamic = Reflect.field(rawDependencies, name);
-				dependencies.set(name, new PackageDependency(new PackageId(name),
-					PackageSourceCodec.parse(dependency, name, '$path dependency "$name"')));
+				var dependency:Dynamic = Reflect.field(rawDependencies, name),
+					dependencyPath = '$path dependency "$name"',
+					source = PackageSourceCodec.parse(dependency, name, dependencyPath),
+					platforms = Std.isOfType(dependency, String) ? [] : stringArray(dependency, "platforms",
+						dependencyPath, []);
+				for (platform in platforms)
+					if (!AppManifest.PLATFORMS.contains(platform))
+						throw new UsageError('$dependencyPath has an unknown platform "$platform"');
+				dependencies.set(name, new PackageDependency(new PackageId(name), source, platforms));
 			}
 		}
 		var nativeData:Dynamic = Reflect.field(raw, "native"),
@@ -269,42 +454,106 @@ class PackageManifest {
 				throw new InternalError('$path "ffi" must be an object');
 			var imports = stringArray(ffiData, "imports", path, []),
 				interfaces = stringArray(ffiData, "interfaces", path, []),
-				projections = stringArray(ffiData, "projections", path, []);
-			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0)
-				throw new InternalError('$path "ffi" requires "imports", "interfaces", or "projections"');
-			ffi = new FfiManifest(imports, interfaces, projections);
-		}
-		var android:Dynamic = Reflect.field(raw, "android"),
-			androidApplicationId = "org.haxeon.android",
-			androidAppLabel = "Haxeon";
-		if (android != null) {
-			if (!isObject(android))
-				throw new InternalError('$path "android" must be an object');
-			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
-			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
-			if (!isAndroidApplicationId(androidApplicationId))
-				throw new InternalError('$path "android.applicationId" must be a dotted Java package name, such as "org.example.game"');
+				projections = stringArray(ffiData, "projections", path, []),
+				wasmInterfaces = stringArray(ffiData, "wasmInterfaces", path, []);
+			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0 && wasmInterfaces.length == 0)
+				throw new InternalError('$path "ffi" requires "imports", "interfaces", "wasmInterfaces", or "projections"');
+			ffi = new FfiManifest(imports, interfaces, projections, wasmInterfaces);
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
-			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
-			parseInstrument(raw, path));
+			outputDir, dependencies, native, ffi, compatibility, inlineEnabled,
+			parseNullSafety(raw, path), [], parseInstrument(raw, path), parseApp(raw, packageName, path),
+			packageData == null ? null : optionalNullableString(packageData, "version", '$path package'),
+			parsePublish(raw, path), parsePatches(raw, path));
+	}
+
+	/** `publish`: false, or a table with `exclude` and `vendor` (PublishManifest). */
+	static function parsePublish(raw:Dynamic, path:String):PublishManifest {
+		var value:Dynamic = Reflect.field(raw, "publish");
+		if (value == null)
+			return new PublishManifest(true);
+		if (Std.isOfType(value, Bool)) {
+			if (value)
+				throw new UsageError('$path "publish" is false or a table; leave it out to publish the package');
+			return new PublishManifest(false);
+		}
+		if (!isObject(value))
+			throw new UsageError('$path "publish" must be false or a table');
+		var vendor:Map<String, String> = [], rawVendor:Dynamic = Reflect.field(value, "vendor");
+		if (rawVendor != null) {
+			if (!isObject(rawVendor))
+				throw new UsageError('$path "publish.vendor" must be a table of directories');
+			for (name in Reflect.fields(rawVendor))
+				vendor.set(name, requiredValueString(Reflect.field(rawVendor, name), 'publish.vendor.$name', path));
+		}
+		return new PublishManifest(true, stringArray(value, "exclude", '$path publish', []), vendor);
+	}
+
+	/** `[patch.REGISTRY]`, each entry a `{ path = ... }` table. */
+	static function parsePatches(raw:Dynamic, path:String):Map<String, Map<String, String>> {
+		var patches:Map<String, Map<String, String>> = [], value:Dynamic = Reflect.field(raw, "patch");
+		if (value == null)
+			return patches;
+		if (!isObject(value))
+			throw new UsageError('$path "patch" must be a table of registries, as [patch.haxeon]');
+		for (registry in Reflect.fields(value)) {
+			var entries:Dynamic = Reflect.field(value, registry);
+			if (!isObject(entries))
+				throw new UsageError('$path "patch.$registry" must be a table of packages');
+			var patched:Map<String, String> = [];
+			for (name in Reflect.fields(entries)) {
+				var entry:Dynamic = Reflect.field(entries, name),
+					patchPath:Dynamic = isObject(entry) ? Reflect.field(entry, "path") : null;
+				if (!Std.isOfType(patchPath, String) || Reflect.fields(entry).length != 1)
+					throw new UsageError('$path "patch.$registry.$name" must be { path = "DIRECTORY" }');
+				patched.set(name, patchPath);
+			}
+			patches.set(registry, patched);
+		}
+		return patches;
+	}
+
+	/** The `[app]` section: a name (the package's by default), a reverse-domain `id`, a `version`, an `icon` and the `platforms`. */
+	static function parseApp(raw:Dynamic, packageName:String, path:String):Null<AppManifest> {
+		var app:Dynamic = Reflect.field(raw, "app");
+		if (app == null)
+			return null;
+		if (!isObject(app))
+			throw new UsageError('$path "app" must be a table');
+		var id = optionalString(app, "id", "", path);
+		if (!isAndroidApplicationId(id))
+			throw new UsageError('$path "app.id" must be a reverse-domain identifier, such as "com.example.hello"');
+		var platforms = stringArray(app, "platforms", path, []);
+		if (platforms.length == 0)
+			throw new UsageError('$path "app.platforms" must name at least one of ${AppManifest.PLATFORMS.join(", ")}');
+		for (platform in platforms)
+			if (AppManifest.PLATFORMS.indexOf(platform) < 0)
+				throw new UsageError('$path "app.platforms" names "$platform"; the platforms are ${AppManifest.PLATFORMS.join(", ")}');
+		var icon:Dynamic = Reflect.field(app, "icon");
+		if (icon != null && !Std.isOfType(icon, String))
+			throw new UsageError('$path "app.icon" must be a path');
+		return new AppManifest(optionalString(app, "name", packageName, path), id,
+			optionalString(app, "version", "1.0.0", path),
+			icon, platforms);
 	}
 
 	/**
-	 * The manifest of a program the CLI builds with no haxeon.json of its own (a script, a Haxe command line's compilation): a host
+	 * The manifest of a program the CLI builds with no manifest file of its own (a script, a Haxe command line's compilation): a host
 	 * project with these sources, source roots (absolute) and defines, built into `build` beside where it is resolved.
 	 * `scopeSourceRoots: false` lets its roots hold any package, as Haxe's class paths do.
 	 */
 	public static function program(name:String, entry:String, sources:Array<String>, sourceRoots:Array<String>,
 			scopeSourceRoots:Bool, defines:Array<String>, inlineEnabled:Null<Bool>,
-			dependencies:Map<String, PackageSource>):PackageManifest {
+			dependencies:Map<String, PackageSource>, ?nullSafetyRules:Array<NullSafetyRule>):PackageManifest {
 		var declared:Map<String, PackageDependency> = [];
 		for (dependency => source in dependencies)
 			declared.set(dependency, new PackageDependency(new PackageId(dependency), source));
 		return new PackageManifest(1, name, entry, sources, sourceRoots, [], scopeSourceRoots, [], "host", defines,
 			"build",
-			declared, null, null, "org.haxeon.android", "Haxeon", new PackageCompatibility(), inlineEnabled);
+			declared, null, null, new PackageCompatibility(), inlineEnabled,
+			NullSafetyMode.Off,
+			nullSafetyRules == null ? [] : nullSafetyRules);
 	}
 
 	/** A Java package name with at least two parts, as Android requires of an application ID. */
@@ -326,6 +575,21 @@ class PackageManifest {
 
 	static function isAsciiLetter(code:Int):Bool
 		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+
+	/** The modes a manifest's `nullSafety` names; `strict-threaded` stays a compiler option, for metadata and command lines. */
+	public static final NULL_SAFETY_VALUES = ["strict", "loose", "off", "warn"];
+
+	static function parseNullSafety(raw:Dynamic, path:String):NullSafetyMode {
+		var value:Dynamic = Reflect.field(raw, "nullSafety");
+		if (value == null)
+			return NullSafetyMode.Off;
+		var mode = Std.isOfType(value, String)
+			&& NULL_SAFETY_VALUES.indexOf(value) >= 0 ? NullSafetyMode.parse(value) : null;
+		if (mode == null)
+			throw new InternalError('$path "nullSafety" must be one of '
+				+ [for (name in NULL_SAFETY_VALUES) '"$name"'].join(", "));
+		return mode;
+	}
 
 	static function parseInstrument(raw:Dynamic, path:String):Null<InstrumentManifest> {
 		var data:Dynamic = Reflect.field(raw, "instrument");

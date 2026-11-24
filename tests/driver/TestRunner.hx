@@ -100,7 +100,7 @@ class TestRunner {
 		this.root = root;
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "";
 		haxe = Path.join([root, ".tools", "haxe", "haxe" + suffix]);
-		hl = Path.join([Sys.getEnv("HAXEON_HASHLINK_DIR"), "hl" + suffix]);
+		hl = Path.join([Sys.getEnv("HAXEON_SDK"), "bin", "hl" + suffix]);
 		var server = Sys.getEnv("HAXEON_COMPILER_SERVER_HL");
 		serverCommand = server != null && server != "" && FileSystem.exists(server) ? [hl, server] : [
 			haxe,
@@ -153,9 +153,12 @@ class TestRunner {
 		];
 		for (root in roots)
 			arguments.push("--root=" + root);
-		if (!run.plain)
+		if (!run.plain) {
 			arguments.push("--live");
-		else if (release) {
+			// A live build keeps every function, `Reflect`'s among them, so it reflects over every layout and boxes what a plain
+			// build keeps inline: a program's allocation census holds only in a plain build, which `live_build` tells it.
+			arguments.push("--define=live_build");
+		} else if (release) {
 			arguments.push("--build-mode=release");
 			arguments.push("--verify-ir");
 		}
@@ -359,7 +362,7 @@ class TestRunner {
 
 	/**
 	 * A program, test main or executable case runs in a directory of its own: a fresh one under out/cases, holding a link to every entry of the repository root
-	 * except `out`, which is a new directory linking only the native build (out/cmake and the libraries), so what a program creates there is its own, and removed afterwards. Relative paths such as `out/x` and `tests/fixtures/...`
+	 * except `out`, which is a new directory linking only the native build (out/cmake, the SDK in out/sdk and the libraries), so what a program creates there is its own, and removed afterwards. Relative paths such as `out/x` and `tests/fixtures/...`
 	 * resolve there, so what a program writes can never collide with another run of it (the live, plain and warm builds run together)
 	 * or with another program, and leaves nothing in the tree. The tree itself is reached only through the links.
 	 */
@@ -369,7 +372,7 @@ class TestRunner {
 			return new Process(hl, all);
 		return new Process("sh", [
 			"-c",
-			"r=$1; shift; mkdir -p \"$r/out/cases\" && d=$(mktemp -d \"$r/out/cases/run.XXXXXX\") || exit 125; for e in \"$r\"/* \"$r\"/.[!.]*; do case \"${e##*/}\" in out|.git) continue;; esac; [ -e \"$e\" ] && ln -s \"$e\" \"$d/\"; done; mkdir \"$d/out\"; for e in \"$r\"/out/cmake \"$r\"/out/*.hdll \"$r\"/out/*.so*; do [ -e \"$e\" ] && ln -s \"$e\" \"$d/out/\"; done; (cd \"$d\" && \"$@\"); s=$?; rm -rf \"$d\"; exit $s",
+			"r=$1; shift; mkdir -p \"$r/out/cases\" && d=$(mktemp -d \"$r/out/cases/run.XXXXXX\") || exit 125; for e in \"$r\"/* \"$r\"/.[!.]*; do case \"${e##*/}\" in out|.git) continue;; esac; [ -e \"$e\" ] && ln -s \"$e\" \"$d/\"; done; mkdir \"$d/out\"; for e in \"$r\"/out/cmake \"$r\"/out/sdk \"$r\"/out/*.hdll \"$r\"/out/*.so*; do [ -e \"$e\" ] && ln -s \"$e\" \"$d/out/\"; done; (cd \"$d\" && \"$@\"); s=$?; rm -rf \"$d\"; exit $s",
 			"sh",
 			root,
 			hl
@@ -794,7 +797,7 @@ class TestRunner {
 	function configureRuntimeLibraryPath():Void {
 		// "out" is relative, so a run finds the out of the directory it starts in first; the checkout's own out follows, for a
 		// program a test starts in another directory (a watched app in its project).
-		var paths = ["out", Path.join([root, "out"]), Sys.getEnv("HAXEON_HASHLINK_DIR")];
+		var paths = ["out", Path.join([root, "out"]), Path.join([Sys.getEnv("HAXEON_SDK"), "bin"])];
 		var variable = Sys.systemName() == "Windows"
 			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);

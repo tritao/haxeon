@@ -48,7 +48,8 @@ class Runtime implements Disposable {
 	public function startApp(surface:Surface, app:App, ?recorder:FrameRecorder):AppLoop {
 		ensureLive();
 		if (surface == null || app == null || !surface.usesEventPump(events))
-			throw BindingError.invalidArgument("Runtime.startApp", "An app and a surface using this runtime's event pump are required");
+			throw BindingError.invalidArgument("Runtime.startApp",
+				"An app and a surface using this runtime's event pump are required");
 		return new AppLoop(events, surface, app, recorder);
 	}
 

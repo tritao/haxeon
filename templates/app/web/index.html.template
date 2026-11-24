@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{name}}</title>
+<style>
+    html, body { margin: 0; }
+    canvas { display: block; width: 100%; height: 100dvh; outline: none; }
+    #status { position: absolute; inset: 0 auto auto 0; margin: 12px; }
+</style>
+<canvas id="canvas" tabindex="0" aria-label="{{name}}"></canvas>
+<p id="status" role="status">Loading…</p>
+<script src="haxeon-host.js"></script>
+<script type="module">
+    import { module } from "./haxeon-build.js";
+
+    const canvas = document.querySelector("#canvas");
+    const status = document.querySelector("#status");
+    const fail = error => { status.hidden = false; status.textContent = error.message; };
+    const hostUrl = new URL("./ui/nativekit_ui_haxeon.js", import.meta.url);
+    let memory;
+    try {
+        const emscripten = await new Promise((resolve, reject) => {
+            window.Module = {
+                canvas,
+                instantiateWasm(imports, receiveInstance) {
+                    HaxeonWasmHost.instantiateEmscripten(new URL("nativekit_ui_haxeon.wasm", hostUrl), imports)
+                        .then(result => {
+                            memory = result.memory;
+                            receiveInstance(result.instance);
+                        }).catch(reject);
+                    return {};
+                },
+                onRuntimeInitialized() { resolve(window.Module); },
+                onAbort(reason) { reject(new Error(reason)); }
+            };
+            const script = document.createElement("script");
+            script.src = hostUrl;
+            script.onerror = () => reject(new Error("Could not load the WebGL2 UI host"));
+            document.head.append(script);
+        });
+        const contract = HaxeonWasmHost.emscriptenContract(emscripten, memory);
+        const guest = await HaxeonWasmHost.instantiate(module, { emscripten, memory, contract });
+        guest.exports.main();
+        function tick(time) {
+            try {
+                const active = guest.exports["Main.frame"](time);
+                const count = guest.exports["Main.renderedCount"]();
+                if (count >= 0) {
+                    canvas.dataset.count = String(count);
+                    status.hidden = true;
+                }
+                if (active)
+                    requestAnimationFrame(tick);
+            } catch (error) {
+                fail(error);
+            }
+        }
+        requestAnimationFrame(tick);
+    } catch (error) {
+        fail(error);
+    }
+</script>
+</html>

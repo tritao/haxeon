@@ -9,6 +9,7 @@ import compiler.ir.model.Ir;
  * inlining consulted and on nothing else about them, so a cached form stays valid exactly while those objects are unchanged;
  * recording what was consulted is what lets one new class leave every function that never looked at it alone.
  */
+@:nullSafety(Strict)
 class IrObjectTable {
 	final objects:Map<String, IrObject>;
 	final children:Map<String, Array<String>>;

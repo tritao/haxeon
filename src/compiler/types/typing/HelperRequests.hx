@@ -29,6 +29,13 @@ typedef EnumInterfaceAdapterRequest = {
 	final span:SourceSpan;
 }
 
+/** A copy of a `Dynamic` record into the anonymous structure (or array of them) `type`. */
+typedef DynamicStructureRequest = {
+	final type:CompilerType;
+	final origin:String;
+	final span:SourceSpan;
+}
+
 /** A synthesized member of an enum abstract (`Flags`, `RawRepresentable`). */
 typedef MemberHelperRequest = {
 	final owner:String;
@@ -48,6 +55,7 @@ enum HelperRequest {
 	HashHelper(name:String, request:EqualityRequest);
 	FlagsHelper(name:String, request:MemberHelperRequest);
 	RawRepresentableHelper(name:String, request:MemberHelperRequest);
+	DynamicStructureHelper(name:String, request:DynamicStructureRequest);
 }
 
 /**
@@ -77,6 +85,9 @@ class HelperRequests {
 	public final flags:Map<String, MemberHelperRequest> = [];
 	public final rawRepresentables:Map<String, MemberHelperRequest> = [];
 
+	/** `Dynamic` to anonymous structure copies, one per target type. */
+	public final dynamicStructures:Map<String, DynamicStructureRequest> = [];
+
 	/** The first request of each name, in the order they were made. */
 	final entries:Array<HelperRequest> = [];
 
@@ -98,6 +109,7 @@ class HelperRequests {
 			case HashHelper(name, value): addTo(hashes, name, value);
 			case FlagsHelper(name, value): addTo(flags, name, value);
 			case RawRepresentableHelper(name, value): addTo(rawRepresentables, name, value);
+			case DynamicStructureHelper(name, value): addTo(dynamicStructures, name, value);
 		};
 		if (added)
 			entries.push(request);

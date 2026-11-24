@@ -1,6 +1,6 @@
 # Enum lowering: phase order and contracts
 
-Status: accepted (dev-71 review 2026-11-11). Implementation follows the separately gated order below; the shared IR model remains owned by dev-c5. This is the enum portion of [ADR 0003 §13](../adr/0003-compiler-architecture.md), not a second reachability or provider design. The unified declarations in [the provider model](../history/provider-requests-2026-11.md) remain authoritative: a generated provider has one `IrFunction.kind`, and a pending use is a typed operation in an instruction. There is no separate request list.
+Status: accepted (dev-71 review 2026-11-11). Implementation follows the separately gated order below; the shared IR model remains owned by dev-c5. This is the enum portion of [ADR 0003 §13](../adr/0003-compiler-architecture.md), not a second reachability or provider design. The unified declarations of the provider model (`IrFunctionKind`) remain authoritative: a generated provider has one `IrFunction.kind`, and a pending use is a typed operation in an instruction. There is no separate request list.
 
 ## Current order and the ordering problem
 

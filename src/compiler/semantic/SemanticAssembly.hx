@@ -16,6 +16,9 @@ import compiler.core.CancellationToken;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
 import compiler.semantic.Invalidation.InvalidationReason;
+import compiler.semantic.ProgramFacts.InferredProgramFacts;
+import compiler.semantic.DeclarationFacts.FactAspect;
+import compiler.semantic.DeclarationFacts.UnitReads;
 
 typedef SemanticAssemblyResult = {
 	final canonicalProgram:AstProgram;
@@ -47,14 +50,15 @@ typedef SemanticAssemblyResult = {
 	final allocatedBytes:Float;
 }
 
-/** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
+/** Canonicalizes reachable declarations and selects the units to type again: those that read a fact that changed. */
 class SemanticAssembly {
 	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
 			rollbackModules:Map<String, ModuleState>,
-			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
-			structuralChanged:Map<String, Bool>,
-			refreshUnchangedModules:Bool = true, continuation:Bool = false):SemanticAssemblyResult {
+			names:Array<String>, structuralChanged:Map<String, Bool>,
+			refreshUnchangedModules:Bool = true):SemanticAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
+		var facts = context.state.declarationFacts;
+		facts.beginBuild();
 		#if haxeon
 		var allocatedAtStart = hl.Gc.totalAllocated();
 		#elseif hl
@@ -70,16 +74,13 @@ class SemanticAssembly {
 			interfaces:Array<compiler.syntax.Ast.AstInterface> = [],
 			classes:Array<compiler.syntax.Ast.AstClass> = [],
 			owners:Map<String, String> = [],
-			generatedByModule:Map<String, Map<String, Bool>> = [],
-			reverseCalls:Map<String, Array<String>> = [],
-			genericOrigins:Map<String, Bool> = [];
+			generatedByModule:Map<String, Map<String, Bool>> = [];
 		var sourceTypeAliases:Map<String, String> = [],
 			aliasesByModule:Map<String, Array<{sourceName:String, declarationName:String}>> = [],
 			visibleAliasesByPackage:Map<String, Map<String, String>> = [],
 			enumCasesByType:Map<String, Array<String>> = [];
 		// The declarations whose type is inferred from their own body or initializer.
-		var inferredDeclarations:Map<String, Bool> = [],
-			inferredInstanceFields:Map<String, String> = [];
+		var inferredDeclarations:Map<String, Bool> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;
@@ -104,8 +105,7 @@ class SemanticAssembly {
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.classes)
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
-			collectInferredDeclarations(program, moduleName, entryModule, inferredDeclarations,
-				inferredInstanceFields);
+			collectInferredDeclarations(program, moduleName, entryModule, inferredDeclarations);
 		}
 		// Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"). They are attached to each module's
 		// table as shared layers instead of being copied into it.
@@ -117,13 +117,16 @@ class SemanticAssembly {
 				dottedSourceAliases.set(sourceName, declarationName);
 			else
 				plainSourceAliases.set(sourceName, declarationName);
+		var patternConstants:Map<String, Bool> = [];
 		var aliasUniverse = [
 			for (sourceName => declarationName in sourceTypeAliases)
 				sourceName + "=" + declarationName
 		];
 		for (typeName => caseNames in enumCasesByType)
-			for (caseName in caseNames)
+			for (caseName in caseNames) {
 				aliasUniverse.push(typeName + "#" + caseName);
+				patternConstants.set(typeName + "." + caseName, true);
+			}
 		// Where each module-level variable is stored (ModuleFields): name resolution names it there. A module that adds or removes
 		// one changes the key, so the modules that resolve names are resolved again.
 		// One that shares its name with a static of the module's own class is that static when named through the imported class.
@@ -135,6 +138,14 @@ class SemanticAssembly {
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
+				for (decl in parsed.classes)
+					for (field in decl.fields)
+						if (field.isStatic && field.isInline) {
+							var path = ModuleCanonicalizer.qualifiedTypeName(parsed.packageName,
+								decl.name) + "." + field.name;
+							patternConstants.set(path, true);
+							aliasUniverse.push("inline " + path);
+						}
 				for (fn in parsed.functions)
 					moduleMembers.set(moduleName + "." + fn.name, true);
 				if (parsed.fields != null) {
@@ -145,6 +156,10 @@ class SemanticAssembly {
 					for (field in parsed.fields) {
 						var path = moduleName + "." + field.name;
 						moduleFieldStorage.set(path, ModuleFields.storageName(moduleName) + "." + field.name);
+						if (field.isInline) {
+							patternConstants.set(ModuleFields.storageName(moduleName) + "." + field.name, true);
+							aliasUniverse.push("inline " + path);
+						}
 						moduleMembers.set(path, true);
 						aliasUniverse.push("field " + path);
 						if (ownClass != null && declaresStatic(ownClass, field.name)) {
@@ -200,8 +215,7 @@ class SemanticAssembly {
 			if (reuseModuleContributions
 				&& state.canonicalRevision == state.revision
 				&& state.canonicalEntry == entryModule
-				&& state.canonicalAliasKey == aliasKey
-				&& state.canonicalAllFunctions.length > 0) {
+				&& state.canonicalAliasKey == aliasKey) {
 				for (value in state.canonicalAliases)
 					typeAliases.push(value);
 				for (value in state.canonicalEnums)
@@ -217,26 +231,24 @@ class SemanticAssembly {
 				for (fn in state.canonicalAllFunctions) {
 					functions.push(fn);
 					owners.set(fn.name, name);
-					var fallbackCalls = state.canonicalCalls.get(fn.name);
-					if (fallbackCalls == null)
-						fallbackCalls = [];
-					for (callee in dependencyCalls(state, rollbackModules, fn.name, fallbackCalls))
-						addReverseCall(reverseCalls, callee, fn.name);
 				}
 				for (fn in state.canonicalProgramFunctions)
 					programFunctions.push(fn);
-				for (functionName in state.canonicalGenericOrigins)
-					genericOrigins.set(functionName, true);
 				if (state.canonicalGeneratedFunctions.length > 0)
 					generatedByModule.set(name,
 						[for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
 				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
+			// The facts of the module's declarations are moved by what changed since they were last made (`DeclarationPrints`).
+			var before = state.canonicalRevision > 0 ? canonicalContribution(state) : null,
+				scope = scopeKey(ast),
+				sameScope = state.canonicalScope == scope && state.canonicalAliasKey == aliasKey;
 			var importedTypes = context.moduleAnalyzer.importAliases(ast.imports),
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
 			aliases.useModuleFieldStorage(moduleFieldStorage, moduleTypeStatics, moduleMembers);
+			aliases.usePatternConstants(patternConstants);
 			var namespaceUses:Array<AliasTable.ModuleNamespaceUse> = [];
 			aliases.recordNamespaceUses(namespaceUses);
 			// An explicit import outranks a same-named type elsewhere in the
@@ -248,21 +260,27 @@ class SemanticAssembly {
 				ambiguousConstructors:Map<String, Bool> = [];
 			for (imported in ast.imports) {
 				var importPath = imported.path;
-				if (ModuleAnalyzer.isWildcardImport(importPath))
-					continue;
 				var importedTypes:Array<String> = [],
 					importConstructors:Map<String, String> = [],
 					ambiguousImportConstructors:Map<String, Bool> = [];
-				var importedType = sourceTypeAliases.get(importPath);
-				if (importedType != null)
-					importedTypes.push(importedType);
-				// Importing a module imports every type declared in it, and with
-				// each enum its constructors, as in Haxe.
-				if (aliasesByModule.exists(importPath)
-					&& (imported.alias == null || imported.alias == QualifiedName.last(importPath)))
-					for (entry in aliasesByModule.get(importPath))
-						if (importedTypes.indexOf(entry.declarationName) < 0)
-							importedTypes.push(entry.declarationName);
+				if (ModuleAnalyzer.isWildcardImport(importPath)) {
+					// `import pack.Type.*` imports the type's statics: an enum's constructors and an enum abstract's values are among
+					// them, as in Haxe. A package's wildcard imports its types without their constructors.
+					var wildcardType = sourceTypeAliases.get(ModuleAnalyzer.importModulePath(importPath));
+					if (wildcardType != null)
+						importedTypes.push(wildcardType);
+				} else {
+					var importedType = sourceTypeAliases.get(importPath);
+					if (importedType != null)
+						importedTypes.push(importedType);
+					// Importing a module imports every type declared in it, and with
+					// each enum its constructors, as in Haxe.
+					if (aliasesByModule.exists(importPath)
+						&& (imported.alias == null || imported.alias == QualifiedName.last(importPath)))
+						for (entry in aliasesByModule.get(importPath))
+							if (importedTypes.indexOf(entry.declarationName) < 0)
+								importedTypes.push(entry.declarationName);
+				}
 				for (type in importedTypes)
 					if (enumCasesByType.exists(type))
 						for (caseName in enumCasesByType.get(type))
@@ -307,12 +325,13 @@ class SemanticAssembly {
 			}
 			aliases.attach(plainSourceAliases);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
-			// Enum constructors imported through their enum type are expression
-			// aliases. Install them only after visible type aliases have been
-			// collected, so a class in the current/imported package keeps its
-			// name in type positions such as `new Tabs()`.
+			// Enum constructors imported through their enum type are expression aliases, so a type of the same name keeps it in
+			// type positions such as `new Tabs()`. In an expression an imported constructor comes before a type of the package or
+			// the program, as in Haxe (`Lambda(3)` with `import pack.Shape` is Shape's constructor, not the class `Lambda`); a
+			// type the module declares or imports by name keeps the name.
 			for (caseName => target in constructorTargets)
-				if (!ambiguousConstructors.exists(caseName) && !aliases.exists(caseName))
+				if (!ambiguousConstructors.exists(caseName) && !importedTypes.exists(caseName)
+					&& !aliases.setsOwn(caseName))
 					ModuleCanonicalizer.addExpressionAlias(aliases, caseName, target);
 			var aliasStart = typeAliases.length,
 				enumStart = enums.length,
@@ -345,9 +364,6 @@ class SemanticAssembly {
 					var qualified = canonicalAbstract.name + "." + method.name;
 					functions.push(AstFunctions.withName(method, qualified));
 					owners.set(qualified, name);
-					if (canonicalAbstract.typeParameters.length > 0
-						|| (method.typeParameters != null && method.typeParameters.length > 0))
-						genericOrigins.set(qualified, true);
 					LambdaCollector.collect(method.statements, qualified, name, generatedByModule);
 				}
 			}
@@ -369,38 +385,16 @@ class SemanticAssembly {
 				for (use in functionUses)
 					namespaceUses.push(use);
 				state.canonicalFunctionNamespaceUses = functionUses;
-				var canonicalCalls:Map<String, Array<String>> = [];
-				for (canonical in canonicalFunctions) {
-					var calls:Map<String, Bool> = [],
-						localAliases:Map<String, String> = [];
-					for (statement in canonical.statements)
-						SemanticDependencyCollector.scanCalls(statement, calls, localAliases);
-					canonicalCalls.set(canonical.name, [for (callee in calls.keys()) callee]);
-				}
 				state.canonicalFunctions = canonicalFunctions;
 				state.canonicalRevision = state.revision;
 				state.canonicalEntry = entryModule;
 				state.canonicalAliasKey = aliasKey;
-				state.canonicalCalls = canonicalCalls;
 			}
 			for (canonical in canonicalFunctions) {
 				functions.push(canonical);
 				programFunctions.push(canonical);
 				owners.set(canonical.name, name);
-				if (canonical.typeParameters != null && canonical.typeParameters.length > 0)
-					genericOrigins.set(canonical.name, true);
 				LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-				for (callee in dependencyCalls(state, rollbackModules, canonical.name,
-					state.canonicalCalls.get(canonical.name))) {
-					var callers:Array<String>;
-					if (reverseCalls.exists(callee))
-						callers = reverseCalls.get(callee);
-					else {
-						callers = [];
-						reverseCalls.set(callee, callers);
-					}
-					callers.push(canonical.name);
-				}
 			}
 			for (classDecl in ast.classes) {
 				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
@@ -430,26 +424,7 @@ class SemanticAssembly {
 					functions.push(canonical);
 					classMethods.push(AstFunctions.withName(canonical, method.name));
 					owners.set(canonical.name, name);
-					if (classDecl.typeParameters.length > 0
-						|| (method.typeParameters != null && method.typeParameters.length > 0))
-						genericOrigins.set(canonical.name, true);
-					var calls:Map<String, Bool> = [];
-					var aliases:Map<String, String> = [];
-					for (statement in canonical.statements)
-						SemanticDependencyCollector.scanCalls(statement, calls, aliases);
 					LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-					var fallbackCalls = [for (name in calls.keys()) name];
-					state.canonicalCalls.set(canonical.name, fallbackCalls);
-					for (callee in dependencyCalls(state, rollbackModules, canonical.name, fallbackCalls)) {
-						var callers:Array<String>;
-						if (reverseCalls.exists(callee))
-							callers = reverseCalls.get(callee);
-						else {
-							callers = [];
-							reverseCalls.set(callee, callers);
-						}
-						callers.push(canonical.name);
-					}
 				}
 				var canonicalFields:Array<compiler.syntax.Ast.AstField> = [];
 				for (field in classDecl.fields) {
@@ -498,10 +473,6 @@ class SemanticAssembly {
 			}
 			state = context.state.writableState(name, rollbackModules);
 			state.canonicalAliases = typeAliases.slice(aliasStart);
-			// An alias remains an invalidation node even though typed values use its resolved type.
-			for (alias in state.canonicalAliases)
-				SemanticDependencyCollector.addTypeDependency(state.semanticDependencies, alias.name,
-					SemanticDependencyKind.Layout, alias.type, aliases);
 			state.canonicalEnums = enums.slice(enumStart);
 			state.canonicalAbstracts = abstracts.slice(abstractStart);
 			state.canonicalInterfaces = interfaces.slice(interfaceStart);
@@ -509,14 +480,47 @@ class SemanticAssembly {
 			state.canonicalAllFunctions = functions.slice(functionStart);
 			state.canonicalNamespaceUses = namespaceUses;
 			state.canonicalProgramFunctions = programFunctions.slice(programFunctionStart);
-			state.canonicalGenericOrigins = [
-				for (functionName in genericOrigins.keys())
-					if (owners.get(functionName) == name) functionName
-			];
 			var generated = generatedByModule.get(name);
 			state.canonicalGeneratedFunctions = generated == null
 				? [] : [for (functionName in generated.keys()) functionName];
+			DeclarationPrints.update(facts, before, canonicalContribution(state), sameScope);
+			state.canonicalScope = scope;
+			// A unit that copied syntax from this module's file (a default argument) names the file's text.
+			var snapshot = facts.existing(FactAspect.Snapshot, state.source.path);
+			if (snapshot >= 0 && (state.lastGoodSource == null || state.lastGoodSource.text != state.source.text))
+				facts.changed(snapshot);
 			contributionRebuildMs += Sys.time() * 1000.0 - contributionStartedAt;
+		}
+
+		// A newly matching typedef can change a structural codec even when its caller never names the typedef.
+		var previousSemantic = context.state.semanticProgram;
+		if (previousSemantic != null) {
+			var previousAliases = previousSemantic.program.aliases;
+			var sameAliases = previousAliases.length == typeAliases.length;
+			if (sameAliases)
+				for (index in 0...typeAliases.length)
+					if (previousAliases[index] != typeAliases[index]) {
+						sameAliases = false;
+						break;
+					}
+			if (!sameAliases) {
+				var before:Null<Map<String, Array<AstTypeAlias>>> = null;
+				var after:Null<Map<String, Array<AstTypeAlias>>> = null;
+				facts.forEach(FactAspect.WireAliases, (id, key) -> {
+					before = before ?? compiler.types.DeclarationIndex.indexWireAliases(previousAliases);
+					after = after ?? compiler.types.DeclarationIndex.indexWireAliases(typeAliases);
+					var left = before.get(key) ?? [], right = after.get(key) ?? [];
+					if (left.length != right.length) {
+						facts.changed(id);
+						return;
+					}
+					for (index in 0...right.length)
+						if (left[index].name != right[index].name) {
+							facts.changed(id);
+							return;
+						}
+				});
+			}
 		}
 
 		var canonicalizedAt = Sys.time() * 1000.0;
@@ -524,88 +528,50 @@ class SemanticAssembly {
 			for (lambdaName in lambdaNames.keys())
 				owners.set(lambdaName, module);
 		// A class without a constructor has its base class's: give it one, so it is typed, tracked and invalidated like any other.
-		var changedSignatures:Map<String, Bool> = [for (name in signatureChanged.keys()) name => true];
+		// Its signature is its base constructor's, so its signature fact goes through that one.
+		// The functions made from other declarations, which appear and go with them, in a module no edit touched.
+		var derived:Array<String> = [];
 		for (constructor in ImplicitConstructors.add(classes)) {
-			var qualified = constructor.owner + ".new",
-				baseConstructor = constructor.base + ".new";
-			// Its signature is the base constructor's, so it changes whenever that does; the class stands for it to callers.
-			if (changedSignatures.exists(baseConstructor)) {
-				changedSignatures.set(qualified, true);
-				changedSignatures.set(constructor.owner, true);
-			}
+			var qualified = constructor.owner + ".new";
 			functions.push(AstFunctions.withName(constructor.method, qualified));
-			var callers = reverseCalls.get(baseConstructor);
-			if (callers == null) {
-				callers = [];
-				reverseCalls.set(baseConstructor, callers);
-			}
-			callers.push(qualified);
-			for (declaration in classes)
-				if (declaration.name == constructor.owner && declaration.typeParameters.length > 0)
-					genericOrigins.set(qualified, true);
+			derived.push(qualified);
+			facts.setDependencies(facts.id(FactAspect.Signature, qualified),
+				[facts.id(FactAspect.Signature, constructor.base + ".new")]);
 		}
 		// A class that implements an interface with variables has their hidden accessors (`InterfaceFieldAccessors`): typed, tracked
-		// and invalidated as its own methods, through its layout dependency on the interface.
+		// and invalidated as its own methods. An accessor's signature is the interface variable's, which the class's members name.
 		for (accessor in InterfaceFieldAccessors.add(classes, interfaces)) {
 			var qualified = accessor.owner + "." + accessor.method.name;
 			functions.push(AstFunctions.withName(accessor.method, qualified));
 			owners.set(qualified, owners.get(accessor.owner + ".new"));
-			for (declaration in classes)
-				if (declaration.name == accessor.owner && declaration.typeParameters.length > 0)
-					genericOrigins.set(qualified, true);
+			derived.push(qualified);
+			facts.setDependencies(facts.id(FactAspect.Signature, qualified),
+				[facts.id(FactAspect.Members, accessor.owner)]);
 		}
 
-		// Purity and no-return are whole-program facts, but typed bodies are cached between
-		// incremental compiles. Recompute both fresh from the current canonical program (cheap:
-		// purely syntactic, no type resolution needed) and compare against what each cached
-		// body's own typing last recorded asking about. A caller whose depended-upon answer
-		// flipped elsewhere is retyped below through the ordinary invalidation propagation, even
-		// though neither its own source nor its signature changed.
-		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
-		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
-			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
-		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
-			[for (enumDecl in enums) enumDecl.name => enumDecl];
-		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
-			[for (decl in abstracts) decl.name => decl];
-		// The typer's own signature table: purity inferred over any other scope can disagree with what typing relied on, and
-		// every cached body then looks drifted on every edit.
-		var purityScopeSignatures:Map<String, AstFunction> = [];
-		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
-		var isAnnotatedPure =
-			function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
-			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures,
-			purityScopeClasses);
-		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
-			.isTypeName(candidate, purityScopeClasses,
-			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
-		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
-			purityScopeAbstracts,
-			purityScopeEnums, isAnnotatedPure, isTypeName);
-		var freshNoReturn = compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures);
-		var purityDrifted:Map<String, Bool> = [];
-		for (moduleName in names) {
-			if (!modules.exists(moduleName))
-				continue;
-			var dependencyState = modules.get(moduleName);
-			for (caller => record in dependencyState.purityQueries)
-				for (callee => wasPure in record)
-					if ((freshInferredPure.exists(callee) || isAnnotatedPure(callee)) != wasPure) {
-						purityDrifted.set(purityDependencyOwner(caller), true);
-						break;
-					}
-			for (caller => record in dependencyState.noReturnQueries)
-				for (callee => wasNoReturn in record)
-					if (freshNoReturn.exists(callee) != wasNoReturn) {
-						purityDrifted.set(purityDependencyOwner(caller), true);
-						break;
-					}
+		// Purity and no-return are whole-program facts, inferred from the canonical program: when they are inferred again, each
+		// answer a typed body read (`FactAspect.Purity`, `FactAspect.NoReturn`) that differs moves, and its readers are typed again.
+		var contributions = [
+			for (moduleName in names)
+				if (modules.exists(moduleName)) modules.get(moduleName).canonicalAllFunctions
+		];
+		var previousFacts = context.state.programFacts, inferred = previousFacts;
+		if (inferred == null || !sameContributions(inferred.contributions, contributions)) {
+			inferred = inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions, facts,
+				previousFacts == null ? null : previousFacts.dependencies);
+			context.state.programFacts = inferred;
+			// `--check-reuse`: what the bodies whose facts held were taken to depend on gives what walking every body gives.
+			if (context.options.checkReuse && previousFacts != null)
+				checkPurity(inferred,
+					inferProgramFacts(contributions, classes, interfaces, enums, abstracts, programFunctions,
+					facts, null));
+			if (previousFacts != null)
+				moveAnswers(facts, previousFacts, inferred);
 		}
 
 		var invalid:Map<String, Bool> = [],
-			invalidationReasons:Map<String, Array<InvalidationReason>> = [], // A continuation picks up a pass whose typed functions are already published to the module states, though no module has
-			// a good revision until the whole compilation commits: it is incremental over that pass, not a first build.
-			initialBuild = !continuation;
+			invalidationReasons:Map<String, Array<InvalidationReason>> = [],
+			initialBuild = true;
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;
@@ -616,82 +582,48 @@ class SemanticAssembly {
 		if (initialBuild) {
 			for (fn in functions)
 				invalidate(invalid, invalidationReasons, fn.name, SourceRevision, owners.get(fn.name));
-		} else {
-			var structuralQueue:Array<String> = [for (change in structuralChanged.keys()) change],
-				structuralTargets:Map<String, Bool> = [],
-				structuralCursor = 0;
-			while (structuralCursor < structuralQueue.length) {
-				var change = structuralQueue[structuralCursor++];
-				var changedDependency:String = change,
-					separator = changedDependency.indexOf(":"),
-					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1,
-						changedDependency.length),
-					targetId = context.state.semanticWorkspace.resolveTypeSymbolId(target);
-				if (targetId == null)
-					targetId = context.state.semanticWorkspace.resolveSymbolId(target);
-				var targetKey = targetId == null ? target : targetId;
-				if (structuralTargets.exists(targetKey))
+		} else if (facts.changedInBuild()) {
+			// A unit is typed again when a fact it read, or one that fact goes through, changed after it was typed. When no fact
+			// changed in this build, every unit is current.
+			function unitReads(id:Int):Null<UnitReads> {
+				var module = facts.unitModule(id), state = module == null ? null : modules.get(module);
+				return state == null ? null : state.unitReads.get(facts.name(id));
+			}
+			for (moduleName in names) {
+				var state = modules.get(moduleName);
+				if (state == null)
 					continue;
-				structuralTargets.set(targetKey, true);
-				for (moduleName in names) {
-					if (!modules.exists(moduleName))
+				var gone:Null<Array<String>> = null;
+				for (unit => record in state.unitReads) {
+					var changed = facts.firstChanged(record, unitReads);
+					if (changed < 0)
 						continue;
-					var dependencyState = modules.get(moduleName);
-					for (owner => dependencies in dependencyState.semanticDependencies)
-						for (dependency in dependencies) {
-							var functionOwner:String = owner;
-							var matches = dependency.targetId != null
-								&& targetId != null ? dependency.targetId
-								== targetId : SemanticDependencyCollector.sameDependencyTarget(dependency.target,
-								target);
-							if (matches) {
-								invalidate(invalid, invalidationReasons, functionOwner, StructuralDependency, target,
-									targetId, Std.string(dependency.kind));
-								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
-									for (classDecl in classes)
-										if (classDecl.name == functionOwner) {
-											structuralQueue.push(functionOwner);
-											break;
-										}
-								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
-									for (interfaceDecl in interfaces)
-										if (interfaceDecl.name == functionOwner) {
-											structuralQueue.push(functionOwner);
-											break;
-										}
-								if (dependency.kind == SemanticDependencyKind.Layout)
-									for (alias in typeAliases)
-										if (alias.name == functionOwner) {
-											structuralQueue.push(functionOwner);
-											break;
-										}
-								var matchedFunction = false;
-								for (fn in functions)
-									if (fn.name == functionOwner
-										|| StringTools.startsWith(fn.name, functionOwner + ".")) {
-										invalidate(invalid, invalidationReasons, fn.name, StructuralDependency, target,
-											targetId, Std.string(dependency.kind));
-										matchedFunction = true;
-									}
-								if (matchedFunction)
-									break;
-							}
-						}
+					if (!unitExists(unit, owners, state)) {
+						if (gone == null)
+							gone = [];
+						gone.push(unit);
+						continue;
+					}
+					var reason = readReason(unit, facts.aspect(changed), facts.name(changed));
+					invalidate(invalid, invalidationReasons, unit, reason.kind, facts.name(changed), null, reason.via);
+				}
+				// A unit the program no longer has keeps no record.
+				if (gone != null) {
+					var writable = context.state.writableState(moduleName, rollbackModules);
+					for (unit in gone)
+						writable.unitReads.remove(unit);
 				}
 			}
+			// A function a change to another declaration made (an implicit constructor, an interface variable's accessor) and
+			// never typed has nothing to be current with. Any other function is new only in a module that changed, which is typed
+			// again as a whole (below).
+			for (name in derived) {
+				var owner = owners.get(name), state = owner == null ? null : modules.get(owner);
+				if (state != null && !state.unitReads.exists(name) && !state.typedFunctions.exists(name)
+					&& !invalid.exists(name))
+					invalidate(invalid, invalidationReasons, name, SourceRevision, owner, null, "new");
+			}
 		}
-		// A default argument is typed in the declaration's scope but embedded in its caller. Even a comment-only
-		// declaration edit changes that syntax's snapshot hash. Refresh exactly the callers which copied it.
-		var sourceFiles = [for (state in modules) state.source.path => state.source];
-		for (moduleName in names)
-			if (modules.exists(moduleName))
-				for (caller => sources in modules.get(moduleName).defaultArgumentSources)
-					for (path => source in sources)
-						if (!sourceFiles.exists(path) || sourceFiles.get(path).text != source.text) {
-							invalidate(invalid, invalidationReasons, enclosingFunction(caller), SourceRevision, path,
-								null, "default-argument");
-							break;
-						}
 		// Rehydrated modules can retain field initializer fingerprints without
 		// retaining the generated constructor body. Treat that missing body as
 		// invalidated so normal typing and publication rebuild it.
@@ -707,66 +639,11 @@ class SemanticAssembly {
 					declaredConstructor = true;
 			if (declaredConstructor)
 				continue;
-			for (field in classDecl.fields)
-				if (!field.isStatic && field.initializer != null) {
-					invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
-					break;
-				}
+			if (ImplicitConstructors.hasInstanceInitializers(classDecl))
+				invalidate(invalid, invalidationReasons, constructorName, SourceRevision, owner);
 		}
-		for (name in bodyChanged.keys())
-			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
-		var reverseBodyDependencies:Map<String, Array<String>> = [],
-			reverseDeclarationTypeReads:Map<String, Array<String>> = [],
-			reverseInitializerCalls:Map<String, Array<String>> = [];
-		for (moduleName in names) {
-			if (!modules.exists(moduleName))
-				continue;
-			for (owner => dependencies in modules.get(moduleName).semanticDependencies)
-				for (dependency in dependencies)
-					if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
-						&& dependency.targetId != null) {
-						var dependents = reverseBodyDependencies.get(dependency.targetId);
-						if (dependents == null) {
-							dependents = [];
-							reverseBodyDependencies.set(dependency.targetId, dependents);
-						}
-						dependents.push(owner);
-					} else if (dependency.kind == SemanticDependencyKind.DeclarationType)
-						addReverseCall(reverseDeclarationTypeReads, dependency.target, owner);
-					else if (dependency.kind == SemanticDependencyKind.Initializer
-						&& inferredDeclarations.exists(owner))
-						addReverseCall(reverseInitializerCalls,
-							dependency.targetId == null ? dependency.target : dependency.targetId, owner);
-		}
-		// Before typing, `gate.worst()` only names the local `gate`, so the syntactic dependencies above cannot tell that a
-		// function calls `Gate.worst`. Typing can: it records the callee of every call against the function being typed (see
-		// `TypingSession.purityQueries`, kept for the purity drift check and used here for the callee alone). Walked backwards,
-		// that finds the functions to retype when a callee's signature changes, such as a method gaining an optional parameter,
-		// which every caller still type-checks against but must be lowered to again.
-		var reverseTypedCalls:Map<String, Array<String>> = [];
-		for (moduleName in names) {
-			if (!modules.exists(moduleName))
-				continue;
-			for (caller => record in modules.get(moduleName).purityQueries)
-				for (callee in record.keys()) {
-					var callers = reverseTypedCalls.get(callee);
-					if (callers == null) {
-						callers = [];
-						reverseTypedCalls.set(callee, callers);
-					}
-					callers.push(purityDependencyOwner(caller));
-				}
-		}
-		// A generated helper can depend on a type that its source function does not mention in its signature.
-		// When that helper is invalidated, retype its origin so the helper and its dependencies are requested again.
-		var helperOrigins:Map<String, String> = [];
-		for (moduleName in names)
-			if (modules.exists(moduleName))
-				for (name => fn in modules.get(moduleName).typedFunctions)
-					if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
-						helperOrigins.set(name, fn.origin);
 		// A call may resolve to a static extension without its body naming it (`text.trim()` after `using StringTools`). When the
-		// extensions a module's code sees change, every body of the module is typed again, and propagates as any retyped body does.
+		// extensions a module's code sees change, every body of the module is typed again.
 		for (moduleName in names) {
 			var moduleState = modules.get(moduleName);
 			if (moduleState == null)
@@ -778,130 +655,6 @@ class SemanticAssembly {
 			for (fn in functions)
 				if (owners.get(fn.name) == moduleName)
 					invalidate(invalid, invalidationReasons, fn.name, StaticExtensions, moduleName);
-		}
-		var genericCallers:Null<Map<String, Array<String>>> = null;
-		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
-		for (name in invalid.keys())
-			if (helperOrigins.exists(name) || inferredDeclarations.exists(name))
-				work.push(name);
-		for (name in bodyChanged.keys())
-			if (genericOrigins.exists(name)) {
-				work.push(name);
-				invalidate(invalid, invalidationReasons, name, GenericOrigin, name);
-			}
-		// An invalidated generic origin loses its cached specializations, and only a retyped caller requests one again,
-		// so its callers are invalidated however the origin was (a changed body, or a layout it depends on).
-		for (name in [for (name in invalid.keys()) name])
-			if (genericOrigins.exists(name) && !bodyChanged.exists(name))
-				work.push(name);
-		for (name in purityDrifted.keys()) {
-			work.push(name);
-			invalidate(invalid, invalidationReasons, name, PurityDependency, name);
-		}
-		while (workCursor < work.length) {
-			if (token != null)
-				token.check();
-			var changed = work[workCursor++];
-			if (changedSignatures.exists(changed))
-				invalidate(invalid, invalidationReasons, changed, SignatureChanged, changed,
-					context.state.semanticWorkspace.resolveSymbolId(changed));
-			else if (!invalid.exists(changed))
-				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
-			var changedId = context.state.semanticWorkspace.resolveSymbolId(changed);
-			// The coarse rule of lazy declaration typing (`LAZY_DECLARATION_TYPING.md`, "Invalidation"): a declaration whose type is
-			// inferred and that is typed again for any reason may get another type, so its signature counts as changed, and the
-			// readers of its type are typed again in turn.
-			if (!changedSignatures.exists(changed) && inferredDeclarations.exists(changed)) {
-				changedSignatures.set(changed, true);
-				var constructor = inferredInstanceFields.get(changed);
-				if (constructor != null && !invalid.exists(constructor)) {
-					work.push(constructor);
-					invalidate(invalid, invalidationReasons, constructor, DependencySignature, changed, changedId,
-						Std.string(SemanticDependencyKind.Initializer));
-				}
-			}
-			// A field's initializer is a unit of its own (`Class.__init.x`): what it read can change the type of its field.
-			var initialized = InitializerUnit.field(changed);
-			if (initialized != null && inferredDeclarations.exists(initialized) && !invalid.exists(initialized)) {
-				work.push(initialized);
-				invalidate(invalid, invalidationReasons, initialized, DependencySignature, changed, changedId,
-					Std.string(SemanticDependencyKind.DeclarationType));
-			}
-			var helperOrigin = helperOrigins.get(changed);
-			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
-				work.push(helperOrigin);
-				invalidate(invalid, invalidationReasons, helperOrigin, DependencySignature, changed, changedId,
-					"generated-helper");
-			}
-			// A caller is typed against its callee's signature, and lowered with the defaults of the arguments it omits, so it is
-			// retyped when that signature changes, as Haxe types it again. A callee only retyped (its body, or a callee of its own,
-			// changed) keeps its signature and leaves its callers alone; one whose signature is inferred counts as changed above.
-			// A generic origin's callers are retyped however it was invalidated: they request its dropped specializations again.
-			var callersRetyped = changedSignatures.exists(changed) || genericOrigins.exists(changed);
-			if (callersRetyped && changedId != null && reverseBodyDependencies.exists(changedId))
-				for (ownerName in reverseBodyDependencies.get(changedId)) {
-					var owner = enclosingFunction(ownerName);
-					if (!invalid.exists(owner)) {
-						work.push(owner);
-						invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId,
-							Std.string(compiler.modules.ModuleState.SemanticDependencyKind.Body));
-					}
-				}
-			if (changedSignatures.exists(changed)) {
-				var readers = reverseDeclarationTypeReads.get(changed);
-				if (readers != null)
-					for (reader in readers) {
-						var owner = enclosingFunction(reader);
-						if (!invalid.exists(owner)) {
-							work.push(owner);
-							invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId,
-								Std.string(SemanticDependencyKind.DeclarationType));
-						}
-					}
-				// A field initializer is typed with its class in every build, but its field's type is inferred from what it calls.
-				for (key in (changedId == null ? [changed] : [changed, changedId])) {
-					var fields = reverseInitializerCalls.get(key);
-					if (fields != null)
-						for (field in fields)
-							if (!invalid.exists(field)) {
-								work.push(field);
-								invalidate(invalid, invalidationReasons, field, DependencySignature, changed, changedId,
-									Std.string(SemanticDependencyKind.Initializer));
-							}
-				}
-			}
-			if (changedSignatures.exists(changed) && reverseTypedCalls.exists(changed))
-				for (caller in reverseTypedCalls.get(changed))
-					if (!invalid.exists(caller)) {
-						work.push(caller);
-						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
-							"typed-call");
-					}
-			if (genericOrigins.exists(changed)) {
-				// A call through a local (`context.resourceState(...)`) has no resolvable name before typing, so the callers
-				// that must request this origin's dropped specializations again come from the IR they were lowered to.
-				if (genericCallers == null)
-					genericCallers = callersOfSpecializations(modules, names);
-				var requesting = genericCallers.get(changed);
-				if (requesting != null)
-					for (caller in requesting)
-						if (!invalid.exists(caller)) {
-							work.push(caller);
-							invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
-								"specialization-request");
-						}
-			}
-			if (callersRetyped && reverseCalls.exists(changed)) {
-				var callers = reverseCalls.get(changed);
-				for (callerName in callers) {
-					var caller = enclosingFunction(callerName);
-					if (!invalid.exists(caller)) {
-						work.push(caller);
-						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
-							"provisional-call");
-					}
-				}
-			}
 		}
 		var invalidated:Map<String, Bool> = [];
 		for (name in invalid.keys())
@@ -958,8 +711,8 @@ class SemanticAssembly {
 			entrySpan: context.state.executableEntrySpan(entryModule),
 			inferredDeclarations: inferredDeclarations,
 			facts: {
-				pure: freshInferredPure,
-				noReturn: freshNoReturn
+				pure: inferred.facts.pure,
+				noReturn: inferred.facts.noReturn
 			},
 			aliasSetupMs: aliasesPreparedAt - startedAt,
 			canonicalizationMs: canonicalizedAt - aliasesPreparedAt,
@@ -969,6 +722,177 @@ class SemanticAssembly {
 			allocatedBytes: #if haxeon hl.Gc.totalAllocated() - allocatedAtStart #elseif hl hl.Gc.stats().totalAllocated
 				- allocatedAtStart #else 0.0 #end
 		};
+	}
+
+	/**
+	 * Purity and no-return over the canonical program, made of `contributions` (see `InferredProgramFacts`), over the typer's own
+	 * signature table: purity inferred over any other scope can disagree with what typing relied on, and every cached body then
+	 * looks drifted on every edit.
+	 */
+	static function inferProgramFacts(contributions:Array<Array<AstFunction>>, classes:Array<AstClass>,
+			interfaces:Array<compiler.syntax.Ast.AstInterface>, enums:Array<compiler.syntax.Ast.AstEnum>,
+			abstracts:Array<compiler.syntax.Ast.AstAbstract>,
+			programFunctions:Array<AstFunction>, declarationFacts:DeclarationFacts,
+			previous:Null<compiler.types.analysis.PurityInference.PurityDependencies>):InferredProgramFacts {
+		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
+		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
+			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
+		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
+			[for (enumDecl in enums) enumDecl.name => enumDecl];
+		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
+			[for (decl in abstracts) decl.name => decl];
+		var purityScopeSignatures:Map<String, AstFunction> = [];
+		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
+		// The typer's own seed (`TypingSession.isDeclaredPure`): with any other, a body that asked about a generated helper the
+		// typer counts as pure (a flags or raw-representable helper) looks drifted on every edit.
+		var isAnnotatedPure = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
+			.isDeclaredPure(candidate, purityScopeSignatures, purityScopeClasses);
+		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
+			.isTypeName(candidate, purityScopeClasses,
+			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
+		var dependencies = new compiler.types.analysis.PurityInference.PurityDependencies(declarationFacts);
+		return {
+			contributions: contributions,
+			dependencies: dependencies,
+			facts: {
+				pure: compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
+					purityScopeAbstracts, purityScopeEnums, isAnnotatedPure, isTypeName, previous, dependencies),
+				noReturn: compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures)
+			},
+			isAnnotatedPure: isAnnotatedPure
+		};
+	}
+
+	/**
+	 * Moves the purity and never-returns answers typed bodies read (`FactAspect.Purity`, `FactAspect.NoReturn`) that `current`
+	 * gives otherwise than `previous`.
+	 */
+	static function moveAnswers(facts:DeclarationFacts, previous:InferredProgramFacts,
+			current:InferredProgramFacts):Void {
+		facts.forEach(FactAspect.Purity, (id, name) -> {
+			if ((previous.facts.pure.exists(name) || previous.isAnnotatedPure(name)) != (current.facts.pure.exists(name)
+				|| current.isAnnotatedPure(name)))
+				facts.changed(id);
+		});
+		facts.forEach(FactAspect.NoReturn, (id, name) -> {
+			if (previous.facts.noReturn.exists(name) != current.facts.noReturn.exists(name))
+				facts.changed(id);
+		});
+	}
+
+	/** `--check-reuse`: `reused`, inferred taking unchanged bodies' dependencies, says what `fresh`, inferred anew, says. */
+	static function checkPurity(reused:InferredProgramFacts, fresh:InferredProgramFacts):Void {
+		var left = reused.facts.pure, right = fresh.facts.pure;
+		for (name in left.keys())
+			if (!right.exists(name))
+				throw new compiler.core
+					.InternalError('--check-reuse: purity inference reused dependencies that make $name pure');
+		for (name in right.keys())
+			if (!left.exists(name))
+				throw new compiler.core
+					.InternalError('--check-reuse: purity inference reused dependencies that leave $name impure');
+		for (name => dependency in fresh.dependencies.entries) {
+			var kept = reused.dependencies.entries.get(name);
+			if (kept == null || !sameDependencies(kept.dependencies, dependency.dependencies))
+				throw new compiler.core
+					.InternalError('--check-reuse: purity inference reused what $name depends on, which differs');
+		}
+	}
+
+	static function sameDependencies(left:Null<Map<String, Bool>>, right:Null<Map<String, Bool>>):Bool {
+		if (left == null || right == null)
+			return left == right;
+		var count = 0;
+		for (name in left.keys()) {
+			if (!right.exists(name))
+				return false;
+			count++;
+		}
+		for (_ in right.keys())
+			count--;
+		return count == 0;
+	}
+
+	/** A module's canonical declarations as its state holds them, which `DeclarationPrints` compares. */
+	static function canonicalContribution(state:ModuleState):DeclarationPrints.CanonicalContribution
+		return {
+			aliases: state.canonicalAliases,
+			enums: state.canonicalEnums,
+			abstracts: state.canonicalAbstracts,
+			interfaces: state.canonicalInterfaces,
+			classes: state.canonicalClasses,
+			functions: state.canonicalAllFunctions
+		};
+
+	/**
+	 * What a module's canonical declarations are resolved in besides their own text and the names every module sees (the alias
+	 * key, compared apart): the module's package, imports, `using`s and the names it declares. Two canonicalizations in the same
+	 * scope, with the same alias key, make the same canonical form of the same text.
+	 */
+	static function scopeKey(ast:AstProgram):String {
+		var parts = [ast.packageName == null ? "" : ast.packageName];
+		for (imported in ast.imports)
+			parts.push("import " + imported.path + (imported.alias == null ? "" : " as " + imported.alias));
+		if (ast.usings != null)
+			for (used in ast.usings)
+				parts.push("using " + used.path);
+		for (fn in ast.functions)
+			parts.push("function " + fn.name);
+		if (ast.fields != null)
+			for (field in ast.fields)
+				parts.push("var " + field.name);
+		for (decl in ast.classes)
+			parts.push("class " + decl.name);
+		for (decl in ast.interfaces)
+			parts.push("interface " + decl.name);
+		for (decl in ast.enums)
+			parts.push("enum " + decl.name);
+		for (decl in ast.abstracts)
+			parts.push("abstract " + decl.name);
+		for (decl in ast.aliases)
+			parts.push("typedef " + decl.name);
+		return parts.join(";");
+	}
+
+	/** Whether the program still has unit `unit`, whose reads `state` holds: a function, a field initializer or an inline constant. */
+	static function unitExists(unit:String, owners:Map<String, String>, state:ModuleState):Bool {
+		if (owners.exists(unit) || state.typedFunctions.exists(unit))
+			return true;
+		if (StringTools.startsWith(unit, compiler.types.typing.TypingSession.INLINE_CONSTANT_PREFIX))
+			return owners.exists(QualifiedName.parentOrEmpty(unit.substr(compiler.types.typing.TypingSession
+				.INLINE_CONSTANT_PREFIX.length))
+				+ ".new");
+		var owner = InitializerUnit.ownerClass(unit);
+		return owner != null && owners.exists(owner + ".new");
+	}
+
+	/** Why unit `unit` is typed again, for the invalidation report, when it read fact `aspect` of `name`, which changed. */
+	static function readReason(unit:String, aspect:FactAspect, name:String):{kind:InvalidationKind,
+		via:Null<String>} return switch aspect {
+			case Body if (name == unit): {kind: BodyChanged, via: null};
+			case Signature if (name == unit): {kind: SignatureChanged, via: null};
+			case Body: {kind: GenericOrigin, via: "body"};
+			case Signature: {kind: DependencySignature, via: null};
+			case Unit: {kind: DependencySignature, via: "unit"};
+			case Initializer: {kind: DependencySignature, via: "initializer"};
+			case Shape: {kind: StructuralDependency, via: "shape"};
+			case Members: {kind: StructuralDependency, via: "members"};
+			case Kind: {kind: StructuralDependency, via: "kind"};
+			case Case: {kind: StructuralDependency, via: "case"};
+			case WireShape: {kind: StructuralDependency, via: "wire-shape"};
+			case WireAliases: {kind: StructuralDependency, via: "wire-aliases"};
+			case Purity | NoReturn: {kind: PurityDependency, via: null};
+			case Snapshot: {kind: SourceRevision, via: "default-argument"};
+		};
+
+	/** Whether two programs are made of the same module contributions, in the same order. */
+	static function sameContributions(previous:Array<Array<AstFunction>>, current:Array<Array<AstFunction>>):Bool {
+		if (previous.length != current.length)
+			return false;
+		for (index in 0...current.length)
+			if (previous[index] != current[index])
+				return false;
+		return true;
 	}
 
 	static function addSourceAlias(target:Map<String, String>, moduleAliases:Array<{
@@ -995,61 +919,16 @@ class SemanticAssembly {
 			&& state.typedSourceRevisions.get(name) == state.revision
 			&& (state.irFunctions.exists(name) || state.pendingIrFunctions.exists(name));
 
-	/** The functions whose lowered bodies call or refer to a specialization, by the generic function it was made from. */
-	static function callersOfSpecializations(modules:Map<String, ModuleState>,
-			names:Array<String>):Map<String, Array<String>> {
-		var result:Map<String, Array<String>> = [];
-		for (moduleName in names) {
-			var state = modules.get(moduleName);
-			if (state == null)
-				continue;
-			for (functionName => fn in state.irFunctions) {
-				var caller = enclosingFunction(functionName),
-					seen:Map<String, Bool> = [];
-				for (block in fn.blocks)
-					for (located in block.instructions) {
-						var target = switch located.value {
-							case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): name;
-							default: null;
-						};
-						var origin = target == null ? null : genericOrigin((target == null ? null : target.name));
-						if (origin == null)
-							continue;
-						if (seen.exists(origin))
-							continue;
-						seen.set(origin, true);
-						var callers = result.get(origin);
-						if (callers == null) {
-							callers = [];
-							result.set(origin, callers);
-						}
-						callers.push(caller);
-					}
-			}
-		}
-		return result;
-	}
-
-	/** The generic function or method a call or closure target was made from, or null when the target is not generic. */
-	static function genericOrigin(target:String):Null<String> {
-		if (GeneratedNames.isSpecialization(target))
-			return enclosingFunction(target);
-		// A bound method (a method value): made from its owner's method.
-		var reference = compiler.ir.gen.IrMethodReferences.of(target);
-		return reference == null ? null : reference.owner + "." + reference.member;
-	}
-
 	/**
 	 * A lambda is retyped with the function it is written in, so a dependency recorded on the lambda invalidates that function.
 	 * Lambda names read `$lambda:<enclosing>:<id>`, and the enclosing name can itself be a generic specialization.
 	 */
 	/**
 	 * The canonical names of the declarations of `program` whose type is inferred from their own body or initializer: a field
-	 * without a type, and a function without a result type or with an argument without one. Each such instance field names the
-	 * constructor that holds its initializer.
+	 * without a type, and a function without a result type or with an argument without one.
 	 */
 	static function collectInferredDeclarations(program:AstProgram, moduleName:String, entryModule:String,
-			declarations:Map<String, Bool>, instanceFields:Map<String, String>):Void {
+			declarations:Map<String, Bool>):Void {
 		for (fn in program.functions)
 			if (AstFunctions.leavesSignatureToInference(fn))
 				declarations.set(moduleName == entryModule && fn.name == "main" ? "main" : moduleName + "." + fn.name,
@@ -1057,11 +936,8 @@ class SemanticAssembly {
 		for (classDecl in program.classes) {
 			var className = ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name);
 			for (field in classDecl.fields)
-				if (field.type == null) {
+				if (field.type == null)
 					declarations.set(className + "." + field.name, true);
-					if (!field.isStatic)
-						instanceFields.set(className + "." + field.name, className + ".new");
-				}
 			for (method in classDecl.methods)
 				if (AstFunctions.leavesSignatureToInference(method))
 					declarations.set(className + "." + method.name, true);
@@ -1072,20 +948,6 @@ class SemanticAssembly {
 				if (AstFunctions.leavesSignatureToInference(method))
 					declarations.set(abstractName + "." + method.name, true);
 		}
-	}
-
-	static function enclosingFunction(name:String):String {
-		name = LambdaName.outermost(name);
-		return GeneratedNames.specializedFunction(name);
-	}
-
-	static function addReverseCall(reverseCalls:Map<String, Array<String>>, callee:String, caller:String):Void {
-		var callers = reverseCalls.get(callee);
-		if (callers == null) {
-			callers = [];
-			reverseCalls.set(callee, callers);
-		}
-		callers.push(caller);
 	}
 
 	/**
@@ -1175,27 +1037,6 @@ class SemanticAssembly {
 		return [for (name in names) {
 			artifact:name, reasons:reasons.get(name)
 		}];
-	}
-
-	/** A purity/no-return answer is recorded against the exact body that asked, which for a
-	 * closure is its own `$lambda:origin:identity` name. Only the top-level function is ever
-	 * independently retyped, so walk back through any lambda nesting to find it.
-	 */
-	static function purityDependencyOwner(name:String):String
-		return LambdaName.outermost(name);
-
-	/** Prefer the last successfully resolved call graph; syntax calls bootstrap new declarations. */
-	static function dependencyCalls(state:ModuleState, rollbackModules:Map<String, ModuleState>, owner:String,
-			fallback:Array<String>):Array<String> {
-		var previous = rollbackModules.exists(state.name) ? rollbackModules.get(state.name) : state,
-			dependencies = previous.semanticDependencies.get(owner),
-			resolved:Array<String> = [];
-		if (dependencies != null)
-			for (dependency in dependencies)
-				if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
-					&& dependency.targetId != null)
-					resolved.push(dependency.target);
-		return resolved.length == 0 ? fallback : resolved;
 	}
 
 	/**

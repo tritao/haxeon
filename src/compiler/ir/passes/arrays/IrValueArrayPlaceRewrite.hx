@@ -17,6 +17,7 @@ private typedef ArrayPlace = {
 }
 
 /** Lower element-place projections before rewriting the remaining value-copy array reads, on a body edited in place. */
+@:nullSafety(Strict)
 class IrValueArrayPlaceRewrite {
 	/** Locate frontend-marked mutable roots without treating ordinary element copies as live places. */
 	/** `roots` of a function: for a pass run on its own (a test). */

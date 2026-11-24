@@ -2,6 +2,7 @@ package compiler.ir.codec;
 
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
+import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.model.IrOpcode;
@@ -18,8 +19,9 @@ import compiler.ir.model.SourceProvenance.SourceOrigin;
  * file would make every later function of it look different; lines and columns still count, so a function whose lines moved
  * differs and its stack traces stay right. Two functions with the same code that are not `same` only moved within their file:
  * one cannot stand in for the other in a build, whose debug information must name the source snapshot it carries. Neither
- * decodes a body.
+ * decodes a body: a function compared with a body is encoded instead.
  */
+@:nullSafety(Strict)
 class IrFunctionStateEquality {
 	public static inline function same(left:IrFunction, right:IrFunction):Bool
 		return compare(left, right, true);
@@ -35,6 +37,17 @@ class IrFunctionStateEquality {
 		var leftBody = left.body, rightBody = right.body;
 		if (leftBody != null && rightBody != null)
 			return compareBodies(leftBody, rightBody, placed);
+		// One that is its body alone (a session releases the objects of what it keeps frozen, `IrFunction.releaseDecoded`) is not
+		// decoded: the other is encoded with its table and the bodies compared, after the header shows they could be the same.
+		if (leftBody != null || rightBody != null) {
+			if (left.name != right.name || left.arguments.length != right.arguments.length
+				|| !IrVerifier.sameType(left.result, right.result))
+				return false;
+			if (leftBody != null)
+				return compareBodies(leftBody, IrBodyBuilder.encode(right, leftBody.types), placed);
+			if (rightBody != null)
+				return compareBodies(IrBodyBuilder.encode(left, rightBody.types), rightBody, placed);
+		}
 		if (left.name != right.name
 			|| !sameKind(left.kind, right.kind)
 			|| left.inlineHint != right.inlineHint
@@ -66,10 +79,12 @@ class IrFunctionStateEquality {
 					return false;
 			}
 			var x = a.terminator, y = b.terminator;
-			if (x != y
-				&& (x == null || y == null || !provenance(x.provenance, y.provenance, placed)
-				|| !terminator(x.value, y.value)))
-				return false;
+			if (x != y) {
+				if (x == null || y == null)
+					return false;
+				if (!provenance(x.provenance, y.provenance, placed) || !terminator(x.value, y.value))
+					return false;
+			}
 		}
 		return true;
 	}
@@ -214,7 +229,7 @@ class IrFunctionStateEquality {
 	static function describe(value:IrValue):String
 		return 'value ${value.id} "${value.name}" ${value.type}';
 
-	static function sameKind(a:compiler.ir.model.IrFunction.IrFunctionKind,
+	public static function sameKind(a:compiler.ir.model.IrFunction.IrFunctionKind,
 			b:compiler.ir.model.IrFunction.IrFunctionKind):Bool
 		return switch [a, b] {
 			case [Ordinary, Ordinary]: true;

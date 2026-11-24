@@ -22,6 +22,7 @@ import compiler.ir.model.IrPassScratch.IrValueMarks;
  * when one of them changes.
  */
 @:allow(compiler.ir.passes.cleanup.IrBodyCopyElision)
+@:nullSafety(Strict)
 class IrCopyElision {
 	static inline var MaxDepth = 12;
 
@@ -88,8 +89,8 @@ class IrCopyElision {
  * (`IrPassScratch.copyElision`).
  */
 @:allow(compiler.ir.passes.cleanup.IrCopyElision)
+@:nullSafety(Strict)
 class IrBodyCopyElision {
-	var body:Null<IrBody> = null;
 	var bodyOf:String->Null<IrBody> = noBody;
 	var resolve:IrType->String->Null<String> = noTarget;
 	var consult:String->Void = ignore;
@@ -127,7 +128,6 @@ class IrBodyCopyElision {
 
 	function run(body:IrBody, bodyOf:String->Null<IrBody>, resolve:IrType->String->Null<String>,
 			consult:String->Void):Bool {
-		this.body = body;
 		this.bodyOf = bodyOf;
 		this.resolve = resolve;
 		this.consult = consult;
@@ -143,7 +143,7 @@ class IrBodyCopyElision {
 				if (IrCopyElision.isValueCopyRow(body, row)) {
 					// The rows before the copy stay, so the walk goes on from the row now after them.
 					var previous = body.previousRow(row);
-					if (tryElide(block, row, body.output(row))) {
+					if (tryElide(body, block, row, body.output(row))) {
 						elided = true;
 						row = previous >= 0 ? body.nextRow(previous) : body.firstRow(block);
 						continue;
@@ -152,7 +152,6 @@ class IrBodyCopyElision {
 				row = body.nextRow(row);
 			}
 		}
-		this.body = null;
 		this.bodyOf = noBody;
 		this.resolve = noTarget;
 		this.consult = ignore;
@@ -181,8 +180,8 @@ class IrBodyCopyElision {
 	 * Drops the copy made at `row` when its fields are written from reads of one source and its one other use is a call argument
 	 * the callee only reads; positions within the copy's block are counted in `positions`.
 	 */
-	function tryElide(home:Int, allocation:Int, copy:IrValueId):Bool {
-		var body = this.body, source = -1, callRow = -1, argument = -1;
+	function tryElide(body:IrBody, home:Int, allocation:Int, copy:IrValueId):Bool {
+		var source = -1, callRow = -1, argument = -1;
 		writes.resize(0);
 		feeders.resize(0);
 		for (block in 0...body.blockCount()) {
@@ -206,7 +205,7 @@ class IrBodyCopyElision {
 							return false;
 						switch opcode {
 							case IrOpcode.FieldSet if (body.operand(row, 0) == copy && body.operand(row, 1) != copy):
-								var feeder = feederOf(home, allocation, row, body.operand(row, 1), body.aux(row));
+								var feeder = feederOf(body, home, allocation, row, body.operand(row, 1), body.aux(row));
 								if (feeder < 0)
 									return false;
 								var from:Int = body.operand(feeder, 0);
@@ -217,10 +216,10 @@ class IrBodyCopyElision {
 								feeders.push(feeder);
 							case IrOpcode.Call if (callRow < 0 && uses == 1):
 								callRow = row;
-								argument = operandIndex(row, 0, copy);
+								argument = operandIndex(body, row, 0, copy);
 							case IrOpcode.MethodCall if (callRow < 0 && uses == 1 && body.operand(row, 0) != copy):
 								callRow = row;
-								argument = operandIndex(row, 1, copy);
+								argument = operandIndex(body, row, 1, copy);
 							default:
 								return false;
 						}
@@ -244,7 +243,7 @@ class IrBodyCopyElision {
 		for (write in writes)
 			if (positions[write] > lastWrite)
 				lastWrite = positions[write];
-		if (positions[callRow] < lastWrite || !nothingRunsBetween(home, lastWrite + 1, positions[callRow]))
+		if (positions[callRow] < lastWrite || !nothingRunsBetween(body, home, lastWrite + 1, positions[callRow]))
 			return false;
 		var calleeName:Null<String> = null;
 		switch body.opcode(callRow) {
@@ -276,7 +275,7 @@ class IrBodyCopyElision {
 	}
 
 	/** The first operand of `row` from `from` on that is `value`, or -1: the parameter a call passes it to. */
-	function operandIndex(row:Int, from:Int, value:IrValueId):Int {
+	function operandIndex(body:IrBody, row:Int, from:Int, value:IrValueId):Int {
 		for (index in from...body.operandCount(row))
 			if (body.operand(row, index) == value)
 				return index;
@@ -284,7 +283,7 @@ class IrBodyCopyElision {
 	}
 
 	/** The FieldGet of `field` whose value is `value`, when nothing else uses that value. */
-	function feederOf(block:Int, allocation:Int, write:Int, value:IrValueId, field:Int):Int {
+	function feederOf(body:IrBody, block:Int, allocation:Int, write:Int, value:IrValueId, field:Int):Int {
 		var row = body.nextRow(allocation);
 		while (row != write) {
 			if (body.opcode(row) == IrOpcode.FieldGet && body.output(row) == value && body.aux(row) == field) {
@@ -305,7 +304,7 @@ class IrBodyCopyElision {
 	}
 
 	/** Only pure computation may sit between the copy and the call, or the callee could see a later state of the source. */
-	function nothingRunsBetween(block:Int, from:Int, to:Int):Bool {
+	function nothingRunsBetween(body:IrBody, block:Int, from:Int, to:Int):Bool {
 		if (checkSymbol < 0) {
 			checkSymbol = IrSymbol.of(IrReceiverCheck.NAME).id;
 			identitySymbol = IrSymbol.of(IrReferenceIdentity.NAME).id;
@@ -341,8 +340,9 @@ class IrBodyCopyElision {
 		if (fn == null || index >= fn.argumentCount() || depth > IrCopyElision.MaxDepth)
 			return true;
 		var key = name + "#" + index;
-		if (resultDependencies.exists(key))
-			return resultDependencies.get(key);
+		var known = resultDependencies.get(key);
+		if (known != null)
+			return known;
 		if (visiting.indexOf(key) >= 0)
 			return true;
 		consult(name);

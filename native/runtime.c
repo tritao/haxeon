@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdatomic.h>
 #include <ffi.h>
+#include "shared/float_to_int.h"
 
 /* Keep this as the stable build entry point. The implementation is organized
    by runtime domain below while remaining one translation unit, which lets the
@@ -30,6 +31,7 @@
 #include "runtime/reactive.c"
 #include "runtime/bytes.c"
 #include "runtime/sha256.c"
+#include "watch/haxeon_watch.c"
 #include "runtime/dir_watch.c"
 /* Dynamic array views preserve the backing representation when performing structural operations. */
 HL_PRIM bool HL_NAME(__value_array_is)(varray *array);

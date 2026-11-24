@@ -1,14 +1,15 @@
 # Project CLI and builds
 
-The project CLI creates a small `haxeon.json` manifest, builds HashLink programs
-for the current desktop host, experimental Wasm32 modules, and Android APKs, and
-can launch host programs or install and launch an Android app. The same command
-is available on Unix-like systems and Windows:
+The project CLI creates projects with a `haxeon.toml` manifest
+([MANIFEST.md](MANIFEST.md)), builds desktop HashLink programs, Android APKs and
+experimental web bundles, and launches desktop and Android apps. It runs on
+Unix-like systems and Windows.
 
 Desktop and Wasm builds default to `development`, retaining metadata for
 debuggers and other development tools. Use `--build-mode release` when building
-artifacts for packaging or distribution; `run --watch --live` always selects development. An
-explicit release mode cannot be combined with `--live`. The Android debug host
+artifacts for packaging or distribution; `run --watch` of an app it patches live always selects development. An
+explicit release mode cannot be patched live: `run --watch --build-mode=release` of such an app asks for `--restart`. The
+Android debug host
 uses development metadata for live patching. Release HashLink
 modules retain function names and line tables for profiler output and stack
 traces, and omit opcode spans and embedded source snapshots. The compiler CLI
@@ -25,7 +26,11 @@ run it as `haxeon`. `scripts/haxeon` (and `scripts\haxeon` on Windows) runs it
 after rebuilding it and the CLI's bytecode if their sources changed.
 
 ```sh
-./scripts/haxeon init
+./scripts/haxeon create my_app
+./scripts/haxeon create my_tool --template console
+./scripts/haxeon create .
+./scripts/haxeon migrate --dry-run
+./scripts/haxeon migrate
 ./scripts/haxeon doctor
 ./scripts/haxeon platforms
 ./scripts/haxeon build
@@ -41,15 +46,15 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 ./scripts/haxeon build.hxml
 ./scripts/haxeon -cp src -main Main --hl bin/main.hl
 ./scripts/haxeon build --target wasm32
-./scripts/haxeon init --target android
+./scripts/haxeon create mobile_app --platforms android
 ./scripts/haxeon build --target android
 ./scripts/haxeon run --target android
 ./scripts/haxeon devices
 ./scripts/haxeon fmt src/Main.hx
 ./scripts/haxeon fmt --check src/Main.hx
 cat src/Main.hx | ./scripts/haxeon fmt --stdin
-./scripts/haxeon lint --manifest haxeon.json src/Main.hx
-./scripts/haxeon lint --fix --manifest haxeon.json src/Main.hx
+./scripts/haxeon lint --manifest haxeon.toml src/Main.hx
+./scripts/haxeon lint --fix --manifest haxeon.toml src/Main.hx
 ```
 
 `haxeon --help` lists the commands by task; `haxeon help build`, `haxeon build --help`
@@ -67,19 +72,51 @@ command or option, a missing or invalid value) and 70 for an internal error, whi
 bug in Haxeon. The compiler run directly takes each valued option as `--name=value` or
 `--name value`, and exits with 2 for a usage error too.
 
+`haxeon create DIRECTORY` makes a project from a template in the installation's `templates/`: `--template app` (the default) is a window with a counter and an
+`[app]` section ([MANIFEST.md](MANIFEST.md)) that uses the UI package from the `haxeon` registry (`ui = "^0.3"`, with
+`compatibility.haxeon`), in a checkout and in a release alike; `--template console` (or `-t console`) a console program (no `[app]`). `--platforms` lists an app's
+platforms (by default every platform the template has a runner for: android, linux, macos, web and windows) and `--org` the prefix of its identifier (`com.example`). `haxeon create .` adds the
+template's files a project lacks and never overwrites one. Use `create . -t console` for a console program in the current directory.
+
+An app builds through its runner project, the CMake project for each platform that `haxeon create` writes beside the
+sources (`linux/`, `macos/`, `windows/`), which is the app's to change (the executable's name, the bundle's Info.plist, the
+version resources, packaging): `haxeon build` compiles the module,
+writes `build/generated/PLATFORM/haxeon.cmake` and builds this machine's runner with CMake into `build/PLATFORM/app/`,
+where the executable (named after the package), its module and its native packages' libraries sit together, or on macOS
+make the bundle `NAME.app`; on Windows it builds with MSVC, as a Windows program (no console window from Explorer).
+`haxeon run` runs that executable, and `--watch` runs the module it rebuilds in it. `cmake -S linux -B DIR &&
+cmake --build DIR` (or `macos`, `windows`) builds the same app once a build has written the fragment. Building for a
+platform the app does not list, or without its
+runner, is a usage error that names `haxeon create .`.
+
+An app's window takes the host's standard flags after `--`, so a test or a script can run any app without code of its
+own: `--frames=N` stops after N rendered frames, requesting redraws while idle. `--capture=DIR` writes diagnostics to DIR
+and on X11 saves an image of the app window as `frame.png`.
+`--capture-seconds=S` captures after S seconds instead, and `--input-script=PATH` plays timed input
+(`haxeon.ui.host.DesktopUiHostOptions.withArguments`):
+
+```sh
+haxeon run -- --frames=10 --capture=out/capture
+```
+
 `haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
 default, while `--check` reports files that would change; a directory stands for
 the `.hx` files under it. Use `--stdin` for editor or pipeline integration.
 
 The style comes from the project: the `format` section of the nearest
-`haxeon.json` above a file that has one, else tabs and 120 columns. `haxeon fmt`,
-`haxeon lint --fix` and the language server all read it (the language server
-ignores an editor's tab settings), so a file formats the same everywhere. A
-package's `tests/haxeon.json` without a `format` section takes the package's.
+manifest (`haxeon.toml` or `haxeon.json`) above a file that has one, else tabs and
+120 columns. `haxeon fmt`, `haxeon lint --fix` and the language server all read it
+(the language server ignores an editor's tab settings), so a file formats the same
+everywhere. A package's tests manifest without a `format` section takes the package's.
 
-```json
-"format": {"indent": "spaces", "indentWidth": 2, "lineWidth": 100}
+```toml
+[format]
+indent = "spaces"
+indentWidth = 2
+lineWidth = 100
 ```
+
+(`"format": {"indent": "spaces", "indentWidth": 2, "lineWidth": 100}` in a `haxeon.json`.)
 
 `indent` is `tabs` or `spaces`, `indentWidth` the width of one level (the columns
 a tab counts for), `lineWidth` the column limit; every key is optional and an
@@ -127,12 +164,13 @@ Haxe accepts such a local and gives it the type `Dynamic` without a warning, and
 does Haxeon's compiler; the rule is there to audit code for them. A local that a
 later assignment, a `push` or a typed use (a return, a typed argument) fixes is not
 named. Each file is typed as the editor types it: its project is the nearest
-`haxeon.json` or `.hxml` above it (`--manifest` is not used), and the file's module
+`haxeon.toml`, `haxeon.json` or `.hxml` above it (`--manifest` is not used), and the file's module
 is the entry. If a file's program has type errors, they go to standard error, the
 bodies that typed are still checked, and a body that failed is not. The command exits
 with 1 when it names a local or a program does not type. The rule has no `--fix`:
-give each local it names a type. It runs in a tool of its own (`LintMain`), built on
-first use like the language server.
+give each local it names a type. It runs in a program that links the compiler, like the
+language server: the compiler's own (its `lint` role) when it is current, as in a release, else a tool of its own
+(`LintMain`) built on first use.
 
 The opt-in rule `module-namespace` names each module-level variable or function
 reached through its module's name, a Haxeon extension stock Haxe rejects (see
@@ -174,42 +212,25 @@ program does not type, and has no `--fix`. Haxeon's own sources keep to the
 subset: the compiler and its tools throw `CompileError` for a located compile
 error and `compiler.core.InternalError` for any other failure.
 
-On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
-creates `src/Main.hx` and a project file like this:
+On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. Create a program
+with `haxeon create my_tool --template console`, or an Android app with
+`haxeon create my_app --platforms android`.
 
-```json
-{
-  "version": 1,
-  "package": { "name": "my-app" },
-  "entry": "Main",
-  "sources": ["src/Main.hx"],
-  "sourceRoots": ["src"],
-  "target": "host",
-  "defines": [],
-  "outputDir": "build"
-}
-```
+A project may keep a `haxeon.json` instead, with the same keys ([MANIFEST.md](MANIFEST.md) lists them and shows both
+forms); every command reads either, and a directory with both is a usage error that names both. `haxeon migrate`
+rewrites a project's `haxeon.json` as `haxeon.toml`: it checks that the TOML reads back to the same settings, then
+removes the JSON file. `haxeon migrate --dry-run` prints the TOML instead and changes nothing; `--project PATH` names
+another project.
 
-`haxeon init --target android` also adds Android settings to the manifest:
-
-```json
-"android": {
-  "applicationId": "org.haxeon.android",
-  "label": "Haxeon"
-}
-```
-
-Paths in the project file are relative to that file. Host builds go to
-`build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`; Android
-builds go to `build/android/app-debug.apk`, packaged by Gradle from the module
-the build compiles to `build/android-arm64/app.hl` (see
-[ANDROID.md](ANDROID.md)). Android projects require a
-top-level `main():Void` entry function and an installed Android SDK/NDK. Use
-`--device SERIAL` with `run --target android` when more than one device is
-connected. Android builds use the pinned `vendor/libffi` submodule, which is
-initialized by `scripts/bootstrap-tools.sh` or with
-`git submodule update --init vendor/libffi`. Use
-`--project path/to/haxeon.json` to select another project, repeat
+Paths in the project file are relative to that file. Console host builds go to
+`build/host/main.hl`. Web app bundles go to `build/web/wasm32/` or
+`build/web/wasm-gc/`, ready to serve over HTTP. Console Wasm builds write just
+the module in `build/wasm32/` or `build/wasm-gc/`.
+Android builds package `build/android/app-debug.apk` through the app's Gradle
+runner. Use `--gradle-inputs FILE` to prepare a standalone Gradle build and
+`--device SERIAL` when running on one of several connected devices. See
+[Android](ANDROID.md) for prerequisites and live editing. Use
+`--project path/to/haxeon.toml` (or the project's directory) to select another project, repeat
 `--define NAME[=VALUE]` to add conditional defines, and pass arguments to a
 running program after `--`:
 
@@ -223,7 +244,7 @@ exit, and a fatal signal attempts a last flush; SIGKILL can lose the buffered ta
 `Sys.stdout().flush()` flushes explicitly, and `HL_STDOUT_FLUSH=1` flushes after every
 print (`haxeon script.hx` sets it, so a script's lines appear as they are printed).
 
-For function breakpoints during debugging, set `"inline": false` in `haxeon.json`; inlining is on otherwise. The
+For function breakpoints during debugging, set `inline = false` in `haxeon.toml`; inlining is on otherwise. The
 choice applies to the root project's compilation, including dependencies, and participates in action and compiler memo
 fingerprints. It does not disable the other IR passes. Direct compiler calls turn it off with `--no-inline`.
 
@@ -238,6 +259,12 @@ A compile server keeps a session between requests and builds on it (`--session=r
 other settings starts it over anyway. `--session=fresh` starts it over before compiling, so the result depends on the
 request alone, never on what the server compiled before.
 
+`--null-safety=MODE[:PATH[:shallow]]` gives the classes and abstracts at the dot path `PATH` (every one when it is left out) the
+null-safety mode `MODE` (`off`, `loose`, `strict`, `strict-threaded` or `warn`), as Haxe's `nullSafety(PATH, MODE)` does;
+`:shallow` keeps a package's rule out of its subpackages. The flag may repeat. A build passes one per package path from each
+package's `nullSafety` setting ([MANIFEST.md](MANIFEST.md#null-safety)) and one per `--macro nullSafety(...)` of a Haxe command
+line.
+
 `run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
 capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.
 `SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `instrument`, which
@@ -251,32 +278,40 @@ them.
 ```
 
 On Linux, macOS and Windows, `run --watch` rebuilds after edits to resolved package
-sources and relaunches the host app after a successful build. Haxe source edits
-use the compiler-only build path; FFI, manifest, and native source edits use the
-full project build. A failed build leaves the running app open. Runtime output
-is forwarded from `<output>.watch.log`. This mode restarts the process.
+sources. Haxe source edits use the compiler-only build path; FFI, manifest, and
+native source edits use the full project build. A failed build leaves the
+running app open. Runtime output is forwarded from `<output>.watch.log`. What a
+successful build does depends on the project's entry class, which the watch reads
+from its source before the first build and names in one line as it starts:
+
+- **Patch.** When the entry class declares the static functions the live host
+  calls, `start(arguments:String):Void`, `tick():Int` (nonzero while running),
+  `close():Int`, `saveState():String` and `restoreState(state:String):Void`
+  (`tools.LiveEntryPoints`), the app runs in a stable host process that applies
+  compatible HLP patches between application pump steps. The host calls `start`
+  once, then `tick` repeatedly; it never calls `main`, which the entry class
+  still has. A structural change reloads the module through the state methods.
+  Non-Haxe changes restart the process. The app templates' `Main` has them all.
+- **Restart.** Otherwise, or with `--restart`, the watch relaunches the app
+  after each successful build.
+
+`--strict-live` makes a patching watch refuse an edit that cannot patch instead
+of reloading ([LIVE_PATCHING.md](LIVE_PATCHING.md#strict-mode)); it is an error
+with `--restart` or for an app the watch would restart.
 
 ```sh
-./scripts/haxeon run --watch --project path/to/haxeon.json -- --verbose
+./scripts/haxeon run --watch --project path/to/haxeon.toml -- --verbose
+./scripts/haxeon run --watch --restart --project path/to/haxeon.toml
 ```
 
-`run --watch --live` keeps a stable host process and applies compatible HLP
-patches between application pump steps. The project entry class must expose
-static `start(arguments:String):Void`, `tick():Int` (nonzero while running),
-`saveState():String`, `close():Int`, and `restoreState(state:String):Void`, and,
-like any entry class, a `main` (the live host never calls it).
-The host calls `start` once, then `tick` repeatedly. A structural change reloads
-the module through those state methods. Non-Haxe changes restart the process.
-The output path must be separate from any ordinary app build output.
-
-```sh
-./scripts/haxeon run --watch --live --project path/to/live.json \
-  --output build/host/live.hl -- --verbose
-```
+`build --compiler-only --patchable` builds the module as a patching watch does,
+for a host that applies the patches itself (a phone's, say): the compiler worker
+keeps the module's history, so each later `build --compiler-only --patchable`
+publishes an `.hlp` patch and its `.live.*` descriptions beside the module.
 
 Besides the console, `run --watch` appends what it does with each edit to `<output>.watch-events.jsonl`, one JSON
 object per line, and passes that path to the app in `HAXEON_WATCH_EVENTS`: `rebuild-started` (with `changedFiles`),
-one `output-line` per line the build printed, `build-failed` or `build-ok`, and in live mode `patch-published`
+one `output-line` per line the build printed, `build-failed` or `build-ok`, and when it patches `patch-published`
 (`revision`, `reloadReasons`). The live host adds `patch-applied`, `patch-rejected` (a refused patch or a failed
 reload, with `message`) and `reload`. The file starts empty with each watch and moves to `<file>.1` past 4 MiB.
 `src/tools/WatchEvents.hx` lists the fields.
@@ -293,33 +328,33 @@ Host builds resolve local path dependencies declared by package name. A
 dependency can provide Haxe sources and optional C sources; C sources are
 compiled into the HashLink native library requested by the build:
 
-```json
-{
-  "version": 1,
-  "package": { "name": "my-app" },
-  "entry": "Main",
-  "sourceRoots": ["src"],
-  "dependencies": {
-    "foo": { "path": "../foo" }
-  },
-  "target": "host",
-  "outputDir": "build"
-}
+```toml
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+target = "host"
+outputDir = "build"
+
+[package]
+name = "my-app"
+
+[dependencies]
+foo = { path = "../foo" }
 ```
 
 The `foo` package can list native inputs in its own manifest:
 
-```json
-{
-  "version": 1,
-  "package": { "name": "foo" },
-  "sourceRoots": ["src"],
-  "native": {
-    "sources": ["native/foo.c"],
-    "includeDirs": ["native/include"],
-    "std": "c++20"
-  }
-}
+```toml
+version = 1
+sourceRoots = ["src"]
+
+[package]
+name = "foo"
+
+[native]
+sources = ["native/foo.c"]
+includeDirs = ["native/include"]
+std = "c++20"
 ```
 
 The optional native `std` value controls compilation of package-owned C and
@@ -402,12 +437,13 @@ library still do. Failed native builds still block the project build and launch.
 On Linux, macOS and Windows, host and `wasm32` builds reuse a private compiler worker between
 CLI invocations (on Windows, only the compiled CLI; `scripts/haxeon.cmd` interprets
 the CLI and compiles one-shot). Small source edits retain semantic compiler state; changes to the
-source manifest, roots, defines, or FFI configuration reset it. Compiler or
-standard-library changes select a fresh worker. Workers exit after
+source manifest, roots, defines, or FFI configuration reset it. Workers are keyed by the compiler build,
+project root, build root, output path, and backend target. Workers exit after
 `HAXEON_COMPILER_IDLE_SECONDS` (default 90) without a request. Every build root
 shares one per-user session directory (`$XDG_CACHE_HOME/haxeon/compiler`,
 `%LOCALAPPDATA%\haxeon\compiler` on Windows, or `HAXEON_COMPILER_SESSION_DIR`) holding worker programs, connection metadata, and
-logs, so the resident limits below apply to the whole machine. Set
+logs, so the resident limits below apply to the whole machine. Compiler activity removes dead connection
+records and prunes unused worker programs, orphaned logs, and abandoned temporary files after a day. Set
 `HAXEON_COMPILER_SERVER=0` to use one-shot compilation, which runs the compiler
 as a HashLink program compiled once per compiler version (Windows interprets it). Explicit `--self-hosted` builds and unavailable workers
 retain the one-shot path. The normal CLI's local fingerprint checks run before
@@ -428,9 +464,14 @@ and toolchain selection is centralized: examples include
 `windows-x86_64-msvc`, `linux-x86_64-gnu`, `macos-arm64`, `android-arm64`,
 and `wasm32` (see [Targets and backends](#targets-and-backends)).
 
-Git dependencies can be added and installed reproducibly:
+Dependencies can be added and installed reproducibly. `haxeon add NAME` adds the latest release of `NAME` that is not
+yanked from the `haxeon` registry, written as its version range alone (`ui = "^0.3.1"`); `--version RANGE` picks the
+range and `--registry NAME` another registry, written as `{ registry = NAME, version = RANGE }`:
 
 ```sh
+./scripts/haxeon add ui
+./scripts/haxeon add ui --version "^0.3"
+./scripts/haxeon add widgets --registry local
 ./scripts/haxeon add --git https://github.com/example/foo.git --rev main foo
 ./scripts/haxeon install
 ./scripts/haxeon install --locked
@@ -449,24 +490,29 @@ Registry sources use the same lockfile path. A registry index records immutable
 release checksums, SemVer versions, yanked status, compatibility metadata, and
 native provider metadata. For local development, `publish` writes an immutable
 release and index below `~/.haxeon/cache/sources/registry`; projects then use
-`{"registry":"local","version":"^1.0"}` and resolve through the normal
-package graph.
+`core = { registry = "local", version = "^1.0" }` and resolve through the normal
+package graph. A dependency on the `haxeon` registry is written as its range alone,
+`core = "^1.0"`; that registry is the SDK's first (a release's unpacked packages, a checkout's
+`packages/` resolved live; [MANIFEST.md](MANIFEST.md)), then the cache's. `publish` turns path
+dependencies on packages of the registry into version ranges and refuses others, and copies the
+files Git tracks (submodules included) or, outside a repository, every file, less the manifest's
+`publish.exclude`. `install --locked` is strict: a locked registry version that is gone is an
+error, where a build or `install` picks again within the range.
 
 Repositories can declare workspace members. A workspace member with the same
 package name overrides an external dependency source while retaining the same
 package identity:
 
-```json
-"workspace": ["packages/core", "packages/editor"]
+```toml
+workspace = ["packages/core", "packages/editor"]
 ```
 
 Native packages may instead delegate an existing CMake project as one coarse
 provider:
 
-```json
-"native": {
-  "cmake": { "source": "native", "target": "foo" }
-}
+```toml
+[native]
+cmake = { source = "native", target = "foo" }
 ```
 
 Native providers advertise their supported targets with `native.targets`; the
@@ -477,12 +523,11 @@ compilation or linking begins.
 
 Packages can also gate resolution with compatibility metadata:
 
-```json
-"compatibility": {
-  "haxeon": ">=0.3",
-  "targets": ["host", "android"],
-  "runtimeAbi": "2"
-}
+```toml
+[compatibility]
+haxeon = ">=0.3"
+targets = ["host", "android"]
+runtimeAbi = "2"
 ```
 
 These requirements are checked while resolving the package graph, before any
@@ -495,15 +540,20 @@ is translated to a normal Haxeon manifest. Haxeon does not read global
 `haxelib dev` state or execute `extraParams`, macros, or HXML compiler settings;
 unsupported settings fail with an explicit import diagnostic.
 
-Android builds resolve the same package graph, compile `native.sources` with the
-Android NDK, and expose the resulting ABI-specific shared libraries to Gradle
-under `build/android-arm64/jniLibs/arm64-v8a`. A native package therefore gets
-rebuilt and repackaged when its C sources change; Haxe-only edits continue to
-use the Android HLB asset path.
+Android app runners build native CMake packages with Gradle's NDK toolchain once per ABI.
+The APK contains the resulting libraries, the generated Haxe assets and the SDK host.
 
-The `doctor` command checks the local compiler, HashLink runtime, and Android
-SDK tools. `platforms` lists the targets with the backend each builds, and `devices` reports connected
-Android devices. Wasm32 is build-only; host output runs through HashLink on the
+The `doctor` command checks Haxeon's own installation (the compiler, the HashLink runtime), the C and C++ toolchain
+that an app, a package with C or C++ code and a build ahead of time need, and the Android SDK tools. It
+prints one `ok:` or `missing:` line for each. The toolchain is looked up as the builds find it: on Linux and macOS the
+C and C++ compilers (`CC` and `CXX`, else `cc` and `c++`, `gcc` and `g++` or `clang` and `clang++`), on macOS the Xcode
+command line tools first, on Windows MSVC through `vswhere` (Visual Studio or its Build Tools with the C++ tools); then
+CMake 3.24 or later, Ninja or Make (not on Windows), and on Linux `pkg-config` with the development files of GTK 3,
+OpenGL and Fontconfig, which the UI package's window needs. When a tool is missing it prints the command that installs
+the toolchain on this system (`apt-get` on Debian and Ubuntu, `dnf` on Fedora, `xcode-select --install` and Homebrew on
+macOS, `winget` on Windows). It exits with 1 only when Haxeon's own installation is incomplete: a program builds without
+the toolchain. `platforms` lists the targets with the backend each builds, and `devices` reports connected
+Android devices. Serve web bundles over HTTP to run them in a browser. Host output runs through HashLink on the
 current machine.
 
 ## Checking, testing and cleaning
@@ -521,7 +571,7 @@ Checking my-app (host)…
 ```
 
 `haxeon test` builds the project's tests and runs them: a package keeps them in a project of their own,
-`tests/haxeon.json` beside its `haxeon.json` (as each package under `packages/` does), whose entry runs the tests and exits
+`tests/haxeon.toml` (or `tests/haxeon.json`) beside its manifest (as each package under `packages/` does), whose entry runs the tests and exits
 with a status other than 0 when one fails. Run in that `tests` directory, it runs the tests project itself. It takes the
 options of `run`, `--watch` included (the tests run again after each edit), passes the arguments after `--` to the tests,
 and exits with 0 when they pass and 1 when they fail. `haxeon workspace test` runs the tests of many projects at once,
@@ -533,7 +583,7 @@ cache and the package source cache. An `outputDir` that would hold the project i
 
 ## Haxe command lines
 
-`haxeon` builds Haxe's own command lines, so a Haxe project builds without a `haxeon.json`:
+`haxeon` builds Haxe's own command lines, so a Haxe project builds without a `haxeon.toml`:
 
 ```sh
 ./scripts/haxeon build.hxml
@@ -562,22 +612,30 @@ to compile (no `-main` and no dot path) prints the help and succeeds, as Haxe's 
 | `--debug` | a development build (otherwise release), and the define `debug` |
 | `--dce std`, `--dce full` | accepted: Haxeon always removes what the entry cannot reach |
 | `--no-inline` | the project setting `"inline": false` |
+| `--macro nullSafety("PATH", MODE, RECURSIVE)` | Haxe's null-safety macro, also as `haxe.macro.Compiler.nullSafety(...)`; see below |
 | `-lib NAME:VERSION`, `-L`, `--library` | a Haxelib dependency of that exact version, from the Haxelib cache (see Haxelib above) |
 | `--cmd COMMAND` | run by the shell in the working directory after the compilation succeeds |
 | `-v`, `--verbose`; `--times` | `-v normal`; `--timings` |
 
 Anything else is one usage error (status 2) that lists each unsupported argument with what to do instead, before anything
 is built: another target (`--js`, `--cpp`, ...; HashLink/C `--hl FILE.c` too, for now), `--interp`, `--run` and `-x` (Haxeon
-has no interpreter: build with `--hl` and run the module with `hl`, or make a project and `haxeon run`), `--macro`, `-lib`
+has no interpreter: build with `--hl` and run the module with `hl`, or make a project and `haxeon run`), any `--macro` but
+`nullSafety(...)`, `-lib`
 without a version (Haxeon does not read haxelib's global repository), `--dce no`, `--resource` and the server and display
 options.
 
 ```text
 haxeon: this Haxe command line uses what Haxeon does not support:
   --js bin/main.js: Haxeon generates HashLink (--hl FILE) only
-  --macro include("app"): macros are not supported
+  --macro include("app"): macros are not supported, but for nullSafety("path", Mode, recursive)
 See 'Haxe command lines' in docs/reference/CLI.md.
 ```
+
+`--macro nullSafety("app.ui", Strict)` is the one macro Haxeon takes, as Haxe states it: the classes and abstracts at the dot
+path (a package, a module or a type; `""` is everything) are checked as if marked `@:nullSafety(MODE)`. The path is a string in
+double or single quotes; the mode is `Off`, `Loose` (the default), `Strict` or `StrictThreaded`, bare or as `NullSafetyMode.Strict`;
+the optional third argument, `false`, keeps a package's rule out of its subpackages. A command line without the macro is not
+checked. The checker's rules are in [LANGUAGE_SUPPORT.md](LANGUAGE_SUPPORT.md#null-safety), "Null safety".
 
 Each compilation is a project the CLI makes in memory, as it does for a script, and builds like any host project. Its
 build state lives in the CLI's cache, `~/.haxeon/cache/hxml/<digest>` (`HAXEON_HXML_CACHE` names another directory), one
@@ -588,18 +646,22 @@ the module, copied to the `--hl` path. A compilation's cache is removed after 30
 
 Two names describe a build, and Haxeon keeps them apart:
 
-- The **target** (`--target`, `"target"` in `haxeon.json`, `compatibility.targets` and `native.targets`) says where the
-  program runs: `host` (this machine, the default), `android` (`android-arm64`), `wasm32`, or an explicit
+- The **target** (`--target`, `target` in `haxeon.toml`, `compatibility.targets` and `native.targets`) says where the
+  program runs: `host` (this machine, the default), `android` (`android-arm64`), `wasm32`, `wasm-gc`, or an explicit
   `OS-ARCH[-ABI]` such as `linux-x86_64`, `macos-arm64` or `windows-x86_64-msvc`. Architectures are spelled `x86_64` and
   `arm64`; `aarch64`, `amd64` and `x64` are read too, and `wasm32-wasi` is `wasm32`. `haxeon platforms` lists them with this
   machine's name.
 - The **backend** says what the compiler generates: `hl` (HashLink bytecode, run by the VM's JIT), `hlc` (C on the HashLink
-  runtime, compiled ahead of time; [AOT_BACKEND.md](../design/AOT_BACKEND.md)), `wasm32` (WebAssembly
+  runtime, compiled ahead of time by the C compiler), `wasm32` (WebAssembly
   with linear memory) or `wasm-gc` (WebAssembly GC). The compiler takes it as `--target=NAME`, which is Haxe's sense of
   "target"; the project build passes it.
 
-The target chooses the backend: `host`, `android` and the other native targets build `hl`, and `wasm32` builds `wasm32`.
-`hlc` and `wasm-gc` are reached by calling the compiler directly. Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
+The target chooses the backend: `host`, `android` and the other native targets build `hl`, and each Wasm target selects its corresponding backend.
+An app's release build (`--build-mode=release`) builds `hlc`, which its runner compiles into the executable. Otherwise
+`hlc` and `wasm-gc` are reached by calling the compiler directly; `--target=hlc` writes the C to `OUTPUT.c/` and does
+not compile it. A CMake project builds it with the SDK's CMake package: after `find_package(Haxeon)`,
+`haxeon_add_c_executable(TARGET SOURCES_DIR OUTPUT.c [DEVELOPMENT])` makes the executable, with the C compiler CMake
+chooses (`CC`, `-DCMAKE_C_COMPILER`). Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
 and a Haxe target name given to `--target` is refused with Haxeon's (`--target hl` says to use `host`).
 
 ## Language server and FFI tools
@@ -619,7 +681,7 @@ up, as `dotnet run app.cs` does:
 
 - The file is the project's one source. Its directory is the source root its imports resolve in, so modules beside it
   can be imported, but other files there are not compiled.
-- A `haxeon.json` beside the script makes that project a path dependency, with its source roots and dependencies.
+- A `haxeon.toml` (or `haxeon.json`) beside the script makes that project a path dependency, with its source roots and dependencies.
 - The build is quiet: its output appears, on standard error, only if it fails. The program runs in the directory the
   command was invoked from, with the given arguments, and its exit status is the command's.
 - The project is made in memory and built in `~/.haxeon/cache/scripts/<digest of the script's path>`
@@ -629,6 +691,23 @@ up, as `dotnet run app.cs` does:
   line at the start of a file, and so do Haxeon's compiler and formatter.
 - The file's name is its module's, dashes included (`check-self-hosting.hx`); a script is never imported by name, so it
   need not be an identifier. Only a further dot (`a.b.hx`) is refused, since it would read as a package.
+
+A script can declare `main` or run top-level statements as an implicit `main`. Combining both is a compile
+error. The statements run in source order and can call module-level functions and use types declared later in
+the file. Plain `var` and `final` declarations in the implicit `main` are locals. A script with an explicit
+`main` can still declare ordinary module fields. Read command-line arguments with `Sys.args()`.
+
+```haxe
+#!/usr/bin/env haxeon
+final args = Sys.args();
+Sys.println(greet(args.length > 0 ? args[0] : "world"));
+
+function greet(name:String):String
+	return 'hello $name';
+```
+
+Only the file invoked as a script accepts top-level statements. Imported modules and project sources use the
+ordinary Haxe module grammar.
 
 `haxeon.Script` (in the standard library) covers what shell scripts make short. It starts programs directly, never
 through a shell, so arguments need no quoting and a script runs the same on every platform:
@@ -684,10 +763,11 @@ The workspace file lists the member projects. Paths are relative to the file:
 - CMake packages are identified by (source, target), not package name, so projects that request the same native
   tree share one configure, one build, and one set of runtime libraries.
 - `--jobs N` (default: CPU count) sets the total job limit and `--compilers N` (default 3) bounds simultaneous
-  compiles, each of which holds a compiler heap. Every project keeps its own compiler worker. Across all build
-  roots, at most `HAXEON_COMPILER_WORKERS` (default 4) stay resident and, on Linux, their total resident memory
-  stays within `HAXEON_COMPILER_MEMORY_MB` (default 4096); the least recently used workers are retired first, and a
-  project's workers from older compiler versions are retired immediately.
+  compiles, each of which holds a compiler heap. Across all build roots, Haxeon uses
+  `HAXEON_COMPILER_WORKERS` (default 4) and, on Linux, `HAXEON_COMPILER_MEMORY_MB` (default 4096)
+  to retire the least recently used batch workers. It first tries batch workers for the same output
+  from older compiler versions. Live workers keep their patch baseline until their idle timeout, so
+  active live sessions can temporarily exceed these limits.
 - With Ninja 1.13 or newer (`scripts/bootstrap-tools.sh` installs a pinned copy under `.tools/ninja`), a GNU
   jobserver shares the job limit between Haxeon's own actions and every CMake build, so the machine is never
   oversubscribed. Older Ninja builds use their own parallelism; `HAXEON_CMAKE_GENERATOR=default` restores the

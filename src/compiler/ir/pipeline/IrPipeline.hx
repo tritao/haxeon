@@ -3,6 +3,7 @@ package compiler.ir.pipeline;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch.IrTypedInterfaceCalls;
 import compiler.ir.model.IrFunction.IrRetention;
 import compiler.ir.passes.enums.IrEnumTagLowering.IrEnumTagLoweringPass;
+import compiler.ir.passes.enums.IrEnumTagLowering.IrTagEscapesPass;
 import compiler.ir.passes.objects.IrGenericOwnerErasure;
 import compiler.ir.passes.objects.IrCheckedDynamicCasts;
 import compiler.ir.passes.enums.IrClosedEnumTagAbi;
@@ -10,18 +11,17 @@ import compiler.ir.passes.cleanup.IrConstantBranches;
 import compiler.ir.analysis.IrEntryPrune;
 import compiler.ir.passes.enums.IrEnumDynamicDispatch;
 import compiler.ir.passes.enums.IrEnumRuntimeSpecializations;
-import compiler.ir.passes.enums.IrEnumTagLowering;
 import compiler.ir.model.IrFunction;
 import compiler.ir.passes.enums.IrInlineEnumLayout;
 import compiler.ir.passes.enums.IrInlineEnumLowering;
 import compiler.ir.passes.inlining.IrInliner;
 import compiler.ir.gen.IrMethodReferences;
 import compiler.ir.passes.nullability.IrNullableScalarFields;
+import compiler.ir.passes.nullability.IrNullableScalarFields.IrNullableScalarFieldsPass;
 import compiler.ir.passes.nullability.IrNullableScalarFlow;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.passes.nullability.IrOptionalFieldStorage;
 import compiler.ir.passes.nullability.IrOptionalScalarFlow;
-import compiler.ir.passes.nullability.IrOptionalValueFlow;
 import compiler.ir.passes.objects.IrOverrideBridges;
 import compiler.ir.model.IrProviders;
 import compiler.ir.analysis.IrReachability.IrReachabilityReport;
@@ -33,6 +33,8 @@ import compiler.ir.model.IrTypeIds;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 import compiler.ir.passes.arrays.IrValueArrayProgramRewrite;
 import compiler.ir.passes.values.IrValueConstructors;
+import compiler.ir.passes.values.IrValueObjectRows;
+import compiler.ir.model.IrOpcode;
 import compiler.ir.passes.values.IrValueDynamicDispatch;
 import compiler.ir.passes.values.IrValueInterfaceBoxes;
 import compiler.ir.passes.values.IrValuePhiScalarization;
@@ -69,7 +71,7 @@ class IrPipeline {
 		// Erased dispatch can reach a specialized body that the original callers do not name.
 		// Expose those targets before the walk filters typed enum/value conversions.
 		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects),
-		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(pruning),
+		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(walking),
 		new IrAssemblyStage("enum-dynamic-dispatch-input", enumDynamicDispatchInput).when(hasObjects),
 		IrFunctionStages.stage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects),
 		new IrAssemblyStage("reachability-report", reachabilityReport).when(reportsReachability),
@@ -87,15 +89,16 @@ class IrPipeline {
 		IrFunctionStages.stage("enum-tag-lowering", enumTagLowering, loweredEnumInput).when(lowersEnums),
 		new IrAssemblyStage("encode-bodies", encodeBodies).encodes(),
 		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
-		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
-		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
+		IrFunctionStages.stage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).checksPrune(),
+		IrFunctionStages.stage(IrStaticNullChecks.STAGE, staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
-		new IrAssemblyStage("object-reflection", objectReflection),
+		new IrAssemblyStage(IrObjectReflection.STAGE, objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
-		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
-		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
+		IrFunctionStages.stage(IrOptionalFieldStorage.STAGE, optionalFieldStorage,
+			physicalFields).when(hasOptionalFields),
+		IrFunctionStages.stage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
-		new IrAssemblyStage("enum-tag-escapes", assemblyEnumTagEscapes)
+		IrFunctionStages.stage("enum-tag-escapes", assemblyEnumTagEscapes, escapedProgram)
 	]);
 
 	/**
@@ -105,21 +108,24 @@ class IrPipeline {
 	 * module builders.
 	 */
 	public static final target:IrStageList = new IrStageList("target", [
-		new IrStage("closed-enum-tag-abi", closedEnumTagAbi).when(closesEnumTags),
+		IrFunctionStages.programStage("closed-enum-tag-abi", closedEnumTagAbi,
+			closedEnumTagProgram).when(closesEnumTags),
 		new IrStage("value-array-rewrite", valueArrayRewrite),
-		new IrStage("value-constructors", valueConstructors).when(wasmValueLanes),
-		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
-		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
-		new IrStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
-		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
-		new IrStage("value-constructors", valueConstructors).when(hashLink),
-		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
-		new IrStage("scalar-closures", scalarClosures).when(hashLink),
-		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
+		IrFunctionStages.programStage("value-constructors", valueConstructors).when(wasmValueLanes),
+		IrFunctionStages.programStage("scalar-argument-joins", valuePhiScalarizationBodies).when(wasmValueLanes),
+		IrFunctionStages.programStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
+		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
+		IrFunctionStages.programStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
+		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
+		IrFunctionStages.programStage("value-constructors", valueConstructors).when(hashLink),
+		IrFunctionStages.programStage("scalar-argument-joins", valuePhiScalarizationBodies).when(hashLink),
+		IrFunctionStages.programStage("scalar-arguments", scalarArguments).when(hashLink),
+		IrFunctionStages.programStage("scalar-closures", scalarClosures).when(hashLink),
+		IrFunctionStages.programStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
-		new IrStage("scalar-replacement", scalarReplacement),
-		new IrStage("nullable-scalar-flow", nullableScalarFlow),
-		new IrStage("enum-tag-escapes", enumTagEscapes),
+		IrFunctionStages.programStage("scalar-replacement", scalarReplacement),
+		IrFunctionStages.programStage("nullable-scalar-flow", nullableScalarFlow),
+		IrFunctionStages.programStage("late-enum-tag-escapes", lateEnumTagEscapes),
 		new IrStage("inliner", inliner),
 		new IrStage("verifier", verifier).when(verifiesHere),
 		new IrStage("verifier-check", verifierCheck).when(checksVerification)
@@ -130,6 +136,9 @@ class IrPipeline {
 
 	// Predicates.
 
+	static function walking(assembly:IrAssembly, context:IrPipelineContext):Bool
+		return context.walkFromEntry && assembly.objects != null;
+
 	static function pruning(assembly:IrAssembly, context:IrPipelineContext):Bool
 		return context.pruneFromEntry && assembly.objects != null;
 
@@ -138,6 +147,11 @@ class IrPipeline {
 
 	static function hasInterfaces(assembly:IrAssembly, context:IrPipelineContext):Bool
 		return assembly.objects != null && assembly.interfaces != null;
+
+	static function hasOptionalFields(assembly:IrAssembly, context:IrPipelineContext):Bool {
+		var objects = assembly.objects;
+		return objects != null && IrOptionalFieldStorage.hasPlans(objects);
+	}
 
 	static function hasReflectable(assembly:IrAssembly, context:IrPipelineContext):Bool
 		return assembly.objects != null && assembly.reflectableObjects != null;
@@ -210,8 +224,11 @@ class IrPipeline {
 			functions:Array<IrFunction>):compiler.ir.analysis.IrTypeAwareWalk.IrClassDependencies {
 		var objectTable:Map<String, IrObject> = [for (object in assembly.objects) object.name => object],
 			present:Map<String, Bool> = [for (fn in functions) fn.name => true],
-			facts = assembly.generator.facts;
+			facts = assembly.generator.facts,
+			observable = [for (name in facts.observableFieldBits.keys()) name];
+		observable.sort(Reflect.compare);
 		return {
+			inputs: "observable-bits " + observable.join(" "),
 			symbols: IrObjectReflection.helperSymbols(),
 			of: (className, symbol) -> IrObjectReflection.dependencies(objectTable, facts.observableFieldBits,
 				className,
@@ -221,16 +238,20 @@ class IrPipeline {
 	}
 
 	/**
-	 * A plain build decides the Dynamic dispatch of enums and structs from what is reached: an enum or struct that no reached code can
-	 * have, and a helper that only unreached code asked for, change nothing (the dispatches rewrite every `__dynamic_equal` site once
-	 * any type registers).
+	 * A build that is not live decides whether it reflects over object layouts from the natives reached code calls, so a module that
+	 * is loaded but unused (`Reflect`, which every program with a stdlib has) changes nothing. A pruned build also decides the Dynamic
+	 * dispatch of enums and structs from what is reached: an enum or struct that no reached code can have, and a helper that only
+	 * unreached code asked for, change nothing (the dispatches rewrite every `__dynamic_equal` site once any type registers). A build
+	 * that keeps what it does not reach (Wasm, whose builders emit only what they reach) rewrites every function.
 	 */
 	static function dispatchWalk(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var functions = assembly.functions;
 		var walk = IrEntryPrune.walk(pruneInputOf(assembly, context, functions), context.pruneRoots,
-			pruneDependencies(assembly, functions), context.lineage);
+			IrEntryPrune.DISPATCH_WALK, pruneDependencies(assembly, functions), context.lineage);
 		assembly.dispatchWalk = walk;
-		assembly.unreached = [for (fn in functions) if (!walk.reached.exists(fn.name)) fn.name => true];
+		assembly.reachedNatives = walk.calledNatives;
+		if (context.pruneFromEntry)
+			assembly.unreached = [for (fn in functions) if (!walk.reached.exists(fn.name)) fn.name => true];
 		return assembly;
 	}
 
@@ -250,8 +271,9 @@ class IrPipeline {
 		reflectionInput.natives = natives == null ? [] : natives;
 		reflectionInput.cNatives = cNatives == null ? [] : cNatives;
 		// The reflection decisions of the enum dispatch read what reached code does, not what every loaded module declares.
+		reflectionInput.reachedNatives = assembly.reachedNatives;
 		var walk = assembly.dispatchWalk;
-		if (walk != null) {
+		if (walk != null && context.pruneFromEntry) {
 			reflectionInput.functions = [for (fn in assembly.functions) if (walk.reached.exists(fn.name)) fn];
 			reflectionInput.natives =
 				[for (native in reflectionInput.natives) if (walk.calledNatives.exists(native.name)) native];
@@ -278,13 +300,15 @@ class IrPipeline {
 	static function valueDynamicDispatch(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass {
 		var walk = assembly.dispatchWalk;
 		return new IrValueDynamicDispatch(assembly.objects, assembly.unreached,
-			walk == null ? null : walk.createdClasses);
+			walk == null || !context.pruneFromEntry ? null : walk.createdClasses);
 	}
 
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		// Method values first: a bound method of an erased generic owner calls an erased operation, which erasure then makes.
-		IrMethodReferences.generate(assembly.functions, assembly.objects);
-		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects);
+		IrMethodReferences.generate(assembly.functions, assembly.objects, context.lineage,
+			derivedHelpers(IrMethodReferences.STAGE, context));
+		IrGenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects, context.lineage,
+			derivedHelpers(IrGenericOwnerErasure.STAGE, context));
 		return assembly;
 	}
 
@@ -315,7 +339,8 @@ class IrPipeline {
 	}
 
 	static function valueInterfaceBoxes(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrValueInterfaceBoxes(assembly.objects, assembly.interfaces);
+		return new IrValueInterfaceBoxes(assembly.objects, assembly.interfaces, null,
+			derivedHelpers(IrValueInterfaceBoxes.STAGE, context));
 
 	/** The box objects the value interface boxes made join the program's objects. */
 	static function addBoxObjects(assembly:IrAssembly, pass:IrFunctionPass):Void {
@@ -351,7 +376,8 @@ class IrPipeline {
 	static function checkedDynamicCasts(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrCheckedDynamicCasts(assembly.objects, assembly.generator.profile.nativeReflectionDispatch, null,
 			false,
-			false);
+			false, IrCheckedDynamicCasts.STAGE, context.lineage, context.options.checkReuse, bodyTypes(context),
+			context.passScratch.bodyBuilder);
 
 	/** An exported function is exposed; one already exposed is kept as it is, so it keeps its identity from build to build. */
 	static function exportedFunctions(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -408,10 +434,9 @@ class IrPipeline {
 	}
 
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var input = assembly.functions;
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
-			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder);
-		assembly.functions = stableChanged("inline-enum-lowering", input, enumOutput.functions, context);
+			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage);
+		assembly.functions = enumOutput.functions;
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;
 		assembly.staticFields = enumOutput.staticFields;
@@ -420,24 +445,15 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var objects = assembly.objects,
-			types = bodyTypes(context),
-			builder = context.passScratch.bodyBuilder;
-		var functions = new IrOptionalScalarFlow(objects).rewrite(objects, assembly.functions, types, builder);
-		// The copy, box and unbox helpers the rewritten calls name.
-		functions = IrOptionalValueFlow.addHelpers(functions, objects, types, builder);
-		assembly.functions = encodeMade("optional-scalar-flow", functions, context);
-		return assembly;
-	}
+	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrOptionalScalarFlow(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.lineage,
+			context.options.checkReuse);
 
-	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		// The checked copies are kept, frozen, only in a session.
-		var cache = context.options.keepSession ? context.inlineCache : null;
-		assembly.functions = IrStaticNullChecks.run(assembly.functions, assembly.objects,
-			cache == null ? null : cache.staticChecks, bodyTypes(context), context.passScratch.bodyBuilder);
-		return assembly;
-	}
+	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrStaticNullChecks(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.lineage,
+			context.options.checkReuse);
 
 	/** Value objects, interface boxes and anonymous records are reflectable too, besides the classes the typed program lists. */
 	static function reflectableObjects(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -461,64 +477,31 @@ class IrPipeline {
 		var generator = assembly.generator;
 		assembly.natives = IrObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
-			assembly.reachedNatives, context.options.checkReuse);
-		assembly.functions = encodeMade("object-reflection", assembly.functions, context);
+			assembly.reachedNatives, context.options.checkReuse,
+			derivedHelpers(IrObjectReflection.STAGE, context));
+		// A one-shot compile lets every function's objects go, the ones the stage decoded to read included.
+		encodeAll(assembly.functions, context);
 		return assembly;
 	}
 
-	/**
-	 * `functions` with those a stage past the conversion point made as objects (those without a body) encoded: in a session, one
-	 * made the same as last build is last build's object, which has its body. A one-shot compile lets every function's objects go,
-	 * the ones the stage decoded to read included.
-	 */
-	static function encodeMade(stage:String, functions:Array<IrFunction>, context:IrPipelineContext):Array<IrFunction> {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		var made = [for (fn in functions) if (fn.body == null) fn];
-		if (retained && cache != null && made.length > 0) {
-			// The stable functions are encoded as the cache takes them, so the ones to replace are told apart before.
-			var isMade = [for (fn in functions) fn.body == null];
-			var stable = cache.stableGenerated(stage, made, context.passScratch.bodyBuilder), index = 0;
-			functions = [for (position in 0...functions.length) isMade[position]
-				? stable[index++] : functions[position]];
-		} else if (retained && cache != null)
-			cache.stableGenerated(stage, made, context.passScratch.bodyBuilder);
-		encodeAll(functions, context);
-		return functions;
-	}
-
-	/**
-	 * `output`, which a stage past the conversion point made from `input` with every function a body: in a session, one it changed
-	 * or made the same as last build is last build's, so the stages after it reuse what they made of it; a one-shot compile lets the
-	 * objects of the functions it made go.
-	 */
-	static function stableChanged(stage:String, input:Array<IrFunction>, output:Array<IrFunction>,
-			context:IrPipelineContext):Array<IrFunction> {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		var given:Map<String, IrFunction> = [for (fn in input) fn.name => fn];
-		var changed = [for (fn in output) if (given.get(fn.name) != fn) fn];
-		if (!retained || cache == null) {
-			for (fn in changed)
-				fn.releaseDecoded();
-			return output;
-		}
-		var stable = cache.stableGenerated(stage, changed, context.passScratch.bodyBuilder);
-		if (changed.length == 0)
-			return output;
-		var index = 0;
-		return [for (fn in output) given.get(fn.name) != fn ? stable[index++] : fn];
-	}
+	/** What `stage` derives its helpers through (`IrDerivedHelpers`), in the session's memo when there is one. */
+	static function derivedHelpers(stage:String, context:IrPipelineContext):IrDerivedHelpers
+		return new IrDerivedHelpers(stage, context.lineage, context.options.checkReuse, bodyTypes(context),
+			context.passScratch.bodyBuilder);
 
 	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
 		var types = bodyTypes(context),
 			builder = context.passScratch.bodyBuilder,
 			retained = context.options.keepSession;
+		// A session keeps the frozen body alone: the stages after this point read bodies, the memos before it hand on a function
+		// they reuse without reading it, and the whole-program scans read bodies (`IrSourceRehash`, `IrStaticReferences`, the
+		// contributions); what a later build reads as objects is decoded again from its body.
 		for (fn in functions) {
 			fn.bodyIn(types, builder);
 			if (retained)
 				fn.freezeBody(builder);
-			else
-				fn.releaseDecoded();
+			fn.releaseDecoded();
 		}
 	}
 
@@ -530,32 +513,30 @@ class IrPipeline {
 		var functions = assembly.functions, start = assembly.generatedStart;
 		if (functions.length > start) {
 			var existing = functions.slice(0, start);
-			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies(functions.slice(start),
-				assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing, true, true,
-				bodyTypes(context), context.passScratch.bodyBuilder));
+			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies("reflection-casts",
+				functions.slice(start), assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing,
+				true,
+				true, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage,
+				context.options.checkReuse));
 		}
 		return assembly;
 	}
 
-	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var optionalStorage = new IrOptionalFieldStorage(assembly.objects);
-		if (optionalStorage.hasFields()) {
-			assembly.functions = optionalStorage.rewrite(assembly.functions, bodyTypes(context),
-				context.passScratch.bodyBuilder);
-			assembly.objects = optionalStorage.physicalObjects(assembly.objects);
-		}
-		return assembly;
-	}
+	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrOptionalFieldStorage(assembly.objects, context.lineage, context.options.checkReuse,
+			bodyTypes(context),
+			context.passScratch.bodyBuilder);
+
+	/** The objects hold the optional fields' slots in place of the fields. */
+	static function physicalFields(assembly:IrAssembly, pass:IrFunctionPass):Void
+		assembly.objects = cast(pass, IrOptionalFieldStorage).physicalObjects(assembly.objects);
 
 	/**
 	 * The conversion point (docs/design/IR_CORE_COLUMNS.md, migration): every function is encoded, and the stages from here on read
-	 * bodies. A session takes last compile's object for a function rebuilt the same, which has its body; a one-shot compile lets the
-	 * objects go.
+	 * bodies. In a session the stage memos before it hand on last build's object for a function nothing changed (`IrLineage`),
+	 * which has its frozen body already, so only what this build made is encoded.
 	 */
 	static function encodeBodies(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var cache = context.inlineCache, retained = context.options.keepSession;
-		if (retained && cache != null)
-			assembly.functions = cache.stableBodySources(assembly.functions, context.passScratch.bodyBuilder);
 		encodeAll(assembly.functions, context);
 		var enumInput = assembly.enumInput;
 		if (enumInput != null)
@@ -563,97 +544,94 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = new IrNullableScalarFields(assembly.objects).rewrite(assembly.functions,
-			bodyTypes(context),
-			context.passScratch.bodyBuilder);
-		return assembly;
-	}
+	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
+		return new IrNullableScalarFieldsPass(new IrNullableScalarFields(assembly.objects),
+			bodyTypes(context), context.passScratch.bodyBuilder);
 
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.program = IrProgramAssembler.finish(assembly, context);
+		var program = IrProgramAssembler.finish(assembly, context);
+		assembly.program = program;
+		// From here the stages work on the finished program's functions, which the lineage settles.
+		assembly.functions = program.functions;
 		return assembly;
 	}
 
-	static function assemblyEnumTagEscapes(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+	static function assemblyEnumTagEscapes(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass {
 		var program = assembly.program;
 		if (program == null)
 			throw new InternalError("The enum tag escapes run on the finished program");
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
-		return assembly;
+		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
+	}
+
+	/** The finished program's functions are the stage's. */
+	static function escapedProgram(assembly:IrAssembly, pass:IrFunctionPass):Void {
+		var program = assembly.program;
+		if (program != null)
+			program.functions = assembly.functions;
 	}
 
 	// Target stages.
 
-	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram {
-		return IrClosedEnumTagAbi.run(program, context.reflectable, bodyTypes(context), context.passScratch);
-	}
+	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrClosedEnumTagAbi(program, context.reflectable, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.lineage);
+
+	/** The program with the closed tags projected in its tables too. */
+	static function closedEnumTagProgram(program:IrProgram, pass:IrFunctionPass):IrProgram
+		return cast(pass, IrClosedEnumTagAbi).result();
 
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
-			bodyTypes(context), context.passScratch, context.options.keepSession ? context.inlineCache : null);
+			bodyTypes(context), context.passScratch, context.lineage);
 		return program;
 	}
 
 	/**
-	 * Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen; its call rewrite can
+	 * Value joins are scalarized before `scalar-arguments` (`scalar-argument-joins`), before the scalar call ABI is chosen; its call rewrite can
 	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
-	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValueConstructors.rewrite(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrValueConstructors(program, bodyTypes(context), context.passScratch, context.lineage);
 
 	/** The last value phi scalarization before scalar replacement. */
-	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return IrValuePhiScalarization.pass(program, bodyTypes(context), context.passScratch, context.lineage);
 
 	/** Wasm's scalar argument ABI, with value lanes. */
-	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, true, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrScalarArguments(program, true, bodyTypes(context), context.passScratch, context.lineage);
 
 	/** HashLink's scalar argument and result ABI. */
-	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, false, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrScalarArguments(program, false, bodyTypes(context), context.passScratch, context.lineage);
 
-	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrScalarClosures(program, bodyTypes(context), context.passScratch, context.lineage);
 
 	static function scalarReplacementObjects(program:IrProgram, context:IrPipelineContext):IrProgram {
 		context.scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => object]);
 		return program;
 	}
 
-	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrProgram {
+	/** A function that allocates a value object is rewritten (`IrValueObjectRows`). */
+	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrFunctionPass {
 		var scalarObjects = context.scalarObjects,
 			hashLink = !context.isWasm(),
-			types = bodyTypes(context);
-		program.functions = [
-			for (fn in program.functions)
-				IrScalarReplacement.rewriteBody(fn, scalarObjects, types, context.passScratch, hashLink)
-		];
-		return program;
+			types = bodyTypes(context),
+			scratch = context.passScratch;
+		return new IrValueObjectRows(IrOpcode.ValueInit, scalarObjects, types, scratch.bodyBuilder,
+			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, types, scratch, hashLink),
+			compiler.ir.passes.values.IrInlineValueLayout.declarationsFact(program.objects, context.lineage));
 	}
 
-	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrNullableScalarFlow.rewrite(program, bodyTypes(context), context.passScratch);
-		return program;
-	}
+	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrNullableScalarFlow(program, bodyTypes(context), context.passScratch, context.lineage,
+			context.options.checkReuse);
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
-	static function enumTagEscapes(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder);
-		return program;
-	}
+	static function lateEnumTagEscapes(program:IrProgram, context:IrPipelineContext):IrFunctionPass
+		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
 
 	/**
 	 * The type ids of the bodies from here to the inliner: its cache's, so it takes the functions' bodies as they are. The
@@ -672,7 +650,9 @@ class IrPipeline {
 		if (cache == null)
 			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
-			context.instrumentScope);
+			context.instrumentScope, context.lineage);
+		// The lineage ends here: no stage after the inliner reads versions.
+		context.lineage = null;
 		// `--check-reuse`: what the session keeps for the next compile is frozen, so no stage of this one changed it in place.
 		if (context.options.checkReuse && context.options.keepSession) {
 			var unfrozen = cache.unfrozen();

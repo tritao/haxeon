@@ -69,21 +69,29 @@ class ProcessRunner {
 		restore(previousDirectory, oldEnvironment);
 		launchMutex.release();
 
+		// A quiet build keeps what its processes print with its other lines, which it shows only if the build fails.
+		var keep = forwardOutput && build.BuildOutput.capturing(),
+			keptOutput = new haxe.io.BytesOutput(),
+			keptError = new haxe.io.BytesOutput();
 		var readers = new Lock();
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.process.stdout");
-			copyOutput(process.stdout, forwardOutput ? Sys.stdout() : null);
+			copyOutput(process.stdout, keep ? keptOutput : forwardOutput ? Sys.stdout() : null, !keep);
 			readers.release();
 		});
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.process.stderr");
-			copyOutput(process.stderr, forwardOutput ? Sys.stderr() : null);
+			copyOutput(process.stderr, keep ? keptError : forwardOutput ? Sys.stderr() : null, !keep);
 			readers.release();
 		});
 		var status = process.exitCode();
 		readers.wait();
 		readers.wait();
 		process.close();
+		if (keep) {
+			keepText(keptOutput, false);
+			keepText(keptError, true);
+		}
 		return status == null ? 1 : status;
 		#else
 		var previousDirectory = Sys.getCwd(), oldEnvironment = new Map<String, Null<String>>(), status = 1;
@@ -237,7 +245,20 @@ class ProcessRunner {
 			Sys.setCwd(previousDirectory);
 	}
 
-	static function copyOutput(input:haxe.io.Input, output:Null<haxe.io.Output>):Void {
+	/** Hands a kept stream to the build's output, which records it as it records its own lines. */
+	static function keepText(output:haxe.io.BytesOutput, error:Bool):Void {
+		var text = output.getBytes().toString();
+		if (StringTools.endsWith(text, "\n"))
+			text = text.substr(0, text.length - 1);
+		if (text == "")
+			return;
+		if (error)
+			build.BuildOutput.error(text);
+		else
+			build.BuildOutput.line(text);
+	}
+
+	static function copyOutput(input:haxe.io.Input, output:Null<haxe.io.Output>, record:Bool):Void {
 		try {
 			var bytes = Bytes.alloc(8192),
 				count = input.readBytes(bytes, 0, bytes.length);
@@ -245,7 +266,8 @@ class ProcessRunner {
 				if (output != null) {
 					output.writeBytes(bytes, 0, count);
 					output.flush();
-					OutputCapture.recordBytes(bytes, 0, count);
+					if (record)
+						OutputCapture.recordBytes(bytes, 0, count);
 				}
 				count = input.readBytes(bytes, 0, bytes.length);
 			}

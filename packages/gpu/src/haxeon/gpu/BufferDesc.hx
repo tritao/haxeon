@@ -24,7 +24,7 @@ class BufferDesc {
 	function nativeValue():nkgpu_buffer_desc {
 		var value = new nkgpu_buffer_desc();
 		value.set_struct_size(nkgpu_buffer_desc.size());
-		value.set_size(size);
+		value.set_byteSize(size);
 		value.set_usage(usage);
 		value.set_data_size(0);
 		value.set_dynamic_update(dynamicUpdate ? 1 : 0);

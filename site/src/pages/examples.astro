@@ -1,0 +1,54 @@
+---
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import Showcase from '../components/home/Showcase.astro';
+import { docsUrl, repositorySource } from '../../docs.mjs';
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'Examples',
+    template: 'splash',
+    prev: false,
+    next: false,
+    description: 'Explore Haxeon apps and their source.',
+  }}
+>
+  <div class="landing-content">
+    <section class="page-intro">
+      <div class="wrap">
+        <div class="head">
+          <h1 id="_top" tabindex="-1">Examples</h1><p class="lede">
+            Explore Haxeon apps and their source.
+          </p>
+        </div>
+        <Showcase />
+        <div class="prose">
+          <h2>Task List</h2>
+          <p>
+            A small app covering layout, text, lists, forms, navigation and theming. Read the <a
+              href={docsUrl('guides/03-ui-basics.md')}
+            >
+              UI basics guide
+            </a> or <a href={repositorySource('docs/guides/examples/03-ui-basics/tasks/')}
+              >get the source</a
+            >.
+          </p>
+          <h2>UI Showcase and Audio Lab</h2>
+          <p>
+            Run the <a href={repositorySource('packages/ui/examples/ui_showcase')}>UI Showcase</a> and
+            <a href={repositorySource('packages/audio/examples/audio-lab')}> Audio Lab </a> from their
+            source.
+          </p>
+          <h2 id="games-and-3d">Games and 3D</h2>
+          <p>
+            Explore the <a href={repositorySource('packages/gpu')}>GPU package</a> and <a
+              href={repositorySource('packages/animation')}
+            >
+              animation package
+            </a> in the repository.
+          </p>
+        </div>
+      </div>
+    </section>
+  </div>
+</StarlightPage>

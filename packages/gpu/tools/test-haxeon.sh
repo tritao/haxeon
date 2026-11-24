@@ -76,7 +76,6 @@ fi
     "$platform_dir/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
     "$platform_dir/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
     "$platform_dir/src/haxeon/platform/async/Requests.hx" \
-    "$platform_dir/src/haxeon/platform/async/Outcome.hx" \
     "$platform_dir/src/haxeon/platform/Window.hx" \
     "$platform_dir/src/haxeon/platform/WebView.hx" \
     "$platform_dir/src/haxeon/platform/Runtime.hx")

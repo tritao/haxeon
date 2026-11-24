@@ -118,7 +118,7 @@ from fused array reads, since string intrinsics were not added. The full four-la
 nine-run measurement, starting at load 3.96; it also verifies every benchmark's output.
 
 Validation passed with the inliner both on and off. Details, mutation evidence and the native audit are in
-[`docs/reference/JIT_NATIVE_PROPERTIES.md`](../../docs/reference/JIT_NATIVE_PROPERTIES.md).
+[`docs/internals/JIT_NATIVE_PROPERTIES.md`](../../docs/internals/JIT_NATIVE_PROPERTIES.md).
 
 Haxeon's IR inliner is on by default (`--no-inline` turns it off). It matters mostly for nbody (0.34s without it)
 and spectral-norm (0.295s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
@@ -194,12 +194,13 @@ The other benchmarks had no regression beyond noise. Reduced page release/refaul
 cache-miss explanation. See [the full measurement and validation report](../../docs/reports/2026-10-gc-empty-page-retention.md).
 The cross-language table above was not regenerated.
 
-### Guarded JIT object allocation (opt-in)
+### Guarded JIT object allocation
 
-`HL_JIT_ALLOC_INLINE=1` enables guarded inline allocation of eligible objects up to 40 bytes on Linux x86-64 SysV.
+The JIT allocates eligible objects up to 40 bytes inline on Linux x86-64 SysV and AArch64.
 Nine alternating pairs on core 0, identical bytecode and load <=4 measured binarytrees at 0.810601 → 0.574274 s
 (29.15% faster) and merkletrees at 0.293442 → 0.248573 s (15.29%). Peak RSS was essentially unchanged and none of
-the other four benchmarks regressed. The feature remains off by default; its per-site cold stubs increase code size.
+the other four benchmarks regressed. Its per-site cold stubs increase code size. It is on by default; measured again when it was
+enabled, against the call path: binarytrees -33% and merkletrees -23% main-thread cycles, the other four within noise.
 See [the full report](../../docs/reports/2026-10-jit-inline-allocation.md) for validation, startup limitations and all six results.
 The cross-language table above was not regenerated.
 
@@ -207,7 +208,8 @@ The cross-language table above was not regenerated.
 
 A guarded inline integer-box prototype measured merkletrees at 0.247260 → 0.198725 s (19.63% faster), but repeated
 LRU comparisons showed a 1–2% regression against the accepted runtime. It was dropped under the no-regression gate;
-that variant was reverted. See [the experiment report](../../docs/reports/2026-10-jit-boxed-allocation.md).
+that variant was reverted. A follow-up that keeps the cold helpers out of the hot runtime text removes the regression and is
+opt-in with `HL_JIT_ALLOC_BOX=1` ([report](../../docs/reports/2026-10-jit-boxed-allocation-layout.md)).
 The cross-language table above was not regenerated.
 
 ### Corrected integer-box allocation (opt-in; final timing gate pending)

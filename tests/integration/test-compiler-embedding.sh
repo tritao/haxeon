@@ -18,9 +18,8 @@ manifest = {
 (project / "haxeon.json").write_text(json.dumps(manifest) + "\n")
 PY
 cp "$repo_dir/tests/fixtures/self-hosting/Main.hx" "$project_dir/src/Main.hx"
-task_haxeon_home=${HAXEON_HOME:-$repo_dir}
-task_haxe=${HAXEON_HAXE:-"$task_haxeon_home/.tools/haxe/haxe"}
-HAXEON_HOME="$task_haxeon_home" HAXEON_COMPILER_SOURCE="$repo_dir/src" \
+task_haxe=${HAXEON_HAXE:-"$repo_dir/.tools/haxe/haxe"}
+HAXEON_SDK="${HAXEON_SDK:-$repo_dir/out/sdk}" HAXEON_COMPILER_SOURCE="$repo_dir/src" \
     "$task_haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli \
     run --project "$project_dir/haxeon.json" "$@"
 

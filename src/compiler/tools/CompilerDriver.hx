@@ -4,7 +4,7 @@ import compiler.Compiler.CompileResult;
 import compiler.abi.AbiChangeSchema;
 import compiler.backend.BackendTargets;
 import compiler.backend.MemoryContract.MemoryContractCodec;
-import compiler.backend.c.HlcBuild;
+import compiler.backend.c.HlcModule.HlcFile;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
@@ -59,7 +59,8 @@ class CompilerDriver {
 			wasmRuntimeNeutral: request.wasmRuntimeNeutral,
 			wasmLegacyExceptions: request.options.wasmLegacyExceptions,
 			checkReuse: request.options.checkReuse,
-			exports: request.exports
+			exports: request.exports,
+			standardLibrary: request.stdlib
 		} : null;
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
@@ -181,8 +182,11 @@ class CompilerDriver {
 			var baselineOutput = request.baselineOutput;
 			if (baselineOutput != null)
 				compilerSession.writeBaseline(baselineOutput);
-			File.saveContent(request.output + ".build-id",
-				build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
+			// A session works the HashLink module's id out from the bytes it wrote, once for an unchanged module.
+			var buildId = session == null
+				|| isWasm ? build.execution.ContentDigest.makeHex(File.getBytes(request.output))
+				: session.hashLinkBuildId(BackendArtifacts.hashLink(result.artifact).module);
+			File.saveContent(request.output + ".build-id", buildId);
 			if (request.xmlOutput != null)
 				File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 			if (request.irOutput != null)
@@ -263,8 +267,8 @@ class CompilerDriver {
 			+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt)
 			+ (deferFullModule ? " (patch first)" : "")));
 		report(phaseReport(result, backendDoneAt - backendStartedAt));
-		for (line in result.metrics.frontendPassReports)
-			report("frontend " + line);
+		if (result.metrics.frontendStages != "")
+			report("frontend " + result.metrics.frontendStages);
 		report("ir passes (ms/MB/k objects): "
 			+ [for (entry in result.metrics.irPassCosts) entry.name + "=" + Math.round(entry.milliseconds) + "/"
 			+ Math.round(entry.bytes / 1048576.0) + "/"
@@ -277,30 +281,50 @@ class CompilerDriver {
 	}
 
 	/**
-	 * A C build (docs/design/AOT_BACKEND.md): the sources go to `OUTPUT.c/`; with a C compiler and SDK the executable is linked
-	 * at `OUTPUT`. Like a Wasm module, it has no live host: writing it publishes it.
+	 * A C build (docs/design/AOT_BACKEND.md): the sources go to `OUTPUT.c/`, from which the SDK's CMake package builds the
+	 * executable (`haxeon_add_c_executable`). Like a Wasm module, it has no live host: writing it publishes it.
 	 */
 	static function writeC(owner:compiler.Compiler, result:CompileResult, request:CompilerRequest,
 			report:String->Void, preparedAt:Float):CompileResult {
 		var compiledAt = Sys.time() * 1000.0;
-		var files = BackendArtifacts.c(result.artifact).files, directory = request.output + ".c";
-		var changed = HlcBuild.write(files, directory);
+		// The sources are written in place, under the published output's name rather than a request's staging one: only files
+		// whose text changed are written, so a C build (this one's or an app runner's) compiles only those again.
+		var published = request.publishedOutput == null ? request.output : request.publishedOutput;
+		var files = BackendArtifacts.c(result.artifact).files, directory = published + ".c";
+		var changed = writeCSources(files, directory);
+		// What the program was compiled from, which a project build reads to know when to compile it again.
+		if (request.inputsOutput != null)
+			File.saveContent(request.inputsOutput, inputsReport(owner, result.moduleNames, request));
 		var writtenAt = Sys.time() * 1000.0;
-		var sdk = request.options.cSdk;
-		if (sdk != null) {
-			var compiled = HlcBuild.compile(files, directory, request.output,
-				HlcBuild.toolchain(sdk, request.options.toolchain), sdk,
-				request.buildMode == "development");
-			report('compiled $compiled C files');
-		}
 		report("driver phases (ms): compile=" + milliseconds(compiledAt - preparedAt) + " write-c="
-			+ milliseconds(writtenAt - compiledAt) + " c-build=" + milliseconds(Sys.time() * 1000.0 - writtenAt));
+			+ milliseconds(writtenAt - compiledAt));
 		report(phaseReport(result, 0));
 		var status = owner.publicationStatus();
 		if (status.hasPendingRevision && status.pendingRevision == result.revision)
 			owner.acknowledgePublication(result.revision);
 		report('wrote ${files.length} C sources ($changed changed) -> $directory');
 		return result;
+	}
+
+	/**
+	 * Writes a C build's `files` into `directory`; returns how many changed. A file whose text did not change is not written,
+	 * so the C build compiles only what an edit changed. Files of an earlier build that this one lacks are removed.
+	 */
+	static function writeCSources(files:Array<HlcFile>, directory:String):Int {
+		FileSystem.createDirectory(directory);
+		var changed = 0, kept:Map<String, Bool> = [];
+		for (file in files) {
+			var path = directory + "/" + file.path;
+			kept.set(file.path, true);
+			if (FileSystem.exists(path) && File.getContent(path) == file.content)
+				continue;
+			File.saveContent(path, file.content);
+			changed++;
+		}
+		for (name in FileSystem.readDirectory(directory))
+			if ((StringTools.endsWith(name, ".c") || StringTools.endsWith(name, ".h")) && !kept.exists(name))
+				FileSystem.deleteFile(directory + "/" + name);
+		return changed;
 	}
 
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */
@@ -320,9 +344,11 @@ class CompilerDriver {
 				throw new InternalError("Compiled module has no source: " + name);
 			// The identity table's text is generated from every other module during the compile; its file is the input.
 			var path = physicalPaths.get(state.source.path);
-			if (path == null)
-				path = !haxe.io.Path.isAbsolute(state.source.path) && FileSystem.exists("stdlib/" + state.source.path)
-					? FileSystem.fullPath("stdlib/" + state.source.path) : state.source.path;
+			if (path == null) {
+				var standard = haxe.io.Path.join([request.stdlib, state.source.path]);
+				path = !haxe.io.Path.isAbsolute(state.source.path)
+					&& FileSystem.exists(standard) ? FileSystem.fullPath(standard) : state.source.path;
+			}
 			var text = state.loadedText;
 			rows.push([
 				name,
@@ -375,17 +401,12 @@ class CompilerDriver {
 		if (FileSystem.exists(path))
 			FileSystem.deleteFile(path);
 
-	/** Empty unless typing found modules the graph lacked; the restart then redid the whole frontend. */
-	static function frontendRestarts(reasons:Array<String>):String
-		return reasons.length == 0 ? "" : " (restarted: " + reasons.join("; ") + ")";
-
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
 		return "compiler phases (reused: " + metrics.reuse + ", linked functions: " + metrics.linkedFunctions
 			+ ", of which re-indexed: " + metrics.movedFunctions + ") (ms): snapshot="
 			+ milliseconds(metrics.transactionSnapshotMs) + " candidate="
 			+ milliseconds(metrics.candidateSetupMs) + " frontend=" + milliseconds(metrics.frontendMs)
-			+ frontendRestarts(metrics.frontendRestarts)
 			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs)
 			+ " dependencies="
 			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs)
@@ -496,12 +517,37 @@ class CompilerDriver {
 			}
 
 	/** The live manifest's identities: every function's stable id, by name, in name order, as JSON. */
+	/**
+	 * The live manifest's identities, `[{"id":N,"name":"..."},...]` in name order, written directly: an edit that moves the ids
+	 * writes every one again, which through the reflective printer cost more than encoding the module.
+	 */
 	static function identitiesJson(ids:Map<String, Int>):String {
-		var identities = [for (name => id in ids) {
-			name:name, id:id
-		}];
-		identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
-		return Json.stringify(identities);
+		var names = [for (name in ids.keys()) name];
+		names.sort(Reflect.compare);
+		var text = new StringBuf();
+		text.addChar("[".code);
+		for (index in 0...names.length) {
+			var name = names[index];
+			if (index > 0)
+				text.addChar(",".code);
+			text.add('{"id":');
+			text.add(ids.get(name));
+			text.add(',"name":');
+			text.add(plainJson(name) ? '"' + name + '"' : Json.stringify(name));
+			text.addChar("}".code);
+		}
+		text.addChar("]".code);
+		return text.toString();
+	}
+
+	/** Whether `text` is printable ASCII without a quote or a backslash, which JSON quotes as it is. */
+	static function plainJson(text:String):Bool {
+		for (index in 0...text.length) {
+			var code = StringTools.fastCodeAt(text, index);
+			if (code < 0x20 || code > 0x7e || code == '"'.code || code == "\\".code)
+				return false;
+		}
+		return true;
 	}
 
 	static function functionMap(indices:Map<String, Int>):String {

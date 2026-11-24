@@ -308,6 +308,7 @@ class LspProtocol {
 							{globPattern: "**/*.hxml", kind: 7},
 							{globPattern: "**/haxe.json", kind: 7},
 							{globPattern: "**/haxeon.json", kind: 7},
+							{globPattern: "**/haxeon.toml", kind: 7},
 							{globPattern: "**/*.hxi", kind: 7},
 							{globPattern: "**/*.hxmap", kind: 7}
 						]
@@ -1336,7 +1337,7 @@ class LspProtocol {
 
 	function configure(configuration:editor.lsp.ProjectWorkspace.HaxeProjectConfiguration):Void
 		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi,
-			configuration.ffiIdentity);
+			configuration.ffiIdentity, configuration.nullSafety.copy());
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.syntax.Ast.AstExpression;
@@ -28,11 +29,15 @@ interface BodyTyping {
 	// Expressions, statements and types.
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
 			inferDynamicLambdaResult:Bool = false):TypedExpression;
-	function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression;
+	function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:String,
+			?use:NullSafetyUse):TypedExpression;
 
-	/** `coerce` for argument `position` (from 1) of a call to `callee`, its mismatch message spelled only on a mismatch. */
-	function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int):TypedExpression;
+	/**
+	 * `coerce` for argument `position` (from 1) of a call to `callee`, its mismatch message spelled only on a mismatch. `use` is what
+	 * the null-safety checker names it, by default the argument of the declared `callee`.
+	 */
+	function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
+			?use:NullSafetyUse):TypedExpression;
 	function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement>;
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;
@@ -67,6 +72,7 @@ interface BodyTyping {
 			?elaboration:GenericElaboration):TypedFunction;
 	function argumentTypesOf(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
 	function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression;
+	function stringifyMap(value:TypedExpression):Null<TypedExpression>;
 	function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation, arguments:Array<TypedExpression>,
 			span:compiler.core.Source.SourceSpan):TypedExpression;
 	function typeDefaultExpression(argument:compiler.syntax.Ast.AstArgument, expected:CompilerType,
@@ -97,6 +103,7 @@ interface BodyTyping {
 	function bindCell(binding:compiler.types.analysis.Scope.LocalBinding, type:CompilerType):Void;
 
 	// Switch rules, shared by statement switches and switch expressions.
+	function typePatternValue(value:AstExpression, scope:Scope, expected:CompilerType):TypedExpression;
 	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchCasePattern;
 	function rejectMatchPatternVariable(span:SourceSpan):Void;
 	function enterStructureSwitch(span:SourceSpan, columns:Array<String>):Void;

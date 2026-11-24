@@ -79,7 +79,7 @@ typedef AstField = {
 	final metadata:Array<AstMetadata>;
 	/**
 	 * The field's annotation, or null when the source gives it none: its type is then its initializer's, which the typer gives
-	 * (`DeclarationTypes`), and a reader of it reads an inferred type (`SemanticDependencyKind.DeclarationType`).
+	 * (`DeclarationTypes`), and a reader of it reads the initializer's unit (`FactAspect.Unit`).
 	 */
 	final type:Null<AstType>;
 
@@ -231,10 +231,19 @@ typedef AstCatch = {
 	final span:SourceSpan;
 }
 
+/** Metadata on a statement or expression that changes how the typer checks what it wraps. */
+enum ScopeMetadata {
+	/** `@:privateAccess`: private members are reachable. */
+	PrivateAccess;
+
+	/** `@:nullSafety(Off)`: the null-safety checker does not check it. */
+	NullSafetyOff;
+}
+
 /** Parsed expression tree; each constructor retains its complete source span. */
 enum AstExpression {
-	/** An expression evaluated with explicit private access. */
-	PrivateAccessExpression(expression:AstExpression, span:SourceSpan);
+	/** An expression with metadata that changes how it is checked (`@:privateAccess`, `@:nullSafety(Off)`). */
+	AnnotatedExpression(metadata:ScopeMetadata, expression:AstExpression, span:SourceSpan);
 
 	IntegerLiteral(value:Int, span:SourceSpan);
 	FloatLiteral(value:Float, span:SourceSpan);
@@ -334,10 +343,12 @@ enum AstExpression {
 
 	/**
 	 * `identity` is the parser's `<member>#<ordinal>` name for the lambda; see `LambdaName`. `isInline` marks a local
-	 * `inline function`, which each call replaces by its body (`LocalInlineFunctions`).
+	 * `inline function`, which each call replaces by its body (`LocalInlineFunctions`). `isNamed` marks the lambda of a
+	 * named local function (`function f() ...`), whose name is bound in its own body, as Haxe binds it; a lambda a `var`
+	 * holds is not in scope in its own initializer.
 	 */
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan,
-		?isInline:Bool);
+		?isInline:Bool, ?isNamed:Bool);
 }
 
 /** Compile-time query over a fixed native ABI layout. */
@@ -372,8 +383,8 @@ typedef AstSwitchExpressionCase = {
 
 /** Parsed statement tree before binding resolution and type checking. */
 enum AstStatement {
-	/** A statement evaluated with explicit private access. */
-	PrivateAccessStatement(statement:AstStatement, span:SourceSpan);
+	/** A statement with metadata that changes how it is checked (`@:privateAccess`, `@:nullSafety(Off)`). */
+	AnnotatedStatement(metadata:ScopeMetadata, statement:AstStatement, span:SourceSpan);
 
 	/** Recovery-only placeholder retaining the malformed statement location. */
 	ErrorStatement(span:SourceSpan);
@@ -427,6 +438,7 @@ typedef AstSwitchCase = {
 typedef AstFunction = {
 	/** Explicit override modifier, checked against inherited instance methods. */
 	final ?isOverride:Bool;
+	final ?isDynamic:Bool;
 	final name:String;
 	final isStatic:Bool;
 

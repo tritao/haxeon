@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-home=${HAXEON_HOME:-$repo_dir}
-haxe=${HAXEON_HAXE:-"$home/.tools/haxe/haxe"}
+sdk=${HAXEON_SDK:-$repo_dir/out/sdk}
+haxe=${HAXEON_HAXE:-"$repo_dir/.tools/haxe/haxe"}
 workspace_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-shards.XXXXXX")
 source_cache=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-shards-cache.XXXXXX")
 trap 'rm -rf -- "$workspace_dir" "$source_cache"' EXIT
@@ -38,7 +38,7 @@ write_workspace() {
 }
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
+	HAXEON_SDK="$sdk" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 # A shard count that is not a whole number of at least 1 is rejected before anything runs.

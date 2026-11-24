@@ -10,6 +10,7 @@ import compiler.query.Digest;
  * Encoding is expensive (see `docs/design/QUERY_ENGINE.md`, Digests): a pass's output is digested by its computation
  * (`QueryKind.computed`), and this is for an input that is new in a build, check mode and tests.
  */
+@:nullSafety(Strict)
 class IrFunctionDigest {
 	public static function feed(fn:IrFunction, digest:Digest):Void
 		digest.bytes(IrFunctionStateCodec.encode(fn));

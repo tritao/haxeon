@@ -1,0 +1,125 @@
+---
+import EditLink from '@astrojs/starlight/components/EditLink.astro';
+import LastUpdated from '@astrojs/starlight/components/LastUpdated.astro';
+import Pagination from '@astrojs/starlight/components/Pagination.astro';
+import { getCollection } from 'astro:content';
+import { docsUrl, projectRepo } from '../../docs.mjs';
+
+const { editUrl, lastUpdated, pagination } = Astro.locals.starlightRoute;
+const hasPagination = Boolean(pagination.prev || pagination.next);
+
+const comingFrom = await getCollection(
+  'docs',
+  ({ id, data }) => (id === 'coming-from' || id.startsWith('coming-from/')) && !data.draft,
+);
+---
+
+<footer class="site-footer" data-pagefind-ignore>
+  {
+    (editUrl || lastUpdated || hasPagination) && (
+      <div class="page-footer">
+        {(editUrl || lastUpdated) && (
+          <div class="meta">
+            <EditLink />
+            <LastUpdated />
+          </div>
+        )}
+        {hasPagination && <Pagination />}
+      </div>
+    )
+  }
+  <div class="site-links">
+    <div class="wrap">
+      <div>
+        <a class="mark" href="/">Haxeon</a><p>
+          A language and runtime for cross-platform apps and tools, developed in the open.
+        </p>
+      </div>
+      <div>
+        <h2>Learn</h2>
+        <a href={docsUrl('guides/00-get-started.md')}>Get started</a>
+        <a href={docsUrl('guides/README.md')}>Guides</a>
+        <a href={docsUrl('reference/CLI.md')}>Reference</a>
+      </div>
+      {
+        comingFrom.length > 0 && (
+          <div>
+            <h2>Coming from</h2>
+            {comingFrom.map(({ id, data }) => (
+              <a href={`/${id}/`}>{data.sidebar?.label || data.title}</a>
+            ))}
+          </div>
+        )
+      }
+      <div>
+        <h2>Project</h2>
+        <a href={projectRepo}>GitHub</a>
+        <a href="/about/">About</a>
+        <a href="/about/#licenses">Licenses</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .page-footer {
+    display: grid;
+    gap: 1.5rem;
+    margin-block: 3rem 1.5rem;
+  }
+  .meta {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--hx-space-3);
+    font-size: var(--sl-text-sm);
+    color: var(--sl-color-gray-3);
+  }
+  .meta > :global(p:only-child) {
+    margin-inline-start: auto;
+  }
+  .site-links {
+    border-top: 1px solid var(--sl-color-gray-5);
+    padding-block: 40px;
+    color: var(--sl-color-gray-3);
+    font-size: 0.9rem;
+  }
+  .wrap {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+    gap: 24px;
+  }
+  .site-links a {
+    color: var(--sl-color-white);
+    text-decoration: none;
+    display: block;
+  }
+  .site-links h2 {
+    margin: 0 0 8px;
+    font: 600 0.75rem var(--sl-font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .site-links p {
+    margin-top: var(--hx-space-2);
+    max-width: 46ch;
+  }
+  .site-links a:hover {
+    text-decoration: underline;
+  }
+  .mark {
+    font: 800 1.1rem/1 var(--hx-font-display);
+    letter-spacing: -0.03em;
+    color: var(--sl-color-white);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: var(--hx-space-2);
+  }
+  @media (max-width: 900px) {
+    .wrap {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+</style>

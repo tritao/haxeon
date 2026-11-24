@@ -15,6 +15,7 @@ import compiler.ir.verify.IrVerifier;
  * Inlining one call of a body in place by a copy of a branching callee (`expand`), and binding a callee's parameters to a call's
  * operands: the inliner's, which value constructors share. One serves many expansions; its tables are reused.
  */
+@:nullSafety(Strict)
 class IrBodyCallExpansion {
 	/** The tables of one expansion: by callee value id its value here, by callee block id its block id here. */
 	final calleeValues:Array<Int> = [];

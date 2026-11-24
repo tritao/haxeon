@@ -1,0 +1,18 @@
+{
+	"version": 1,
+	"package": { "name": "haxeon-nativekit" },
+	"sourceRoots": ["."],
+	"scopeSourceRoots": false,
+	"native": {
+		"cmake": {
+			"source": ".",
+			"target": "haxeon_nativekit",
+			"libraries": ["nativekit", "nativekit_gpu"]
+		}
+	},
+	"publish": {
+		"vendor": { "nativekit": "../../vendor/nativekit" },
+		"exclude": ["nativekit/tests", "nativekit/examples", "nativekit/docs"]
+	},
+	"target": "host"
+}

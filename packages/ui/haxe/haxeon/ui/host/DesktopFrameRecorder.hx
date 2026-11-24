@@ -9,6 +9,9 @@ import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.ui.Renderer;
 import hl.Gc;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes.NativeWindowKind;
+import nativekit.ffi.NativeKitTypes.Result;
 import nativekit.ffi.NativeKitTypes.WindowHandle;
 import sys.FileSystem;
 import sys.io.File;
@@ -60,7 +63,12 @@ class DesktopFrameRecorder {
 	var gcMicrosBefore = 0.0;
 	var collectionStartedAt = 0.0;
 	var collectionSeconds = 0.0;
-	var frame:{scriptedFrameCount:Int, scriptedFrameAt:Float, scriptedFrameDeliveredAt:Float, scriptedFrameDispatch:Float};
+	var frame:{
+		scriptedFrameCount:Int,
+		scriptedFrameAt:Float,
+		scriptedFrameDeliveredAt:Float,
+		scriptedFrameDispatch:Float
+	};
 	var pointerFirstAt = -1.0;
 	var pointerLatestAt = -1.0;
 	var pointerCount = 0;
@@ -161,8 +169,8 @@ class DesktopFrameRecorder {
 	public function ready():Bool {
 		var check = options.captureReady;
 		if (check != null && !check()) return false;
+		readyFrames++;
 		if (enabled) {
-			readyFrames++;
 			if (options.captureSeconds > 0.0 && startedAt < 0.0) startedAt = frameStartedAt;
 		}
 		return true;
@@ -249,7 +257,7 @@ class DesktopFrameRecorder {
 		record.gcSeconds = record.gcSecondsTotal - gcMicrosBefore / 1000000.0;
 	}
 
-	public function needsFrames():Bool return enabled && options.frameLimit > 0;
+	public function needsFrames():Bool return options.frameLimit > 0;
 	public function reachedFrameLimit():Bool return needsFrames() && readyFrames >= options.frameLimit;
 	public function elapsed():Bool
 		return startedAt >= 0.0 && options.captureSeconds > 0.0 && Sys.time() - startedAt >= options.captureSeconds;
@@ -304,8 +312,14 @@ class DesktopFrameRecorder {
 	static function noFunctions(_:Dynamic, value:Dynamic):Dynamic
 		return Reflect.isFunction(value) ? "<function>" : value;
 
-	public function write(state:UiHostRuntime):Void {
-		var application:DesktopUiApplication = cast state.app();
+	public static function diagnosticState(application:Null<UiApplication>):Dynamic {
+		if (!Std.isOfType(application, UiDiagnosticsProvider)) return null;
+		var provider:UiDiagnosticsProvider = cast application;
+		return provider.diagnosticState();
+	}
+
+	public function write(window:WindowHandle, state:UiHostRuntime):Void {
+		var application = state.app();
 		var renderer:Renderer = cast state.frameRenderer();
 		var directory:String = cast options.captureDirectory;
 		createDirectories(directory);
@@ -317,7 +331,7 @@ class DesktopFrameRecorder {
 		File.saveContent(directory + "/layout.json",
 			Json.stringify(application.context().inspect(), noFunctions, "  ") + "\n");
 		File.saveContent(directory + "/app-state.json",
-			Json.stringify(application.diagnosticState(), noFunctions, "  ") + "\n");
+			Json.stringify(diagnosticState(application), noFunctions, "  ") + "\n");
 		var metrics = application.context().frameMetrics;
 		var stats = renderer.stats();
 		var frameData:Dynamic = {
@@ -354,11 +368,18 @@ class DesktopFrameRecorder {
 			[for (event in eventHistory) Json.stringify({event: event})].join("\n") + "\n");
 		File.saveContent(directory + "/frame-timeline.jsonl",
 			[for (frame in frameHistory) Json.stringify(frame)].join("\n") + "\n");
-		var screenshot = directory + "/frame.png";
-		var screenshotResult = Sys.command("import", ["-window", options.title, screenshot]);
-		if (screenshotResult != 0)
-			File.saveContent(directory + "/screenshot-error.txt",
-				"ImageMagick import could not capture the application window (exit " + screenshotResult + ").\n");
+		if (Sys.systemName() == "Linux") {
+			var nativeWindow = NativeKit.nk_window_get_native(window);
+			if (nativeWindow.status != Result.Ok) {
+				File.saveContent(directory + "/screenshot-error.txt", NativeKit.nk_last_error() + "\n");
+			} else if (nativeWindow.out_native.get_kind() == NativeWindowKind.X11) {
+				var xid = nativeWindow.out_native.get_window();
+				var status = Sys.command("import", ["-window", Std.string(xid), directory + "/frame.png"]);
+				if (status != 0)
+					File.saveContent(directory + "/screenshot-error.txt",
+						'ImageMagick import could not capture the application window (exit $status).\n');
+			}
+		}
 		Sys.println("diagnostics captured in " + directory);
 	}
 

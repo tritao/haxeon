@@ -2,8 +2,10 @@ package tools;
 
 import build.execution.OutputCapture;
 import compiler.core.InternalError;
+import compiler.tools.Verbosity;
 import haxe.Json;
 import haxe.io.Path;
+import project.PackageManifest;
 import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;
@@ -30,8 +32,8 @@ typedef WatchChange = {
 class WatchRun {
 	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
 			liveHost:Null<String>, entry:String,
-			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>,
-			?session:build.BuildSession):Int {
+			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, verbosity:Verbosity,
+			?session:build.BuildSession, runner:Bool = false):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw new InternalError("haxeon run --watch currently requires Linux, macOS or Windows");
 		// Each edit's result goes to the events file too, and the app (and a live host) learns its path from the environment.
@@ -43,10 +45,14 @@ class WatchRun {
 			baseline = snapshot(project),
 			logPath = output + ".watch.log",
 			profile = startProfile(profiling),
-			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile),
+			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile, runner),
 			logOffset = 0,
 			result = 0;
 		var watcher = openWatcher(project, baseline);
+		if (verbosity.atLeast(Verbosity.Detailed))
+			Sys.println(watcher == null
+				? 'haxeon: polling every $POLL_SECONDS s' : 'haxeon: watching ${watcher.directories()} '
+				+ 'directories (${DirectoryWatcher.BACKEND})');
 		try {
 			while (true) {
 				// A notification wakes the loop at once; the timeout is the poll that backs it up, covering anything not watched.
@@ -80,6 +86,9 @@ class WatchRun {
 					// Writes that are not edits (the app's log, build output) also notify; do not scan again for them at once.
 					if (notified)
 						Sys.sleep(NOTIFIED_IDLE_SECONDS);
+					else if (session != null)
+						// No save is pending and the sources are as the last build found them: what it left for later is done now.
+						session.runIdleWork();
 					continue;
 				}
 				var previous = baseline;
@@ -122,8 +131,10 @@ class WatchRun {
 					WatchEvents.emit(events, "build-failed", build);
 					continue;
 				}
+				// A project resolved again may watch other directories; an edit of Haxe contents keeps the same one.
+				if (updated != project)
+					watcher = reopenWatcher(watcher, project);
 				project = updated;
-				watcher = reopenWatcher(watcher, project);
 				var published = liveHost == null ? null : publication(output);
 				WatchEvents.emit(events, "build-ok", build, published == null ? null : published.revision);
 				if (liveHost != null && compilerOnly && published != null)
@@ -146,7 +157,7 @@ class WatchRun {
 				finishProfile(profile);
 				profile = startProfile(profiling);
 				WatchEvents.emit(events, "reload", build, null, null, null, null, "restarting the app");
-				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
+				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile, runner);
 				logOffset = 0;
 			}
 		} catch (error:haxe.Exception) {
@@ -159,6 +170,8 @@ class WatchRun {
 		}
 		if (watcher != null)
 			watcher.close();
+		if (session != null)
+			session.runIdleWork();
 		process.close();
 		finishProfile(profile);
 		printLog(logPath, logOffset);
@@ -215,7 +228,10 @@ class WatchRun {
 				directories.push({path: directory, recursive: false});
 			}
 		}
-		return DirectoryWatcher.create(directories);
+		// The build's own output changes on every build and is never an edit.
+		var output = project.manifest.outputDir;
+		return DirectoryWatcher.create(directories,
+			[Path.isAbsolute(output) ? output : Path.join([project.root, output])]);
 	}
 
 	static function normalize(path:String):String {
@@ -261,8 +277,10 @@ class WatchRun {
 	}
 
 	/**
-		taskkill /F returns before the old app has closed its handles. While it still holds the
-		log, the new cmd.exe redirection fails and the relaunch exits at once.
+		Empties the app's log before the next app starts. The shell's redirection truncates it too, but only once the new
+		process runs: a read of the log before then would take the previous app's output for the new one's and skip as
+		much of the new output. On Windows it also waits out the old app: taskkill /F returns before it has closed its
+		handles, and while it still holds the log the new cmd.exe redirection fails and the relaunch exits at once.
 	**/
 	static function releaseLog(path:String):Void {
 		var deadline = Sys.time() + 10.0;
@@ -280,11 +298,18 @@ class WatchRun {
 
 	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String,
 			liveHost:Null<String>, entry:String,
-			profile:Null<ProfileCapture>):Process {
+			profile:Null<ProfileCapture>, runner:Bool):Process {
 		var runtimeOptions = profile == null ? [] : profile.runtimeArguments();
-		var commandArguments = [runtime].concat(runtimeOptions)
-			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry,
-			Json.stringify(arguments)]);
+		var program = liveHost == null ? [output].concat(arguments) : [
+			liveHost,
+			output,
+			entry,
+			Json.stringify(arguments)
+		];
+		// An app's runner (docs/design/PROJECT_BUILDS.md) runs the module it is given by its option, the rest as its arguments.
+		if (runner)
+			program = ["--haxeon-module=" + program[0]].concat(program.slice(1));
+		var commandArguments = [runtime].concat(runtimeOptions).concat(program);
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
 		// macOS strips DYLD_* from what the protected /bin/sh inherits, so the app would not find its native
 		// libraries. Set the search path again inside the shell.
@@ -293,8 +318,7 @@ class WatchRun {
 			command = "export DYLD_LIBRARY_PATH=" + quote(dyldPath) + "; " + command;
 		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
 		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
-		if (Sys.systemName() == "Windows")
-			releaseLog(logPath);
+		releaseLog(logPath);
 		var previous = Sys.getCwd();
 		try {
 			Sys.setCwd(cwd);
@@ -348,7 +372,9 @@ class WatchRun {
 	public static function snapshot(project:ResolvedProject):Map<String, String> {
 		var result:Map<String, String> = [];
 		for (item in project.packages.packages) {
-			record(Path.join([item.root, "haxeon.json"]), result);
+			// Either manifest name, so a migration (one appearing, the other going) is a change too.
+			for (name in [PackageManifest.TOML_NAME, PackageManifest.JSON_NAME])
+				record(Path.join([item.root, name]), result);
 			for (root in item.sourceRoots)
 				collect(root, result);
 			for (path in item.ffiInterfaces)
@@ -367,7 +393,7 @@ class WatchRun {
 	static function record(path:String, result:Map<String, String>):Void {
 		var stat = statOrNull(path);
 		if (stat != null && !isDirectory(stat))
-			result.set(path, signature(stat));
+			result.set(path, signature(path, stat));
 	}
 
 	static function collect(root:String, result:Map<String, String>):Void {
@@ -376,7 +402,7 @@ class WatchRun {
 			return;
 		if (!isDirectory(stat)) {
 			if (Path.extension(root) == "hx")
-				result.set(root, signature(stat));
+				result.set(root, signature(root, stat));
 			return;
 		}
 		for (name in FileSystem.readDirectory(root)) {
@@ -386,7 +412,7 @@ class WatchRun {
 			if (isDirectory(entry))
 				collect(path, result);
 			else if (Path.extension(path) == "hx")
-				result.set(path, signature(entry));
+				result.set(path, signature(path, entry));
 		}
 	}
 
@@ -402,12 +428,50 @@ class WatchRun {
 	static inline function isDirectory(stat:sys.FileStat):Bool
 		return (stat.mode & 0xF000) == 0x4000;
 
-	static inline function signature(stat:sys.FileStat):String
-		return '${stat.mtime.getTime()}:${stat.size}';
+	/**
+		A file's modification time and size, and for a file modified in the last `RACY_SECONDS` its content's digest too (`sameFile`).
+		The time has a resolution of one second, so a save of the same size within the second of the one before it (one digit for
+		another) would otherwise look unchanged and never be built.
+	**/
+	static function signature(path:String, stat:sys.FileStat):String {
+		var modified = stat.mtime.getTime(), text = '$modified:${stat.size}';
+		if (Date.now().getTime() - modified >= RACY_SECONDS * 1000.0)
+			return text;
+		var digest = digestOrNull(path);
+		return digest == null ? text : text + ":" + digest;
+	}
+
+	static inline final RACY_SECONDS = 2.0;
+
+	static function digestOrNull(path:String):Null<String> {
+		try {
+			return build.execution.ContentDigest.makeHex(File.getBytes(path));
+		} catch (_:Dynamic) {
+			return null;
+		}
+	}
+
+	/**
+		Whether the file at `path` is unchanged from its signature in an earlier snapshot (`before`) to a later one (`after`). With
+		the same time and size, an earlier signature without a digest was taken once no write could share that time any more, so the
+		file is unchanged; one with a digest is compared with the later digest, or with the file's when the later has none.
+	**/
+	static function sameFile(path:String, before:Null<String>, after:Null<String>):Bool {
+		if (before == after)
+			return true;
+		if (before == null || after == null)
+			return false;
+		var earlier = before.split(":"), later = after.split(":");
+		if (earlier[0] != later[0] || earlier[1] != later[1])
+			return false;
+		if (earlier.length < 3)
+			return true;
+		return earlier[2] == (later.length < 3 ? digestOrNull(path) : later[2]);
+	}
 
 	public static function same(a:Map<String, String>, b:Map<String, String>):Bool {
 		for (path in a.keys())
-			if (a.get(path) != b.get(path))
+			if (!sameFile(path, a.get(path), b.get(path)))
 				return false;
 		for (path in b.keys())
 			if (!a.exists(path))
@@ -431,7 +495,7 @@ class WatchRun {
 
 	static function haxeOnly(before:Map<String, String>, after:Map<String, String>):Bool {
 		for (path in before.keys())
-			if (before.get(path) != after.get(path) && Path.extension(path) != "hx")
+			if (!sameFile(path, before.get(path), after.get(path)) && Path.extension(path) != "hx")
 				return false;
 		for (path in after.keys())
 			if (!before.exists(path) && Path.extension(path) != "hx")
@@ -457,7 +521,7 @@ class WatchRun {
 	static function changedPaths(before:Map<String, String>, after:Map<String, String>):Array<String> {
 		var result:Array<String> = [];
 		for (path in after.keys())
-			if (before.get(path) != after.get(path))
+			if (!sameFile(path, before.get(path), after.get(path)))
 				result.push(path);
 		for (path in before.keys())
 			if (!after.exists(path))

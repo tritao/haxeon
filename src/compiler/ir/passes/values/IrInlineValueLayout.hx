@@ -1,11 +1,13 @@
 package compiler.ir.passes.values;
 
 import compiler.core.InternalError;
+import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.model.Ir.IrScalarStorage;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrFieldStorage;
 import compiler.ir.model.IrObjectTable;
+import compiler.ir.model.IrTypeIdentity;
 
 /** One storage slot in a recursively flattened value. */
 typedef IrInlineValueSlot = {
@@ -26,11 +28,37 @@ typedef IrInlineValueSlot = {
  * objects expand recursively. Optional values contribute a presence slot followed by their payload slots. Keeping the
  * source path separate from the generated physical name lets field-place lowering preserve aliases and diagnostics.
  */
+@:nullSafety(Strict)
 class IrInlineValueLayout {
 	final objects:IrObjectTable;
 
 	public function new(objects:IrObjectTable)
 		this.objects = objects;
+
+	/**
+	 * The text of the value objects' declarations among `objects`, in their order: what a rewrite reads of the program when it
+	 * reads which objects are values and their layouts, so a memoized rewrite states it as one fact (`declarationsFact`).
+	 */
+	public static function valueDeclarations(objects:Array<IrObject>):String {
+		var parts:Array<String> = [];
+		for (object in objects)
+			if (object.isValue) {
+				parts.push('value ${object.name} ${object.base} ${Std.string(object.nativeLayout)}');
+				for (field in object.fields)
+					parts.push('field ${field.name} ${IrTypeIdentity.text(field.type)} ${Std.string(field.nativeLayout)} '
+						+ '${Std.string(field.scalarStorage)} ${Std.string(field.nullableScalarStorage)}');
+			}
+		return parts.join("\n");
+	}
+
+	/** A fact's value naming `valueDeclarations(objects)` and `extra` in `lineage`'s session, computed when asked; 0 without one. */
+	public static function declarationsFact(objects:Array<IrObject>,
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, extra = ""):() -> Int {
+				if (lineage == null)
+					return () -> 0;
+				var facts = lineage.memos.facts;
+				return () -> facts.intern(valueDeclarations(objects) + extra);
+			}
 
 	public function slots(type:IrType):Array<IrInlineValueSlot> {
 		var result:Array<IrInlineValueSlot> = [];

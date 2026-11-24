@@ -20,6 +20,11 @@ typedef SemanticLifecycleMetrics = {
 	final signatureTypingMs:Float;
 }
 
+typedef DeclarationPositions = {
+	final classes:Map<String, Int>;
+	final abstracts:Map<String, Int>;
+}
+
 typedef SemanticMethodInfo = {
 	final owner:String;
 	final isStatic:Bool;
@@ -47,6 +52,14 @@ class SemanticProgram {
 	 * own has none.
 	 */
 	public var staticExtensions:StaticExtensionTable = StaticExtensionTable.empty();
+
+	/**
+	 * The canonical class each of `program.classes` was last refreshed from by `replaceBodies`, by position; null for one it has
+	 * not refreshed (and past its end). A class whose canonical form has the same parts has nothing to refresh.
+	 */
+	var classSources:Array<Null<AstClass>>;
+
+	var positions:Null<DeclarationPositions> = null;
 
 	public static function analyze(program:AstProgram):SemanticProgram {
 		return analyzeThrough(program, SignatureTyped);
@@ -82,55 +95,97 @@ class SemanticProgram {
 		});
 	}
 
-	/** Reuses the validated declarations when only function bodies and field initializers changed. */
+	/**
+	 * Reuses the validated declarations when only function bodies and field initializers changed. Only what changed is made again:
+	 * the declarations whose canonical form `current` holds anew (a module whose canonical declarations were made again), and the
+	 * selected functions, which take their current bodies. Everything else, the signature tables included, is shared with this
+	 * program, which stays as it was.
+	 */
 	public function replaceBodies(current:AstProgram, selected:Map<String, Bool>):SemanticProgram {
-		var currentByName:Map<String, AstFunction> = [];
-		for (fn in current.functions)
-			currentByName.set(fn.name, fn);
-		var functions:Array<AstFunction> = [];
-		for (fn in program.functions)
-			if (selected.exists(fn.name) && currentByName.exists(fn.name))
-				functions.push(withBody(fn, currentByName.get(fn.name)));
-			else
-				functions.push(fn);
-		var currentClasses = [for (decl in current.classes) decl.name => decl],
-			classes = program.classes.copy();
-		for (index in 0...classes.length) {
+		var functions = program.functions,
+			classes = program.classes,
+			abstracts = program.abstracts,
+			changedSignatures:Array<{name:String, fn:AstFunction}> = [],
+			nextClassSources = classSources,
+			selectedClasses:Map<String, Bool> = [],
+			selectedAbstracts:Map<String, Bool> = [],
+			selectsFunctions = false;
+		for (name in selected.keys()) {
+			var info = methodInfo.get(name);
+			if (info == null)
+				selectsFunctions = true;
+			else if (declarationPositions().classes.exists(info.owner))
+				selectedClasses.set(info.owner, true);
+			else if (declarationPositions().abstracts.exists(info.owner))
+				selectedAbstracts.set(info.owner, true);
+		}
+		if (selectsFunctions) {
+			var currentByName:Map<String, AstFunction> = [for (fn in current.functions) fn.name => fn];
+			functions = [for (fn in program.functions) {
+				var replacement = currentByName.get(fn.name);
+				if (selected.exists(fn.name) && replacement != null) {
+					var next = withBody(fn, replacement);
+					changedSignatures.push({name: fn.name, fn: next});
+					declarations.declaredTypes.forgetFunction(fn);
+					next;
+				} else fn;
+			}];
+		}
+		// The current classes are in the validated program's order (`SemanticAssembly`, `InterfaceFieldAccessors.withAccessors`); a
+		// class not found at its position is looked up by name.
+		var currentClasses:Null<Map<String, AstClass>> = null;
+		function currentClass(index:Int, name:String):Null<AstClass> {
+			var candidate = index < current.classes.length ? current.classes[index] : null;
+			if (candidate != null && candidate.name == name)
+				return candidate;
+			if (currentClasses == null)
+				currentClasses = [for (decl in current.classes) decl.name => decl];
+			return currentClasses.get(name);
+		}
+		for (index in 0...program.classes.length) {
 			var decl = program.classes[index],
-				replacement = currentClasses.get(decl.name);
-			if (replacement == null)
+				replacement = currentClass(index, decl.name);
+			if (replacement == null
+				|| (index < classSources.length && sameRefreshedParts(replacement, classSources[index])
+				&& !selectedClasses.exists(decl.name)))
 				continue;
-			var currentMethods = [for (method in replacement.methods) method.name => method],
-				methods = decl.methods.copy();
-			for (methodIndex in 0...methods.length) {
-				var name = decl.name + "." + methods[methodIndex].name,
-					currentMethod = currentMethods.get(methods[methodIndex].name);
-				if (selected.exists(name) && currentMethod != null)
-					methods[methodIndex] = withBody(methods[methodIndex], currentMethod);
+			if (classes == program.classes) {
+				classes = program.classes.copy();
+				nextClassSources = [
+					for (position in 0...program.classes.length)
+						position < classSources.length ? classSources[position] : null
+				];
 			}
+			var methods = withSelectedBodies(decl.name, decl.methods, replacement.methods, selected, changedSignatures,
+				null);
+			forgetReplaced(decl.methods, methods);
 			var next:Dynamic = copyWithMethods(decl, methods);
 			// Keep validated field types while refreshing source-bearing initializer syntax.
 			Reflect.setField(next, "span", replacement.span);
 			Reflect.setField(next, "metadata", replacement.metadata);
-			Reflect.setField(next, "fields", withInitializers(decl.fields, replacement.fields));
+			var fields = withInitializers(decl.fields, replacement.fields);
+			for (index in 0...decl.fields.length)
+				if (fields[index] != decl.fields[index])
+					declarations.declaredTypes.forgetField(decl.fields[index]);
+			Reflect.setField(next, "fields", fields);
 			classes[index] = cast next;
+			nextClassSources[index] = replacement;
 		}
-		var currentAbstracts = [for (decl in current.abstracts) decl.name => decl],
+		if (selectedAbstracts.keys().hasNext()) {
+			var currentAbstracts = [for (decl in current.abstracts) decl.name => decl];
 			abstracts = program.abstracts.copy();
-		for (index in 0...abstracts.length) {
-			var decl = program.abstracts[index],
-				replacement = currentAbstracts.get(decl.name);
-			if (replacement == null)
-				continue;
-			var currentMethods = [for (method in replacement.methods) method.name => method],
-				methods = decl.methods.copy();
-			for (methodIndex in 0...methods.length) {
-				var name = decl.name + "." + methods[methodIndex].name,
-					currentMethod = currentMethods.get(methods[methodIndex].name);
-				if (selected.exists(name) && currentMethod != null)
-					methods[methodIndex] = withBody(methods[methodIndex], currentMethod);
+			for (owner in selectedAbstracts.keys()) {
+				var index = declarationPositions().abstracts.get(owner),
+					decl = program.abstracts[index],
+					replacement = currentAbstracts.get(owner);
+				if (replacement != null) {
+					var methods = withSelectedBodies(decl.name, decl.methods, replacement.methods, selected,
+						changedSignatures,
+						decl.typeParameters);
+					forgetReplaced(decl.methods, methods);
+					abstracts[index] = cast copyWithMethods(decl, methods);
+				}
 			}
-			abstracts[index] = cast copyWithMethods(decl, methods);
 		}
 		var nextProgram:AstProgram = {
 			packageName: program.packageName,
@@ -143,30 +198,104 @@ class SemanticProgram {
 			classes: classes,
 			functions: functions
 		};
-		var nextSignatures:Map<String, AstFunction> = [];
-		for (name => fn in signatures)
-			nextSignatures.set(name, fn);
-		for (fn in functions)
-			if (selected.exists(fn.name))
-				nextSignatures.set(fn.name, fn);
-		for (decl in classes)
-			for (method in decl.methods) {
-				var name = decl.name + "." + method.name;
-				if (selected.exists(name))
-					nextSignatures.set(name, method);
+		// The enums are the current program's: those made again are other objects than the ones this program resolved.
+		var currentEnums:Map<String, compiler.syntax.Ast.AstEnum> = [for (decl in current.enums) decl.name => decl];
+		for (decl in program.enums)
+			if (currentEnums.get(decl.name) != decl)
+				declarations.declaredTypes.forgetEnum(decl);
+		var nextSignatures = signatures,
+			nextSignaturesByOwner = signaturesByOwner;
+		for (changed in changedSignatures) {
+			var previous = signatures.get(changed.name);
+			if (previous != null && previous != changed.fn)
+				declarations.declaredTypes.forgetFunction(previous);
+		}
+		if (changedSignatures.length > 0) {
+			nextSignatures = signatures.copy();
+			nextSignaturesByOwner = signaturesByOwner.copy();
+			var copiedOwners:Map<String, Bool> = [];
+			for (changed in changedSignatures) {
+				nextSignatures.set(changed.name, changed.fn);
+				var separator = changed.name.lastIndexOf(".");
+				if (separator < 0)
+					continue;
+				var owner = changed.name.substring(0, separator),
+					members = nextSignaturesByOwner.get(owner);
+				if (members == null)
+					continue;
+				if (!copiedOwners.exists(owner)) {
+					members = members.copy();
+					nextSignaturesByOwner.set(owner, members);
+					copiedOwners.set(owner, true);
+				}
+				members.set(changed.name.substring(separator + 1), changed.fn);
 			}
-		for (decl in abstracts)
-			for (method in decl.methods) {
-				var name = decl.name + "." + method.name;
-				if (selected.exists(name))
-					nextSignatures.set(name, withOwnerTypeParameters(method, decl.typeParameters));
-			}
-		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations,
-			new DeclarationLifecycle(declarations, SignatureTyped), {
+		}
+		var next = new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations,
+			lifecycle.restarted(SignatureTyped), {
 				declarationMs: 0.0,
 				shapeConnectionMs: 0.0,
 				signatureTypingMs: 0.0
+			}, nextSignaturesByOwner, methodsByOwner);
+		next.classSources = nextClassSources;
+		next.positions = positions;
+		return next;
+	}
+
+	/** Forgets what was resolved for each method of `previous` that `next` replaced (`DeclaredTypes.forgetFunction`). */
+	function forgetReplaced(previous:Array<AstFunction>, next:Array<AstFunction>):Void
+		if (previous != next)
+			for (index in 0...previous.length)
+				if (next[index] != previous[index])
+					declarations.declaredTypes.forgetFunction(previous[index]);
+
+	/**
+	 * Whether refreshing a class from `current` gives what refreshing it from `source` gave: the parts a refresh takes are the same
+	 * objects. (A class given an implicit constructor is another object in every build, with the same parts.)
+	 */
+	static function sameRefreshedParts(current:AstClass, source:Null<AstClass>):Bool
+		return source != null && current.span == source.span && current.metadata == source.metadata
+			&& current.fields == source.fields;
+
+	/**
+	 * `methods` with the selected ones of `owner` given their bodies in `current`, each recorded in `changed` as the signature table
+	 * holds it (with the owner's type parameters for an abstract's); `methods` itself when none is selected.
+	 */
+	static function withSelectedBodies(owner:String, methods:Array<AstFunction>, current:Array<AstFunction>,
+			selected:Map<String, Bool>, changed:Array<{name:String, fn:AstFunction}>,
+			ownerParameters:Null<Array<String>>):Array<AstFunction> {
+		var result = methods, currentMethods:Null<Map<String, AstFunction>> = null;
+		for (index in 0...methods.length) {
+			var name = owner + "." + methods[index].name;
+			if (!selected.exists(name))
+				continue;
+			if (currentMethods == null)
+				currentMethods = [for (method in current) method.name => method];
+			var currentMethod = currentMethods.get(methods[index].name);
+			if (currentMethod == null)
+				continue;
+			if (result == methods)
+				result = methods.copy();
+			result[index] = withBody(methods[index], currentMethod);
+			changed.push({
+				name: name,
+				fn: ownerParameters == null ? result[index] : withOwnerTypeParameters(result[index], ownerParameters)
 			});
+		}
+		return result;
+	}
+
+	/** The position of each class and abstract in `program`, which the programs `replaceBodies` makes from this one share. */
+	function declarationPositions():DeclarationPositions {
+		var known = positions;
+		if (known == null) {
+			known = {
+				classes: [for (index in 0...program.classes.length) program.classes[index].name => index],
+				abstracts: [for (index in 0...program.abstracts.length) program.abstracts[index].name => index]
+			};
+			positions = known;
+		}
+		return known;
 	}
 
 	static function withInitializers(fields:Array<compiler.syntax.Ast.AstField>,
@@ -217,7 +346,9 @@ class SemanticProgram {
 			?preparedSignatures:Map<String, AstFunction>,
 			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations,
 			?preparedLifecycle:DeclarationLifecycle,
-			?preparedLifecycleMetrics:SemanticLifecycleMetrics) {
+			?preparedLifecycleMetrics:SemanticLifecycleMetrics,
+			?preparedSignaturesByOwner:Map<String, Map<String, AstFunction>>,
+			?preparedMethodsByOwner:Map<String, Map<String, SemanticMethodInfo>>) {
 		this.program = program;
 		this.declarations = declarations;
 		relations = preparedRelations == null ? new TypeRelations(declarations) : preparedRelations;
@@ -235,14 +366,16 @@ class SemanticProgram {
 			fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures,
 				methodInfo);
 		}
-		signaturesByOwner = QualifiedName.byOwner(signatures);
-		methodsByOwner = QualifiedName.byOwner(methodInfo);
+		signaturesByOwner = preparedSignaturesByOwner == null
+			? QualifiedName.byOwner(signatures) : preparedSignaturesByOwner;
+		methodsByOwner = preparedMethodsByOwner == null ? QualifiedName.byOwner(methodInfo) : preparedMethodsByOwner;
+		classSources = [];
 	}
 
 	/**
 	 * The table of function signatures typing resolves calls against: interface, class and abstract methods under their
-	 * qualified names, then the program's functions. Purity inference runs over it at typing time, and the drift check of
-	 * `SemanticAssembly` must run over the same table to agree with what a cached body relied on.
+	 * qualified names, then the program's functions. Purity inference runs over it at typing time, and `SemanticAssembly` infers
+	 * the answers typed bodies read (`FactAspect.Purity`) over the same table, so that the two agree.
 	 */
 	public static function signatureTable(program:AstProgram):Map<String, AstFunction> {
 		var signatures:Map<String, AstFunction> = [];

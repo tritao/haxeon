@@ -1,8 +1,10 @@
 package compiler.types.typing;
 
+import compiler.types.NominalInheritance;
 import compiler.types.analysis.BindingWalker;
 
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
@@ -31,6 +33,7 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.analysis.Scope.LocalBinding;
+import compiler.types.typing.NullSafety.NullSafetyUse;
 
 typedef StaticFieldInfo = {owner:String, type:CompilerType};
 
@@ -128,6 +131,43 @@ class StatementTyper {
 			span));
 	}
 
+	/**
+	 * Whether the local function `name` declared at `span` refers to itself in its own body. Its storage then asks for a
+	 * cell (`StorageRequirements`); a local function never assigned has no other reason to.
+	 */
+	function refersToItself(name:String, span:SourceSpan):Bool {
+		var context = session.currentContext, declaration = BindingWalker.key(name, span);
+		return context.storage.candidateKind(declaration) == MutableCapture
+			&& !context.assignedDeclarations.exists(declaration);
+	}
+
+	/**
+	 * The type a local function that refers to itself has in its own body, when it declares no result: its parameters'
+	 * types, as a declared result would give them, and a type variable for the result, which typing the body fills, as
+	 * Haxe binds the name before typing the body. Null where no body is being typed.
+	 */
+	function selfReferenceType(name:String, arguments:Array<compiler.syntax.Ast.AstArgument>,
+			span:SourceSpan):Null<CompilerType> {
+		var context = session.currentContext, parameters:Array<CompilerType> = [];
+		for (argument in arguments) {
+			var parameter = switch argument.type {
+				case InferredType: session.monomorphs.create('the type of parameter "${argument.name}"', argument.span);
+				default: session.declarations.resolve(compiler.syntax.Parser.localParameterType(argument),
+					argument.span, context.typeSubstitutions);
+			};
+			if (parameter == null)
+				return null;
+			parameters.push(parameter);
+		}
+		var result = session.monomorphs.create('the result of local function "$name"', span);
+		if (result == null)
+			return null;
+		return TFunction(parameters, result, compiler.types.FunctionTypes.canonical([
+			for (argument in arguments)
+				compiler.syntax.AstPredicates.isOptionalArgument(argument)
+		]));
+	}
+
 	/** A `var` declaration, or the declaration of `temporary`, a local the typer introduced under `name`. */
 	function typeLocalDeclaration(name:String, declared:Null<AstType>, initializer:AstExpression, span:SourceSpan,
 			scope:Scope, statements:Array<AstStatement>, statementIndex:Int,
@@ -162,10 +202,18 @@ class StatementTyper {
 		var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
 			span,
 			context.typeSubstitutions);
+		if (declaredType == null)
+			switch initializer {
+				case Lambda(arguments, _, _, _, _, true) if (refersToItself(name, span)):
+					declaredType = selfReferenceType(name, arguments, span);
+				default:
+			}
+		if (declaredType != null)
+			registerDeclaredType(declaredType);
 		var predeclared:Null<LocalBinding> = null, recursiveCell:Null<String> = null;
 		if (declaredType != null)
 			switch initializer {
-				case Lambda(_, _, _, _):
+				case Lambda(_, _, _, _, _, true):
 					var binding = scope.define(name, declaredType, span, true, null, false, localFunction, null,
 						temporary);
 					predeclared = binding;
@@ -182,7 +230,7 @@ class StatementTyper {
 				declaredType = TNullable(variable);
 		}
 		if (declaredType != null)
-			value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002");
+			value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002", Assignment(span));
 		else
 			value = ValueCopy.bind(session, value, value.type);
 		// Its type's empty variables (`var list = []`, `var x = null`) are this local's: one nothing fills is reported by it.
@@ -214,6 +262,13 @@ class StatementTyper {
 		return [TVar(binding.id, value, span)];
 	}
 
+	/**
+	 * A local's written type is a type of the program even when no value of it is ever made (`var o:{x:Int} = null`): the local,
+	 * an environment capturing it and a field read through it all name the structure.
+	 */
+	function registerDeclaredType(type:CompilerType):Void
+		new AnonymousTypeRegistry(session).register(type);
+
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>,
 			statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
@@ -226,6 +281,7 @@ class StatementTyper {
 					default: false;
 				}) ? uninitializedType(name, span) : session.declarations.resolve(declared, span,
 					context.typeSubstitutions);
+				registerDeclaredType(declaredType);
 				var binding = scope.define(name, declaredType, span, false);
 				bodyTyper.bindCell(binding, declaredType);
 				[TDeclare(binding.id, declaredType, span)];
@@ -270,7 +326,7 @@ class StatementTyper {
 					if (expected == null)
 						context.inferredResult = value.type;
 					else
-						value = bodyTyper.coerce(value, expected, "return", "E1003");
+						value = bodyTyper.coerce(value, expected, "return", "E1003", Return(span));
 					output.push(TReturn(value, span));
 				}
 				output;
@@ -457,7 +513,15 @@ class StatementTyper {
 				fail("E1007", "Cannot set inline closure", span);
 			if (binding == null) {
 				var thisType = scope.receiverType(),
-					instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
+					owner = session.currentContext.lexicalOwner;
+				var instanceOwner = thisType == null ? null : NominalInheritance.name(thisType);
+				if (instanceOwner != null && DynamicMethods.declaration(session, instanceOwner, name, false) != null)
+					return methodAssignment(bodyTyper.implicitReceiver(span, scope), name, expression, span, scope,
+						assigned);
+				if (owner != null && DynamicMethods.declaration(session, owner, name, true) != null)
+					return methodAssignment(new TypedExpression(TClassRef(owner), TInstance(Class, owner, []), span),
+						name, expression, span, scope, assigned);
+				var instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
 				if (instanceField != null) {
 					if (thisType == null)
 						throw new InternalError('Missing "this" type for field "$name"');
@@ -468,7 +532,8 @@ class StatementTyper {
 					PropertyWriteRules.rejectInstanceMutation(session, thisType, name, span);
 					var assignedValue = bodyTyper.typeExpression(expression, scope, instanceField),
 						value = stored(assigned,
-							bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002"), assignedValue);
+							bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002", Assignment(span)),
+							assignedValue);
 					var receiver = bodyTyper.typeExpression(Variable("this", span), scope),
 						propertySetter = ClassProperties.instanceAccessor(session, thisType, name, false, receiver,
 							span);
@@ -488,23 +553,25 @@ class StatementTyper {
 						session.representation.resolveField(thisType, name, span).physical),
 						span);
 				}
-				var owner = session.currentContext.lexicalOwner,
-					staticField:Null<StaticFieldInfo> = null;
+				var staticField:Null<StaticFieldInfo> = null;
 				if (owner != null)
 					staticField = bodyTyper.findStaticFieldNullable(owner, name);
 				if (staticField == null)
-					fail("E1005", 'Unknown variable "$name"', span);
+					throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+						span));
 				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, name, span);
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, name, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = stored(assigned,
-						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002"), assignedValue);
+						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002", Assignment(span)),
+						assignedValue);
 				return staticStore(staticField.owner, name, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
 			}
 			var expected = scope.declaredTypeOf(binding);
 			var assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-				value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002"),
+				value = stored(assigned,
+					bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002", Assignment(span)),
 					assignedValue),
 				statement:TypedStatement;
 			if (scope.isCaptured(binding)) {
@@ -524,10 +591,16 @@ class StatementTyper {
 
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
-			object = TypeParameterMembers.receiver(session, bodyTyper,
-				BodyTyper.unwrapNullable(bodyTyper.typeExpression(Variable(objectName, span), scope)), fieldName, span);
+			declaredObject = bodyTyper.typeExpression(Variable(objectName, span), scope),
+			object = TypeParameterMembers.receiver(session, bodyTyper, BodyTyper.unwrapNullable(declaredObject),
+				fieldName,
+				span);
+		session.nullSafety.checkReceiver(declaredObject, fieldName, BodyTyper.referencePrefixSpan(name, span));
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
+		var methodStore = methodAssignment(object, fieldName, expression, span, scope, assigned);
+		if (methodStore != null)
+			return methodStore;
 		var propertyWrite = bodyTyper.accessorPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
@@ -543,14 +616,16 @@ class StatementTyper {
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = stored(assigned,
-						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002"), assignedValue);
+						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002", Assignment(span)),
+						assignedValue);
 				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$name"', "E1002"),
+					value = stored(assigned,
+						bodyTyper.coerce(assignedValue, expected, 'field "$name"', "E1002", Assignment(span)),
 						assignedValue),
 					setter:Null<String> = platformField == null ? null : platformField.set,
 					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
@@ -580,8 +655,12 @@ class StatementTyper {
 
 	public function typeIndexAssignment(array:AstExpression, offset:AstExpression, expression:AstExpression,
 			span:SourceSpan, scope:Scope, ?assigned:AssignedValue):TypedStatement {
-		var typedArray = BodyTyper.unwrapNullable(bodyTyper.typeExpression(array, scope)),
-			typedIndex = bodyTyper.typeExpression(offset, scope);
+		var declaredArray = bodyTyper.typeExpression(array, scope),
+			typedArray = BodyTyper.unwrapNullable(declaredArray),
+			typedIndex = bodyTyper.typeExpression(offset, scope),
+			accessSpan = new SourceSpan(span.file, compiler.syntax.Parser.expressionSpan(array).start,
+				compiler.syntax.Parser.expressionSpan(offset).end + 1);
+		session.nullSafety.checkArrayAccess(declaredArray, accessSpan);
 		return switch typedArray.type {
 			case TDynamic:
 				// `dynamicValue[i] = v`: stored when the program runs, as Haxe/HL stores into the array the value holds.
@@ -590,21 +669,22 @@ class StatementTyper {
 					value = bodyTyper.coerce(stored(assigned, assignedValue, assignedValue), TDynamic, "array element",
 						"E1002");
 				scope.invalidateExpressionNamespace("array-entry:");
-				session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 				TExpression(new TypedExpression(TCall("haxeon.DynamicOps.setIndex", [typedArray, index, value]), TVoid,
 					span), span);
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
-				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", "E1002");
+				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", "E1002", NamedArgument("set", "k"));
 				var assignedValue = bodyTyper.typeExpression(expression, scope, mapValue),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, mapValue, "map value", "E1002"),
+					value = stored(assigned, bodyTyper.coerce(assignedValue, mapValue, "map value", "E1002",
+						NamedArgument("set", "v")),
 						assignedValue),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
 				if (entryPath != null)
 					scope.refineExpression(entryPath, mapValue, FlowAnalysis.entryFactsSurviveCalls(scope, typedArray));
 				TMapAssign(typedArray, typedIndex, value, span);
 			default:
-				typedIndex = ConversionResolver.plainValue(typedIndex, bodyTyper);
+				typedIndex = ConversionResolver.plainValue(typedIndex, bodyTyper, Index(accessSpan));
 				if ((switch typedIndex.type {
 					// A Dynamic index (an untyped `cast`) unifies with Int, as in Haxe.
 					case TNever | TDynamic: true;
@@ -619,8 +699,8 @@ class StatementTyper {
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = bodyTyper.arrayElementType(typedArray.type, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, element),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, element, "array element", "E1002"),
-						assignedValue);
+					value = stored(assigned, bodyTyper.coerce(assignedValue, element, "array element", "E1002",
+						Assignment(span)), assignedValue);
 				// A stored value can replace any literal-index element reached through an alias.
 				// Drop these transient refinements globally rather than retaining an unsound path fact.
 				scope.invalidateExpressionNamespace("array-entry:");
@@ -639,7 +719,7 @@ class StatementTyper {
 
 	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression,
 			span:SourceSpan):TypedStatement {
-		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
 		var boxed = bodyTyper.coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
 			call = new TypedExpression(TCall("Reflect.setField", [
 				object,
@@ -652,10 +732,17 @@ class StatementTyper {
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression,
 			span:SourceSpan,
 			scope:Scope, ?assigned:AssignedValue):TypedStatement {
-		var object = TypeParameterMembers.receiver(session, bodyTyper,
-			BodyTyper.unwrapNullable(bodyTyper.typeExpression(receiverExpression, scope)), fieldName, span);
+		var declaredObject = bodyTyper.typeExpression(receiverExpression, scope),
+			object = TypeParameterMembers.receiver(session, bodyTyper, BodyTyper.unwrapNullable(declaredObject),
+				fieldName,
+				span);
+		session.nullSafety.checkReceiver(declaredObject, fieldName,
+			NullSafety.memberSpan(declaredObject.span, fieldName, span));
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
+		var methodStore = methodAssignment(object, fieldName, expression, span, scope, assigned);
+		if (methodStore != null)
+			return methodStore;
 		var propertyWrite = bodyTyper.accessorPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
@@ -671,15 +758,15 @@ class StatementTyper {
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = stored(assigned, bodyTyper.coerce(assignedValue, staticField.type, 'field "$fieldName"',
-						"E1002"), assignedValue);
+						"E1002", Assignment(span)), assignedValue);
 				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"', "E1002"),
-						assignedValue);
+					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"', "E1002",
+						Assignment(span)), assignedValue);
 				var setter:Null<String> = platformField == null ? null : platformField.set,
 					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
 						false, object, span) : null;
@@ -706,6 +793,25 @@ class StatementTyper {
 				}
 				statement;
 		};
+	}
+
+	function methodAssignment(object:TypedExpression, name:String, expression:AstExpression, span:SourceSpan,
+			scope:Scope, assigned:Null<AssignedValue>):Null<TypedStatement> {
+		var owner = NominalInheritance.name(object.type),
+			isStatic = object.expression.match(TClassRef(_));
+		if (owner == null || DynamicMethods.declaration(session, owner, name, isStatic) == null)
+			return null;
+		var field = DynamicMethods.resolve(session, object, name, span);
+		if (field == null)
+			fail("E1002", "Cannot rebind this method : please use 'dynamic' before method declaration",
+				AbstractProperties.nameSpan(span, name, false));
+		var source = bodyTyper.typeExpression(expression, scope, field.type),
+			value = stored(assigned, bodyTyper.coerce(source, field.type, 'field "$name"', "E1002", Assignment(span)),
+				source);
+		scope.invalidateField(name);
+		return isStatic ? staticStore(owner, name, value, source.type, field.type, span, scope, assigned)
+			: TFieldAssign(object, name, session.representation.boundaryCast(value, field.storage.type, object.type),
+			span);
 	}
 
 	/** A store of `value` to the static `name` of `owner`: a call of its setter where it is a property (`ClassProperties`). */
@@ -803,7 +909,7 @@ class StatementTyper {
 			span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, scope),
-			bodyTyper);
+			bodyTyper, Condition("if"));
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "If condition must be Bool", span);
 		var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
@@ -845,7 +951,7 @@ class StatementTyper {
 			result:Null<CompilerType>):TypedStatement {
 		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]), null, span);
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, scope),
-			bodyTyper);
+			bodyTyper, Condition("while"));
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "While condition must be Bool", span);
 		var context = session.currentContext;
@@ -868,7 +974,7 @@ class StatementTyper {
 		var typedBody = bodyTyper.typeStatements(body, bodyScope, result);
 		context.loopDepth--;
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, bodyScope),
-			bodyTyper);
+			bodyTyper, Condition("while"));
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "Do-while condition must be Bool", span);
 		// The body runs at least once, so what it assigns and narrows holds afterwards, unless a break or continue can skip the
@@ -883,7 +989,9 @@ class StatementTyper {
 	public function typeForIn(name:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>,
 			span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
-		var typedIterable = BodyTyper.unwrapNullable(bodyTyper.typeExpression(iterable, scope));
+		var declaredIterable = bodyTyper.typeExpression(iterable, scope),
+			typedIterable = BodyTyper.unwrapNullable(declaredIterable);
+		session.nullSafety.checkIterable(declaredIterable);
 		if (IterationProtocol.structuralIterator(typedIterable.type))
 			IterationProtocol.invalidateEffects(session, scope);
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
@@ -911,6 +1019,9 @@ class StatementTyper {
 							Range(IntegerLiteral(0, span), Member(TemporaryVariable(array, span), "length",
 							span), span), loopBody, span)
 					], [], span, scope, result);
+				case TMap(_, _):
+				case type if (IterationProtocol.structuralIterator(type) || type.match(TIterator(_))):
+					return typeKeyValueForIn(name, valueName, iterable, typedIterable, body, span, scope, result);
 				default:
 			}
 		var originalIterable = typedIterable;
@@ -983,6 +1094,46 @@ class StatementTyper {
 			typedBody, span);
 	}
 
+	/**
+	 * `for (key => value in iterable)` over anything but an array or a map, as Haxe types it: a loop over the entries of
+	 * `keyValueSource`, each `next()` giving the `key` and `value` fields the loop binds afresh for every step.
+	 */
+	function typeKeyValueForIn(name:String, valueName:String, iterable:AstExpression, typedIterable:TypedExpression,
+			body:Array<AstStatement>, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+		var iterator = new TemporaryLocal("__haxeon_key_value_iterator" + span.start),
+			entry = new TemporaryLocal("__haxeon_key_value_entry" + span.start),
+			step:Array<AstStatement> = [
+				TemporaryDeclaration(entry, null, MethodCall(TemporaryVariable(iterator, span), "next", [], span),
+					span),
+				VarDeclaration(name, null, Member(TemporaryVariable(entry, span), "key", span), span),
+				VarDeclaration(valueName, null, Member(TemporaryVariable(entry, span), "value", span), span)
+			];
+		for (statement in body)
+			step.push(statement);
+		return typeIf(BoolLiteral(true, span), [
+			TemporaryDeclaration(iterator, null, keyValueSource(session, iterable, typedIterable, span), span),
+			While(MethodCall(TemporaryVariable(iterator, span), "hasNext", [], span), step, span)
+		], [], span, scope, result);
+	}
+
+	/**
+	 * The iterator a key-value loop over `iterable` (typed as `typedIterable`, neither an array nor a map) reads its entries from,
+	 * as Haxe finds it: the value's `keyValueIterator()`, else the value itself when it is an iterator. Its entries must have
+	 * `key` and `value` fields; Haxe reports a missing one at the iterated expression (`Int has no field key`).
+	 */
+	public static function keyValueSource(session:TypingSession, iterable:AstExpression, typedIterable:TypedExpression,
+			span:SourceSpan):AstExpression {
+		var type = typedIterable.type, declarations = session.declarations;
+		var iteratorType = IterationProtocol.result(declarations, type, "keyValueIterator");
+		var entryType = IterationProtocol.element(declarations, iteratorType ?? type, false);
+		if (entryType == null)
+			throw MissingMember.field(MissingMember.haxeType(type), "keyValueIterator", typedIterable.span);
+		for (field in ["key", "value"])
+			if (!entryType.match(TDynamic) && IterationProtocol.method(declarations, entryType, field) == null)
+				throw MissingMember.field(MissingMember.haxeType(entryType), field, typedIterable.span);
+		return iteratorType == null ? iterable : MethodCall(iterable, "keyValueIterator", [], span);
+	}
+
 	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>,
 			hasDefault:Bool, span:SourceSpan,
 			scope:Scope, result:Null<CompilerType>):TypedStatement {
@@ -1019,7 +1170,7 @@ class StatementTyper {
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null
 					? null : bodyTyper.coerce(bodyTyper.typeExpression(parsedGuard, caseScope),
-					TBool, "switch guard", "E1003");
+					TBool, "switch guard", "E1003", Condition("if"));
 			if (typedGuard != null)
 				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
 			var typedBody = bodyTyper.typeStatements(switchCase.statements, caseScope, result);

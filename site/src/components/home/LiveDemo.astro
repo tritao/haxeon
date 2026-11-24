@@ -1,0 +1,353 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+const tasks = [
+  { title: 'Buy milk', done: true },
+  { title: 'Write the report', done: false },
+  { title: 'Call the plumber', done: false },
+];
+const diff = [
+  ['', 'function view():View'],
+  ['', '\treturn column(['],
+  ['del', '\t\ttext("Tasks", Title),'],
+  ['add', "\t\ttext('Tasks · ${remaining()} left', Title),"],
+  ['', '\t\tfor (task in tasks) taskRow(task),'],
+  ['', '\t\taddRow(draft)'],
+  ['', '\t]);'],
+  ['', ''],
+  ['', 'function taskRow(task:Task):View'],
+  ['del', '\treturn row([checkbox(task.done), text(task.title)]);'],
+  ['add', '\treturn row([checkbox(task.done),'],
+  ['add', '\t\ttext(task.title, task.done ? Done : Body)]);'],
+];
+---
+
+<live-edit-demo class="demo">
+  <div class="editor">
+    <div class="bar"><span>src/App.hx</span><span data-version>version 1</span></div>
+    {
+      [1, 2].map((version) => {
+        const lines = diff.filter(([change]) => version === 2 || change !== 'add');
+        return (
+          <div data-code={version} hidden={version !== 1}>
+            <Code
+              code={lines.map(([, text]) => text).join('\n')}
+              lang="haxe"
+              frame="none"
+              ins={
+                version === 2
+                  ? lines.flatMap(([change], i) => (change === 'add' ? [i + 1] : []))
+                  : []
+              }
+              del={
+                version === 2
+                  ? lines.flatMap(([change], i) => (change === 'del' ? [i + 1] : []))
+                  : []
+              }
+            />
+          </div>
+        );
+      })
+    }
+  </div>
+  <div class="app">
+    <div class="window">
+      <div class="tb">
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span
+          >Task List</span
+        >
+      </div>
+      <div class="body">
+        <h3 data-title>Tasks</h3>
+        <div class="tasks">
+          {
+            tasks.map(({ title, done }) => (
+              <div class:list={['task', { done }]}>
+                <label>
+                  <>
+                    <input type="checkbox" checked={done} />
+                    <span>{title}</span>
+                  </>
+                </label>
+              </div>
+            ))
+          }
+        </div>
+        <form class="addrow">
+          <input name="draft" type="text" placeholder="New task" aria-label="New task" />
+          <button type="submit">Add</button>
+        </form>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn primary" data-apply type="button">Apply the edit</button>
+      <button class="reject" data-reject type="button">Try a broken edit</button>
+    </div>
+    <span class="status" role="status">Running version 1</span>
+    <p class="demo-note">Interactive preview of a Haxeon live edit.</p>
+  </div>
+</live-edit-demo>
+
+<script>
+  class LiveEditDemo extends HTMLElement {
+    connectedCallback() {
+      const windowPanel = this.querySelector('.window')!;
+      const form = this.querySelector('form')!;
+      const draft = form.querySelector('input')!;
+      const title = this.querySelector('[data-title]')!;
+      const versionLabel = this.querySelector('[data-version]')!;
+      const list = this.querySelector('.tasks')!;
+      const status = this.querySelector('[role="status"]')!;
+      const apply = this.querySelector<HTMLButtonElement>('[data-apply]')!;
+      const code = [...this.querySelectorAll<HTMLElement>('[data-code]')];
+      let version = 1;
+
+      const countDone = () => list.querySelectorAll('input:checked').length;
+      const updateTitle = () => {
+        title.textContent =
+          version === 1 ? 'Tasks' : `Tasks · ${list.children.length - countDone()} left`;
+      };
+
+      list.addEventListener('change', (event) => {
+        const checkbox = event.target;
+        if (!(checkbox instanceof HTMLInputElement)) return;
+        checkbox.closest('.task')?.classList.toggle('done', checkbox.checked);
+        updateTitle();
+      });
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const task = draft.value.trim();
+        if (!task) return;
+        const row = document.createElement('div');
+        row.className = 'task';
+        const label = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        const text = document.createElement('span');
+        text.textContent = task;
+        label.append(checkbox, text);
+        row.append(label);
+        list.append(row);
+        draft.value = '';
+        draft.focus();
+        updateTitle();
+      });
+
+      const announce = (message: string) => {
+        const kept = document.createElement('span');
+        kept.className = 'kept';
+        kept.textContent =
+          `kept: ${list.children.length} tasks, ${countDone()} done` +
+          (draft.value.trim() ? `, draft "${draft.value}"` : '');
+        status.replaceChildren(message + ' ', kept);
+      };
+
+      apply.addEventListener('click', () => {
+        version = version === 1 ? 2 : 1;
+        code.forEach((panel) => {
+          panel.hidden = Number(panel.dataset.code) !== version;
+        });
+        list.classList.toggle('v2', version === 2);
+        updateTitle();
+        versionLabel.textContent = `version ${version}`;
+        apply.textContent = version === 1 ? 'Apply the edit' : 'Undo the edit';
+        windowPanel.classList.remove('flash');
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => windowPanel.classList.add('flash')),
+        );
+        announce(`Patched to version ${version}.`);
+      });
+
+      this.querySelector('[data-reject]')!.addEventListener('click', () => {
+        announce(`Patch rejected. Still running version ${version}.`);
+      });
+    }
+  }
+
+  customElements.define('live-edit-demo', LiveEditDemo);
+</script>
+
+<style>
+  .demo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-m);
+    overflow: hidden;
+    background: var(--sl-color-bg-sidebar);
+  }
+  .demo > * {
+    min-width: 0;
+  }
+  .demo .editor {
+    background: var(--sl-color-bg-inline-code);
+    color: var(--hx-code-fg);
+    display: flex;
+    flex-direction: column;
+  }
+  .demo .editor .bar {
+    padding: 10px 14px;
+    font: 0.75rem var(--sl-font-mono);
+    color: var(--hx-code-muted);
+    border-bottom: 1px solid #ffffff14;
+    display: flex;
+    justify-content: space-between;
+    gap: var(--hx-space-2);
+    flex-wrap: wrap;
+  }
+  .demo :global(.ec-line.del .code) {
+    text-decoration: line-through;
+  }
+  .demo .app {
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    background: var(--sl-color-accent-low);
+  }
+  .window {
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .window .tb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--hx-space-2) 12px;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-3);
+  }
+  .dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--sl-color-gray-5);
+  }
+  .window .body {
+    padding: var(--hx-space-4);
+    display: grid;
+    gap: 10px;
+  }
+  .window h3 {
+    margin: 0;
+    font: 600 1.05rem var(--hx-font-display);
+  }
+  .task {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: var(--hx-space-2) 10px;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-s);
+  }
+  .task input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--sl-color-accent);
+    flex: none;
+  }
+  .tasks.v2 .task.done label span {
+    text-decoration: line-through;
+    color: var(--sl-color-gray-3);
+  }
+  .addrow {
+    display: flex;
+    gap: var(--hx-space-2);
+  }
+  .addrow input {
+    flex: 1;
+    min-width: 0;
+    padding: var(--hx-space-2) 10px;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-s);
+    background: var(--sl-color-bg-sidebar);
+    color: var(--sl-color-white);
+    font: inherit;
+  }
+  .addrow button {
+    padding: var(--hx-space-2) 12px;
+    border-radius: var(--hx-radius-s);
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-bg-sidebar);
+    color: var(--sl-color-white);
+    font: inherit;
+    cursor: pointer;
+  }
+  .controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .status {
+    font: 0.8rem var(--sl-font-mono);
+    color: var(--sl-color-gray-3);
+  }
+  .status :global(.kept) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--sl-color-green-low);
+    color: var(--sl-color-green-high);
+    border-radius: var(--hx-radius-pill);
+    padding: 3px 10px;
+    font: 600 0.78rem var(--sl-font-mono);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .flash {
+      animation: flash 900ms ease-out;
+    }
+    @keyframes flash {
+      from {
+        box-shadow: 0 0 0 3px var(--sl-color-green-high);
+      }
+      to {
+        box-shadow: 0 0 0 0 transparent;
+      }
+    }
+  }
+  .tasks {
+    display: grid;
+    gap: var(--hx-space-2);
+  }
+  .controls .reject {
+    padding: var(--hx-space-1);
+    border: 0;
+    color: var(--sl-color-accent);
+    background: none;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+  }
+  .demo-note {
+    color: var(--sl-color-gray-3);
+    font-size: 0.85rem;
+  }
+  .task label {
+    display: flex;
+    align-items: center;
+    gap: var(--hx-space-2);
+    width: 100%;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+
+  .demo :global(.expressive-code pre) {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .demo :global(.expressive-code .copy) {
+    display: none;
+  }
+  @media (max-width: 900px) {
+    .demo {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

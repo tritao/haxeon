@@ -52,7 +52,7 @@ class NavigationStack implements ScopeView {
 		rootStyle.height = LayoutAxis.grow();
 		rootStyle.clipHorizontal = true;
 		rootStyle.clipVertical = true;
-		rootStyle.background = NavUi.ground;
+		rootStyle.background = context.theme.tokens.surface;
 		var root = NavUi.box(context, id, "navigation-stack", key, rootStyle, ["navigation-stack"]);
 		root.semantics = new Semantics(AccessibilityRole.Group, "Screens");
 
@@ -97,7 +97,7 @@ class NavigationStack implements ScopeView {
 			var layerStyle = new LayoutStyle();
 			layerStyle.width = LayoutAxis.grow();
 			layerStyle.height = LayoutAxis.stretch();
-			layerStyle.background = NavUi.ground;
+			layerStyle.background = context.theme.tokens.surface;
 			layerStyle.clipHorizontal = true;
 			layerStyle.clipVertical = true;
 			if (sliding) {

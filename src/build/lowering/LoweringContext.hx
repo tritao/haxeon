@@ -2,6 +2,7 @@ package build.lowering;
 
 import build.BuildEnvironment;
 import build.BuildSession;
+import build.HaxeonSdk;
 import build.TargetLayout;
 import project.ResolvedProject;
 
@@ -12,6 +13,7 @@ class LoweringContext {
 	public final cmakePreset:String;
 	public final project:Null<ResolvedProject>;
 	public final output:Null<String>;
+	/** Haxeon's home, the SDK the build uses (`HaxeonSdk`); by default the one the checkout being built stages. */
 	public final compilerHome:String;
 	public final extraDefines:Array<String>;
 	public final selfHosted:Bool;
@@ -25,7 +27,10 @@ class LoweringContext {
 	/** Directory of the CMake trees that project builds share (NativeCache), or null when each project builds its own. */
 	public final nativeCache:Null<String>;
 
-	/** Build for `haxeon run --watch --live`: the compiler keeps the history patches address the running module by. */
+	/**
+	 * Build for a live session (`haxeon run --watch` of an app the live host runs, `build --compiler-only --patchable`): the
+	 * compiler keeps the history patches address the running module by.
+	 */
 	public final live:Bool;
 
 	/**
@@ -43,12 +48,18 @@ class LoweringContext {
 	/** Type the program without writing a module (`BuildScope.Check`): the compile is a `--no-output` request with no outputs. */
 	public final checkOnly:Bool;
 
+	public final scriptModule:Null<String>;
+
+	public final webHost:Null<String>;
+
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
 			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle,
-			?checkOnly:Bool) {
+			?checkOnly:Bool, ?scriptModule:String, ?webHost:String) {
+		this.webHost = webHost;
+		this.scriptModule = scriptModule;
 		this.checkOnly = checkOnly == true;
 		this.reportStyle = reportStyle == null ? compiler.tools.ReportStyle.DEFAULT : reportStyle;
 		this.developmentMetadata = developmentMetadata;
@@ -62,7 +73,7 @@ class LoweringContext {
 		this.cmakePreset = cmakePreset == null ? Std.string(environment.profile) : cmakePreset;
 		this.project = project;
 		this.output = output;
-		this.compilerHome = compilerHome == null ? environment.projectRoot : compilerHome;
+		this.compilerHome = compilerHome == null ? HaxeonSdk.ofCheckout(environment.projectRoot) : compilerHome;
 		this.extraDefines = extraDefines == null ? [] : extraDefines.copy();
 		this.selfHosted = selfHosted == true;
 	}

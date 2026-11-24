@@ -508,7 +508,7 @@ class HotReloadMain {
 		File.saveBytes(prefix + "-survivor.hli", survivorResult.artifact.hashLink().runtimeIdentity);
 		File.saveContent(prefix + "-survivor.id",
 			Std.string(survivorResult.artifact.hashLink().functionIds.get("main")));
-		var test = Sys.getEnv("HAXEON_HASHLINK_DIR") + "/haxeon-jit-support-lifetime";
+		var test = Sys.getEnv("HAXEON_SDK") + "/bin/haxeon-jit-support-lifetime";
 		#if windows
 		test += ".exe";
 		#end

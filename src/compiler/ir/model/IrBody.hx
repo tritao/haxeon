@@ -5,6 +5,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
+import compiler.ir.model.SourceProvenance.SourceLocation;
 
 /**
  * A function body as a table (docs/design/IR_CORE_COLUMNS.md): one row per instruction or terminator in parallel `Int` columns
@@ -26,6 +27,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * targets]. Operands are the instruction's values in the order `IrInstruction` declares them, the output left out.
  */
 @:allow(compiler.ir.model.IrBodyBuilder)
+@:nullSafety(Strict)
 class IrBody {
 	/** The `nextRow` of a row no block holds any more. */
 	static inline final UNLINKED = -2;
@@ -209,6 +211,27 @@ class IrBody {
 
 	public inline function provenance(row:Int):SourceProvenance
 		return provenancePool[provenances[row]];
+
+	/**
+	 * The distinct provenances the rows name, each once, without decoding: a frozen body's pool holds only those (`freeze`); one
+	 * still edited may hold some its edits dropped.
+	 */
+	public function provenanceTable():Array<SourceProvenance>
+		return provenancePool;
+
+	/** The location of the first instruction that has one, in block order, read from the rows without decoding them. */
+	public function firstLocation():Null<SourceLocation> {
+		for (block in 0...blockIds.length) {
+			var terminator = terminatorRow(block), row = blockFirstRows[block];
+			while (row >= 0 && row != terminator) {
+				var location = provenance(row).location;
+				if (location != null)
+					return location;
+				row = nextRows[row];
+			}
+		}
+		return null;
+	}
 
 	public inline function float(row:Int):Float
 		return floats[auxes[row]];
@@ -956,84 +979,91 @@ class IrBody {
 		return [for (index in operandStarts[row] + from...operandEnds[row]) valueOf(operandPool[index], values)];
 
 	function decodeInstruction(row:Int, values:Array<Null<IrValue>>):IrInstruction {
-		var out = outputs[row] >= 0 ? valueOf(outputs[row], values) : null,
-			aux = auxes[row];
+		var aux = auxes[row];
+		// Every row of an instruction with an output has one (`endRow`); the others do not read it.
+		inline function out():IrValue {
+			if (outputs[row] < 0)
+				throw new InternalError('IR body row $row has no output');
+			return valueOf(outputs[row], values);
+		}
 		inline function at(index:Int):IrValue
 			return valueOf(operand(row, index), values);
 		return switch opcode(row) {
-			case IrOpcode.Phi: Phi(out, [for (index in 0...operandCount(row))
+			case IrOpcode.Phi: Phi(out(), [for (index in 0...operandCount(row))
 				{
 						block:ints[aux + index], value:at(index)
 					}]);
-			case IrOpcode.ConstVoid: ConstVoid(out);
-			case IrOpcode.ConstInt: ConstInt(out, aux);
-			case IrOpcode.ConstFloat: ConstFloat(out, floats[aux]);
-			case IrOpcode.ConstString: ConstString(out, strings[aux]);
-			case IrOpcode.StaticDataAddress: StaticDataAddress(out,
+			case IrOpcode.ConstVoid: ConstVoid(out());
+			case IrOpcode.ConstInt: ConstInt(out(), aux);
+			case IrOpcode.ConstFloat: ConstFloat(out(), floats[aux]);
+			case IrOpcode.ConstString: ConstString(out(), strings[aux]);
+			case IrOpcode.StaticDataAddress: StaticDataAddress(out(),
 				[for (index in 0...ints[aux]) ints[aux + 1 + index]]);
-			case IrOpcode.PointerOffset: PointerOffset(out, at(0), at(1));
-			case IrOpcode.MemoryLoad: MemoryLoad(out, at(0), aux >> 1, aux & 1 == 1);
+			case IrOpcode.PointerOffset: PointerOffset(out(), at(0), at(1));
+			case IrOpcode.MemoryLoad: MemoryLoad(out(), at(0), aux >> 1, aux & 1 == 1);
 			case IrOpcode.MemoryStore: MemoryStore(at(0), at(1), aux);
-			case IrOpcode.ConstBool: ConstBool(out, aux == 1);
-			case IrOpcode.ConstNull: ConstNull(out);
-			case IrOpcode.TypeValue: TypeValue(out, types.type(aux));
-			case IrOpcode.ToDyn: ToDyn(out, at(0));
-			case IrOpcode.IntToFloat: IntToFloat(out, at(0));
-			case IrOpcode.IntToInt64: IntToInt64(out, at(0));
-			case IrOpcode.FloatToInt: FloatToInt(out, at(0));
-			case IrOpcode.FloatToFloat: FloatToFloat(out, at(0));
-			case IrOpcode.SafeCast: SafeCast(out, at(0));
+			case IrOpcode.ConstBool: ConstBool(out(), aux == 1);
+			case IrOpcode.ConstNull: ConstNull(out());
+			case IrOpcode.TypeValue: TypeValue(out(), types.type(aux));
+			case IrOpcode.ToDyn: ToDyn(out(), at(0));
+			case IrOpcode.IntToFloat: IntToFloat(out(), at(0));
+			case IrOpcode.IntToInt64: IntToInt64(out(), at(0));
+			case IrOpcode.FloatToInt: FloatToInt(out(), at(0));
+			case IrOpcode.FloatToFloat: FloatToFloat(out(), at(0));
+			case IrOpcode.SafeCast: SafeCast(out(), at(0));
 			case IrOpcode.BeginTry: BeginTry(ints[aux], ints[aux + 1], ints[aux + 2] == 1);
 			case IrOpcode.EndTry: EndTry(ints[aux], ints[aux + 1] == 1);
-			case IrOpcode.Catch: Catch(out);
-			case IrOpcode.GlobalGet: GlobalGet(out, IrSymbol.at(aux).name);
+			case IrOpcode.Catch: Catch(out());
+			case IrOpcode.GlobalGet: GlobalGet(out(), IrSymbol.at(aux).name);
 			case IrOpcode.GlobalSet: GlobalSet(IrSymbol.at(aux).name, at(0));
-			case IrOpcode.Add: Add(out, at(0), at(1));
-			case IrOpcode.Sub: Sub(out, at(0), at(1));
-			case IrOpcode.Mul: Mul(out, at(0), at(1));
-			case IrOpcode.Div: Div(out, at(0), at(1));
-			case IrOpcode.Mod: Mod(out, at(0), at(1));
-			case IrOpcode.BitAnd: BitAnd(out, at(0), at(1));
-			case IrOpcode.BitXor: BitXor(out, at(0), at(1));
-			case IrOpcode.BitOr: BitOr(out, at(0), at(1));
-			case IrOpcode.ShiftLeft: ShiftLeft(out, at(0), at(1));
-			case IrOpcode.ShiftRight: ShiftRight(out, at(0), at(1));
-			case IrOpcode.UnsignedShiftRight: UnsignedShiftRight(out, at(0), at(1));
-			case IrOpcode.Less: Less(out, at(0), at(1));
-			case IrOpcode.LessEqual: LessEqual(out, at(0), at(1));
-			case IrOpcode.Equal: Equal(out, at(0), at(1));
-			case IrOpcode.Call: Call(out, IrSymbol.at(aux), operandValues(row, 0, values));
-			case IrOpcode.CNativeCall: CNativeCall(out, IrSymbol.at(aux).name, operandValues(row, 0, values));
-			case IrOpcode.StaticClosure: StaticClosure(out, IrSymbol.at(aux));
-			case IrOpcode.InstanceClosure: InstanceClosure(out, IrSymbol.at(aux), at(0));
-			case IrOpcode.CallClosure: CallClosure(out, at(0), operandValues(row, 1, values));
-			case IrOpcode.ToVirtual: ToVirtual(out, at(0));
-			case IrOpcode.Upcast: Upcast(out, at(0));
-			case IrOpcode.ClassId: ClassId(out, at(0));
-			case IrOpcode.MethodCall: MethodCall(out, at(0), IrSymbol.at(aux >> 1).name, operandValues(row, 1, values),
+			case IrOpcode.Add: Add(out(), at(0), at(1));
+			case IrOpcode.Sub: Sub(out(), at(0), at(1));
+			case IrOpcode.Mul: Mul(out(), at(0), at(1));
+			case IrOpcode.Div: Div(out(), at(0), at(1));
+			case IrOpcode.Mod: Mod(out(), at(0), at(1));
+			case IrOpcode.BitAnd: BitAnd(out(), at(0), at(1));
+			case IrOpcode.BitXor: BitXor(out(), at(0), at(1));
+			case IrOpcode.BitOr: BitOr(out(), at(0), at(1));
+			case IrOpcode.ShiftLeft: ShiftLeft(out(), at(0), at(1));
+			case IrOpcode.ShiftRight: ShiftRight(out(), at(0), at(1));
+			case IrOpcode.UnsignedShiftRight: UnsignedShiftRight(out(), at(0), at(1));
+			case IrOpcode.Less: Less(out(), at(0), at(1));
+			case IrOpcode.LessEqual: LessEqual(out(), at(0), at(1));
+			case IrOpcode.Equal: Equal(out(), at(0), at(1));
+			case IrOpcode.Call: Call(out(), IrSymbol.at(aux), operandValues(row, 0, values));
+			case IrOpcode.CNativeCall: CNativeCall(out(), IrSymbol.at(aux).name, operandValues(row, 0, values));
+			case IrOpcode.StaticClosure: StaticClosure(out(), IrSymbol.at(aux));
+			case IrOpcode.InstanceClosure: InstanceClosure(out(), IrSymbol.at(aux), at(0));
+			case IrOpcode.CallClosure: CallClosure(out(), at(0), operandValues(row, 1, values));
+			case IrOpcode.ToVirtual: ToVirtual(out(), at(0));
+			case IrOpcode.Upcast: Upcast(out(), at(0));
+			case IrOpcode.ClassId: ClassId(out(), at(0));
+			case IrOpcode.MethodCall: MethodCall(out(), at(0), IrSymbol.at(aux >> 1).name,
+				operandValues(row, 1, values),
 				aux & 1 == 1);
-			case IrOpcode.NewObject: NewObject(out, IrSymbol.at(aux).name);
-			case IrOpcode.ValueInit: ValueInit(out);
-			case IrOpcode.FieldGet: FieldGet(out, at(0), IrSymbol.at(aux).name);
+			case IrOpcode.NewObject: NewObject(out(), IrSymbol.at(aux).name);
+			case IrOpcode.ValueInit: ValueInit(out());
+			case IrOpcode.FieldGet: FieldGet(out(), at(0), IrSymbol.at(aux).name);
 			case IrOpcode.FieldSet: FieldSet(at(0), IrSymbol.at(aux).name, at(1));
-			case IrOpcode.ArrayGet: ArrayGet(out, at(0), at(1));
+			case IrOpcode.ArrayGet: ArrayGet(out(), at(0), at(1));
 			case IrOpcode.ArraySet: ArraySet(at(0), at(1), at(2));
-			case IrOpcode.ArraySize: ArraySize(out, at(0));
-			case IrOpcode.IteratorNew: IteratorNew(out, at(0));
-			case IrOpcode.IteratorHasNext: IteratorHasNext(out, at(0));
-			case IrOpcode.IteratorNext: IteratorNext(out, at(0));
-			case IrOpcode.MakeEnum: MakeEnum(out, IrSymbol.at(ints[aux]).name, ints[aux + 1],
+			case IrOpcode.ArraySize: ArraySize(out(), at(0));
+			case IrOpcode.IteratorNew: IteratorNew(out(), at(0));
+			case IrOpcode.IteratorHasNext: IteratorHasNext(out(), at(0));
+			case IrOpcode.IteratorNext: IteratorNext(out(), at(0));
+			case IrOpcode.MakeEnum: MakeEnum(out(), IrSymbol.at(ints[aux]).name, ints[aux + 1],
 				operandValues(row, 0, values));
-			case IrOpcode.EnumIndex: EnumIndex(out, at(0));
-			case IrOpcode.EnumField: EnumField(out, at(0), ints[aux], ints[aux + 1]);
-			case IrOpcode.EnumDynamicBox: Intrinsic(out, EnumDynamicBox(types.type(aux)),
+			case IrOpcode.EnumIndex: EnumIndex(out(), at(0));
+			case IrOpcode.EnumField: EnumField(out(), at(0), ints[aux], ints[aux + 1]);
+			case IrOpcode.EnumDynamicBox: Intrinsic(out(), EnumDynamicBox(types.type(aux)),
 				operandValues(row, 0, values));
-			case IrOpcode.EnumDynamicView: Intrinsic(out, EnumDynamicView(types.type(aux)),
+			case IrOpcode.EnumDynamicView: Intrinsic(out(), EnumDynamicView(types.type(aux)),
 				operandValues(row, 0, values));
-			case IrOpcode.EnumTagBox: Intrinsic(out, EnumTagBox(types.type(aux)), operandValues(row, 0, values));
-			case IrOpcode.EnumTagUnbox: Intrinsic(out, EnumTagUnbox(types.type(aux)), operandValues(row, 0, values));
-			case IrOpcode.InlineEnumBox: Intrinsic(out, InlineEnumBox(types.type(aux)), operandValues(row, 0, values));
-			case IrOpcode.InlineEnumUnbox: Intrinsic(out, InlineEnumUnbox(types.type(aux)),
+			case IrOpcode.EnumTagBox: Intrinsic(out(), EnumTagBox(types.type(aux)), operandValues(row, 0, values));
+			case IrOpcode.EnumTagUnbox: Intrinsic(out(), EnumTagUnbox(types.type(aux)), operandValues(row, 0, values));
+			case IrOpcode.InlineEnumBox: Intrinsic(out(), InlineEnumBox(types.type(aux)),
+				operandValues(row, 0, values));
+			case IrOpcode.InlineEnumUnbox: Intrinsic(out(), InlineEnumUnbox(types.type(aux)),
 				operandValues(row, 0, values));
 			default: throw new InternalError('IR body row $row is not an instruction');
 		};
@@ -1061,6 +1091,7 @@ class IrBody {
  * change in place.
  */
 @:allow(compiler.ir.model.IrBody)
+@:nullSafety(Strict)
 class IrBodyTrial {
 	var edited = false;
 	var edits = 0;

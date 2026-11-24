@@ -12,5 +12,18 @@
       "native/bindings/animkit.hxi"
     ]
   },
+  "publish": {
+    "exclude": [
+      "tests",
+      "native/vendor",
+      "native/src",
+      "native/include",
+      "native/tests",
+      "native/tools",
+      "native/CMakeLists.txt",
+      "native/haxeon.json",
+      "native/THIRD_PARTY.md"
+    ]
+  },
   "target": "host"
 }

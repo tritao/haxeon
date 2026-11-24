@@ -7,6 +7,7 @@ import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrValueId;
 
 /** Remove unused computations that cannot observe memory, allocate, call, or throw. */
+@:nullSafety(Strict)
 class IrDeadPureValues {
 	/** Whether a row with this opcode computes a value without observing memory, allocating, calling or throwing. */
 	public static function removableOpcode(opcode:IrOpcode):Bool

@@ -2,7 +2,7 @@ package build.native;
 
 import build.BuildEnvironment;
 import build.TargetLayout;
-import haxe.crypto.Sha256;
+import compiler.core.TextDigest;
 import haxe.io.Path;
 import project.ResolvedPackage;
 import sys.FileSystem;
@@ -29,16 +29,21 @@ class NativeCache {
 	static final realPaths = new Map<String, String>();
 
 	/**
-	 * The cache directory, or null when projects build their own trees. `HAXEON_NATIVE_CACHE` names another directory,
-	 * `off` disables the cache. The instrumented flavor keeps its own trees, which publish debug databases as well.
+	 * The cache directory, or null when projects build their own trees: `out/native-cache` of the checkout of the SDK at `home`,
+	 * or for a release, whose install directory is not written, `native` in the user's cache. `HAXEON_NATIVE_CACHE` names another
+	 * directory, `off` disables the cache. The instrumented flavor keeps its own trees, which publish debug databases as well.
 	 */
 	public static function root(home:String, environment:BuildEnvironment):Null<String> {
 		var configured = Sys.getEnv("HAXEON_NATIVE_CACHE");
 		if (environment.instrument != null || configured == "off" || configured == "0" || !cmakeAtLeast())
 			return null;
 		scriptHome = home;
-		return canonical(configured != null
-			&& configured != "" ? configured : Path.join([home, "out", "native-cache"]));
+		var source = build.HaxeonSdk.source(home);
+		return canonical(configured != null && configured != "" ? configured : source != null ? Path.join([
+			source,
+			"out",
+			"native-cache"
+		]) : build.UserCache.directory("native"));
 	}
 
 	/**
@@ -56,7 +61,7 @@ class NativeCache {
 			var output = HostCommand.text("cmake", [
 				"-DP=" + normalized,
 				"-P",
-				Path.join([scriptHome, "cmake", "haxeon-real-path.cmake"])
+				Path.join([build.HaxeonSdk.cmakeDirectory(scriptHome), "haxeon-real-path.cmake"])
 			]);
 			if (output != null && output != "")
 				real = Path.normalize(output);
@@ -67,14 +72,17 @@ class NativeCache {
 		return real;
 	}
 
-	/** The tree of a package's CMake project: `cmake*` holds the build and `out` the libraries it produces. */
+	/**
+	 * The tree of a package's CMake project: `cmake*` holds the build and `out` the libraries it produces. `dependencies` are
+	 * the trees of the packages it builds on, which its configure finds (`CMAKE_PREFIX_PATH`).
+	 */
 	public static function treeRoot(root:String, layout:TargetLayout, environment:BuildEnvironment,
 			resolvedPackage:ResolvedPackage, source:String,
-			target:String):String {
-		// What decides a tree's configuration: the source, the target and profile, the haxeon home (CMAKE_PROJECT_INCLUDE and
-		// the pinned tools come from it) and the compilers. The configure arguments are the same for every project that
-		// reaches a package (NativeKit modules are chosen by the packages' own CMakeLists, not by arguments), so nothing else
-		// of a project belongs here.
+			target:String, dependencies:Array<String>):String {
+		// What decides a tree's configuration: the source, the target and profile, the SDK (CMAKE_PROJECT_INCLUDE and the pinned
+		// tools come from it), the compilers and the trees it builds on. The configure arguments are the same for every project
+		// that reaches a package (NativeKit modules are chosen by the packages' own CMakeLists, not by arguments), so nothing
+		// else of a project belongs here.
 		var fullSource = canonical(source),
 			home = scriptHome == null ? "" : canonical(scriptHome),
 			compilers = [for (name in ["CC", "CXX", "VCToolsVersion", "VisualStudioVersion"]) name + "="
@@ -86,11 +94,11 @@ class NativeCache {
 			Std.string(environment.profile),
 			home,
 			compilers
-		].join("\n");
+		].concat(dependencies).join("\n");
 		// Case-insensitive file systems (Windows, macOS) reach one directory by several spellings.
 		if (Sys.systemName() == "Windows" || Sys.systemName() == "Mac")
 			identity = identity.toLowerCase();
-		var key = Sha256.encode(identity).substr(0, 10),
+		var key = TextDigest.sha256(identity).substr(0, 10),
 			name = new EReg("[^A-Za-z0-9_.]+", "g").replace(resolvedPackage.name, "-");
 		return Path.join([root, layout.targetDirectory(), name + "-" + key]);
 	}

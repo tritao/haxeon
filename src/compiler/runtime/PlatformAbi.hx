@@ -8,6 +8,9 @@ class PlatformAbi {
 	/** Stdlib class implementing `{...}` literals typed as Dynamic where the runtime has no dynamic objects. */
 	public static inline final DYNAMIC_OBJECT_CLASS = "runtime.DynamicObject";
 
+	/** The module declaring `haxe.io.Bytes`, whose methods the platform implements. */
+	public static inline final BYTES = "haxe.io.Bytes";
+
 	static final types:Map<String, Bool> = [
 		"haxe.io.Encoding" => true,
 		"haxe.Json" => true,
@@ -28,10 +31,21 @@ class PlatformAbi {
 
 	/**
 	 * The stdlib modules that implement methods of the platform types `module` declares, which a call of one adds to the program.
-	 * They come with the declaring module, so the typer finds them loaded: one found while typing restarts the frontend.
+	 * They come with the declaring module, so the typer finds them loaded: the graph has them before any call is typed.
 	 */
-	public static function implementationModules(module:String):Array<String>
-		return module == "haxe.io.Bytes" ? ["haxe.io.BytesBounds"] : [];
+	public static function implementationModules(module:String):Array<String> {
+		if (module != BYTES)
+			return [];
+		var modules:Map<String, Bool> = [];
+		for (nativeName in [OUTSIDE_BOUNDS].concat([for (method in bytesMethods) method.nativeName])) {
+			var implementation = sourceModule(nativeName);
+			if (implementation != null)
+				modules.set(implementation, true);
+		}
+		var sorted = [for (implementation in modules.keys()) implementation];
+		sorted.sort(Reflect.compare);
+		return sorted;
+	}
 
 	public static function isType(name:String):Bool
 		return types.exists(name);
@@ -76,13 +90,9 @@ class PlatformAbi {
 			default: null;
 		};
 
-	public static function method(type:CompilerType, name:String):Null<{
-		arguments:Array<CompilerType>,
-		result:CompilerType,
-		nativeName:String
-	}>
+	public static function method(type:CompilerType, name:String):Null<PlatformMethod>
 		return switch type {
-			case CompilerType.TBytes: bytesMethod(name);
+			case CompilerType.TBytes: bytesMethods.get(name);
 			case CompilerType.THlBytes:
 				name == "ucs2Length" ? {
 					arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__hl_bytes_ucs2_length"
@@ -91,107 +101,33 @@ class PlatformAbi {
 			default: null;
 		};
 
-	static function bytesMethod(name:String):Null<{
-		arguments:Array<CompilerType>,
-		result:CompilerType,
-		nativeName:String
-	}>
-		return switch name {
-			case "getData": {
-				arguments: noArguments(),
-				result: CompilerType.THlBytes,
-				nativeName: "__bytes_get_data"
-			};
-			case "get": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get"};
-			case "getInt32": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get_i32"};
-			case "getFloat": {
-				arguments: [CompilerType.TInt],
-				result: CompilerType.TFloat,
-				nativeName: "__bytes_get_float"
-			};
-			case "getDouble": {
-				arguments: [CompilerType.TInt],
-				result: CompilerType.TFloat,
-				nativeName: "__bytes_get_double"
-			};
-			case "set": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TVoid,
-				nativeName: "__bytes_try_set"
-			};
-			case "setInt32": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TVoid,
-				nativeName: "__bytes_try_set_i32"
-			};
-			case "setFloat": {
-				arguments: [CompilerType.TInt, CompilerType.TFloat],
-				result: CompilerType.TVoid,
-				nativeName: "__bytes_try_set_float"
-			};
-			case "setDouble": {
-				arguments: [CompilerType.TInt, CompilerType.TFloat],
-				result: CompilerType.TVoid,
-				nativeName: "__bytes_try_set_double"
-			};
-			case "blit": {
-				arguments: [CompilerType.TInt, CompilerType.TBytes, CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TVoid,
-				nativeName: "__bytes_try_blit"
-			};
-			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt,
-				nativeName: "__bytes_compare"};
-			case "toString": {arguments: noArguments(), result: CompilerType.TString, nativeName: "__bytes_to_string"};
-			// Haxe source in the stdlib (haxe/io/BytesBounds.hx), the same on every target.
-			case "sub": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TBytes,
-				nativeName: "haxe.io.BytesBounds.sub"
-			};
-			case "getString": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TString,
-				nativeName: "haxe.io.BytesBounds.getString"
-			};
-			case "readString": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TString,
-				nativeName: "haxe.io.BytesBounds.readString"
-			};
-			// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
-			case "fill": {
-				arguments: [CompilerType.TInt, CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TVoid,
-				nativeName: "haxe.io.BytesAccess.fill"
-			};
-			case "getUInt16": {
-				arguments: [CompilerType.TInt],
-				result: CompilerType.TInt,
-				nativeName: "haxe.io.BytesAccess.getUInt16"
-			};
-			case "setUInt16": {
-				arguments: [CompilerType.TInt, CompilerType.TInt],
-				result: CompilerType.TVoid,
-				nativeName: "haxe.io.BytesAccess.setUInt16"
-			};
-			case "getInt64": {
-				arguments: [CompilerType.TInt],
-				result: CompilerType.TInt64,
-				nativeName: "haxe.io.BytesAccess.getInt64"
-			};
-			case "setInt64": {
-				arguments: [CompilerType.TInt, CompilerType.TInt64],
-				result: CompilerType.TVoid,
-				nativeName: "haxe.io.BytesAccess.setInt64"
-			};
-			// Haxe source in the stdlib (haxe/io/BytesHex.hx), the same on every target.
-			case "toHex": {
-				arguments: noArguments(),
-				result: CompilerType.TString,
-				nativeName: "haxe.io.BytesHex.toHex"
-			};
-			default: null;
-		};
+	/** The methods of `haxe.io.Bytes` the platform implements, by name. */
+	static final bytesMethods:Map<String, PlatformMethod> = [
+		"getData" => platformMethod([], THlBytes, "__bytes_get_data"),
+		"get" => platformMethod([TInt], TInt, "__bytes_get"),
+		"getInt32" => platformMethod([TInt], TInt, "__bytes_get_i32"),
+		"getFloat" => platformMethod([TInt], TFloat, "__bytes_get_float"),
+		"getDouble" => platformMethod([TInt], TFloat, "__bytes_get_double"),
+		"set" => platformMethod([TInt, TInt], TVoid, "__bytes_try_set"),
+		"setInt32" => platformMethod([TInt, TInt], TVoid, "__bytes_try_set_i32"),
+		"setFloat" => platformMethod([TInt, TFloat], TVoid, "__bytes_try_set_float"),
+		"setDouble" => platformMethod([TInt, TFloat], TVoid, "__bytes_try_set_double"),
+		"blit" => platformMethod([TInt, TBytes, TInt, TInt], TVoid, "__bytes_try_blit"),
+		"compare" => platformMethod([TBytes], TInt, "__bytes_compare"),
+		"toString" => platformMethod([], TString, "__bytes_to_string"),
+		// Haxe source in the stdlib (haxe/io/BytesBounds.hx), the same on every target.
+		"sub" => platformMethod([TInt, TInt], TBytes, "haxe.io.BytesBounds.sub"),
+		"getString" => platformMethod([TInt, TInt], TString, "haxe.io.BytesBounds.getString"),
+		"readString" => platformMethod([TInt, TInt], TString, "haxe.io.BytesBounds.readString"),
+		// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
+		"fill" => platformMethod([TInt, TInt, TInt], TVoid, "haxe.io.BytesAccess.fill"),
+		"getUInt16" => platformMethod([TInt], TInt, "haxe.io.BytesAccess.getUInt16"),
+		"setUInt16" => platformMethod([TInt, TInt], TVoid, "haxe.io.BytesAccess.setUInt16"),
+		"getInt64" => platformMethod([TInt], TInt64, "haxe.io.BytesAccess.getInt64"),
+		"setInt64" => platformMethod([TInt, TInt64], TVoid, "haxe.io.BytesAccess.setInt64"),
+		// Haxe source in the stdlib (haxe/io/BytesHex.hx), the same on every target.
+		"toHex" => platformMethod([], TString, "haxe.io.BytesHex.toHex")
+	];
 
 	/**
 	 * Whether a platform method's native returns whether its range was inside the bytes, where Haxe throws
@@ -207,6 +143,13 @@ class PlatformAbi {
 	/** The stdlib function that throws Haxe's `haxe.io.Error.OutsideBounds`. */
 	public static inline final OUTSIDE_BOUNDS = "haxe.io.BytesBounds.outsideBounds";
 
-	static function noArguments():Array<CompilerType>
-		return [];
+	static function platformMethod(arguments:Array<CompilerType>, result:CompilerType, nativeName:String):PlatformMethod
+		return {arguments: arguments, result: result, nativeName: nativeName};
+}
+
+/** A method of a platform type: its signature, and the native or stdlib function a call of it calls. */
+typedef PlatformMethod = {
+	arguments:Array<CompilerType>,
+	result:CompilerType,
+	nativeName:String
 }

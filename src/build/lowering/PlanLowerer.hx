@@ -42,8 +42,8 @@ class PlanLowerer {
 					artifactActions.set(artifact.id.key(), [actionId]);
 				}
 			for (resolvedPackage in project.packages.packages)
-				if (resolvedPackage.nativeSources.length > 0
-					|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)) {
+				if (context.webHost == null && (resolvedPackage.nativeSources.length > 0
+					|| (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null))) {
 					var packageArtifacts = [
 						for (artifact in plan.artifacts)
 							if (artifact.id.packageId == resolvedPackage.name) artifact
@@ -58,7 +58,7 @@ class PlanLowerer {
 
 			for (artifact in plan.artifacts)
 				switch artifact.id.kind {
-					case HashLinkModule | WasmModule:
+					case HashLinkModule | WasmModule | CModule:
 						// The compiler reads the FFI interfaces a module imports and nothing else of the project's native code: the
 						// libraries the module loads are built beside it, so a long native build and the compile overlap. Whatever
 						// runs the module waits for the whole build of its project (see `WorkspaceBuild.withTests`).
@@ -75,7 +75,7 @@ class PlanLowerer {
 							: context.layout.hashLinkModulePath(artifact.id.packageId)) : context.output;
 						actions.push(CompilerProvider.action(project, context,
 							new ActionId('compile-project:${artifact.id.key()}'), dependencies,
-							destination));
+							destination, artifact.id.kind == ArtifactKind.CModule));
 					case FfiInterface:
 					default:
 						if (artifact.id.kind != ArtifactKind.NativeRuntime

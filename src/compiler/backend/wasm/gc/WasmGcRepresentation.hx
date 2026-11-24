@@ -251,6 +251,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			}>
 		return WasmGcLocalCompaction.run(body, locals, parameters);
 
+	public function runtimeFunction(name:String):Int
+		return WasmModuleSupport.requiredFunctionIndex(gc.functions, name);
+
 	public function hasScalarCall(name:String):Bool
 		return plan.scalarSignatures.exists(name);
 
@@ -1150,7 +1153,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			var box = plan.boxedPrimitiveType(type),
 				unbox:Array<WasmInstruction> = switch type {
 					case I32, Bool: [StructGet(box, 0)];
-					case F64: [StructGet(box, 0), I32TruncF64S];
+					case F64: [StructGet(box, 0), I32FromF64];
 					case I64: [StructGet(box, 0), I32WrapI64];
 					default: throw new InternalError('Unsupported Wasm GC dynamic Int conversion from $type');
 				};
@@ -2320,7 +2323,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case [I32, F64]:
 				return [LocalGet(sourceLocal), F64ConvertI32S];
 			case [F64, I32]:
-				return [LocalGet(sourceLocal), I32TruncF64S];
+				return [LocalGet(sourceLocal), I32FromF64];
 			case [_, _]:
 				return switch valueType(targetType) {
 					case Ref(reference): [LocalGet(sourceLocal), RefCast(reference)];
@@ -2346,7 +2349,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case [I32, F64]:
 				return [LocalSet(temporary), LocalGet(temporary), F64ConvertI32S, LocalSet(destination)];
 			case [F64, I32]:
-				return [LocalSet(temporary), LocalGet(temporary), I32TruncF64S, LocalSet(destination)];
+				return [LocalSet(temporary), LocalGet(temporary), I32FromF64, LocalSet(destination)];
 			case [_, _]:
 				return switch [valueType(sourceType), valueType(output.type)] {
 					case [Ref(_), Ref(_)]: [LocalSet(destination)];
@@ -2505,7 +2508,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				default: true;
 			}) || argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm GC Math.ceil signature");
-			return [LocalGet(argumentLocals[0]), F64Ceil, I32TruncF64S, LocalSet(outputLocal)];
+			return [LocalGet(argumentLocals[0]), F64Ceil, I32FromF64, LocalSet(outputLocal)];
 		}
 		if (name == "__math_sqrt") {
 			if ((switch (output.type) {
@@ -2561,7 +2564,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				default: true;
 			}) || argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm GC Math.floor signature");
-			return [LocalGet(argumentLocals[0]), F64Floor, I32TruncF64S, LocalSet(outputLocal)];
+			return [LocalGet(argumentLocals[0]), F64Floor, I32FromF64, LocalSet(outputLocal)];
 		}
 		if (name == "__math_round") {
 			if ((switch (output.type) {
@@ -2578,7 +2581,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				F64Const(0.5),
 				F64Add,
 				F64Floor,
-				I32TruncF64S,
+				I32FromF64,
 				LocalSet(outputLocal)
 			];
 		}
@@ -2591,7 +2594,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				default: true;
 			}) || argumentLocals.length != 1)
 				throw new InternalError("Invalid Wasm GC Std.int(Float) signature");
-			return [LocalGet(argumentLocals[0]), I32TruncF64S, LocalSet(outputLocal)];
+			return [LocalGet(argumentLocals[0]), I32FromF64, LocalSet(outputLocal)];
 		}
 		if (name == "__std_int_dynamic") {
 			if ((switch (output.type) {

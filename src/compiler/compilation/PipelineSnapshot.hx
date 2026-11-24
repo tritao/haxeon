@@ -46,15 +46,19 @@ class PipelineSnapshot {
 	}
 
 	/** Why `next` cannot reuse a build made from `this.inputs`, or null when it can. */
-	public function mismatch(next:PipelineInputs):Null<String> {
-		if (inputs.environment != next.environment)
-			return "environment: " + firstDifference(inputs.environment, next.environment);
-		if (inputs.tables.compare(next.tables) != 0)
+	public function mismatch(next:PipelineInputs):Null<String>
+		return inputsDifference(inputs, next);
+
+	/** What differs between two pipeline inputs, positions included, or null when the pipeline would read the same. */
+	public static function inputsDifference(previous:PipelineInputs, next:PipelineInputs):Null<String> {
+		if (previous.environment != next.environment)
+			return "environment: " + firstDifference(previous.environment, next.environment);
+		if (previous.tables.compare(next.tables) != 0)
 			return "program tables";
-		var function_ = differingFunction(inputs.functions, next.functions);
+		var function_ = differingFunction(previous.functions, next.functions);
 		if (function_ != null)
 			return 'function $function_';
-		var initializer = differingFunction(inputs.initializers, next.initializers);
+		var initializer = differingFunction(previous.initializers, next.initializers);
 		return initializer == null ? null : 'initializer $initializer';
 	}
 

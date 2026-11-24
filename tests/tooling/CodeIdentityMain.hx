@@ -54,7 +54,7 @@ class Main {
 			"--output=" + output].concat(extra == null ? [] : extra);
 		CompilerDriver.compile(CompilerArguments.parse(args.concat([for (name in all) root + "/" + name + ".hx"])),
 			_ -> {}, session);
-		var process = new Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [output]);
+		var process = new Process(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [output]);
 		var text = process.stdout.readAll().toString();
 		var code = process.exitCode();
 		process.close();

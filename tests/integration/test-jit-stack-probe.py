@@ -16,8 +16,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-HASHLINK_DIR = Path(os.environ.get("HL_GC_TEST_LIBRARY_DIR") or
-                    subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
+HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
 VM = os.environ.get("HL_JIT_TEST_VM") or str(HASHLINK_DIR / "hl")
 LIVE_VALUES = 2000  # live across the recursive call, so each frame holds them: about four pages
 PAD_VALUES = 250  # a padding frame of about half a page, to shift where the overflow starts

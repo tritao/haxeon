@@ -37,11 +37,11 @@ function main():Int {
 	}
 	if (ready != 1 || !client.isCurrent(1) || client.capabilities().length != 2)
 		return 1;
-	var vector = RpcProtocol.encode(Hello(1, 1, "fixture/1", ["read"]), 1024);
+	var vector = RpcProtocol.encode(Hello(RpcProtocol.VERSION, RpcProtocol.CODEC_VERSION, "fixture/1", ["read"]), 1024);
 	var hex = "";
 	for (index in 0...vector.length)
 		hex += StringTools.hex(vector.get(index), 2);
-	if (hex != "8101940101A9666978747572652F3191A472656164")
+	if (hex != "8101940201A9666978747572652F3191A472656164")
 		return 2;
 	var method = new RpcMethod<String, String>(100, text -> Bytes.ofString(text),
 		function(bytes:Bytes) return bytes.toString(),
@@ -55,9 +55,10 @@ function main():Int {
 		context.respond(value + "!");
 	});
 	var answer = "";
-	active.call(method, "hello", 25, function(value) {
-		answer = value;
-	}, function(_) {});
+	active.call(method, "hello", 25).onComplete(outcome -> switch outcome {
+		case Success(value): answer = value;
+		case _:
+	});
 	service.poll();
 	client.poll();
 	if (answer != "hello!")
@@ -79,5 +80,18 @@ function main():Int {
 	client.close();
 	if (client.nextWakeAt() != null || client.current() != null)
 		return 7;
-	return 42;
+
+	pair = MemoryTransport.pair(4096, 16);
+	server = RpcHandshake.server(pair.server, clock, options);
+	if (!pair.client.send(RpcProtocol.encode(Hello(1, RpcProtocol.CODEC_VERSION, "fixture/1", ["read"]), 1024)))
+		return 8;
+	server.poll();
+	server.poll();
+	var refusal = pair.client.receive();
+	if (refusal == null || server.connection != null)
+		return 9;
+	return switch RpcProtocol.decode(refusal, 1024) {
+		case Refused(error) if (error.code == "unsupported_protocol"): 42;
+		default: 10;
+	};
 }

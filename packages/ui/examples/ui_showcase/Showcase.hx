@@ -1,6 +1,7 @@
 import haxeon.ui.Paint.SolidPaint;
 import haxeon.ui.TextLayout.TextPosition;
 
+import haxeon.platform.Surface;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.DisplayList;
@@ -24,7 +25,6 @@ import haxeon.ui.Path;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
 import haxeon.ui.Renderer;
-import haxeon.platform.Surface;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 

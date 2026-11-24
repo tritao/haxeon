@@ -10,6 +10,7 @@ import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.passes.values.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Array-specific storage around a value's scalar/reference lanes. */
+@:nullSafety(Strict)
 class IrValueArrayLayout {
 	public final element:IrType;
 	public final storage:IrType;
@@ -20,37 +21,34 @@ class IrValueArrayLayout {
 	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
 			?enums:Array<IrEnum>) {
 		this.element = element;
+		// An enum tag is its own storage; a struct, or an enum stored inline, names the value class it is stored as.
+		var validity = false, stored = element, name:Null<String> = null;
 		switch element {
 			case EnumTag(_):
-				hasValidity = false;
-				storage = element;
-				lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(element);
-				return;
-			default:
-		}
-		var name = switch element {
-			case Obj(value): hasValidity = true;
-				storage = element;
-				value;
-			case Nullable(Obj(value)): hasValidity = false;
-				storage = element;
-				value;
+			case Obj(value):
+				validity = true;
+				name = value;
+			case Nullable(Obj(value)):
+				name = value;
 			case Nullable(Enum(_)): throw new InternalError("Nullable enums must use their canonical Enum IR type");
 			case Enum(value):
 				var resolved = enums == null ? null : IrInlineEnumStorage.resolve(enums, objects, value);
 				if (resolved == null) throw new InternalError('Enum "$value" has no inline storage');
 				// Enum null is tag zero, not an additional optional wrapper or validity bit.
-				hasValidity = false;
-				storage = resolved;
-				switch resolved {
-					case Obj(name): name;
+				stored = resolved;
+				name = switch resolved {
+					case Obj(record): record;
 					default: throw new InternalError("Invalid enum value record");
 				};
 			default: throw new InternalError('A value array requires a struct element');
-		};
-		var object = objects.get(name);
-		if (object == null || !object.isValue) throw new InternalError('Array element "$name" is not a struct');
-		lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(storage);
+		}
+		hasValidity = validity;
+		storage = stored;
+		if (name != null) {
+			var object = objects.get(name);
+			if (object == null || !object.isValue) throw new InternalError('Array element "$name" is not a struct');
+		}
+		lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(stored);
 	}
 
 	/** Validity bits follow the payload in the same scalar lane; growth moves them when capacity changes. */

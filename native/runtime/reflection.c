@@ -54,6 +54,8 @@ HL_PRIM vdynamic *HL_NAME(__reflect_field)(vdynamic *object, vstring *name) {
 
 HL_PRIM void HL_NAME(__reflect_set_field)(vdynamic *object, vstring *name,
 		vdynamic *value) {
+	// As HashLink's own field store (hl_obj_set_field): a null object is a null access.
+	if (!object) hl_null_access();
 	if (!name) hl_error("Null field name");
 	int field = hl_hash((vbyte *)name->bytes);
 	if (!value) {

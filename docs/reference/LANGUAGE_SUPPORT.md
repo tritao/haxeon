@@ -1,5 +1,17 @@
 # Language support
 
+## Compatibility at a glance
+
+| Area | What to check when moving Haxe code |
+|---|---|
+| Syntax and types | Classes, interfaces, enums, abstracts, generics and pattern matching are in the subset below. See [Not yet supported](#not-yet-supported) for differences in typing, structure conversion and array access. |
+| Standard library and `sys` | See the supported operations below and the [standard library gaps](#not-yet-supported). Compile the modules you use for the intended output. |
+| Metadata and macros | Supported metadata includes `@:nullSafety`, `@:allow` and `@:hlNative`. See [Haxe command lines](CLI.md#haxe-command-lines) for the supported `nullSafety` option and macro restrictions. |
+| Conditional compilation | Use `#if` with a define passed as `-D` or through the project's [`defines` setting](MANIFEST.md#settings). Check the branch for each target. |
+| Platform APIs and externs | Check target-specific imports against the output you build. See [HashLink bindings](#source-declared-hashlink-bindings), [C header import](#c-header-import) and the [Wasm backend](WASM_BACKEND.md). |
+
+## Supported language features
+
 The current subset includes:
 
 - `Int`, `Bool`, `Float`, `String`, nullable values, and dynamic values
@@ -8,6 +20,10 @@ The current subset includes:
 - An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
   prints as `Kind(9)`, and a nullable one as `null`).
+- A bare name is an enum abstract's value where Haxe makes it one: in the abstract's own code and module, where the
+  abstract is imported (`import pack.Kind`, `import pack.Kind.*`, which also imports an enum's constructors), and where a
+  value of the abstract is expected. An abstract elsewhere in the program, its own package's included, does not put its
+  values in scope, so a value named `Type` or `Array` there hides nothing.
 - A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.
@@ -66,6 +82,13 @@ The current subset includes:
 - Haxe's `Lambda` over arrays, maps and iterables, `flatten` and `flatMap` included. A callback's result that names a type
   parameter nothing has fixed yet is a type variable its body fills, as in Haxe: `Lambda.flatMap(words, w -> w.split(""))`
   returns an array as the `Iterable<S>` it declares, and a statement body makes it Void.
+- Key/value iteration as in Haxe: `for (key => value in x)` and key/value comprehensions over a class or structure,
+  through `x.keyValueIterator()` or over `x` itself when it is an iterator of `{key, value}`; the
+  `KeyValueIterator<K, V>` and `KeyValueIterable<K, V>` types, which a class with a `keyValueIterator()` converts to;
+  `keyValueIterator()` on a map (`haxeon.MapMethods`: its keys taken when the iterator is made, each value read when
+  `next()` reaches it), an array or a `ReadOnlyArray` (`haxeon.ArrayMethods`), and a String with `using StringTools`.
+  Not yet: a map or an array passed where a `KeyValueIterable` is expected, `Map.toString()` (and Haxe's printing of a
+  map), and `keys()`, `iterator()`, `keyValueIterator()` and `copy()` on `haxe.ds.ObjectMap`.
 - Arrays and compiler-owned primitive, string, and reference array operations
 - `Map` keyed by `String`, `Int`, an enum, or a struct that conforms to `Hashable`, holding primitive, reference or
   value-class values. A class or interface cannot be a key (classes cannot conform to `Hashable`), so there is no
@@ -79,8 +102,9 @@ The current subset includes:
   evaluated once, matches the pattern: nested patterns, constants, `_` and alternatives (`Circle(_) | Rect(1, _)`). As in
   Haxe, the pattern binds no names: a capture there (`shape`, `Circle(radius)`, `s = Circle(_)`) is `E1019`, "Pattern
   variables are not allowed in .match patterns".
-- A lowercase name in a pattern captures, as in Haxe, even where a function, local, static or field of that name is in
-  scope (`case Box(size):` beside a function `size`): inside the case the name is the captured value.
+- A bare lowercase capture shadows outer names in the case's guard and body, including locals, fields, module-level
+  functions and imported functions. Bare uppercase names resolve as references, such as enum constructors, enum abstract
+  values and static inline constants. An unknown uppercase name reports an error at the identifier.
 - Array iteration and comprehensions
 - Static initialization runs in Haxe's order: every class's `static function __init__()` first, then the static
   initializers, class by class, each class's in declaration order. Classes go module by module in path order, each
@@ -138,6 +162,8 @@ The current subset includes:
   `@:isVar` property's), so a read in `set_x` still calls `get_x`. A `never` side cannot be accessed, a `null` side only
   from the class and its subclasses (or `@:allow`, `@:access`), a missing accessor is reported, and so is the variable of a
   property without storage, in Haxe's words and at its places.
+- Dynamic class methods (`dynamic function`) store a callable value on each object or, for a static method, on its class.
+  Assigning a new function changes subsequent calls. A subclass can override an instance dynamic method.
 - Variables and properties in an interface (`interface Shape { var x:Int; var area(get, never):Int; }`), as in Haxe: an
   implementing class has each, public, with an access that unifies with the interface's (each side the same, or the
   interface's `null` or `never`) and the same type, and the accessors of its `get` and `set` sides, in Haxe's words and at
@@ -198,8 +224,8 @@ The current subset includes:
   the value does not fix (`[1, 2].map`) is `E1003` (`using-extension-value-open`). Last come Haxe's global extensions of an
   enum value, `haxe.EnumTools.EnumValueTools` (below), which apply without a `using`. Not yet: a class named as a value
   (`Main.twice()` with a `Dynamic` first argument, which Haxe passes `Class<Main>`) and Haxe's `haxe.EnumTools` on an enum
-  itself (`Color.getName()`, `Color.createAll()`): both need the `Type` API's class and enum values
-  (`docs/design/TYPE_VALUES.md`).
+  itself (`Color.getName()`, `Color.createAll()`): both need class and enum values (`Class<T>`,
+  `Enum<T>`), which Haxeon does not have yet.
 - The enum part of Haxe's `Type` API, on a value of a known enum type: `Type.enumIndex`, `Type.enumEq`,
   `Type.enumConstructor` (the constructor's name) and `Type.enumParameters` (a new `Array<Dynamic>` of its arguments in
   declaration order, `null` for an optional one left out; writing to it does not change the value, as on HashLink). Haxe's
@@ -208,7 +234,16 @@ The current subset includes:
   puts them at its place in the module's list), and callable as `EnumValueTools.getName(value)`. A `Null<E>` value is
   checked, as a call of a method on it is: null throws "Null access", as Haxe's does. `Type.enumEq` also compares
   `Dynamic` values; the others need the enum's type where they are typed. `Dynamic` and Haxe's `EnumValue` type wait for
-  enums as runtime values (`docs/design/TYPE_VALUES.md`).
+  enums as runtime values.
+- On a class or enum named where they are called: `Type.getClassName(C)` (an interface and `String` too),
+  `Type.getEnumName(E)`, `Type.getEnumConstructs(E)`, `Type.getInstanceFields(C)` (the class's methods, then its variables,
+  each in declaration order, then its base's, an override listed with the base that declares it, as HashLink lists them,
+  without HashLink's empty slot for an implemented interface), `Type.getClassFields(C)` (its statics in declaration order),
+  `Type.createInstance(C, [arguments])` (with the arguments written as an array literal) and `Type.createEmptyInstance(C)`
+  (an object whose constructor and field initializers have not run, its variables at their type's default, null for a
+  reference: a non-generic class only). `Type.getClass`, `getSuperClass`, `getEnum`, `resolveClass`, `resolveEnum` and
+  `typeof`, and any of these on a class or enum held as a value, are `E1009`: they need classes and enums as runtime
+  values.
 - On an enum named where they are called: `Type.createEnumIndex(E, index, ?params)`, `Type.createEnum(E, name, ?params)`
   and `Type.allEnums(E)` (its constructors without arguments, in order). They throw what HashLink's `Type` throws for
   an index out of range, an unknown name, a constructor with arguments given none, or a wrong count of arguments. A
@@ -256,6 +291,56 @@ realtime operations remain in a separately versioned ABI.
 Unsupported ABI combinations produce explicit typed diagnostics instead of
 silently falling back to dynamic behavior.
 
+## Null safety
+
+Haxeon has Haxe's null-safety checker (`@:nullSafety`, Haxe 4.3.7's `nullSafety.ml`), with Haxe's four modes. It only checks: the
+code it lets through is the code a build without it makes (a later step is to let code generation trust what it proves).
+
+- **Turning it on.** It is off unless something turns it on. `@:nullSafety(Mode)` on a class or abstract checks its members, on a
+  field or method that member; `@:nullSafety` alone is `Loose`. A Haxe command line takes Haxe's own
+  `--macro nullSafety("pack", Strict)` (`haxe.macro.Compiler.nullSafety(path, mode, recursive)`, recursive by default), and a
+  project its `nullSafety` setting ([MANIFEST.md](MANIFEST.md)), which applies to the package's own sources: `haxeon create` writes
+  `"strict"`, a project without the key is off, and `warn` checks as `Strict` but reports warnings (`W1003`), to migrate code.
+  These combine as Haxe's metadata does: `Off` anywhere wins, `Strict` and `StrictThreaded` win over `Loose`, so a class cannot
+  lower its package's mode. `@:nullSafety(Off)` on an expression or statement leaves it unchecked. The standard library is not
+  checked. An argument Haxe does not take (`@:nullSafety(Yes)`) is an error.
+- **What it reports** (`E1005`, with Haxe's message after "Null safety:", at Haxe's position): a `Null<T>` or `null` the flow
+  facts do not prove present where a type that does not take null is expected (an assignment or declaration, an argument that is
+  not optional, a return, an array item, a field's initial value, a typed `cast` or `(value : Type)`); a `Null<T>` inside a type
+  where the expected one has none (`Array<Null<String>>` as `Array<String>`, a function that takes `String` as one that takes
+  `Null<String>`); a field read, write or method call through a nullable; a call of a nullable function; an array access on a
+  nullable or with a nullable index; arithmetic, an ordering, `!` or `-` on a nullable; a nullable condition; iterating or
+  throwing a nullable; concatenating two nullable strings. `??` and a checked value are fine. In a checked class, a static
+  needs an initial value and an instance field one or an assignment in the constructor, which may not use `this`, call a
+  method or read an unassigned field before every one is assigned (Haxe's simple flow: statements in order, both branches
+  of an `if` with an `else`).
+- **Narrowing** is the typer's own (`x != null`, an early return or throw, `while`, `&&` and `||`), per mode: `Loose` trusts a
+  field's narrowing across calls, as Haxe does; `Strict` forgets it at a call, and trusts no narrowing of a local inside a
+  closure that captures it, unless the closure is written as a call's argument (it runs during the call); `StrictThreaded`
+  narrows no field but a `final` one. In a checked body, a field read through a nullable is the checker's finding, not the
+  plain build's `E1005` ("requires an object"), so `Loose` accepts what Haxe accepts there.
+
+Known gaps, where Haxe's checker has holes and Haxeon matches it for now (the step that lets code generation trust the checker
+treats these values as unproven): `Dynamic` converts to anything, and `Reflect` results are `Dynamic`; an untyped `cast`; a type
+parameter, which a call fills with whatever it is given; a value from unchecked code typed `String` is trusted, and a callback
+unchecked code calls may be passed null; `a[i]` is an element, never null; overrides and interface implementations are not
+checked for nullability (Haxeon's own rule requires their signatures to match anyway, `E1020`).
+
+Where Haxeon differs from Haxe's checker:
+
+- Haxeon narrows more, so it accepts code Haxe rejects: `map.exists(k)` makes `map.get(k)` and `map[k]` present, a type test
+  narrows, a pure call keeps a field's narrowing in `Strict`, and Haxe's checker misses a null test that is not the first
+  operand of a chain of `||` (`a || b == null || b.f`), which Haxeon reads.
+- A lambda written as an argument of any call to a function or method is taken to run during the call; Haxe looks at whether
+  the callee stores it. A local a closure assigns keeps losing its narrowing at calls that may run the closure, where Haxe's
+  `Strict` never narrows it again.
+- `Std.downcast` is `Null<T>` in Haxeon, where Haxe types it `T`, so its result needs a check.
+- A null field of an object literal and a null branch of a `switch` or `? :` are reported at that value, where Haxe points at
+  the declaration that takes them.
+- `@:nullSafety(Off)` on a local's declaration leaves that declaration unchecked, but not the local's later assignments.
+- With `warn`, the field-initialization findings of a class that has no constructor are not reported.
+- Haxe's `?.` is not parsed yet.
+
 ## Not yet supported
 
 Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
@@ -264,27 +349,24 @@ HashLink):
 - An arrow lambda's rest parameter (`(...values:Int) -> values.length`), which Haxe also rejects.
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
-  lowered as views of one object, so the narrower value is the same object (`docs/design/STRUCTURE_VALUES.md`, step 4);
+  lowered as views of one object, so the narrower value is the same object;
   the differential case `anonymous-width-subtyping` records it. The same holds for an object literal once it has met one
   structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
   after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
   as in Haxe (`structure-open-literal`).
 - A class or interface instance where a structure is expected (`var shape:{function area():Int;} = new Rectangle();`)
-  is a type mismatch. It waits for the same views (`docs/design/STRUCTURE_VALUES.md`, step 4); the differential case
+  is a type mismatch. It waits for the same views; the differential case
   `structure-from-class` records it.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
-  `write` (`getContent` and `saveContent` work), and the `Type` API beyond an enum value's (`typeof`, `getClass`,
-  `getClassName`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
-  does not have yet (`docs/design/TYPE_VALUES.md`).
+  `write` (`getContent` and `saveContent` work), and the `Type` API on a class or enum held as a value (`typeof`, `getClass`,
+  `getSuperClass`, `resolveClass`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
+  does not have yet.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
 - A generic call whose type argument is a type variable something after the call still fixes (`var values = [];
   Lambda.count(values); values.push(1);`): `E1003`. Haxeon names and types a generic call's specialization when it types the
   call, so it cannot follow a variable fixed later; one that only the argument's own value carries (`Lambda.empty([])`) is
   Dynamic, as in Haxe. The differential case `lambda-unfixed-before-call` records it.
-- Reading an `Array` element at or past its length (`var a:Array<Null<Bool>> = []; a[3]`): HashLink throws "Array index
-  out of bounds". Haxe gives null there (the type's default value for a basic type on static targets). Writing past the
-  end grows the array, as in Haxe. Found on 2026-11-19; the Wasm backends are not checked yet.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 
@@ -294,8 +376,9 @@ Haxeon is stricter than Haxe only where Haxe's code would fail when it runs. Whe
 follows it, as with the scalar defaults of `Null<Int>` above (which follow Haxe's static targets; on JavaScript the
 value stays null), and a warning can point out a surprising case.
 
-- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`). Haxe
-  reads through and throws "Null access" when the program runs.
+- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`), and a
+  `Null<F>` function is not called. Haxe reads through and throws "Null access" when the program runs. In a body the null-safety
+  checker checks (above), these are its findings instead.
 - Map keys must be `Hashable` (above). The rule stays for structs, but Haxe's identity-keyed maps (`ObjectMap`, a class
   instance as key) have no Haxeon equivalent yet; one is planned.
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet
@@ -306,12 +389,29 @@ value stays null), and a warning can point out a surprising case.
   one win. Nor does this meet the rule, but it is almost always a mistake, and Rust rejects it too. Declaring a local
   again in the same block is allowed, as in Haxe: the later declaration shadows the earlier for the code after it
   (`local-redeclared-same-block`).
+- Reading an `Array` element at a negative index or at or past its length (`var a:Array<Int> = []; a[3]`) throws "Array
+  index out of bounds" on every backend. The Haxe manual promises that array access does not throw and returns a
+  target-dependent value (null, or the type's default for a basic type on static targets). Writing past the end grows the
+  array and fills the gap with the default, as in Haxe; writing at a negative index throws (Haxe leaves it unspecified).
+  Nor does this meet the rule: it is kept so that a bug surfaces at the read that goes wrong rather than later. To port
+  code that relies on Haxe's read, write `i < a.length ? a[i] : null` or a small helper (`array-read-out-of-range`).
+
+Different from Haxe on purpose:
+
+- The file invoked by `haxeon script.hx` or `haxeon run script.hx` can use top-level statements as an implicit
+  `main`. This applies only to the script file. Imported modules and project sources use the ordinary Haxe
+  module grammar.
+
+- `haxe.crypto.Sha256.encode` gives the SHA-256 of the string's UTF-8 bytes. Haxe's hashes those bytes but pads them
+  with the string's UTF-16 length, so for a string beyond ASCII its digest is not the SHA-256 (Haxe 4.3.7 on HashLink:
+  `encode("é")` is `b2207512...`, not `4a99557e...`). `Sha256.make(Bytes.ofString(s))` is the SHA-256 in both, so code
+  that must agree with stock Haxe hashes the bytes (`sha256-string-digests`).
 
 An unannotated field's type is its initializer's, and an unannotated function's result and arguments are what its body
 gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must
 match it, `return null` first makes it nullable, and no value return makes it `Void`. Where Haxe would let a later use in
 another function fix such a type, Haxe's result depends on the order it types functions in, so Haxeon asks for an
-annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's decisions):
+annotation instead (`E1002`):
 
 - A type the initializer leaves open: `static var e = [];`, `static var m = new Map();`, `static var n = null;`
   (`Cannot infer the type of field "C.e": nothing in its initializer fixes ...; annotate the field's type`).
@@ -323,8 +423,8 @@ annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's 
   (`function c() return d() + 1; function d() return c();`), or a field and a function. Haxe types them as `Dynamic` or,
   when one of them fixes the type, as that type. The error is on the first of them in declaration order and names the
   others; annotating one of them is enough. A function that calls itself is typed as in Haxe.
-- An object literal's structure gains optional fields only while the function or initializer that wrote it is typed
-  (docs/design/STRUCTURE_VALUES.md, decision 3). A literal held by an unannotated field and used elsewhere as a structure
+- An object literal's structure gains optional fields only while the function or initializer that wrote it is typed.
+  A literal held by an unannotated field and used elsewhere as a structure
   with more optional fields, `static var config = {name: "x"};` read as `{name:String, ?debug:Bool}`, is an error:
   `{name : String} has no field debug; the structure comes from a literal in "Main.config", which closed its type;
   annotate the type of field "Main.config"`. Haxe keeps the field's structure open, so which use adds a field depends on

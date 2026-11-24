@@ -47,12 +47,19 @@ class HxiSourceOrigins {
 				result.set(structure.name, span(declaration));
 				switch declaration {
 					case Structure(_, _, _, fields, _):
+						var fieldNames = [for (field in structure.fields) field.name];
 						for (field in structure.fields)
 							for (native in fields)
 								if (native.name == field.nativeName) {
 									result.set(structure.name + "." + field.name, native.span);
 									result.set(structure.name + ".get_" + field.name, native.span);
 									result.set(structure.name + ".set_" + field.name, native.span);
+									var propertyName = HxiHaxeEmitter.scalarPropertyName(field.name, fieldNames);
+									if (propertyName != field.name) {
+										result.set(structure.name + "." + propertyName, native.span);
+										result.set(structure.name + ".get_" + propertyName, native.span);
+										result.set(structure.name + ".set_" + propertyName, native.span);
+									}
 								}
 					case _:
 				}

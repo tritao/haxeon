@@ -141,7 +141,7 @@ class LspProtocolMain {
 		var watcherRegistration = protocol.handle('{"jsonrpc":"2.0","method":"initialized","params":{}}');
 		if (watcherRegistration.length != 1
 			|| Json.parse(watcherRegistration[0]).method != "client/registerCapability"
-			|| Json.parse(watcherRegistration[0]).params.registrations[0].registerOptions.watchers.length != 6)
+			|| Json.parse(watcherRegistration[0]).params.registrations[0].registerOptions.watchers.length != 7)
 			throw "LSP did not register project and source file watchers";
 		if (protocol.handle('{"jsonrpc":"2.0","id":"haxeon/register-watchers","result":null}').length != 0)
 			throw "LSP did not accept the client watcher-registration response";

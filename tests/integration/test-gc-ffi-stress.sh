@@ -7,7 +7,7 @@ fi
 root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-ffi.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+library=$("$root/scripts/hashlink-path.sh" --lib-dir)
 vm=${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}
 "${CC:-cc}" -shared -fPIC "$root/tests/native/gc_no_proc_tracking.c" -ldl -o "$work/no-proc.so"
 "${CC:-cc}" -shared -fPIC "$root/tests/native/native_call_fixture.c" -lpthread -o "$work/fixture.so"

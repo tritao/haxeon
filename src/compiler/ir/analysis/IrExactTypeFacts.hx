@@ -20,6 +20,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * a runtime function: HashLink lowers it inline (a type load and a compare), and the Wasm targets, which have no virtuals,
  * bind it to `__std_is_exact_type`, whose meaning is the same there (IrProgramAssembler).
  */
+@:nullSafety(Strict)
 class IrExactTypeFacts {
 	public static inline final TEST = "__object_has_exact_type";
 

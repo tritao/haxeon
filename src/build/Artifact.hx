@@ -3,6 +3,10 @@ package build;
 enum ArtifactKind {
 	Diagnostics;
 	HashLinkModule;
+
+	/** The program as C on the HashLink runtime (`--target=hlc`), which an app's runner compiles and links (docs/design/PROJECT_BUILDS.md). */
+	CModule;
+
 	HashLinkPatch;
 	WasmModule;
 	NativeObject;
@@ -34,6 +38,7 @@ class Artifact {
 		return switch kind {
 			case Diagnostics: "Diagnostics";
 			case HashLinkModule: "HashLinkModule";
+			case CModule: "CModule";
 			case HashLinkPatch: "HashLinkPatch";
 			case WasmModule: "WasmModule";
 			case NativeObject: "NativeObject";

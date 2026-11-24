@@ -563,7 +563,7 @@ class TypeRelations {
 			case TInstance(NominalKind.Enum, name, arguments) if ((switch expected {
 				case TInstance(NominalKind.Interface, _, _): true;
 				default: false;
-			})): var declaration = declarations.enums.get(name);
+			})): var declaration = declarations.enums.header(name);
 			if (declaration == null || declaration.conformances == null)
 				return false;
 			var substitutions:Map<String, CompilerType> = [];
@@ -829,7 +829,7 @@ class TypeRelations {
 	public function isValueClass(type:CompilerType):Bool
 		return switch type {
 			case TInstance(NominalKind.Class, name, _):
-				var declaration = declarations.classes.get(name);
+				var declaration = declarations.classes.header(name);
 				if (declaration == null) false;
 				else {
 					var found = declaration.isStruct == true;
@@ -843,7 +843,7 @@ class TypeRelations {
 
 	function isStructType(type:CompilerType):Bool
 		return switch type {
-			case TInstance(NominalKind.Class, name, _): var declaration = declarations.classes.get(name);
+			case TInstance(NominalKind.Class, name, _): var declaration = declarations.classes.header(name);
 				declaration != null && declaration.isStruct == true;
 			default: false;
 		};

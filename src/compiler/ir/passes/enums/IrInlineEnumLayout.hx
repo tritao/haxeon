@@ -26,6 +26,7 @@ typedef IrInlineEnumShape = {
 }
 
 /** Plans inline enum payloads using the same packing rules as struct arrays. */
+@:nullSafety(Strict)
 class IrInlineEnumLayout {
 	public static inline final CANONICAL_ABI = "portable-abi64";
 	public static inline final VALUE_PREFIX = "$inline-enum:";
@@ -143,10 +144,12 @@ class IrInlineEnumLayout {
 
 	/** Enum value declarations created while planning the requested shapes, in deterministic order. */
 	public function generatedObjects():Array<IrObject> {
-		var names = [for (name in objects.keys())
-			if (StringTools.startsWith(name, VALUE_PREFIX)) name];
-		names.sort(Reflect.compare);
-		return [for (name in names) objects.get(name)];
+		var generated = [for (name => object in objects)
+			if (StringTools.startsWith(name, VALUE_PREFIX)) {
+				name:name, object:object
+			}];
+		generated.sort((a, b) -> Reflect.compare(a.name, b.name));
+		return [for (entry in generated) entry.object];
 	}
 
 	/** The mapped form of a source value used in a planned enum payload. */

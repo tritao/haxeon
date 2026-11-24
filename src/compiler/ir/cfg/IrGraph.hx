@@ -14,6 +14,7 @@ import haxe.ds.ReadOnlyArray;
  * one of successors and one of predecessors, each block's a run of them (`successorCount`, `successor`), so a graph is a
  * handful of arrays whatever the number of blocks.
  */
+@:nullSafety(Strict)
 class IrGraph {
 	/** The reachable blocks in reverse postorder, the entry first. */
 	public var order(get, never):ReadOnlyArray<Int>;

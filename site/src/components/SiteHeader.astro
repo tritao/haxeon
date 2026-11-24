@@ -1,0 +1,188 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import { docsUrl, sourceRef } from '../../docs.mjs';
+
+const version =
+  process.env.HAXEON_SITE_MAIN_URL && sourceRef !== 'main'
+    ? { label: sourceRef, main: process.env.HAXEON_SITE_MAIN_URL }
+    : { label: sourceRef };
+
+const nav = [
+  ['Language', '/language/'],
+  ['UI', '/ui/'],
+  ['Build', '/build/'],
+  ['Docs', docsUrl('guides/README.md')],
+  ['Examples', '/examples/'],
+  ['About', '/about/'],
+];
+const getStarted = docsUrl('guides/00-get-started.md');
+---
+
+<div class="site-nav">
+  <a class="wordmark" href="/" aria-label="Haxeon home">Haxeon</a>
+  <nav class="wide-nav" aria-label="Main">
+    {
+      nav.map(([label, href]) => (
+        <a href={href} aria-current={Astro.url.pathname === href ? 'page' : undefined}>
+          {label}
+        </a>
+      ))
+    }
+  </nav>
+  <details class="mobile-nav">
+    <summary>Site</summary>
+    <nav aria-label="Main">
+      {
+        nav.map(([label, href]) => (
+          <a href={href} aria-current={Astro.url.pathname === href ? 'page' : undefined}>
+            {label}
+          </a>
+        ))
+      }
+    </nav>
+  </details>
+  <div class="actions">
+    <Search />
+    <span class="version">
+      {version.label}
+      {
+        version.main && (
+          <>
+            {' '}
+            · <a href={version.main}>main</a>
+          </>
+        )
+      }
+    </span>
+    <ThemeSelect />
+    <a class="btn primary get-started" href={getStarted}>Get started</a>
+  </div>
+</div>
+
+<style>
+  :global(header.header:has(> .site-nav)) {
+    --sl-nav-pad-y: 0;
+    border-color: var(--sl-color-gray-5);
+    background: color-mix(in srgb, var(--sl-color-bg-nav) 88%, transparent);
+    backdrop-filter: blur(8px);
+  }
+  .site-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--sl-nav-gap);
+    margin-inline: auto;
+    max-width: 1168px;
+    height: 100%;
+    line-height: 1.6;
+  }
+  .wordmark {
+    color: var(--sl-color-white);
+    font: 800 1.35rem/1 var(--hx-font-display);
+    letter-spacing: -0.03em;
+    text-decoration: none;
+  }
+  nav {
+    display: flex;
+    gap: var(--sl-nav-gap);
+  }
+  nav a,
+  summary {
+    color: var(--sl-color-white);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  nav a:hover,
+  nav a[aria-current] {
+    color: var(--sl-color-text-accent);
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--hx-space-3);
+    margin-inline-start: auto;
+  }
+  .version {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
+    white-space: nowrap;
+  }
+  .get-started {
+    border: 0;
+    padding: 0.5rem 1rem;
+    white-space: nowrap;
+  }
+  .mobile-nav {
+    display: none;
+    position: relative;
+  }
+  .mobile-nav nav {
+    position: absolute;
+    inset-block-start: calc(100% + var(--hx-space-3));
+    inset-inline-start: 0;
+    z-index: 1;
+    display: grid;
+    gap: var(--hx-space-2);
+    min-width: 9rem;
+    padding: var(--hx-space-3);
+    background: var(--sl-color-bg-sidebar);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: var(--hx-radius-m);
+  }
+  summary {
+    cursor: pointer;
+  }
+  @media (max-width: 66rem) {
+    .wide-nav {
+      display: none;
+    }
+    .mobile-nav {
+      display: block;
+    }
+  }
+  @media (max-width: 50rem) {
+    .site-nav,
+    .actions {
+      gap: var(--hx-space-2);
+    }
+    .version {
+      display: none;
+    }
+  }
+  @media (max-width: 30rem) {
+    .actions {
+      gap: var(--hx-space-1);
+    }
+    .get-started {
+      padding-inline: var(--hx-space-2);
+      font-size: var(--sl-text-xs);
+    }
+    .actions :global(starlight-theme-select label) {
+      justify-content: center;
+    }
+    .actions :global(starlight-theme-select .label-icon) {
+      inset-inline-start: auto;
+    }
+    .actions :global(starlight-theme-select select) {
+      margin-inline: 0;
+      width: 1.5rem;
+      padding-inline: 0;
+      color: transparent;
+    }
+    .actions :global(starlight-theme-select .caret) {
+      display: none;
+    }
+  }
+  @media (max-width: 23rem) {
+    :global(header.header:has(> .site-nav)) {
+      --sl-nav-pad-x: var(--hx-space-2);
+      --sl-nav-gap: var(--hx-space-2);
+    }
+    .site-nav {
+      font-size: var(--sl-text-sm);
+    }
+    .wordmark {
+      font-size: var(--sl-text-lg);
+    }
+  }
+</style>

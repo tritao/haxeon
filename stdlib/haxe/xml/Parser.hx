@@ -349,35 +349,7 @@ class Parser {
 						if (StringTools.fastCodeAt(s, 0) == '#'.code) {
 							var c = StringTools.fastCodeAt(s, 1) == 'x'.code ? Std.parseInt("0" + s.substr(1,
 								s.length - 1)) : Std.parseInt(s.substr(1, s.length - 1));
-							#if wasm
-							// Wasm strings hold UTF-8 bytes, like upstream's non-unicode targets.
-							if (c >= 128) {
-								// UTF8-encode it
-								if (c <= 0x7FF) {
-									buf.addChar(0xC0 | (c >> 6));
-									buf.addChar(0x80 | (c & 63));
-								} else if (c <= 0xFFFF) {
-									buf.addChar(0xE0 | (c >> 12));
-									buf.addChar(0x80 | ((c >> 6) & 63));
-									buf.addChar(0x80 | (c & 63));
-								} else if (c <= 0x10FFFF) {
-									buf.addChar(0xF0 | (c >> 18));
-									buf.addChar(0x80 | ((c >> 12) & 63));
-									buf.addChar(0x80 | ((c >> 6) & 63));
-									buf.addChar(0x80 | (c & 63));
-								} else
-									throw new XmlParserException("Cannot encode UTF8-char " + c, str, p);
-							} else
-								buf.addChar(c);
-							#else
-							// HashLink strings hold UTF-16 code units, and `String.fromCharCode` takes one unit, so a
-							// supplementary character is added as a surrogate pair.
-							if (c > 0xFFFF && c <= 0x10FFFF) {
-								buf.addChar(0xD800 | ((c - 0x10000) >> 10));
-								buf.addChar(0xDC00 | ((c - 0x10000) & 0x3FF));
-							} else
-								buf.addChar(c);
-							#end
+							buf.addChar(c);
 						} else if (!escapes.exists(s)) {
 							if (strict)
 								throw new XmlParserException("Undefined entity: " + s, str, p);

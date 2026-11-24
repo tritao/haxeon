@@ -1,13 +1,12 @@
 package haxeon.platform.async;
 
+import haxeon.async.Future;
+import haxeon.async.Outcome;
+import haxeon.async.Promise;
 import haxeon.platform.BindingError;
 import haxeon.platform.NativeKitError;
-import haxeon.platform.PlatformError;
 import haxeon.platform.WebView;
 import haxeon.platform.Window;
-import haxeon.platform.async.Future;
-import haxeon.platform.async.Outcome;
-import haxeon.platform.async.Promise;
 import haxeon.platform.async.Task;
 import haxeon.platform.dialog.FileDialogOptions;
 import haxeon.platform.dialog.MessageDialogOptions;
@@ -160,8 +159,9 @@ class Requests {
 			var outcome:Outcome<T>;
 			try {
 				outcome = decode(value, promise.future.isCancellationRequested());
-				if (outcome == null) throw BindingError.invalidData("Requests.decode", "Decoder returned null");
-			} catch (error:PlatformError) {
+				if (outcome == null || outcome.match(Failure(null)))
+					throw BindingError.invalidData("Requests.decode", "Decoder did not return a valid outcome");
+			} catch (error:haxe.Exception) {
 				promise.fail(error);
 				return;
 			} catch (error:Dynamic) {
@@ -171,7 +171,7 @@ class Requests {
 			promise.resolve(outcome);
 		}, promise.cancel);
 		entries.set(key, entry);
-		promise.future.setControls(cancelNative, function() {
+		promise.setControls(cancelNative, function() {
 			if (entries.get(key) == entry) entries.remove(key);
 		});
 		return promise.future;

@@ -4,6 +4,7 @@ import compiler.ir.model.Ir.IrType;
 import compiler.ir.passes.scalars.IrHlScalarRef;
 
 /** Opaque carrier for a traced lane slot. It is not a Haxe Dynamic value and must never box its input. */
+@:nullSafety(Strict)
 class IrValueLaneReference {
 	public static inline final TYPE_NAME = "value_lane_reference";
 	public static inline final PACK = "$lane:reference-pack";

@@ -40,7 +40,7 @@ class EqualityHelperEditMain {
 			var output = root + "/main.hl";
 			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output]).concat(paths)), _ -> {},
 				session);
-			var status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [output]);
+			var status = Sys.command(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [output]);
 			if (status != 18)
 				throw 'build with literal $literal returned $status, expected 18';
 		}

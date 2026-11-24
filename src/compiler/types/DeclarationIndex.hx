@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
 import compiler.syntax.Ast;
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.core.Source.SourceFile;
@@ -13,6 +14,10 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.StructProperties;
 import compiler.types.DeclarationTypes.DeclaredTypes;
+import compiler.semantic.DeclarationFacts;
+import compiler.semantic.DeclarationFacts.FactAspect;
+import compiler.semantic.DeclarationReads;
+import compiler.semantic.DeclarationTable;
 
 /** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
@@ -60,24 +65,96 @@ class OpenStructure {
 
 /** Shared owner of source declarations and parsed-type resolution. */
 class DeclarationIndex {
-	public final aliases:Map<String, AstTypeAlias> = [];
-	public final enums:Map<String, AstEnum> = [];
+	public final aliases = new DeclarationTable<AstTypeAlias>(FactAspect.Shape, FactAspect.Shape,
+		DeclarationFacts.KIND_ALIASES);
+	/** Every enum: `get` reads its constructors (`FactAspect.Members`), `exists` its shape; one constructor is read alone (`Case`). */
+	public final enums = new DeclarationTable<AstEnum>(FactAspect.Members, FactAspect.Shape,
+		DeclarationFacts.KIND_ENUMS);
+
 	/** Every abstract, enum abstracts included. */
-	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	public final abstracts = new DeclarationTable<compiler.syntax.Ast.AstAbstract>(FactAspect.Shape, FactAspect.Shape,
+		DeclarationFacts.KIND_ABSTRACTS);
 
 	/** The abstracts that are enum abstracts (they declare values), for the lookups of values. */
-	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	public final enumAbstracts = new DeclarationTable<compiler.syntax.Ast.AstAbstract>(FactAspect.Shape,
+		FactAspect.Shape,
+		DeclarationFacts.KIND_ENUM_ABSTRACTS);
 
-	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
-	public final enumAbstractList:Array<compiler.syntax.Ast.AstAbstract> = [];
+	/** The same enum abstracts in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
+	final enumAbstractList:Array<compiler.syntax.Ast.AstAbstract> = [];
 
-	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
+	final aliasList:Array<AstTypeAlias>;
+	var wireAliases:Null<Map<String, Array<AstTypeAlias>>> = null;
+
+	/** Where the lookups of the unit being typed are recorded (`DeclarationReads`); null where nothing records. */
+	public var reads(default, null):Null<DeclarationReads> = null;
+
+	/** Records the lookups of the units typed from here on in `reads`. */
+	public function bindReads(reads:Null<DeclarationReads>):Void {
+		this.reads = reads;
+		aliases.reads = reads;
+		enums.reads = reads;
+		abstracts.reads = reads;
+		enumAbstracts.reads = reads;
+		interfaces.reads = reads;
+		classes.reads = reads;
+	}
+
+	/** Records that the unit being typed read what a reference to the type `name` means. */
+	inline function readShape(name:String):Void {
+		var recorder = reads;
+		if (recorder != null && recorder.recording)
+			recorder.read(FactAspect.Shape, name);
+	}
+
+	/** The enum abstracts in declaration order: a read of every one of them. */
+	public function enumAbstractsInOrder():Array<compiler.syntax.Ast.AstAbstract> {
+		var recorder = reads;
+		if (recorder != null && recorder.recording)
+			recorder.read(FactAspect.Kind, DeclarationFacts.KIND_ENUM_ABSTRACTS);
+		return enumAbstractList;
+	}
+
+	public function wireAliasCandidates(names:Array<String>):Array<AstTypeAlias> {
+		var groups = wireAliases;
+		if (groups == null)
+			wireAliases = groups = indexWireAliases(aliasList);
+		var key = wireFieldNames(names), recorder = reads, candidates = groups.get(key) ?? [];
+		if (recorder != null && recorder.recording) {
+			recorder.read(FactAspect.WireAliases, key);
+			for (alias in candidates)
+				recorder.read(FactAspect.WireShape, alias.name);
+		}
+		return candidates;
+	}
+
+	static function wireFieldNames(names:Array<String>):String {
+		names.sort(Reflect.compare);
+		return names.join(",");
+	}
+
+	public static function indexWireAliases(aliases:Array<AstTypeAlias>):Map<String, Array<AstTypeAlias>> {
+		var groups:Map<String, Array<AstTypeAlias>> = [];
+		for (alias in aliases)
+			switch alias.type {
+				case AnonymousType(fields) if (alias.typeParameters.length == 0):
+					var key = wireFieldNames([for (field in fields) field.name]), group = groups.get(key);
+					if (group == null) {
+						group = [];
+						groups.set(key, group);
+					}
+					group.push(alias);
+				default:
+			}
+		return groups;
+	}
 
 	// This index belongs to one semantic declaration snapshot; rebuilding the index drops the cache.
 	final abstractEqualityOperators:Map<String, Bool> = [];
 
 	/** Whether this abstract declares its own equality operator. */
 	public function declaresEqualityOperator(name:String):Bool {
+		readShape(name);
 		if (abstractEqualityOperators.exists(name))
 			return abstractEqualityOperators.get(name);
 		var declaration = abstractDeclaration(name), found = false;
@@ -136,13 +213,17 @@ class DeclarationIndex {
 		return abstracts.get(name);
 
 	public function abstractNames():Array<String> {
-		var names = [for (name in abstracts.keys()) name];
+		var names = [for (name in abstracts.withoutReads().keys()) name];
 		names.sort(Reflect.compare);
 		return names;
 	}
 
-	public final interfaces:Map<String, AstInterface> = [];
-	public final classes:Map<String, AstClass> = [];
+	public final interfaces = new DeclarationTable<AstInterface>(FactAspect.Shape, FactAspect.Shape,
+		DeclarationFacts.KIND_INTERFACES);
+
+	/** Every class: `get` reads its members, `exists` its shape. */
+	public final classes = new DeclarationTable<AstClass>(FactAspect.Members, FactAspect.Shape,
+		DeclarationFacts.KIND_CLASSES);
 	public final symbols:Map<String, DeclarationSymbol> = [];
 
 	final typeConstraints:Map<String, Array<compiler.syntax.Ast.AstTypeConstraint>> = [];
@@ -175,10 +256,10 @@ class DeclarationIndex {
 		declaredTypes = new DeclaredTypes(this);
 		types = declaredTypes;
 		fallbackSpan = firstSpan(program, emptySpan);
+		aliasList = program.aliases;
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias);
-			aliasList.push(alias);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
@@ -487,6 +568,11 @@ class DeclarationIndex {
 					if (arguments.length != 1)
 						fail('Type "$name" expects 1 type argument, got ${arguments.length}', span);
 					IterationProtocol.contract(name, resolveInner(arguments[0], span, resolving, substitutions));
+				} else if (name == "KeyValueIterator" || name == "KeyValueIterable") {
+					if (arguments.length != 2)
+						fail('Type "$name" expects 2 type arguments, got ${arguments.length}', span);
+					IterationProtocol.keyValueContract(name, resolveInner(arguments[0], span, resolving, substitutions),
+						resolveInner(arguments[1], span, resolving, substitutions));
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)
@@ -523,7 +609,7 @@ class DeclarationIndex {
 						kind:NominalKind
 					};
 					if (classes.exists(name)) {
-						var found = classes.get(name);
+						var found = classes.entry(name);
 						declaration = {
 							typeParameters: found.typeParameters,
 							typeConstraints: found.typeConstraints,
@@ -650,15 +736,15 @@ class DeclarationIndex {
 		var enumDecl = enums.get(name);
 		if (enumDecl != null)
 			return resolveBareNominal(name, NominalKind.Enum, enumDecl.typeParameters.length, span);
-		var classDecl = classes.get(name);
+		var classDecl = classes.entry(name);
+		if (classDecl != null)
+			readShape(name);
 		if (classDecl != null)
 			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class,
 				classDecl.typeParameters.length, span);
-		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name);
-		else {
-			fail('Unknown type "$name"', span);
-			TVoid;
-		};
+		if (PlatformAbi.isType(name))
+			return PlatformAbi.valueType(name);
+		throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedType, name, span));
 	}
 
 	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int,
@@ -791,12 +877,12 @@ class DeclarationIndex {
 	function findRecursiveAliases():Map<String, Bool> {
 		var edges:Map<String, Array<String>> = [],
 			result:Map<String, Bool> = [];
-		for (name => alias in aliases) {
+		for (name => alias in aliases.withoutReads()) {
 			var referenced:Array<String> = [];
 			collectAliasReferences(alias.type, alias.typeParameters, referenced);
 			edges.set(name, referenced);
 		}
-		for (name => alias in aliases) {
+		for (name => alias in aliases.withoutReads()) {
 			var anonymous = switch alias.type {
 				case AnonymousType(_): true;
 				default: false;
@@ -971,7 +1057,7 @@ class DeclarationIndex {
 		};
 
 	function validateCycles():Void {
-		for (name in aliases.keys()) {
+		for (name in aliases.withoutReads().keys()) {
 			if (!aliases.exists(name))
 				throw new InternalError('Alias "$name" disappeared during cycle validation');
 			var alias = aliases.get(name),
@@ -980,7 +1066,7 @@ class DeclarationIndex {
 				substitutions.set(parameter, TTypeParameter(alias.name, parameter));
 			resolveAlias(alias, [], substitutions);
 		}
-		for (name in classes.keys()) {
+		for (name in classes.withoutReads().keys()) {
 			visitClass(name, []);
 			if (!classes.exists(name))
 				throw new InternalError('Class "$name" disappeared during cycle validation');
@@ -992,16 +1078,17 @@ class DeclarationIndex {
 				var interfaceName = nominalName(resolve(interfaceType, decl.span, substitutions));
 				if (interfaceName == null
 					|| (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
-					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
+					throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedInterface,
+						ModuleCanonicalizer.astTypeName(interfaceType), decl.span));
 			}
 		}
-		for (name in interfaces.keys())
+		for (name in interfaces.withoutReads().keys())
 			visitInterface(name, []);
 		validateInterfaceInstantiations();
 	}
 
 	function validateInterfaceInstantiations():Void {
-		for (name in interfaces.keys()) {
+		for (name in interfaces.withoutReads().keys()) {
 			if (!interfaces.exists(name))
 				throw new InternalError('Interface "$name" disappeared during inheritance validation');
 			var decl = interfaces.get(name);
@@ -1010,7 +1097,7 @@ class DeclarationIndex {
 					TTypeParameter(decl.name, parameter)
 			])), decl.span);
 		}
-		for (name in classes.keys()) {
+		for (name in classes.withoutReads().keys()) {
 			if (!classes.exists(name))
 				throw new InternalError('Class "$name" disappeared during inheritance validation');
 			var decl = classes.get(name);
@@ -1089,7 +1176,7 @@ class DeclarationIndex {
 	function validateInheritedMethods(program:AstProgram):Void {
 		for (decl in program.classes) {
 			var own = declarationSubstitutions(decl.name, decl.typeParameters);
-			var overrides:Map<String, Bool> = [];
+			var overrides:Map<String, String> = [], dynamicOverrides:Map<String, Bool> = [];
 			var base = decl.base == null ? null : resolve(decl.base, decl.span, own);
 			while (base != null) {
 				var baseName = NominalInheritance.name(base);
@@ -1103,8 +1190,10 @@ class DeclarationIndex {
 					for (original in parent.methods) {
 						if (method.name != original.name || method.isStatic && original.isStatic)
 							continue;
-						if (!method.isStatic && !original.isStatic)
-							overrides.set(method.name, true);
+						if (!overrides.exists(method.name))
+							overrides.set(method.name, baseName);
+						if (original.isDynamic == true)
+							dynamicOverrides.set(method.name, true);
 						var member = decl.name + "." + method.name,
 							ancestor = baseName + "." + original.name;
 						if (method.isStatic != original.isStatic)
@@ -1121,10 +1210,18 @@ class DeclarationIndex {
 				}
 				base = parent.base == null ? null : resolve(parent.base, parent.span, inherited);
 			}
-			for (method in decl.methods)
-				if (method.isOverride == true && !overrides.exists(method.name))
+			for (method in decl.methods) {
+				var overridden = overrides.get(method.name), dynamicBase = dynamicOverrides.exists(method.name);
+				if (method.isOverride == true && overridden == null)
 					fail('Method "${decl.name}.${method.name}" is declared override but has no inherited instance method',
 						method.span);
+				if (dynamicBase && method.isOverride != true)
+					fail('Field ${method.name} should be declared with \'override\' since it is inherited from superclass $overridden',
+						method.span);
+				if (dynamicBase && method.isInline == true
+					|| overridden != null && !dynamicBase && method.isDynamic == true)
+					fail('Field ${method.name} has different property access than in superclass', method.span);
+			}
 		}
 	}
 
@@ -1191,6 +1288,8 @@ class DeclarationIndex {
 			expected = types.resultType(original, right);
 		if (TypeRelations.equals(result, expected))
 			return true;
+		if (original.isDynamic == true)
+			return false;
 		// Covariant class results have the same pointer ABI; arbitrary function-type coercions require adapters.
 		return switch [result, expected] {
 			case [TInstance(Class, _, _), TInstance(Class, _, _)]: var relations = new TypeRelations(this);
@@ -1234,6 +1333,10 @@ class DeclarationIndex {
 	}
 
 	function resolveFunction(fn:AstFunction, owner:String, ?ownerSubstitutions:Map<String, CompilerType>):Void {
+		if (fn.isDynamic == true && fn.isInline == true)
+			fail("Invalid modifier combination: dynamic + inline", fn.span);
+		if (fn.isDynamic == true && fn.typeParameters != null && fn.typeParameters.length > 0)
+			fail("Dynamic methods with their own type parameters are not supported yet", fn.span);
 		var substitutions:Map<String, CompilerType> = ownerSubstitutions == null
 			? [] : [for (name => type in ownerSubstitutions) name => type],
 			typeParameters = fn.typeParameters;
@@ -1256,7 +1359,8 @@ class DeclarationIndex {
 		if (!classes.exists(name)) {
 			if (PlatformAbi.isType(name))
 				return;
-			fail('Unknown base class "$name"', fallbackSpan);
+			throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedBaseClass, name,
+				fallbackSpan));
 		}
 		var decl = classes.get(name);
 		if (visiting.exists(name))
@@ -1274,7 +1378,8 @@ class DeclarationIndex {
 		if (StructProperties.isConstraintName(name))
 			return;
 		if (!interfaces.exists(name))
-			fail('Unknown interface "$name"', fallbackSpan);
+			throw new CompileError(Diagnostic.unresolved("E1020", UnresolvedNameKind.WantedInterface, name,
+				fallbackSpan));
 		var decl = interfaces.get(name);
 		if (visiting.exists(name))
 			fail('Cyclic interface inheritance involving "$name"', decl.span);

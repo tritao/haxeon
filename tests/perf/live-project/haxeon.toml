@@ -1,0 +1,8 @@
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+target = "host"
+outputDir = "build"
+
+[package]
+name = "perf-live-project"

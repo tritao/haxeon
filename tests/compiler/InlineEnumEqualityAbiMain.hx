@@ -265,7 +265,7 @@ class InlineEnumEqualityAbiMain {
 				+ 'const c=e.__allocation_count||e["haxeon.memory.allocation_count"]; for(const n of [8,1024]) for(const dynamic of [false,true]) {'
 				+ 'const before=c(),result=e[dynamic?"dynamicCensus":"typedCensus"](n),count=c()-before; '
 				+ 'if(result!==42*n||count!==(dynamic?2*n:0))throw Error(JSON.stringify({n,dynamic,result,count})); }';
-			var process = new sys.io.Process(target == HashLink ? Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" : "node",
+			var process = new sys.io.Process(target == HashLink ? Sys.getEnv("HAXEON_SDK") + "/bin/hl" : "node",
 				target == HashLink ? [module] : [
 					"-e",
 					js,

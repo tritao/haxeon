@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.InternalError;
+import compiler.runtime.RuntimeType;
 import compiler.semantic.AbstractStatics;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
 
@@ -13,6 +14,7 @@ import compiler.syntax.Ast.AstType;
 import compiler.syntax.AstChildren;
 import compiler.syntax.AstPredicates;
 import compiler.types.FunctionTypes;
+import compiler.types.InlineConstantEvaluator;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
@@ -38,8 +40,10 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedSwitchArrayElement;
 import compiler.core.Diagnostic;
+import compiler.core.UnresolvedNameKind;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
+import compiler.types.typing.NullSafety.NullSafetyUse;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
@@ -107,14 +111,15 @@ class BodyTyper implements BodyTyping {
 	}
 
 	function declareNoReturnFunctions():Void {
-		for (name in compiler.types.analysis.NoReturnDeclarations.declared(session.signatures).keys())
+		for (name in compiler.types.analysis.NoReturnDeclarations.declared(session.signatures.withoutReads()).keys())
 			session.noReturnFunctions.set(name, true);
 	}
 
 	/** Every override of a `@:noReturn` method is declared too: a call through the base method must still never return. */
 	function checkNoReturnOverrides():Void {
-		var violation = compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls,
-			session.interfaceDecls);
+		var violation =
+			compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls.withoutReads(),
+			session.interfaceDecls.withoutReads());
 		if (violation != null)
 			fail("E1006",
 				'Method ${violation.method.name} overrides or implements @:noReturn ${violation.base} and must be declared @:noReturn too',
@@ -131,11 +136,6 @@ class BodyTyper implements BodyTyping {
 
 	static function parentPath(path:String):Null<String> {
 		return compiler.core.QualifiedName.parent(path);
-	}
-
-	static function pathBeforeLast(path:String):String {
-		var parent = parentPath(path);
-		return parent == null ? "" : parent;
 	}
 
 	static function lastPathSegment(path:String):String {
@@ -406,6 +406,9 @@ class BodyTyper implements BodyTyping {
 	public function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression
 		return session.representation.boundaryCast(value, target);
 
+	public function stringifyMap(value:TypedExpression):Null<TypedExpression>
+		return callResolver.stringifyMap(value, value.span, new Scope());
+
 	/** `operation` on `arguments`, of substituted types, with the helper the types ask for (`GenericElaboration`). */
 	public function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation,
 			arguments:Array<TypedExpression>,
@@ -593,7 +596,8 @@ class BodyTyper implements BodyTyping {
 		context.resolution = session.syntaxResolutions.ofInitializer(field);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
 		try
-			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
+			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002",
+				FieldInitializer(field.name, field.declarationSpan == null ? field.span : field.declarationSpan))
 		catch (error:haxe.Exception) {
 			session.monomorphs.discard(frame);
 			throw error;
@@ -719,7 +723,7 @@ class BodyTyper implements BodyTyping {
 			for (expression in AstChildren.statementExpressions(statement))
 				validateDeferredExpression(expression, loopDepth);
 			switch statement {
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					validateDeferredControl([inner], loopDepth);
 				case Return(_, span), ReturnVoid(span):
 					fail("E1019", "Cannot return from a deferred statement", span);
@@ -813,7 +817,7 @@ class BodyTyper implements BodyTyping {
 	static function continuesAfterFailure(statement:AstStatement):Bool
 		return switch statement {
 			case ScopedDeclaration(_, _, _, _): false;
-			case PrivateAccessStatement(inner, _): continuesAfterFailure(inner);
+			case AnnotatedStatement(_, inner, _): continuesAfterFailure(inner);
 			default: true;
 		};
 
@@ -843,7 +847,7 @@ class BodyTyper implements BodyTyping {
 				declared = type;
 				span = at;
 				initialized = false;
-			case PrivateAccessStatement(inner, _):
+			case AnnotatedStatement(_, inner, _):
 				declareFailedLocal(inner, scope);
 				return;
 			default:
@@ -880,16 +884,16 @@ class BodyTyper implements BodyTyping {
 				continue;
 			}
 			switch statement {
-				case PrivateAccessStatement(inner, _):
-					session.currentContext.privateAccessDepth++;
+				case AnnotatedStatement(metadata, inner, _):
+					session.currentContext.scopeMetadata(metadata, 1);
 					try {
 						for (typed in typeStatements([inner], scope, result))
 							output.push(typed);
 					} catch (error:haxe.Exception) {
-						session.currentContext.privateAccessDepth--;
+						session.currentContext.scopeMetadata(metadata, -1);
 						throw error;
 					}
-					session.currentContext.privateAccessDepth--;
+					session.currentContext.scopeMetadata(metadata, -1);
 				case ErrorStatement(_):
 					throw new InternalError("Simple statement was not dispatched");
 				case UninitializedDeclaration(_, _, _), TemporaryDeclaration(_, _, _, _), TemporaryAssignment(_, _, _),
@@ -1071,7 +1075,7 @@ class BodyTyper implements BodyTyping {
 		var signatureName = resolvedCallName(name);
 		if (!session.signatures.exists(signatureName))
 			return null;
-		var signature = requiredMapValue(session.signatures, signatureName);
+		var signature = session.signatures.required(signatureName);
 		return isGeneric(signature) ? null : functionResultType(signature, signature.span);
 	}
 
@@ -1120,7 +1124,7 @@ class BodyTyper implements BodyTyping {
 				bindings = enumPattern.bindings;
 				predicates = enumPattern.predicates;
 			} else if (!isCatchAll) {
-				typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType,
+				typedValue = coerce(typePatternValue(elementPattern, scope, elementType), elementType,
 					"array switch pattern", "E1019");
 				var literal = enumLiteral(typedValue);
 				if (literal != null)
@@ -1254,19 +1258,18 @@ class BodyTyper implements BodyTyping {
 					}
 					switch argument {
 						case Variable(binding, bindingSpan):
-							var constantName = enumAbstractPatternConstant(abstractName, binding),
-								owner = context.lexicalOwner,
-								staticField = owner == null ? null : findStaticFieldNullable(owner, binding),
-								inlineField = staticField == null
-									? null : inlineConstantResolver.resolve(staticField.owner, binding, bindingSpan);
-							if (binding == "_") {} else if (constantName != null
-								|| inlineField != null
-								|| patternConstructor(binding, bindingSpan, parameterType, scope) != null
-								|| binding.indexOf(".") >= 0) {
-								predicates.push(typeEnumPredicate(argument, parameterType, storageType, index,
-									constantName));
-							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType,
-								storageType, index));
+							var constantName = enumAbstractPatternConstant(abstractName, binding);
+							if (binding != "_") {
+								var capture = constantName == null
+									? patternBindingName(binding, bindingSpan, parameterType, scope) : null;
+								if (capture != null)
+									bindings.push(bindPatternName(capture, bindingSpan, scope, parameterType,
+										storageType,
+										index));
+								else
+									predicates.push(typeEnumPredicate(argument, parameterType, storageType, index,
+										constantName));
+							}
 						case TemporaryVariable(local, bindingSpan):
 							bindings.push(bindPatternName(local.name, bindingSpan, scope, parameterType, storageType,
 								index, local));
@@ -1343,7 +1346,7 @@ class BodyTyper implements BodyTyping {
 										switch field.value {
 											case Variable("_", _):
 											default:
-												var typed = coerce(typeExpression(field.value, new Scope(),
+												var typed = coerce(typePatternValue(field.value, new Scope(),
 													expectedField.type), expectedField.type,
 													"enum object payload pattern", "E1019");
 												if (constantPatternKey(typed) == null)
@@ -1390,11 +1393,16 @@ class BodyTyper implements BodyTyping {
 									for (arrayIndex in 0...values.length)
 										switch values[arrayIndex] {
 											case Variable("_", _):
-											// A name binds the element unless it names a constructor, which is matched.
-											case Variable(binding, bindingSpan) if (patternConstructor(binding,
-												bindingSpan, elementType, scope) == null):
+											case Variable(binding, bindingSpan):
+												var capture = patternBindingName(binding, bindingSpan, elementType,
+													scope);
+												if (capture == null) {
+													predicates.push(typeEnumPredicate(values[arrayIndex], elementType,
+														elementStorage, index, null, arrayIndex, storageType));
+													continue;
+												}
 												bindings.push({
-													name: declarePatternName(binding, elementType, bindingSpan,
+													name: declarePatternName(capture, elementType, bindingSpan,
 														scope).id,
 													type: elementType,
 													storageType: elementStorage,
@@ -1552,26 +1560,51 @@ class BodyTyper implements BodyTyping {
 	function switchSubjectBinding(value:AstExpression, expected:CompilerType, scope:Scope):Null<String> {
 		return switch value {
 			case Variable(name, span):
-				// A qualified name denotes a constant, never a new pattern binding.
-				if (name.indexOf(".") >= 0)
-					return null;
-				var owner = context.lexicalOwner;
-				if (owner != null && findStaticFieldNullable(owner, name) != null)
-					return null;
-				var info = patternConstructor(name, span, expected, scope);
-				// Enum abstracts are erased to their underlying type, so the
-				// subject cannot name its values; a bare value name resolves as
-				// in any expression rather than binding the subject.
-				if (info == null && !scope.hasVisibleLocal(name) && isEnumAbstractValueName(name))
-					return null;
-				if (info != null) null;
-				else if (name == "_") null;
-				else
-					declarePatternName(name, expected, span, scope).id;
+				var capture = patternBindingName(name, span, expected, scope);
+				capture == null ? null : declarePatternName(capture, expected, span, scope).id;
 			// A temporary the typer put in the pattern binds, whatever its name.
 			case TemporaryVariable(local, span):
 				declarePatternName(local.name, expected, span, scope, local).id;
 			default: null;
+		}
+	}
+
+	/** Bare lowercase names bind unless the matcher finds a constructor or a compile-time constant. */
+	function patternBindingName(name:String, span:SourceSpan, expected:CompilerType, scope:Scope):Null<String> {
+		var capture = AstPredicates.patternCaptureName(name, span);
+		if (capture == null || patternConstructor(name, span, expected, scope) != null
+			|| expectedEnumAbstractDeclaresValue(expected, capture))
+			return null;
+		if (!scope.hasVisibleLocal(capture)) {
+			if (isEnumAbstractValueName(name, span))
+				return null;
+			var owner = context.lexicalOwner,
+				field = owner == null ? null : findStaticFieldNullable(owner, capture);
+			if (field != null && inlineConstantResolver.resolve(field.owner, capture, span) != null)
+				return null;
+			if (name != capture) {
+				var target = compiler.core.QualifiedName.parentOrEmpty(name);
+				if (inlineConstantResolver.resolve(target, compiler.core.QualifiedName.last(name), span) != null
+					|| enumAbstractPatternConstant(session.enumAbstractName(target), name) != null)
+					return null;
+			}
+		}
+		return capture;
+	}
+
+	public function typePatternValue(value:AstExpression, scope:Scope, expected:CompilerType):TypedExpression {
+		try
+			return typeExpression(value, scope, expected)
+		catch (error:CompileError) {
+			switch value {
+				case Variable(name,
+					span) if (name.indexOf(".") < 0 && AstPredicates.patternCaptureName(name, span) == null
+					&& error.diagnostic.message == 'Unknown variable "$name"'):
+					fail(error.diagnostic.code,
+						'Unknown identifier : $name, pattern variables must be lower-case or with `var ` prefix', span);
+				default:
+			}
+			throw error;
 		}
 	}
 
@@ -1646,13 +1679,9 @@ class BodyTyper implements BodyTyping {
 		return false;
 	}
 
-	function isEnumAbstractValueName(name:String):Bool {
-		for (candidate in session.declarations.enumAbstractList)
-			for (value in candidate.values)
-				if (value.name == name)
-					return true;
-		return false;
-	}
+	/** Whether the bare `name` is a value of an enum abstract visible without a qualifier where `span` is (`findBareEnumAbstract`). */
+	function isEnumAbstractValueName(name:String, span:SourceSpan):Bool
+		return findBareEnumAbstract(name, span) != null;
 
 	static function isSwitchCatchAll(value:AstExpression):Bool
 		return switch value {
@@ -1685,7 +1714,7 @@ class BodyTyper implements BodyTyping {
 			case Variable(_, span) if (constantName != null): Variable(Std.string(constantName), span);
 			default: value;
 		};
-		var typed = coerce(typeExpression(resolvedValue, new Scope(), type), type, "enum payload pattern",
+		var typed = coerce(typePatternValue(resolvedValue, new Scope(), type), type, "enum payload pattern",
 			"E1019");
 		if (constantPatternKey(typed) == null)
 			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);
@@ -1794,6 +1823,7 @@ class BodyTyper implements BodyTyping {
 
 	/** Dotted assignment syntax carries the statement span; each receiver still needs its own source range. */
 	@:allow(compiler.types.typing.CallResolver)
+	@:allow(compiler.types.typing.StatementTyper)
 	static function referencePrefixSpan(name:String, span:SourceSpan):SourceSpan {
 		var size = span.file.utf8LengthAt(span.start, name);
 		if (size < 0 || span.start + size > span.end)
@@ -1949,14 +1979,17 @@ class BodyTyper implements BodyTyping {
 				new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt, []),
 					span);
 			else if (session.signatures.exists(functionName)) {
-				var fn = requiredMapValue(session.signatures, functionName),
-					types = argumentTypesOf(fn),
-					methodInfo = session.methodInfo.get(functionName);
+				var fn = session.signatures.required(functionName),
+					methodInfo = session.methodInfoOf(functionName);
 				// A static method value of a class or abstract (`C.m`); a module function has no method info.
-				if (methodInfo != null)
-					MemberAccess.method(session, methodInfo.owner,
-						functionName.substr(functionName.lastIndexOf(".") + 1),
-						span);
+				if (methodInfo != null) {
+					var member = compiler.core.QualifiedName.last(functionName);
+					MemberAccess.method(session, methodInfo.owner, member, span);
+					if (fn.isDynamic == true)
+						return new TypedExpression(TStaticField(methodInfo.owner, member),
+							DynamicMethods.functionType(session, fn, []), span);
+				}
+				var types = argumentTypesOf(fn);
 				// A function value is the dispatch entry when the function has one: a call through it may omit an argument.
 				new TypedExpression(TFunctionRef(DefaultArguments.hasDispatchEntry(fn.arguments, types,
 					session.relations) ? DefaultArguments.dispatchName(functionName) : functionName),
@@ -2004,7 +2037,7 @@ class BodyTyper implements BodyTyping {
 					var expectedAbstract = expectedAbstractName == null
 						? null : session.enumAbstractDecls.get(expectedAbstractName);
 					if (expectedAbstract == null && expectedAbstractName != null)
-						for (candidateName => candidate in session.enumAbstractDecls)
+						for (candidateName => candidate in session.enumAbstractDecls.readAll())
 							if (lastPathSegment(candidateName) == lastPathSegment(expectedAbstractName)) {
 								expectedAbstract = candidate;
 								break;
@@ -2022,10 +2055,12 @@ class BodyTyper implements BodyTyping {
 								return EnumAbstractValues.typed(this, unqualifiedAbstract, value, span);
 					var thisType = scope.receiverType();
 					if (thisType == null)
-						fail("E1005", 'Unknown variable "$name"', span);
+						throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+							span));
 					var field = findFieldType(thisType, name);
 					if (field == null)
-						fail("E1005", 'Unknown variable "$name"', span);
+						throw new CompileError(Diagnostic.unresolved("E1005", UnresolvedNameKind.WantedVariable, name,
+							span));
 					typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 				} else {
 					var parts = splitPath(name),
@@ -2035,7 +2070,7 @@ class BodyTyper implements BodyTyping {
 						enumCaseName = parts[parts.length - 1];
 					var enumAbstractName = session.enumAbstractName(enumName);
 					if (enumAbstractName != null) {
-						var enumAbstract = requiredMapValue(session.enumAbstractDecls, enumAbstractName);
+						var enumAbstract = session.enumAbstractDecls.required(enumAbstractName);
 						for (value in enumAbstract.values)
 							if (value.name == enumCaseName)
 								return EnumAbstractValues.typed(this, enumAbstract, value, span);
@@ -2046,7 +2081,7 @@ class BodyTyper implements BodyTyping {
 						isEnumAlias = resolvedEnumName != null && resolvedEnumName != enumName;
 					if (resolvedEnumName != null) {
 						enumName = resolvedEnumName;
-						var enumDecl = requiredMapValue(session.enumDecls, enumName);
+						var enumDecl = session.enumConstructorDeclaration(enumName, enumCaseName);
 						var index = -1;
 						for (i in 0...enumDecl.cases.length)
 							if (enumDecl.cases[i].name == enumCaseName)
@@ -2340,6 +2375,10 @@ class BodyTyper implements BodyTyping {
 		var refinedObject = scope.resolveAccess(object);
 		if (refinedObject != null && !sameType(object.type, refinedObject))
 			object = new TypedExpression(TCast(object), refinedObject, object.span);
+		// Where null safety checks, a read through a nullable is its finding, as in Haxe; elsewhere it needs a null check.
+		session.nullSafety.checkReceiver(object, name, span);
+		if (session.nullSafety.active())
+			object = unwrapNullable(object);
 		explainNullableReceiver(object, name, span, scope);
 		var property = AbstractProperties.find(session, object.type, name);
 		if (property != null)
@@ -2407,25 +2446,42 @@ class BodyTyper implements BodyTyping {
 			for (target in resolved.dependencies)
 				recordInlineConstantDependency(target);
 		}
-		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span,
-			false, null, null, owner + "." + name);
+		if (resolved == null)
+			return null;
+		var value = InlineConstantEvaluator.locatedAt(resolved.value, span);
+		return new TypedExpression(value.expression, value.type, span, false, null, null, owner + "." + name);
 	}
 
-	/** Substitution must retain the dependencies erased by constant folding, including inside default arguments. */
+	/**
+	 * Substitution must retain the dependencies erased by constant folding, including inside default arguments: the unit reads the
+	 * constant's initializer, with its position, which its code holds.
+	 */
 	function recordInlineConstantDependency(target:String):Void {
 		inlineConstantResolver.recordDependency(target);
-		session.output.records.recordInlineConstantDependency(defaultArgumentCaller == null
-			? context.name : defaultArgumentCaller,
-			target);
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Initializer, target);
+	}
+
+	/** An enum abstract's value substituted at a use: the unit reads the abstract, whose shape holds its values and their lines. */
+	function recordEnumAbstractValue(abstractName:String):Void {
+		inlineConstantResolver.recordDependency(abstractName);
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Shape, abstractName);
 	}
 
 	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		var dynamicMethod = DynamicMethods.read(session, typedObject, name, span);
+		if (dynamicMethod != null)
+			return dynamicMethod;
 		typedObject = TypeParameterMembers.receiver(session, this, typedObject, name, span);
-		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
+		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic. Unlike `Reflect.field`, which
+		// gives null, reading a field of null throws, as reading any other field does.
 		if (sameType(typedObject.type, TDynamic)) {
-			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
+			session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.REFLECT);
 			return new TypedExpression(TCall("Reflect.field", [
-				typedObject,
+				new TypedExpression(TCall("$receiver.checked", [typedObject]), TDynamic, typedObject.span),
 				new TypedExpression(TStringLiteral(name), TString, span)
 			]), TDynamic, span);
 		}
@@ -2447,7 +2503,7 @@ class BodyTyper implements BodyTyping {
 		switch typedObject.expression {
 			case TClassRef(className):
 				if (session.enumAbstractDecls.exists(className)) {
-					var abstractDecl = requiredMapValue(session.enumAbstractDecls, className);
+					var abstractDecl = session.enumAbstractDecls.required(className);
 					for (value in abstractDecl.values)
 						if (value.name == name)
 							return EnumAbstractValues.typed(this, abstractDecl, value, span);
@@ -2505,8 +2561,8 @@ class BodyTyper implements BodyTyping {
 		var getter = interfaceProperty != null ? InterfaceProperties.accessor(session, interfaceProperty, true,
 			span) : ClassProperties.instanceAccessor(session, typedObject.type, name, true, typedObject, span);
 		if (getter != null) {
-			var method = requiredMapValue(session.signatures, getter);
-			var methodInfo = session.methodInfo.get(getter),
+			var method = session.signatures.required(getter);
+			var methodInfo = session.methodInfoOf(getter),
 				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
 				methodResult = session.representation.resolveMethodResult(typedObject.type, owner, method),
 				call = new TypedExpression(TMethodCall(typedObject, getter, []), methodResult.physical, span);
@@ -2520,7 +2576,7 @@ class BodyTyper implements BodyTyping {
 			var resolvedMethodInfo = findMethod(owner, name);
 			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
 				var methodKey = resolvedMethodInfo.owner + "." + name,
-					method = requiredMapValue(session.signatures, methodKey);
+					method = session.signatures.required(methodKey);
 				MemberAccess.method(session, resolvedMethodInfo.owner, name, span);
 				if (session.relations.isValueClass(typedObject.type)
 					&& !session.isPureCall(methodKey)
@@ -2590,8 +2646,8 @@ class BodyTyper implements BodyTyping {
 	 */
 	public function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
 			span:SourceSpan):TypedExpression {
-		var method = requiredMapValue(session.signatures, setter),
-			methodInfo = session.methodInfo.get(setter),
+		var method = session.signatures.required(setter),
+			methodInfo = session.methodInfoOf(setter),
 			owner = methodInfo == null ? requiredString(parentPath(setter)) : methodInfo.owner,
 			arguments = session.representation.adaptMethodArguments(object.type, owner, method, [value]),
 			methodResult = session.representation.resolveMethodResult(object.type, owner, method);
@@ -2649,10 +2705,6 @@ class BodyTyper implements BodyTyping {
 		return callResolver.coerceArguments(arguments, expected, name);
 	}
 
-	function typeCallArguments(arguments:Array<AstExpression>, expected:Array<CompilerType>, scope:Scope,
-			name:String):Array<TypedExpression> {
-		return callResolver.typeCallArguments(arguments, expected, scope, name);
-	}
 
 	/**
 	 * `fn`'s argument types through the declaration query, in `substitutions` or, when none are given, the current body's: the
@@ -2685,8 +2737,13 @@ class BodyTyper implements BodyTyping {
 		body.resolution = session.syntaxResolutions.ofDefault(argument);
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
-			session.output.records.recordDefaultArgumentSource(defaultArgumentCaller,
-				typed.span.generatedReason == null ? typed.span.file : null);
+			// The caller holds the default's syntax, with its positions in the declaration's file as that file's text has them.
+			var recorder = session.declarations.reads;
+			if (recorder != null) {
+				recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Signature, declarationName);
+				if (typed.span.generatedReason == null)
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Snapshot, typed.span.file.path);
+			}
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;
 			return typed;
@@ -2742,16 +2799,16 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
-	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression {
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String, ?code:String,
+			?use:NullSafetyUse):TypedExpression {
 		rejectScopedDynamic(value, expected);
-		return conversionResolver.coerce(value, expected, context, code);
+		return conversionResolver.coerce(value, expected, context, code == null ? "E1009" : code, use);
 	}
 
-	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String,
-			position:Int):TypedExpression {
+	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int,
+			?use:NullSafetyUse):TypedExpression {
 		rejectScopedDynamic(value, expected);
-		return conversionResolver.coerceArgument(value, expected, callee, position);
+		return conversionResolver.coerceArgument(value, expected, callee, position, use);
 	}
 
 	function rejectScopedDynamic(value:TypedExpression, expected:CompilerType):Void
@@ -2854,11 +2911,11 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/**
-	 * The enum abstract an uncontextualized bare value name belongs to.
-	 * In an enum abstract's own code (its methods and its statics' initializers) its values are its own members and win.
-	 * Among several abstracts declaring the value, the one in the current type's own package wins: its
-	 * types are visible without an import, as in Haxe. An ambiguity that leaves more than one is an
-	 * error.
+	 * The enum abstract an uncontextualized bare value name belongs to, among those Haxe makes visible without a qualifier: in an
+	 * enum abstract's own code (its methods and its statics' initializers) its values are its own members and win; then the enum
+	 * abstracts declared in the same file. An imported abstract's values reach the typer qualified (name resolution installs them as
+	 * the constructors of an imported enum are), and an abstract elsewhere in the program, its package's included, is not visible.
+	 * Two abstracts of the file declaring the value are an error.
 	 */
 	function findBareEnumAbstract(name:String, span:SourceSpan):Null<compiler.syntax.Ast.AstAbstract> {
 		var lexicalOwner = context.lexicalOwner,
@@ -2869,33 +2926,19 @@ class BodyTyper implements BodyTyping {
 				if (value.name == name)
 					return own;
 		var found:Null<compiler.syntax.Ast.AstAbstract> = null,
-			ambiguous = false,
-			samePackage:Array<compiler.syntax.Ast.AstAbstract> = [],
 			declaredBy:Array<String> = [];
-		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
-		for (candidate in session.declarations.enumAbstractList) {
-			var candidateName = candidate.name;
+		for (candidate in session.enumAbstractsInFile(span.file.path))
 			for (value in candidate.values)
 				if (value.name == name) {
-					if (found != null)
-						ambiguous = true;
 					found = candidate;
-					declaredBy.push(candidateName);
-					if (pathBeforeLast(candidateName) == ownerPackage)
-						samePackage.push(candidate);
+					declaredBy.push(candidate.name);
 				}
-		}
-		if (ambiguous) {
-			if (samePackage.length != 1) {
-				declaredBy.sort(Reflect.compare);
-				fail("E1005",
-					'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}'
-					+ (samePackage.length > 1 ? ", and more than one of them is in the current package"
-					: ", and none of them is in the current package")
-					+ '. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
-					span);
-			}
-			found = samePackage[0];
+		if (declaredBy.length > 1) {
+			declaredBy.sort(Reflect.compare);
+			fail("E1005",
+				'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}'
+				+ '. Qualify it with its abstract, for example "${declaredBy[0]}.$name"',
+				span);
 		}
 		return found;
 	}
@@ -2917,7 +2960,7 @@ class BodyTyper implements BodyTyping {
 		if (enumName == null)
 			return null;
 		return new TypedExpression(TEnumLiteral(enumName, index),
-			enumLiteralType(requiredMapValue(session.enumDecls, enumName), null, span), span);
+			enumLiteralType(session.enumDecls.required(enumName), null, span), span);
 	}
 
 	/**
@@ -2969,7 +3012,7 @@ class BodyTyper implements BodyTyping {
 			case TInstance(Class, className, arguments):
 				var found:Null<CompilerType> = null;
 				if (session.classDecls.exists(className)) {
-					var classDecl = requiredMapValue(session.classDecls, className);
+					var classDecl = session.classDecls.required(className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
 							found = session.declarations.types.fieldType(className, field,
@@ -3000,7 +3043,8 @@ class BodyTyper implements BodyTyping {
 		if (interfaceProperty != null) {
 			var setter = InterfaceProperties.accessor(session, interfaceProperty, false, span),
 				type = InterfaceProperties.typeOf(session, object.type, interfaceProperty),
-				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
+				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002",
+					Assignment(span));
 			if (assigned != null)
 				value = assigned.bind(value, value.type);
 			// The interface's setter is any implementing class's: what it may change is unknown here.
@@ -3014,7 +3058,7 @@ class BodyTyper implements BodyTyping {
 			return null;
 		var setter = AbstractProperties.accessor(session, property, false, span),
 			type = AbstractProperties.typeOf(session, object.type, property),
-			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
+			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002", Assignment(span));
 		if (assigned != null)
 			value = assigned.bind(value, value.type);
 		var call = callResolver.typeAbstractAccessorCall(object, setter, [value], span, scope);
@@ -3166,7 +3210,7 @@ class BodyTyper implements BodyTyping {
 		var enumName = enumName(type);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return false;
-		var enumDecl = requiredMapValue(session.enumDecls, enumName),
+		var enumDecl = session.enumDecls.required(enumName),
 			coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in cases) for (arm in switchCase.arms)
 				{
 					constructorIndex:arm.constructorIndex,
@@ -3281,12 +3325,16 @@ class BodyTyper implements BodyTyping {
 		return null;
 	}
 
+	/** Generates the `Dynamic` to structure copies requested and not in `generated` yet (`DynamicStructureGenerator`). */
+	public function generateDynamicStructures(generated:Map<String, TypedFunction>):Array<TypedFunction>
+		return DynamicStructureGenerator.generate(session, conversionResolver, generated);
+
 	function registerAnonymousTypes(type:CompilerType):Void
 		anonymousTypeRegistry.register(type);
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
+			case ErrorStatement(span), AnnotatedStatement(_, _, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
 				DeclaredAssignment(_, _, _, span),

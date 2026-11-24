@@ -2,7 +2,7 @@
 set -euo pipefail
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 python3 - "$repo_dir" <<'PY'
-import hashlib, json, os, pathlib, socket, struct, subprocess, sys, tempfile, time
+import hashlib, json, os, pathlib, re, socket, struct, subprocess, sys, tempfile, time
 
 repo = pathlib.Path(sys.argv[1])
 env = os.environ.copy()
@@ -161,6 +161,55 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         build()
         run(13)
         assert json.loads(next(states.glob('*.json')).read_text())['token'] != old_token
+        # The failed request searches a source outside the entry's dependency closure.
+        candidate = root / 'src/elsewhere/Controls.hx'
+        candidate.parent.mkdir()
+        candidate.write_text('package elsewhere; class Controls {} class SuggestionWidget {}\n')
+        binary = root / 'build/suggestion-isolation.hl'
+
+        def fixed_build(label, after_failure):
+            state = states / (label + '.json')
+            process = worker(state)
+            try:
+                deadline = time.monotonic() + 30
+                while not state.exists() and process.poll() is None and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                assert state.exists(), 'suggestion isolation worker did not start'
+                descriptor = json.loads(state.read_text())
+
+                def request():
+                    arguments = ['--target=hl', '--entry=Main', '--root=' + str(root / 'src'),
+                                 '--output=' + str(binary), '--verbosity=diagnostic', str(main)]
+                    with socket.create_connection(('127.0.0.1', descriptor['port']), timeout=120) as client:
+                        body = json.dumps({'token': descriptor['token'], 'arguments': arguments}).encode()
+                        client.sendall(struct.pack('<i', len(body)) + body)
+                        with client.makefile() as responses:
+                            return [json.loads(line) for line in responses]
+
+                if after_failure:
+                    main.write_text('class Main { public static function main():Int { var widget:SuggestionWidget; return 19; } }\n')
+                    failure = request()
+                    assert failure[-1]['status'] == 1, failure
+                    assert any('help: import elsewhere.Controls.SuggestionWidget;' in response.get('diagnostics', '')
+                               for response in failure), failure
+                source('19')
+                output = request()
+                assert output[-1]['status'] == 0, output
+                messages = '\n'.join(response['message'] for response in output if 'message' in response)
+                stats = re.search(r'compiler phases \(reused: ([^\n]+?)\) \(ms\)', messages)
+                retyped = re.search(r'compiler: \d+ ms, (\d+) functions retyped', messages)
+                assert stats and retyped, messages
+                run(19, 'suggestion-isolation.hl')
+                return binary.read_bytes(), (stats[1], retyped[1])
+            finally:
+                stop(state)
+                process.wait(timeout=10)
+
+        recovered_binary, recovered_stats = fixed_build('after-failure', True)
+        clean_binary, clean_stats = fixed_build('fixed-alone', False)
+        assert recovered_binary == clean_binary, 'suggestion search changed the recovered build output'
+        assert recovered_stats == clean_stats, (recovered_stats, clean_stats)
+        source('13')
         fallback = dict(env, HAXEON_COMPILER_SERVER='0')
         workers = set(states.glob('*.hl'))
         output = build(extra=('--output=build/fallback.hl',), environment=fallback)
@@ -170,7 +219,7 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         assert len(set(states.glob('*.hl')) - workers) == (0 if aot else 1), 'one-shot build did not use a compiled compiler'
         source('unknown_value')
         build(success=False, extra=('--output=build/fallback.hl',), environment=fallback)
-        print('PASS: compiler worker reuse, retirement limits, error recovery, sidecars, disconnect cancellation, restart, and compiled one-shot fallback')
+        print('PASS: compiler worker reuse, retirement limits, error recovery, suggestion isolation, sidecars, disconnect cancellation, restart, and compiled one-shot fallback')
     finally:
         for state in states.glob('*.json'):
             stop(state)

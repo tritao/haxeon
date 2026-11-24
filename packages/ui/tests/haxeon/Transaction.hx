@@ -4,6 +4,7 @@ import haxeon.ui.Paint.SolidPaint;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
+import haxeon.platform.Surface;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.DisplayList;
@@ -18,7 +19,6 @@ import haxeon.ui.ParagraphStyle;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
 import haxeon.ui.Renderer;
-import haxeon.platform.Surface;
 import haxeon.ui.TextAlignment;
 import haxeon.ui.TextColorRange;
 import haxeon.ui.TextDirection;

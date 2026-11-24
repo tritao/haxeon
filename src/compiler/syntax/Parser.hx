@@ -30,6 +30,21 @@ typedef RecoveredParse = {
 	final diagnostics:Array<compiler.core.Diagnostic>;
 }
 
+private typedef FieldProperty = {
+	final read:AstFieldAccess;
+	final write:AstFieldAccess;
+}
+
+/** Unqualified script variables can become fields or locals once the entry point is known. */
+private class ScriptVariables {
+	public final fieldIndexes:Map<Int, Bool> = [];
+	public final names:Map<String, Int> = [];
+	public var fieldError:Null<Diagnostic>;
+	public var localError:Null<Diagnostic>;
+
+	public function new() {}
+}
+
 /** The lambda numbering of a declaration, restored when the parser leaves it. */
 private typedef LambdaNumbering = {
 	final member:String;
@@ -213,7 +228,24 @@ class Parser {
 		tokenCount = this.tokens.length;
 	}
 
-	public function parseProgram():AstProgram {
+	public static function parseScript(tokens:ParserTokens, ?embedded:compiler.core.EmbeddedText):AstProgram
+		return new Parser(tokens, embedded).parseModule(true);
+
+	static function explicitMain(functions:Array<AstFunction>, classes:Array<AstClass>):Null<AstFunction> {
+		for (fn in functions)
+			if (fn.name == "main")
+				return fn;
+		for (declaration in classes)
+			for (method in declaration.methods)
+				if (method.isStatic && method.name == "main")
+					return method;
+		return null;
+	}
+
+	public function parseProgram():AstProgram
+		return parseModule(false);
+
+	function parseModule(script:Bool):AstProgram {
 		var packageName:Null<String> = null,
 			imports:Array<AstImport> = [],
 			importNames:Map<String, Bool> = [],
@@ -252,7 +284,12 @@ class Parser {
 			enums:Array<AstEnum> = [],
 			abstracts:Array<AstAbstract> = [],
 			interfaces:Array<AstInterface> = [],
-			classes = [];
+			classes = [],
+			statements:Array<AstStatement> = [];
+		var variables = script ? new ScriptVariables() : null;
+		var hasOtherStatements = false;
+		// Keep statement lambdas distinct from initializers of a script variable named main.
+		var outer = script ? enterLambdaMember("main()") : null;
 		while (!check(TokenKind.Eof)) {
 			var declarationStart = position;
 			try {
@@ -283,6 +320,9 @@ class Parser {
 						fail(current(), "A struct cannot be declared extern");
 					classes.push(parseClass(visibility != null && kindOf(visibility) == TokenKind.Private, metadata,
 						externDeclaration, isStruct));
+				} else if (variables != null && visibility == null && !externDeclaration
+					&& (check(TokenKind.Var) || check(TokenKind.Final))) {
+					parseScriptVariables(metadata, variables, fields, statements);
 				} else if (check(TokenKind.Var) || check(TokenKind.Final)
 					|| check(TokenKind.Inline) && (peekKind(1) == TokenKind.Var || peekKind(1) == TokenKind.Final)) {
 					// A module-level variable: public unless `private`, as module-level declarations are (a class's field is private).
@@ -298,6 +338,12 @@ class Parser {
 				else if (check(TokenKind.Identifier) && textOf(current()) == "abstract") {
 					var start = spanOf(advance());
 					abstracts.push(parseAbstract(start, externDeclaration, metadata));
+				} else if (script && !externDeclaration && !check(TokenKind.Function)
+					&& !(check(TokenKind.Inline) && peekKind(1) == TokenKind.Function)) {
+					hasOtherStatements = true;
+					var first = statements.length;
+					parseStatements(statements);
+					applyStatementMetadata(statements, first, metadata);
 				} else {
 					var inlineFunction = match(TokenKind.Inline);
 					functions.push(parseFunction(false, externDeclaration, metadata, inlineFunction));
@@ -308,6 +354,30 @@ class Parser {
 				recordRecoveryDiagnostic(error.diagnostic);
 				synchronizeTopLevel(declarationStart);
 			}
+		}
+		if (outer != null)
+			leaveLambdaMember(outer);
+		var main = script ? explicitMain(functions, classes) : null;
+		if (main != null && hasOtherStatements)
+			throw new CompileError(new Diagnostic("E0002",
+				"A script cannot declare main and also contain top-level statements", main.span));
+		if (variables != null) {
+			var error = main == null ? variables.localError : variables.fieldError;
+			if (error != null)
+				throw new CompileError(error);
+		}
+		if (main == null && statements.length > 0) {
+			if (variables != null)
+				fields = [for (index in 0...fields.length) if (!variables.fieldIndexes.exists(index)) fields[index]];
+			compiler.types.analysis.FinalLocalChecker.check([], statements, finalLocals);
+			functions.push({
+				name: "main",
+				isStatic: false,
+				arguments: [],
+				result: InferredType,
+				statements: statements,
+				span: statementSpan(statements[0]).merge(statementEnd(statements))
+			});
 		}
 		return {
 			packageName: packageName,
@@ -817,13 +887,13 @@ class Parser {
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false,
 			isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false, ?isPublic:Bool,
-			isOverride:Bool = false):AstFunction {
+			isOverride:Bool = false, isDynamic:Bool = false):AstFunction {
 		var outer = enterLambdaMember(name);
 		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
 		var parsed:AstFunction;
 		try {
 			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline,
-				isPublic, isOverride);
+				isPublic, isOverride, isDynamic);
 		} catch (error:CompileError) {
 			leaveLambdaMember(outer);
 			throw error;
@@ -835,7 +905,7 @@ class Parser {
 	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool,
 			isExtern:Bool,
 			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>,
-			isOverride:Bool):AstFunction {
+			isOverride:Bool, isDynamic:Bool):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -892,6 +962,7 @@ class Parser {
 			isStatic: isStatic,
 			isPublic: isPublic,
 			isOverride: isOverride,
+			isDynamic: isDynamic,
 			// A function with `@:hlNative` is the native, as Haxe compiles it on HashLink: an extern one, whose body (if it has one)
 			// is typed but never runs (`ProgramTyper.checkNativeBoundBodies`). Haxeon binds it on Wasm too, as it binds an extern's
 			// `@:hlNative` there (the Wasm runtime provides `haxeon_runtime`'s natives).
@@ -1013,9 +1084,19 @@ class Parser {
 				}
 				// Haxe's position of a field starts at its first modifier, after its metadata.
 				var modifierStart = spanOf(current());
-				var isStatic = false, isInline = false, isFinal = false, isOverride = false, isExternMember = false;
+				var isStatic = false,
+					isInline = false,
+					isFinal = false,
+					isOverride = false,
+					isExternMember = false,
+					isDynamic = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
+					if (kindOf(current()) == TokenKind.Identifier && textOf(current()) == "dynamic") {
+						isDynamic = true;
+						advance();
+						continue;
+					}
 					if (kindOf(current()) == TokenKind.Identifier && textOf(current()) == "override") {
 						isOverride = true;
 						advance();
@@ -1048,9 +1129,14 @@ class Parser {
 						methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
 						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, isPublic,
-						isOverride));
-				} else
-					fields.push(parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart));
+						isOverride, isDynamic));
+				} else {
+					var field = parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart);
+					if (isDynamic)
+						throw new CompileError(new Diagnostic("E1007",
+							"Invalid accessor 'dynamic' for variable " + field.name, modifierStart));
+					fields.push(field);
+				}
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -1083,46 +1169,114 @@ class Parser {
 			isInline:Bool, isFinal:Bool, ?start:SourceSpan, ?declarationStart:SourceSpan):AstField {
 		var fieldStart = start == null ? spanOf(current()) : start;
 		match(TokenKind.Var);
-		var fieldName = textOf(consume(TokenKind.Identifier));
-		var readAccess = null, writeAccess = null;
-		if (match(TokenKind.LeftParen)) {
-			readAccess = parseFieldAccess();
-			consume(TokenKind.Comma);
-			writeAccess = parseFieldAccess();
-			consume(TokenKind.RightParen);
-		}
-		var fieldType = match(TokenKind.Colon) ? parseType() : null,
-			outerMember = enterLambdaMember(fieldName);
-		var initializer:Null<AstExpression> = null;
-		try {
-			if (match(TokenKind.Assign))
-				initializer = parseExpression();
-		} catch (error:CompileError) {
-			leaveLambdaMember(outerMember);
-			throw error;
-		}
-		leaveLambdaMember(outerMember);
-		if (fieldType == null) {
-			if (initializer == null)
-				fail(current(), 'Field "$fieldName" requires a type or initializer');
-		}
-		// Like local declarations, a braced initializer (block or switch) may omit the trailing semicolon.
-		var end = initializer == null ? spanOf(consume(TokenKind.Semicolon)) : expressionEnd(initializer);
+		var name = textOf(consume(TokenKind.Identifier)),
+			property = parseFieldProperty(),
+			type = match(TokenKind.Colon) ? parseType() : null,
+			initializer = parseFieldInitializer(name);
+		if (type == null && initializer == null)
+			fail(current(), 'Field "$name" requires a type or initializer');
+		var end = variableEnd(initializer);
+		return variableField(name, memberMetadata, type, initializer, property, isPublic, isStatic, isInline, isFinal,
+			fieldStart.merge(end), declarationStart == null ? null : declarationStart.merge(end));
+	}
+
+	static function variableField(name:String, metadata:Array<Ast.AstMetadata>, type:Null<AstType>,
+			initializer:Null<AstExpression>, property:Null<FieldProperty>, isPublic:Null<Bool>, isStatic:Bool,
+			isInline:Bool, isFinal:Bool, span:SourceSpan, declarationSpan:Null<SourceSpan>):AstField {
 		return {
-			name: fieldName,
+			name: name,
 			isPublic: isPublic,
-			metadata: memberMetadata,
-			type: fieldType,
+			metadata: metadata,
+			type: type,
 			initializer: initializer,
-			readAccess: readAccess,
-			writeAccess: writeAccess,
+			readAccess: property == null ? null : property.read,
+			writeAccess: property == null ? null : property.write,
 			isStatic: isStatic,
 			isInline: isInline,
 			isFinal: isFinal,
-			span: fieldStart.merge(end),
-			declarationSpan: declarationStart == null ? null : declarationStart.merge(end)
+			span: span,
+			declarationSpan: declarationSpan
 		};
 	}
+
+	function parseFieldProperty():Null<FieldProperty> {
+		if (!match(TokenKind.LeftParen))
+			return null;
+		var read = parseFieldAccess();
+		consume(TokenKind.Comma);
+		var write = parseFieldAccess();
+		consume(TokenKind.RightParen);
+		return {read: read, write: write};
+	}
+
+	function parseFieldInitializer(member:String):Null<AstExpression> {
+		if (!match(TokenKind.Assign))
+			return null;
+		var outer = enterLambdaMember(member), initializer:AstExpression;
+		try {
+			initializer = parseExpression();
+		} catch (error:CompileError) {
+			leaveLambdaMember(outer);
+			throw error;
+		}
+		leaveLambdaMember(outer);
+		return initializer;
+	}
+
+	function variableEnd(initializer:Null<AstExpression>):SourceSpan
+		return initializer == null ? spanOf(consume(TokenKind.Semicolon)) : expressionEnd(initializer);
+
+	function parseScriptVariables(metadata:Array<Ast.AstMetadata>, variables:ScriptVariables, fields:Array<AstField>,
+			statements:Array<AstStatement>):Void {
+		var isFinal = check(TokenKind.Final), start = spanOf(advance()), first = statements.length;
+		if (isFinal && check(TokenKind.Var)) {
+			variables.localError = variables.localError ?? scriptVariableError("Expected Identifier, got Var");
+			advance();
+		}
+		var more:Bool;
+		do {
+			var name = textOf(consume(TokenKind.Identifier));
+			if (check(TokenKind.LeftParen))
+				variables.localError = variables.localError ?? scriptVariableError(isFinal
+					? "Local final declarations require an initializer" : "Expected Semicolon, got LeftParen");
+			var property = parseFieldProperty(), type = match(TokenKind.Colon) ? parseType() : null;
+			// Use field lambda identities so the explicit-main AST matches an ordinary module's AST.
+			var occurrence = variables.names.get(name) ?? 0;
+			variables.names.set(name, occurrence + 1);
+			var initializer = parseFieldInitializer(occurrence == 0 ? name : name + "=" + occurrence);
+			if (initializer == null) {
+				if (isFinal)
+					variables.localError = variables.localError
+						?? scriptVariableError("Local final declarations require an initializer");
+				if (type == null)
+					variables.fieldError = variables.fieldError
+						?? scriptVariableError('Field "$name" requires a type or initializer');
+			}
+			more = check(TokenKind.Comma);
+			var end:SourceSpan;
+			if (more) {
+				variables.fieldError = variables.fieldError ?? scriptVariableError("Expected Semicolon, got Comma");
+				end = initializer == null ? spanOf(previous()) : expressionSpan(initializer);
+				advance();
+			} else
+				end = variableEnd(initializer);
+			var span = start.merge(end);
+			variables.fieldIndexes.set(fields.length, true);
+			fields.push(variableField(name, metadata, type, initializer, property, true, true, false, isFinal, span,
+				null));
+			if (initializer == null)
+				statements.push(UninitializedDeclaration(name, type == null ? InferredType : type, span));
+			else {
+				statements.push(VarDeclaration(name, type, initializer, span));
+				if (isFinal)
+					finalLocals.set(compiler.types.analysis.BindingWalker.key(name, span), true);
+			}
+		} while (more);
+		applyStatementMetadata(statements, first, metadata);
+	}
+
+	function scriptVariableError(message:String):Diagnostic
+		return new Diagnostic("E0002", message, spanOf(current()));
 
 	/** `extern` among a member's modifiers. */
 	inline function isExternModifier():Bool
@@ -1320,12 +1474,23 @@ class Parser {
 		};
 	}
 
+	/** What `entry` on a statement or expression changes about checking it, or null for metadata the typer ignores there. */
+	static function scopeMetadata(entry:compiler.syntax.Ast.AstMetadata):Null<compiler.syntax.Ast.ScopeMetadata>
+		return switch entry.name {
+			case "privateAccess": PrivateAccess;
+			case "nullSafety" if (entry.arguments.length == 1
+				&& entry.arguments[0].match(Variable("Off", _))): NullSafetyOff;
+			default: null;
+		};
+
 	function parseStatement():AstStatement {
 		if (check(TokenKind.At)) {
 			var metadata = parseMetadata(), statement = parseStatement();
-			for (entry in metadata)
-				if (entry.name == "privateAccess")
-					return PrivateAccessStatement(statement, entry.span.merge(statementSpan(statement)));
+			for (entry in metadata) {
+				var scoped = scopeMetadata(entry);
+				if (scoped != null)
+					statement = AnnotatedStatement(scoped, statement, entry.span.merge(statementSpan(statement)));
+			}
 			return statement;
 		}
 		if (check(TokenKind.Identifier) && textOf(current()) == "scoped" && peekKind(1) == TokenKind.Var) {
@@ -1373,7 +1538,7 @@ class Parser {
 				span = start.merge(end),
 				declared = result == null ? null : localFunctionType(arguments, result);
 			closeLambda();
-			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined), span);
+			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span, inlined, true), span);
 		}
 		if (match(TokenKind.Defer)) {
 			var start = spanOf(previous());
@@ -1638,7 +1803,7 @@ class Parser {
 			[for (argument in arguments) AstPredicates.isOptionalArgument(argument)]);
 
 	/** The parameter type a local function exposes: nullable by Haxe's rule (`AstPredicates.isNullableArgument`), as for declared functions. */
-	static function localParameterType(argument:AstArgument):AstType {
+	public static function localParameterType(argument:AstArgument):AstType {
 		if (!AstPredicates.isNullableArgument(argument))
 			return argument.type;
 		return switch argument.type {
@@ -1660,7 +1825,8 @@ class Parser {
 	}
 
 	function parseArrowFunctionBody():Array<AstStatement> {
-		if (check(TokenKind.LeftBrace)) {
+		// `{name: ...}` is an object literal, as anywhere a value starts (`() -> {key: k, value: v}`); any other brace opens a block.
+		if (check(TokenKind.LeftBrace) && !startsObjectLiteralFields()) {
 			var statements = parseStatementOrBlock();
 			// As in Haxe, the value of an arrow function's block is its last expression. A callback that is expected
 			// to return nothing discards it, as it does the value of an expression body.
@@ -1676,6 +1842,11 @@ class Parser {
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
 	}
+
+	/** Whether the `{` at the current token starts an object literal's first field, `name:` or `"name":`. */
+	function startsObjectLiteralFields():Bool
+		return (peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral)
+			&& peekKind(2) == TokenKind.Colon;
 
 	/** An `if` without an `else` in an expression's place, as Haxe reads it: a statement whose branch ends with the expression. */
 	function parseVoidIf():AstStatement {
@@ -1752,10 +1923,10 @@ class Parser {
 			return;
 		var index = statements.length - 1;
 		switch statements[index] {
-			case PrivateAccessStatement(inner, span):
+			case AnnotatedStatement(metadata, inner, span):
 				var wrapped = [inner];
 				returnArrowValue(wrapped);
-				statements[index] = PrivateAccessStatement(wrapped[0], span);
+				statements[index] = AnnotatedStatement(metadata, wrapped[0], span);
 			case Expression(expression, span): statements[index] = Return(expression, span);
 			case Try(body, catches, _):
 				returnArrowValue(body);
@@ -1765,17 +1936,23 @@ class Parser {
 		}
 	}
 
+	function applyStatementMetadata(target:Array<AstStatement>, first:Int, metadata:Array<Ast.AstMetadata>):Void {
+		for (entry in metadata) {
+			var scoped = scopeMetadata(entry);
+			if (scoped != null)
+				for (index in first...target.length)
+					target[index] = AnnotatedStatement(scoped, target[index],
+						entry.span.merge(statementSpan(target[index])));
+		}
+	}
+
 	/** The statements of one source statement (a `var` of several names makes one per name), appended to `target` once all parsed. */
 	function parseStatements(target:Array<AstStatement>):Void {
 		// Parse metadata before deciding whether this is a declaration or block, while retaining private access for typing.
 		if (check(TokenKind.At)) {
 			var metadata = parseMetadata(), first = target.length;
 			parseStatements(target);
-			for (entry in metadata)
-				if (entry.name == "privateAccess")
-					for (index in first...target.length)
-						target[index] = PrivateAccessStatement(target[index],
-							entry.span.merge(statementSpan(target[index])));
+			applyStatementMetadata(target, first, metadata);
 			return;
 		}
 		if (!check(TokenKind.Var) && !check(TokenKind.Final)) {
@@ -1804,7 +1981,7 @@ class Parser {
 			case VarDeclaration(_, _, initializer, _): initializer;
 			default: null;
 		};
-		var end = lastInitializer != null ? expressionEnd(lastInitializer) : spanOf(consume(TokenKind.Semicolon));
+		var end = variableEnd(lastInitializer);
 		if (declarations.length > 0) {
 			var last = declarations.length - 1;
 			switch declarations[last] {
@@ -2083,9 +2260,11 @@ class Parser {
 		}
 		if (check(TokenKind.At)) {
 			var metadata = parseMetadata(), expression = parsePrimary();
-			for (entry in metadata)
-				if (entry.name == "privateAccess")
-					return PrivateAccessExpression(expression, entry.span.merge(expressionSpan(expression)));
+			for (entry in metadata) {
+				var scoped = scopeMetadata(entry);
+				if (scoped != null)
+					expression = AnnotatedExpression(scoped, expression, entry.span.merge(expressionSpan(expression)));
+			}
 			return expression;
 		}
 		if (match(TokenKind.Switch))
@@ -2414,10 +2593,7 @@ class Parser {
 		}
 		// `{` opens an object literal when empty or starting with `name:` or `"name":`, and a block expression valued by its last expression
 		// otherwise.
-		if (check(TokenKind.LeftBrace)
-			&& peekKind(1) != TokenKind.RightBrace
-			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral)
-			&& peekKind(2) == TokenKind.Colon))
+		if (check(TokenKind.LeftBrace) && peekKind(1) != TokenKind.RightBrace && !startsObjectLiteralFields())
 			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
 			var start = spanOf(previous()), fields = [];
@@ -3471,7 +3647,7 @@ class Parser {
 
 	public static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
-			case PrivateAccessExpression(_, span): span;
+			case AnnotatedExpression(_, _, span): span;
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span),
 				NullLiteral(span), Unreachable(span),
 				EmptyExpression(span), ErrorExpression(span), Variable(_, span), TemporaryVariable(_, span),
@@ -3731,7 +3907,7 @@ class Parser {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
+			case ErrorStatement(span), AnnotatedStatement(_, _, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
 				DeclaredAssignment(_, _, _, span),

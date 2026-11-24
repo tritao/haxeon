@@ -236,7 +236,7 @@ class InlineEnumWordMain {
 						wasmMemoryStats: target == Wasm32
 					}).bytes;
 				sys.io.File.saveBytes(path, bytes);
-				var vm = Sys.getEnv("HAXEON_HASHLINK_DIR");
+				var vm = TestHashLink.directory();
 				var command = target == HashLink ? (vm == null ? TestHashLink.vm() : vm + "/hl") : "node";
 				var script =
 					'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("wrong enum payload bits");if(c()!==before)throw Error("F32 payload allocated");}';

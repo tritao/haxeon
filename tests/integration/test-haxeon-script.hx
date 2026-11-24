@@ -39,6 +39,8 @@ function main() {
 	if (status == 0 || File.getContent(mistyped).indexOf("mistyped.hx:2:") < 0)
 		Script.fail('FAIL: a script that does not compile exited with $status; its log:\n${File.getContent(mistyped)}');
 
+	checkTopLevelStatements(work, env);
+
 	// A script that declares a package and lives in its folders is rooted where the package starts, as a project is, so its
 	// positions carry the package path.
 	FileSystem.createDirectory(Path.join([work, "tool", "b"]));
@@ -63,4 +65,66 @@ function main() {
 			Script.fail('FAIL: running the script through its #! line printed ${haxe.Json.stringify(direct)} and exited with $directStatus');
 	}
 	Sys.println("PASS: a script runs with its arguments, status, caller's directory and neighbours; a compile error fails it quietly");
+}
+
+function checkTopLevelStatements(work:String, env:Map<String, String>):Void {
+	var source = Path.join([work, "Statements.hx"]),
+		log = Path.join([work, "statements.log"]);
+	File.saveContent(source,
+		'#!/usr/bin/env haxeon
+import haxe.io.Path;
+
+final who = Sys.args().join(",");
+var count = 0, multiplier = 2;
+for (i in 0...2)
+	count += i;
+Sys.println(greet(who) + " " + Later.multiply(count, multiplier));
+trace("traced");
+
+function greet(name:String):String
+	return "hello " + Path.withoutExtension(name);
+
+class Later {
+	public static function multiply(n:Int, multiplier:Int):Int return n * multiplier;
+}
+');
+	var status = Script.run(Script.haxeon(), ["run", source, "a", "b"], {env: env, log: log}),
+		output = File.getContent(log);
+	if (status != 0 || output != "hello a,b 2\nStatements.hx:9: traced\n")
+		Script.fail('FAIL: top-level statements exited with $status; their output:\n$output');
+
+	File.saveContent(source, "#!/usr/bin/env haxeon\nSys.println(1);\nfinal invalid:Int = \"text\";\n");
+	checkScriptError([source], env, log, "Statements.hx:3:");
+	File.saveContent(source, "function main() {}\nSys.println(1);\n");
+	checkScriptError([source], env, log, "A script cannot declare main and also contain top-level statements");
+	File.saveContent(source, "class Statements { static function main() {} }\nSys.println(1);\n");
+	checkScriptError([source], env, log, "A script cannot declare main and also contain top-level statements");
+
+	File.saveContent(source, "final value = 42;\nfunction main() Sys.println(value);\n");
+	status = Script.run(Script.haxeon(), [source], {env: env, log: log});
+	if (status != 0 || File.getContent(log) != "42\n")
+		Script.fail('FAIL: an explicit main with module fields exited with $status; its output:\n${File.getContent(log)}');
+
+	File.saveContent(source,
+		"var count = 40;\nprivate final step = 2;\nfinal var add = () -> count += step;\n"
+		+ "class Statements { static function main() Sys.println(add()); }\n");
+	status = Script.run(Script.haxeon(), [source], {env: env, log: log});
+	if (status != 0 || File.getContent(log) != "42\n")
+		Script.fail('FAIL: a static main with module fields exited with $status; its output:\n${File.getContent(log)}');
+
+	File.saveContent(source, "Sys.println(1);\n");
+	var hxml = Path.join([work, "normal.hxml"]);
+	File.saveContent(hxml, '-cp $work\n-main Statements\n--no-output\n');
+	checkScriptError([hxml], env, log, "Expected Function, got Identifier");
+
+	File.saveContent(Path.join([work, "Imported.hx"]), "class Imported {}\nSys.println(1);\n");
+	File.saveContent(source, "import Imported;\nSys.println(1);\n");
+	checkScriptError([source], env, log, "Expected Function, got Identifier");
+}
+
+function checkScriptError(arguments:Array<String>, env:Map<String, String>, log:String, expected:String):Void {
+	var status = Script.run(Script.haxeon(), arguments, {env: env, log: log}),
+		output = File.getContent(log);
+	if (status == 0 || output.indexOf(expected) < 0)
+		Script.fail('FAIL: expected "$expected", got status $status and output:\n$output');
 }

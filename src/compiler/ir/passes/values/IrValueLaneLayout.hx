@@ -60,6 +60,7 @@ private enum LanePart {
  * separate lane. A Flat value occupies its exact C byte layout, including padding; this also holds for a Flat value
  * nested in a managed struct. Packed scalar fields and C records can cross a word boundary at later element indices.
  */
+@:nullSafety(Strict)
 class IrValueLaneLayout {
 	final objects:IrObjectTable;
 	final pointerBits:Int;

@@ -40,11 +40,11 @@ class Script {
 
 	/** The HashLink VM that runs scripts, from the haxeon command that started this one. */
 	public static function vm():String
-		return programIn("HAXEON_HASHLINK_DIR", "hl");
+		return program("hl");
 
 	/** The haxeon command that started this script. */
 	public static function haxeon():String
-		return programIn("HAXEON_HASHLINK_DIR", "haxeon");
+		return program("haxeon");
 
 	/** Runs `command` and returns its exit status. Its output passes through, or goes to `options.log`. */
 	public static function run(command:String, ?arguments:Array<String>, ?options:ScriptRunOptions):Int {
@@ -174,11 +174,12 @@ class Script {
 		}
 	}
 
-	static function programIn(variable:String, name:String):String {
-		var directory = Sys.getEnv(variable);
-		if (directory == null || directory == "")
-			fail('haxeon.Script: $variable is not set; run the script with haxeon');
-		return Path.join([directory, Sys.systemName() == "Windows" ? name + ".exe" : name]);
+	/** A program in the bin of the SDK of the haxeon command that started this script (`HAXEON_SDK`). */
+	static function program(name:String):String {
+		var sdk = Sys.getEnv("HAXEON_SDK");
+		if (sdk == null || sdk == "")
+			fail('haxeon.Script: HAXEON_SDK is not set; run the script with haxeon');
+		return Path.join([sdk, "bin", Sys.systemName() == "Windows" ? name + ".exe" : name]);
 	}
 
 	static function describe(command:String, arguments:Null<Array<String>>):String

@@ -10,10 +10,11 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # Pushes and pull requests share one group per ref and cancel what they supersede. Nightly and manual runs each get a group
-  # of their own (the run id) and are never cancelled, by a push or anything else.
+  # Pushes and pull requests share one group per ref and cancel what they supersede, except on main: pushes there come faster
+  # than a run finishes, and a run cancelled by the next push gives no verdict, so failures pile up unseen. Main's runs queue
+  # instead. Nightly and manual runs each get a group of their own (the run id) and are never cancelled.
   group: compiler-and-runtime-${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'push' }}
-  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
 
 jobs:
   platform:
@@ -41,7 +42,8 @@ jobs:
             platform: windows
             os: windows
             runs_on: windows-2022
-            timeout: 90
+            # With room for the project templates step, which builds the app's native packages twice.
+            timeout: 120
           - name: macos
             platform: macos
             os: macos
@@ -196,9 +198,71 @@ jobs:
         shell: pwsh
         run: ./tests/integration/test-haxeon-cli.ps1
 
+      # The project templates suite, which scripts/test.sh runs on the other platforms: the app through its Windows runner. It
+      # needs none of the steps above but the setup, so it reports even when one of them fails.
+      - name: Project templates
+        if: ${{ !cancelled() && matrix.platform == 'windows' }}
+        shell: pwsh
+        run: ./scripts/haxeon.ps1 tests/integration/test-project-templates.hx
+
       # The compiler's sources build themselves to a fixed point. Whether the checked-in bootstrap/compiler.hl is still that
       # fixed point (bootstrap-compiler.sh --self) is not gated: it holds only until the next compiler change, and refreshing
       # it (bootstrap-compiler.sh) is a step of its own.
       - name: Hot reload and GDB metadata gate
         if: matrix.platform == 'test' || matrix.platform == 'linux-arm64'
         run: ./tests/integration/test-gdb-hot-reload.sh
+
+  android-app:
+    name: Android app on emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_API_LEVEL: '36'
+      ANDROID_IMAGE_TARGET: google_apis
+      ANDROID_IMAGE_ARCH: x86_64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install the pinned Android toolchain
+        id: android-toolchain
+        run: |
+          cmake -P cmake/haxeon-android-toolchain.cmake
+          echo "image-path=$ANDROID_HOME/system-images/android-$ANDROID_API_LEVEL/$ANDROID_IMAGE_TARGET/$ANDROID_IMAGE_ARCH" >> "$GITHUB_OUTPUT"
+
+      # The native build in setup-host includes the Android host library once the pinned toolchain is in place.
+      - uses: ./.github/actions/setup-host
+
+      - name: Build and stage the Haxeon SDK
+        run: |
+          CMAKE_BUILD_PARALLEL_LEVEL=4 scripts/build-native.sh
+          test -s out/sdk/platforms/android/haxeon-host.aar
+          echo "HAXEON_NATIVE_READY=1" >> "$GITHUB_ENV"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+          test -r /dev/kvm && test -w /dev/kvm
+
+      - name: Cache the Android system image
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.android-toolchain.outputs.image-path }}
+          key: android-image-${{ runner.os }}-${{ env.ANDROID_API_LEVEL }}-${{ env.ANDROID_IMAGE_TARGET }}-${{ env.ANDROID_IMAGE_ARCH }}
+
+      - name: Check Android launch, patch and reload
+        uses: reactivecircus/android-emulator-runner@v2.33.0
+        with:
+          api-level: ${{ env.ANDROID_API_LEVEL }}
+          target: ${{ env.ANDROID_IMAGE_TARGET }}
+          arch: ${{ env.ANDROID_IMAGE_ARCH }}
+          disable-linux-hw-accel: false
+          script: tests/integration/test-android-app.sh

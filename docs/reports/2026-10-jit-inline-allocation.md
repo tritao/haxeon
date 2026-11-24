@@ -109,5 +109,4 @@ Frozen SHA-256 values:
 ## Stage 2 follow-up
 
 A local proof that omitted immediately overwritten payload clearing was tested and dropped: binarytrees measured
--1.67% against the required 2% gain. Stage 1 remains unchanged. See
-[JIT_ALLOCATION_INITIALIZATION.md](2026-10-jit-allocation-initialization.md) for the paired gate and exact checks/skips.
+-1.67% against the required 2% gain. Stage 1 remains unchanged.

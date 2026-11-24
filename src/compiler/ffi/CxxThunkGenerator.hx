@@ -1,13 +1,13 @@
 package compiler.ffi;
 
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxModel;
 import compiler.ffi.CxxModel.CxxRecord;
 import compiler.ffi.CxxModel.CxxSpanElement;
 import compiler.ffi.CxxModel.CxxType;
-import haxe.crypto.Sha256;
 
 /** Emits C-ABI entry points which adapt supported C++ calls before they reach Haxeon. */
 class CxxThunkGenerator {
@@ -229,7 +229,7 @@ class CxxThunkGenerator {
 	}
 
 	static function thunkSymbol(kind:String, qualifiedName:String, symbol:String):String
-		return "haxeon_cxx_thunk_" + Sha256.encode('$kind\n$qualifiedName\n$symbol').substr(0, 20);
+		return "haxeon_cxx_thunk_" + TextDigest.sha256('$kind\n$qualifiedName\n$symbol').substr(0, 20);
 
 	static function escape(value:String):String
 		return StringTools.replace(StringTools.replace(value, "\\", "\\\\"), '"', '\\"');

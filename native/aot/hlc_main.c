@@ -1,9 +1,10 @@
-/* The entry point of a program Haxeon compiled to C (docs/design/AOT_BACKEND.md). The generated image.c holds the module image,
+/* The start of a program Haxeon compiled to C (docs/design/AOT_BACKEND.md). The generated image.c holds the module image,
  * the slot table, the call trampolines and the layouts the C code assumes. The runtime builds its types, globals, natives and
  * constants from the image with the fork's own module initialization, given the C functions as the module's code
  * (`hl_module_init_aot`: nothing is compiled), so the C code shares every layout decision with the JIT. */
 #include <hl.h>
 #include <hlmodule.h>
+#include <hlc_prelude.h>
 
 extern const unsigned long long hlc_image[]; // the image's bytes as little-endian words
 extern const int hlc_image_size;
@@ -27,7 +28,6 @@ extern const int hlc_global_ref_indices[];
 extern const int hlc_native_ref_count;
 extern void **const hlc_native_refs[];
 extern const int hlc_native_ref_indices[];
-typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;
 extern const hlc_signature hlc_signatures[];
 extern const int hlc_signature_count;
 
@@ -100,11 +100,12 @@ static void hlc_check_layouts( hl_module *m ) {
 	}
 }
 
-// The program's arguments are the runtime's characters: UTF-16 on Windows, where the entry point is wmain (-municode).
+// The program, run by the SDK's entry points (haxeon_app.c), as an app's development build runs its module. Its arguments are
+// the runtime's characters: UTF-16 on Windows, where the entry points are wide (-municode).
 #ifdef HL_WIN
-int wmain( int argc, wchar_t *argv[] ) {
+int haxeon_app_run( int argc, wchar_t *argv[] ) {
 #else
-int main( int argc, char *argv[] ) {
+int haxeon_app_run( int argc, char *argv[] ) {
 #endif
 	vdynamic *ret;
 	bool isExc = false;

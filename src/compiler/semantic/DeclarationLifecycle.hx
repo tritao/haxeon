@@ -16,21 +16,38 @@ enum abstract DeclarationStage(Int) from Int to Int {
 /** Candidate-local declaration state machine. */
 class DeclarationLifecycle {
 	/** The identities and their stages side by side, so advancing all of them walks arrays rather than a map's iterator. */
-	final ids:Array<String> = [];
+	final ids:Array<String>;
 
-	final current:Array<DeclarationStage> = [];
-	final positions:Map<String, Int> = [];
+	final current:Array<DeclarationStage>;
+	final positions:Map<String, Int>;
 
-	public function new(declarations:DeclarationIndex, ?initial:DeclarationStage = Declared)
-		for (symbol in declarations.symbols) {
-			var position = positions.get(symbol.id);
-			if (position == null) {
-				positions.set(symbol.id, ids.length);
-				ids.push(symbol.id);
-				current.push(initial);
-			} else
-				current[position] = initial;
+	/** The declarations of `declarations`, each at `initial`; or, with `restarting`, that lifecycle's, sharing its identities. */
+	public function new(declarations:Null<DeclarationIndex>, ?initial:DeclarationStage = Declared,
+			?restarting:DeclarationLifecycle) {
+		if (restarting != null) {
+			ids = restarting.ids;
+			positions = restarting.positions;
+			current = [for (_ in ids) initial];
+			return;
 		}
+		ids = [];
+		current = [];
+		positions = [];
+		if (declarations != null)
+			for (symbol in declarations.symbols) {
+				var position = positions.get(symbol.id);
+				if (position == null) {
+					positions.set(symbol.id, ids.length);
+					ids.push(symbol.id);
+					current.push(initial);
+				} else
+					current[position] = initial;
+			}
+	}
+
+	/** The same declarations, each at `initial`: a lifecycle of its own that shares this one's identities. */
+	public function restarted(initial:DeclarationStage):DeclarationLifecycle
+		return new DeclarationLifecycle(null, initial, this);
 
 	public function stage(id:DeclarationId):DeclarationStage {
 		var position = positions.get(id);

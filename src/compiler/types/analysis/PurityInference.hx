@@ -1,6 +1,33 @@
 package compiler.types.analysis;
 
+import compiler.semantic.DeclarationFacts;
+import compiler.semantic.DeclarationFacts.FactAspect;
+import compiler.semantic.DeclarationFacts.UnitReads;
 import compiler.syntax.Ast;
+
+/** What one inference found a function (or a constructor) depends on, with the facts it read to find it (`PurityDependencies`). */
+class PurityDependencyEntry {
+	public final reads:UnitReads;
+	public final dependencies:Null<Map<String, Bool>>;
+
+	public function new(reads:UnitReads, dependencies:Null<Map<String, Bool>>) {
+		this.reads = reads;
+		this.dependencies = dependencies;
+	}
+}
+
+/**
+ * The dependencies an inference found, by function, each with the declaration facts its walk read (`DeclarationFacts`): its own
+ * signature and body, and what it asked of the rest of the program. The next inference takes an entry whose facts are unchanged
+ * instead of walking the body again; an edit to one body walks that body alone.
+ */
+class PurityDependencies {
+	public final facts:DeclarationFacts;
+	public final entries:Map<String, PurityDependencyEntry> = [];
+
+	public function new(facts:DeclarationFacts)
+		this.facts = facts;
+}
 
 /**
  * Infers which static and module functions are pure: their bodies read state, allocate fresh
@@ -29,6 +56,62 @@ class PurityInference {
 	 * before a call through it can keep flow facts (see `dependenciesOf`).
 	 */
 	final overrideFamilies:Map<String, Array<String>>;
+
+	/** The facts the walk being recorded read (`memoized`), each once; null while nothing is recorded. */
+	var recorded:Null<Array<Int>> = null;
+
+	var recordedFacts:Null<DeclarationFacts> = null;
+	var recordSink = 0;
+
+	/** Records that the walk read fact `aspect` of `name`, when one is being recorded. */
+	function note(aspect:FactAspect, name:String):Void {
+		var list = recorded, table = recordedFacts;
+		if (list != null && table != null) {
+			var id = table.id(aspect, name);
+			if (table.firstRecord(id, recordSink))
+				list.push(id);
+		}
+	}
+
+	/** Records the facts `isAnnotatedPure` reads of `key`: its signature (its metadata), and its class's shape (the class's). */
+	function noteAnnotation(key:String):Void {
+		note(FactAspect.Signature, key);
+		var owner = compiler.core.QualifiedName.parent(key);
+		if (owner != null)
+			note(FactAspect.Shape, owner);
+	}
+
+	static function noUnits(unit:Int):Null<UnitReads>
+		return null;
+
+	/**
+	 * What `compute` finds for `key`, a function or a constructor fact: last inference's (`previous`) while every fact it read is
+	 * unchanged, else computed with its reads recorded, from the facts of `own` (pairs of an aspect and a name) on. Kept in `next`.
+	 */
+	function memoized(key:String, own:Array<Dynamic>, previous:Null<PurityDependencies>, next:Null<PurityDependencies>,
+			compute:() -> Null<Map<String, Bool>>):Null<Map<String, Bool>> {
+		if (next == null)
+			return compute();
+		var table = next.facts, prior = previous == null ? null : previous.entries.get(key);
+		if (prior != null && previous != null && previous.facts == table && table.current(prior.reads, noUnits)) {
+			next.entries.set(key, prior);
+			return prior.dependencies;
+		}
+		var list:Array<Int> = [];
+		recorded = list;
+		recordedFacts = table;
+		recordSink = table.newSink();
+		var index = 0;
+		while (index < own.length) {
+			note(cast own[index], own[index + 1]);
+			index += 2;
+		}
+		var found = compute();
+		recorded = null;
+		recordedFacts = null;
+		next.entries.set(key, new PurityDependencyEntry(new UnitReads(table.revision, list), found));
+		return found;
+	}
 
 	function new(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, enums:Map<String, AstEnum>,
 			isAnnotatedPure:String->Bool,
@@ -128,8 +211,11 @@ class PurityInference {
 	}
 
 	/** Whether assigning a field of this name may run a setter on some type: a `set_` method or a `set`/`dynamic` field. */
-	public function mayHaveSetter(field:String):Bool
+	public function mayHaveSetter(field:String):Bool {
+		note(FactAspect.Kind, DeclarationFacts.KIND_ACCESSORS);
+		note(FactAspect.Kind, DeclarationFacts.KIND_INTERFACES);
 		return setters.exists(field);
+	}
 
 	static function hasArgument(arguments:Array<AstArgument>, name:String):Bool {
 		for (argument in arguments)
@@ -143,10 +229,14 @@ class PurityInference {
 			isAnnotatedPure:String->Bool, isTypeName:String->Bool):PurityInference
 		return new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName);
 
-	/** Returns inferred-pure static and module function keys. */
+	/**
+	 * Returns inferred-pure static and module function keys. With `next`, what each body depends on is recorded there with the
+	 * facts its walk read, and taken from `previous` while they are unchanged (`PurityDependencies`).
+	 */
 	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>,
 			abstracts:Map<String, AstAbstract>,
-			enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool, isTypeName:String->Bool):Map<String, Bool> {
+			enums:Map<String, AstEnum>, isAnnotatedPure:String->Bool, isTypeName:String->Bool,
+			?previous:PurityDependencies, ?next:PurityDependencies):Map<String, Bool> {
 		var inference = new PurityInference(signatures, classes, enums, isAnnotatedPure, isTypeName),
 			dependencies:Map<String, Map<String, Bool>> = [],
 			receiverFacts:Map<String, Bool> = [],
@@ -172,7 +262,17 @@ class PurityInference {
 				dependencies.set(key, []);
 				continue;
 			}
-			var found = inference.constructorDependencies(fn, name, declaration);
+			var found = inference.memoized(key,
+				[
+					FactAspect.Shape,
+					name,
+					FactAspect.Members,
+					name,
+					FactAspect.Signature,
+					name + ".new",
+					FactAspect.Body,
+					name + ".new"
+				], previous, next, () -> inference.constructorDependencies(fn, name, declaration));
 			if (found != null) dependencies.set(key, found);
 		}
 		for (name => fn in signatures) {
@@ -187,7 +287,8 @@ class PurityInference {
 				stringMethods.push(name);
 			if (!operatorMethod && !stringConversion && !inference.isCandidate(name))
 				continue;
-			var found = inference.dependenciesOf(fn, name);
+			var found = inference.memoized(name, [FactAspect.Signature, name, FactAspect.Body, name], previous, next,
+				() -> inference.dependenciesOf(fn, name));
 			if (found != null)
 				dependencies.set(name, found);
 		}
@@ -274,6 +375,9 @@ class PurityInference {
 		if (!walker.statements(fn.statements))
 			return null;
 		var result = walker.dependencies;
+		// Which methods override this one: every class's base and override methods.
+		note(FactAspect.Kind, DeclarationFacts.KIND_CLASSES);
+		note(FactAspect.Kind, DeclarationFacts.KIND_OVERRIDES);
 		var family = overrideFamilies.get(name);
 		if (family != null)
 			for (overrideKey in family)
@@ -289,6 +393,7 @@ class PurityInference {
 	 * is fresh when its own constructor is and the base constructor its `super(...)` runs is (`freshBaseKey`).
 	 */
 	public function freshConstructorKey(name:String):Null<String> {
+		note(FactAspect.Shape, name);
 		var declaration = classes.get(name);
 		if (declaration == null || declaration.isExtern == true || declaration.typeParameters.length != 0
 			|| declaration.base != null && freshBaseKey(name) == null)
@@ -298,6 +403,7 @@ class PurityInference {
 
 	/** The construction fact of `name`'s base class, which its constructor's `super(...)` call depends on, or null. */
 	public function freshBaseKey(name:String):Null<String> {
+		note(FactAspect.Shape, name);
 		var declaration = classes.get(name);
 		if (declaration == null)
 			return null;
@@ -310,6 +416,7 @@ class PurityInference {
 
 	/** A direct stored field of the fresh receiver; properties and static fields may have visible effects. */
 	public function freshField(owner:String, name:String):Bool {
+		note(FactAspect.Members, owner);
 		var declaration = classes.get(owner);
 		if (declaration == null) return false;
 		for (field in declaration.fields)
@@ -333,6 +440,8 @@ class PurityInference {
 					PurityWalker.isStringArrayType(argument.type), PurityWalker.isMapType(argument.type));
 		}
 		for (field in declaration.fields) {
+			if (field.initializer != null)
+				note(FactAspect.Initializer, owner + "." + field.name);
 			// A non-inline static initializer can publish state on first class use; its scheduling is
 			// outside this fresh receiver proof.
 			if (field.isStatic && !field.isInline && field.initializer != null) return null;
@@ -344,24 +453,36 @@ class PurityInference {
 	/** The known concrete class of a declared type, when it names a class this program declares -
 	 * only then can a call through a value of that type be resolved to a specific method key.
 	 */
-	public function classNameOfType(type:Null<AstType>):Null<String>
-		return switch type {
-			case NamedType(name) if (classes.exists(name)): name;
-			case AppliedType(name, _) if (classes.exists(name)): name;
-			default: null;
+	public function classNameOfType(type:Null<AstType>):Null<String> {
+		var name = switch type {
+			case NamedType(name), AppliedType(name, _): name;
+			default: return null;
 		};
+		note(FactAspect.Shape, name);
+		return classes.exists(name) ? name : null;
+	}
 
 	public function resolveCall(name:String, functionName:String):Null<String> {
 		var keys = name.indexOf(".") >= 0 ? [name] : [sibling(functionName, name), name];
-		for (key in keys)
+		for (key in keys) {
+			noteAnnotation(key);
 			if (signatures.exists(key) || isAnnotatedPure(key))
 				return key;
+		}
 		return null;
+	}
+
+	/** Whether the direct call declares a numeric result, recording the signature it resolved to. */
+	public function callReturnsNumber(name:String, functionName:String):Bool {
+		var key = resolveCall(name, functionName);
+		var fn = key == null ? null : signatures.get(key);
+		return fn != null && PurityWalker.isNumericType(fn.result);
 	}
 
 	/** A method on the enclosing class, called through `this`. */
 	public function resolveOwnMethod(name:String, functionName:String):Null<String> {
 		var key = sibling(functionName, name);
+		note(FactAspect.Signature, key);
 		return signatures.exists(key) ? key : null;
 	}
 
@@ -371,16 +492,20 @@ class PurityInference {
 		for (candidate in [
 			typeName + "." + method,
 			packageName == null ? null : packageName + "." + typeName + "." + method
-		])
+		]) {
+			if (candidate != null)
+				noteAnnotation(candidate);
 			if (candidate != null
 				&& (isAnnotatedPure(candidate) || (signatures.exists(candidate) && signatures.get(candidate).isStatic)))
 				return candidate;
+		}
 		return null;
 	}
 
 	/** A method called on a receiver whose static type is a known class of this program. */
 	public function resolveInstance(className:String, method:String):Null<String> {
 		var candidate = className + "." + method;
+		note(FactAspect.Signature, candidate);
 		return signatures.exists(candidate) ? candidate : null;
 	}
 
@@ -389,9 +514,12 @@ class PurityInference {
 	 * makes its acceptance depend on every concrete override sharing the same answer.
 	 */
 	public function isCandidate(key:String):Bool {
+		noteAnnotation(key);
 		var fn = signatures.get(key);
 		if (fn == null || fn.isExtern == true)
 			return isAnnotatedPure(key);
+		if (fn.isDynamic == true)
+			return false;
 		if (fn.isStatic)
 			return true;
 		var owner = compiler.core.QualifiedName.parent(key);
@@ -401,13 +529,16 @@ class PurityInference {
 	}
 
 	/** Getter keys a property read depends on; null when the name has no getter. */
-	public function getterDependencies(name:String):Null<Array<String>>
+	public function getterDependencies(name:String):Null<Array<String>> {
+		note(FactAspect.Kind, DeclarationFacts.KIND_ACCESSORS);
 		return getters.get(name);
+	}
 
 	/** The declared type of `owner`'s own field named `name`, when it has one. */
 	public function ownFieldType(owner:Null<String>, name:String):Null<AstType> {
 		if (owner == null)
 			return null;
+		note(FactAspect.Members, owner);
 		var classDecl = classes.get(owner);
 		if (classDecl == null)
 			return null;
@@ -417,8 +548,10 @@ class PurityInference {
 		return null;
 	}
 
-	public function isConstructor(name:String):Bool
+	public function isConstructor(name:String):Bool {
+		note(FactAspect.Kind, DeclarationFacts.KIND_ENUMS);
 		return constructors.exists(name);
+	}
 
 	static function sibling(functionName:String, name:String):String {
 		var owner = compiler.core.QualifiedName.parent(functionName);
@@ -555,7 +688,7 @@ private class PurityWalker {
 		return fact != null && fact.iterable;
 	}
 
-	/** Syntactically numeric: numeric literals and locals, and arithmetic over them. */
+	/** Syntactically numeric: numeric literals, locals, declared call results, and arithmetic over them. */
 	function isNumeric(value:AstExpression):Bool
 		return switch value {
 			case IntegerLiteral(_, _), FloatLiteral(_, _): true;
@@ -568,7 +701,9 @@ private class PurityWalker {
 			case MethodCall(object, name, _,
 				_) if (name == "indexOf" || name == "lastIndexOf"): isStringReceiver(object);
 			case Call(name, _, _): var parts = name.split(".");
-				parts.length == 2 && (parts[1] == "indexOf" || parts[1] == "lastIndexOf") && isStringName(parts[0]);
+				(parts.length == 2 && (parts[1] == "indexOf" || parts[1] == "lastIndexOf") && isStringName(parts[0]))
+					|| (!isLocal(name) && !inference.isConstructor(name)
+					&& inference.callReturnsNumber(name, functionName));
 			default: false;
 		};
 
@@ -599,7 +734,7 @@ private class PurityWalker {
 
 	function statement(value:AstStatement):Bool {
 		return switch value {
-			case PrivateAccessStatement(inner, _): statement(inner);
+			case AnnotatedStatement(_, inner, _): statement(inner);
 			case ErrorStatement(_): false;
 			case ScopedDeclaration(_, _, _, _): false;
 			case UninitializedDeclaration(name, type, _):
@@ -697,7 +832,7 @@ private class PurityWalker {
 
 	function expression(value:AstExpression):Bool {
 		return switch value {
-			case PrivateAccessExpression(inner, _): expression(inner);
+			case AnnotatedExpression(_, inner, _): expression(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _):

@@ -1,76 +1,100 @@
 package compiler.ir.analysis;
 
-import compiler.ir.cfg.IrGraph;
+import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.model.Ir;
-import compiler.ir.model.IrFunction;
-import compiler.ir.model.IrOperands;
+import compiler.ir.model.IrBody;
+import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrPassScratch;
+import compiler.ir.model.IrValueId;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.names.IrReferenceIdentity;
 import compiler.ir.passes.scalars.IrScalarWordBits;
 
-/** An induction variable's first tested value: `value` plus `offset`. */
-private typedef InductionStart = {
-	final value:IrValue;
-	final offset:Int;
-}
-
-private typedef BoundsLoop = {
-	final header:Int;
-	final members:Map<Int, Bool>;
-}
-
-/** Read-only proofs for unit-step counted loops, including the pre-increment form of counted for-in loops. */
+/**
+ * Read-only proofs for unit-step counted loops, including the pre-increment form of counted for-in loops: an index that
+ * starts at zero or more, counts up by one and is tested against an array's length before every access is in range of that
+ * array, while nothing in the loop can resize an array. Read from a body's rows and its graph (`IrBodyGraph`), which the
+ * caller has made. The loops are found when a proof first needs them, and the tables are kept from one body to the next
+ * (`reset`), so a backend asks of every access at little cost.
+ */
 class IrLoopBounds {
-	final graph:IrGraph;
-	final loops:Array<BoundsLoop> = [];
-	final definitions:Map<Int, IrInstruction> = [];
-	final homes:Map<Int, Int> = [];
 	final pureCalls:Map<String, Bool>;
-	final hasHandlers:Bool;
-	final stableLoops:Map<Int, Bool> = [];
+	var body:IrBody;
+	var graph:IrBodyGraph;
+	var loops:IrLoopForest;
+	var loopsFound = false;
 
-	public function new(fn:IrFunction, pureCalls:Map<String, Bool>) {
+	/** By row, the id of the block that links it, or -1, once `rowsFound` (`homeOf`). */
+	final rowBlocks:Array<Int> = [];
+
+	var rowsFound = false;
+
+	/** By loop, 1 when nothing in it may resize an array, 2 when something may, 0 until asked. */
+	final stableLoops:Array<Int> = [];
+
+	/** By value id, the `stamp` of the proof that has asked whether the value is nonnegative, so a cycle stops. */
+	final seenValues:Array<Int> = [];
+
+	/** By block id, the `stamp` of the walk that visited it (`unchangedSince`). */
+	final seenBlocks:Array<Int> = [];
+
+	final pending:Array<Int> = [];
+	var stamp = 0;
+
+	/** Where the induction variable `inductionStart` found starts: `startValue` plus `startOffset`. */
+	var startValue = IrValueId.of(-1);
+
+	var startOffset = 0;
+
+	public function new(pureCalls:Map<String, Bool>) {
 		this.pureCalls = pureCalls;
-		graph = new IrGraph(fn);
-		var handlers = false;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null) {
-					definitions.set(output.id, located.value);
-					homes.set(output.id, block.id);
-				}
-				switch located.value {
-					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
-						handlers = true;
-					default:
-				}
-			}
-		hasHandlers = handlers;
-		for (tail in graph.order)
-			for (index in 0...graph.successorCount(tail)) {
-				var header = graph.successor(tail, index);
-				if (graph.dominates(header, tail)) {
-					var loop:Null<BoundsLoop> = null;
-					for (candidate in loops)
-						if (candidate.header == header)
-							loop = candidate;
-					if (loop == null) {
-						loop = {header: header, members: []};
-						loops.push(loop);
-					}
-					loop.members.set(header, true);
-					var pending:Array<Int> = [tail];
-					while (pending.length > 0) {
-						var id = pending.pop();
-						if (id == null || loop.members.exists(id))
-							continue;
-						loop.members.set(id, true);
-						for (edge in 0...graph.predecessorCount(id))
-							pending.push(graph.predecessor(id, edge));
-					}
+	}
+
+	/** Starts reading `body`, whose graph `graph` is. */
+	public function reset(body:IrBody, graph:IrBodyGraph):IrLoopBounds {
+		this.body = body;
+		this.graph = graph;
+		loopsFound = false;
+		rowsFound = false;
+		return this;
+	}
+
+	/** The body's loops, found the first time they are asked for. */
+	function forest():IrLoopForest {
+		if (loopsFound)
+			return loops;
+		var known = new IrLoopForest(body, graph);
+		loops = known;
+		loopsFound = true;
+		IrPassScratch.filledInts(stableLoops, known.count(), 0);
+		return known;
+	}
+
+	/** The id of the block that links `row`, or -1; the blocks of every row are found the first time one is asked for. */
+	function homeOf(row:Int):Int {
+		if (!rowsFound) {
+			IrPassScratch.filledInts(rowBlocks, body.rowLimit(), -1);
+			for (block in 0...body.blockCount()) {
+				var id = body.blockId(block), at = body.firstRow(block);
+				while (at >= 0) {
+					rowBlocks[at] = id;
+					at = body.nextRow(at);
 				}
 			}
+			rowsFound = true;
+		}
+		return row >= 0 ? rowBlocks[row] : -1;
+	}
+
+	/** Whether `row` is one of the phis block `id` starts with. */
+	function leadingPhiOf(row:Int, id:Int):Bool {
+		var at = body.firstRow(graph.indexOf(id));
+		while (at >= 0 && body.opcode(at) == IrOpcode.Phi) {
+			if (at == row)
+				return true;
+			at = body.nextRow(at);
+		}
+		return false;
 	}
 
 	/** Whitelist by ABI binding, not by source function name. These implementations accept only scalar arguments. */
@@ -81,27 +105,9 @@ class IrLoopBounds {
 				switch native.symbol {
 					case "__math_sqrt", "__math_abs", "__math_floor", "__math_ceil", "__math_min", "__math_max",
 						"__math_is_finite", "__math_is_nan":
-						var scalar = (switch (native.result) {
-							case F64: true;
-							default: false;
-						}) || (switch (native.result) {
-							case I32: true;
-							default: false;
-						}) || (switch (native.result) {
-							case Bool: true;
-							default: false;
-						});
+						var scalar = isScalar(native.result);
 						for (argument in native.arguments)
-							if ((switch (argument) {
-								case F64: false;
-								default: true;
-							}) && (switch (argument) {
-								case I32: false;
-								default: true;
-							}) && (switch (argument) {
-								case Bool: false;
-								default: true;
-							}))
+							if (!isScalar(argument))
 								scalar = false;
 						if (scalar)
 							result.set(native.name, true);
@@ -110,238 +116,278 @@ class IrLoopBounds {
 		return result;
 	}
 
-	public function depth(block:Int):Int {
-		var result = 0;
-		for (loop in loops)
-			if (loop.members.exists(block))
-				result++;
-		return result;
-	}
+	/** Whether values of `type` are numbers, booleans or enum tags, held in place. */
+	static function isScalar(type:IrType):Bool
+		return switch type {
+			case F64, F32, I32, I64, Bool, EnumTag(_): true;
+			default: false;
+		};
+
+	/** How many loops hold block `id`. */
+	public function depth(id:Int):Int
+		return forest().depthOf(id);
 
 	public function dominates(a:Int, b:Int):Bool
 		return graph.dominates(a, b);
 
-	public function definition(value:Int):Null<IrInstruction>
-		return definitions.get(value);
-
-	public function invariantInputs(instruction:IrInstruction, block:Int):Bool {
-		for (loop in loops)
-			if (loop.members.exists(block)) {
-				var invariant = true;
-				for (input in IrOperands.inputs(instruction)) {
-					var home = homes.get(input.id);
-					if (home != null && loop.members.exists(home))
-						switch definitions.get(input.id) {
-							case ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _):
-							default:
-								invariant = false;
-						}
-				}
-				if (invariant)
-					return true;
-			}
-		return false;
-	}
-
-	public function proven(array:IrValue, index:IrValue, accessBlock:Int):Bool {
-		if (hasHandlers)
-			return false;
-		for (loop in loops)
-			if (loop.members.exists(accessBlock) && stable(loop)) {
-				var start = inductionStart(index, loop);
-				if (start != null && startsNonnegative(start, loop.header, [])
-					&& guarded(array, index, accessBlock, loop))
-					return true;
-			}
-		return false;
-	}
-
-	function guarded(array:IrValue, index:IrValue, accessBlock:Int, loop:BoundsLoop):Bool {
-		for (id in graph.order)
-			if (loop.members.exists(id)) {
-				var block = graph.block(id);
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Branch(condition, yes, no) if (loop.members.exists(yes) && !loop.members.exists(no)
-							&& graph.dominates(yes, accessBlock)):
-							switch definitions.get(condition.id) {
-								case Less(_, left, right) if (left.id == index.id):
-									switch definitions.get(right.id) {
-										case ArraySize(_,
-											receiver) if (receiver.id == array.id): return unchangedSince(right, id);
-										default:
-									}
-								default:
-							}
+	/**
+	 * Whether a loop around block `id` defines none of `inputs` but constants, so an operation of them could be computed
+	 * before it.
+	 */
+	public function invariantInputs(inputs:Array<IrValueId>, id:Int):Bool {
+		var loops = forest(), loop = loops.loopOf(id);
+		while (loop >= 0) {
+			var invariant = true;
+			for (input in inputs) {
+				var definition = body.definingRow(input);
+				if (definition >= 0 && loops.contains(loop, homeOf(definition)))
+					switch body.opcode(definition) {
+						case IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstBool:
 						default:
+							invariant = false;
 					}
 			}
+			if (invariant)
+				return true;
+			loop = loops.parent(loop);
+		}
 		return false;
 	}
 
-	/** Whether the first index the loop tests, `start.value + start.offset`, is at least zero. */
-	function startsNonnegative(start:InductionStart, header:Int, seen:Map<Int, Bool>):Bool {
-		if (start.offset == 0)
-			return nonnegative(start.value, header, seen);
-		var literal = integer(start.value, []);
-		return literal != null && literal + start.offset >= 0;
+	/** Whether `index` is in range of `array` at an access in block `accessBlock`, by a loop around it. */
+	public function proven(array:IrValueId, index:IrValueId, accessBlock:Int):Bool {
+		// A handler's entry from inside the loop carries none of its facts. Only a loop's counter can be proved, a phi of its
+		// header or that plus something, so an access with another index does not need the loops.
+		if (graph.hasTry || !countsInHeader(index))
+			return false;
+		var loops = forest(), loop = loops.loopOf(accessBlock);
+		while (loop >= 0) {
+			if (stable(loop) && inductionStart(index, loop)) {
+				var value = startValue, offset = startOffset;
+				stamp++;
+				if (startsNonnegative(value, offset, loops.header(loop)) && guarded(array, index, accessBlock, loop))
+					return true;
+			}
+			loop = loops.parent(loop);
+		}
+		return false;
 	}
 
 	/**
-	 * Where `index` starts in `loop`: an induction variable counting up by one from a value before the loop, or that value
-	 * plus one, tested before its first use (`index = i + 1` with `i` starting at `start - 1`, or at a constant, as a for-in
-	 * over an array counts from -1).
+	 * Whether `index` is a phi, or a phi plus something, of a block a back edge enters: what every index `inductionStart` reads
+	 * is. A phi's block is the successor of its first input's block that it leads.
 	 */
-	function inductionStart(index:IrValue, loop:BoundsLoop):Null<InductionStart> {
-		var phi = index, preincrement = false;
-		switch definitions.get(index.id) {
-			case Add(_, left, right) if (one(right)):
-				phi = left;
-				preincrement = true;
-			default:
+	function countsInHeader(index:IrValueId):Bool {
+		var row = body.definingRow(index);
+		if (row >= 0 && body.opcode(row) == IrOpcode.Add)
+			row = body.definingRow(body.operand(row, 0));
+		if (row < 0 || body.opcode(row) != IrOpcode.Phi || body.operandCount(row) == 0)
+			return false;
+		var from = body.auxInt(row, 0);
+		if (!graph.isReachable(from))
+			return false;
+		for (successor in 0...graph.successorCount(from)) {
+			var header = graph.successor(from, successor);
+			if (leadingPhiOf(row, header)) {
+				for (edge in 0...graph.predecessorCount(header))
+					if (graph.dominates(header, graph.predecessor(header, edge)))
+						return true;
+				return false;
+			}
 		}
-		var home = homes.get(phi.id);
-		if (home == null || home != loop.header || (switch (phi.type) {
-			case I32: false;
-			default: true;
-		}))
-			return null;
-		var inputs = switch definitions.get(phi.id) {
-			case Phi(_, incoming): incoming;
-			default: return null;
-		};
-		var start:Null<IrValue> = null, offset = 0, step = false;
-		for (input in inputs)
-			if (!loop.members.exists(input.block)) {
-				var initial = input.value, initialOffset = 0;
-				if (preincrement)
-					switch definitions.get(initial.id) {
-						case Sub(_, left, right) if (one(right)):
-							initial = left;
-						case ConstInt(_, _):
+		return false;
+	}
+
+	function guarded(array:IrValueId, index:IrValueId, accessBlock:Int, loop:Int):Bool {
+		for (id in graph.order)
+			if (loops.contains(loop, id)) {
+				var row = body.terminatorRow(graph.indexOf(id));
+				if (row < 0 || body.opcode(row) != IrOpcode.Branch)
+					continue;
+				var yes = body.successor(row, 0), no = body.successor(row, 1);
+				if (!loops.contains(loop, yes) || loops.contains(loop, no) || !graph.dominates(yes, accessBlock))
+					continue;
+				var condition = body.definingRow(body.operand(row, 0));
+				if (condition < 0 || body.opcode(condition) != IrOpcode.Less || body.operand(condition, 0) != index)
+					continue;
+				var length = body.operand(condition, 1), size = body.definingRow(length);
+				if (size >= 0 && body.opcode(size) == IrOpcode.ArraySize && body.operand(size, 0) == array)
+					return unchangedSince(length, id);
+			}
+		return false;
+	}
+
+	/** Whether the first index the loop tests, `value + offset`, is at least zero. */
+	function startsNonnegative(value:IrValueId, offset:Int, header:Int):Bool {
+		if (offset == 0)
+			return nonnegative(value, header);
+		var literal = integer(value, 0);
+		return literal != null && literal + offset >= 0;
+	}
+
+	/**
+	 * Where `index` starts in `loop` (`startValue` and `startOffset`), when it is an induction variable counting up by one from
+	 * a value before the loop, or that value plus one, tested before its first use (`index = i + 1` with `i` starting at
+	 * `start - 1`, or at a constant, as a for-in over an array counts from -1).
+	 */
+	function inductionStart(index:IrValueId, loop:Int):Bool {
+		var phi = index, preincrement = false, row = body.definingRow(index);
+		if (row >= 0 && body.opcode(row) == IrOpcode.Add && one(body.operand(row, 1))) {
+			phi = body.operand(row, 0);
+			preincrement = true;
+		}
+		row = body.definingRow(phi);
+		if (row < 0 || body.opcode(row) != IrOpcode.Phi || !isInt(phi) || !leadingPhiOf(row, loops.header(loop)))
+			return false;
+		var start = IrValueId.of(-1), offset = 0, step = false;
+		for (input in 0...body.operandCount(row)) {
+			var value = body.operand(row, input);
+			if (!loops.contains(loop, body.auxInt(row, input))) {
+				var initial = value, initialOffset = 0;
+				if (preincrement) {
+					var definition = body.definingRow(initial);
+					switch definition < 0 ? IrOpcode.Phi : body.opcode(definition) {
+						case IrOpcode.Sub if (one(body.operand(definition, 1))):
+							initial = body.operand(definition, 0);
+						case IrOpcode.ConstInt:
 							initialOffset = 1;
 						default:
-							return null;
+							return false;
 					}
-				if (start != null && (start.id != initial.id || offset != initialOffset))
-					return null;
+				}
+				if (start.exists() && (start != initial || offset != initialOffset))
+					return false;
 				start = initial;
 				offset = initialOffset;
 			} else if (preincrement) {
-				if (input.value.id != index.id)
-					return null;
+				if (value != index)
+					return false;
 				step = true;
-			} else
-				switch definitions.get(input.value.id) {
-					case Add(_, left, right) if (left.id == index.id && one(right)):
-						step = true;
-					default:
-						return null;
-				}
-		return step && start != null ? {value: start, offset: offset} : null;
+			} else {
+				var definition = body.definingRow(value);
+				if (definition < 0 || body.opcode(definition) != IrOpcode.Add || body.operand(definition, 0) != index
+					|| !one(body.operand(definition, 1)))
+					return false;
+				step = true;
+			}
+		}
+		if (!step || !start.exists())
+			return false;
+		startValue = start;
+		startOffset = offset;
+		return true;
 	}
 
-	function one(value:IrValue):Bool {
-		var n = integer(value, []);
+	function one(value:IrValueId):Bool {
+		var n = integer(value, 0);
 		return n != null && n == 1;
 	}
 
-	function integer(value:IrValue, seen:Map<Int, Bool>):Null<Int> {
-		if (seen.exists(value.id))
+	/** The constant `value` is, adding and subtracting constants; `depth` bounds the walk. */
+	function integer(value:IrValueId, depth:Int):Null<Int> {
+		var row = body.definingRow(value);
+		if (row < 0 || depth > 32)
 			return null;
-		seen.set(value.id, true);
-		return switch definitions.get(value.id) {
-			case ConstInt(_, n): n;
-			case Add(_, left, right), Sub(_, left, right):
-				var a = integer(left, seen), b = integer(right, seen);
+		return switch body.opcode(row) {
+			case IrOpcode.ConstInt: body.aux(row);
+			case IrOpcode.Add, IrOpcode.Sub:
+				var a = integer(body.operand(row, 0), depth + 1), b = integer(body.operand(row, 1), depth + 1);
 				if (a == null || b == null) null;
-				else switch definitions.get(value.id) {
-					case Add(_, _, _): a + b;
-					default: a - b;
-				}
+				else body.opcode(row) == IrOpcode.Add ? a + b : a - b;
 			default: null;
 		};
 	}
 
-	function nonnegative(value:IrValue, atBlock:Int, seen:Map<Int, Bool>):Bool {
-		var literal = integer(value, []);
+	function nonnegative(value:IrValueId, atBlock:Int):Bool {
+		var literal = integer(value, 0);
 		if (literal != null)
 			return literal >= 0;
-		if (seen.exists(value.id))
+		var id:Int = value;
+		while (seenValues.length <= id)
+			seenValues.push(0);
+		if (seenValues[id] == stamp)
 			return false;
-		seen.set(value.id, true);
+		seenValues[id] = stamp;
 		// Nested i+1 is safe: its enclosing length guard proves i <= Int.MAX_VALUE-1.
-		switch definitions.get(value.id) {
-			case Add(_, left, right) if (one(right)):
-				return boundedIndex(left, atBlock, seen);
-			default:
-				return boundedIndex(value, atBlock, seen);
-		}
+		var row = body.definingRow(value);
+		if (row >= 0 && body.opcode(row) == IrOpcode.Add && one(body.operand(row, 1)))
+			return boundedIndex(body.operand(row, 0), atBlock);
+		return boundedIndex(value, atBlock);
 	}
 
-	function boundedIndex(value:IrValue, atBlock:Int, seen:Map<Int, Bool>):Bool {
-		for (loop in loops)
-			if (loop.members.exists(atBlock) && stable(loop)) {
-				var start = inductionStart(value, loop);
-				if (start == null || !startsNonnegative(start, loop.header, seen))
+	function boundedIndex(value:IrValueId, atBlock:Int):Bool {
+		var loop = loops.loopOf(atBlock);
+		while (loop >= 0) {
+			if (stable(loop) && inductionStart(value, loop)
+				&& startsNonnegative(startValue, startOffset, loops.header(loop))
+				&& testedAgainstLength(value, atBlock, loop))
+				return true;
+			loop = loops.parent(loop);
+		}
+		return false;
+	}
+
+	/** Whether a branch of `loop` that stays in it only while `value` is below some array's length dominates `atBlock`. */
+	function testedAgainstLength(value:IrValueId, atBlock:Int, loop:Int):Bool {
+		for (id in graph.order)
+			if (loops.contains(loop, id)) {
+				var row = body.terminatorRow(graph.indexOf(id));
+				if (row < 0 || body.opcode(row) != IrOpcode.Branch)
 					continue;
-				for (id in graph.order)
-					if (loop.members.exists(id)) {
-						var block = graph.block(id);
-						if (block.terminator != null)
-							switch block.terminator.value {
-								case Branch(condition, yes, no) if (loop.members.exists(yes) && !loop.members.exists(no)
-									&& graph.dominates(yes, atBlock)):
-									switch definitions.get(condition.id) {
-										case Less(_, left, right) if (left.id == value.id):
-											switch definitions.get(right.id) {
-												case ArraySize(_, _): return true;
-												default:
-											}
-										default:
-									}
-								default:
-							}
-					}
+				var yes = body.successor(row, 0), no = body.successor(row, 1);
+				if (!loops.contains(loop, yes) || loops.contains(loop, no) || !graph.dominates(yes, atBlock))
+					continue;
+				var condition = body.definingRow(body.operand(row, 0));
+				if (condition < 0 || body.opcode(condition) != IrOpcode.Less || body.operand(condition, 0) != value)
+					continue;
+				var size = body.definingRow(body.operand(condition, 1));
+				if (size >= 0 && body.opcode(size) == IrOpcode.ArraySize)
+					return true;
 			}
 		return false;
 	}
 
-	function stable(loop:BoundsLoop):Bool {
-		if (stableLoops.exists(loop.header))
-			return stableLoops.get(loop.header);
-		var result = computeStable(loop);
-		stableLoops.set(loop.header, result);
-		return result;
+	function stable(loop:Int):Bool {
+		if (stableLoops[loop] == 0)
+			stableLoops[loop] = resizesNothing(loop) ? 1 : 2;
+		return stableLoops[loop] == 1;
 	}
 
-	function computeStable(loop:BoundsLoop):Bool {
+	function resizesNothing(loop:Int):Bool {
 		for (id in graph.order)
-			if (loop.members.exists(id))
-				for (located in graph.block(id).instructions)
-					if (mayResize(located.value))
+			if (loops.contains(loop, id)) {
+				var row = body.firstRow(graph.indexOf(id));
+				while (row >= 0) {
+					if (!keepsArrays(row))
 						return false;
+					row = body.nextRow(row);
+				}
+			}
 		return true;
 	}
 
 	/** A captured length must also survive code between its definition and loop entry. */
-	function unchangedSince(length:IrValue, guardBlock:Int):Bool {
-		var home = homes.get(length.id);
-		if (home == null || !graph.dominates(home, guardBlock))
+	function unchangedSince(length:IrValueId, guardBlock:Int):Bool {
+		var definition = body.definingRow(length), home = homeOf(definition);
+		if (home < 0 || !graph.dominates(home, guardBlock))
 			return false;
-		var seen:Map<Int, Bool> = [], pending:Array<Int> = [guardBlock];
+		stamp++;
+		pending.resize(0);
+		pending.push(guardBlock);
 		while (pending.length > 0) {
 			var id = pending.pop();
-			if (id == null || seen.exists(id))
+			while (seenBlocks.length <= id)
+				seenBlocks.push(0);
+			if (seenBlocks[id] == stamp)
 				continue;
-			seen.set(id, true);
-			var after = id != home;
-			for (located in graph.block(id).instructions) {
-				if (after && mayResize(located.value))
+			seenBlocks[id] = stamp;
+			var after = id != home, row = body.firstRow(graph.indexOf(id));
+			while (row >= 0) {
+				if (after && !keepsArrays(row))
 					return false;
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id == length.id)
+				if (row == definition)
 					after = true;
+				row = body.nextRow(row);
 			}
 			if (id != home)
 				for (index in 0...graph.predecessorCount(id))
@@ -358,19 +404,50 @@ class IrLoopBounds {
 		return StringTools.startsWith(name, "__value_array_read_") || name == "__value_array_validate"
 			|| name == "__value_array_is_initialized" || IrScalarWordBits.matches(name);
 
-	function mayResize(instruction:IrInstruction):Bool {
-		return switch instruction {
-			case Call(_, name,
-				_) if (name.name == IrReceiverCheck.NAME || name.name == IrReferenceIdentity.NAME): false;
-			case Call(_, name, _) if (pureCalls.exists(name.name) || readsValueArray(name.name)): false;
-			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _),
-				MemoryStore(_, _, _), ArraySet(_, _, _),
-				IteratorNew(_, _), IteratorNext(_, _), IteratorHasNext(_, _), SafeCast(_, _), ToVirtual(_, _): true;
-			case FieldSet(receiver, _, _): switch receiver.type {
-					case Obj(_): false;
-					default: true;
-				};
+	/**
+	 * Whether row `row` of the body being read leaves every array as long as it is: it runs no code of the program's and
+	 * shrinks no array. Only the rows named here do; anything else, every other call included, may. Both the loops' proofs and
+	 * the HashLink backends' proofs within a block (`HlArrayBounds`) ask this.
+	 *
+	 * Arithmetic and comparisons run no code on scalars only: on a dynamic value or an object they may call its `toString` or
+	 * `__compare`. A write of an array element or of a class's field only ever grows an array, and a throw leaves the proofs
+	 * with the code it leaves.
+	 */
+	public function keepsArrays(row:Int):Bool
+		return switch body.opcode(row) {
+			case IrOpcode.Phi, IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString,
+				IrOpcode.ConstBool, IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.StaticDataAddress,
+				IrOpcode.PointerOffset,
+				IrOpcode.MemoryLoad, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64, IrOpcode.FloatToInt,
+				IrOpcode.FloatToFloat, IrOpcode.Upcast, IrOpcode.ClassId, IrOpcode.GlobalGet, IrOpcode.GlobalSet,
+				IrOpcode.StaticClosure, IrOpcode.InstanceClosure, IrOpcode.NewObject, IrOpcode.ValueInit,
+				IrOpcode.FieldGet,
+				IrOpcode.ArrayGet, IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.MakeEnum, IrOpcode.EnumIndex,
+				IrOpcode.EnumField, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView, IrOpcode.EnumTagBox,
+				IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox, IrOpcode.BeginTry,
+				IrOpcode.EndTry,
+				IrOpcode.Catch, IrOpcode.Unreachable, IrOpcode.Return, IrOpcode.Throw, IrOpcode.Rethrow, IrOpcode.Jump,
+				IrOpcode.Branch, IrOpcode.Switch:
+				true;
+			case IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.Div, IrOpcode.Mod, IrOpcode.BitAnd, IrOpcode.BitXor,
+				IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight, IrOpcode.Less,
+				IrOpcode.LessEqual, IrOpcode.Equal:
+				isScalar(body.valueType(body.operand(row, 0))) && isScalar(body.valueType(body.operand(row, 1)));
+			case IrOpcode.FieldSet:
+				switch body.valueType(body.operand(row, 0)) {
+					case Obj(_): true;
+					default: false;
+				}
+			case IrOpcode.Call:
+				var name = body.symbol(row).name;
+				name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME || pureCalls.exists(name)
+					|| readsValueArray(name);
 			default: false;
 		};
-	}
+
+	function isInt(value:IrValueId):Bool
+		return switch body.valueType(value) {
+			case I32: true;
+			default: false;
+		};
 }

@@ -1,7 +1,9 @@
 package compiler.types.typing;
 
+import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
+import compiler.runtime.RuntimeType;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
@@ -68,24 +70,38 @@ class ExpressionTyper {
 		this.bodyTyper = bodyTyper;
 	}
 
-	/** Dispatches each source expression to its focused typing rule or semantic resolver. */
+	/**
+	 * Dispatches each source expression to its focused typing rule or semantic resolver. A Loose null-safety body keeps the scope
+	 * of what it types, whose facts the checker reads where the value is used (`NullSafety.isNullable`).
+	 */
 	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
+			inferDynamicLambdaResult:Bool = false):TypedExpression {
+		if (!session.hasBody() || session.currentContext.nullSafetyMode != Loose)
+			return typeExpressionIn(expression, scope, expectedType, inferDynamicLambdaResult);
+		var context = session.currentContext, outer = context.flowScope;
+		context.flowScope = scope;
+		var result = typeExpressionIn(expression, scope, expectedType, inferDynamicLambdaResult);
+		context.flowScope = outer;
+		return result;
+	}
+
+	function typeExpressionIn(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
 			inferDynamicLambdaResult:Bool = false):TypedExpression {
 		// An expected type that is an empty type variable expects its hint, if a later use gave it one; a filled one is the type
 		// it holds.
 		if (expectedType != null && session.monomorphs.active())
 			expectedType = compiler.types.Monomorphs.expectation(expectedType);
 		var result = switch expression {
-			case PrivateAccessExpression(inner, _):
-				session.currentContext.privateAccessDepth++;
+			case AnnotatedExpression(metadata, inner, _):
+				session.currentContext.scopeMetadata(metadata, 1);
 				var value:TypedExpression;
 				try
 					value = bodyTyper.typeExpression(inner, scope, expectedType, inferDynamicLambdaResult)
 				catch (error:haxe.Exception) {
-					session.currentContext.privateAccessDepth--;
+					session.currentContext.scopeMetadata(metadata, -1);
 					throw error;
 				}
-				session.currentContext.privateAccessDepth--;
+				session.currentContext.scopeMetadata(metadata, -1);
 				value;
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
@@ -552,7 +568,7 @@ class ExpressionTyper {
 	/** Descriptors for every source struct and legacy C record in this typed program. */
 	public function nativeTypeDescriptors():Array<NativeTypeDescriptorData> {
 		var names = [
-			for (name in session.classDecls.keys())
+			for (name in session.classDecls.withoutReads().keys())
 				if (isStructDeclaration(session.classDecls.get(name))) name
 		];
 		names.sort(Reflect.compare);
@@ -791,9 +807,21 @@ class ExpressionTyper {
 				continue;
 			}
 			var values = typedAnnotationValues.get(metadataKey(annotation));
-			if (values != null)
+			if (values != null) {
+				// The values were typed against the annotation's declaration (`prepareNativeTypeAnnotations`): using them reads it.
+				var recorder = session.declarations.reads;
+				if (recorder != null) {
+					recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Members, annotation.name);
+					var declaration = session.classDecls.entry(annotation.name);
+					if (declaration != null)
+						for (field in declaration.fields)
+							if (field.initializer != null)
+								recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Initializer,
+									annotation.name + "." + field.name);
+				}
 				for (value in values)
 					result.push(value);
+			}
 		}
 		return result;
 	}
@@ -933,6 +961,10 @@ class ExpressionTyper {
 			span:SourceSpan):Null<NativeTypeDescriptorDefault> {
 		if (initializer == null)
 			return null;
+		// The descriptor holds the default: the unit asking for it reads the field's initializer.
+		var recorder = session.declarations.reads;
+		if (recorder != null)
+			recorder.read(compiler.semantic.DeclarationFacts.FactAspect.Initializer, owner + "." + fieldName);
 		var value = descriptorDefaultConstant(type, initializer);
 		if (value == null) {
 			var reason = switch initializer {
@@ -1177,7 +1209,8 @@ class ExpressionTyper {
 				&& isDynamicExpectation(expectedType) ? TDynamic : null;
 			var value = bodyTyper.typeExpression(field.value, scope, fieldExpected);
 			if (expectedField != null)
-				value = bodyTyper.coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
+				value = bodyTyper.coerce(value, expectedField.type, 'object field "${field.name}"', "E1002",
+					Assignment(value.span));
 			else if ((switch (value.type) {
 				case TNull: true;
 				default: false;
@@ -1282,7 +1315,10 @@ class ExpressionTyper {
 				elementType = TNullable(variable);
 		}
 		// Decide storage before coercing any element: a later Float or nullable value can widen it.
-		typedValues = [for (value in typedValues) bodyTyper.coerce(value, elementType, "array element", "E1003")];
+		typedValues = [
+			for (value in typedValues)
+				bodyTyper.coerce(value, elementType, "array element", "E1003", ArrayItem)
+		];
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 	}
 
@@ -1308,8 +1344,8 @@ class ExpressionTyper {
 			} else
 				resolvedValue = valueType;
 			typedEntries.push({
-				key: bodyTyper.coerce(key, resolvedKey, "map key", "E1003"),
-				value: bodyTyper.coerce(value, resolvedValue, "map value", "E1003")
+				key: bodyTyper.coerce(key, resolvedKey, "map key", "E1003", NamedArgument("set", "k")),
+				value: bodyTyper.coerce(value, resolvedValue, "map value", "E1003", NamedArgument("set", "v"))
 			});
 		}
 		// With nothing expected, `new Map()` has type variables for its key and value, which the first use that fixes them
@@ -1347,27 +1383,57 @@ class ExpressionTyper {
 	 */
 	static function bindElement(element:String, held:TemporaryLocal, index:String, expression:AstExpression,
 			span:SourceSpan):AstExpression
-		return switch expression {
-			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
-				ArrayComprehension(innerKey, innerValue, bindElement(element, held, index, iterable, span),
-					bindOptional(element, held, index, filter, span),
-					bindElement(element, held, index, value, span), true, innerSpan);
-			default:
-				BlockExpression([
-					VarDeclaration(element, null,
-						Index(TemporaryVariable(held, span), DeclaredVariable(index, span.start,
-						span), span), span)
-				], expression, span);
-		};
+		return bindAround([
+			VarDeclaration(element, null,
+				Index(TemporaryVariable(held, span), DeclaredVariable(index, span.start, span), span),
+				span)
+		], expression, span);
 
 	static function bindOptional(element:String, held:TemporaryLocal, index:String, expression:Null<AstExpression>,
 			span:SourceSpan):Null<AstExpression>
 		return expression == null ? null : bindElement(element, held, index, expression, span);
 
+	/** `expression` evaluated after `bindings`, which go into each part of a flattened inner comprehension (`bindElement`). */
+	static function bindAround(bindings:Array<AstStatement>, expression:AstExpression, span:SourceSpan):AstExpression
+		return switch expression {
+			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
+				ArrayComprehension(innerKey, innerValue, bindAround(bindings, iterable, span),
+					filter == null ? null : bindAround(bindings, filter, span), bindAround(bindings, value, span), true,
+					innerSpan);
+			default:
+				BlockExpression(bindings, expression, span);
+		};
+
+	/**
+	 * A comprehension `for (key => value in iterable)` over anything but an array or a map, as a loop over its entries
+	 * (`StatementTyper.keyValueSource`): `make` builds it from the entries' iterator, the loop variable and the bindings of `key`
+	 * and `value` from each entry. Null for an array, a map or a range, which have their own key-value loops.
+	 */
+	function keyValueComprehension(keyName:String, valueName:String, iterable:AstExpression,
+			typedIterable:TypedExpression,
+			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
+			make:(AstExpression, String, Array<AstStatement>) -> AstExpression):Null<TypedExpression> {
+		var type = typedIterable.type;
+		if (!IterationProtocol.structuralIterator(type) && !type.match(TIterator(_)))
+			return null;
+		var held = new TemporaryLocal("__haxeon_key_value_iterator" + span.start),
+			entry = "__haxeon_key_value_entry" + span.start,
+			bindings:Array<AstStatement> = [
+				VarDeclaration(keyName, null, Member(DeclaredVariable(entry, span.start, span), "key", span), span),
+				VarDeclaration(valueName, null, Member(DeclaredVariable(entry, span.start, span), "value", span), span)
+			];
+		return bodyTyper.typeExpression(BlockExpression([
+			TemporaryDeclaration(held, null, StatementTyper.keyValueSource(session, iterable, typedIterable, span),
+				span)
+		], make(TemporaryVariable(held, span), entry, bindings), span), scope, expectedType);
+	}
+
 	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression,
 			predicate:Null<AstExpression>, value:AstExpression,
 			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var typedIterable = unwrapNullable(bodyTyper.typeExpression(iterable, scope));
+		var declaredIterable = bodyTyper.typeExpression(iterable, scope),
+			typedIterable = unwrapNullable(declaredIterable);
+		session.nullSafety.checkIterable(declaredIterable);
 		if (IterationProtocol.structuralIterator(typedIterable.type))
 			IterationProtocol.invalidateEffects(session, scope);
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedIterable.type, "iterator");
@@ -1386,6 +1452,15 @@ class ExpressionTyper {
 			keyName,
 			valueName
 		]);
+		if (valueName != null) {
+			var entries = keyValueComprehension(keyName, valueName, iterable, typedIterable, span, scope, expectedType,
+				(entries, entry, bindings) -> ArrayComprehension(entry, null, entries,
+				predicate == null ? null : bindAround(bindings, predicate, span), bindAround(bindings, value, span),
+				flattened,
+				span));
+			if (entries != null)
+				return entries;
+		}
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {
@@ -1448,7 +1523,7 @@ class ExpressionTyper {
 			}
 		}
 		var typedCondition = predicate == null
-			? null : plain(bodyTyper.typeExpression(predicate, loopScope, TBool));
+			? null : plain(bodyTyper.typeExpression(predicate, loopScope, TBool), Condition("if"));
 		if (typedCondition != null && (switch (typedCondition.type) {
 			case TBool: false;
 			default: true;
@@ -1481,7 +1556,7 @@ class ExpressionTyper {
 				elementType = TNullable(variable);
 		}
 		if (flattenedElement == null)
-			typedValue = bodyTyper.coerce(typedValue, elementType, "array comprehension value", "E1003");
+			typedValue = bodyTyper.coerce(typedValue, elementType, "array comprehension value", "E1003", ArrayItem);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TArray(elementType),
 				resultName = "$comprehension-result:" + span.start;
@@ -1508,7 +1583,9 @@ class ExpressionTyper {
 	public function typeMapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression,
 			predicate:Null<AstExpression>, key:AstExpression,
 			value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var typedIterable = unwrapNullable(bodyTyper.typeExpression(iterable, scope));
+		var declaredIterable = bodyTyper.typeExpression(iterable, scope),
+			typedIterable = unwrapNullable(declaredIterable);
+		session.nullSafety.checkIterable(declaredIterable);
 		if (IterationProtocol.structuralIterator(typedIterable.type))
 			IterationProtocol.invalidateEffects(session, scope);
 		if (valueName == null
@@ -1523,6 +1600,14 @@ class ExpressionTyper {
 				keyName,
 				valueName
 			]);
+		if (valueName != null) {
+			var entries = keyValueComprehension(keyName, valueName, iterable, typedIterable, span, scope, expectedType,
+				(entries, entry, bindings) -> MapComprehension(entry, null, entries,
+				predicate == null ? null : bindAround(bindings, predicate, span), bindAround(bindings, key, span),
+				bindAround(bindings, value, span), span));
+			if (entries != null)
+				return entries;
+		}
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {
@@ -1567,7 +1652,7 @@ class ExpressionTyper {
 				default:
 			}
 		var typedCondition = predicate == null
-			? null : plain(bodyTyper.typeExpression(predicate, loopScope, TBool));
+			? null : plain(bodyTyper.typeExpression(predicate, loopScope, TBool), Condition("if"));
 		if (typedCondition != null && (switch (typedCondition.type) {
 			case TBool: false;
 			default: true;
@@ -1581,8 +1666,9 @@ class ExpressionTyper {
 			typedValue = bodyTyper.typeExpression(value, entryScope, expected == null ? null : expected.value),
 			resultKey = expected == null ? typedKey.type : expected.key,
 			resultValue = expected == null ? typedValue.type : expected.value;
-		typedKey = bodyTyper.coerce(typedKey, resultKey, "map comprehension key", "E1003");
-		typedValue = bodyTyper.coerce(typedValue, resultValue, "map comprehension value", "E1003");
+		typedKey = bodyTyper.coerce(typedKey, resultKey, "map comprehension key", "E1003", NamedArgument("set", "k"));
+		typedValue = bodyTyper.coerce(typedValue, resultValue, "map comprehension value", "E1003",
+			NamedArgument("set", "v"));
 		DeclaredConformance.requireMapRuntime(session, resultKey, resultValue, span);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TMap(resultKey, resultValue),
@@ -1630,25 +1716,27 @@ class ExpressionTyper {
 	}
 
 	public function typeIndex(array:AstExpression, offset:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
-		var typedArray = unwrapNullable(bodyTyper.typeExpression(array, scope)),
+		var declaredArray = bodyTyper.typeExpression(array, scope),
+			typedArray = unwrapNullable(declaredArray),
 			typedIndex = bodyTyper.typeExpression(offset, scope);
+		session.nullSafety.checkArrayAccess(declaredArray, span);
 		var forwardedArray = AbstractForwarding.arrayStorage(session, typedArray.type, null);
 		if (forwardedArray != null)
 			typedArray = session.representation.boundaryCast(typedArray, forwardedArray);
 		return switch typedArray.type {
 			case TDynamic:
 				// `dynamicValue[i]`: read when the program runs, as Haxe/HL reads the array the value holds.
-				session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+				session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 				new TypedExpression(TCall("haxeon.DynamicOps.index", [typedArray, bodyTyper.dynamicIndex(typedIndex)]),
 					TDynamic, span);
 			case TMap(key, value):
 				DeclaredConformance.requireMapRuntime(session, key, value, span);
-				var typedKey = bodyTyper.coerce(typedIndex, key, "map key", "E1002"),
+				var typedKey = bodyTyper.coerce(typedIndex, key, "map key", "E1002", NamedArgument("get", "k")),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey),
 					refined == null ? CallResolver.nullableMapValue(value) : refined, span);
-			default: typedIndex = plain(typedIndex);
+			default: typedIndex = plain(typedIndex, Index(span));
 				if ((switch typedIndex.type {
 					// A Dynamic index (an untyped `cast`) unifies with Int, as in Haxe.
 					case TNever | TDynamic: true;
@@ -1767,7 +1855,7 @@ class ExpressionTyper {
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null
 					? null : bodyTyper.coerce(bodyTyper.typeExpression(parsedGuard, caseScope), TBool, "switch guard",
-					"E1003"),
+					"E1003", Condition("if")),
 				caseIndex = typedCases.length,
 				typedResult:TypedExpression;
 			if (typedGuard != null)
@@ -1920,7 +2008,7 @@ class ExpressionTyper {
 	public function typeConditional(predicate:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression,
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
-		var typedCondition = plain(bodyTyper.typeExpression(predicate, scope, TBool));
+		var typedCondition = plain(bodyTyper.typeExpression(predicate, scope, TBool), Condition("if"));
 		if (!sameType(typedCondition.type, TBool))
 			fail("E1011", "Conditional expression requires a Bool condition", span);
 		var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
@@ -1983,7 +2071,7 @@ class ExpressionTyper {
 			case TNever: true;
 			default: false;
 		}))
-			return bodyTyper.coerce(value, resultType, context, "E1003");
+			return bodyTyper.coerce(value, resultType, context, "E1003", Assignment(value.span));
 		return new TypedExpression(TBlockExpression([TExpression(value, value.span)],
 			new TypedExpression(TVoidLiteral, TVoid, value.span)), TVoid, value.span);
 	}
@@ -2003,6 +2091,9 @@ class ExpressionTyper {
 			span);
 		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
 		var typedValue = bodyTyper.typeExpression(value, scope, target == null ? null : targetType);
+		// An untyped cast takes whatever it is given, as Haxe's does; a typed one does not make a nullable value present.
+		if (target != null)
+			session.nullSafety.checkConversion(typedValue, targetType, Cast(span));
 		// A value that never arrives (a `throw`) has every type, as Haxe's Never: `(throw e : Int)` and `cast (throw e)` are that
 		// expression, typed as the target, as any other coercion of Never makes it.
 		if (typedValue.type.match(TNever))
@@ -2027,7 +2118,7 @@ class ExpressionTyper {
 	function typeCheckType(value:AstExpression, type:AstType, span:SourceSpan, scope:Scope):TypedExpression {
 		var targetType = bodyTyper.lowerType(type, span),
 			typedValue = bodyTyper.typeExpression(value, scope, targetType);
-		return bodyTyper.coerce(typedValue, targetType, "type check", "E1003");
+		return bodyTyper.coerce(typedValue, targetType, "type check", "E1003", Cast(span));
 	}
 
 	/** Give each null-producing arm a concrete type without discarding its evaluation. */
@@ -2066,7 +2157,7 @@ class ExpressionTyper {
 				return null;
 		if (!dynamicOperand)
 			return null;
-		session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+		session.runtimeDependencyTracker.record(session.currentContext.name, RuntimeType.DYNAMIC_OPS);
 		var boxed = [for (operand in operands) bodyTyper.coerce(operand, TDynamic, "dynamic operand", "E1010")];
 		return new TypedExpression(TCall("haxeon.DynamicOps." + name, boxed), result, span);
 	}
@@ -2080,7 +2171,7 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator("u-", [typedValue], span, scope);
 		if (overloaded != null)
 			return overloaded;
-		typedValue = plain(typedValue);
+		typedValue = plain(typedValue, UnaryOperand(span));
 		var dynamicResult = dynamicOperation("neg", [typedValue], TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2090,15 +2181,15 @@ class ExpressionTyper {
 	}
 
 	public function logicalNot(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
-		var typedValue = plain(bodyTyper.typeExpression(value, scope));
+		var typedValue = plain(bodyTyper.typeExpression(value, scope), UnaryOperand(span));
 		if (!sameType(typedValue.type, TBool))
 			fail("E1011", "Logical negation requires a Bool operand", span);
 		return new TypedExpression(TNot(typedValue), TBool, span);
 	}
 
 	/** See ConversionResolver.plainValue. */
-	inline function plain(value:TypedExpression):TypedExpression
-		return ConversionResolver.plainValue(value, bodyTyper);
+	inline function plain(value:TypedExpression, ?use:NullSafetyUse):TypedExpression
+		return ConversionResolver.plainValue(value, bodyTyper, use);
 
 	public function throwExpression(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression
 		return new TypedExpression(TThrowExpression(ThrownValue.of(session, bodyTyper,
@@ -2440,12 +2531,13 @@ class ExpressionTyper {
 		}) && isNumeric(left.type))
 			right = bodyTyper.coerce(right, left.type, "arithmetic operand");
 		if (add && (isStringOperand(left.type) || isStringOperand(right.type))) {
+			session.nullSafety.checkConcatenation(left, right, span);
 			left = stringify(left, scope);
 			right = stringify(right, scope);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
-		left = plain(left);
-		right = plain(right);
+		left = plain(left, Operand(span));
+		right = plain(right, Operand(span));
 		var dynamicResult = dynamicOperation(add ? "add" : "sub", [left, right], add ? TDynamic : TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2479,8 +2571,8 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator(operation == 2 ? "*" : "/", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
-		left = plain(left);
-		right = plain(right);
+		left = plain(left, Operand(span));
+		right = plain(right, Operand(span));
 		var dynamicResult = dynamicOperation(operation == 2 ? "mul" : "div", [left, right], TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2502,8 +2594,8 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator("%", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
-		left = plain(left);
-		right = plain(right);
+		left = plain(left, Operand(span));
+		right = plain(right, Operand(span));
 		var dynamicResult = dynamicOperation("mod", [left, right], TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2533,8 +2625,8 @@ class ExpressionTyper {
 		if (overloaded != null)
 			return overloaded;
 
-		left = plain(left);
-		right = plain(right);
+		left = plain(left, Operand(span));
+		right = plain(right, Operand(span));
 		var dynamicResult = dynamicOperation([
 			"bitAnd",
 			"bitXor",
@@ -2628,8 +2720,8 @@ class ExpressionTyper {
 				return test;
 		} else {
 			// An ordering reads a nullable number as the number, null as 0, as Haxe does; equality keeps the null.
-			left = plain(left);
-			right = plain(right);
+			left = plain(left, Operand(span));
+			right = plain(right, Operand(span));
 		}
 		var result = compareOperands(left, right, operation, span, reversed);
 		return operation == 2 ? enumValueComparison(result) : result;

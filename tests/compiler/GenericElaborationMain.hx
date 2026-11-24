@@ -48,6 +48,31 @@ class GenericElaborationMain {
 		plain.update("Box.hx", box.join("\n"));
 		sameBytes("a warm rebuild that edits the class", elaborated.compile("Main"), plain.compile("Main"));
 		expectSource("a warm rebuild that edits the class", elaborated);
+		// A member whose type holds the parameter inside a structure (`Iterator<T>` is `{hasNext, next():T}`) is elaborated with the
+		// structure's fields substituted.
+		var items = [
+			"class Items<T> {",
+			"	final items:Array<T>;",
+			"	public function new(items:Array<T>) this.items = items;",
+			"	public function iterator():Iterator<T> return items.iterator();",
+			"}"
+		],
+			loop = [
+				"class Main {",
+				"	static function main():Int {",
+				"		var sum = 0;",
+				"		for (x in new Items([1, 2])) sum += x;",
+				"		return sum;",
+				"	}",
+				"}"
+			];
+		var structured = compiler(true), structuredPlain = compiler(false);
+		for (c in [structured, structuredPlain]) {
+			c.update("Items.hx", items.join("\n"));
+			c.update("Main.hx", loop.join("\n"));
+		}
+		sameBytes("a member that returns a structure of its parameter", structured.compile("Main"),
+			structuredPlain.compile("Main"));
 		Sys.println("PASS: a generic class's elaborated code is the code typed again, and its boundaries name their type parameter");
 	}
 

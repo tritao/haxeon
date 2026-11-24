@@ -53,13 +53,30 @@ add_subdirectory(vendor/hashlink hashlink EXCLUDE_FROM_ALL)
 if(HAXEON_GC_APPLE_SOFTWARE_TEST)
   target_compile_definitions(libhl PRIVATE HL_GC_APPLE_SOFTWARE_TEST=1)
 endif()
-# Keep all built VM binaries in this checkout, away from the shared toolchain.
-set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
+# The SDK this build makes (docs/design/SDK_LAYOUT.md). The build of the preset whose VM the checkout runs (out/cmake/release,
+# out/cmake/windows-msvc on Windows; build.HashLinkPath.forPreset) stages the checkout's own, out/sdk; any other stages one in
+# its build directory, so it never replaces it.
+if(CMAKE_HOST_WIN32)
+  set(_checkout_build "${CMAKE_SOURCE_DIR}/out/cmake/windows-msvc")
+else()
+  set(_checkout_build "${CMAKE_SOURCE_DIR}/out/cmake/release")
+endif()
+if(CMAKE_BINARY_DIR STREQUAL _checkout_build)
+  set(HAXEON_SDK_DIR "${CMAKE_SOURCE_DIR}/out/sdk")
+else()
+  set(HAXEON_SDK_DIR "${CMAKE_BINARY_DIR}/sdk")
+endif()
+# The VM and the programs beside it are the SDK's bin, which the haxeon launcher finds the SDK from (bin/..).
+set(HAXEON_HASHLINK_OUTPUT_DIR "${HAXEON_SDK_DIR}/bin")
+# The directory earlier layouts published the VM in.
+file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/hashlink-runtime")
 # Files earlier layouts built that nothing uses now. A stale libhl shared library beside libhl.a would be what `-lhl`
 # links, and a stale haxeon_runtime.hdll reads as if the VM loaded it. haxeon-compiler was the executable built ahead of
 # time before it held the CLI (now haxeon-aot), with its C build in out/aot-compiler.
 file(GLOB _haxeon_stale_files
   "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.so*" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl*.dylib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.dll"
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.a" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.lib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhlprof_hooks.a"
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/hlprof_penter.lib"
   "${CMAKE_BINARY_DIR}/runtime/haxeon_runtime.hdll" "${CMAKE_SOURCE_DIR}/out/haxeon_runtime.hdll"
   "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl" "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl.inputs"
   "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler" "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-compiler.exe"
@@ -189,14 +206,35 @@ if(WIN32)
 else()
   target_link_libraries(hlvm INTERFACE m dl pthread)
 endif()
-set_target_properties(hlvm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+# The SDK takes it into lib/<target> (haxeon-sdk), where C test programs link it.
+set_target_properties(hlvm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/hashlink-lib")
 if(MSVC)
   set_target_properties(hlvm PROPERTIES OUTPUT_NAME libhl)
 else()
   set_target_properties(hlvm PROPERTIES OUTPUT_NAME hl)
 endif()
 
-# The VM library of executables compiled ahead of time (the hlc SDK's libhl.a): hlvm with no JIT. Its objects are hlvm's
+# The VM of an app's runner (docs/design/PROJECT_BUILDS.md, the SDK's lib/libhaxeon-app): hlvm with HashLink's entry point
+# (hl_vm_main) and the app entry point that starts it on the module beside the executable (native/app/haxeon_app_main.c).
+# The runner compiles only a two-line main (native/app/haxeon_app.c), so these are compiled here with hl's own flags.
+add_library(haxeon_app_entry OBJECT native/haxeon_vm_main.c native/app/haxeon_app_main.c)
+target_include_directories(haxeon_app_entry PRIVATE vendor/hashlink/src)
+set_target_properties(haxeon_app_entry PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+foreach(_property IN ITEMS COMPILE_DEFINITIONS COMPILE_OPTIONS)
+  get_target_property(_value hl ${_property})
+  if(_value)
+    set_property(TARGET haxeon_app_entry APPEND PROPERTY ${_property} "${_value}")
+  endif()
+endforeach()
+add_library(haxeon_app STATIC
+  "$<FILTER:$<TARGET_OBJECTS:hl>,EXCLUDE,/src/main\\.c\\.(o|obj)$>"
+  $<TARGET_OBJECTS:libhl>
+  $<TARGET_OBJECTS:haxeon_runtime_objects>
+  $<TARGET_OBJECTS:haxeon_app_entry>
+)
+set_target_properties(haxeon_app PROPERTIES OUTPUT_NAME haxeon-app)
+
+# The VM library of executables compiled ahead of time (the SDK's lib/<target>/libhl-aot): hlvm with no JIT. Its objects are hlvm's
 # but for the JIT's, whose entry points jit_none.c gives as a VM without the JIT (hl_module_init_aot only).
 include(vendor/hashlink/cmake/hl-sources.cmake)
 add_library(hlvm_jit_none OBJECT ${HL_NO_JIT_SOURCES})
@@ -218,47 +256,108 @@ add_library(hlvm_aot STATIC
 )
 set_target_properties(hlvm_aot PROPERTIES OUTPUT_NAME hl-aot)
 
-# The SDK a `--target=hlc` build compiles against (`--c-sdk`, docs/design/AOT_BACKEND.md): the VM library without the JIT and libffi in
-# lib/, the runtime headers in include/, the entry point the generated C links with in src/, and in `target` the target it was built
-# for, as build.Target spells it (OS-ARCH-ABI, macos-ARCH), from which the C build takes its default toolchain and checks a chosen one.
-set(HAXEON_HLC_SDK_DIR "${CMAKE_BINARY_DIR}/hlc-sdk")
-string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _hlc_sdk_arch)
-if(_hlc_sdk_arch MATCHES "^(amd64|x86_64|x64)$")
-  set(_hlc_sdk_arch x86_64)
-elseif(_hlc_sdk_arch MATCHES "^(aarch64|arm64)$")
-  set(_hlc_sdk_arch arm64)
+# What a `--target=hlc` build's C compiles against (docs/design/AOT_BACKEND.md): the VM library without the JIT and libffi in
+# lib/<target>, the target it was built for as build.Target spells it (OS-ARCH-ABI, macos-ARCH), the runtime headers and the
+# generated C's fixed part (native/aot/hlc_prelude.h) in include/, and the entry point the generated C links with in src/.
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _sdk_arch)
+if(_sdk_arch MATCHES "^(amd64|x86_64|x64)$")
+  set(_sdk_arch x86_64)
+elseif(_sdk_arch MATCHES "^(aarch64|arm64)$")
+  set(_sdk_arch arm64)
 endif()
 if(WIN32)
   if(MSVC)
-    set(_hlc_sdk_target "windows-${_hlc_sdk_arch}-msvc")
+    set(_sdk_target "windows-${_sdk_arch}-msvc")
   else()
-    set(_hlc_sdk_target "windows-${_hlc_sdk_arch}-gnu")
+    set(_sdk_target "windows-${_sdk_arch}-gnu")
   endif()
 elseif(APPLE)
-  set(_hlc_sdk_target "macos-${_hlc_sdk_arch}")
+  set(_sdk_target "macos-${_sdk_arch}")
 else()
-  set(_hlc_sdk_target "linux-${_hlc_sdk_arch}-gnu")
+  set(_sdk_target "linux-${_sdk_arch}-gnu")
 endif()
-file(MAKE_DIRECTORY "${HAXEON_HLC_SDK_DIR}")
-file(CONFIGURE OUTPUT "${HAXEON_HLC_SDK_DIR}/target" CONTENT "${_hlc_sdk_target}\n")
-set(_hlc_sdk_headers
+set(_sdk_headers
   vendor/hashlink/src/hl.h vendor/hashlink/src/hlc.h vendor/hashlink/src/hlmodule.h vendor/hashlink/src/hlsystem.h
   vendor/hashlink/src/opcodes.h vendor/hashlink/src/gc_write.h vendor/hashlink/src/hl_ffi.h
-  vendor/hashlink/include/zlib/zlib.h vendor/hashlink/include/zlib/zconf.h)
-list(TRANSFORM _hlc_sdk_headers PREPEND "${CMAKE_SOURCE_DIR}/")
-add_custom_target(haxeon-hlc-sdk ALL
-  COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_HLC_SDK_DIR}/include" "${HAXEON_HLC_SDK_DIR}/lib"
-    "${HAXEON_HLC_SDK_DIR}/src"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${_hlc_sdk_headers} "${HAXEON_HLC_SDK_DIR}/include"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
-    "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${HAXEON_HLC_SDK_DIR}/src"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm_aot>" "${HAXEON_HLC_SDK_DIR}/lib/libhl${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_pinned_libffi>"
-    "${HAXEON_HLC_SDK_DIR}/lib/libffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  DEPENDS hlvm_aot "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c"
-  COMMENT "Assembling the hlc SDK"
+  vendor/hashlink/include/zlib/zlib.h vendor/hashlink/include/zlib/zconf.h native/aot/hlc_prelude.h
+  native/shared/float_to_int.h)
+list(TRANSFORM _sdk_headers PREPEND "${CMAKE_SOURCE_DIR}/")
+
+# The SDK (docs/design/SDK_LAYOUT.md): what an app's runner and an ahead-of-time build consume, in the layout a release ships.
+# A checkout stages it in HAXEON_SDK_DIR (out/sdk); its manifest names the checkout's own stdlib and templates, and the checkout
+# as the source root. Libraries go under lib/<target>, the target this build makes them for. The manifest is written when
+# CMake configures, as the launcher reads it before anything is built.
+file(STRINGS "${CMAKE_SOURCE_DIR}/src/project/PackageCompatibility.hx" _haxeon_version_line
+  REGEX "CURRENT_HAXEON = \"[0-9]+\\.[0-9]+\\.[0-9]+\"")
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" HAXEON_VERSION "${_haxeon_version_line}")
+if(NOT HAXEON_VERSION)
+  message(FATAL_ERROR "No CURRENT_HAXEON in src/project/PackageCompatibility.hx")
+endif()
+set(_sdk_generated "${CMAKE_BINARY_DIR}/sdk-generated")
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file("${_sdk_generated}/HaxeonConfigVersion.cmake" VERSION "${HAXEON_VERSION}"
+  COMPATIBILITY SameMinorVersion ARCH_INDEPENDENT)
+file(CONFIGURE OUTPUT "${HAXEON_SDK_DIR}/haxeon-sdk.toml" CONTENT "# Haxeon's SDK manifest (docs/design/SDK_LAYOUT.md).
+version = \"${HAXEON_VERSION}\"
+# The checkout this SDK was built from: its tools, sources and tests.
+source = \"${CMAKE_SOURCE_DIR}\"
+
+[roots]
+stdlib = \"${CMAKE_SOURCE_DIR}/stdlib\"
+templates = \"${CMAKE_SOURCE_DIR}/templates\"
+registry = \"${HAXEON_SDK_DIR}/registry\"
+")
+# The SDK's haxeon registry (docs/design/SDK_LAYOUT.md). A checkout's is this index: each package in packages/ at Haxeon's version,
+# resolved live from its directory (`path`), so an edit to a package shows on the next build; a release publishes the same
+# packages into its own (`haxeon dev package`). A package whose manifest says `"publish": false` is in neither.
+file(GLOB _registry_manifests CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/packages/*/haxeon.json")
+set(_registry_index "{\"version\": 1, \"packages\": {}}")
+foreach(_registry_manifest IN LISTS _registry_manifests)
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_registry_manifest}")
+  file(READ "${_registry_manifest}" _registry_text)
+  string(JSON _registry_publish ERROR_VARIABLE _registry_no_publish GET "${_registry_text}" publish)
+  if(_registry_publish STREQUAL "OFF")
+    continue()
+  endif()
+  get_filename_component(_registry_root "${_registry_manifest}" DIRECTORY)
+  get_filename_component(_registry_name "${_registry_root}" NAME)
+  string(JSON _registry_index SET "${_registry_index}" packages "${_registry_name}"
+    "{\"versions\": [{\"version\": \"${HAXEON_VERSION}\", \"path\": \"${_registry_root}\"}]}")
+endforeach()
+file(CONFIGURE OUTPUT "${HAXEON_SDK_DIR}/registry/index.json" CONTENT "${_registry_index}\n")
+set(_sdk_lib "${HAXEON_SDK_DIR}/lib/${_sdk_target}")
+# The scripts native packages' CMake builds include or run (build.native.NativeCMakeProvider, NativeCache), and the Android
+# toolchain installer, from the SDK's cmake/ in a checkout as in a release. Copied file by file, so the launcher's haxeon-command brings an edit to them along.
+set(_sdk_native_scripts)
+foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument haxeon-locked haxeon-publish haxeon-real-path
+    haxeon-android-toolchain)
+  add_custom_command(OUTPUT "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
+    COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_SOURCE_DIR}/cmake/${_script}.cmake" "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${HAXEON_SDK_DIR}/cmake/${_script}.cmake"
+    DEPENDS "${CMAKE_SOURCE_DIR}/cmake/${_script}.cmake"
+    VERBATIM)
+  list(APPEND _sdk_native_scripts "${HAXEON_SDK_DIR}/cmake/${_script}.cmake")
+endforeach()
+add_custom_target(haxeon-sdk ALL
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}" "${HAXEON_SDK_DIR}/include" "${HAXEON_SDK_DIR}/src"
+    "${HAXEON_SDK_DIR}/cmake"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm>" "${_sdk_lib}/${CMAKE_STATIC_LIBRARY_PREFIX}hl${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm_aot>" "${_sdk_lib}/${CMAKE_STATIC_LIBRARY_PREFIX}hl-aot${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_app>" "${_sdk_lib}/${CMAKE_STATIC_LIBRARY_PREFIX}haxeon-app${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_pinned_libffi>" "${_sdk_lib}/${CMAKE_STATIC_LIBRARY_PREFIX}ffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${_sdk_headers} "${HAXEON_SDK_DIR}/include"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/app/haxeon_app.c"
+    "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${HAXEON_SDK_DIR}/src"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonApp.cmake" "${_sdk_generated}/HaxeonConfigVersion.cmake" "${HAXEON_SDK_DIR}/cmake"
+  DEPENDS hlvm hlvm_aot haxeon_app ${_sdk_native_scripts} "${CMAKE_SOURCE_DIR}/native/app/haxeon_app.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
+    "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonConfig.cmake"
+    "${CMAKE_SOURCE_DIR}/cmake/sdk/HaxeonApp.cmake"
+  COMMENT "Staging the Haxeon SDK in ${HAXEON_SDK_DIR}"
   VERBATIM
 )
+
+include(cmake/haxeon-platforms.cmake)
 
 add_subdirectory(tests/native)
 
@@ -275,11 +374,6 @@ if(EXISTS "${HAXEON_PINNED_HAXE}")
   add_executable(haxeon native/haxeon_main.c native/haxeon_vm_main.c)
   target_include_directories(haxeon PRIVATE vendor/hashlink/src)
   target_link_libraries(haxeon PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,hlvm>")
-  target_compile_definitions(haxeon PRIVATE
-    "HAXEON_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\""
-    "HAXEON_HASHLINK_DIR=\"${HAXEON_HASHLINK_OUTPUT_DIR}\""
-    "HAXEON_CLI_BYTECODE=\"${HAXEON_CLI_BYTECODE}\""
-  )
   set_target_properties(haxeon PROPERTIES ENABLE_EXPORTS ON C_STANDARD 11 C_STANDARD_REQUIRED ON)
   haxeon_use_unix_main_stack(haxeon)
   # HashLink's main.c is compiled as hl compiles it.
@@ -341,23 +435,30 @@ foreach(_program IN LISTS HAXEON_PROGRAMS)
   list(APPEND HAXEON_PUBLISHED_PROGRAMS "${_published}")
 endforeach()
 
-# Instrumented native builds link the function hooks from the HashLink tools directory: hlprof_penter.lib for /Gh /GH
-# on Windows, libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
+# Instrumented native builds link the function hooks from the SDK's lib/<target>: hlprof_penter.lib for /Gh /GH on Windows,
+# libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})
-    set_target_properties(${_hooks} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+    set_target_properties(${_hooks} PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/hashlink-lib")
+    # The hooks are HashLink's targets, defined in its directory: a target of this one copies them.
+    add_custom_target(${_hooks}-sdk ALL
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${_hooks}>" "${_sdk_lib}"
+      DEPENDS ${_hooks}
+      VERBATIM)
   endif()
 endforeach()
 
 add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} ${HAXEON_CLI_BYTECODE} hldump hlvm jit_native_properties
-  haxeon-hlc-sdk
+  haxeon-sdk
   haxeon-native-tests)
 # What the haxeon launchers bring up to date before running it: the command and the CLI's bytecode.
 if(TARGET haxeon)
-  add_custom_target(haxeon-command DEPENDS "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon${CMAKE_EXECUTABLE_SUFFIX}" "${HAXEON_CLI_BYTECODE}")
+  add_custom_target(haxeon-command DEPENDS "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon${CMAKE_EXECUTABLE_SUFFIX}" "${HAXEON_CLI_BYTECODE}"
+    ${_sdk_native_scripts})
 endif()
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})
-    add_dependencies(haxeon-native ${_hooks})
+    add_dependencies(haxeon-native ${_hooks}-sdk)
   endif()
 endforeach()

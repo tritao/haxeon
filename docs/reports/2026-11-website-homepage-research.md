@@ -1,0 +1,171 @@
+# Haxeon website research
+
+Status: research report, 2026-11-23, produced with Codex (web search over the live sites, cited); folded into docs/design/WEBSITE.md (homepage outline, navigation, docs structure).
+
+**Lead with “a programming language and runtime,” then make cross-platform apps the first and largest proof of what Haxeon can do.** Kotlin provides the clearest precedent for giving a flagship use case its own landing page while preserving the language’s identity. Dart and Flutter are the closest precedent for explaining development-time execution, compiled outputs, and hot reload. React Native and Avalonia show how to make the app result visible beside the code or claim. Haxeon’s demo should add one specific piece of evidence: the visitor changes the code, sees the new behavior, and can verify that state created before the edit survived. [Kotlin](https://kotlinlang.org/) · [Dart](https://dart.dev/) · [Flutter](https://flutter.dev/) · [React Native](https://reactnative.dev/) · [Avalonia](https://avaloniaui.net/)
+
+## 1. Site-by-site findings
+
+Checked November 23, 2026. Section order follows the fetched homepage content. “First screen” describes the hero and its immediate content as exposed by the fetch. I did not measure viewport boundaries, play animations, or execute examples. Quickstart counts are practical stages to first output, with prerequisites identified separately where relevant. Quoted hero copy is verbatim. A few longer subheads are excerpted to stay within source quotation limits. “No route found” means it did not surface in the pages checked. Microsoft’s MAUI homepage was available through an older crawl, so its section order and hero have lower freshness confidence than its tutorial.
+
+### Group A — Languages and runtimes
+
+**Kotlin**
+
+- **Hero and first screen.** “Kotlin” / “Concise. Multiplatform. Fun.” The hero illustration, JetBrains attribution, and **Get started** carry the opening. Multiplatform, Backend, AI, Android, and Kotlin tour are the nearby secondary routes. [Homepage](https://kotlinlang.org/)
+- **Order and proof.** Hero → Why Kotlin with a short, editable example → news → Kotlin in action case studies → dedicated Multiplatform feature → community → foundation → final start CTA. Solution links lead to separate pages. Case studies mix app and backend work, including named adopters and links to longer stories or videos. The dedicated Multiplatform section gives the flagship additional space without making the other routes hard to find. [Homepage](https://kotlinlang.org/)
+- **Start, navigation, and migration.** Get started leads to the tour, install instructions, and use-case choices. First browser output takes two stages: open the tour or playground, then run a sample. Navigation has Solutions, Case studies, Docs, API, Community, Teach, and Play. Docs splits the language guide from multiplatform development, API has its own menu, and Play groups the Playground and Koans. Java-to-Kotlin guides compare idioms side by side. [Get started](https://kotlinlang.org/docs/getting-started.html) · [Java and Kotlin example](https://kotlinlang.org/docs/java-to-kotlin-idioms-strings.html)
+
+**Swift**
+
+- **Hero and first screen.** “Swift is the powerful, flexible, multiplatform programming language.” / “Fast. Expressive. Safe.” **Install** is the main action, supported by a Linux, macOS, and Windows tools line. The next route is the use-case grid. [Homepage](https://www.swift.org/)
+- **Order and proof.** Hero → Create using Swift → Fast → Expressive → Safe → Interoperable → Adaptable → Open Source → tools, community, and governance links. Cloud services, CLI, and embedded get explanatory cards. iOS, Windows, and machine learning/AI appear as additional links. Static code in the language sections gives evidence for syntax, safety, and interop. The use-case hierarchy makes the non-Apple routes visible early. [Homepage](https://www.swift.org/)
+- **Start, navigation, and migration.** The fetch exposed Install plus the Tools, Community, and Governance link groups. I could not verify the complete primary menu, and the documentation landing returned a redirect stub. Getting Started covers install, usage, and follow-on topics, including wrapping C/C++. First output takes about three stages on the package path: install, initialize, run. The Swift concurrency migration URL likewise returned a redirect stub. [Getting Started](https://www.swift.org/getting-started/) · [Documentation redirect](https://www.swift.org/documentation/) · [Migration redirect](https://www.swift.org/migration/)
+
+**Dart**
+
+- **Hero and first screen.** “An approachable, portable, and productive language for high-quality apps on any platform.” Google backing and free/open-source status sit near the opening. The fetch exposed search but no hero button. The prominent runnable action is farther down, **Try Dart in your browser**, with learning routes beneath it. [Homepage](https://dart.dev/)
+- **Order and proof.** Positioning → three short benefits → illustrated elaborations on syntax, compilation, and hot reload → live DartPad iframe → language, core library, and CLI links. Apps unify the narrative. Native and web targets and backend support appear under portability, while CLI gets a concrete tutorial link. Illustrations and the live editor make a stronger case than the adjectives alone. [Homepage](https://dart.dev/)
+- **Start, navigation, and migration.** Scroll to DartPad and run the sample for the shortest path. Local use starts at the SDK page. The docs hub separates learning the language, libraries, tools, and tutorials. The homepage fetch did not expose the full menu, and the candidate “coming from” URL was inaccessible. [Docs](https://dart.dev/docs) · [SDK](https://dart.dev/get-dart) · [Unavailable comparison URL](https://dart.dev/resources/coming-from)
+
+**Go**
+
+- **Hero and first screen.** “Build simple, secure, scalable systems with Go.” Four supporting bullets describe Google support, learnability, concurrency and the standard library, and the ecosystem. **Get Started** and **Download** sit beside the Gopher artwork and platform download links. [Homepage](https://go.dev/)
+- **Order and proof.** Hero → company logos and case studies → live Try Go editor → domain cards → final onboarding. The editor has Run, Share, a sample selector, and a Tour link. Cloud/network, CLI, web, and DevOps/SRE cards pair a practical domain with relevant resources. The runnable example and use-case links substantiate the language pitch. [Homepage](https://go.dev/)
+- **Start, navigation, and migration.** Browser output takes one Run action once the editor is in view. Local Hello World takes four stages: install, set up a directory and module, write the file, run it. Main navigation is Why Go, Learn, Docs, Packages, and Community. Docs distinguishes the spec, user manual, standard library, release notes, and Effective Go. No cross-language migration route surfaced in that navigation. [Homepage](https://go.dev/) · [First program](https://go.dev/doc/tutorial/getting-started)
+
+**Rust**
+
+- **Hero and first screen.** “Rust” / “A language empowering everyone to build reliable and efficient software.” **Get Started** and the current version link are the two hero actions. Playground is available in the header. [Homepage](https://rust-lang.org/)
+- **Order and proof.** Hero → performance, reliability, and productivity → four illustrated domains → Rust in production → community participation → acknowledgments. CLI, WebAssembly, networking, and embedded each get a guide link. There is no homepage code runner. The ownership and runtime explanations are more concrete than the brief production section. [Homepage](https://rust-lang.org/)
+- **Start, navigation, and migration.** Local first program takes three stages: install Rust, generate a Cargo project, run it. Navigation exposes Install, Learn, Playground, Tools, Governance, Funding, Community, and Blog. Learn routes into the book and other learning material. No “coming from” route surfaced on the homepage or quickstart. [Homepage](https://rust-lang.org/) · [Quickstart](https://rust-lang.org/learn/get-started/) · [Learn](https://rust-lang.org/learn/)
+
+**Zig**
+
+- **Hero and first screen.** “Zig is a general-purpose programming language and toolchain for maintaining robust, optimal and reusable software.” The fetched opening moves directly into language features. **Full overview** and **More code samples** are the first prominent body links. The top menu was not exposed in the fetch. [Homepage](https://ziglang.org/)
+- **Order and proof.** Definition → simple language → comptime → working with C/C++ codebases → overview and samples → static Zig test with shell output → community and development → foundation → sponsors. Use cases show up as capabilities, particularly C/C++ compilation and incremental adoption. The concrete test and output make the pitch inspectable. [Homepage](https://ziglang.org/)
+- **Start, docs, and migration.** The Learn quickstart takes three broad stages: install and configure PATH, initialize a project, run it. The overview, samples, and quickstart serve distinct jobs. The homepage’s C/C++ section is an adoption pitch. A separate migration flow did not surface in the audited pages. [Getting Started](https://ziglang.org/learn/getting-started/) · [Overview](https://ziglang.org/learn/overview/)
+
+**Gleam**
+
+- **Hero and first screen.** “Gleam is a friendly language for building type-safe systems that scale!” The mascot and **Try Gleam** dominate the opening. The following copy explains the type system, functional programming, and Erlang runtime, paired with a small Hello World. No equally prominent second hero action was exposed. [Homepage](https://gleam.run/)
+- **Order and proof.** Hero and sample → sponsor acknowledgment → concurrency → tooling and packages → diagnostics → interoperability and JavaScript output → community values → sponsors → tour CTA → newsletter. Static examples show actor messaging, package/test output, an error diagnostic, and foreign calls. There is no domain grid. The compiler diagnostic is especially effective because readers can judge it themselves. [Homepage](https://gleam.run/)
+- **Start, navigation, and migration.** Try Gleam opens an interactive tour. Locally, install Gleam and Erlang, create a project, and run it. The footer exposes News, Code, Discord, Language tour, Playground, Documentation, Sponsor, Packages, Roadmap, and Case studies. Docs separates learning, reference, guides, deployment, and cheatsheets for readers coming from languages including Elixir, Python, and Rust. The guessed `/getting-started/` gave a 404. The docs-linked Writing Gleam worked. [Docs](https://gleam.run/documentation/) · [Writing Gleam](https://gleam.run/writing-gleam/) · [Tour](https://tour.gleam.run/)
+
+**Bun**
+
+- **Hero and first screen.** “Bun is a fast JavaScript runtime & toolkit. All in one.” The subhead opens, “Runtime, package manager, test runner, bundler, type checker and formatter in a single binary.” It continues with adoption examples for an existing Node project. The install command with OS tabs is the main action. **Quickstart** and **Read the docs** sit beside it. [Homepage](https://bun.sh/)
+- **Order and proof.** Announcement and hero → benchmark examples for installs, Express, Postgres, and WebSockets → six tools → built-in APIs → production stories → framework compatibility → Node/Deno comparison matrix → release notes → final install CTA. The homepage uses command and code panels, benchmark replays, and named stories. It groups uses by tools and APIs, with recognizable projects showing where those tools fit. Benchmark conditions and reproduction links add credibility. The fetched install benchmark table and chart text display conflicting units or formatting. [Homepage](https://bun.sh/)
+- **Start, navigation, and migration.** Install, initialize a blank project, run the generated file. Navigation gives Docs, Guides, Reference, and Blog their own entries alongside Home and Install. Node compatibility and the homepage matrix are explicit comparison and adoption routes. [Quickstart](https://bun.sh/docs/quickstart) · [Node compatibility](https://bun.sh/docs/runtime/nodejs-compat)
+
+**Deno**
+
+- **Hero and first screen.** “Better, faster JavaScript” / “Deno is a fast, open-source, fully Node-compatible JS runtime with TypeScript and everything else you need baked right in.” **Get started** and **GitHub** accompany a release link and a Node/Bun comparison claim. [Homepage](https://deno.com/)
+- **Order and proof.** Hero and capability list → install and agent setup → TypeScript/npm and Node adoption → built-in tools → security → performance → observability → deployment and hosting → desktop → social proof and final CTA. Code, CLI examples, benchmark graphics, and product visuals support the claims. Use cases appear as extensions of a runtime and toolchain. The compatibility claims and benchmark headlines need the linked detail to be interpretable. [Homepage](https://deno.com/)
+- **Start, navigation, and migration.** Install, initialize, run. Navigation groups Products, Docs, Modules, Community, and Blog. Runtime docs separate getting started, guides, concepts, diagnostics, advanced material, and reference. The homepage explains running existing Node projects. The version migration guide loaded, while the candidate Node migration tutorial returned a cache miss. [Runtime quickstart](https://docs.deno.com/runtime/) · [Version migration](https://docs.deno.com/runtime/reference/migration_guide/)
+
+**Elixir**
+
+- **Hero and first screen.** “Simple from zero to scale.” Four supporting bullets describe development, team size, deployment scale, and Erlang reliability. **Install now** and **Get started** accompany a static data-transformation example and its output. [Homepage](https://elixir-lang.org/)
+- **Order and proof.** Release and hero → language benefits → production logos/case studies → five use-case tabs → project ecosystem and stewardship → community/footer. The tabs cover web, embedded, machine learning, data/media, and IoT/distributed systems. Each connects a domain to named packages and a static snippet. This makes the breadth of the ecosystem tangible. [Homepage](https://elixir-lang.org/)
+- **Start, navigation, and migration.** After installing, open IEx and enter an expression, or write a file and run it with `elixir`. The header exposes Home, Install, Learning, Docs, Case studies, Blog, and Get started. Learning resources and HexDocs guides provide distinct routes into the language and API. No dedicated migration route surfaced on the pages checked. [Homepage](https://elixir-lang.org/) · [HexDocs introduction](https://elixir.hexdocs.pm/introduction.html)
+
+### Group B — Cross-platform app platforms
+
+**Flutter**
+
+- **Hero and first screen.** “Build for any screen” / “Flutter transforms the development process. Build, test, and deploy beautiful mobile, web, desktop, and embedded experiences from a single codebase.” **Get started** is the hero action. The nearby secondary path is **Try it in DartPad** in the benefit sections. [Homepage](https://flutter.dev/)
+- **Order and proof.** Hero → framework definition and Fast/Productive/Flexible examples → target platforms → developer workflow → ecosystem trust → Google integrations → Google Pay story → community → Dart → news → newsletter and final install/docs. The benefits use illustrations and outbound DartPad demos, including a state-preserving hot-reload claim. Platforms get distinct pages. The runnable paths and named developer story give substance to the broad headline. [Homepage](https://flutter.dev/)
+- **Start, navigation, and migration.** With tooling installed, create the project, then run it on a selected device. The fetched header exposed Get started, search, and a menu control. Page links expose platform, development, ecosystem, and learning routes. Docs provides install, a learning journey, codelabs, cookbook, samples, and API material. Flutter for React Native developers is a task-by-task comparison. [Install](https://docs.flutter.dev/install/with-vs-code) · [React Native guide](https://docs.flutter.dev/flutter-for/react-native-devs)
+
+**.NET MAUI**
+
+- **Hero and first screen.** “.NET Multi-platform App UI” / “Build native, cross-platform desktop and mobile apps all in one framework.” **Get started** and **Read docs** accompany imagery under the broader .NET header. [Homepage, older crawl](https://dotnet.microsoft.com/en-us/apps/maui)
+- **Order and proof.** Hero → multiplatform, one codebase, and productivity → template controls and components → explainer video → learning portal, eShop source, and e-book → community and vendor ecosystem. Windows, macOS, iOS, and Android define the main scope. There is no homepage code runner in the fetched page. A template with included controls and a source-linked sample do more work than the broad productivity claims. [Homepage, older crawl](https://dotnet.microsoft.com/en-us/apps/maui)
+- **Start, navigation, and migration.** The tutorial walks through setup and verification, project creation, and a target run. The parent .NET navigation covers workloads, Learn, Download, Docs, Community, and customer stories. Microsoft Learn separates onboarding and samples from platform-specific material, API docs, and migration guidance. Xamarin has a dedicated upgrade path. [First app](https://dotnet.microsoft.com/en-us/learn/maui/first-app-tutorial/intro) · [Xamarin migration](https://learn.microsoft.com/en-us/dotnet/maui/migration/)
+
+**Avalonia**
+
+- **Hero and first screen.** “The cross-platform UI framework for .NET” / “Write an app once and run it on Windows, macOS, Linux, iOS, Android and the web.” **Learn more** and **Evaluating for your team?** sit above a montage of named apps and samples with a showcase link. [Homepage](https://avaloniaui.net/)
+- **Order and proof.** Hero and montage → trust logos → rendering, familiar .NET skills, and licensing → named customer stories → platforms → static three-command example → commercial tooling, WPF offering, and support → first-app CTA. Screenshots cover desktop, embedded, browser, and phone. Named projects and case studies with concrete constraints are especially credible. Commercial tiers make the navigation denser. [Homepage](https://avaloniaui.net/)
+- **Start, navigation, and migration.** With .NET and an IDE, install templates, create an app, run it. Header menus cover Products, Solutions, and Resources, surfacing platform pages, docs, GitHub, stories, showcase, and commercial offerings. Docs puts the quickstart and “Coming from WPF?” near one another. Avalonia XPF offers an additional commercial WPF adoption path. [Getting started](https://docs.avaloniaui.net/docs/get-started/) · [Homepage](https://avaloniaui.net/)
+
+**React Native**
+
+- **Hero and first screen.** “React Native” / “Learn once, write anywhere.” **Get Started** and **Learn the Basics** precede the first product example. [Homepage](https://reactnative.dev/)
+- **Order and proof.** Hero → static JSX next to Android and iOS output → native component explanation → Expo framework path covering routing, libraries, and tooling → talks → logos and app showcase → ecosystem and community CTA. The paired phones answer what the code renders. The homepage example is static. Interactive examples appear in the docs. [Homepage](https://reactnative.dev/) · [Docs introduction](https://reactnative.dev/docs/getting-started)
+- **Start, navigation, and migration.** Get Started recommends Expo. With prerequisites, scaffold, start the dev server, and open on a device or emulator. The fetched homepage exposed social links and footer navigation for Guides, Components, APIs, Architecture, Showcase, Contributing, Community, and Blog. A framework-less path is available, and the docs offer integration into existing apps. [Environment setup](https://reactnative.dev/docs/environment-setup) · [Existing app integration](https://reactnative.dev/docs/integration-with-existing-apps)
+
+**Expo**
+
+- **Hero and first screen.** “Agentic mobile infrastructure.” The supporting copy opens, “Build with our CLI and dev tools. Test on simulators made for agents.” It continues into CI/CD and release feedback. **Get started** and **Talk to our team** are the main actions, with a Simulators link and adoption figures nearby. [Homepage](https://expo.dev/)
+- **Order and proof.** Hero → app-icon proof → Develop/Validate/Deploy/Monitor panels → SDK and tooling → infrastructure and service cards → adoption metrics → testimonials/community → closing CTA. Solutions are organized around the app lifecycle. The fetched home emphasizes product imagery and social proof. The live browser editor is a separate route, Snack. Named tooling and service links give the workflow detail that the hero’s “agentic” framing leaves open. [Homepage](https://expo.dev/) · [Docs](https://docs.expo.dev/)
+- **Start, navigation, and migration.** Create an Expo project, start the dev server, open the app. Snack offers a browser path. Navigation covers Docs, Product, Solutions, Enterprise, Pricing, Blog, and account actions. Docs separates onboarding, SDK/API, routing, service workflows, and examples. It also links an existing React Native app path through installing Expo modules. [Start developing](https://docs.expo.dev/get-started/start-developing/) · [Install Expo modules](https://docs.expo.dev/bare/installing-expo-modules/)
+
+**Kotlin Multiplatform**
+
+- **Hero and first screen.** “Kotlin Multiplatform” / “Go cross‑platform without compromising performance, UX, or code quality.” **Get Started** and the platform choices are the primary routes. Compose Multiplatform is a secondary destination in local navigation. [Homepage](https://kotlinlang.org/multiplatform/)
+- **Order and proof.** Hero and platform/share-scope content → AI code generation → IDE tooling → adoption claim → extensive real-world stories. Platform panels cover Android, iOS, web, desktop, and server. The opening also explains sharing an isolated logic module, sharing business logic with native UI, or sharing UI. The page relies on tooling visuals, customer quotes, and videos. The incremental adoption options are more specific than the broad hero promise. [Homepage](https://kotlinlang.org/multiplatform/)
+- **Start, navigation, and migration.** Choose tools and set up the environment, generate a project, check prerequisites, run a sample. The global Kotlin header sits above local links for Kotlin Multiplatform, Compose Multiplatform, Success stories, For startups, Libraries, and Get started. Docs branches into shared UI and shared logic tutorials. The homepage explicitly describes extending an existing Android app to other platforms. [Quickstart](https://kotlinlang.org/docs/multiplatform/quickstart.html) · [Homepage](https://kotlinlang.org/multiplatform/)
+
+**Tauri**
+
+- **Hero and first screen.** “Tauri 2.0” / “Create small, fast, secure, cross-platform applications.” **Get started** and **Tauri 1.0 Documentation** sit above a tabbed project creation command. [Homepage](https://tauri.app/)
+- **Order and proof.** Hero → scaffold commands by shell and package manager → frontend independence, platform support, security, and size cards → sponsors. The immediate proof is an actionable command, with Linux, macOS, Windows, Android, and iOS described in the platform card. No app gallery or live app was exposed. The minimal-size claim is presented as a possible lower bound, and the page explains the OS web renderer. [Homepage](https://tauri.app/)
+- **Start, navigation, and migration.** Set up prerequisites, scaffold, install frontend dependencies as needed, then run the development app. Header links are Guides, References, Blog, and Releases. Guides lead from setup into development and distribution. References cover APIs and configuration. There is a specific Tauri 1-to-2 migration guide. [Create a project](https://v2.tauri.app/start/create-project/) · [Migration](https://v2.tauri.app/start/migrate/from-tauri-1/)
+
+**Electron**
+
+- **Hero and first screen.** “Build cross-platform desktop apps with JavaScript, HTML, and CSS.” **Get Started** and **Why Electron?** are the two hero actions. The following cards supply the technical explanation, beginning with Chromium and Node.js. [Homepage](https://www.electronjs.org/)
+- **Order and proof.** Hero → platform and architecture benefits → trusted apps → desktop capabilities → frontend tooling → Forge → static installation commands → downloadable Electron Fiddle → app gallery. The use cases are desktop capabilities such as native menus, updating, installers, and crash reporting. Recognizable products and a named packaging tool are stronger evidence than generic quality claims. [Homepage](https://www.electronjs.org/)
+- **Start, navigation, and migration.** The tutorial takes four broad stages after Node setup: initialize and install Electron, add the main script and start command, add a window and HTML, and run it. Forge offers a scaffold, and Fiddle offers a downloadable sandbox. The fetched navigation evidence groups Getting Started/API Reference, performance/security, Forge/Fiddle, and community/resources. Versioned breaking changes are documented. The older `/tutorial/quick-start` gave a 404, while the current tutorial loaded. [First app](https://www.electronjs.org/docs/latest/tutorial/tutorial-first-app) · [Breaking changes](https://www.electronjs.org/docs/latest/breaking-changes)
+
+## 2. Cross-site patterns
+
+- **Almost every site gives the visitor an obvious first action.** Language sites commonly use Get Started, Install, or Try. Secondary actions address a different intent: run a sample, read the basics, download, or inspect the project. Go makes the local path and the in-browser path easy to distinguish. Bun makes the install command useful even before a visitor enters the docs. [Go](https://go.dev/) · [Bun](https://bun.sh/)
+- **The strongest first example proves a particular claim.** Go proves that you can immediately edit and run the language. React Native shows the UI produced by the code. Gleam shows a real compiler diagnostic, and Zig shows the test result. A Hello World is useful for onboarding. A feature claim needs its own observable result. [Go](https://go.dev/) · [React Native](https://reactnative.dev/) · [Gleam](https://gleam.run/) · [Zig](https://ziglang.org/)
+- **Good proof has enough detail to inspect.** Avalonia names the application or engineering constraint. Elixir names the package behind each domain. Bun exposes benchmark conditions and reproduction links. These are stronger models for an early project than an unqualified speed, productivity, or adoption claim. [Avalonia](https://avaloniaui.net/) · [Elixir](https://elixir-lang.org/) · [Bun](https://bun.sh/)
+- **Tutorials, guides, and reference serve different needs.** The clearest sites have a first-run path, material organized by task or use case, and an API or language reference that can be searched independently. Tours offer a fourth route when learning the language itself is the goal. [Kotlin](https://kotlinlang.org/) · [Go](https://go.dev/) · [Gleam](https://gleam.run/documentation/) · [Tauri](https://tauri.app/)
+
+## 3. Multiple uses and the app demo
+
+**Language-first sites make breadth legible through a single organizing idea.** Kotlin states its identity and gives visitors short routes into solutions, then devotes a larger module and separate page to Multiplatform. Swift introduces its domains immediately after its language promise. Go and Elixir make domain sections actionable with guides, packages, or code. Dart ties compilation modes and backend support to the work of building apps. Bun and Deno organize breadth around jobs their runtimes perform, so their lists of tools and APIs reinforce the runtime pitch. For Haxeon, that suggests a dedicated Apps page plus a compact set of links for CLI tools, games and 3D, scripts, and embedding. Each link should lead to an example someone can run. [Kotlin](https://kotlinlang.org/) · [Swift](https://www.swift.org/) · [Go](https://go.dev/) · [Elixir](https://elixir-lang.org/) · [Dart](https://dart.dev/) · [Bun](https://bun.sh/) · [Deno](https://deno.com/)
+
+**App platforms get to visible output quickly, but the format varies.** Avalonia leads with identifiable apps. React Native places code and platform output together immediately after the hero. Flutter leads with the cross-screen result, then links its benefit examples to DartPad. Tauri leads with a scaffold command, and Electron relies on logos and later tooling. For Haxeon’s distinguishing claim, the most useful combination is React Native’s side-by-side presentation and Flutter’s explicit focus on iteration. Make the retained state visible on both sides of an edit. [Avalonia](https://avaloniaui.net/) · [React Native](https://reactnative.dev/) · [Flutter](https://flutter.dev/) · [Tauri](https://tauri.app/) · [Electron](https://www.electronjs.org/)
+
+## 4. Recommended Haxeon homepage
+
+| Order | Section and purpose | Content and CTAs |
+|---|---|---|
+| 1 | **Hero. Establish the language and runtime.** | Use an explicit category headline and one sentence about live editing, C/C++ interop, or outputs. Beside it, show a short, verified Haxeon program and its output. **Get started** goes to the language quickstart. **See live editing** jumps to the app demo. |
+| 2 | **Cross-platform apps. Demonstrate the flagship use case.** | Make this the largest section. Show a real Haxeon UI-package app beside the source. Create visible state, such as three items in a list. Change the handler or rendering code. Show the existing list survive and a new interaction follow the edited code. A continuous native recording is sufficient at launch, with the source and a reproducible local example. Use an interactive embed if it can exercise the actual runtime behavior. **Build your first app** and **Get the demo source**. |
+| 3 | **Native C/C++ interop. Show the boundary.** | Put a small real header, the generated binding, and the Haxeon call side by side. Use a struct and pointer that readers can trace through the example. Link to ownership and lifetime rules in the guide. **Read the interop guide**. |
+| 4 | **One codebase, three outputs. Make the runtime model concrete.** | Use one verified sample with three panels: run on the JIT VM during development, build an ahead-of-time native executable, and build WebAssembly. Show the actual commands and what each produces. Beside the Apps CTA, list Linux, macOS, Windows, and Android as supported, web as experimental, and iOS as planned. Link the platform matrix so readers can check output and package support together. **See build targets**. |
+| 5 | **What else you can build. Provide short paths into the ecosystem.** | Four tiles: CLI tools with a runnable command, games and 3D with a small GPU/audio/animation sample, scripts with a one-file task, and embedding with a minimal C/C++ host. Give each an example and a link to its guide. |
+| 6 | **Start building. Close with a practical next step.** | Put the shortest verified install-and-run path on the page and link to OS instructions, release notes, and a second tutorial. Aim for three stages: install, create or copy the sample, run. Repeat **Get started** and offer **Browse examples**. |
+
+This order borrows Kotlin’s hierarchy, React Native’s code-to-output pairing, the technical specificity of Zig and Gleam, and the quickstart visibility of Bun and Tauri. It puts the app demo directly after the language hero, then shows what the language and runtime provide across different projects. [Kotlin](https://kotlinlang.org/) · [React Native](https://reactnative.dev/) · [Zig](https://ziglang.org/) · [Gleam](https://gleam.run/) · [Bun](https://bun.sh/) · [Tauri](https://tauri.app/)
+
+**Top navigation.** Use **Language**, **Build**, **Docs**, **Examples**, and **About**, with **Get started** as the persistent action. Build opens with **Apps**, followed by CLI tools, games and 3D, scripts, and embedding. Give Apps a dedicated landing page with the demo, supported-platform matrix, UI package overview, and first-app guide. About contains **Coming from Haxe**, where the relationship to Haxe belongs.
+
+**Docs structure.**
+
+- **Start here** — Install, first program, first app.
+- **Learn the language** — Tour and progressive examples. Give it a browser runner when one is available and verified.
+- **Build guides** — Apps/UI, CLI, games and 3D, scripts, and embedding.
+- **Runtime and targets** — JIT and live editing, what state survives which edits, AOT executables, WebAssembly, packaging, and compatibility.
+- **C/C++ interop** — Generate bindings, call functions, use structs and pointers, and follow ownership and lifetime rules.
+- **Reference** — Language, CLI/build configuration, runtime and embedding APIs, standard library, and package APIs. Link to reference from guides at the point of use.
+
+The outline assumes a source-linked native recording is the launch demo and treats a browser embed as conditional. The brief supplied capabilities and platform status, so I left literal Haxeon syntax and commands for the project’s verified examples.
+
+## 5. Hero alternatives
+
+| Headline | Subheading |
+|---|---|
+| **Haxeon is a programming language and runtime.** | Edit running programs and keep their state. Build native executables or WebAssembly from the same codebase. |
+| **Edit code. Keep state.** | Haxeon is a programming language and runtime for building apps, tools, and games you can change while they run. |
+| **A language and runtime for live development.** | Run code on a JIT VM as you work, call C and C++ directly, and build native executables or WebAssembly. |
+| **One language for development and deployment.** | Haxeon runs your code on a JIT VM while you develop and builds the same codebase for native execution or WebAssembly. |
+
+The first pair is the clearest launch default. The second gives live editing the strongest lead and works best when the demo is visible immediately below it.

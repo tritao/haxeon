@@ -431,6 +431,13 @@ class WasmModuleSupport {
 		return globals.get(name);
 	}
 
+	public static function declaresNative(program:IrProgram, name:String):Bool {
+		for (native in program.natives)
+			if (native.name == name)
+				return true;
+		return false;
+	}
+
 	public static function requiredFunctionIndex(functions:Map<String, Int>, name:String):Int {
 		if (!functions.exists(name))
 			throw new InternalError('Unknown Wasm function "$name"');

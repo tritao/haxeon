@@ -21,8 +21,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-HASHLINK_DIR = Path(os.environ.get("HL_GC_TEST_LIBRARY_DIR") or
-                    subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
+HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
 VM = os.environ.get("HL_JIT_TEST_VM") or str(HASHLINK_DIR / "hl")
 HAXE = ROOT / ".tools" / "haxe" / ("haxe.exe" if os.name == "nt" else "haxe")
 

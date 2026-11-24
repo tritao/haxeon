@@ -4,6 +4,7 @@ import compiler.ir.model.Ir.IrType;
 import compiler.ir.verify.IrVerifier;
 
 /** Internal bit transport for nominal scalar carriers; this never performs a source-level cast. */
+@:nullSafety(Strict)
 class IrScalarWordBits {
 	public static inline final PACK = "$word:scalar-pack";
 	public static inline final UNPACK = "$word:scalar-unpack";

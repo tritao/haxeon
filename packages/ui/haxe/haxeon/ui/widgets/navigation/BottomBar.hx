@@ -70,7 +70,7 @@ class BottomBar implements ScopeView {
 		var rootStyle = style.copy();
 		rootStyle.direction = LayoutDirection.TopToBottom;
 		rootStyle.width = LayoutAxis.grow();
-		rootStyle.background = NavUi.surface;
+		rootStyle.background = context.theme.tokens.navigationBackground;
 		var root = NavUi.box(context, id, "bottom-bar", key, rootStyle, ["bottom-bar"]);
 		var tabs = new Semantics(AccessibilityRole.TabList, "Navigation");
 		tabs.orientation = AccessibilityOrientation.Horizontal;
@@ -79,7 +79,7 @@ class BottomBar implements ScopeView {
 		var dividerStyle = new LayoutStyle();
 		dividerStyle.width = LayoutAxis.grow();
 		dividerStyle.height = LayoutAxis.fixed(1.0);
-		dividerStyle.background = NavUi.border;
+		dividerStyle.background = context.theme.tokens.border;
 		root.add(NavUi.child(context, "divider", "bottom-bar-divider", dividerStyle));
 
 		var rowStyle = new LayoutStyle();
@@ -120,7 +120,7 @@ class BottomBar implements ScopeView {
 			node.onActivate(function(_:UiEvent) onSelect(chosen));
 		}
 
-		var foreground = active ? NavUi.accent : NavUi.secondary;
+		var foreground = active ? context.theme.tokens.accent : context.theme.tokens.textSecondary;
 		node.add(context.withScope(new Key("icon"),
 			function() return new Icon("glyph", item.icon, 22.0, foreground).build(context)));
 
@@ -137,13 +137,13 @@ class BottomBar implements ScopeView {
 			badgeStyle.childAlignY = LayoutAlignmentY.Center;
 			badgeStyle.childDistribution = LayoutDistribution.Center;
 			badgeStyle.direction = LayoutDirection.LeftToRight;
-			badgeStyle.background = NavUi.attention;
+			badgeStyle.background = context.theme.tokens.warning;
 			badgeStyle.radiusTopLeft = 8.0;
 			badgeStyle.radiusTopRight = 8.0;
 			badgeStyle.radiusBottomLeft = 8.0;
 			badgeStyle.radiusBottomRight = 8.0;
 			var badge = NavUi.child(context, "badge", "bottom-bar-badge", badgeStyle);
-			badge.add(NavUi.label(context, "count", Std.string(item.badge), 11.0, NavUi.white));
+			badge.add(NavUi.label(context, "count", Std.string(item.badge), 11.0, context.theme.tokens.textOnAccent));
 			labelRow.add(badge);
 		}
 		node.add(labelRow);

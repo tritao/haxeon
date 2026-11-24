@@ -28,6 +28,22 @@ class IrStage extends IrStageHooks {
 		enabled = predicate;
 		return this;
 	}
+
+	/** The stage keeps the lineage of the functions itself (`IrFunctionStages`), so the list does not settle after it. */
+	public var memoizes(default, null) = false;
+
+	public function memoized():IrStage {
+		memoizes = true;
+		return this;
+	}
+
+	/** Runs the stage; in a session its changes are settled into the lineage (`IrLineage.settle`). */
+	public function runSettled(program:IrProgram, context:IrPipelineContext):IrProgram {
+		var result = run(program, context), lineage = context.lineage;
+		if (lineage != null && !memoizes)
+			lineage.settle(name, result.functions);
+		return result;
+	}
 }
 
 /** What every stage declares besides its pass: its name and the early prune's check hooks. */
@@ -198,11 +214,11 @@ class IrStageList {
 					var meter:compiler.core.IrPassMeter = context.meter,
 						input = IrStageHooks.censusStart(program.functions),
 						before = meter.start();
-					program = stage.run(program, context);
+					program = stage.runSettled(program, context);
 					meter.stop(stage.name, before);
 					IrStageHooks.census(stage.name, input, program.functions, meter);
 				} else
-					program = stage.run(program, context);
+					program = stage.runSettled(program, context);
 				IrStageHooks.release(program.functions, context);
 			}
 		}
@@ -249,8 +265,9 @@ class IrAssemblyStageList {
 						assembly = stage.runSettled(assembly, context);
 					IrStageHooks.release(assembly.functions, context);
 				}
-				if (stage.encodePoint)
-					context.lineage = null;
+				var lineage = context.lineage;
+				if (stage.encodePoint && lineage != null)
+					lineage.enterBodies();
 				IrStageHooks.after(stage, assembly.functions, context);
 				watches = watches || stage.prunePoint;
 			}

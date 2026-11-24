@@ -4,6 +4,7 @@ import compiler.core.InternalError;
 import compiler.ir.model.Ir.IrType;
 
 /** Rules about IR types that more than one stage needs. */
+@:nullSafety(Strict)
 class IrTypeTools {
 	/** The nominal class of a verified value initializer. */
 	public static function valueObjectName(type:IrType):String

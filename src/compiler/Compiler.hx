@@ -95,13 +95,12 @@ typedef CompileMetrics = {
 	final graphParseMs:Float;
 	final graphDependencyMs:Float;
 	final graphInitializationMs:Float;
-	final frontendRestarts:Array<String>;
 
-	/** The functions each typing pass of the frontend typed, in order: a pass that continues another types only what is new. */
-	final frontendPassFunctions:Array<Int>;
+	/** The functions the frontend typed: those an edit invalidated, or every one in a first build. */
+	final frontendTypedFunctions:Int;
 
-	/** Where each frontend pass spent its time and allocation, one line per pass. */
-	final frontendPassReports:Array<String>;
+	/** Where the frontend's stages spent their time and allocation, as one line; empty when the frontend did not run. */
+	final frontendStages:String;
 
 	/** What each IR pass allocated, for the timings line; empty when the build reused its pipeline and ran none. */
 	final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost>;
@@ -253,6 +252,14 @@ class Compiler {
 	function set_options(value:CompileOptions):CompileOptions {
 		if (value.key() != options.key())
 			sourceGeneration++;
+		if (value.scriptModule != options.scriptModule) {
+			// Both modules need to be parsed again when their grammar changes.
+			for (name in [options.scriptModule, value.scriptModule]) {
+				var module = name == null ? null : modules.get(name);
+				if (module != null)
+					module.render(module.source);
+			}
+		}
 		return options = value;
 	}
 
@@ -499,7 +506,8 @@ class Compiler {
 		if (state == null)
 			throw new InternalError('Cannot refresh unloaded module "$name"');
 		if (state.loadedText != source) {
-			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource, state.source.physicalPath));
+			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource,
+				state.source.physicalPath));
 			sourceGeneration++;
 		}
 	}
@@ -701,9 +709,8 @@ class Compiler {
 						graphParseMs: 0.0,
 						graphDependencyMs: 0.0,
 						graphInitializationMs: 0.0,
-						frontendRestarts: [],
-						frontendPassFunctions: [],
-						frontendPassReports: [],
+						frontendTypedFunctions: 0,
+						frontendStages: "",
 						irPassCosts: [],
 						semanticAssemblyMs: 0.0,
 						semanticAliasMs: 0.0,

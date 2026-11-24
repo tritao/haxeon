@@ -26,16 +26,16 @@ class IrAssembly {
 	public var cNatives:Null<Array<IrCNative>>;
 	public var reflectableObjects:Null<Array<String>>;
 
-	/** The walk the Dynamic dispatch of enums and structs is decided by, in a pruned build. */
+	/** The walk from the entry of a build that is not live: the natives reached code calls and, in a pruned build, the Dynamic dispatch of enums and structs. */
 	public var dispatchWalk:Null<IrWalkResult> = null;
 
-	/** The functions `dispatchWalk` does not reach. */
+	/** The functions `dispatchWalk` does not reach, in a pruned build. */
 	public var unreached:Null<Map<String, Bool>> = null;
 
 	/** The input of the enum Dynamic dispatch. */
 	public var reflectionInput:Null<IrProgram> = null;
 
-	/** The natives the prune found called; null without the prune. */
+	/** The natives reached code calls (the walk's, then the prune's); null in a live HashLink build, which walks nothing. */
 	public var reachedNatives:Null<Map<String, Bool>> = null;
 
 	/** Where the functions a stage generated start, for the stage after it that rewrites only those. */

@@ -8,6 +8,12 @@ import compiler.ir.model.Ir.IrTerminator;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.model.SourceProvenance.SourceLocation;
 
+/** A file a function's locations name, by the content hash they name it with. */
+typedef NamedSource = {
+	final path:String;
+	final hash:Int;
+}
+
 /**
  * A function the frontend keeps across an edit of its file, because its own text did not change, still names the file as it was when it
  * was typed: every location carries the content hash of that text, and the module's source snapshot is now another text. A debug span
@@ -59,14 +65,64 @@ class IrSourceRehash {
 		return current != null && current != location.sourceHash;
 	}
 
-	/** Whether any location of `fn` names a file by a hash other than the file's current one. */
+	/**
+	 * Whether any location of `fn` names a file by a hash other than the file's current one. A function that has its body is read
+	 * from the body's provenance table, not decoded: a session keeps most functions as their bodies alone.
+	 */
 	public static function isStale(fn:IrFunction, hashes:Map<String, Int>):Bool {
+		var body = fn.body;
+		if (body != null) {
+			for (provenance in body.provenanceTable())
+				if (stale(provenance, hashes))
+					return true;
+			return false;
+		}
 		for (block in fn.blocks) {
 			for (instruction in block.instructions)
 				if (stale(instruction.provenance, hashes))
 					return true;
 			var terminator = block.terminator;
 			if (terminator != null && stale(terminator.provenance, hashes))
+				return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The files `fn`'s locations name, each with the hash it is named by: `fn` is stale against `hashes` exactly when one of them
+	 * is (`namesStale`). An `IrFunction` never changes, so a session can keep the answer while the function is the same object.
+	 */
+	public static function sourcesOf(fn:IrFunction):Array<NamedSource> {
+		var named:Array<NamedSource> = [];
+		function add(provenance:SourceProvenance):Void {
+			var location = provenance.location;
+			if (location == null || location.sourceHash == 0)
+				return;
+			for (entry in named)
+				if (entry.hash == location.sourceHash && entry.path == location.path)
+					return;
+			named.push({path: location.path, hash: location.sourceHash});
+		}
+		var body = fn.body;
+		if (body != null)
+			for (provenance in body.provenanceTable())
+				add(provenance);
+			else
+				for (block in fn.blocks) {
+					for (instruction in block.instructions)
+						add(instruction.provenance);
+					var terminator = block.terminator;
+					if (terminator != null)
+						add(terminator.provenance);
+				}
+		return named;
+	}
+
+	/** Whether a file of `named` (`sourcesOf`) has another hash in `hashes` than the one it is named by. */
+	public static function namesStale(named:Array<NamedSource>, hashes:Map<String, Int>):Bool {
+		for (entry in named) {
+			var current = hashes.get(entry.path);
+			if (current != null && current != entry.hash)
 				return true;
 		}
 		return false;

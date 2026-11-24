@@ -4,7 +4,6 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.QualifiedName;
 import compiler.core.Source.SourceSpan;
 import compiler.ir.model.Ir.IrObject;
-import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 import compiler.ir.verify.IrVerifyMemo;
 import compiler.modules.ModuleState;
@@ -51,6 +50,12 @@ class SessionState {
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
 	public var semanticProgram:Null<SemanticProgram> = null;
+
+	/** The purity and no-return facts of the last canonical program (`SemanticAssembly`), while it is made of the same modules. */
+	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
+
+	/** The facts typed units read (`DeclarationFacts`); every copy shares it, as a print only moves forward. */
+	public var declarationFacts(default, null) = new compiler.semantic.DeclarationFacts();
 	public var publishedAbi:Null<RuntimeAbiDescriptor> = null;
 	public var compiledOnce = false;
 
@@ -68,6 +73,23 @@ class SessionState {
 	 * gives; every copy shares it, as an entry holds only for the versions and fact prints it recorded.
 	 */
 	public var stageMemos(default, null):compiler.ir.reuse.IrStageMemo.IrStageMemos;
+
+	/**
+	 * What each previous IR function names of classes and enums (`FrontendCompilation.typeMentions`), while it is the same object;
+	 * every copy shares it, as an object's answer never changes.
+	 */
+	public var irTypeMentions(default, null) = new compiler.ir.reuse.IrFunctionMemo<FrontendCompilation.TypeMentions>();
+
+	/** The functions each IR function of the modules calls (`FrontendCompilation.callsOf`), while it is the same object. */
+	public var irCalls(default, null) = new compiler.ir.reuse.IrFunctionMemo<Array<String>>();
+
+	/** The files each IR function's locations name, with the hashes they name them by (`IrSourceRehash.sourcesOf`). */
+	public var irSources(default,
+		null) = new compiler.ir.reuse.IrFunctionMemo<Array<compiler.ir.pipeline.IrSourceRehash.NamedSource>>();
+
+	/** What each IR function references for the static initialization order (`IrStaticReferences`), while it is the same object. */
+	public var staticReferences(default, null) =
+		new compiler.ir.reuse.IrFunctionMemo<compiler.ir.pipeline.StaticInitializationOrder.IrStaticReferences>();
 
 	/**
 	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
@@ -107,6 +129,7 @@ class SessionState {
 		anonymousStrings = [];
 		lastTypedProgram = null;
 		semanticProgram = null;
+		programFacts = null;
 		inlineCache = new IrInlineCache();
 		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(irVersions);
 		pipelineSnapshot = null;
@@ -116,11 +139,17 @@ class SessionState {
 
 	/**
 	 * Releases the modules' generated IR functions, for a compile that keeps no session once its IR pipeline has its input: the
-	 * passes then hold the only copy of the program. Changes the modules in place, as `releaseRetained` does.
+	 * passes then hold the only copy of the program. The memos keyed by those functions are emptied with them, as their keys would
+	 * keep the functions alive. Changes the modules and the memos in place, as `releaseRetained` does.
 	 */
-	public function releaseGeneratedIr():Void
+	public function releaseGeneratedIr():Void {
 		for (state in modules)
 			state.irFunctions = [];
+		irTypeMentions.clear();
+		irCalls.clear();
+		irSources.clear();
+		staticReferences.clear();
+	}
 
 	/**
 	 * Releases the modules' tokens, syntax trees, semantic models and canonical declarations, for a compile that keeps no session
@@ -147,20 +176,18 @@ class SessionState {
 			state.canonicalClasses = [];
 			state.canonicalNamespaceUses = [];
 			state.canonicalFunctionNamespaceUses = [];
-			state.canonicalCalls = [];
 			// Nothing canonical is left to reuse: a later canonicalization starts over.
 			state.canonicalRevision = -1;
 		}
 
 	/**
 	 * Releases the records only a next build reads to decide what to redo (dependency edges, fingerprints, the answers typed bodies
-	 * relied on, the inferred signatures and declaration types), for a compile that keeps no session once its last frontend pass has
-	 * assembled the IR tables. A pass that restarts reads them, so they are made as before and dropped only here. Changes the modules
-	 * in place, as `releaseRetained` does.
+	 * relied on, the inferred signatures and declaration types), for a compile that keeps no session once its frontend has assembled
+	 * the IR tables, with the facts the typed units' reads name. Changes the modules in place, as `releaseRetained` does.
 	 */
-	public function releaseIncrementalRecords():Void
+	public function releaseIncrementalRecords():Void {
+		declarationFacts.clear();
 		for (state in modules) {
-			state.semanticDependencies = [];
 			state.signatureFingerprints = [];
 			state.interfaceFingerprints = [];
 			state.aliasFingerprints = [];
@@ -173,11 +200,10 @@ class SessionState {
 			state.bodyFingerprints = [];
 			state.declarationTypeDigests = [];
 			state.inferredSignatures = [];
-			state.purityQueries = [];
-			state.noReturnQueries = [];
 			state.keyPathUses = [];
-			state.defaultArgumentSources = [];
+			state.unitReads = [];
 		}
+	}
 
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
 			backend:BackendSession) {
@@ -198,21 +224,38 @@ class SessionState {
 			(startingBackend == null ? backend : startingBackend).forCandidate());
 		for (name => state in modules)
 			result.modules.set(name, state);
-		result.objectCache = [for (name => object in objectCache) name => object];
-		result.canonicalObjectCache = [for (name => object in canonicalObjectCache) name => object];
-		result.anonymousStrings = [for (name => fn in anonymousStrings) name => fn];
+		result.objectCache = objectCache.copy();
+		result.canonicalObjectCache = canonicalObjectCache.copy();
+		result.anonymousStrings = anonymousStrings.copy();
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
+		result.programFacts = programFacts;
+		result.declarationFacts = declarationFacts;
 		result.publishedAbi = publishedAbi;
 		result.compiledOnce = compiledOnce;
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
 		result.irVersions = irVersions;
 		result.stageMemos = stageMemos;
+		result.irTypeMentions = irTypeMentions;
+		result.irCalls = irCalls;
+		result.irSources = irSources;
+		result.staticReferences = staticReferences;
 		result.pipelineSnapshot = pipelineSnapshot;
 		result.verifyMemo = verifyMemo;
-		result.reachabilityCache = copyReachabilityCache(reachabilityCache);
+		result.reachabilityCache = reachabilityCache.copy();
 		result.declarationOwners = declarationOwners.copy();
+		return result;
+	}
+
+	/**
+	 * A state with this one's sources and nothing a build left in it: what a first build of the same text starts from. The frontend's
+	 * reuse check (`--check-reuse`) builds the program on it and compares.
+	 */
+	public function freshFromSources():SessionState {
+		var result = new SessionState(new TypeRegistry(), new GenericSpecializationRegistry(), backend.forCandidate());
+		for (name => state in modules)
+			result.modules.set(name, new ModuleState(name, state.source));
 		return result;
 	}
 
@@ -270,26 +313,6 @@ class SessionState {
 		return first ?? new SourceSpan(state.source, 0, 0);
 	}
 
-	/** Of the regenerated functions, those that differ from the resumed module's (all of them when nothing was resumed). */
-	public function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
-		var baseline = rehydrationBaseline;
-		if (baseline == null)
-			return regenerated;
-		var current:Map<String, compiler.ir.model.IrFunction> = [], changed = [];
-		for (fn in program.functions)
-			current.set(fn.name, fn);
-		for (name in regenerated) {
-			if (!baseline.exists(name) || !current.exists(name)) {
-				changed.push(name);
-				continue;
-			}
-			var old = baseline.get(name), next = current.get(name);
-			if (old.compare(compiler.ir.codec.IrFunctionStateCodec.encode(next)) != 0)
-				changed.push(name);
-		}
-		return changed;
-	}
-
 	public function cachedReachability(entry:String):Null<ReachabilityCache>
 		return reachabilityCache.get(entry);
 
@@ -305,16 +328,5 @@ class SessionState {
 			dependencyKeys: dependencyKeys,
 			initializationClasses: initializationClasses.copy()
 		});
-	}
-
-	static function copyReachabilityCache(source:Map<String, ReachabilityCache>):Map<String, ReachabilityCache> {
-		var result:Map<String, ReachabilityCache> = [];
-		for (entry => cached in source)
-			result.set(entry, {
-				names: cached.names.copy(),
-				dependencyKeys: [for (name => key in cached.dependencyKeys) name => key],
-				initializationClasses: cached.initializationClasses.copy()
-			});
-		return result;
 	}
 }

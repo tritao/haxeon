@@ -16,6 +16,7 @@ import compiler.ir.model.SourceProvenance.Located;
  * counts a try region's handler and its after block as reached from where the region begins, and the handler from where it ends,
  * so a rewrite never removes a handler some reached block installs.
  */
+@:nullSafety(Strict)
 class IrUnreachableBlocks {
 	public static function remove(fn:IrFunction):IrFunction {
 		var successors:Map<Int, Array<Int>> = [];
@@ -23,7 +24,10 @@ class IrUnreachableBlocks {
 			successors.set(block.id, edges(block));
 		var reached:Map<Int, Bool> = [fn.blocks[0].id => true], work = [fn.blocks[0].id];
 		while (work.length > 0) {
-			var next = successors.get(work.pop());
+			var id = work.pop();
+			if (id == null)
+				break;
+			var next = successors.get(id);
 			if (next != null)
 				for (target in next)
 					if (!reached.exists(target)) {

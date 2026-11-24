@@ -5,19 +5,9 @@ $ErrorActionPreference = "Stop"
 
 $RootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
-# The checkout-built VM's directory, from the path table every entry point reads.
-$HashLinkDir = $null
-foreach ($Line in Get-Content (Join-Path $RootDir "cmake/hashlink-output-paths.txt")) {
-    $Fields = $Line.Split("=")
-    if ($Fields.Length -eq 2 -and $Fields[0] -eq "windows-msvc" -and $Fields[1].Trim() -ne "") {
-        $HashLinkDir = Join-Path $RootDir $Fields[1].Trim()
-    }
-}
-if (-not $HashLinkDir) {
-    Write-Error "Missing the windows-msvc entry in cmake/hashlink-output-paths.txt"
-    exit 1
-}
-$BuildDir = Split-Path $HashLinkDir -Parent
+# The checkout-built VM's directory, the bin of the checkout's SDK.
+$HashLinkDir = Join-Path $RootDir "out/sdk/bin"
+$BuildDir = Join-Path $RootDir "out/cmake/windows-msvc"
 $Haxeon = Join-Path $HashLinkDir "haxeon.exe"
 
 if ($env:HAXEON_NATIVE_READY -ne "1") {

@@ -1,8 +1,8 @@
 import haxe.io.Bytes;
 import haxeon.gpu.Batch;
 import haxeon.gpu.Buffer;
-import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.BufferDesc;
+import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Pipeline;
 import haxeon.gpu.Renderer;
@@ -48,10 +48,10 @@ class CircuitRenderer {
 		commands = renderer.commandBuffer(64);
 		var shader = Shader.begin(renderer, ShaderLanguage.Glsl,
 		#if circuit_run_web
-			Embed.text("shaders/maze-web.vert.glsl"),
+		Embed.text("shaders/maze-web.vert.glsl"),
 			Embed.text("shaders/maze-web.frag.glsl")).build();
 		#else
-			Embed.text("shaders/maze.vert.glsl"),
+		Embed.text("shaders/maze.vert.glsl"),
 			Embed.text("shaders/maze.frag.glsl")).build();
 		#end
 		pipeline = Pipeline.begin(renderer, shader, stride)

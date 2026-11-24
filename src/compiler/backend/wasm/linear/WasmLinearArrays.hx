@@ -38,15 +38,6 @@ class WasmLinearArrays {
 			default: I32Const(0);
 		};
 
-	public static function registerNativeAllocators(context:WasmLinearContext):Void {
-		for (native in context.program.natives) {
-			var stride = arrayStrideForNative(native.name);
-			if (stride != null)
-				context.functions.set(native.name,
-					addArrayAllocator(context.module, native.name, stride, context.allocatorFunction));
-		}
-	}
-
 	public static function addArrayCopy(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
 			source = builder.parameter("source", 0),

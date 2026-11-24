@@ -3,22 +3,51 @@
 Concrete gaps found while compiling Materia and while matching stock Haxe.
 Longer-term direction is in `ROADMAP.md`.
 
-- **Enum abstracts lose their type when lowered.**
-  `DeclarationIndex.resolveNamedType` resolves an enum abstract to its
-  underlying type, so a switch subject or expected type of an enum abstract
-  is just `Int`/`String`, and a bare case value such as `case Box:` cannot be
-  resolved against the switched type as Haxe does. `BodyTyper` works around
-  it by searching every enum abstract for the value, preferring the one in the
-  current package (`722504a6`, test
-  `tests/compiler/SamePackageEnumAbstractValueMain.hx`). A switch over an
-  enum abstract from another package still fails when two imported abstracts
-  share a value name. Keep enum abstracts as `TAbstract`, like other
-  abstracts, and resolve bare values from the expected type; then remove the
-  package heuristic.
+- **App runners: what step 1 left** (`docs/design/PROJECT_BUILDS.md`).
+  A package with native
+  sources and no `[native.cmake]` cannot join a runner's graph. Under
+  `--watch`, an edit to native code needs a restart.
+- **Rough edges met writing the user guides** (`docs/guides/03` to `05`).
+  - `--capture` takes `frame.png` with `import -window TITLE`, which matches
+    names without case and can pick GTK's hidden 10x10 leader window, named
+    after the executable: an app whose title is its executable's name in
+    another case (`haxeon create hello` makes "Hello" in `hello`) gets no
+    `frame.png` ("Resource temporarily unavailable"). Capture by window id.
+  - `--frames=N` counts drawn frames, and an idle window draws none, so an
+    app run with a large N (`--frames=400`) never stops.
+  - A package's CMake configure prints a warning that `HAXEON_NATIVE_OUTPUT_DIR`
+    and `HAXEON_TARGET` were not used, when its project does not read them.
+  - `haxeon ffi import --help`, or any unknown option, is an uncaught
+    `InternalError` (exit 70) instead of a usage error with the options.
+  - Naming an FFI record without importing its interface module
+    (`new geo_point()` without `import Geometry;`) reports `Missing module
+    "geo_point"` at line 1, column 1, with no hint about the import.
+  - An `ffi.imports` recipe cannot call a package's own `[native] sources`:
+    they link `<package>.hdll`, while the importer's `library` resolves to
+    `lib<name>.so`, so the call fails at run time ("Could not open ordinary
+    C library"). Only `[native.cmake]` with `library` works for it.
+  - `TextField` with a style loses its whole default style (height, padding,
+    corner radius), and the default is private, so a field cannot change only
+    its width.
+  - `NavigationStack` paints its screens with a fixed phone colour
+    (`NavUi.ground`), not the theme's, so it stays light under `Theme.dark()`.
+  - Nothing installs the Android SDK and NDK into `.tools/android-sdk`, which
+    the Android build requires; `docs/reference/ANDROID.md` says they live
+    there but not how they get there.
+- **Spike: bundle a C compiler with Haxeon** (after the app template). Apps
+  that use native packages build C and C++ with the user's toolchain
+  (`docs/design/WEBSITE.md`, native code), which on Windows means Visual
+  Studio Build Tools. Build NativeKit and an ahead-of-time app with a pinned
+  `zig cc` on Linux and Windows: correctness, the size it adds, and whether
+  its GNU ABI mixes with the MSVC-built VM and runtime. macOS keeps the Xcode
+  tools (Apple's SDK is not redistributable) and Android the NDK either way.
+
 - **Most of Haxe's `Type` API is missing.** Haxeon has the enum-value part, on a value of a known enum type:
   `Type.enumIndex`, `Type.enumEq`, `Type.enumConstructor`, `Type.enumParameters` and Haxe's global
   `haxe.EnumTools.EnumValueTools` (`getName`, `getParameters`, `getIndex`, `equals`), which the typer provides
-  (`EnumReflection`, `StaticExtensions.enumValueTool`). The rest (`E1007: Unknown function "Type.getClassName"`) needs
+  (`EnumReflection`, `StaticExtensions.enumValueTool`). On a class or enum named at the call, `getClassName`,
+  `getEnumName`, `getEnumConstructs`, `getInstanceFields`, `getClassFields`, `createInstance` and `createEmptyInstance`
+  are written out by the typer (`TypeReflection`). The rest (E1009, "needs classes and enums as runtime values") needs
   classes and enums as runtime values; the design is `docs/design/TYPE_VALUES.md` (reviewed by haxeon-e4, decisions
   for the user listed at its end). Haxe libraries that serialize, log or load plugins need it. In phases:
   2. `Class<T>`, `Enum<T>` and `EnumValue` on HashLink, wasm32 and wasm-gc: one `TypeDescriptor` per declaration,
@@ -29,6 +58,11 @@ Longer-term direction is in `ROADMAP.md`.
   3. `resolveClass`, `resolveEnum`, `createInstance`, `createEmptyInstance`, and `createEnum`, `createEnumIndex` and
      `allEnums` on an enum held as a value (on an enum named at the call they are written out by `EnumCreation`), once
      a port needs them. A type named only by a string defeats pruning: the note proposes Haxe's `-dce std` rule.
+- **A `Dynamic` cast straight to an array of structures fails at run time.**
+  `var points:Array<{x:Int}> = dynamicValue;` throws "Array element type
+  mismatch" when the array holds records of another anonymous type; Haxe
+  accepts it unchecked. The array is kept as a storage view, and only an array
+  inside a record is copied (`ConversionResolver.structuralCopyTarget`).
 - **`trace` with several values prints differently from Haxe.**
   `trace(a, b, c)` prints `2, 1, 1`; Haxe prints `2,1,1`.
 - **Warm builds still track subclasses' reads of base-class statics.**
@@ -90,6 +124,45 @@ Open items from the architecture plan's typer and service steps
 The repeated type test after `__exception_matches` and typed payloads for
 regular recursive generic enums are in the next section.
 
+- **`new C()` on a class with no constructor compiles.** Haxe rejects it
+  ("C does not have a constructor"), even when the instance fields have
+  initializers; an inherited constructor, even a private one, is accepted.
+  `CallResolver.typeConstruction` should fail with E1008 when neither the
+  class nor a base class gives it one, and the implicit-constructor path it
+  falls into then goes.
+- **An anonymous type is recorded twice.** `AnonymousTypeRegistry` walks a
+  type once to attribute its structures to the unit being typed
+  (`TypingSession.recordAnonymousUse`) and once to add them to the unit's
+  output (`TypingOutput.discoverAnonymous`): two records of one fact, the
+  kind of drift that made warm builds differ from fresh ones. Record once in
+  the unit's output and derive the unit attribution at merge.
+- **A deferred structure record assumes its unit is still being typed.** A
+  structure whose fields are not known yet is recorded when they are
+  (`Monomorphs.whenKnown` in `AnonymousTypeRegistry.recordUses`), into the
+  output of the unit being typed then. That is the unit that met it as long
+  as no check outlives its unit, which holds but is not checked; fail with an
+  internal error when a deferred record runs after its unit's output was
+  merged or dropped.
+- **Reachability on the query engine: one liveness result per function.**
+  When pruning moves onto the engine (`docs/design/QUERY_ENGINE.md`,
+  whole-program steps), whether a function is live should be its own query
+  read by the stages after it, so a whole-program walk changes only the
+  functions whose liveness changed, as Nimony's DCE writes one live set per
+  module (`doc/internals/ic.md` there). The redo of the early prune still
+  needs each helper recorded with what it serves
+  (`docs/design/WARM_REBUILD_REUSE.md`).
+- **A persistent standard-library cache (low value for now).** Nimony builds
+  its standard library once per compiler build and options key and shares it
+  between builds. Haxeon loads only the standard-library modules a program
+  reaches, so a small program's compile is already short: a program using
+  `Map`, `StringBuf`, `haxe.Json`, `StringTools`, `Reflect` and `Date`
+  compiles in about 0.1 s in the worker, against about 1 s for the whole
+  `haxeon build`. Measure the standard library's share of a large program
+  (the self-compile, the app) before planning it. The cacheable layer would be
+  the typed or early IR of standard-library functions (passes, pruning and
+  specializations depend on the program), once the typer runs on the query
+  engine and memos own their outputs (ADR 0003 decisions 11 and 14).
+
 - **An interface met through an inherited inferred method is not re-checked.**
   When a class implements an interface through a method it inherits, and that
   method's inferred signature changes, a warm build does not check the
@@ -123,18 +196,18 @@ regular recursive generic enums are in the next section.
   3. The Android reload crash (below).
 
   Items 4 and 5 (nested generic calls and structured lambda names, then the
-  pass replacing paths 6 to 8) wait until the naming function and the
-  boundary contract are agreed with haxeon-e4.
-- **CLI usage errors are `InternalError`.** An unknown option or a missing
-  argument (`HaxeonCli`, `LintCommand`) throws
-  `compiler.core.InternalError` since `24db87fe1`. Add a `UsageError` so a
-  user's mistake is not reported as a compiler failure.
+  pass replacing paths 6 to 8) have the naming function (`GeneratedNames`,
+  `63914ff7d`) and wait for the boundary contract with haxeon-e4.
+- **`haxeon lint` reports usage errors as `InternalError`.** `UsageError`
+  (exit 2) exists since `43ece64c9`, but `LintCommand` still throws
+  `InternalError` for a missing `--only` or `--manifest` value and an unknown
+  rule, as does `HaxeonCli` for a missing project file.
 - **`haxe.io.Error.Blocked` became `InternalError("Blocked")`.** `24db87fe1`
   changed `ProcessOutputCapture.read`. Blocked is a control-flow signal, not a
   failure: throw the enum value again.
-- **Lint rules cannot type many stdlib modules.** `LintMain` types each file
-  through the language service, which fails on many stdlib modules with
-  "Duplicate type name". Run the typed rules (`unbound-local`,
+- **Lint rules cannot type many stdlib modules.** `tools.TypedLint` types
+  each file through the language service, which fails on many stdlib modules
+  with "Duplicate type name". Run the typed rules (`unbound-local`,
   `throw-non-exception`) on the build's own compilation instead.
 - **`@:pure` is written by hand on `haxe.Exception`.** Its constructor and its
   caching `stack` getter carry it (`stdlib/haxe/Exception.hx`, `0db84ca90`).
@@ -178,14 +251,10 @@ SSA from.
 
 Design debt and levers left once the peak work lands:
 
-- **A performance guard in CI.** Main-thread instructions, allocated bytes
-  and peak resident memory of the self-compile on the frozen input, failing
-  on a clear regression, so the gains stay.
-- **One IR representation.** Objects are the IR; `IrBody` columns exist
-  beside it, unused by any pass (rewriting on immutable bodies was slower).
-  Decide: design in-place editing and migrate
-  ([IR_CORE_COLUMNS.md](docs/design/IR_CORE_COLUMNS.md)), or keep columns
-  for read-only consumers (the lowering reading bodies) and remove the rest.
+- **Finish moving the IR stages onto bodies.** The decision is a full
+  migration to bodies edited in place ([IR_CORE_COLUMNS.md](docs/design/IR_CORE_COLUMNS.md)),
+  and several passes run on bodies already; the stages before the encode
+  point still work on objects.
 - **The checked-arena runtime.** The fork's write tracking, evacuation and
   layout registration are unused by the compiler (the pilot did not pay,
   [ARENAS.md](docs/design/ARENAS.md)). Either make it a language feature with
@@ -199,8 +268,27 @@ Design debt and levers left once the peak work lands:
   symbol ids everywhere rather than one string key at a time.
 - **Parallel compilation** (ADR 0005): typing per class and lowering per
   function are natural units; the largest wall-time lever left.
-- **Warm-build latency.** Benchmark compile-server and language-service
-  rebuilds (latency, memory) beside the one-shot self-compile.
+- **Language-service latency.** The perf guard benchmarks compile-server
+  edits (`scripts/perf-guard.py`, incremental part); language-service
+  rebuilds (latency, memory) are not benchmarked.
+- **Delete the transitional reuse paths.** `IrLineage.handedOn`, the
+  `stableGenerated`/`generatedSources` bridges and the static-check copies go
+  once static-null-checks and object reflection are per-function passes; then
+  a per-stage recording view (one code path for one-shot and session builds,
+  as `HlLoweringView` does) and one fact-print table in place of `IrFacts`,
+  `HlFactPrints`, the inliner's prints and `IrVerifyMemo`'s string compare.
+- **Null safety on the rest of `compiler.ir`.** `compiler.ir.pipeline` needs
+  `IrAssembly`'s per-stage tables made non-null per phase, `compiler.ir.gen`
+  needs the SSA builder's null sentinels and the frontend calls that return
+  `Null` reworked, and `IrLoopBounds` keeps state set by `reset()`.
+- **One scripted reorganization commit** at a quiet point: `ir/model` into the
+  `ir` root, `compiler.hl` to `compiler.backend.hl`, `compiler.tools` to
+  `compiler.driver`, `src/tools` to `src/cli`, `src/runtime` to `src/live`
+  (`scripts/apply-ir-layout.py` does the moves). `IrGenerator.hx` is a better
+  split candidate than any folder merge.
+- **Does a plain `Compiler` build live by default?** The Compiler API with
+  default options builds live (field migrations and all); decide whether that
+  is the intended default.
 - **The collection policy.** The peak is the last collection's survivors plus
   the 1 GB trigger; a trigger tied to the live data is a policy to measure,
   not necessarily more collections.
@@ -249,15 +337,58 @@ The Haxe code Haxeon rejects or runs differently is listed in
   that is never called goes unreported; Haxe types the body at the declaration
   and reports it. Typing it once at the declaration too, and discarding the
   result, would report it.
+- **Maps.** A `Map` typed as `Dynamic` still prints its runtime handle
+  (`~map_string_i32:...`), since its key and value types are gone; a Map or Array
+  passed where a `KeyValueIterable` is expected is rejected; `ObjectMap` has no
+  `keys`, `iterator`, `keyValueIterator` or `copy` (on HashLink they need the
+  `hokeys` native array); an explicit cast of a map of maps to
+  `Map<String, Dynamic>` crashes in the runtime cast; and enum keys iterate in
+  insertion order where Haxe on HashLink prints them in declaration order.
+- **Dynamic methods Haxe accepts and Haxeon does not:** `dynamic` methods of an
+  interface, static dynamic methods of an abstract, and dynamic methods with their
+  own type parameters.
+- **Generic owners specialized only from annotated members.** An owner whose
+  member holds its parameter inside a structure is specialized (`3c1041b09`),
+  but only when the member's type is written; one inferred from the body is not
+  checked.
+- **A failed bounds check reports the wrong line on HashLink:** an uncaught
+  out-of-range read is reported at the function's `return`, where the C
+  backend reports the access.
+- **Anonymous structure field order** differs between a stock-built and a
+  Haxeon-built program (watch-event JSON: alphabetical against declaration
+  order). Haxe leaves it unspecified; decide what Haxeon guarantees and match
+  stock HashLink where users see it (`haxe.Json`).
 - **Lone surrogates.** Printing a String with a lone high surrogate swallows
   the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
-  conversion takes it as the pair's low half. `String.fromCharCode` of a code
-  point above 0xFFFF keeps only its low 16 bits where Haxe writes the pair.
+  conversion takes it as the pair's low half.
 
 ## Generated code, HashLink and Wasm (haxeon-e4's lane)
 
 Planned in this order unless noted. Timings so far were taken on a loaded
 machine; re-measure on a quiet one before acting on a ratio.
+
+- **Drop the shared host heap once the web uses wasm-gc.** On the web,
+  NativeKit's Emscripten host and Haxeon's `wasm32` guest share one linear
+  memory, so the host's `malloc` is replaced by dlmalloc confined to a fixed
+  arena below the guest heap (`vendor/nativekit/docs/wasm-host-memory.md`,
+  `NativeKit::wasm_host_allocator`, `NK_WASM_HOST_HEAP_LIMIT`). With
+  `wasm-gc` the guest's objects live in the engine's heap, so the host can
+  have linear memory to itself with Emscripten's own allocator, and the arena,
+  its limit and the adapter can go. Before that, check what still needs a
+  byte region both sides address (buffers passed by pointer, audio worklet
+  memory) and give those explicit shared buffers.
+- **Wasm32 output is not deterministic for a few programs.** Four Wasm32
+  modules of the driver suite differed between two runs of the same commit
+  (lengths 22396/22398 and 23806), seen on 2026-11-10; the source was not found.
+- **HashLink string maps stop a key at NUL.** `hl_hash_gen` and the key
+  comparison in `vendor/hashlink/src/std/obj.c` read a NUL-terminated string,
+  so `"a\0x"` and `"a\0y"` are one key in stock Haxe's `StringMap`. Haxeon
+  rejects NUL in a String, so only code built by stock Haxe (the compiler,
+  tools) can hit it: never put NUL in a map key there.
+- **`haxe.ds.ObjectMap` is a linear search on Wasm.** Wasm references have no
+  stable identity hash, so the Wasm `ObjectMap` keeps parallel key and value
+  arrays and compares keys one by one: every lookup is O(n). Give both Wasm
+  targets an identity-hashed map, as HashLink has.
 
 - **Erased generic owners with a specialized receiver take the slow path.**
   The inlined fast path (`8c18d84d2`) tests only the owner's own class, so
@@ -274,7 +405,7 @@ machine; re-measure on a quiet one before acting on a ratio.
   casts back for nested patterns). Erase only non-regular recursion
   (`E<T>` → `E<Array<T>>`, which never stops specializing); type a regular
   slot with the specialized enum. Classify beside `EnumRecursion`, update
-  `docs/reference/GENERIC_SPECIALIZATION.md`, drop the nested-pattern cast,
+  `docs/internals/GENERIC_SPECIALIZATION.md`, drop the nested-pattern cast,
   add differential tests against Haxe (deep trees, nested patterns,
   `Null<Tree>`, generic functions over `Tree<T>`, a non-regular case still
   erased) and an enum binary-trees benchmark on HashLink and both Wasm
@@ -306,10 +437,6 @@ machine; re-measure on a quiet one before acting on a ratio.
   share a register.
 - **Code size, smaller items:** `OIncr`/`ODecr` for `+= 1` (stock uses them),
   shorter anonymous-structure names, and a size-aware inlining budget.
-- **Compressed debug sections** (decided, ADR 0003 §12): an LZ4 HC flag on
-  debug sections, function identities first (1.15 MB to about 234 KB on the
-  compile server), compressed by a runtime native over the fork's vendored
-  `lz4.c` so both compiler builds write the same bytes.
 - **Hand-built test programs declare runtime natives themselves.** A pass
   that starts calling a new runtime function breaks them
   (`IteratorTypeDescriptorMain`, fixed in `aefdb62c5`). Give
@@ -329,13 +456,38 @@ typer's drain order) and 5 (live pruning).
 
 ### Compiler speed
 
-- **Session memory after the IR columns chain.** A compile server keeps the
-  generator's IR objects for the stages before the encode point and the bodies
-  after it, so the incremental baselines were moved up when the chain landed:
-  cold build, signature edit and the server's live data. Per-function reuse in
-  the pre-encode assembly stages (one memo per stage and function, checked by
-  `--check-reuse`) lets the session keep bodies alone and moves them back down;
-  see IR_CORE_COLUMNS.md, "Session caching model".
+- **Optional scalar arguments through `$dispatch` (parked).** Calling a statically
+  known target's flag-plus-value specialization removes most Bool box requests
+  (1,265K to 329K on the self-compile) but saves no allocation, since small Ints
+  and Bools already use the VM's shared boxes, and it cost +1.4% instructions:
+  each specialization copies the whole method body while the boxed original stays
+  for the vtable. The census put these boxes at about 0.33% of JIT time. If taken
+  up again: make the boxed original a small adapter over the split body instead of
+  cloning large bodies, and find the downstream cost with a symbolized profile first.
+
+- **Live-mode server memory.** On the app template, the live server settles
+  about 5% above `tests/perf/live-baseline.json` and still grows per edit. A
+  heap diff between builds 4 and 12 shows about 67 IR functions with their
+  bodies kept per build (held from the stage memos or the inline cache:
+  `IrStageEntry.output`, `InlineMemo`, `IrLineageCell.fn`) and two large
+  pointer-free blocks of unknown owner; the three retractable publications copy
+  the type registry, object and inline caches and the assembler state instead
+  of sharing them. The baseline predates recorded reads (`540848a15`): measure
+  it before and after that commit before raising it.
+- **Signature edits.** perf-guard's signature edit retypes about 1,350
+  functions. About 40% of its cost is per retyped function and needed; the
+  avoidable part is the inliner remaking every transitive caller of a changed
+  callee (early cutoff on what each caller read, in progress), HashLink
+  metadata lowering redone for the program, and the collections this
+  allocation triggers.
+- **The body edit outside IR assembly:** whole-program purity inference (the
+  recorded reads give the exact "declarations unchanged" signal a
+  per-function memo needs), IR generation, the ABI description, generated
+  helpers and the encode.
+- **After a live patch, the server writes the whole module and its build id
+  before replying,** which delays the next edit; write them after the reply.
+- **AOT small-project instructions** are above their baseline
+  (`aot_build_instructions`, `aot_check_instructions`), not yet investigated.
 
 The 2026-11-18 profile of a self-compile (Haxeon-built release compiler,
 29 s on one thread) is flat: compiler code 48%, string-keyed maps 18.5%,
@@ -356,13 +508,8 @@ lowering 17%, IR generation and SSA 11%, parsing 5.5%.
   Strings now cache their map hash (fork 36197c5), which cut 4%; it is a
   complement, not the fix.
 - **SSA value names.** Every SSA temporary carries a `"v<id>"` String
-  (`SsaScratch.valueName` makes each once). A temporary needs no name; drop
+  (`IrSsaVariables` makes each once). A temporary needs no name; drop
   the field for temporaries with ADR 0003 M3's structured identities.
-- **Lowering facts digest objects as text.** `HlLoweringView.objectDigest` is
-  `Std.string(object)`, paid by every compile-server build (a one-shot compile
-  records no facts since 4b9fcf1bf). Replace it with the query engine's
-  structural digest when lowering moves onto the engine (QUERY_ENGINE.md,
-  step 6).
 - **Per-function scratch.** Register allocation, SSA liveness and the lowering
   tables now keep their storage across functions; the rest of SSA building,
   lowering and the inliner still allocate per function. Do them together as
@@ -382,3 +529,11 @@ Waiting on the user:
   `haxeon heap`) rather than `haxeon dev`.
 - **A lint rule for shared mutable statics,** generalizing the compiler's
   `CompilerStaticsMain` check.
+
+## Web app native packages
+
+Add Emscripten support to web app runners. Use `emcmake` and the generated
+`haxeon.cmake` to build the dependency graph into a native host module. Bundle
+that module and connect its exports, memory contract and callback table through
+`haxeon-host.js` for both Wasm targets. Migrate the UI package's per-app web build
+example once the runner can build it.

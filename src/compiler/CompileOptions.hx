@@ -1,5 +1,7 @@
 package compiler;
 
+import compiler.NullSafetyRule.NullSafetyMode;
+
 /** The options a request sets, each left out for its default. */
 typedef CompileOptionsInit = {
 	final ?inlining:Bool;
@@ -14,26 +16,10 @@ typedef CompileOptionsInit = {
 	final ?elaborateGenerics:Bool;
 	final ?verifyIr:Bool;
 	final ?checkIrBody:Bool;
-	final ?typingArenas:TypingArenas;
 	final ?phaseCollections:Bool;
-	final ?toolchain:String;
-	final ?cSdk:String;
 	final ?inlineAllocation:Bool;
-}
-
-/** Whether the typer types each class's methods in an arena of its own (`CompileOptions.typingArenas`). */
-enum abstract TypingArenas(Int) {
-	var Off;
-	var On;
-
-	/** On, and a class whose arena is kept fails the compile; `HL_GC_ARENA_SITES=1` names what kept it. */
-	var Check;
-
-	/**
-	 * As `Check`, and no release may evacuate: every leftover of a class's typing must be placed outside its arena by the code
-	 * (docs/design/ARENAS.md, "Data rules for arenas"), not copied out by the runtime.
-	 */
-	var Strict;
+	final ?nullSafety:Array<NullSafetyRule>;
+	final ?scriptModule:String;
 }
 
 /**
@@ -107,13 +93,6 @@ class CompileOptions {
 	public final checkIrBody:Bool;
 
 	/**
-	 * Type each class's methods in an arena of its own (`Arena.unit`), released when they are typed, so their temporaries never
-	 * reach the collector (docs/design/ARENAS.md). Off by default until every class's arena is released by explicit placement;
-	 * `Check` and `Strict` fail the compile when one is kept. Changes no output, so `key` leaves it out.
-	 */
-	public final typingArenas:TypingArenas;
-
-	/**
 	 * Collect at the ends of the compile's phases once enough was allocated since the last collection (`PhaseCollections`), so
 	 * the peak is the live data at a boundary plus a phase's allocation, not wherever the byte trigger happens to fire. On by
 	 * default for a compile that keeps no session; a session's process keeps the byte trigger alone. Changes no output, so `key`
@@ -122,22 +101,23 @@ class CompileOptions {
 	public final phaseCollections:Bool;
 
 	/**
-	 * The toolchain a `--target=hlc` build compiles and links its C with (`--toolchain`: `gcc`, `clang`, `clang-cl`, `cl`, or a
-	 * path to one), or null for the default of the target the SDK was built for (`HlcBuild.toolchain`, docs/design/AOT_BACKEND.md).
-	 * Changes no output of the compile itself, so `key` leaves it out.
-	 */
-	public final toolchain:Null<String>;
-
-	/** The C SDK a `--target=hlc` build compiles against: a directory with `include/` and `lib/` (the native build's `hlc-sdk`). */
-	public final cSdk:Null<String>;
-
-	/**
-	 * Allocate objects in a `--target=hlc` build's C from the thread's allocation buffer inline, as the JIT does when the VM runs
-	 * with `HL_JIT_ALLOC_INLINE=1`. Off by default, as on the JIT: both allocate through `hl_alloc_obj` unless asked.
+	 * Allocate objects in a `--target=hlc` build's C from the thread's allocation buffer inline, as the JIT does on Linux.
+	 * Off by default: the C build allocates through `hl_alloc_obj` unless asked.
 	 */
 	public final inlineAllocation:Bool;
 
+	/**
+	 * The null-safety rules of the compile (`--null-safety=MODE[:PATH[:shallow]]`): what Haxe's `--macro nullSafety(...)` states,
+	 * and what a project's `nullSafety` setting becomes. Empty by default, so only `@:nullSafety` metadata turns the checker on.
+	 * They change what a compile reports, so `key` keeps them.
+	 */
+	public final nullSafety:Array<NullSafetyRule>;
+
+	/** The single module compiled with script grammar, when invoked as a script. */
+	public final scriptModule:Null<String>;
+
 	public function new(?init:CompileOptionsInit) {
+		scriptModule = init == null ? null : init.scriptModule;
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
 		strengthReduction = init == null || init.strengthReduction != false;
@@ -150,17 +130,22 @@ class CompileOptions {
 		elaborateGenerics = init != null && init.elaborateGenerics == true;
 		checkIrBody = init != null && init.checkIrBody == true;
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
-		typingArenas = init == null || init.typingArenas == null ? Off : init.typingArenas;
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
-		toolchain = init == null ? null : init.toolchain;
-		cSdk = init == null ? null : init.cSdk;
 		inlineAllocation = init != null && init.inlineAllocation == true;
+		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
 	}
 
 	/** These options with `inlining` set, the others kept. */
 	public function withInlining(value:Bool):CompileOptions
+		return copy(value, nullSafety);
+
+	/** These options with the null-safety rules `rules`, the others kept: what a language server takes from the project. */
+	public function withNullSafety(rules:Array<NullSafetyRule>):CompileOptions
+		return copy(inlining, rules);
+
+	function copy(inlining:Bool, nullSafety:Array<NullSafetyRule>):CompileOptions
 		return new CompileOptions({
-			inlining: value,
+			inlining: inlining,
 			loadStoreForwarding: loadStoreForwarding,
 			strengthReduction: strengthReduction,
 			earlyPrune: earlyPrune,
@@ -172,11 +157,10 @@ class CompileOptions {
 			elaborateGenerics: elaborateGenerics,
 			verifyIr: verifyIr,
 			checkIrBody: checkIrBody,
-			typingArenas: typingArenas,
 			phaseCollections: phaseCollections,
-			toolchain: toolchain,
-			cSdk: cSdk,
-			inlineAllocation: inlineAllocation
+			inlineAllocation: inlineAllocation,
+			nullSafety: nullSafety,
+			scriptModule: scriptModule
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -206,35 +190,29 @@ class CompileOptions {
 			flags.push(NO_VERIFY_IR);
 		if (checkIrBody)
 			flags.push(CHECK_IR_BODY);
-		if (typingArenas == On)
-			flags.push(TYPING_ARENAS);
-		if (typingArenas == Check)
-			flags.push(TYPING_ARENAS_CHECK);
-		if (typingArenas == Strict)
-			flags.push(TYPING_ARENAS_STRICT);
 		if (phaseCollections && keepSession)
 			flags.push(PHASE_COLLECTIONS);
 		if (!phaseCollections && !keepSession)
 			flags.push(NO_PHASE_COLLECTIONS);
-		if (toolchain != null)
-			flags.push(TOOLCHAIN + toolchain);
-		if (cSdk != null)
-			flags.push(C_SDK + cSdk);
 		if (inlineAllocation)
 			flags.push(INLINE_ALLOCATION);
+		if (scriptModule != null)
+			flags.push(SCRIPT_MODULE + scriptModule);
+		for (rule in nullSafety)
+			flags.push(NULL_SAFETY + rule.argument());
 		return flags;
 	}
 
+	public static inline final SCRIPT_MODULE = "--script-module=";
+
 	static inline final PARSE_THREADS = "--parse-threads=";
-
-	/** The toolchain of a `--target=hlc` build (`toolchain`). */
-	public static inline final TOOLCHAIN = "--toolchain=";
-
-	/** The C SDK of a `--target=hlc` build (`cSdk`). */
-	public static inline final C_SDK = "--c-sdk=";
 
 	/** Allocates objects inline in a `--target=hlc` build (`inlineAllocation`). */
 	public static inline final INLINE_ALLOCATION = "--inline-allocation";
+
+	/** One null-safety rule (`nullSafety`). */
+	public static inline final NULL_SAFETY = "--null-safety=";
+
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 	public static inline final NO_VERIFY_IR = "--no-verify-ir";
 
@@ -243,15 +221,6 @@ class CompileOptions {
 
 	/** Checks the `IrBody` round trip of every verified function (`checkIrBody`). */
 	public static inline final CHECK_IR_BODY = "--check-ir-body";
-
-	/** Types each class's methods in an arena of its own (`typingArenas`). */
-	public static inline final TYPING_ARENAS = "--typing-arenas";
-
-	/** The same, failing the compile when an arena is kept. */
-	public static inline final TYPING_ARENAS_CHECK = "--typing-arenas=check";
-
-	/** The same, without evacuating releases. */
-	public static inline final TYPING_ARENAS_STRICT = "--typing-arenas=strict";
 
 	/** Collects at phase ends in a compile that keeps its session too (`phaseCollections`). */
 	public static inline final PHASE_COLLECTIONS = "--phase-collections";
@@ -266,9 +235,7 @@ class CompileOptions {
 	public function key():String
 		return [
 			for (flag in arguments())
-				if (!StringTools.startsWith(flag, PARSE_THREADS) && !StringTools.startsWith(flag, TOOLCHAIN)
-				&& !StringTools.startsWith(flag, C_SDK) && flag != NO_KEEP_SESSION && flag != TYPING_ARENAS
-				&& flag != TYPING_ARENAS_CHECK && flag != TYPING_ARENAS_STRICT && flag != PHASE_COLLECTIONS
+				if (!StringTools.startsWith(flag, PARSE_THREADS) && flag != NO_KEEP_SESSION && flag != PHASE_COLLECTIONS
 				&& flag != NO_PHASE_COLLECTIONS) flag
 		].join(" ");
 
@@ -278,10 +245,10 @@ class CompileOptions {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
-			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, TYPING_ARENAS, TYPING_ARENAS_CHECK,
-				TYPING_ARENAS_STRICT, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS, INLINE_ALLOCATION: true;
-			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, TOOLCHAIN)
-				|| StringTools.startsWith(argument, C_SDK);
+			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
+				INLINE_ALLOCATION: true;
+			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
+				|| StringTools.startsWith(argument, SCRIPT_MODULE);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -299,22 +266,33 @@ class CompileOptions {
 			elaborateGenerics: arguments.indexOf("--elaborate-generics") >= 0,
 			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0,
 			checkIrBody: arguments.indexOf(CHECK_IR_BODY) >= 0,
-			typingArenas: arguments.indexOf(TYPING_ARENAS_STRICT) >= 0 ? Strict : arguments.indexOf(TYPING_ARENAS_CHECK)
-				>= 0 ? Check : arguments.indexOf(TYPING_ARENAS) >= 0 ? On : Off,
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
 				>= 0 ? false : null,
-			toolchain: lastValue(arguments, TOOLCHAIN),
-			cSdk: lastValue(arguments, C_SDK),
-			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0
+			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
+			nullSafety: nullSafetyFrom(arguments),
+			scriptModule: scriptModuleFrom(arguments)
 		});
 
-	/** The value of the last `PREFIXvalue` among `arguments`, or null. */
-	static function lastValue(arguments:Array<String>, prefix:String):Null<String> {
-		var found:Null<String> = null;
+	static function scriptModuleFrom(arguments:Array<String>):Null<String> {
 		for (argument in arguments)
-			if (StringTools.startsWith(argument, prefix))
-				found = argument.substr(prefix.length);
-		return found;
+			if (StringTools.startsWith(argument, SCRIPT_MODULE))
+				return argument.substr(SCRIPT_MODULE.length);
+		return null;
+	}
+
+	/** The rules of the `--null-safety=` flags among `arguments`, in order. A malformed one is a usage error. */
+	static function nullSafetyFrom(arguments:Array<String>):Array<NullSafetyRule> {
+		var rules:Array<NullSafetyRule> = [];
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, NULL_SAFETY)) {
+				var value = argument.substr(NULL_SAFETY.length), rule = NullSafetyRule.parse(value);
+				if (rule == null)
+					throw new compiler.core
+						.UsageError('Compiler option "$NULL_SAFETY" takes MODE, MODE:PATH or MODE:PATH:shallow, '
+						+ 'MODE one of ${NullSafetyMode.NAMES.join(", ")}, not "$value"');
+				rules.push(rule);
+			}
+		return rules;
 	}
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

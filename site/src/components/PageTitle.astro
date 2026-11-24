@@ -1,0 +1,7 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+
+const { template, hero } = Astro.locals.starlightRoute.entry.data;
+---
+
+{(template !== 'splash' || hero) && <Default />}

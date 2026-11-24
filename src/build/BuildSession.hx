@@ -31,6 +31,11 @@ class BuildSession {
 	 */
 	public final workerPings:Map<String, Float> = [];
 
+	/** Work builds left for when the watch is idle, by key: a later build's replaces an earlier one's still waiting. */
+	final idleWork:Map<String, Void -> Void> = [];
+
+	final idleOrder:Array<String> = [];
+
 	public function new(?digests:ContentDigestCache) {
 		this.digests = digests == null ? new ContentDigestCache(true) : digests;
 	}
@@ -46,6 +51,27 @@ class BuildSession {
 		if (warmup != null && !liveCompiled) {
 			liveCompiled = true;
 			warmup();
+		}
+	}
+
+	/** Leaves `work` for the next time the watch is idle, replacing what was left under `key`. */
+	public function whenIdle(key:String, work:Void->Void):Void {
+		if (!idleWork.exists(key))
+			idleOrder.push(key);
+		idleWork.set(key, work);
+	}
+
+	/**
+		Runs the work builds left, in the order it was first left. The watch calls it when no save is pending and the sources are
+		as the last build found them, and when it ends.
+	**/
+	public function runIdleWork():Void {
+		var keys = idleOrder.splice(0, idleOrder.length);
+		for (key in keys) {
+			var work = idleWork.get(key);
+			idleWork.remove(key);
+			if (work != null)
+				work();
 		}
 	}
 

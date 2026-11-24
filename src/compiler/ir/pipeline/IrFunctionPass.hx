@@ -14,7 +14,7 @@ import compiler.ir.verify.IrVerifier;
  * asking for helpers through it (`IrFactReader.request`, made by `request`); `finish` the program from the rewritten functions.
  * A transform must read nothing about the program but through the reader, and have no side effect but its requests.
  */
-interface IrFunctionPass {
+interface IrFunctionPass extends IrFactSource {
 	/** What the whole-program step needs of `fn`, as a number: it may depend on `fn` alone. */
 	function summarize(fn:IrFunction):Int;
 
@@ -24,27 +24,42 @@ interface IrFunctionPass {
 	 */
 	function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void;
 
-	/** The value of this stage's fact of `kind` and `key`, as the program stands after `prepare`. */
-	function fact(kind:Int, key:String):Int;
-
 	/** `fn` rewritten: `fn` itself when the stage leaves it alone. */
 	function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction;
 
-	/** Makes the helper of `kind` (the stage's own numbering) for `type`, when it is not made yet; called in the order the rewrites asked. */
-	function request(kind:Int, type:IrType):Void;
+	/**
+	 * Makes the helper of `kind` (the stage's own numbering) for `type` and `name` (what else the stage keys the helper by, such as
+	 * the static it checks), when it is not made yet; called in the order the rewrites asked.
+	 */
+	function request(kind:Int, type:IrType, name:Null<String>):Void;
 
 	/** The program's functions from the rewritten ones, in program order: the helpers the stage made added. */
 	function finish(functions:Array<IrFunction>):Array<IrFunction>;
 }
 
-/** A helper a rewrite asked for (`IrFactReader.request`): the kind the stage numbers its helpers by, and the type it is for. */
+/**
+
+ * What a stage's facts are computed from (`IrFacts`): a per-function stage (`IrFunctionPass`), or a stage that drives its own run
+ * and reads its facts through an `IrFactReader` all the same (`IrInliner`).
+ */
+interface IrFactSource {
+	/** The value of the stage's fact of `kind` and `key`, as the program stands in this run (after `prepare`, for a pass). */
+	function fact(kind:Int, key:String):Int;
+}
+
+/**
+ * A helper a rewrite asked for (`IrFactReader.request`): the kind the stage numbers its helpers by, the type it is for, and the name
+ * it is for when the stage keys it by one too.
+ */
 class IrStageRequest {
 	public final kind:Int;
 	public final type:IrType;
+	public final name:Null<String>;
 
-	public function new(kind:Int, type:IrType) {
+	public function new(kind:Int, type:IrType, name:Null<String>) {
 		this.kind = kind;
 		this.type = type;
+		this.name = name;
 	}
 
 	/** Whether two lists of requests ask for the same helpers in the same order, for `--check-reuse`. */
@@ -54,7 +69,8 @@ class IrStageRequest {
 			return false;
 		if (left != null && right != null)
 			for (index in 0...leftCount)
-				if (left[index].kind != right[index].kind || !IrVerifier.sameType(left[index].type, right[index].type))
+				if (left[index].kind != right[index].kind || left[index].name != right[index].name
+					|| !IrVerifier.sameType(left[index].type, right[index].type))
 					return false;
 		return true;
 	}

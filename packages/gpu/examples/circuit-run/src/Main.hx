@@ -1,19 +1,19 @@
 import haxeon.gpu.SurfaceOptions;
-import haxeon.platform.Surface;
 import haxeon.platform.App;
 import haxeon.platform.AppLoop;
-import haxeon.platform.FrameTick;
 import haxeon.platform.FrameRecorder;
+import haxeon.platform.FrameTick;
+import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
 #if circuit_run_web
 import haxeon.ui.FontCollection;
 #end
-import haxeon.ui.host.UiOverlay;
-import haxeon.platform.Runtime;
-import haxeon.platform.WindowOptions;
-import nativekit.ffi.NativeKitTypes;
 import Circuit.CircuitEvent;
 import Circuit.Position;
+import haxeon.platform.Runtime;
+import haxeon.platform.WindowOptions;
+import haxeon.ui.host.UiOverlay;
+import nativekit.ffi.NativeKitTypes;
 
 class Main implements App {
 	static inline var stepSeconds = 1.0 / Circuit.ticksPerSecond;

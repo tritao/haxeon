@@ -1,7 +1,7 @@
 package compiler.backend.c;
 
+import compiler.core.TextDigest;
 import compiler.hl.HlCode;
-import haxe.crypto.Sha256;
 
 /**
  * The C names of a module's types, globals and natives, derived from what each one is rather than from its table position
@@ -104,7 +104,7 @@ class HlcStableNames {
 	}
 
 	public static function digest(text:String):String
-		return Sha256.encode(text).substr(0, DIGEST_LENGTH);
+		return TextDigest.sha256(text).substr(0, DIGEST_LENGTH);
 
 	function text(index:Int):String {
 		var value = index >= 0 && index < code.strings.length ? code.strings[index] : null;
@@ -128,7 +128,7 @@ class HlcStableNames {
 
 	/** What a type is, naming the types it refers to by their references in turn: the same text in every build. */
 	function reference(index:Int):String {
-		var cached = references[index];
+		var cached = index < references.length ? references[index] : null;
 		if (cached != null)
 			return cached;
 		if (visiting.exists(index))

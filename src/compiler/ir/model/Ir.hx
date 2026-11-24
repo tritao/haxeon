@@ -43,6 +43,7 @@ enum IrType {
 }
 
 /** Immutable SSA definition with a function-local numeric identity. */
+@:nullSafety(Strict)
 class IrValue {
 	public final id:Int;
 	public final name:String;
@@ -184,6 +185,7 @@ enum IrTerminator {
 }
 
 /** SSA basic block identified independently of its position in the block array. */
+@:nullSafety(Strict)
 class IrBlock {
 	public final id:Int;
 	public final instructions:Array<Located<IrInstruction>>;
@@ -296,11 +298,46 @@ typedef IrObject = {
 }
 
 /** Copies of an IR object that change one part and carry every other field over, including ones added later. */
+@:nullSafety(Strict)
 class IrObjectTools {
 	public static function withMethods(object:IrObject, methods:Array<IrObjectMethod>):IrObject {
 		var copy:Dynamic = Reflect.copy(object);
 		copy.methods = methods;
 		return copy;
+	}
+
+	/**
+	 * Whether two objects declare the same name, kind, base, interfaces, fields (names and types) and methods (names and the
+	 * functions they name): what the whole-program walks read of an object (`IrWalkTables`, `IrEnumEscapeReach`).
+	 */
+	public static function sameShape(left:IrObject, right:IrObject):Bool {
+		if (left == right)
+			return true;
+		if (left.name != right.name || left.isValue != right.isValue || left.base != right.base
+			|| !sameNames(left.interfaces, right.interfaces) || left.fields.length != right.fields.length
+			|| left.methods.length != right.methods.length)
+			return false;
+		for (index in 0...left.fields.length) {
+			var a = left.fields[index], b = right.fields[index];
+			if (a.name != b.name || !compiler.ir.model.IrTypeIdentity.same(a.type, b.type))
+				return false;
+		}
+		for (index in 0...left.methods.length) {
+			var a = left.methods[index], b = right.methods[index];
+			if (a.name != b.name || a.functionName.name != b.functionName.name)
+				return false;
+		}
+		return true;
+	}
+
+	/** Whether two lists of names are equal. */
+	public static function sameNames(left:Array<String>, right:Array<String>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
 	}
 }
 
@@ -352,6 +389,7 @@ enum IrDefault {
 }
 
 /** Complete register-independent program assembled into a HashLink module. */
+@:nullSafety(Strict)
 class IrProgram {
 	public var natives:Array<IrNative> = [];
 	public var cNatives:Array<IrCNative> = [];
@@ -405,12 +443,15 @@ class IrProgram {
 
 	public var methodResolution:Null<compiler.ir.analysis.IrMethodResolution> = null;
 
+	/** The fields of the final program never null once constructed (`IrNonNullFields.of`). */
+	public var nonNullFields:Null<compiler.ir.analysis.IrNonNullFields> = null;
+
 	/** The HaxeonHost C function each runtime native calls on Wasm, by native name (`WasmModuleSupport.hostCNative`). */
 	public var hostCNatives:Null<Map<String, IrCNative>> = null;
 
 	/**
-	 * Names of the natives that reached code calls, once the early prune ran (`IrEntryPrune`); null when it did not, and every declared native then
-	 * counts. A decision about what the program does at run time (does it reflect?) reads this, not the declared natives of every loaded module.
+	 * Names of the natives that reached code calls, from the walk from the entry (`IrEntryPrune`) of every build but a live HashLink one; null in
+	 * that one, where every declared native counts. A decision about what the program does at run time (does it reflect?) reads this, not the declared natives of every loaded module.
 	 */
 	public var reachedNatives:Null<Map<String, Bool>> = null;
 

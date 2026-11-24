@@ -17,6 +17,7 @@ import compiler.ir.model.IrValueId;
  * block, is removed: each load becomes the value stored last, and the reference, its stores and loads go. A field of the
  * result nothing reads is then an unused value, which the dead value pass removes with what computed it.
  */
+@:nullSafety(Strict)
 class IrScalarRefPromotion {
 	/** Whether `row` calls the function named `symbol` (an `IrSymbol` id) with `arguments` operands, or any number when -1. */
 	static inline function calls(body:IrBody, row:Int, symbol:Int, arguments:Int):Bool

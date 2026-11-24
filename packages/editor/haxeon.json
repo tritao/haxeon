@@ -3,5 +3,6 @@
 	"package": { "name": "haxeon-editor" },
 	"sourceRoots": ["src"],
 	"scopeSourceRoots": false,
+	"publish": { "exclude": ["tests"] },
 	"target": "host"
 }

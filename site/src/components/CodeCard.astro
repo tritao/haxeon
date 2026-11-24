@@ -1,0 +1,63 @@
+---
+import { Code } from '@astrojs/starlight/components';
+
+interface Props {
+  code: string;
+  lang: string;
+  title?: string;
+  output?: string;
+  command?: string;
+  example?: string;
+}
+const { code, lang, title, output, command, example } = Astro.props;
+const prompt = command ? `$ ${command}\n` : undefined;
+---
+
+<div class="term" data-example={example}>
+  {title && <div class="bar">{title}</div>}
+  <Code {code} {lang} frame="none" />
+  {
+    output !== undefined && (
+      <pre
+        class="output-pane"
+        aria-label="Program output">{prompt && <span class="p" data-prompt>{prompt}</span>}{output}</pre>
+    )
+  }
+</div>
+
+<style>
+  .term {
+    background: var(--sl-color-bg-inline-code);
+    color: var(--hx-code-fg);
+    border-radius: var(--hx-radius-m);
+    overflow: hidden;
+    min-width: 0;
+  }
+  .term .bar {
+    display: flex;
+    gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #ffffff14;
+    font: 0.75rem var(--sl-font-mono);
+    color: var(--hx-code-muted);
+  }
+  .output-pane {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    tab-size: 2;
+    border-top: 1px dashed #ffffff22;
+  }
+  .output-pane .p {
+    color: var(--hx-code-muted);
+  }
+
+  .term :global(.expressive-code pre) {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+  .term :global(.expressive-code .copy) {
+    display: none;
+  }
+</style>

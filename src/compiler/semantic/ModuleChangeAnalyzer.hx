@@ -303,7 +303,10 @@ class ModuleChangeAnalyzer {
 				structuralChanged.set(className, true);
 			var typeResult = types.declareClass(className, baseName, classFields, classMethods,
 				isValue && !isNativeValue);
-			if (compiledOnce && typeResult.compatibility != Compatible)
+			// A method whose signature alone changed is a signature change (below), which names nothing new: the class's shape, which
+			// the methods its subclasses discover (`@:discoverMethods`) are taken from, is the same.
+			if (compiledOnce && typeResult.compatibility != Compatible
+				&& typeResult.compatibility != MethodSignatureChanged)
 				structuralChanged.set(className, true);
 			for (method in classDecl.methods) {
 				var localName = className + "." + method.name,

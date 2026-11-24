@@ -257,8 +257,16 @@ class WasmEncoder {
 	public static function encodeFunctionBody(fn:WasmFunction):Bytes {
 		if (fn.encodedBody != null) return fn.encodedBody;
 		var body = new BytesOutput();
-		writeLocals(body, fn.locals);
-		writeInstructions(body, fn.body);
+		var conversionLocal = -1;
+		var locals = fn.locals;
+		for (instruction in fn.body)
+			if (instruction == I32FromF64 || instruction == I64FromF64) {
+				conversionLocal = fn.type.parameters.length + locals.length;
+				locals = locals.concat([{type: F64}]);
+				break;
+			}
+		writeLocals(body, locals);
+		writeInstructions(body, fn.body, conversionLocal);
 		body.writeByte(0x0b);
 		return body.getBytes();
 	}
@@ -354,7 +362,8 @@ class WasmEncoder {
 			writeValueType(output, type);
 	}
 
-	static function writeInstructions(output:BytesOutput, instructions:Array<WasmInstruction>):Void {
+	static function writeInstructions(output:BytesOutput, instructions:Array<WasmInstruction>,
+			conversionLocal:Int = -1):Void {
 		for (instruction in instructions)
 			switch instruction {
 				case Unreachable:
@@ -617,11 +626,8 @@ class WasmEncoder {
 					output.writeByte(0xb6);
 				case I32WrapI64:
 					output.writeByte(0xa7);
-				case I32TruncF64S:
-					output.writeByte(0xaa);
-				case I64TruncSatF64S:
-					output.writeByte(0xfc);
-					writeU32(output, 6);
+				case I32FromF64, I64FromF64:
+					writeSignedTruncation(output, conversionLocal, instruction == I64FromF64);
 				case I32ReinterpretF32:
 					output.writeByte(0xbc);
 				case F32ReinterpretI32:
@@ -687,6 +693,16 @@ class WasmEncoder {
 				case ArrayFill(typeIndex):
 					writeGcOpcode(output, 16, typeIndex);
 			}
+	}
+
+	static function writeSignedTruncation(output:BytesOutput, local:Int, wide:Bool):Void {
+		if (local < 0) throw new InternalError("Signed float truncation requires a function local");
+		var limit = wide ? 9223372036854775808.0 : 2147483648.0;
+		// Negative overflow already saturates to the desired minimum. The ordered comparison also rejects NaN.
+		writeInstructions(output, [LocalTee(local), F64Const(-limit), LocalGet(local), F64Const(limit), F64Lt]);
+		output.writeByte(0x1b); // select
+		output.writeByte(0xfc);
+		writeU32(output, wide ? 6 : 2);
 	}
 
 	static function writeGcOpcode(output:BytesOutput, subopcode:Int, typeIndex:Int):Void {

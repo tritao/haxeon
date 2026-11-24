@@ -1,9 +1,9 @@
 package compiler.types.typing;
 
+import compiler.core.TextDigest;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import haxe.crypto.Sha256;
 
 /** Stable runtime descriptors retain the semantic arguments of a generic boxed enum. */
 class EnumRuntimeType {
@@ -16,7 +16,8 @@ class EnumRuntimeType {
 		return switch type {
 			case TNullable(inner), TAbstract(_, _, inner): name(inner);
 			case TInstance(NominalKind.Enum, name, arguments):
-				arguments.length == 0 ? name : name + SEPARATOR + Sha256.encode(SemanticSignature.type(type)).substr(0,
+				arguments.length == 0
+					? name : name + SEPARATOR + TextDigest.sha256(SemanticSignature.type(type)).substr(0,
 					HASH_LENGTH);
 			default: null;
 		};

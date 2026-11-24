@@ -12,6 +12,6 @@ hashlink_dir="$("$repo_dir/scripts/hashlink-path.sh")"
 (
   cd "$repo_dir/out"
   # The test runs the JIT support helper built above from the HashLink directory it names.
-  HAXEON_HASHLINK_DIR="$hashlink_dir" LD_LIBRARY_PATH="$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  HAXEON_SDK="$(dirname "$hashlink_dir")" LD_LIBRARY_PATH="$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     "$hashlink_dir/hl" hot-reload-test.hl
 )

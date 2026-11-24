@@ -87,10 +87,7 @@ class CompilerMemoryCensus {
 				{name: "typed functions of modules",
 				release: () -> for (state in compiler.modules) {
 					state.typedFunctions = [];
-					state.purityQueries = [];
-					state.noReturnQueries = [];
 					state.keyPathUses = [];
-					state.defaultArgumentSources = [];
 				}
 			},
 				{name: "IR functions of modules",
@@ -109,6 +106,8 @@ class CompilerMemoryCensus {
 					state.canonicalInterfaces = [];
 					state.canonicalAbstracts = [];
 					state.canonicalAliases = [];
+					// Nothing canonical is left to reuse: a later canonicalization starts over.
+					state.canonicalRevision = -1;
 				}
 			},
 				{name: "semantic models of modules",

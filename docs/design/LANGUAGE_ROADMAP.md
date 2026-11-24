@@ -19,7 +19,7 @@ The rules for every entry:
 | Feature | Summary | Recorded in |
 |---|---|---|
 | Interfaces as the abstraction | No separate trait feature. Interface bounds dispatch statically and specialize for struct type arguments; a struct boxes only when converted to an interface-typed value. | [STRUCTS.md](STRUCTS.md) |
-| Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](../reference/GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
+| Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](../internals/GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
 | `Equatable`, `Hashable` | Value-only declared equality, synthesized when every field supports it; nonconforming struct comparisons are errors. Class/interface `==` is always identity; classes cannot declare either capability. Replaces `@:structural`. | [STRUCTS.md](STRUCTS.md) |
 | `RawRepresentable` | Closed Int/String enum abstracts synthesize inline raw-value access and checked conversion from declared constants; implicit conversions are rejected. Implemented. | [STRUCTS.md](STRUCTS.md#closed-raw-value-enums) |
 | `Flags` | Closed integer flags synthesize checked bit sets, immutable operations and readable formatting with no implicit conversions. Implemented. | [STRUCTS.md](STRUCTS.md#closed-flags) |
@@ -287,7 +287,7 @@ Check each against what Haxeon already supports before designing it.
 5. Flat structs, arrays of structs and generic specialization for structs, with inline enums. Struct arrays and
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums use declared
    value equality. The closed source subset uses inline lanes; wider enum transport and the UI conversion remain in progress. See [STRUCTS.md](STRUCTS.md) and
-   [GENERIC_SPECIALIZATION.md](../reference/GENERIC_SPECIALIZATION.md) for the layouts and measurements.
+   [GENERIC_SPECIALIZATION.md](../internals/GENERIC_SPECIALIZATION.md) for the layouts and measurements.
 6. Key paths are implemented before UI bindings: typed stored-field references, checked writes, composition,
    equality/hash and the `Diff.bit` port.
 7. Inline `Null<T>` through the callable ABI (queue **a2**): carry presence and payload through closures and generic

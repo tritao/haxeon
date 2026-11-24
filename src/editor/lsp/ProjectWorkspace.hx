@@ -7,13 +7,14 @@ import build.Target;
 import build.TargetLayout;
 import compiler.core.FileVersion;
 import compiler.core.InternalError;
+import compiler.core.TextDigest;
 import compiler.service.LanguageService;
 import compiler.tools.SourceManifestLoader;
 import haxe.Json;
-import haxe.crypto.Sha256;
 import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
 import project.CompilerInputs;
+import project.PackageManifest;
 import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
@@ -29,11 +30,14 @@ class HaxeProjectConfiguration {
 	public final ffi:compiler.ffi.FfiRegistry.FfiConfiguration;
 	public final ffiIdentity:String;
 
+	/** The project's null-safety rules, as its build passes them (`CompilerInputs.nullSafety`). */
+	public final nullSafety:ReadOnlyArray<compiler.NullSafetyRule>;
+
 	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>,
 			libraries:Array<String>,
-			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration) {
+			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration, ?nullSafety:Array<compiler.NullSafetyRule>) {
 		this.ffi = ffi == null ? new compiler.ffi.FfiRegistry.FfiConfiguration() : ffi;
-		ffiIdentity = Sha256.encode(haxe.Json.stringify({
+		ffiIdentity = TextDigest.sha256(haxe.Json.stringify({
 			interfaces: this.ffi.interfaceSources(),
 			projections: this.ffi.projectionSources()
 		}));
@@ -42,14 +46,16 @@ class HaxeProjectConfiguration {
 		this.entries = sortedCopy(entries);
 		this.defines = sortedCopy(defines);
 		this.libraries = sortedCopy(libraries);
-		scopeId = Sha256.encode([
+		this.nullSafety = nullSafety == null ? [] : nullSafety.copy();
+		scopeId = TextDigest.sha256([
 			file,
 			this.classPaths.join("|"),
 			this.entries.join("|"),
 			this.libraries.join("|"),
 			ffiIdentity
 		].join("\n"));
-		id = Sha256.encode(scopeId + "\n" + this.defines.join("|"));
+		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|") + "\n"
+			+ [for (rule in this.nullSafety) rule.argument()].join("|"));
 	}
 
 	public function owns(path:String):Bool {
@@ -184,7 +190,7 @@ class ProjectWorkspace {
 
 	public function isConfiguration(path:String):Bool {
 		var name = Path.withoutDirectory(path);
-		return name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml")
+		return PackageManifest.isManifestName(name) || name == "haxe.json" || StringTools.endsWith(name, ".hxml")
 			|| StringTools.endsWith(name, ".hxi")
 			|| StringTools.endsWith(name, ".hxmap");
 	}
@@ -303,7 +309,8 @@ class ProjectWorkspace {
 			var files:Array<String> = [];
 			if (FileSystem.exists(directory) && FileSystem.isDirectory(directory))
 				for (name in FileSystem.readDirectory(directory))
-					if (name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml"))
+					if (PackageManifest.isManifestName(name) || name == "haxe.json"
+						|| StringTools.endsWith(name, ".hxml"))
 						files.push(normalize(Path.join([directory, name])));
 			if (files.length > 0) {
 				files.sort(Reflect.compare);
@@ -445,7 +452,7 @@ class ProjectWorkspace {
 	}
 
 	function parseJson(file:String):HaxeProjectConfiguration {
-		if (Path.withoutDirectory(file) == "haxeon.json") {
+		if (PackageManifest.isManifestName(Path.withoutDirectory(file))) {
 			// Resolved as the build resolves it, with haxeon.lock, but offline: a dependency missing from the source cache is an
 			// error to fix with `haxeon install`, never a download the editor starts. Native artifacts are not built here.
 			var resolved = ProjectDiscovery.resolve(file, null, true),
@@ -519,7 +526,7 @@ class ProjectWorkspace {
 			}]);
 			var defines = inputs.defines.concat(compiler.tools.CompilerDriver.targetDefines(inputs.target));
 			return new HaxeProjectConfiguration(file, roots, inputs.entry == null ? [] : [inputs.entry], defines, [],
-				ffi);
+				ffi, inputs.nullSafety);
 		}
 		var value:Dynamic = Json.parse(File.getContent(file)),
 			base = Path.directory(file),

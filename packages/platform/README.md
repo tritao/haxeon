@@ -40,7 +40,7 @@ boundary. Native enums and flags remain shared with the generated bindings.
 import haxeon.platform.Runtime;
 import haxeon.platform.WindowOptions;
 import haxeon.platform.dialog.MessageDialogOptions;
-import haxeon.platform.async.Outcome;
+import haxeon.async.Outcome;
 
 var runtime = Runtime.start();
 var options = new WindowOptions(960, 640);

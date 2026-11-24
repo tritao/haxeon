@@ -117,6 +117,11 @@ class DeclaredConformance {
 		session.monomorphs.whenKnown(TMap(key, value), function() {
 			var knownKey = session.monomorphs.settled(key),
 				knownValue = session.monomorphs.settled(value);
+			// A generic body's map of its own type parameters (`Map<K, V>` in `f<K, V>`) is checked where the body is specialized
+			// for them: such an argument nests the parameters, so every call specializes (`GenericSpecializationPolicy`).
+			if (TypeRepresentation.mentionsTypeParameter(knownKey)
+				|| TypeRepresentation.mentionsTypeParameter(knownValue))
+				return;
 			requestHashableMapKey(session, knownKey, span);
 			if (session.mapName(knownKey, knownValue) == null)
 				BodyTyper.fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);

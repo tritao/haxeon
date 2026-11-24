@@ -19,6 +19,7 @@ import compiler.ir.model.Ir;
  * the same elements. Erased dynamic array accesses use calls, which invalidate all known loads.
  * Object layouts are needed only to exclude inline value fields; unknown Obj fields are excluded too.
  */
+@:nullSafety(Strict)
 class IrLoadStoreForwarding {
 	/**
 	 * A forwarded load is unlinked and its output made an alias of the value it was forwarded from;
@@ -61,6 +62,7 @@ class IrLoadStoreForwarding {
 }
 
 /** `IrLoadStoreForwarding.runBody`: the facts are value ids, field names symbol ids. */
+@:nullSafety(Strict)
 private class IrBodyLoadStoreForwarding {
 	public static function run(body:IrBody, objects:Null<IrObjectTable>, scratch:IrPassScratch):Bool {
 		var tables = scratch.bodyLoadStore, constants = tables.constants, constantValues = tables.constantValues;
@@ -397,6 +399,7 @@ private class IrBodyLoadStoreForwarding {
  * A block's outgoing available fields, stored compactly: the present keys and their values (-1 for the analysis top), or every
  * key with the top value, the state every block starts from. Each block has its own, refilled as the analysis goes.
  */
+@:nullSafety(Strict)
 private class BodyBlockFields {
 	public var everything = true;
 
@@ -416,6 +419,7 @@ private class BodyBlockFields {
  * The available-field state being computed at one program point, one slot per field key of the function: a key is absent,
  * present with -1 (the analysis top), or present with its value id. A function keeps only a few of these.
  */
+@:nullSafety(Strict)
 private class BodyFieldStates {
 	public final present:Array<Bool> = [];
 	public final values:Array<Int> = [];
@@ -515,6 +519,7 @@ private class BodyFieldStates {
 
 /** The tables of `IrBodyLoadStoreForwarding`, kept from one function to the next (`IrPassScratch.bodyLoadStore`). */
 @:allow(compiler.ir.passes.cleanup.IrBodyLoadStoreForwarding)
+@:nullSafety(Strict)
 class IrBodyLoadStoreScratch {
 	final constants = new IrValueMarks();
 	final constantValues:Array<Int> = [];

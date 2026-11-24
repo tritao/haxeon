@@ -11,8 +11,16 @@
     "interfaces": [
       "bindings/nativekit-gpu.hxi"
     ],
+    "wasmInterfaces": ["bindings/nativekit-gpu-wasm.hxi"],
     "projections": [
       "bindings/nativekit-gpu.hxmap"
+    ]
+  },
+  "publish": {
+    "exclude": [
+      "tests",
+      "tools",
+      "bench"
     ]
   },
   "target": "host",

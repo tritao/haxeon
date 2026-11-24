@@ -55,7 +55,7 @@ class WasmClosureReceiverRuntimeMain {
 					reflectionBytes: null
 				});
 		context.allocatorFunction = allocator;
-		WasmLinearRuntime.register(context);
+		WasmLinearRuntime.register(context, [for (native in program.natives) native.name => true]);
 		var first = functions.get("query0");
 		if (first == null)
 			throw "Missing closure receiver probe";

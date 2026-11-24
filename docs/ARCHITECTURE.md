@@ -193,8 +193,8 @@ it. The lists are built once; running one costs a predicate and a call per stage
 
 ## Warm builds: what landed (M0 and M1 of ADR 0003)
 
-The current plan and the measurements are in [`design/WARM_REBUILD_REUSE.md`](design/WARM_REBUILD_REUSE.md) and
-[`reports/2026-11-compiler-memory.md`](reports/2026-11-compiler-memory.md). This section is the short record.
+What a warm build reuses, its checks and open items are in [`design/WARM_REBUILD_REUSE.md`](design/WARM_REBUILD_REUSE.md);
+worker memory is in [`reports/2026-11-compiler-memory.md`](reports/2026-11-compiler-memory.md). This section is the short record.
 
 ### Layers of a plain build
 

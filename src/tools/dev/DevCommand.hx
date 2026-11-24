@@ -41,17 +41,24 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       command and the CLI run it while it is current (build.AotCompiler, AotBuild): what a release ships prebuilt.
  *
  *   haxeon dev package [--output=DIR] [--version=VERSION] [--no-archive]
- *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/reference/RELEASES.md).
+ *       Stage this checkout's release for this platform and archive it (ReleasePackage, docs/DEVELOPMENT.md, Releases).
  *
  *   haxeon dev check-tests
  *       Fail on a test file under tests/ that no suite, test driver case or workflow runs (TestRegistration).
  */
 class DevCommand {
-	public static function run(arguments:Array<String>, home:String):Int {
+	/** Runs the command in `arguments` on the checkout the SDK at `sdk` was built from: every command but hl-stat needs one. */
+	public static function run(arguments:Array<String>, sdk:String):Int {
 		var command = arguments.length == 0 ? "" : arguments.shift();
+		if (command == "hl-stat")
+			return HlStatCommand.run(arguments);
+		var home = build.HaxeonSdk.source(sdk);
+		if (home == null)
+			throw new compiler.core
+				.UsageError('haxeon dev is for working on Haxeon itself and runs only in a checkout of its sources '
+				+ '(scripts/haxeon, or the checkout\'s out/sdk/bin/haxeon); this Haxeon ($sdk) is a release');
 		return switch command {
 			case "tool-path": toolPath(arguments, home);
-			case "hl-stat": HlStatCommand.run(arguments);
 			case "tool-build-mode":
 				Sys.println(build.HaxeonBuild.TOOL_BUILD_MODE);
 				0;
@@ -176,33 +183,71 @@ class DevCommand {
 		]);
 	}
 
+	/** The overview and each command's help share the same usage and descriptions. */
+	static final HELP = [
+		{
+			usage: "tool-path [--cp DIR]... [--define NAME[=VALUE]]... MAIN",
+			summary: "Print the path of a cached HashLink build of the entry point MAIN (built with the pinned Haxe)"
+		},
+		{
+			usage: "hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]",
+			summary: "What a HashLink module is made of: part sizes, opcodes, largest functions, one function's code"
+		},
+		{
+			usage: "tool-build-mode",
+			summary: "Print the build mode tool artifacts are built in (the checked-in bootstrap's)"
+		},
+		{
+			usage: "run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]",
+			summary: "Run that build of MAIN with the arguments (the benchmarks: run --cp benchmarks BenchmarkMain)"
+		},
+		{
+			usage: "format [--check] [--changed]",
+			summary: "Format the checkout's Haxe sources, or check them; --changed: only files that differ from origin/main"
+		},
+		{
+			usage: "test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]",
+			summary: "Run a mode of tests/suites.txt; --gate writes a report to out/gate (default jobs: TEST_JOBS, else 16)"
+		},
+		{
+			usage: "native [preset]",
+			summary: "Build the VM (HashLink with the Haxeon runtime compiled in); release, or windows-msvc on Windows"
+		},
+		{
+			usage: "test-driver [jobs] [--suite NAMES] [--test REGEX] [--list]",
+			summary: "Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)"
+		},
+		{
+			usage: "bootstrap [--self]",
+			summary: "Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically"
+		},
+		{
+			usage: "aot [--toolchain=NAME]",
+			summary: "Build the CLI and the compiler to C (default toolchain: the hlc SDK's target's) and publish them beside the VM"
+		},
+		{
+			usage: "package [--output=DIR] [--version=VERSION] [--no-archive]",
+			summary: "Stage this platform's release in DIR (default out/release) and archive it"
+		},
+		{
+			usage: "check-tests",
+			summary: "Fail on a test file under tests/ that no suite, test driver case or workflow runs"
+		},
+	];
+
+	public static function help(?command:String):Null<String> {
+		if (command == null || command == "help")
+			return "Usage: haxeon dev <command>   (commands for working on a Haxeon checkout)\n"
+				+ [for (item in HELP) "  " + item.usage + "\n      " + item.summary].join("\n");
+		for (item in HELP)
+			if (item.usage.split(" ")[0] == command)
+				return "Usage: haxeon dev " + item.usage + "\n" + item.summary;
+		return null;
+	}
+
 	static function usage(status:Int):Int {
 		var out = status == 0 ? Sys.stdout() : Sys.stderr();
-		out.writeString("Usage: haxeon dev <command>   (commands for working on a Haxeon checkout)\n");
-		out.writeString("  tool-path [--cp DIR]... [--define NAME[=VALUE]]... MAIN\n");
-		out.writeString("      Print the path of a cached HashLink build of the entry point MAIN (built with the pinned Haxe)\n");
-		out.writeString("  hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]\n");
-		out.writeString("      What a HashLink module is made of: part sizes, opcodes, largest functions, one function's code\n");
-		out.writeString("  tool-build-mode\n");
-		out.writeString("      Print the build mode tool artifacts are built in (the checked-in bootstrap's)\n");
-		out.writeString("  run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]\n");
-		out.writeString("      Run that build of MAIN with the arguments (the benchmarks: run --cp benchmarks BenchmarkMain)\n");
-		out.writeString("  format [--check] [--changed]\n");
-		out.writeString("      Format the checkout's Haxe sources, or check them; --changed: only files that differ from origin/main\n");
-		out.writeString("  test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]\n");
-		out.writeString("      Run a mode of tests/suites.txt; --gate writes a report to out/gate (default jobs: TEST_JOBS, else 16)\n");
-		out.writeString("  native [preset]\n");
-		out.writeString("      Build the VM (HashLink with the Haxeon runtime compiled in); release, or windows-msvc on Windows\n");
-		out.writeString("  test-driver [jobs] [--suite NAMES] [--test REGEX] [--list]\n");
-		out.writeString("      Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)\n");
-		out.writeString("  bootstrap [--self]\n");
-		out.writeString("      Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically\n");
-		out.writeString("  aot [--toolchain=NAME]\n");
-		out.writeString("      Build the CLI and the compiler to C (default toolchain: the hlc SDK's target's) and publish them beside the VM\n");
-		out.writeString("  package [--output=DIR] [--version=VERSION] [--no-archive]\n");
-		out.writeString("      Stage this platform's release in DIR (default out/release) and archive it\n");
-		out.writeString("  check-tests\n");
-		out.writeString("      Fail on a test file under tests/ that no suite, test driver case or workflow runs\n");
+		out.writeString(help() + "\n");
 		return status;
 	}
 }

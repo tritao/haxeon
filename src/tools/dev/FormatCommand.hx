@@ -7,7 +7,7 @@ import sys.io.Process;
 /**
  * `haxeon dev format [--check] [--changed | --range FROM..TO]`: formats the Haxe sources of this checkout with `haxeon fmt`, after
  * `haxeon lint --fix` removes their unused imports and sorts the rest, or with `--check` reports what either would change. The
- * format-check suite runs it. The style is each project's "format" setting in haxeon.json; this tree uses the default (tabs, 120 columns). A
+ * format-check suite runs it. The style is each project's "format" setting in its manifest; this tree uses the default (tabs, 120 columns). A
  * file that must keep its layout (a test that names its lines) says so with `@formatter:off` on its first line.
  *
  * Every `.hx` file git tracks or would add is formatted, vendored code aside; with `--changed`, only those that differ from

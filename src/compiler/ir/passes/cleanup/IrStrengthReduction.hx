@@ -5,6 +5,7 @@ import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 
 /** Exact post-inline arithmetic rewrites. */
+@:nullSafety(Strict)
 class IrStrengthReduction {
 	/**
 	 * On a body, in place: a float division by a constant whose reciprocal is exact (`exactNormalReciprocal`) becomes a

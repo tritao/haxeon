@@ -20,27 +20,29 @@ import sys.FileSystem;
  */
 class NativeCompilerCache {
 	/**
-	 * The ccache executable to launch compilers through, or null when it is turned off or not installed. On Windows only the
-	 * one the bootstrap pins under `home`'s `.tools` is used, and only in an MSVC environment that names its toolset.
+	 * The ccache executable to launch compilers through, or null when it is turned off or not installed: on Windows the one the
+	 * bootstrap pins under the `.tools` of the checkout of the SDK at `home`, when there is one, and only in an MSVC environment
+	 * that names its toolset; otherwise the one on PATH.
 	 */
-	public static function executable(?home:String):Null<String> {
+	public static function executable(home:String):Null<String> {
 		if (Sys.getEnv("HAXEON_CCACHE") == "0")
 			return null;
-		if (Sys.systemName() == "Windows") {
-			// MSVC's CL and _CL_ variables add options ccache cannot see, so it does not support them: it falls back to the
-			// compiler, and with ccache 4.14 that fallback left no object behind. With either set, compiles run directly.
-			if (home == null || msvcToolset() == null || hasValue("CL") || hasValue("_CL_"))
-				return null;
-			var pinned = Path.join([home, ".tools", "ccache", "ccache.exe"]);
+		var windows = Sys.systemName() == "Windows";
+		// MSVC's CL and _CL_ variables add options ccache cannot see, so it does not support them: it falls back to the
+		// compiler, and with ccache 4.14 that fallback left no object behind. With either set, compiles run directly.
+		if (windows && (msvcToolset() == null || hasValue("CL") || hasValue("_CL_")))
+			return null;
+		var source = build.HaxeonSdk.source(home),
+			pinned = source == null ? null : Path.join([source, ".tools", "ccache", "ccache.exe"]);
+		if (windows && pinned != null)
 			return FileSystem.exists(pinned) ? pinned : null;
-		}
 		var search = Sys.getEnv("PATH");
 		if (search == null)
 			return null;
-		for (directory in search.split(":")) {
+		for (directory in search.split(windows ? ";" : ":")) {
 			if (directory.length == 0)
 				continue;
-			var candidate = Path.join([directory, "ccache"]);
+			var candidate = Path.join([directory, windows ? "ccache.exe" : "ccache"]);
 			if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate))
 				return candidate;
 		}

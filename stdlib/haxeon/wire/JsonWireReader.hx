@@ -80,6 +80,23 @@ class JsonWireReader {
 		if (!Std.isOfType(value, Array))
 			throw "Expected JSON wire container";
 		var values:Array<Dynamic> = cast value;
+		return pushFrame(values, map);
+	}
+
+	public function readObjectHeader():Int {
+		var value = take();
+		if (!isObjectValue(value))
+			throw "Expected JSON wire object";
+		var names = Reflect.fields(value);
+		if (names.length > maxContainer)
+			throw "JSON wire container exceeds configured limit";
+		var pairs:Array<Dynamic> = [];
+		for (name in names)
+			pairs.push([name, Reflect.field(value, name)]);
+		return pushFrame(pairs, true);
+	}
+
+	function pushFrame(values:Array<Dynamic>, map:Bool):Int {
 		if (values.length > maxContainer)
 			throw "JSON wire container exceeds configured limit";
 		if (frames.length >= maxDepth)
@@ -96,6 +113,15 @@ class JsonWireReader {
 
 	public function isNil():Bool
 		return peek() == null;
+
+	public function isString():Bool
+		return Std.isOfType(peek(), String);
+
+	public function isObject():Bool
+		return isObjectValue(peek());
+
+	function isObjectValue(value:Dynamic):Bool
+		return Reflect.isObject(value) && !Std.isOfType(value, String) && !Std.isOfType(value, Array);
 
 	public function readNil():Void
 		if (take() != null)

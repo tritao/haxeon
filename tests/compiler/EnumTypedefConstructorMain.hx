@@ -125,7 +125,7 @@ class EnumTypedefConstructorMain {
 	static function execute(result:CompileResult, expected:Int):Void {
 		var path = "out/enum-typedef-constructor.hl";
 		File.saveBytes(path, HlWriter.encode(result.artifact.hashLink().module).flatten());
-		var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
+		var child = new sys.io.Process(Sys.getEnv("HAXEON_SDK") + "/bin/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 		var status = child.exitCode();
 		child.close();

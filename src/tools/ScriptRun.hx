@@ -15,8 +15,8 @@ import sys.io.File;
  * (`HAXEON_SCRIPT_CACHE`, else `~/.haxeon/cache/scripts/<digest of the script's path>`), and then built and run like any
  * other: the file is the project's one source and its directory the source root its imports resolve in (the folder its package
  * starts in, when the script declares one and lives in its folders), so modules beside it
- * can be imported but other scripts there are not compiled. A `haxeon.json` beside the script makes that project a path
- * dependency, with its source roots and dependencies. The incremental build and the artifact cache make a second run cost a
+ * can be imported but other scripts there are not compiled. A manifest (`haxeon.toml` or `haxeon.json`) beside the script makes
+ * that project a path dependency, with its source roots and dependencies. The incremental build and the artifact cache make a second run cost a
  * launch. A first line `#!/usr/bin/env haxeon` makes the file executable where the shell reads such lines. A script's cache is
  * removed after 30 days without a run.
  */
@@ -39,15 +39,15 @@ class ScriptRun {
 			root = packageRoot(directory, packagePath),
 			entry = root == directory ? module : packagePath + "." + module,
 			dependencies:Map<String, project.PackageSource> = [],
-			neighbour = Path.join([directory, "haxeon.json"]);
-		if (FileSystem.exists(neighbour))
+			neighbour = PackageManifest.find(directory);
+		if (neighbour != null)
 			dependencies.set(PackageManifest.parse(neighbour, File.getContent(neighbour)).packageName,
 				project.PackageSource.Path(directory));
 		return new ProgramProject(ProgramProject.directory("scripts", "HAXEON_SCRIPT_CACHE",
 			ContentDigest.makeHex(Bytes.ofString(path)).substr(0, 16)),
 			PackageManifest.program("script-" + module.toLowerCase().split("_").join("-"), entry, [path], [root],
 			true, [],
-			null, dependencies));
+			null, dependencies), null, entry);
 	}
 
 	/** The package a script declares (`package a.b;` before any other declaration), or null. */

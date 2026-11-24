@@ -3,6 +3,8 @@ package compiler.hl.lower;
 import compiler.core.PeakProbe;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
+import compiler.hl.lower.HlLoweringDecisions.HlCallKind;
+import compiler.hl.lower.HlLoweringDecisions.InlineValueSlot;
 import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrFunction;
@@ -24,7 +26,6 @@ import compiler.ir.model.Ir.IrCNative;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.Ir.IrType;
-import compiler.ir.model.Ir.IrValue;
 import compiler.ir.verify.IrVerifier;
 import compiler.hl.incremental.HlSymbolRequest;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
@@ -56,6 +57,7 @@ typedef MeasuredHlCode = {
 }
 
 /** Lowers verified SSA IR into indexed HashLink types, registers, and opcodes. */
+@:nullSafety(Strict)
 class HlLower {
 	final code:HlCode;
 	final symbols:HlSymbolTable;
@@ -63,7 +65,7 @@ class HlLower {
 	final objectTypeIndices:Map<String, Int> = [];
 
 	/** Everything lowering a function may learn about an object type; see `HlLoweringView`. */
-	var view:HlLoweringView;
+	final view:HlLoweringView;
 
 	/** The requests the function being lowered makes, when lowering records them. */
 	var recordedKeys:Null<Array<Int>>;
@@ -83,8 +85,8 @@ class HlLower {
 	/** The tables of the function being lowered, their storage kept from one function to the next. */
 	final scratch = new HlLowerScratch();
 
-	/** The body of the function being lowered (`lowerFunction`). */
-	var body:IrBody;
+	/** The body of the function being lowered (`lowerFunction`), null before the first; its methods read it through `requireBody`. */
+	var body:Null<IrBody> = null;
 
 	/**
 	 * The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`): the program's, so every
@@ -135,7 +137,7 @@ class HlLower {
 
 	public static function lower(program:IrProgram, ?indices:Map<String, Int>):HlCode {
 		IrVerifier.verify(program);
-		var lowerer = new HlLower(new HlSymbolTable(), null),
+		var lowerer = new HlLower(program, new HlSymbolTable(), null),
 			code = lowerer.lowerProgram(program);
 		if (indices != null)
 			for (name => index in lowerer.functionIndices)
@@ -153,7 +155,8 @@ class HlLower {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
-		if (!trustCache || regenerated == null || loweredCache == null || !loweredCache.entries.iterator().hasNext()) {
+		var cacheEmpty = loweredCache == null || !loweredCache.entries.iterator().hasNext();
+		if (!trustCache || regenerated == null || cacheEmpty) {
 			// The final IR of a plain build is verified where it is made (`FrontendCompilation`), once, whatever the backend.
 			// A frozen function (a retired signature, or a lambda the program dropped) is code the running module holds for
 			// its closures: the objects it names may be gone from the program, so it is lowered against the published types
@@ -177,7 +180,8 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve,
+			lowerer = new HlLower(program, symbols, indices, stableIds, affected, runtimeNatives, debugCache,
+				fieldReserve,
 				developmentMetadata, recordLowering,
 				loweredCache, trustCache, frozen, checkReuse),
 			code = lowerer.lowerProgram(program);
@@ -218,14 +222,14 @@ class HlLower {
 	final debugCache:Null<HlDebugMetadataCache>;
 	final developmentMetadata:Bool;
 
-	var typedInterfaces:HlTypedInterfaceTables;
+	final typedInterfaces:HlTypedInterfaceTables;
 	var metadataMs = 0.0;
 	var functionsMs = 0.0;
 	var debugMs = 0.0;
 	var finalizationMs = 0.0;
 	var allocationPhases:Array<PhaseAllocation> = [];
 
-	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>,
+	function new(program:IrProgram, symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>,
 			?regenerated:Array<String>,
 			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
@@ -233,7 +237,7 @@ class HlLower {
 			?frozen:String->Bool, checkReuse:Bool = false) {
 		this.frozen = frozen;
 		this.symbols = symbols;
-		allocateRegister = allocateTemporary;
+		arrayBounds = new HlArrayBounds(compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives));
 		// A compile that checks its reuse lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = !trustCache && checkReuse;
 		this.loweredCache = loweredCache;
@@ -258,14 +262,20 @@ class HlLower {
 		if (indices != null)
 			for (name => index in indices)
 				functionIndices.set(name, index);
+		typedInterfaces = new HlTypedInterfaceTables(program);
+		view = new HlLoweringView(typedInterfaces.keys, null, loweredCache == null ? null : loweredCache.facts,
+			checkingLinks);
+		// A live build keeps the code of the functions it does not regenerate without asking whether their facts still hold, so
+		// it reads none about fields, which an edit elsewhere can change.
+		if (!trustCache)
+			view.useNonNullFields(compiler.ir.analysis.IrNonNullFields.of(program,
+				loweredCache == null ? null : loweredCache.nonNullStores, checkingLinks));
+		// A method of this lowering, so taken once every field has its value.
+		allocateRegister = allocateTemporary;
 	}
 
+	/** Lowers `program`, the program this lowering was made for. */
 	function lowerProgram(program:IrProgram):HlCode {
-		typedInterfaces = new HlTypedInterfaceTables(program);
-		var facts = loweredCache == null ? null : loweredCache.facts;
-		if (facts != null)
-			facts.checkObjects = checkingLinks;
-		view = new HlLoweringView(typedInterfaces.keys, null, facts);
 		var runtimeNatives = preparedRuntimeNatives == null
 			? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
@@ -273,7 +283,8 @@ class HlLower {
 			var arity = native.arguments.length;
 			if (arity > 16)
 				throw new InternalError('Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"');
-			if ((isNativePointer(native.result) || isManagedPointerBytes(native) || isUtf8Result(native))
+			if ((HlLoweringDecisions.isNativePointer(native.result) || HlLoweringDecisions.isManagedPointerBytes(native)
+				|| HlLoweringDecisions.isUtf8Result(native))
 				&& native.pointerOwnership == "unspecified")
 				throw new InternalError('Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution');
 		}
@@ -292,10 +303,10 @@ class HlLower {
 			dispatchArities:Map<String, Bool> = [];
 		for (native in program.cNatives) {
 			var arity = native.arguments.length;
-			var pointerResult = isNativePointer(native.result),
-				bytesResult = isManagedPointerBytes(native),
-				aggregateResult = isAggregateResult(native),
-				utf8Result = isUtf8Result(native),
+			var pointerResult = HlLoweringDecisions.isNativePointer(native.result),
+				bytesResult = HlLoweringDecisions.isManagedPointerBytes(native),
+				aggregateResult = HlLoweringDecisions.isAggregateResult(native),
+				utf8Result = HlLoweringDecisions.isUtf8Result(native),
 				dispatchKey = '$arity:$pointerResult:$bytesResult:$aggregateResult:$utf8Result';
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
@@ -382,7 +393,7 @@ class HlLower {
 	/** The runtime natives lowering the rows of `fn` calls, each once, in the order they come; they depend on nothing else. */
 	static function functionNatives(fn:IrFunction, types:compiler.ir.model.IrTypeIds):Array<IrNative> {
 		var own:Array<IrNative> = [],
-			valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id,
+			valueArrayRead = compiler.ir.model.IrSymbol.of(HlLoweringDecisions.VALUE_ARRAY_READ_I32).id,
 			body = fn.bodyIn(types);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
@@ -411,15 +422,15 @@ class HlLower {
 				ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")],
 					IrType.Bool);
 			case IrOpcode.Call if (body.aux(row) == valueArrayRead && body.operandCount(row) == 5
-				&& readsInline(body.valueType(body.operand(row, 0)))):
-				ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
-				ensureNative(runtimeNatives, VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
+				&& HlLoweringDecisions.readsInline(body.valueType(body.operand(row, 0)))):
+				ensureNative(runtimeNatives, HlLoweringDecisions.VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
+				ensureNative(runtimeNatives, HlLoweringDecisions.VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
 			case IrOpcode.ArrayGet:
 				ensureRawArrayNative(runtimeNatives, body.valueType(body.operand(row, 0)), "check");
 			case IrOpcode.ArraySet:
 				ensureRawArrayNative(runtimeNatives, body.valueType(body.operand(row, 0)), "ensure");
 			case IrOpcode.IteratorNext:
-				var nextNative = iteratorNextNative(body.valueType(body.output(row)));
+				var nextNative = HlLoweringDecisions.iteratorNextNative(body.valueType(body.output(row)));
 				ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")],
 					nextNative.result);
 			default:
@@ -579,12 +590,16 @@ class HlLower {
 					if (trustCache) {
 						entries.set(fn.name,
 							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], [], []));
-					} else if (recordLowering) {
-						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, recordedKeys,
-							recordedAnswers, view.endFunction());
-						this.lowered.set(fn.name, entry);
-						entries.set(fn.name, entry);
-						recordedKeys = null;
+					} else {
+						// Recording lowering, the function's requests were kept from its start.
+						var keys = recordedKeys;
+						if (keys != null) {
+							var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, keys,
+								recordedAnswers, view.endFunction());
+							this.lowered.set(fn.name, entry);
+							entries.set(fn.name, entry);
+							recordedKeys = null;
+						}
 					}
 				} catch (error:InternalError) {
 					throw new InternalError('HashLink lowering failed for ${fn.name}: ${error.message}', error.span);
@@ -736,13 +751,21 @@ class HlLower {
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
-		var cached = debugCache == null ? null : debugCache.identity(fn);
-		if (cached != null && cached.functionIndex == requireFunction(fn.name))
+		// A function keeps its identity while its index and stable id hold; a fresh layout can move either without the other.
+		var cached = debugCache == null ? null : debugCache.identity(fn), functionIndex = requireFunction(fn.name);
+		if (cached != null && cached.functionIndex == functionIndex
+			&& cached.stableId == stableIdOf(fn.name, functionIndex))
 			return cached;
 		var identity = functionIdentity(fn);
 		if (debugCache != null)
 			debugCache.rememberIdentity(fn, identity);
 		return identity;
+	}
+
+	/** The stable id function `name` is known by: its session's, else its index. */
+	function stableIdOf(name:String, functionIndex:Int):Int {
+		var ids = stableIds, id = ids == null ? null : ids.get(name);
+		return id == null ? functionIndex : id;
 	}
 
 	function functionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
@@ -771,7 +794,7 @@ class HlLower {
 		}
 		var parts = fn.name.split(".");
 		return {
-			stableId: stableIds != null && stableIds.exists(fn.name) ? stableIds.get(fn.name) : functionIndex,
+			stableId: stableIdOf(fn.name, functionIndex),
 			functionIndex: functionIndex,
 			qualifiedName: fn.name,
 			displayName: parts[parts.length - 1],
@@ -795,111 +818,6 @@ class HlLower {
 			default: true;
 		};
 
-	/** Byte shift of one element of an Int or Float array, whose storage the compiler lays out itself; null for any other array. */
-	public static inline final VALUE_ARRAY_VALIDATE = "__value_array_validate";
-
-	public static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
-
-	public static inline final VALUE_ARRAY_READ = "__value_array_read_";
-
-	/**
-	 * Whether a scalar read of the same element as the read at `position`, whose value is used, is beside it, with nothing
-	 * but constants and reads of that element between: that read checks the element (in range, present) as this one would.
-	 */
-	public static function usedReadNearby(body:IrBody, row:Int, uses:Array<Int>):Bool {
-		return usedReadBeside(body, row, uses, true) || usedReadBeside(body, row, uses, false);
-	}
-
-	/** `usedReadNearby` on one side of `row`: the rows before it, or those after it. */
-	static function usedReadBeside(body:IrBody, row:Int, uses:Array<Int>, before:Bool):Bool {
-		var array = body.operand(row, 0),
-			index = body.operand(row, 1),
-			at = before ? body.previousRow(row) : body.nextRow(row);
-		while (at >= 0) {
-			switch body.opcode(at) {
-				case IrOpcode.ConstInt, IrOpcode.ConstBool:
-				case IrOpcode.Call if (StringTools.startsWith(body.symbol(at).name, VALUE_ARRAY_READ)
-					&& body.operandCount(at) >= 2 && (body.operand(at, 0):Int) == (array:Int)
-					&& (body.operand(at, 1):Int) == (index:Int)):
-					if (uses[body.output(at)] > 0)
-						return true;
-				default:
-					break;
-			}
-			at = before ? body.previousRow(at) : body.nextRow(at);
-		}
-		return false;
-	}
-
-	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
-	public static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
-
-	public static inline final VALUE_ARRAY_FORWARD_TYPE = "__value_array_forward_type";
-
-	/** Where a value array keeps its scalar stride in bits, and an array its size and data; `value_arrays.c` asserts them. */
-	public static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
-
-	public static inline final ARRAY_SIZE_OFFSET = 16;
-
-	/** Where a value array keeps its validity lane (`value_arrays.c` asserts it). */
-	public static inline final VALUE_ARRAY_VALIDITY_OFFSET = 104;
-	public static inline final ARRAY_DATA_OFFSET = 24;
-
-	/** The type word at the start of an array's storage. */
-	public static inline final LANE_HEADER_BYTES = 8;
-
-	/** How far back from a call its constant arguments are looked for; the IR emits them right before it. */
-	public static inline final CONSTANT_LOOKBACK = 8;
-
-	/** The Int or Bool constant (a Bool as 0 or 1) `value` is, when its definition is just before `index`; else -1. */
-	static function constantBefore(body:IrBody, row:Int, value:IrValueId):Int {
-		var position = body.previousRow(row), remaining = CONSTANT_LOOKBACK;
-		while (position >= 0 && remaining > 0) {
-			if ((body.output(position):Int) == (value:Int))
-				switch body.opcode(position) {
-					case IrOpcode.ConstInt:
-						return body.aux(position);
-					case IrOpcode.ConstBool:
-						return body.aux(position) == 1 ? 1 : 0;
-					default:
-				}
-			position = body.previousRow(position);
-			remaining--;
-		}
-		return -1;
-	}
-
-	/** Whether a value array of `array`'s type is read inline (`hasValidity` tells how). */
-	public static function readsInline(array:IrType):Bool
-		return switch array {
-			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))), Array(Obj(_)): true;
-			default: false;
-		};
-
-	/**
-	 * Whether a value array of `array`'s type keeps a presence bit per element (`IrValueArrayLayout`): arrays of non-null
-	 * structs do; enums (their null is tag zero) and nullable structs do not.
-	 */
-	public static function hasValidity(array:IrType):Bool
-		return switch array {
-			case Array(Obj(_)): true;
-			default: false;
-		};
-
-	/**
-	 * The slot `__value_array_read_i32` at `index` of `instructions` reads, as constants, when it is read inline
-	 * (`lowerValueArrayRead`); null otherwise.
-	 */
-	public static function inlineValueArraySlot(body:IrBody, row:Int):Null<InlineValueSlot> {
-		if (body.operandCount(row) != 5 || !readsInline(body.valueType(body.operand(row, 0))))
-			return null;
-		var offset = constantBefore(body, row, body.operand(row, 2)),
-			width = constantBefore(body, row, body.operand(row, 3)),
-			signed = constantBefore(body, row, body.operand(row, 4));
-		return offset >= 0 && offset % 8 == 0 && signed >= 0 && (width == 8 || width == 16 || width == 32)
-			? {offset: offset, width: width, signed: signed == 1} : null;
-	}
-
 	/**
 	 * A scalar read of a value array element, inline (`VALUE_ARRAY_ACCESS.md`): with the array's header resolved to its
 	 * value array (`valueArrayView`), an index in range, of an element present (for arrays with validity bits), loads the
@@ -908,6 +826,7 @@ class HlLower {
 	 */
 	function lowerValueArrayRead(row:Int, output:IrValueId, slot:InlineValueSlot, block:Int,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
 		var arrayValue = body.operand(row, 0),
 			indexValue = body.operand(row, 1),
 			array = requireRegister(arrayValue, registers),
@@ -921,23 +840,23 @@ class HlLower {
 			position = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.JumpNull(view.array, slow));
 		// A loop that runs the index up to the array's length, and resizes nothing, proved it in range.
-		if (!provenByLoop(arrayValue, indexValue, block)) {
+		if (!arrayBounds.provenByLoop(arrayValue, indexValue, block)) {
 			instructions.push(HlInstruction.GetMem(size, view.array,
-				constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
+				constantRegister(HlLoweringDecisions.ARRAY_SIZE_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
 		}
 		// An element of an array with validity bits is read only once it was written; else the native raises its error.
-		if (hasValidity(body.valueType(arrayValue))) {
+		if (HlLoweringDecisions.hasValidity(body.valueType(arrayValue))) {
 			var bits = temporaryRegister(IrType.Bytes, registerTypes),
 				byte = temporaryRegister(IrType.I32, registerTypes),
 				byteIndex = temporaryRegister(IrType.I32, registerTypes),
 				bit = temporaryRegister(IrType.I32, registerTypes);
 			instructions.push(HlInstruction.GetMem(bits, view.array,
-				constantRegister(VALUE_ARRAY_VALIDITY_OFFSET, instructions, registerTypes)));
+				constantRegister(HlLoweringDecisions.VALUE_ARRAY_VALIDITY_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.UnsignedShiftRight(byteIndex, index,
 				constantRegister(3, instructions, registerTypes)));
 			instructions.push(HlInstruction.Add(byteIndex, byteIndex,
-				constantRegister(LANE_HEADER_BYTES, instructions, registerTypes)));
+				constantRegister(HlLoweringDecisions.LANE_HEADER_BYTES, instructions, registerTypes)));
 			instructions.push(HlInstruction.GetI8(byte, bits, byteIndex));
 			instructions.push(HlInstruction.BitAnd(bit, index, constantRegister(7, instructions, registerTypes)));
 			instructions.push(HlInstruction.UnsignedShiftRight(byte, byte, bit));
@@ -945,11 +864,11 @@ class HlLower {
 			instructions.push(HlInstruction.JumpEqual(byte, constantRegister(0, instructions, registerTypes), slow));
 		}
 		instructions.push(HlInstruction.GetMem(data, view.array,
-			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.ARRAY_DATA_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.Mul(position, index, view.strideBytes));
 		// The lane starts with a type word; the payload follows it.
 		instructions.push(HlInstruction.Add(position, position,
-			constantRegister(LANE_HEADER_BYTES + (slot.offset >> 3), instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.LANE_HEADER_BYTES + (slot.offset >> 3), instructions, registerTypes)));
 		switch slot.width {
 			case 8: instructions.push(HlInstruction.GetI8(destination, data, position));
 			case 16: instructions.push(HlInstruction.GetI16(destination, data, position));
@@ -962,7 +881,7 @@ class HlLower {
 		}
 		instructions.push(HlInstruction.Jump(done));
 		instructions.push(HlInstruction.Label(slow));
-		instructions.push(HlInstruction.CallN(destination, requireFunction(VALUE_ARRAY_READ_I32),
+		instructions.push(HlInstruction.CallN(destination, requireFunction(HlLoweringDecisions.VALUE_ARRAY_READ_I32),
 			operandRegisters(row, 0, registers)));
 		instructions.push(HlInstruction.Label(done));
 	}
@@ -1016,17 +935,17 @@ class HlLower {
 		instructions.push(HlInstruction.GetType(actual, header));
 		instructions.push(HlInstruction.UnsafeCast(actualPointer, actual));
 		// As pointers: the VM compares type registers structurally, and every array header type is an array type.
-		runtimeTypePointer(expectedPointer, VALUE_ARRAY_HEADER_TYPE, instructions, registerTypes);
+		runtimeTypePointer(expectedPointer, HlLoweringDecisions.VALUE_ARRAY_HEADER_TYPE, instructions, registerTypes);
 		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, forwarded));
 		instructions.push(HlInstruction.UnsafeCast(view.array, header));
 		instructions.push(HlInstruction.Jump(resolved));
 		instructions.push(HlInstruction.Label(forwarded));
-		runtimeTypePointer(expectedPointer, VALUE_ARRAY_FORWARD_TYPE, instructions, registerTypes);
+		runtimeTypePointer(expectedPointer, HlLoweringDecisions.VALUE_ARRAY_FORWARD_TYPE, instructions, registerTypes);
 		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, absent));
 		var raw = temporaryRegister(IrType.Bytes, registerTypes);
 		instructions.push(HlInstruction.UnsafeCast(raw, header));
 		instructions.push(HlInstruction.GetMem(view.array, raw,
-			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.ARRAY_DATA_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.Jump(resolved));
 		instructions.push(HlInstruction.Label(absent));
 		instructions.push(HlInstruction.LoadNull(view.array));
@@ -1034,7 +953,7 @@ class HlLower {
 		instructions.push(HlInstruction.JumpNull(view.array, strided));
 		var strideBits = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.GetMem(strideBits, view.array,
-			constantRegister(VALUE_ARRAY_STRIDE_OFFSET, instructions, registerTypes)));
+			constantRegister(HlLoweringDecisions.VALUE_ARRAY_STRIDE_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.UnsignedShiftRight(view.strideBytes, strideBits,
 			constantRegister(3, instructions, registerTypes)));
 		instructions.push(HlInstruction.Label(strided));
@@ -1053,30 +972,6 @@ class HlLower {
 		instructions.push(HlInstruction.GlobalSet(global, type));
 		instructions.push(HlInstruction.Label(ready));
 		instructions.push(HlInstruction.UnsafeCast(destination, type));
-	}
-
-	/**
-	 * Whether the first instruction from `start` on that is not a constant reads a scalar of the element `validate` checks.
-	 * The HashLink runtime's scalar reads validate their element as `__value_array_validate` does, with the same errors, so
-	 * a validation right before one adds nothing: a payload-free enum element is read as exactly that pair.
-	 */
-	public static function scalarReadFollows(body:IrBody, row:Int):Bool {
-		if (body.operandCount(row) != 2)
-			return false;
-		var array = body.operand(row, 0), index = body.operand(row, 1), position = body.nextRow(row);
-		while (position >= 0) {
-			switch body.opcode(position) {
-				case IrOpcode.ConstInt, IrOpcode.ConstBool:
-				case IrOpcode.Call:
-					return StringTools.startsWith(body.symbol(position).name, "__value_array_read_")
-						&& body.operandCount(position) >= 2 && (body.operand(position, 0):Int) == (array:Int)
-						&& (body.operand(position, 1):Int) == (index:Int);
-				default:
-					return false;
-			}
-			position = body.nextRow(position);
-		}
-		return false;
 	}
 
 	static function rawArrayShift(array:IrType):Null<Int>
@@ -1100,18 +995,9 @@ class HlLower {
 				operation == "check" ? "array_out_of_bounds" : 'array_$operation');
 	}
 
-	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
-	/** The native an iterator's `next` calls for elements of type `element`, and what it returns. */
-	public static function iteratorNextNative(element:IrType):{name:String, result:IrType} return switch element {
-		case F64: {name: "__iterator_next_f64", result: IrType.F64};
-		case I32: {name: "__iterator_next_i32", result: IrType.I32};
-		default: {name: "__iterator_next", result: IrType.Dyn};
-	};
-
 	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType,
 			?library:String, ?symbol:String):Void {
-		var nativeLibrary = library == null ? "haxeon_runtime" : library,
-			nativeSymbol = symbol == null ? name : symbol;
+		var nativeLibrary = library ?? "haxeon_runtime", nativeSymbol = symbol ?? name;
 		for (native in natives)
 			if (native.name == name) {
 				if (native.arguments.length != arguments.length
@@ -1151,15 +1037,28 @@ class HlLower {
 	function loweringBody(fn:IrFunction):IrBody
 		return scratch.phiEdges.splitBody(fn.bodyIn(bodyTypes, scratch.bodyBuilder), scratch.bodyBuilder);
 
+	/** The body of the function being lowered, which every method that lowers part of it reads. */
+	inline function requireBody():IrBody {
+		var current = body;
+		if (current == null)
+			throw new InternalError("No function is being lowered");
+		return current;
+	}
+
 	function lowerFunction(source:IrBody):HlFunction {
-		body = source;
+		this.body = source;
+		var body = source;
 		nextLabel = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= nextLabel)
 				nextLabel = body.blockId(block) + 1;
 		// The analyses read the body as it is, so they share its graph.
 		var graph = scratch.graph.reset(body),
-			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull),
+			receiverClass = compiler.ir.analysis.IrNonNullFacts.receiverClass(body),
+			receiver = receiverClass != null
+				&& compiler.ir.analysis.IrNonNullFacts.isMethodReceiver(body, view.object(receiverClass)),
+			nonNull = compiler.ir.analysis.IrNonNullFacts.analyzeBody(body, true, graph, scratch.nonNull, receiver,
+				view.nonNull),
 			exactTypes = scratch.exactTypes.reset(body, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
@@ -1209,18 +1108,11 @@ class HlLower {
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
 			while (row >= 0 && row != terminator) {
-				var next = body.nextRow(row);
-				if (next < 0 || next == terminator)
-					break;
-				if (body.opcode(row) == IrOpcode.ToDyn) {
-					var boxed = body.output(row), value = body.operand(row, 0);
-					if (isArray(body.valueType(value)) && uses[boxed] == 1 && body.opcode(next) == IrOpcode.SafeCast
-						&& (body.operand(next, 0):Int) == (boxed:Int) && isArray(body.valueType(body.output(next)))) {
-						arrayRecasts[body.output(next)] = value;
-						unboxedArrays.add(boxed);
-					}
+				if (HlLoweringDecisions.isArrayRecast(body, row, uses)) {
+					arrayRecasts[body.output(body.nextRow(row))] = body.operand(row, 0);
+					unboxedArrays.add(body.output(row));
 				}
-				row = next;
+				row = body.nextRow(row);
 			}
 		}
 		var catchValues = compiler.ir.model.IrPassScratch.filledInts(scratch.catchValues, nextLabel, -1);
@@ -1265,13 +1157,13 @@ class HlLower {
 		viewedArrays.clear();
 		definedViews.clear();
 		hasViewedArrays = false;
-		loopBounds = null;
-		var valueArrayRead = compiler.ir.model.IrSymbol.of(VALUE_ARRAY_READ_I32).id;
+		arrayBounds.startFunction(body, graph);
+		var valueArrayRead = compiler.ir.model.IrSymbol.of(HlLoweringDecisions.VALUE_ARRAY_READ_I32).id;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.Call && body.aux(row) == valueArrayRead
-					&& inlineValueArraySlot(body, row) != null) {
+					&& HlLoweringDecisions.inlineValueArraySlot(body, row) != null) {
 					viewedArrays.set(body.operand(row, 0), true);
 					hasViewedArrays = true;
 				}
@@ -1320,31 +1212,19 @@ class HlLower {
 						case IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal:
 							fusedCondition = condition;
 						case IrOpcode.Call if (body.operandCount(last) == 2
-							&& (body.symbol(last).name == compiler.ir.analysis.IrExactTypeFacts.TEST
-							|| body.symbol(last).name == compiler.ir.names.IrReferenceIdentity.NAME)):
+							&& isPointerTest(HlLoweringDecisions.classifyCall(body.symbol(last).name))):
 							fusedCondition = condition;
 						default:
 					}
 			}
-			provenInRange.clear();
+			arrayBounds.startBlock();
 			elementOffsets.clear();
 			valueArrayViews.clear();
-			validatedArrayAccesses.clear();
 			var row = body.firstRow(block);
 			while (row >= 0 && row != terminator) {
 				var instructionStart = instructions.length, opcode = body.opcode(row);
-				if (!keepsArrayBounds(opcode))
-					provenInRange.clear();
-				var output = body.output(row);
-				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
-				// Emit an explicit check so the active handler works on every thread.
-				var receiver = switch opcode {
-					case IrOpcode.FieldGet, IrOpcode.FieldSet, IrOpcode.MethodCall, IrOpcode.InstanceClosure,
-						IrOpcode.ArrayGet, IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.IteratorNew,
-						IrOpcode.IteratorHasNext, IrOpcode.IteratorNext, IrOpcode.EnumIndex, IrOpcode.EnumField:
-						body.operand(row, 0);
-					default: IrValueId.of(-1);
-				};
+				arrayBounds.step(row);
+				var output = body.output(row), receiver = HlLoweringDecisions.receiverOf(body, row);
 				if (receiver.exists() && scalarOptionals.get(receiver) == null && !nonNull.has(row))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				lowerRow(row, opcode, output, id, fusedCondition, registers, registerTypes, instructions, uses,
@@ -1528,6 +1408,7 @@ class HlLower {
 	 * Assignments are recorded in position order, so those at `position` are the last ones.
 	 */
 	function assignBindings(binding:Int, nextBinding:Array<Int>, position:Int):Void {
+		var body = requireBody();
 		var debugAssignments = scratch.debugAssignments, assignmentBindings = scratch.assignmentBindings;
 		while (binding >= 0) {
 			var identity = body.bindingIdentity(binding), seen = false, index = debugAssignments.length;
@@ -1556,6 +1437,7 @@ class HlLower {
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
 			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, exactTypes:compiler.ir.analysis.IrExactTypeFacts,
 			firstBinding:Array<Int>, arrayRecasts:Array<Int>, catchValues:Array<Int>):Void {
+		var body = requireBody();
 		var scalarOptionals = scratch.scalarLocals;
 		switch opcode {
 			case IrOpcode.Phi:
@@ -1615,12 +1497,11 @@ class HlLower {
 				instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes),
 					body.aux(row) == 1));
 			case IrOpcode.ConstNull:
-				switch body.valueType(output) {
-					case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers,
-						registerTypes), internInt(0)));
-					default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers,
-						registerTypes)));
-				}
+				if (HlLoweringDecisions.isEnumTag(body.valueType(output)))
+					instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+						internInt(HlLoweringDecisions.NULL_ENUM_TAG)));
+				else
+					instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
 			case IrOpcode.TypeValue:
 				instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes),
 					internType(body.typeOperand(row))));
@@ -1718,7 +1599,7 @@ class HlLower {
 					requireFunction("__iterator_has_next"), requireRegister(body.operand(row, 0), registers)));
 			case IrOpcode.IteratorNext:
 				var destination = defineRegister(output, registers, registerTypes),
-					nextNative = iteratorNextNative(body.valueType(output));
+					nextNative = HlLoweringDecisions.iteratorNextNative(body.valueType(output));
 				if ((switch (nextNative.result) {
 					case IrType.Dyn: true;
 					default: false;
@@ -1751,7 +1632,7 @@ class HlLower {
 					instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"),
 						requireRegister(closure, registers)));
 					instructions.push(HlInstruction.JumpTrue(callable, valid));
-					lowerStringLiteral(error, "Cannot call a non-function value", registerTypes, instructions);
+					lowerStringLiteral(error, HlLoweringDecisions.CALL_ERROR, registerTypes, instructions);
 					instructions.push(HlInstruction.Throw(error));
 					instructions.push(HlInstruction.Label(valid));
 				}
@@ -1833,9 +1714,8 @@ class HlLower {
 				instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
 					requireRegister(array, registers), requireRegister(index, registers)));
 				if (rawArrayShift(body.valueType(array)) != null) {
-					var key = '${array}:${index}';
-					provenInRange.set(key, true);
-					validatedArrayAccesses.set(key, true);
+					arrayBounds.prove(array, index);
+					arrayBounds.validate(array, index);
 				}
 			case IrOpcode.ArraySet:
 				var array = body.operand(row, 0), index = body.operand(row, 1), value = body.operand(row, 2);
@@ -1850,32 +1730,29 @@ class HlLower {
 					requireRegister(body.operand(row, 0), registers)));
 			case IrOpcode.MakeEnum:
 				var constructor = body.auxInt(row, 1), outputType = body.valueType(output);
-				switch outputType {
-					case EnumTag(_):
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
-							internInt(constructor + 1)));
-					default:
-						var typeName = body.symbol(row).name,
-							destination = defineRegister(output, registers, registerTypes),
-							enumConstructor = requireEnumConstructor(typeName, outputType, constructor),
-							args = operandRegisters(row, 0, registers);
-						if (args.length == 0)
-							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
-						else
-							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+				if (HlLoweringDecisions.isEnumTag(outputType))
+					instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+						internInt(constructor + HlLoweringDecisions.ENUM_TAG_BIAS)));
+				else {
+					var typeName = body.symbol(row).name,
+						destination = defineRegister(output, registers, registerTypes),
+						enumConstructor = requireEnumConstructor(typeName, outputType, constructor),
+						args = operandRegisters(row, 0, registers);
+					if (HlLoweringDecisions.isEnumConstant(body, row))
+						lowerEnumConstant(destination, typeName, enumConstructor, instructions);
+					else
+						instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
 				}
 			case IrOpcode.EnumIndex:
 				var value = body.operand(row, 0);
-				switch body.valueType(value) {
-					case EnumTag(_):
-						var one = temporaryRegister(IrType.I32, registerTypes);
-						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
-						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers), one));
-					default:
-						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
-				}
+				if (HlLoweringDecisions.isEnumTag(body.valueType(value))) {
+					var bias = temporaryRegister(IrType.I32, registerTypes);
+					instructions.push(HlInstruction.LoadInt(bias, internInt(HlLoweringDecisions.ENUM_TAG_BIAS)));
+					instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
+						requireRegister(value, registers), bias));
+				} else
+					instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
+						requireRegister(value, registers)));
 			case IrOpcode.EnumField:
 				instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes),
 					requireRegister(body.operand(row, 0), registers), body.auxInt(row, 0), body.auxInt(row, 1)));
@@ -1885,78 +1762,163 @@ class HlLower {
 	}
 
 	/** The registers of operands `from` on of `row`, in order. */
-	function operandRegisters(row:Int, from:Int, registers:Array<Int>):Array<Int>
+	function operandRegisters(row:Int, from:Int, registers:Array<Int>):Array<Int> {
+		var body = requireBody();
 		return [for (index in from...body.operandCount(row)) requireRegister(body.operand(row, index), registers)];
+	}
 
 	function lowerCall(row:Int, output:IrValueId, block:Int, fusedCondition:Int, registers:Array<Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>, uses:Array<Int>,
 			nonNull:compiler.ir.model.IrPassScratch.IrValueMarks, firstBinding:Array<Int>):Void {
-		var functionName = body.symbol(row).name;
-		if ((output:Int) == fusedCondition && functionName == compiler.ir.names.IrReferenceIdentity.NAME) {
-			// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
-			var pointers = identityPointers(row, instructions, registers, registerTypes);
-			fusedPending = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
-			fusedPendingFloat = false;
-			return;
-		}
+		var body = requireBody();
+		var functionName = body.symbol(row).name, kind = HlLoweringDecisions.classifyCall(functionName);
 		if ((output:Int) == fusedCondition) {
-			// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
-			var actual = temporaryRegister(IrType.TypeRef, registerTypes);
-			instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
-			fusedPending = comparisonJump(2, false, false, actual, requireRegister(body.operand(row, 1), registers),
-				-1);
+			switch kind {
+				case ReferenceIdentity:
+					// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
+					var pointers = identityPointers(row, instructions, registers, registerTypes);
+					fusedPending = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
+				case ExactTypeTest:
+					// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
+					var actual = temporaryRegister(IrType.TypeRef, registerTypes);
+					instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
+					var expected = requireRegister(body.operand(row, 1), registers);
+					fusedPending = comparisonJump(2, false, false, actual, expected, -1);
+				default:
+					throw new InternalError('Call of $functionName fused into a branch');
+			}
 			fusedPendingFloat = false;
 			return;
 		}
-		var inlineSlot = functionName == VALUE_ARRAY_READ_I32 ? inlineValueArraySlot(body, row) : null;
-		if (functionName == compiler.ir.names.IrReceiverCheck.NAME && nonNull.has(row)) {
-			// A previous successful dereference or check already proved this SSA receiver non-null.
-		} else if (StringTools.startsWith(functionName, VALUE_ARRAY_READ) && uses[output] == 0
-			&& firstBinding[output] < 0 && usedReadNearby(body, row, uses)) {
-			// A field of the element nothing reads; the read beside it checks the element the same way.
-		} else if (functionName == VALUE_ARRAY_VALIDATE && scalarReadFollows(body, row)) {
-			// The read checks the same element the same way (`realtime_value_array_check_read`).
-		} else if (inlineSlot != null) {
-			lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
-		} else if (!lowerRuntimeFastPath(row, output, functionName, instructions, registers, registerTypes)) {
-			var destination = defineRegister(output, registers, registerTypes);
-			var functionIndex = requireFunction(functionName);
-			var args = operandRegisters(row, 0, registers);
-			if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
-				for (index in 0...args.length)
-					switch body.valueType(body.operand(row, index)) {
-						case Function(_, _):
-							var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
-							instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
-							args[index] = dynamicClosure;
-						default:
-					}
-			switch args.length {
-				case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
-				case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
-				case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
-				default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
-			}
+		switch kind {
+			case ReceiverCheck:
+				// A previous successful dereference or check may already have proved this SSA receiver non-null.
+				if (!nonNull.has(row))
+					instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
+			case StringLength:
+				// The string's `length` read in place, as HashLink reads the field: a null string fails the check, which names
+				// the field, unless a dereference before it already proved the string.
+				var header = temporaryRegisterType(internRuntimeHeader(BytesHeader), registerTypes);
+				instructions.push(HlInstruction.UnsafeCast(header, requireRegister(body.operand(row, 0), registers)));
+				if (!nonNull.has(row))
+					instructions.push(HlInstruction.NullCheck(header));
+				instructions.push(HlInstruction.FieldGet(defineRegister(output, registers, registerTypes), header, 1));
+			case ReferenceIdentity:
+				var pointers = identityPointers(row, instructions, registers, registerTypes);
+				lowerEqualityBool(pointers[0], pointers[1], output, instructions, registers, registerTypes);
+			case ExactTypeTest:
+				// A plain object of exactly the class: its type pointer equals the class's. Null reads as `void`, a virtual as its own
+				// virtual type and a boxed value as its scalar type, so none of them matches an object class.
+				var actual = temporaryRegister(IrType.TypeRef, registerTypes);
+				instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
+				lowerEqualityBool(actual, requireRegister(body.operand(row, 1), registers), output, instructions,
+					registers,
+					registerTypes);
+			case WordBits:
+				if (body.operandCount(row) != 1 || !compiler.ir.passes.scalars.IrScalarWordBits.valid(functionName,
+					body.valueType(body.operand(row, 0)), body.valueType(output)))
+					throw new InternalError("Invalid scalar word transport signature");
+				var scalar = functionName == compiler.ir.passes.scalars.IrScalarWordBits.PACK
+					? body.valueType(body.operand(row, 0)) : body.valueType(output);
+				if (compiler.ir.verify.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
+					throw new InternalError("HashLink callbacks belong in the reference lane");
+				instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case LaneReference:
+				instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case ScalarRefAddress:
+				instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case ScalarRefLoad:
+				instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
+					requireRegister(body.operand(row, 0), registers)));
+			case ScalarRefStore:
+				instructions.push(HlInstruction.Setref(requireRegister(body.operand(row, 0), registers),
+					requireRegister(body.operand(row, 1), registers)));
+			case ArrayPush, BytesGet, BytesSet:
+				lowerRuntimeFastPath(row, output, functionName, kind, instructions, registers, registerTypes);
+			case ValueArrayRead:
+				var inlineSlot = functionName == HlLoweringDecisions.VALUE_ARRAY_READ_I32
+					? HlLoweringDecisions.inlineValueArraySlot(body, row) : null;
+				if (uses[output] == 0 && firstBinding[output] < 0
+					&& HlLoweringDecisions.usedReadNearby(body, row, uses)) {
+					// A field of the element nothing reads; the read beside it checks the element the same way.
+				} else if (inlineSlot != null)
+					lowerValueArrayRead(row, output, inlineSlot, block, instructions, registers, registerTypes);
+				else
+					lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
+			case ValueArrayValidate:
+				// When a read follows, it checks the same element the same way (`realtime_value_array_check_read`).
+				if (!HlLoweringDecisions.scalarReadFollows(body, row))
+					lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
+			case Plain:
+				lowerPlainCall(row, output, functionName, instructions, registers, registerTypes);
+		}
+	}
+
+	/** Whether a call of kind `kind` compares two pointers, so that ending its block it can become the branch itself. */
+	static function isPointerTest(kind:HlCallKind):Bool
+		return switch kind {
+			case ExactTypeTest, ReferenceIdentity: true;
+			default: false;
+		};
+
+	/** Bool `output`: whether registers `left` and `right` are equal. */
+	function lowerEqualityBool(left:Int, right:Int, output:IrValueId, instructions:Array<HlInstruction>,
+			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var result = defineRegister(output, registers, registerTypes), yes = freshLabel(), done = freshLabel();
+		instructions.push(HlInstruction.JumpEqual(left, right, yes));
+		instructions.push(HlInstruction.LoadBool(result, false));
+		instructions.push(HlInstruction.Jump(done));
+		instructions.push(HlInstruction.Label(yes));
+		instructions.push(HlInstruction.LoadBool(result, true));
+		instructions.push(HlInstruction.Label(done));
+	}
+
+	/** A call of function `functionName` with `row`'s operands. */
+	function lowerPlainCall(row:Int, output:IrValueId, functionName:String, instructions:Array<HlInstruction>,
+			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
+		var destination = defineRegister(output, registers, registerTypes);
+		var functionIndex = requireFunction(functionName);
+		var args = operandRegisters(row, 0, registers);
+		if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
+			for (index in 0...args.length)
+				switch body.valueType(body.operand(row, index)) {
+					case Function(_, _):
+						var dynamicClosure = temporaryRegister(IrType.Dyn, registerTypes);
+						instructions.push(HlInstruction.ToDyn(dynamicClosure, args[index]));
+						args[index] = dynamicClosure;
+					default:
+				}
+		switch args.length {
+			case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
+			case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
+			case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
+			default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 		}
 	}
 
 	function lowerCNativeCall(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Void {
+		var body = requireBody();
 		var functionName = body.symbol(row).name, argumentCount = body.operandCount(row);
 		var native = cNatives.get(functionName);
 		if (native == null)
 			throw new InternalError('Unknown ordinary C function "$functionName"');
-		var invocation = cNativeInvocation(native, argumentCount);
+		var invocation = HlLoweringDecisions.cNativeInvocation(native, argumentCount);
 		var callArguments = [for (_ in 0...3) temporaryRegister(IrType.RawPtr, registerTypes)];
 		for (index in 0...3)
 			instructions.push(HlInstruction.LoadString(callArguments[index], internString(invocation.strings[index])));
-		if (invocation.nullable != null) {
+		var resultNullable = invocation.nullable;
+		if (resultNullable != null) {
 			var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
 				release = temporaryRegister(IrType.RawPtr, registerTypes),
 				nullable = temporaryRegister(IrType.Bool, registerTypes);
 			instructions.push(HlInstruction.LoadString(ownership, internString(invocation.strings[3])));
 			instructions.push(HlInstruction.LoadString(release, internString(invocation.strings[4])));
-			instructions.push(HlInstruction.LoadBool(nullable, invocation.nullable));
+			instructions.push(HlInstruction.LoadBool(nullable, resultNullable));
 			callArguments.push(ownership);
 			callArguments.push(release);
 			if (invocation.strings.length > 5) {
@@ -1984,59 +1946,9 @@ class HlLower {
 			instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
 	}
 
-	/**
-	 * How a call of ordinary C function `native` with `argumentCount` arguments goes through the runtime's dispatch: the invoke
-	 * native, the strings (library, symbol, signature, then for a pointer result its ownership, release and length) and the
-	 * nullable flag, which go before the boxed arguments with the flag last, the type the invoker returns, and whether
-	 * that is cast to the result. Both HashLink backends call it so.
-	 */
-	public static function cNativeInvocation(native:IrCNative, argumentCount:Int):{
-		invoker:String,
-		strings:Array<String>,
-		nullable:Null<Bool>,
-		result:IrType,
-		castsResult:Bool,
-		isVoid:Bool
-	} {
-		var functionName = native.name;
-		for (type in native.arguments)
-			if (unsupportedCDispatchArgument(type))
-				throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
-		var isVoid = switch (native.result) {
-			case Void: true;
-			default: false;
-		};
-		if (!isVoid && unsupportedCDispatchResult(native.result))
-			throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
-		var strings = [native.library, native.symbol, native.signature];
-		var pointerResult = isNativePointer(native.result),
-			bytesResult = isManagedPointerBytes(native),
-			aggregateResult = isAggregateResult(native),
-			utf8Result = isUtf8Result(native);
-		var nullable:Null<Bool> = null;
-		if (pointerResult || bytesResult || utf8Result) {
-			strings.push(native.pointerOwnership);
-			strings.push(native.pointerRelease == null ? "" : native.pointerRelease);
-			if (bytesResult)
-				strings.push(native.pointerLength);
-			nullable = native.pointerNullable;
-		}
-		return {
-			invoker: pointerResult ? '__c_native_pointer_invoke_${argumentCount}' : bytesResult
-				? '__c_native_bytes_invoke_${argumentCount}' : aggregateResult
-				? '__c_native_aggregate_invoke_${argumentCount}' : utf8Result
-				? '__c_native_utf8_invoke_${argumentCount}' : '__c_native_invoke_${argumentCount}',
-			strings: strings,
-			nullable: nullable,
-			result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
-				? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
-			castsResult: !(pointerResult || bytesResult || aggregateResult || utf8Result),
-			isVoid: isVoid
-		};
-	}
-
 	function lowerFieldGet(row:Int, output:IrValueId, registers:Array<Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Void {
+		var body = requireBody();
 		var object = body.operand(row, 0), fieldName = body.symbol(row).name, local = scratch.scalarLocals.get(object);
 		if (local != null) {
 			var source:Int = cast local.fields.get(fieldName);
@@ -2067,7 +1979,7 @@ class HlLower {
 				requireObjectField(objectType, object, fieldName)));
 		// Inline records produce an HSTRUCT pointer into their owner. Only scalar
 		// narrow fields need sign or zero extension after the field load.
-		if (nativeLayout != null && nativeLayout.size < 4) {
+		if (nativeLayout != null && HlLoweringDecisions.extendsNarrowStorage(nativeLayout)) {
 			var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 				bits = nativeLayout.size * 8;
 			instructions.push(HlInstruction.LoadInt(maskOrShift,
@@ -2178,6 +2090,7 @@ class HlLower {
 	**/
 	function scopeEndPosition(binding:Int, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
 			lastByScope:Array<Int>):Int {
+		var body = requireBody();
 		// Per binding, as a function's assignments of a variable share it: -2 until it is found.
 		var lastInScope = lastByScope[binding];
 		if (lastInScope == -2) {
@@ -2213,6 +2126,7 @@ class HlLower {
 		its continuation regardless of block creation order.
 	**/
 	function layOut():Array<Int> {
+		var body = requireBody();
 		var size = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= size)
@@ -2285,6 +2199,7 @@ class HlLower {
 
 	/** Puts block `id` on the walk's stack, with its children (`visitPostorder`). */
 	function pushPostorder(id:Int):Void {
+		var body = requireBody();
 		var children = scratch.children;
 		scratch.stackBlocks.push(id);
 		scratch.stackNext.push(children.length);
@@ -2335,6 +2250,7 @@ class HlLower {
 	 * that is a jump can carry moves; a block whose moves go to more than one block has the target -2.
 	 */
 	function groupPhiMoves():Void {
+		var body = requireBody();
 		var size = 0, total = 0;
 		for (block in 0...body.blockCount()) {
 			if (body.blockId(block) >= size)
@@ -2506,12 +2422,6 @@ class HlLower {
 			default: throw new InternalError("Not a comparison jump");
 		};
 
-	static function isArray(type:IrType):Bool
-		return switch type {
-			case Array(_): true;
-			default: false;
-		};
-
 	static function isFloat(type:IrType):Bool
 		return switch type {
 			case F32 | F64: true;
@@ -2552,6 +2462,7 @@ class HlLower {
 	 * `uses` counts every read of a value; a debug binding keeps the offset, so a debugger can show it.
 	 */
 	function foldPointerOffsets(uses:Array<Int>):Void {
+		var body = requireBody();
 		var limit = body.valueLimit(),
 			pointers = compiler.ir.model.IrPassScratch.filledInts(scratch.foldedPointers, limit, -1),
 			offsets = compiler.ir.model.IrPassScratch.filledInts(scratch.foldedOffsets, limit, -1),
@@ -2609,6 +2520,7 @@ class HlLower {
 	var memoryBase = 0;
 
 	function defineRegister(value:IrValueId, registers:Array<Int>, types:Array<Int>):Int {
+		var body = requireBody();
 		if (registers[value] >= 0)
 			return registers[value];
 		var index = types.length;
@@ -2645,18 +2557,15 @@ class HlLower {
 		instructions.push(HlInstruction.Label(done));
 	}
 
-	/** Array and index pairs, as `arrayId:indexId`, already known to be in range at this point of the block being lowered. */
-	final provenInRange:Map<String, Bool> = [];
-
-	/** Historical validation within this block, preserving compound-write semantics after a callee shrinks an array. */
-	final validatedArrayAccesses:Map<String, Bool> = [];
+	/** The array bounds proved and validated in the block being lowered, and the loops' proofs of the function. */
+	final arrayBounds:HlArrayBounds;
 
 	/**
-	 * The byte-offset register of every array and index pair accessed so far in the block being lowered. The offset
-	 * depends only on the index, so it stays valid however much code runs in between. Read validation is recorded
-	 * separately, since fused reads no longer need an offset register.
+	 * The byte-offset register of every array and index pair accessed so far in the block being lowered, by its number
+	 * (`HlArrayBounds.pair`). The offset depends only on the index, so it stays valid however much code runs in between.
+	 * Read validation is recorded separately, since fused reads no longer need an offset register.
 	 */
-	final elementOffsets:Map<String, Int> = [];
+	final elementOffsets:Map<Int, Int> = [];
 
 	/** The value array each array value's header leads to, resolved in the block being lowered (`valueArrayView`). */
 	final valueArrayViews:Map<Int, ValueArrayView> = [];
@@ -2667,42 +2576,6 @@ class HlLower {
 	final definedViews:Map<Int, ValueArrayView> = [];
 
 	var hasViewedArrays = false;
-
-	/** The proofs of the loops' array indices of the function being lowered, made when a read first asks for one. */
-	var loopBounds:Null<compiler.ir.analysis.IrLoopBounds> = null;
-
-	@:processWide("an empty set of calls known not to resize arrays, never added to")
-	static final noPureCalls:Map<String, Bool> = [];
-
-	/** Whether the loops around `block` prove `index` in range of `array` (`IrLoopBounds`). */
-	function provenByLoop(array:IrValueId, index:IrValueId, block:Int):Bool {
-		var bounds = loopBounds;
-		if (bounds == null) {
-			// The proofs read the function as objects: the body is decoded for them, once per function that asks.
-			bounds = new compiler.ir.analysis.IrLoopBounds(body.toFunction(), noPureCalls);
-			loopBounds = bounds;
-		}
-		return bounds.proven(valueOf(array), valueOf(index), block);
-	}
-
-	/** `value` of the body being lowered as an `IrValue`, for an analysis that reads objects. */
-	function valueOf(value:IrValueId):IrValue
-		return new IrValue(value, body.valueName(value), body.valueType(value));
-
-	/**
-	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
-	 * including every call, forgets them. Array writes only ever grow an array, so they keep them.
-	 */
-	public static function keepsArrayBounds(opcode:IrOpcode):Bool
-		return switch opcode {
-			case IrOpcode.ConstVoid, IrOpcode.ConstInt, IrOpcode.ConstFloat, IrOpcode.ConstString, IrOpcode.ConstBool,
-				IrOpcode.ConstNull, IrOpcode.TypeValue, IrOpcode.ToDyn, IrOpcode.IntToFloat, IrOpcode.IntToInt64,
-				IrOpcode.FloatToInt, IrOpcode.FloatToFloat, IrOpcode.Add, IrOpcode.Sub, IrOpcode.Mul, IrOpcode.BitAnd,
-				IrOpcode.BitXor, IrOpcode.BitOr, IrOpcode.ShiftLeft, IrOpcode.ShiftRight, IrOpcode.UnsignedShiftRight,
-				IrOpcode.Less, IrOpcode.LessEqual, IrOpcode.Equal, IrOpcode.FieldGet, IrOpcode.ArrayGet,
-				IrOpcode.ArraySet, IrOpcode.ArraySize, IrOpcode.Phi: true;
-			default: false;
-		};
 
 	/**
 	 * An Int or Float array write with the bounds test in the bytecode. Reads use OGetArray, whose x86-64 JIT
@@ -2721,13 +2594,13 @@ class HlLower {
 	 */
 	function lowerRawArrayWrite(array:IrValueId, index:IrValueId, source:Int, instructions:Array<HlInstruction>,
 			registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
 		var arrayType = body.valueType(array), elementShift = rawArrayShift(arrayType);
 		if (elementShift == null)
 			throw new InternalError("Inline array access requires an Int or Float array");
 		var arrayRegister = requireRegister(array, registers),
-			indexRegister = requireRegister(index, registers),
-			key = '${array}:${index}';
-		if (!provenInRange.exists(key) && !validatedArrayAccesses.exists(key)) {
+			indexRegister = requireRegister(index, registers);
+		if (!arrayBounds.isProven(array, index) && !arrayBounds.isValidated(array, index)) {
 			var outOfRange = freshLabel(),
 				inRange = freshLabel(),
 				size = temporaryRegister(IrType.I32, registerTypes),
@@ -2738,10 +2611,10 @@ class HlLower {
 			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(arrayType, "ensure")),
 				arrayRegister, indexRegister));
 			instructions.push(HlInstruction.Label(inRange));
-			provenInRange.set(key, true);
+			arrayBounds.prove(array, index);
 		}
-		validatedArrayAccesses.set(key, true);
-		var offset = elementOffsets.get(key);
+		arrayBounds.validate(array, index);
+		var key = arrayBounds.pair(array, index), offset = elementOffsets.get(key);
 		if (offset == null) {
 			var shift = temporaryRegister(IrType.I32, registerTypes);
 			offset = temporaryRegister(IrType.I32, registerTypes);
@@ -2754,10 +2627,10 @@ class HlLower {
 		instructions.push(HlInstruction.SetMem(data, offset, source));
 	}
 
-	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	/** The two references a reference-identity test compares, as raw pointers: a virtual is compared by the object it wraps. */
 	function identityPointers(row:Int, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Array<Int> {
+		var body = requireBody();
 		var pointers:Array<Int> = [];
 		for (index in 0...body.operandCount(row)) {
 			var argument = body.operand(row, index), source = requireRegister(argument, registers);
@@ -2775,86 +2648,19 @@ class HlLower {
 		return pointers;
 	}
 
-	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, instructions:Array<HlInstruction>,
-			registers:Array<Int>, registerTypes:Array<Int>):Bool {
-		if (compiler.ir.passes.scalars.IrScalarWordBits.matches(name)) {
-			if (body.operandCount(row) != 1 || !compiler.ir.passes.scalars.IrScalarWordBits.valid(name,
-				body.valueType(body.operand(row, 0)), body.valueType(output)))
-				throw new InternalError("Invalid scalar word transport signature");
-			var scalar = name == compiler.ir.passes.scalars.IrScalarWordBits.PACK
-				? body.valueType(body.operand(row, 0)) : body.valueType(output);
-			if (compiler.ir.verify.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
-				throw new InternalError("HashLink callbacks belong in the reference lane");
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.values.IrValueLaneReference.PACK
-			|| name == compiler.ir.passes.values.IrValueLaneReference.UNPACK) {
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.analysis.IrExactTypeFacts.TEST) {
-			// A plain object of exactly the class: its type pointer equals the class's. Null reads as `void`, a virtual as its own
-			// virtual type and a boxed value as its scalar type, so none of them matches an object class.
-			var actual = temporaryRegister(IrType.TypeRef, registerTypes),
-				result = defineRegister(output, registers, registerTypes),
-				yes = freshLabel(),
-				done = freshLabel();
-			instructions.push(HlInstruction.GetType(actual, requireRegister(body.operand(row, 0), registers)));
-			instructions.push(HlInstruction.JumpEqual(actual, requireRegister(body.operand(row, 1), registers), yes));
-			instructions.push(HlInstruction.LoadBool(result, false));
-			instructions.push(HlInstruction.Jump(done));
-			instructions.push(HlInstruction.Label(yes));
-			instructions.push(HlInstruction.LoadBool(result, true));
-			instructions.push(HlInstruction.Label(done));
-			return true;
-		}
-		if (name == compiler.ir.names.IrReferenceIdentity.NAME) {
-			var pointers = identityPointers(row, instructions, registers, registerTypes);
-			var result = defineRegister(output, registers, registerTypes),
-				yes = freshLabel(),
-				done = freshLabel();
-			instructions.push(HlInstruction.JumpEqual(pointers[0], pointers[1], yes));
-			instructions.push(HlInstruction.LoadBool(result, false));
-			instructions.push(HlInstruction.Jump(done));
-			instructions.push(HlInstruction.Label(yes));
-			instructions.push(HlInstruction.LoadBool(result, true));
-			instructions.push(HlInstruction.Label(done));
-			return true;
-		}
-		if (name == compiler.ir.names.IrReceiverCheck.NAME) {
-			instructions.push(HlInstruction.NullCheck(requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.scalars.IrHlScalarRef.ADDRESS) {
-			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.scalars.IrHlScalarRef.LOAD) {
-			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
-				requireRegister(body.operand(row, 0), registers)));
-			return true;
-		}
-		if (name == compiler.ir.passes.scalars.IrHlScalarRef.STORE) {
-			instructions.push(HlInstruction.Setref(requireRegister(body.operand(row, 0), registers),
-				requireRegister(body.operand(row, 1), registers)));
-			return true;
-		}
-		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64"
-			|| name == "__array_push_bool"
-			|| name == "__array_push_bytes" || name == "__array_push_ref";
-		var get = name == "__bytes_get", set = name == "__bytes_try_set";
-		if (!push && !get && !set)
-			return false;
+	/** An array push or byte read or write: the common case inline, the native on the slow path. */
+	function lowerRuntimeFastPath(row:Int, output:IrValueId, name:String, kind:HlCallKind,
+			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var body = requireBody();
+		var push = kind == ArrayPush, get = kind == BytesGet;
 		var destination = defineRegister(output, registers, registerTypes);
 		var args = operandRegisters(row, 0, registers);
 		var slow = freshLabel(),
 			done = freshLabel();
 		var size = temporaryRegister(IrType.I32, registerTypes);
-		instructions.push(HlInstruction.JumpNull(args[0], slow));
+		// The array was checked before the row (`HlLoweringDecisions.receiverOf`); null bytes take the native.
+		if (!push)
+			instructions.push(HlInstruction.JumpNull(args[0], slow));
 		// The header is read through an object type laid out like it: one field access per header field. The fast path falls
 		// through; the slow path is the native, which keeps allocation and error behavior.
 		var header = temporaryRegisterType(internRuntimeHeader(push ? ArrayHeader : BytesHeader), registerTypes);
@@ -2894,7 +2700,6 @@ class HlLower {
 		else
 			instructions.push(HlInstruction.CallN(destination, requireFunction(name), args));
 		instructions.push(HlInstruction.Label(done));
-		return true;
 	}
 
 	function temporaryRegister(type:IrType, types:Array<Int>):Int {
@@ -2909,53 +2714,11 @@ class HlLower {
 		return index;
 	}
 
-	static function unsupportedCDispatchArgument(type:IrType):Bool
-		return switch type {
-			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
-				IrType.Abstract("realtime_bytes"),
-				IrType.Abstract("native_pointer"), IrType.Abstract("native_callback"): false;
-			default: true;
-		};
-
-	static function unsupportedCDispatchResult(type:IrType):Bool
-		return switch type {
-			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
-				IrType.Abstract("native_pointer"),
-				IrType.Abstract("realtime_bytes"): false;
-			default: true;
-		};
-
-	static function isNativePointer(type:IrType):Bool
-		return switch type {
-			case IrType.Abstract("native_pointer"): true;
-			case _: false;
-		};
-
-	static function isManagedPointerBytes(native:IrCNative):Bool
-		return native.pointerLength != null && switch native.result {
-			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
-			case _: false;
-		};
-
 	function requireRegister(value:IrValueId, registers:Array<Int>):Int {
 		var register = (value:Int) >= 0 && (value:Int) < registers.length ? registers[value] : -1;
 		if (register < 0)
 			throw new InternalError('IR value ${(value : Int)} is used before definition');
 		return register;
-	}
-
-	static function isAggregateResult(native:IrCNative):Bool
-		return native.pointerLength == null && switch (native.result) {
-			case IrType.ManagedBytes, IrType.Abstract("realtime_bytes"): true;
-			case _: false;
-		};
-
-	static function isUtf8Result(native:IrCNative):Bool {
-		var separator = native.signature.indexOf(">");
-		if (separator < 0)
-			return false;
-		var result = native.signature.substr(separator + 1);
-		return StringTools.startsWith(result, "13") || StringTools.startsWith(result, "14");
 	}
 
 	// Everything below that asks the symbol tables or the function layout for an index also notes the question and the answer, when
@@ -3333,8 +3096,9 @@ class HlLower {
 				return;
 			seen.set(name, true);
 			result.push(name);
-			if (interfaceBases.exists(name))
-				for (base in interfaceBases.get(name))
+			var bases = interfaceBases.get(name);
+			if (bases != null)
+				for (base in bases)
 					visit(base);
 		}
 		for (name in names)
@@ -3342,8 +3106,12 @@ class HlLower {
 		return result;
 	}
 
-	function record(request:HlSymbolRequest):Void
-		requestKeys.record(request, recordedKeys, recordedAnswers);
+	/** Records `request` of the function being lowered, when lowering records them. */
+	function record(request:HlSymbolRequest):Void {
+		var keys = recordedKeys;
+		if (keys != null)
+			requestKeys.record(request, keys, recordedAnswers);
+	}
 
 	function addFunctionName(name:String, index:Int):Void {
 		if (functionIndices.exists(name))
@@ -3352,20 +3120,13 @@ class HlLower {
 	}
 
 	function requireFunction(name:String):Int {
-		if (!functionIndices.exists(name))
-			throw new InternalError('Unknown IR function "$name"');
 		var index = functionIndices.get(name);
+		if (index == null)
+			throw new InternalError('Unknown IR function "$name"');
 		if (recordedKeys != null)
 			record(FunctionRef(name, index));
 		return index;
 	}
-}
-
-/** A value array scalar slot read inline: its bit offset in the element, its width in bits and whether it is signed. */
-typedef InlineValueSlot = {
-	final offset:Int;
-	final width:Int;
-	final signed:Bool;
 }
 
 /** A value array as raw memory (null for a header that is no value array's) and its stride in bytes. */

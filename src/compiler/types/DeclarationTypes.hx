@@ -58,6 +58,27 @@ class DeclaredTypes implements DeclarationTypes {
 	public function new(declarations:DeclarationIndex)
 		this.declarations = declarations;
 
+	/**
+	 * Forgets what was resolved for `fn` and its arguments, which a program made from this index's replaced
+	 * (`SemanticProgram.replaceBodies`): the index outlives the programs made from it, and a replaced declaration kept as a key
+	 * would keep its whole syntax tree alive.
+	 */
+	public function forgetFunction(fn:AstFunction):Void {
+		resultTypes.remove(fn);
+		for (argument in fn.arguments)
+			argumentTypesByArgument.remove(argument);
+	}
+
+	/** Forgets what was resolved for `field`, which a program made from this index's replaced, as `forgetFunction` does. */
+	public function forgetField(field:AstField):Void
+		fieldTypes.remove(field);
+
+	/** Forgets what was resolved for the constructors of `decl`, which a program made from this index's replaced. */
+	public function forgetEnum(decl:compiler.syntax.Ast.AstEnum):Void
+		for (enumCase in decl.cases)
+			for (parameter in enumCase.params)
+				enumParameterTypes.remove(parameter);
+
 	public function fieldType(owner:String, field:AstField, ?substitutions:Map<String, CompilerType>):CompilerType {
 		var shared = declarations.resolvesShareable(substitutions);
 		var cached = shared ? fieldTypes.get(field) : null;

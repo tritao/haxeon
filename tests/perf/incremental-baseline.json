@@ -1,18 +1,18 @@
 {
-	"about": "scripts/perf-guard.py, incremental part: the compile server built in release mode from the checkout, compiling a copy of the frozen input (self-compile-baseline.json's input_revision) through cold, no-op, body-edit, signature-edit and late body-edit builds. Measured on Linux x86-64; update with scripts/perf-guard.py --update in the commit that moves a value. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
+	"about": "scripts/perf-guard.py, incremental part: the compile server built in release mode from the checkout, compiling a copy of the frozen input (self-compile-baseline.json's input_revision) through cold, no-op, body-edit, signature-edit and late body-edit builds. Measured on Linux x86-64; scripts/perf-guard.py --update writes the metrics that improved beyond their tolerance, --raise=METRIC=REASON one that is higher on purpose with its reason (raise_reason), in the commit that moves it. Tolerances are fractions of the value (tolerance) or counts (tolerance_abs).",
 	"metrics": {
 		"cold_allocated_bytes": {
-			"value": 2685919056,
+			"value": 2745602592,
 			"tolerance": 0.02,
 			"why": "A cold build in a session that keeps its state: deterministic for a given source tree; the slack absorbs ordinary code growth."
 		},
 		"first_noop_allocated_bytes": {
-			"value": 243598232,
+			"value": 161344168,
 			"tolerance": 0.02,
 			"why": "The first rebuild after the cold build, with nothing changed: deterministic. It should cost what the next no-op costs; while it does more, a fix shows here as an improvement."
 		},
 		"noop_allocated_bytes": {
-			"value": 241488608,
+			"value": 141618376,
 			"tolerance": 0.02,
 			"why": "A no-op rebuild of a warm session: deterministic; it reads and compares the sources and reuses the module."
 		},
@@ -27,7 +27,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"body_edit_allocated_bytes": {
-			"value": 545383672,
+			"value": 411330392,
 			"tolerance": 0.02,
 			"why": "A body-only edit of the entry module: deterministic for a given source tree."
 		},
@@ -47,12 +47,12 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"signature_edit_allocated_bytes": {
-			"value": 1412044344,
+			"value": 1175745048,
 			"tolerance": 0.03,
 			"why": "An optional argument added to InternalError's constructor, which most modules call: deterministic; the slack absorbs code growth."
 		},
 		"signature_edit_retyped_functions": {
-			"value": 1431,
+			"value": 1352,
 			"tolerance": 0.05,
 			"why": "The constructor's callers and what depends on them: deterministic; the slack absorbs new callers."
 		},
@@ -62,7 +62,7 @@
 			"why": "Deterministic; the slack absorbs new callers."
 		},
 		"late_body_edit_allocated_bytes": {
-			"value": 543082912,
+			"value": 388688416,
 			"tolerance": 0.02,
 			"why": "The body edit again after the signature edit: the session holds the rewrites of the constructor's callers, which an edit elsewhere must reuse. Deterministic for a given source tree."
 		},
@@ -72,7 +72,7 @@
 			"why": "Deterministic; the slack absorbs synthesized helpers that come and go with ordinary code changes."
 		},
 		"server_live_bytes": {
-			"value": 873883238,
+			"value": 823446733,
 			"tolerance": 0.03,
 			"why": "The session's live data at the end of the last build, from a heap census there: deterministic to a fraction of a megabyte."
 		},
@@ -81,13 +81,28 @@
 			"tolerance_abs": 4194304,
 			"why": "Growth of the live data over the last two body edits, after the session has settled: steady to a fraction of a megabyte between runs. Keeping each build's compile result, whose IR mostly shares the session's, adds about eight megabytes a build, so the slack is a few megabytes."
 		},
-		"body_edit_instructions": {
-			"value": 9266930207,
+		"noop_instructions": {
+			"value": 1653604377,
 			"tolerance": 0.03,
-			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
+			"why": "Main-thread instructions of a no-op rebuild of a warm session, measured as body_edit_instructions is (the median of three): the floor every build in the server pays, reading and comparing the sources and reusing the module."
+		},
+		"body_edit_instructions": {
+			"value": 4626710672,
+			"tolerance": 0.03,
+			"why": "Main-thread instructions of the body edit, from perf, in a session of its own without the census and invalidation reports, from a server settled after the build before: what an edit costs before the user can run it. The median of three edits; compared only where perf is installed and allowed."
+		},
+		"body_edit_collections": {
+			"value": 1.33,
+			"tolerance_abs": 0.5,
+			"why": "Collections inside the body edit, the mean of the edit-cost session's three: deterministic for a given source tree and session history, as allocation is. One more collection in two of the three edits fails."
+		},
+		"body_edit_collection_ms": {
+			"value": 1074.0,
+			"tolerance": 0.5,
+			"why": "Milliseconds of those collections (the runtime's mark time, gc_mark_micros), the mean of the three: the collector's work, which main-thread instructions leave out as the collector marks on threads of its own. Wall time on a shared machine varies by a third between runs, so the slack catches a collection that costs half again more, not drift."
 		},
 		"signature_edit_instructions": {
-			"value": 28105902485,
+			"value": 22027318798,
 			"tolerance": 0.03,
 			"why": "Main-thread instructions of the signature edit, measured as body_edit_instructions is."
 		}

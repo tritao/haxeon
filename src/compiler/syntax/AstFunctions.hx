@@ -23,6 +23,7 @@ class AstFunctions {
 			span:SourceSpan, ?isExtern:Bool):AstFunction
 		return {
 			isOverride: fn.isOverride,
+			isDynamic: fn.isDynamic,
 			name: name,
 			isStatic: isStatic,
 			isPublic: fn.isPublic,

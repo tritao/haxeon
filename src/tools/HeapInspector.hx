@@ -11,7 +11,7 @@ import sys.io.Process;
 class HeapInspector {
 	public static function run(arguments:Array<String>):Int {
 		if (arguments.length == 0 || arguments.shift() != "inspect")
-			throw new InternalError("Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR");
+			throw new InternalError(tools.CliHelp.HEAP_INSPECT_USAGE);
 		var paths:Array<String> = [],
 			report:Null<String> = null,
 			capture:Null<String> = null;
@@ -49,16 +49,18 @@ class HeapInspector {
 			];
 		}
 		if (paths.length != 2)
-			throw new InternalError("Usage: haxeon heap inspect BYTECODE DUMP [--report PATH] | --capture DIR");
+			throw new InternalError(tools.CliHelp.HEAP_INSPECT_USAGE);
 		var bytecode = FileSystem.fullPath(paths[0]),
 			dump = FileSystem.fullPath(paths[1]);
-		var home = Sys.getEnv("HAXEON_HOME");
-		if (home == null || home == "")
-			throw new InternalError("HAXEON_HOME is missing");
-		var haxe = Path.join([home, ".tools", "haxe", "haxe"]),
+		var home = build.HaxeonSdk.current();
+		if (home == null)
+			throw new InternalError("HAXEON_SDK is missing");
+		// The analyzer is HashLink's hlmem, built with the pinned Haxe from the checkout's vendored sources.
+		var source = build.HaxeonSdk.requireSource(home, "haxeon heap inspect"),
+			haxe = Path.join([source, ".tools", "haxe", "haxe"]),
 			hl = Path.join([build.HashLinkPath.directory(home), "hl"]),
-			hlmem = Path.join([home, "vendor", "hashlink", "other", "haxelib"]),
-			format = Path.join([home, "vendor", "format"]);
+			hlmem = Path.join([source, "vendor", "hashlink", "other", "haxelib"]),
+			format = Path.join([source, "vendor", "format"]);
 		for (file in [
 			bytecode,
 			dump,

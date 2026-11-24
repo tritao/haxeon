@@ -11,6 +11,7 @@ import compiler.ir.passes.values.IrValueLaneReference;
 import compiler.ir.verify.IrVerifier;
 
 /** Construct and project one case through its overlapping scalar and reference lanes. */
+@:nullSafety(Strict)
 class IrInlineEnumCaseAccess {
 	public static inline final HELPER_PREFIX = "$inline-enum:helper:";
 
@@ -188,6 +189,7 @@ class IrInlineEnumCaseAccess {
 }
 
 /** Traced enum payload slots carry references without materializing Dynamic boxes. */
+@:nullSafety(Strict)
 class IrInlineEnumReferenceAccess {
 	public static function write(builder:IrBuilder, owner:IrValue, index:Int, value:IrValue):Void {
 		if (IrValueLaneReference.isCarrier(value.type)) {

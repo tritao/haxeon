@@ -20,7 +20,7 @@ class TestDriverCommand {
 			jobs = arguments[0];
 			options = arguments.slice(1);
 		}
-		var vm = HashLinkPath.executable(home);
+		var vm = HashLinkPath.executable(build.HaxeonSdk.ofCheckout(home));
 		if (!FileSystem.exists(vm)) {
 			Sys.stderr().writeString('Missing $vm; build the native runtime first (scripts/build-native)\n');
 			return 1;

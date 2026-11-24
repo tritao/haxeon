@@ -1,0 +1,19 @@
+version = 1
+entry = "Main"
+sourceRoots = ["src"]
+nullSafety = "strict"
+
+[package]
+name = "my_app"
+
+[app]
+name = "My App"
+id = "com.example.my_app"
+version = "1.0.0"
+platforms = ["android", "linux", "macos", "web", "windows"]
+
+[dependencies]
+ui = { registry = "haxeon", version = "^0.3", platforms = ["linux", "macos", "web", "windows"] }
+
+[compatibility]
+haxeon = "^0.3"

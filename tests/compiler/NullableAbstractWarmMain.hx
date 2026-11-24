@@ -30,9 +30,7 @@ class NullableAbstractWarmMain {
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null || temp == "")
 			throw "TMPDIR is required";
-		var dir = Sys.getEnv("HAXEON_HASHLINK_DIR");
-		if (dir == null || dir == "")
-			throw "HAXEON_HASHLINK_DIR is required";
+		var dir = TestHashLink.directory();
 		run(temp, dir);
 	}
 

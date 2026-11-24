@@ -154,19 +154,27 @@ HL_PRIM int HL_NAME(__math_ceil)(double value) {
 HL_PRIM int HL_NAME(__math_floor)(double value) {
 	return (int)floor(value);
 }
-extern realtime_string_map *hl_hballoc( void );
-extern varray *hl_hbkeys( realtime_string_map *map );
-extern varray *hl_hbvalues( realtime_string_map *map );
-extern int hl_hbsize( realtime_string_map *map );
-extern void hl_hbclear( realtime_string_map *map );
-extern realtime_string_map *hl_hbcopy( realtime_string_map *map );
-extern realtime_string_map *hl_hbs_alloc( void );
-extern int64 hl_hbs_value( realtime_string_map *map, int index );
-extern varray *hl_hbs_keys( realtime_string_map *map );
-extern varray *hl_hbs_values( realtime_string_map *map, hl_type *type );
-extern int hl_hbs_size( realtime_string_map *map );
-extern void hl_hbs_clear( realtime_string_map *map );
-extern realtime_string_map *hl_hbs_copy( realtime_string_map *map );
+extern realtime_string_map *hl_hsalloc( void );
+extern void hl_hsset( realtime_string_map *map, vstring *key, vdynamic *value );
+extern bool hl_hsexists( realtime_string_map *map, vstring *key );
+extern vdynamic *hl_hsget( realtime_string_map *map, vstring *key );
+extern varray *hl_hskeys( realtime_string_map *map );
+extern varray *hl_hsvalues( realtime_string_map *map );
+extern int hl_hssize( realtime_string_map *map );
+extern bool hl_hsremove( realtime_string_map *map, vstring *key );
+extern void hl_hsclear( realtime_string_map *map );
+extern realtime_string_map *hl_hscopy( realtime_string_map *map );
+extern realtime_string_map *hl_hss_alloc( void );
+extern void hl_hss_set( realtime_string_map *map, vstring *key, int64 value );
+extern bool hl_hss_exists( realtime_string_map *map, vstring *key );
+extern int hl_hss_index( realtime_string_map *map, vstring *key );
+extern int64 hl_hss_value( realtime_string_map *map, int index );
+extern varray *hl_hss_keys( realtime_string_map *map );
+extern varray *hl_hss_values( realtime_string_map *map, hl_type *type );
+extern int hl_hss_size( realtime_string_map *map );
+extern bool hl_hss_remove( realtime_string_map *map, vstring *key );
+extern void hl_hss_clear( realtime_string_map *map );
+extern realtime_string_map *hl_hss_copy( realtime_string_map *map );
 
 static HL_NO_RETURN( void realtime_raise_module_exception( void ) );
 static void realtime_raise_module_exception( void ) {

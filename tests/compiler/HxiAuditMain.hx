@@ -12,6 +12,10 @@ class HxiAuditMain {
 				"portable-abi32");
 		if (!portable.identical || portable.issues.length != 0)
 			throw "portable ABI fixture should pass";
+		var longName = StringTools.rpad("audit", "x", 61);
+		if (!HxiAudit.audit("tests/ffi/audit_portable.h", targets, ["tests/ffi"], "portable-abi64", "audit",
+			longName).identical)
+			throw "target spelling should not affect layout during a portable ABI comparison";
 		if (drift.identical || drift.issues.length == 0 || drift.issues[0].kind != "abi-drift")
 			throw "target ABI drift should be diagnosed";
 		if (!portable32.identical || portable32.issues.length != 0)

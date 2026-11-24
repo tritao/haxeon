@@ -7,6 +7,7 @@ import compiler.ir.model.Ir.IrType;
  * compared with `IrTypeIdentity.same`: a lookup builds no text and allocates nothing, and only an insertion can grow the
  * table. Open addressing over parallel arrays, linear probing, never more than half full.
  */
+@:nullSafety(Strict)
 class IrTypeMap<V> {
 	var keys:Array<Null<IrType>>;
 	var values:Array<Null<V>>;

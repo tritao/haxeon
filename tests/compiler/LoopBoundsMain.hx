@@ -1,8 +1,12 @@
 import compiler.Frontend;
 import compiler.ir.analysis.IrLoopBounds;
+import compiler.ir.cfg.IrBodyGraph;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.Ir;
+import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
+import compiler.ir.model.IrTypeIds;
+import compiler.ir.model.IrValueId;
 
 class LoopBoundsMain {
 	static function expect(ok:Bool, message:String):Void {
@@ -19,13 +23,15 @@ class LoopBoundsMain {
 		if (found == null)
 			throw "missing function " + name;
 		var before = IrFunctionStateCodec.encode(found),
-			proof = new IrLoopBounds(found, IrLoopBounds.pureNativeCalls(program.natives)),
+			body = IrBodyBuilder.encode(found, IrTypeIds.ofFunctions([found])),
+			proof = new IrLoopBounds(IrLoopBounds.pureNativeCalls(program.natives)).reset(body,
+				new IrBodyGraph().reset(body)),
 			result = 0;
 		for (block in found.blocks)
 			for (located in block.instructions)
 				switch located.value {
 					case ArrayGet(_, array, index):
-						if (proof.proven(array, index, block.id))
+						if (proof.proven(IrValueId.of(array.id), IrValueId.of(index.id), block.id))
 							result++;
 					default:
 				}
@@ -61,8 +67,8 @@ class LoopBoundsMain {
 			"scan") == 0,
 			"unknown call can resize aliases");
 		expect(count("function scan(a:Array<Int>, b:Array<Int>):Int { var n = 0; for (i in 0...a.length) { b[0] = 1; n += a[i]; } return n; }",
-			"scan") == 0,
-			"array writes through an alias reject the unchanged-length proof");
+			"scan") == 1,
+			"an array write through an alias only grows the array, which keeps the proof");
 		expect(count("function scan(a:Array<Int>):Int { var n = 0; try { for (i in 0...a.length) n += a[i]; } catch (e:Dynamic) { n = 1; } return n; }",
 			"scan") == 0,
 			"handler edges do not inherit loop facts");
@@ -70,11 +76,21 @@ class LoopBoundsMain {
 			"scan") == 0,
 			"captured length invalidated before loop entry must retain checks");
 		expect(count("function scan(a:Array<Int>, alias:Array<Int>):Int { var limit=a.length; alias[20]=7; var sum=0; for(i in 0...limit) sum+=a[i]; return sum; }",
-			"scan") == 0,
-			"preheader alias write invalidates the captured length conservatively");
+			"scan") == 1,
+			"a preheader write through an alias only grows the array, which keeps the captured length a bound");
 		expect(count("function resize(a:Array<Int>):Void { a.pop(); } function scan(a:Array<Int>):Int { resize(a); var sum=0; for(i in 0...a.length) sum+=a[i]; return sum; }",
 			"scan") == 1,
 			"a fresh length read after resizing still proves the loop access");
+		// A proof holds for one array value: an array read again from an element each time, which the loop replaces, is not it.
+		expect(count("function scan(arrs:Array<Array<Int>>):Int { var n = 0; for (i in 0...arrs[0].length) { arrs[0] = [7]; n += arrs[0][i]; } return n; }",
+			"scan") == 0,
+			"an inner array replaced through an element write and read again keeps its checks");
+		expect(count("function scan(arrs:Array<Array<Int>>):Int { var n = 0, i = 0; while (i < arrs[0].length) { arrs[0] = [7]; n += arrs[0][i]; i++; } return n; }",
+			"scan") == 0,
+			"a length tested on one read of an element does not prove an access through another");
+		expect(count("function scan(a:Array<Int>, alias:Array<Int>):Int { var n = 0; for (i in 0...a.length) { n += a[i]; alias.pop(); } return n; }",
+			"scan") == 0,
+			"an array shrunk through an alias in the loop keeps its checks");
 		var pure = '@:hlNative("haxeon_runtime", "__math_sqrt") extern function root(x:Float):Float; '
 			+ 'function scan(a:Array<Float>):Float { var n = 0.0; for (i in 0...a.length) n += root(a[i]); return n; }';
 		expect(count(pure, "scan") == 1, "known scalar math native cannot resize an array");

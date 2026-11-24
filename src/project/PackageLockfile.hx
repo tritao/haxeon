@@ -58,15 +58,21 @@ class PackageLockfile {
 	public function get(name:String):Null<PackageLockEntry>
 		return byName.get(name);
 
-	public function validateGraph(actual:PackageLockfile):Void {
+	/**
+	 * Checks that `actual` is the graph this lockfile describes. `repicked` are the registry packages resolution picked again (their
+	 * locked version was gone or out of range), whose versions differ. An entry without a checksum, as a checkout's SDK writes for
+	 * a haxeon-registry package, pins none.
+	 */
+	public function validateGraph(actual:PackageLockfile, ?repicked:Map<String, Bool>):Void {
 		if (entries.length != actual.entries.length)
 			throw new InternalError("haxeon.lock does not describe the resolved package graph");
 		for (expected in entries) {
-			var resolved = actual.get(expected.id.name);
+			var resolved = actual.get(expected.id.name),
+				changed = repicked != null && repicked.exists(expected.id.name);
 			if (resolved == null
 				|| !PackageSourceCodec.equal(expected.source, resolved.source)
-				|| expected.resolvedRevision != resolved.resolvedRevision
-				|| expected.checksum != resolved.checksum
+				|| !changed && expected.resolvedRevision != resolved.resolvedRevision
+				|| !changed && expected.checksum != null && expected.checksum != resolved.checksum
 				|| !sameDependencies(expected.dependencies, resolved.dependencies))
 				throw new InternalError('haxeon.lock entry for "${expected.id.name}" does not match the resolved package graph');
 		}

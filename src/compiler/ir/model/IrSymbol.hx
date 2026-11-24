@@ -10,6 +10,7 @@ import sys.thread.Mutex;
  * Ids are dense and given in the order names are first seen in the process, so they may index tables but must never decide
  * the order of anything a compile writes: iterate in program order and look up by id.
  */
+@:nullSafety(Strict)
 class IrSymbol {
 	@:processWide("interned names: a name always denotes the same symbol, and the table only grows")
 	static final byName:Map<String, IrSymbol> = [];

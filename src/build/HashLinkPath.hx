@@ -1,23 +1,28 @@
 package build;
 
-import compiler.core.InternalError;
 import haxe.io.Path;
-import sys.io.File;
 
-/** Resolve the checkout-built VM using the same path table as the shell entry points, or a release's (`HaxeonRelease`). */
+/** The VM's directory: the bin of Haxeon's SDK (docs/design/SDK_LAYOUT.md). */
 class HashLinkPath {
-	public static function directory(home:String):String {
-		if (HaxeonRelease.isRelease(home))
-			return Path.join([home, HaxeonRelease.BIN]);
-		var preset = Sys.systemName() == "Windows" ? "windows-msvc" : "release";
-		for (line in File.getContent(Path.join([home, "cmake", "hashlink-output-paths.txt"])).split("\n")) {
-			var fields = line.split("=");
-			if (fields.length == 2 && fields[0] == preset && fields[1] != "")
-				return Path.join([home, StringTools.trim(fields[1])]);
-		}
-		throw new InternalError('Missing HashLink output path for $preset');
-	}
+	public static function directory(home:String):String
+		return Path.join([home, "bin"]);
+
+	/**
+	 * The SDK's static libraries for this machine (`lib/<target>`, the target as `Target` spells it, which the native build's
+	 * `haxeon-sdk` names them by): the VM's archive and the profiler's function hooks.
+	 */
+	public static function libraryDirectory(home:String):String
+		return Path.join([home, "lib", Target.detectHost().toString()]);
 
 	public static function executable(home:String, name:String = "hl"):String
 		return Path.join([directory(home), name + (Sys.systemName() == "Windows" ? ".exe" : "")]);
+
+	/**
+	 * The directories the VM loads native libraries from by name: the VM's own and, in a checkout, `out/`, where the native build
+	 * leaves the libraries tests load.
+	 */
+	public static function libraryPath(home:String):Array<String> {
+		var source = HaxeonSdk.source(home);
+		return source == null ? [directory(home)] : [Path.join([source, "out"]), directory(home)];
+	}
 }

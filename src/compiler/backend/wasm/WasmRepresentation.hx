@@ -114,6 +114,12 @@ interface WasmModelRepresentation {
 	/** The instruction lowered against scalar locals, or null when it does not touch a scalar value place. */
 	public function scalarLocal(instruction:IrInstruction, locals:Map<Int, Int>):Null<Array<WasmInstruction>>;
 
+	/**
+	 * The index of the model's runtime function `name`, which lowering calls. A model that builds its runtime on
+	 * demand builds it now; a name the model's runtime does not define is an error.
+	 */
+	public function runtimeFunction(name:String):Int;
+
 	public function hasScalarCall(name:String):Bool;
 	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
 			argumentLocals:Array<Int>, functionIndex:Int):Array<WasmInstruction>;

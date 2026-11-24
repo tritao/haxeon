@@ -1,6 +1,6 @@
 name: release
 
-# Release archives (docs/reference/RELEASES.md): each platform's job builds the VM and the CLI in release mode, the compiler ahead
+# Release archives (docs/DEVELOPMENT.md, Releases): each platform's job builds the VM and the CLI in release mode, the compiler ahead
 # of time where the AOT backend supports the platform's toolchain, packages them with `haxeon dev package` and smoke-tests the
 # unpacked archive (scripts/smoke-test-release.sh). No test suites run here: the commit is tested by ci.yml, and a tag is
 # published only once ci.yml passed on that commit on main. The final job writes SHA256SUMS and, for a tag, creates the GitHub
@@ -18,7 +18,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  android-host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install the pinned Android toolchain
+        run: cmake -P cmake/haxeon-android-toolchain.cmake
+      # After the toolchain: setup-host's native build includes the host library once it is installed.
+      - uses: ./.github/actions/setup-host
+      - name: Build the Android host AAR
+        run: |
+          cmake --preset release -DHAXEON_ANDROID=ON
+          cmake --build --preset release --target haxeon-android-sdk
+          unzip -Z1 out/sdk/platforms/android/haxeon-host.aar > aar-contents.txt
+          for abi in arm64-v8a x86_64; do
+            grep -Fx "jni/$abi/libhaxeon.so" aar-contents.txt
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-platform
+          path: out/sdk/platforms/android/haxeon-host.aar
+          if-no-files-found: error
+
+  web-host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: ./.github/actions/setup-host
+      - run: nice -n 10 vendor/nativekit/tools/setup-web.sh
+      - run: nice -n 10 scripts/build-web-sdk.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-platform
+          path: out/sdk/platforms/web/ui
+          if-no-files-found: error
+
   package:
+    needs: [android-host, web-host]
     name: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -82,6 +127,15 @@ jobs:
       - name: Build the compiler ahead of time
         if: matrix.aot
         run: ${{ steps.version.outputs.haxeon }} dev aot
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-platform
+          path: out/sdk/platforms/android
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-platform
+          path: out/sdk/platforms/web/ui
 
       - name: Package
         run: ${{ steps.version.outputs.haxeon }} dev package --version=${{ steps.version.outputs.version }} --output=out/release

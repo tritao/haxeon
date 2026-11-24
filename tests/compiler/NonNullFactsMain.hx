@@ -1,4 +1,5 @@
 import compiler.ir.analysis.IrNonNullFacts;
+import compiler.ir.analysis.IrNonNullFields;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
@@ -155,6 +156,8 @@ class NonNullFactsMain {
 		expect(checks == 1, "HashLink keeps the first null check and omits the repeated field check");
 		checkSparseIdentities();
 		checkAllocationScaling();
+		checkProgramFacts();
+		checkInstanceAllocations();
 		Sys.println("PASS: non-null facts respect branches, loops, allocation and handlers");
 	}
 
@@ -220,5 +223,75 @@ class NonNullFactsMain {
 					"unknown receiver facts require an earlier checked dereference");
 			}
 		}
+	}
+
+	/** A method's receiver and a value read from a field never null once constructed need no check; other values do. */
+	static function checkProgramFacts():Void {
+		var box:IrObject = {
+			name: "Box",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			fields: [{name: "next", type: Obj("Box")}, {name: "other", type: Obj("Box")}],
+			methods: [{name: "read", functionName: IrSymbol.of("Box.read")}]
+		};
+		var objects:Map<String, IrObject> = ["Box" => box], none:Map<String, Bool> = [];
+		function fields(type:String):Map<String, Bool>
+			return type == "Box" ? ["next" => true] : none;
+		for (name in ["Box.read", "Box.new", "helper"]) {
+			var b = new IrBuilder(), receiver = b.argument("this", Obj("Box"));
+			var first = check(b, receiver),
+				next = b.fieldGet(receiver, "next", Obj("Box")),
+				fromField = check(b, next),
+				other = b.fieldGet(receiver, "other", Obj("Box")),
+				unknown = check(b, other);
+			b.returnValue(b.constInt(42));
+			var fn = new IrFunction(name, b.arguments, I32, b.blocks, Ordinary),
+				facts = new IrNonNullFacts(fn, false, objects.get, fields);
+			expect(facts.has(first.block, first.index) == (name != "helper"),
+				'the receiver of $name is known non-null only for a method or a constructor');
+			expect(facts.has(fromField.block, fromField.index), "a value read from a non-null field needs no check");
+			expect(!facts.has(unknown.block, unknown.index), "a value read from another field is checked");
+		}
+	}
+
+	/**
+	 * A field every constructor sets is never null (`IrNonNullFields`), unless a native can make an object of any class without
+	 * its constructor (HashLink's `alloc_obj`, behind `Type.createEmptyInstance`): then no field is.
+	 */
+	static function checkInstanceAllocations():Void {
+		function program(allocates:Bool):IrProgram {
+			var made = new IrProgram("main");
+			made.objects.push({
+				name: "Holder",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				fields: [{name: "label", type: Bytes}],
+				methods: []
+			});
+			var b = new IrBuilder(), receiver = b.argument("this", Obj("Holder"));
+			b.fieldSet(receiver, "label", b.constString("set"));
+			b.returnValue(b.constVoid());
+			made.functions.push(new IrFunction("Holder.new", b.arguments, Void, b.blocks, Ordinary));
+			b = new IrBuilder();
+			var holder = b.newObject("Holder");
+			b.call("Holder.new", [holder], Void);
+			b.returnValue(b.constVoid());
+			made.functions.push(new IrFunction("main", b.arguments, Void, b.blocks, Ordinary));
+			if (allocates)
+				made.natives.push({
+					name: "allocObject",
+					library: "std",
+					symbol: "alloc_obj",
+					arguments: [TypeRef],
+					result: Dyn
+				});
+			return made;
+		}
+		expect(IrNonNullFields.of(program(false)).fieldsOf("Holder").exists("label"),
+			"a field the constructor sets is never null");
+		expect(!IrNonNullFields.of(program(true)).fieldsOf("Holder").exists("label"),
+			"no field is never null when a native makes objects without their constructor");
 	}
 }

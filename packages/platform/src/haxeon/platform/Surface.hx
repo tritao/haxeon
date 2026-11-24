@@ -1,22 +1,22 @@
 package haxeon.platform;
 
 import haxe.Int64;
+import haxeon.platform.DisposalRegistration;
+import haxeon.platform.NativeKitError;
+import haxeon.platform.SurfaceFrameSubscription;
+import haxeon.platform.SurfaceFrameTiming;
+import haxeon.platform.Window;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.DisposalRegistration;
-import haxeon.platform.NativeKitError;
-import haxeon.platform.SurfaceFrameTiming;
-import haxeon.platform.SurfaceFrameSubscription;
-import haxeon.platform.Window;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes.Result;
-import nativekit.ffi.NativeKitTypes.OwnedSurfaceHandle;
-import nativekit.ffi.NativeKitTypes.SurfaceFrameCallbackCallback;
-import nativekit.ffi.NativeKitTypes.SurfaceHandle;
 import nativekit.ffi.NativeKitTypes.Handle;
+import nativekit.ffi.NativeKitTypes.OwnedSurfaceHandle;
+import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.SurfaceFrameCallbackCallback;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameMode;
 import nativekit.ffi.NativeKitTypes.SurfaceFrameTarget;
+import nativekit.ffi.NativeKitTypes.SurfaceHandle;
 
 /** Owns one graphics surface attached to a NativeKit window. */
 class Surface implements Disposable {

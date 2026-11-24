@@ -40,6 +40,12 @@ class ArrayMethods {
 		return -1;
 	}
 
+	/** Each index with the element there when `next()` reaches it, as Haxe's `ArrayKeyValueIterator`. */
+	public static function keyValueIterator<T>(values:Array<T>):KeyValueIterator<Int, T> {
+		var current = 0;
+		return {hasNext: () -> current < values.length, next: () -> {key: current, value: values[current++]}};
+	}
+
 	/** Joins elements that are not Strings (which the runtime joins directly) through `Std.string`. */
 	public static function join<T>(values:Array<T>, separator:String):String {
 		var parts:Array<String> = [];

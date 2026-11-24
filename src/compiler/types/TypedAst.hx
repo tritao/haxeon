@@ -111,7 +111,7 @@ enum TypedExpressionKind {
 	TClassRef(name:String);
 	TStaticField(name:String, field:String);
 	TFunctionRef(name:String);
-	TMethodRef(object:TypedExpression, functionName:String);
+	TMethodRef(object:TypedExpression, functionName:String, ?dynamicImplementation:Bool);
 	TLambda(name:String, environment:Null<String>, captures:Array<TypedCapture>);
 	TAdd(left:TypedExpression, right:TypedExpression);
 	TSub(left:TypedExpression, right:TypedExpression);
@@ -503,6 +503,8 @@ typedef TypedField = {
 
 	/** Evaluated constant retained for compile-time inline-field substitution. */
 	final inlineValue:Null<TypedExpression>;
+
+	final ?isDynamicMethod:Bool;
 
 	final readAccess:Null<compiler.syntax.Ast.AstFieldAccess>;
 	final writeAccess:Null<compiler.syntax.Ast.AstFieldAccess>;

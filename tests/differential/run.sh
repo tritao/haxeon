@@ -232,6 +232,7 @@ in_background run_case fibonacci
 in_background run_case control-flow
 in_background run_case nullable
 in_background run_case observable-output
+in_background run_case map-to-string 0
 in_background run_case bytes-access 0
 in_background run_case bytes-bounds 0
 in_background run_case bytes-encoding 0
@@ -316,6 +317,8 @@ in_background run_error_case missing-field-call-bytes
 in_background run_error_case missing-field-call-nullable
 in_background run_error_case missing-field-call-function
 in_background run_error_case missing-field-call-subtype
+in_background run_error_case local-function-assignment
+in_background run_error_case non-dynamic-method-rebind
 in_background run_compile_failure generic-field-own-parameters-error
 in_background run_case generic-nullable-parameter-read 0
 in_background run_case generic-nullable-element-inference 0
@@ -349,6 +352,8 @@ in_background run_case switch-bool 0
 in_background run_case switch-nullable-enum-abstract 0
 # A lowercase name in a pattern captures even where a function or variable of that name is in scope.
 in_background run_case pattern-capture-shadows-name 0
+in_background run_error_case pattern-unknown-uppercase
+in_background run_error_case pattern-unknown-uppercase-nested
 # Haxe's Lambda over arrays and maps (stdlib/Lambda.hx).
 in_background run_case lambda-functions 0
 in_background run_case lambda-empty-literal 0
@@ -475,6 +480,14 @@ in_background run_compile_failure switch-wrong-enum-pattern-call
 in_background run_compile_failure switch-wrong-enum-pattern-nested
 in_background run_compile_failure switch-wrong-enum-pattern-array
 in_background run_compile_failure tuple-switch-wrong-enum-pattern
+# Haxe's Type API on a class or enum named where it is called (TypeReflection), with HashLink's field orders.
+in_background run_case type-class-names 0 hl main
+# Key-value loops over a custom type's keyValueIterator(), KeyValueIterable and KeyValueIterator, and Map's.
+in_background run_case key-value-custom-iteration 0 hl main
+in_background run_error_case key-value-for-in-missing
+in_background run_error_case key-value-entry-fields
+# A generic class whose members hold its parameter in a structure, read at a type argument (TypeRepresentation).
+in_background run_case generic-structure-iterator 0 hl main
 status=0
 for index in "${!pids[@]}"; do
 	wait "${pids[$index]}" || status=1

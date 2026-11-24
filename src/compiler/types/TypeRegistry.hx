@@ -77,7 +77,10 @@ class TypeDescriptor {
 enum TypeCompatibility {
 	NewType;
 	Compatible;
+	/** The same methods, in the same order, some with another signature. */
 	MethodSignatureChanged;
+	/** A method added, removed, renamed or moved. */
+	MethodsChanged;
 	LayoutChanged;
 	BaseChanged;
 }
@@ -93,8 +96,8 @@ class TypeRegistry {
 	static inline final MAGIC = "TID";
 	static inline final VERSION = 1;
 
-	final ids:Map<String, Int> = [];
-	final descriptors:Map<String, TypeDescriptor> = [];
+	var ids:Map<String, Int> = [];
+	var descriptors:Map<String, TypeDescriptor> = [];
 	var nextId:Int = 1;
 
 	public function new(?state:Bytes) {
@@ -104,10 +107,8 @@ class TypeRegistry {
 
 	public function copy():TypeRegistry {
 		var result = new TypeRegistry();
-		for (name => id in ids)
-			result.ids.set(name, id);
-		for (name => descriptor in descriptors)
-			result.descriptors.set(name, descriptor);
+		result.ids = ids.copy();
+		result.descriptors = descriptors.copy();
 		result.nextId = nextId;
 		return result;
 	}
@@ -206,13 +207,16 @@ class TypeRegistry {
 				return LayoutChanged;
 		}
 		if (previous.methods.length != current.methods.length)
-			return MethodSignatureChanged;
+			return MethodsChanged;
+		var signatureChanged = false;
 		for (i in 0...current.methods.length) {
 			var oldMethod = previous.methods[i],
 				newMethod = current.methods[i];
-			if (oldMethod.name != newMethod.name || oldMethod.signature != newMethod.signature)
-				return MethodSignatureChanged;
+			if (oldMethod.name != newMethod.name)
+				return MethodsChanged;
+			if (oldMethod.signature != newMethod.signature)
+				signatureChanged = true;
 		}
-		return Compatible;
+		return signatureChanged ? MethodSignatureChanged : Compatible;
 	}
 }

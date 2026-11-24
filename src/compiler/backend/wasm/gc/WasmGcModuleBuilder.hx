@@ -191,7 +191,7 @@ class WasmGcModuleBuilder {
 				if (reflection != null)
 					functions.set(native.name, reflection);
 			}
-		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives);
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives, options.standardLibrary);
 		// Reserved once every import exists and before the runtime helpers are lowered, so they all call it; its body
 		// needs every class's toString index and is defined later.
 		if (usedNatives.exists("__std_string"))
@@ -859,7 +859,8 @@ class WasmGcModuleBuilder {
 
 	static function isGcRuntimeSystemImport(symbol:Null<String>):Bool {
 		return switch symbol {
-			case "sys_time", "__sys_monotonic_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep",
+			case "sys_time", "__sys_monotonic_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
+				"sys_getpid", "sys_sleep",
 				"sys_get_char", "sys_exit",
 				"native_alloc", "native_free": true;
 			default: false;
@@ -941,7 +942,8 @@ class WasmGcModuleBuilder {
 				"__string_last_index_of",
 				"__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split",
 				"__string_substring",
-				"__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "__sys_monotonic_time",
+				"__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time",
+				"__sys_monotonic_time",
 				"sys_cpu_time", "sys_thread_cpu_time",
 				"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc",
 				"native_free": true;

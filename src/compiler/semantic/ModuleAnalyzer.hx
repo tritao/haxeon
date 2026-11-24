@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.QualifiedName;
+import compiler.core.UnresolvedNameKind;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleSourceLoader;
 import compiler.modules.ModuleState;
@@ -31,10 +32,13 @@ class ModuleAnalyzer {
 	final lookupParses:Map<String, LookupParse> = [];
 	final importedMembers:Map<String, {ast:compiler.syntax.Ast.AstProgram, members:Map<String, Bool>}> = [];
 
+	final scriptModule:Null<String>;
+
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool,
 			defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners,
-			?keepsTokens = true) {
+			?keepsTokens = true, ?scriptModule:String) {
+		this.scriptModule = scriptModule;
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
@@ -48,6 +52,77 @@ class ModuleAnalyzer {
 			for (name => state in modules)
 				if (state.ast != null)
 					indexDeclarations(name, state.parsedAst());
+	}
+
+	/** Suggests import paths for unresolved bare names, including declarations in modules the build never opened. */
+	public function suggestImports(diagnostics:Array<compiler.core.Diagnostic>):Void {
+		var pending = [];
+		for (diagnostic in diagnostics) {
+			var unresolved = diagnostic.unresolvedName;
+			if (unresolved == null)
+				continue;
+			var kind = unresolved.kind, name = unresolved.name;
+			var namespace = ModulePath.packageName(name);
+			if (namespace != null) {
+				// The dependency graph prefixes an unresolved bare name with the source module's package.
+				if (kind != UnresolvedNameKind.WantedModule
+					|| !Lambda.exists(modules, state -> state.source.path == diagnostic.span.file.path
+					&& ModulePath.packageName(state.name) == namespace))
+					continue;
+				name = QualifiedName.last(name);
+			}
+			pending.push({diagnostic: diagnostic, kind: kind, name: name, paths: []});
+		}
+		if (pending.length == 0)
+			return;
+
+		function inspect(state:ModuleState):Void {
+			var ast = state.ast == null ? parseText(state).ast : state.parsedAst();
+			for (item in pending) {
+				if (state.source.path == item.diagnostic.span.file.path)
+					continue;
+				var name = item.name;
+				var isClass = Lambda.exists(ast.classes, decl -> decl.name == name && !decl.isPrivate);
+				var isInterface = Lambda.exists(ast.interfaces, decl -> decl.name == name);
+				var isAbstract = Lambda.exists(ast.abstracts, decl -> decl.name == name);
+				var type = switch item.kind {
+					case WantedFunction: false;
+					case WantedClass: isClass || isAbstract;
+					case WantedInterface: isInterface;
+					case WantedBaseClass: isClass;
+					case WantedType, WantedVariable, WantedModule: isClass || isInterface || isAbstract
+						|| Lambda.exists(ast.aliases, decl -> decl.name == name && !decl.isPrivate)
+						|| Lambda.exists(ast.enums, decl -> decl.name == name);
+				};
+				if (type || ((item.kind == UnresolvedNameKind.WantedVariable
+					|| item.kind == UnresolvedNameKind.WantedFunction)
+					&& Lambda.exists(ast.functions, decl -> decl.name == name && decl.isPublic != false))) {
+					var path = ModuleCanonicalizer.sourceDeclarationPath(state.name, name);
+					if (path != name && item.paths.indexOf(path) < 0)
+						item.paths.push(path);
+				}
+			}
+		}
+
+		function matches(text:String):Bool {
+			for (item in pending)
+				if (text.indexOf(item.name) >= 0)
+					return true;
+			return false;
+		}
+
+		for (state in modules)
+			if (matches(state.source.text))
+				try inspect(state) catch (_:CompileError) {}
+		sourceLoader.visitSources(matches, state -> {
+			if (!modules.exists(state.name))
+				inspect(state);
+		});
+		for (item in pending) {
+			item.paths.sort(Reflect.compare);
+			for (path in item.paths)
+				item.diagnostic.notes.push('import $path;');
+		}
 	}
 
 	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>,
@@ -67,6 +142,8 @@ class ModuleAnalyzer {
 			state.tokens = keepsTokens ? parsed.tokens : TokenTable.empty;
 			state.ast = parsed.ast;
 			declarationOwners.release(state.name);
+			if (!state.source.isStandardLibrarySource)
+				checkStandardTypeNames(state.name, state.parsedAst());
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
@@ -232,15 +309,6 @@ class ModuleAnalyzer {
 		state.dependencies.sort(Reflect.compare);
 		var typeAliases = AliasTable.of(importAliases(ast.imports));
 		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
-		var previousDependencies = state.semanticDependencies;
-		state.semanticDependencies = SemanticDependencyCollector.collectSemanticDependencies(state, entry, typeAliases);
-		// What typing read stays until the reader is typed again: the edges walked to find the readers of a changed inferred type
-		// must include those of a module edited in the same build.
-		for (owner => dependencies in previousDependencies)
-			for (dependency in dependencies)
-				if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.DeclarationType)
-					SemanticDependencyCollector.addDependency(state.semanticDependencies, owner, dependency.kind,
-						dependency.target, dependency.targetId);
 		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
 		mergeChanges(bodyChanged, changes.bodyChanged);
 		mergeChanges(signatureChanged, changes.signatureChanged);
@@ -311,8 +379,9 @@ class ModuleAnalyzer {
 		}
 		for (fn in ast.functions)
 			addFunctionTypeDependencies(fn, state, dependencies);
-		for (implementation in PlatformAbi.implementationModules(state.name)) {
-			var module = sourceModuleForDependency(implementation);
+		// What typing a use of this module's declarations calls comes with it (`RuntimeType.companionModules`).
+		for (companion in compiler.runtime.RuntimeType.companionModules(state.name)) {
+			var module = sourceModuleForDependency(companion);
 			if (module != null)
 				dependencies.set(module, true);
 		}
@@ -445,7 +514,8 @@ class ModuleAnalyzer {
 		var conditional = ConditionalCompilation.process(state.source, defines),
 			tokens = new Lexer(state.source, conditional.text).tokenizeTable(),
 			embedded = new compiler.core.EmbeddedText(),
-			program = new Parser(tokens, embedded).parseProgram();
+			program = state.name == scriptModule ? Parser.parseScript(tokens, embedded) : new Parser(tokens,
+				embedded).parseProgram();
 		if (program.packageName == null) {
 			var packageName = ModulePath.packageName(state.name);
 			if (packageName != null)
@@ -526,6 +596,32 @@ class ModuleAnalyzer {
 		if (declared != null) return declared;
 		// A package-local lookup can fall back to a root declaration such as Equatable.
 		return qualified != typeName ? sourceModuleForDependency(typeName) : null;
+	}
+
+	/**
+	 * A type's path is its package and name, not its module: a type a module declares beside its main type, at the path of a
+	 * standard library type, redefines that type, which Haxe rejects. It is rejected here whether or not the build loads the
+	 * standard type, so every target reports it alike. A module at the standard module's own path replaces that module
+	 * instead, as an earlier class path does in Haxe.
+	 */
+	function checkStandardTypeNames(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {
+		var prefix = ast.packageName == null ? "" : Std.string(ast.packageName) + ".";
+		function check(name:String, isPrivate:Bool, span:compiler.core.Source.SourceSpan):Void {
+			var path = prefix + name;
+			if (!isPrivate && path != moduleName && sourceLoader.isStandardModule(path))
+				throw new CompileError(new compiler.core.Diagnostic("E1020",
+					'Type name $path is redefined from module $moduleName', span));
+		}
+		for (declaration in ast.aliases)
+			check(declaration.name, declaration.isPrivate, declaration.span);
+		for (declaration in ast.enums)
+			check(declaration.name, false, declaration.span);
+		for (declaration in ast.abstracts)
+			check(declaration.name, false, declaration.span);
+		for (declaration in ast.interfaces)
+			check(declaration.name, false, declaration.span);
+		for (declaration in ast.classes)
+			check(declaration.name, declaration.isPrivate, declaration.span);
 	}
 
 	function indexDeclarations(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Void {

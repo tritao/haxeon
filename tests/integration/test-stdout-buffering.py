@@ -11,6 +11,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
+LIBRARY_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh"), "--lib-dir"], text=True).strip())
 
 
 def main():
@@ -50,8 +51,7 @@ def main():
             'int main(void) { hl_global_init(); hl_register_thread(NULL); '
             'fputs("before-fatal", stdout); hl_fatal("stdout-test"); return 0; }\n')
         subprocess.run([os.environ.get("CC", "cc"), str(native),
-            "-I", str(ROOT / "vendor/hashlink/src"), "-L", str(HASHLINK_DIR),
-            "-Wl,-rpath," + str(HASHLINK_DIR), "-lhl", "-lm", "-ldl", "-lpthread", "-o", str(project / "fatal")],
+            "-I", str(ROOT / "vendor/hashlink/src"), "-L", str(LIBRARY_DIR), "-lhl", "-lm", "-ldl", "-lpthread", "-o", str(project / "fatal")],
             check=True, capture_output=True)
         result = subprocess.run([str(project / "fatal")], env=environment,
             capture_output=True, timeout=5)

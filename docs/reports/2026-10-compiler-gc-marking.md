@@ -8,7 +8,7 @@ The opt-in candidate is fork commit `76f4f7cf`; `16a42e3e` bumps the submodule a
 
 ## Baseline and profiling
 
-The [array profile](2026-10-array-allocation-profile.md) put `gc_flush_mark` at 44.91% of compiler CPU samples.
+An array allocation profile put `gc_flush_mark` at 44.91% of compiler CPU samples.
 The compiler is stock-Haxe-built `HaxeonCompiler`, compiling 461 of its own source files from the self-hosting list.
 Baseline: main `60125e2c`, fork `d7f0620a`, guarded object and integer-box allocation enabled, bounded empty-page
 retention enabled with a 64 MiB cap. No `HL_GC_PROFILE` was used for timing; it disables TLABs and adds overhead.

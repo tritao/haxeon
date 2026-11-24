@@ -24,7 +24,6 @@ import compiler.backend.wasm.WasmTarget.WasmTargetConfig;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.linear.WasmLinearAllocator;
-import compiler.backend.wasm.linear.WasmLinearArrays;
 import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearContext.WasmLinearContextState;
 import compiler.backend.wasm.linear.WasmLinearGc;
@@ -458,22 +457,20 @@ class WasmLinearModuleBuilder {
 			linear.fuelChargeFunction = fuelChargeFunction;
 		}
 		linkRuntime();
-		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives,
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives, options.standardLibrary,
 			runtimeNeutral ? requiredFuelFunction() : null);
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
-		WasmLinearRuntime.register(linear);
 		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> {
 			return {
 				parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)],
 				results: WasmModuleSupport.resultTypes(fn.result)
 			};
 		});
+		// Lane storage comes first: the dynamic-view array runtime is built differently when it is linked.
 		WasmLinearValueArrays.register(linear, usedNatives);
-		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
-		WasmLinearArrays.registerNativeAllocators(linear);
-		WasmLinearDynamicArrays.register(linear);
+		WasmLinearRuntime.register(linear, usedNatives);
 		runtimeFunctionCount = module.functions.length;
 	}
 
@@ -485,7 +482,8 @@ class WasmLinearModuleBuilder {
 		if (runtimeNeutral && options.wasmLinearRuntime != null)
 			throw new InternalError("--wasm-runtime-neutral does not accept a custom wasm32 runtime without fuel instrumentation");
 		var runtime = options.wasmLinearRuntime != null
-			? options.wasmLinearRuntime : (runtimeNeutral ? runtimeNeutralRuntime() : defaultRuntime());
+			? options.wasmLinearRuntime : WasmRuntimeLinker.shipped(options.standardLibrary,
+			runtimeNeutral ? "linear-runtime-neutral.wasm" : "linear-runtime.wasm");
 		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {
 			parameters: [],
 			results: []
@@ -504,33 +502,6 @@ class WasmLinearModuleBuilder {
 		linear.heapAllocFunction = required("haxeon_heap_alloc");
 		linear.heapSweepFunction = required("haxeon_heap_sweep");
 	}
-
-	@:processWide("the bytes of a runtime shipped with the compiler, read once")
-	static var cachedRuntime:Null<haxe.io.Bytes> = null;
-	@:processWide("the bytes of a runtime shipped with the compiler, read once")
-	static var cachedRuntimeNeutral:Null<haxe.io.Bytes> = null;
-
-	/** The committed runtime, found like the stdlib host interfaces: relative to the Haxeon root. */
-	static function defaultRuntime():haxe.io.Bytes {
-		if (cachedRuntime == null) {
-			if (!sys.FileSystem.exists(DEFAULT_RUNTIME))
-				throw new InternalError('The wasm32 backend links $DEFAULT_RUNTIME, which is missing; build it with the haxeon-wasm-runtime target of the native build');
-			cachedRuntime = sys.io.File.getBytes(DEFAULT_RUNTIME);
-		}
-		return cachedRuntime;
-	}
-
-	static function runtimeNeutralRuntime():haxe.io.Bytes {
-		if (cachedRuntimeNeutral == null) {
-			var path = "stdlib/haxeon/wasm/linear-runtime-neutral.wasm";
-			if (!sys.FileSystem.exists(path))
-				throw new InternalError('The runtime-neutral wasm32 runtime $path is missing; build it with the haxeon-wasm-runtime target of the native build');
-			cachedRuntimeNeutral = sys.io.File.getBytes(path);
-		}
-		return cachedRuntimeNeutral;
-	}
-
-	static inline final DEFAULT_RUNTIME = "stdlib/haxeon/wasm/linear-runtime.wasm";
 
 	function declareFunctions():Void {
 		methods = [];
@@ -563,21 +534,14 @@ class WasmLinearModuleBuilder {
 			var type:WasmFunctionType = {parameters: parameters, results: results};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
+		linear.functionsDeclared = true;
 		closureTypes = WasmModuleSupport.collectClosureTypes(module, program, scalarAbi);
-		var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
-		if (bytesDataPointer == null)
-			throw new InternalError("Linear Wasm bytes data pointer helper is missing");
-		var cstringCopy = functions.get("__haxeon_cstring_copy");
-		if (cstringCopy == null)
-			throw new InternalError("Linear Wasm C string copy helper is missing");
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
-			scalarAbi, functions, null, null,
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, linear, scalarAbi, null, null,
 			staticClosureDescriptors, closureAdapters);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null,
 			linearRepresentation, linearRepresentation, context -> {
-				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
-					scalarAbi, functions, context.irFunction,
-					context.allocateLocal, staticClosureDescriptors, closureAdapters);
+				var perFunction = new WasmLinearRepresentation(layout, allocator, linear, scalarAbi,
+					context.irFunction, context.allocateLocal, staticClosureDescriptors, closureAdapters);
 				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, perFunction, null);
 			});
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
@@ -598,7 +562,7 @@ class WasmLinearModuleBuilder {
 		module.exceptionTagType = exceptionTagType;
 		linear.exceptionTag = exceptionTag;
 		WasmLinearRuntime.finalizeDynamicString(linear);
-		WasmLinearGc.wrapRuntimeFunctions(linear, runtimeFunctionCount);
+		WasmLinearGc.wrapRuntimeFunctions(linear, [for (position in 0...runtimeFunctionCount) position]);
 		module.exportTable = module.tableMin != null;
 	}
 
@@ -616,6 +580,7 @@ class WasmLinearModuleBuilder {
 				staticDataAddresses,
 				runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue));
 		});
+		WasmLinearGc.wrapRuntimeFunctions(linear, linear.builtAfterDeclaration);
 		compiler.backend.wasm.WasmTypedInterfaceTables.lower(module, functions, tableSlots);
 		return metadata;
 	}

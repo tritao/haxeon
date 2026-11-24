@@ -175,23 +175,24 @@ def main():
         else:
             raise RuntimeError(f"showcase did not reach the requested visual frame: {state}")
 
+        rendered_frames = "Number(document.documentElement?.dataset.nativekitFrames||0)"
+
+        def wait_for_interaction(description):
+            # Sample after dispatch because animation can advance between CDP commands.
+            target_frames = websocket.evaluate(rendered_frames, 7) + 3
+            while time.monotonic() < deadline:
+                if websocket.evaluate(rendered_frames, 8) >= target_frames:
+                    return
+                time.sleep(0.05)
+            raise RuntimeError(f"showcase did not render the requested {description}")
+
         if args.move:
             move_x, move_y = (float(value) for value in args.move.split(",", 1))
             websocket.command("Input.dispatchMouseEvent", {
                 "type": "mouseMoved", "x": move_x, "y": move_y,
                 "button": "none", "buttons": 0,
             }, 7)
-            target_frames = state["frames"] + 3
-            while time.monotonic() < deadline:
-                frames = websocket.evaluate(
-                    "Number(document.documentElement?.dataset.nativekitFrames||0)", 8
-                )
-                if frames >= target_frames:
-                    state["frames"] = frames
-                    break
-                time.sleep(0.05)
-            else:
-                raise RuntimeError("showcase did not render the requested pointer position")
+            wait_for_interaction("pointer position")
 
         if args.click:
             click_x, click_y = (float(value) for value in args.click.split(",", 1))
@@ -203,16 +204,7 @@ def main():
                 "type": "mouseReleased", "x": click_x, "y": click_y,
                 "button": "left", "buttons": 0, "clickCount": 1,
             }, 4)
-            target_frames = state["frames"] + 3
-            while time.monotonic() < deadline:
-                frames = websocket.evaluate(
-                    "Number(document.documentElement?.dataset.nativekitFrames||0)", 5
-                )
-                if frames >= target_frames:
-                    break
-                time.sleep(0.05)
-            else:
-                raise RuntimeError("showcase did not render the requested interaction")
+            wait_for_interaction("click")
 
         caret = websocket.evaluate(
             "({offset:guest['ShowcaseWeb.caretOffset'](),"

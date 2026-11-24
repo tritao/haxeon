@@ -7,6 +7,7 @@ import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrValueId;
 
 /** Thread linear edges through empty jump blocks while preserving SSA phi edges. */
+@:nullSafety(Strict)
 class IrJumpThreading {
 	// The passes run on a body, in place (docs/design/IR_CORE_COLUMNS.md); each says whether it changed the body.
 

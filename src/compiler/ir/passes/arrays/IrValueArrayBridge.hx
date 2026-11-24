@@ -18,6 +18,7 @@ private typedef IrValueArraySnapshot = {
 }
 
 /** Dynamic escapes materialize a value; ordinary typed lane access never calls these helpers. */
+@:nullSafety(Strict)
 class IrValueArrayBridge {
 	public final storage:IrType;
 
@@ -87,11 +88,12 @@ class IrValueArrayBridge {
 			}
 		var position = write.call("__value_array_prepare_write", [writeArray, writeIndex, inserting, references], I32);
 		for (leaf in leaves) {
-			if (leaf.active == null)
+			var active = leaf.active;
+			if (active == null)
 				write.call(helpers.setter(leaf.slot), [writeArray, position, leaf.value], Void);
 			else {
 				var live = write.createBlock(), next = write.createBlock();
-				write.branch(leaf.active, live, next);
+				write.branch(active, live, next);
 				write.select(live);
 				write.call(helpers.setter(leaf.slot), [writeArray, position, leaf.value], Void);
 				write.jump(next);
@@ -157,7 +159,7 @@ class IrValueArrayBridge {
 					live = live.concat(snapshot(b, unwrapped, inner, path));
 				var active = [for (leaf in live)
 					{
-						slot:leaf.slot, value:leaf.active == null ? b.constBool(true) : leaf.active
+						slot:leaf.slot, value:leaf.active ?? b.constBool(true)
 					}], presentEnd = b.currentBlock().id;
 				b.jump(done);
 				b.select(done);

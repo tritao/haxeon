@@ -3,9 +3,7 @@ package compiler.backend.c;
 import compiler.backend.c.HlcTypes.HlcUsage;
 import compiler.core.InternalError;
 import compiler.hl.HlCode;
-import compiler.hl.HlFunction;
 import compiler.hl.HlType;
-import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.model.Ir.IrObject;
@@ -22,10 +20,11 @@ typedef HlcFile = {
 
 /**
  * The C sources of one HashLink assembly (docs/design/AOT_BACKEND.md): `hlc.h` with what every file shares, one file per
- * Haxe source of the functions, each with the declarations it uses, and `image.c` with the module image the runtime builds
- * its types from, the slot table and the layout checks. `code`, `symbols` and `slots` are the assembly's; `program` is the program it
- * lowered.
+ * Haxe source of the functions, each with the declarations it uses, and `image.c` (`HlcImage`) with the module image the
+ * runtime builds its types from, the slot table and the layout checks. `code`, `symbols` and `slots` are the assembly's;
+ * `program` is the program it lowered.
  */
+@:allow(compiler.backend.c.HlcImage)
 class HlcModule {
 	public final code:HlCode;
 	public final symbols:HlSymbolTable;
@@ -52,6 +51,9 @@ class HlcModule {
 	/** The program's objects and typed interface entries as `HlLower`'s analyses read them. */
 	public final view:compiler.hl.lower.HlLoweringView;
 
+	/** The program's natives whose calls resize no array (`IrLoopBounds.pureNativeCalls`). */
+	public final pureCalls:Map<String, Bool>;
+
 	/** The program's ordinary C functions by name (`CNativeCall`). */
 	public final cNatives:Map<String, compiler.ir.model.Ir.IrCNative> = [];
 
@@ -62,14 +64,20 @@ class HlcModule {
 	final allocationTypes:Map<Int, Bool> = [];
 
 	/**
-	 * The type and global tables' lengths once the collection pass has interned everything the functions use (`emit`): lowering
-	 * only reads the tables, and a type or global it would add is the collection's bug, reported as such.
+	 * Whether the functions are being collected (`HlcFunctionLower.collect`): their lowering interns what it uses and is
+	 * handed no C names, as it writes nothing. `settleNames` ends it.
+	 */
+	var collecting = true;
+
+	/**
+	 * The type and global tables' lengths once the collection has interned everything the functions use (`emit`): lowering
+	 * only reads the tables, and a type or global it would add is a difference between collecting and writing, reported as such.
 	 */
 	var typeLimit = 0x7FFFFFFF;
 
 	var globalLimit = 0x7FFFFFFF;
 
-	/** The C names of types, globals and natives (`HlcStableNames`), by table position, settled after the collection pass. */
+	/** The C names of types, globals and natives (`HlcStableNames`), by table position, settled after the collection. */
 	var typeNames:Array<String> = [];
 
 	var globalNames:Array<String> = [];
@@ -99,6 +107,13 @@ class HlcModule {
 	/** Whether objects are allocated inline (`CompileOptions.inlineAllocation`), else by `hl_alloc_obj`. */
 	public final inlineAllocation:Bool;
 
+	/** The fields of the program never null once constructed. */
+	final nonNullFields:compiler.ir.analysis.IrNonNullFields;
+
+	/** The fields of class `name` never null once constructed (`IrNonNullFields.fieldsOf`). */
+	public function nonNullFieldsOf(name:String):Map<String, Bool>
+		return nonNullFields.fieldsOf(name);
+
 	public function new(code:HlCode, symbols:HlSymbolTable, program:IrProgram, slots:Map<String, Int>,
 			inlineAllocation:Bool) {
 		this.code = code;
@@ -114,10 +129,12 @@ class HlcModule {
 		typeRef = symbols.internType(IrType.TypeRef);
 		for (object in program.objects)
 			objects.set(object.name, object);
+		nonNullFields = compiler.ir.analysis.IrNonNullFields.of(program);
 		view = new compiler.hl.lower.HlLoweringView(new compiler.hl.lower.HlTypedInterfaceTables(program).keys,
 			objects);
 		for (native in program.cNatives)
 			cNatives.set(native.name, native);
+		pureCalls = compiler.ir.analysis.IrLoopBounds.pureNativeCalls(program.natives);
 		for (fn in code.functions)
 			place(fn.functionIndex, fn.type, false);
 		for (entry in code.natives) {
@@ -217,6 +234,8 @@ class HlcModule {
 	 * runtime resolved.
 	 */
 	public function functionPointer(slot:Int):String {
+		if (collecting)
+			return "";
 		var text = usage;
 		if (native[slot]) {
 			if (text != null)
@@ -264,29 +283,34 @@ class HlcModule {
 		return type;
 	}
 
-	/** The descriptor of type `type` (`hl_type*`), a pointer the entry point sets before anything runs (`image`). */
+	/** The descriptor of type `type` (`hl_type*`), a pointer the entry point sets before anything runs (`HlcImage`). */
 	public function typeDescriptor(type:Int):String {
+		if (collecting)
+			return "";
 		if (usage != null)
 			usage.types.set(type, true);
 		return typeNames[type];
 	}
 
-	/** The address of global `global`'s value (`void*`), a pointer the entry point sets before anything runs (`image`). */
+	/** The address of global `global`'s value (`void*`), a pointer the entry point sets before anything runs (`HlcImage`). */
 	public function globalPointer(global:Int):String {
+		if (collecting)
+			return "";
 		if (usage != null)
 			usage.globals.set(global, true);
 		return globalNames[global];
 	}
 
 	/**
-	 * Records that object type `type` is allocated inline, while the functions are collected: the entry point fills its
-	 * descriptor with the collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything runs.
+	 * The inline allocation descriptor of object type `type` (`hl_jit_alloc_data`), recorded while the functions are collected:
+	 * the entry point fills it with the collector's own description of the fast path (`hl_jit_alloc_prepare`) before anything
+	 * runs.
 	 */
-	public function collectAllocation(type:Int):Void
-		allocationTypes.set(type, true);
-
-	/** The inline allocation descriptor of object type `type` (`hl_jit_alloc_data`). */
 	public function allocation(type:Int):String {
+		if (collecting) {
+			allocationTypes.set(type, true);
+			return "";
+		}
 		if (!allocationTypes.exists(type))
 			throw new InternalError('C backend: the inline allocation of ${types.typeName(type)} was not collected before lowering');
 		if (usage != null)
@@ -294,8 +318,9 @@ class HlcModule {
 		return allocationNames[type];
 	}
 
-	/** Settles every C name once the collection pass has interned all that the functions use. */
+	/** Settles every C name once the collection has interned all that the functions use. */
 	function settleNames():Void {
+		collecting = false;
 		typeLimit = symbols.types.length;
 		globalLimit = symbols.globals.length;
 		if (code.types.length != typeLimit || code.globals.length != globalLimit)
@@ -320,6 +345,10 @@ class HlcModule {
 		];
 		return '${types.cType(signature.result)} ${cNames[slot]}(${parameters.length == 0 ? "void" : parameters.join(", ")})';
 	}
+
+	/** The object named `name`, or null. */
+	public inline function object(name:String):Null<IrObject>
+		return objects.get(name);
 
 	/** The function a value class's method `name` is, called directly as `HlLower` calls it; null for other receivers. */
 	public function valueMethod(type:IrType, name:String):Null<String> {
@@ -389,7 +418,9 @@ class HlcModule {
 		// lowering only reads the tables.
 		for (index in 0...functions.length)
 			try
-				lowering.collect(bodies[index])
+				lowering.collect(bodies[index], slots.get(functions[index].name))
+			catch (error:HlcFunctionLower.HlcUnsupported)
+				throw error
 			catch (error:InternalError)
 				throw new InternalError('C backend, collecting ${bodies[index].name}: ${error.message}');
 		settleNames();
@@ -439,7 +470,7 @@ class HlcModule {
 		}
 		var imageUsage = new HlcUsage();
 		use(imageUsage);
-		result.push({path: "image.c", content: withDeclarations(image(), imageUsage)});
+		result.push({path: "image.c", content: withDeclarations(new HlcImage(this).write(), imageUsage)});
 		use(null);
 		return result;
 	}
@@ -483,43 +514,17 @@ class HlcModule {
 		return [for (path in paths) names.get(path)];
 	}
 
+	/**
+	 * `hlc.h`: the SDK's `hlc_prelude.h`, what every program's C shares, with this program's options defined before it, and
+	 * after it what depends on the program.
+	 */
 	function header():String {
 		var buffer = new StringBuf();
 		buffer.add("/* Generated by Haxeon's C backend (docs/design/AOT_BACKEND.md). */\n");
 		buffer.add("#ifndef HLC_GENERATED_H\n#define HLC_GENERATED_H\n");
-		buffer.add("#include <math.h>\n#include <string.h>\n#include <stddef.h>\n#include <hl.h>\n\n");
-		buffer.add("#if defined(__GNUC__)\n");
-		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-label\"\n");
-		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-variable\"\n");
-		buffer.add("#pragma GCC diagnostic ignored \"-Wunused-but-set-variable\"\n");
-		buffer.add("#endif\n\n");
-		// The program's functions are in a section of their own, which tells the stack capture its frames (`hlc_stack.c`). A
-		// development build (HLC_EXACT_FRAMES, `HlcBuild`) does not let the C compiler inline them into each other, so a Haxe stack
-		// trace has the JIT's frames exactly; a release build does, and the stack capture restores the inlined frames from the
-		// debug information (DWARF, or the PDB with MSVC). MSVC's compilers (cl, clang-cl) do not define __GNUC__ and take the
-		// same requests as __declspec.
-		buffer.add("#if defined(HLC_EXACT_FRAMES) && defined(__GNUC__)\n#define HLC_NOINLINE __attribute__((noinline))\n");
-		buffer.add("#elif defined(HLC_EXACT_FRAMES) && defined(_MSC_VER)\n#define HLC_NOINLINE __declspec(noinline)\n");
-		buffer.add("#else\n#define HLC_NOINLINE\n#endif\n");
-		buffer.add("#if defined(__ELF__) && defined(__GNUC__)\n");
-		buffer.add("#define HLC_FUNCTION __attribute__((section(\"hlc_text\"))) HLC_NOINLINE\n");
-		buffer.add("#elif defined(_WIN32) && defined(__GNUC__)\n");
-		buffer.add("#define HLC_FUNCTION __attribute__((section(\".text$hlc.2\"))) HLC_NOINLINE\n");
-		buffer.add("#elif defined(_WIN32) && defined(_MSC_VER)\n");
-		buffer.add("#define HLC_FUNCTION __declspec(code_seg(\".text$hlc.2\")) HLC_NOINLINE\n");
-		buffer.add("#else\n#define HLC_FUNCTION HLC_NOINLINE\n#endif\n\n");
-		buffer.add("void hl_jit_null_field_access( int fhash );\n");
-		buffer.add("typedef struct { const char *key; void *(*call)( void *f, void **a, vdynamic *out ); void *wrap; } hlc_signature;\n");
-		buffer.add("static inline double hlc_f64( unsigned int high, unsigned int low ) {\n");
-		buffer.add("\tunsigned long long bits = ((unsigned long long)high << 32) | low; double value;\n");
-		buffer.add("\tmemcpy(&value,&bits,sizeof(value)); return value;\n}\n\n");
 		if (inlineAllocation)
-			buffer.add(ALLOCATION_HELPER);
-		buffer.add("#if defined(__GNUC__)\n#define HLC_STRING2(x) #x\n#define HLC_STRING(x) HLC_STRING2(x)\n");
-		// Weak where the linker allows it: a native the libraries lack is the loader's error at start-up, as for the JIT, not a
-		// link error.
-		buffer.add("#if defined(__ELF__)\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name) __attribute__((weak))\n");
-		buffer.add("#else\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name)\n#endif\n#endif\n\n");
+			buffer.add("#define HLC_INLINE_ALLOCATION\n");
+		buffer.add("#include <hlc_prelude.h>\n\n");
 		if (readsValueArrays) {
 			var helper = new StringBuf();
 			var helperUsage = new HlcUsage();
@@ -535,7 +540,7 @@ class HlcModule {
 	 * A native under a name of its own (`functionPointer`): with gcc and clang a native of the VM or the runtime is its C symbol
 	 * (an asm label), with MSVC's compilers on 64-bit Windows the linker binds the name to it (`/alternatename`, as C symbols
 	 * there have no prefix), else the native is the pointer the runtime resolved for its slot, which the entry point copies to
-	 * `hlc_np_` before anything runs (`image`).
+	 * `hlc_np_` before anything runs (`HlcImage`).
 	 */
 	function nativeDeclaration(slot:Int, buffer:StringBuf):Void {
 		var signature = types.signature(slotTypes[slot]);
@@ -608,54 +613,12 @@ class HlcModule {
 	}
 
 	/**
-	 * `hlc_new`: an object allocated from the thread's allocation buffer as the JIT's inline allocation does, by the
-	 * descriptor the collector gave for its type (`hl_jit_alloc_data`), and through the collector's slow path otherwise. Where
-	 * the collector gives no descriptor (other targets, debug collectors) the descriptor is empty and `hl_alloc_obj` allocates.
-	 */
-	static final ALLOCATION_HELPER =
-		"#if defined(__GNUC__) && defined(__linux__) && (defined(__x86_64__) || defined(__aarch64__))\n"
-		+ "#define HLC_INLINE_ALLOC\n"
-		+ "static inline unsigned char *hlc_thread_pointer( void ) {\n"
-		+ "\tunsigned char *p;\n"
-		+ "#if defined(__x86_64__)\n"
-		+ "\t__asm__(\"mov %%fs:0,%0\" : \"=r\"(p));\n"
-		+ "#else\n"
-		+ "\t__asm__(\"mrs %0, tpidr_el0\" : \"=r\"(p));\n"
-		+ "#endif\n"
-		+ "\treturn p;\n}\n"
-		+ "#endif\n"
-		+ "static inline void *hlc_new( hl_jit_alloc_data *d, hl_type *t ) {\n"
-		+ "#ifdef HLC_INLINE_ALLOC\n"
-		+ "\tif( !d->type ) return hl_alloc_obj(t);\n"
-		+ "\tfor(int i=0;i<d->nguards;i++) {\n"
-		+ "\t\thl_jit_alloc_guard *g = d->guards + i;\n"
-		+ "\t\tuint64 v = g->bytes == 1 ? *(volatile unsigned char*)g->address : g->bytes == 4 ? *(volatile unsigned int*)g->address : *(volatile uint64*)g->address;\n"
-		+ "\t\tif( v & g->mask ) return hl_jit_alloc_slow(t);\n"
-		+ "\t}\n"
-		+ "\tif( !d->runtime->allocation_ready ) return hl_jit_alloc_slow(t);\n"
-		+ "\tunsigned char *th = *(unsigned char**)(hlc_thread_pointer() + d->tls_offset);\n"
-		+ "\tif( !th ) return hl_jit_alloc_slow(t);\n"
-		+ "\tunsigned char *tlab = *(unsigned char**)(th + d->tlab_field);\n"
-		+ "\tif( !tlab ) return hl_jit_alloc_slow(t);\n"
-		+ "\tunsigned char **slot = (unsigned char**)(tlab + d->slot_offset);\n"
-		+ "\tunsigned char *p = slot[0];\n"
-		+ "\tif( !p || (uintptr_t)(p + d->block) > (uintptr_t)slot[1] ) return hl_jit_alloc_slow(t);\n"
-		+ "\tslot[0] = p + d->block;\n"
-		+ "\tfor(int o=HL_WSIZE;o<d->block;o+=HL_WSIZE) *(void**)(p + o) = NULL;\n"
-		+ "\t*(hl_type**)p = d->type;\n"
-		+ "\treturn p;\n"
-		+ "#else\n"
-		+ "\treturn hl_alloc_obj(t);\n"
-		+ "#endif\n"
-		+ "}\n\n";
-
-	/**
 	 * `hlc_value_array_view`: the value array a header leads to, as `HlLower.resolveValueArrayView` resolves it (the header
 	 * itself, or a forwarding header's data; null for anything else), and its stride in bytes.
 	 */
 	function valueArrayHelper(buffer:StringBuf):Void {
-		var header = functionPointer(requireSlot(compiler.hl.lower.HlLower.VALUE_ARRAY_HEADER_TYPE)),
-			forward = functionPointer(requireSlot(compiler.hl.lower.HlLower.VALUE_ARRAY_FORWARD_TYPE));
+		var header = functionPointer(requireSlot(compiler.hl.lower.HlLoweringDecisions.VALUE_ARRAY_HEADER_TYPE)),
+			forward = functionPointer(requireSlot(compiler.hl.lower.HlLoweringDecisions.VALUE_ARRAY_FORWARD_TYPE));
 		buffer.add("static hl_type *hlc_value_array_header_t, *hlc_value_array_forward_t;\n");
 		buffer.add("static inline vbyte *hlc_value_array_view( void *header, int *stride ) {\n");
 		buffer.add("\thl_type *t = header ? ((vdynamic*)header)->t : &hlt_void;\n\tvbyte *a;\n");
@@ -663,215 +626,8 @@ class HlcModule {
 		buffer.add("\tif( t == hlc_value_array_header_t ) a = (vbyte*)header;\n\telse {\n");
 		buffer.add('\t\tif( !hlc_value_array_forward_t ) hlc_value_array_forward_t = (hl_type*)$forward();\n');
 		buffer.add('\t\tif( t != hlc_value_array_forward_t ) return NULL;\n');
-		buffer.add('\t\ta = *(vbyte**)((vbyte*)header + ${compiler.hl.lower.HlLower.ARRAY_DATA_OFFSET});\n\t}\n');
-		buffer.add('\tif( a ) *stride = (int)(*(unsigned int*)(a + ${compiler.hl.lower.HlLower.VALUE_ARRAY_STRIDE_OFFSET}) >> 3);\n');
+		buffer.add('\t\ta = *(vbyte**)((vbyte*)header + ${compiler.hl.lower.HlLoweringDecisions.ARRAY_DATA_OFFSET});\n\t}\n');
+		buffer.add('\tif( a ) *stride = (int)(*(unsigned int*)(a + ${compiler.hl.lower.HlLoweringDecisions.VALUE_ARRAY_STRIDE_OFFSET}) >> 3);\n');
 		buffer.add("\treturn a;\n}\n\n");
-	}
-
-	/** The C calling shape of a value of type `type`, one letter of a trampoline's key; `hlc_main.c` spells it the same. */
-	function shapeCode(type:Int):String
-		return switch types.kind(type) {
-			case Void: "v";
-			case Bool: "b";
-			case Ui8: "c";
-			case Ui16: "s";
-			case I32, EnumTag: "i";
-			case I64, Guid: "l";
-			case F32: "f";
-			case F64: "d";
-			default: "p";
-		};
-
-	static function shapeType(code:String):String
-		return switch code {
-			case "v": "void";
-			case "b": "bool";
-			case "c": "unsigned char";
-			case "s": "unsigned short";
-			case "i": "int";
-			case "l": "int64";
-			case "f": "float";
-			case "d": "double";
-			default: "void*";
-		};
-
-	/**
-	 * The trampolines the runtime calls compiled functions through, and wraps closures in, which the JIT would make
-	 * (`hl_setup.static_call`, `get_wrapper`): one pair per C calling shape of the program's function types, and of each with
-	 * its first argument bound, keyed by the result's shape and the arguments' (`hlc_signatures`, in key order).
-	 */
-	function trampolines(buffer:StringBuf):Void {
-		var keys:Map<String, Bool> = [];
-		for (index in 0...code.types.length)
-			switch types.kind(index) {
-				case Fun, Method:
-					var signature = types.signature(index),
-						shapes = [for (argument in signature.arguments) shapeCode(argument)];
-					keys.set(shapeCode(signature.result) + shapes.join(""), true);
-					if (shapes.length > 0)
-						keys.set(shapeCode(signature.result) + shapes.slice(1).join(""), true);
-				default:
-			}
-		var sorted = [for (key in keys.keys()) key];
-		sorted.sort(Reflect.compare);
-		for (key in sorted) {
-			var result = key.charAt(0), arguments = [for (index in 1...key.length) key.charAt(index)];
-			var parameters = [for (argument in arguments) shapeType(argument)];
-			var values = [
-				for (index in 0...arguments.length)
-					arguments[index] == "p" ? 'a[$index]' : arguments[index] == "b" || arguments[index] == "c"
-					|| arguments[index] == "s"
-					? '(${shapeType(arguments[index])})*(int*)a[$index]' : '*(${shapeType(arguments[index])}*)a[$index]'
-			];
-			var call =
-				'((${shapeType(result)} (*)(${parameters.length == 0 ? "void" : parameters.join(",")}))f)(${values.join(",")})';
-			buffer.add('static void *hlc_call_$key( void *f, void **a, vdynamic *out ) {\n\t');
-			buffer.add(switch result {
-				case "v": '$call;\n\treturn NULL;\n';
-				case "b", "c", "s", "i": 'out->v.i = (int)$call;\n\treturn &out->v.i;\n';
-				case "l": 'out->v.i64 = $call;\n\treturn &out->v.i64;\n';
-				case "f": 'out->v.f = $call;\n\treturn &out->v.f;\n';
-				case "d": 'out->v.d = $call;\n\treturn &out->v.d;\n';
-				default: 'return $call;\n';
-			});
-			buffer.add("}\n");
-			var declared = ["void *w"].concat([for (index in 0...arguments.length) '${parameters[index]} p$index']);
-			var packed = [for (index in 0...arguments.length) arguments[index] == "p" ? 'p$index' : '&p$index'];
-			buffer.add('static ${shapeType(result)} hlc_wrap_$key( ${declared.join(", ")} ) {\n');
-			buffer.add('\tvoid *args[] = {${packed.concat(["NULL"]).join(",")}};\n\tvdynamic ret;\n');
-			buffer.add(switch result {
-				case "v": '\thl_wrapper_call(w,args,&ret);\n';
-				case "b", "c", "s", "i": '\thl_wrapper_call(w,args,&ret);\n\treturn (${shapeType(result)})ret.v.i;\n';
-				case "l": '\thl_wrapper_call(w,args,&ret);\n\treturn ret.v.i64;\n';
-				case "f": '\thl_wrapper_call(w,args,&ret);\n\treturn ret.v.f;\n';
-				case "d": '\thl_wrapper_call(w,args,&ret);\n\treturn ret.v.d;\n';
-				default: '\treturn hl_wrapper_call(w,args,&ret);\n';
-			});
-			buffer.add("}\n");
-		}
-		buffer.add("const hlc_signature hlc_signatures[] = {\n");
-		for (key in sorted)
-			buffer.add('\t{"$key",hlc_call_$key,(void*)hlc_wrap_$key},\n');
-		buffer.add('\t{NULL,NULL,NULL}};\nconst int hlc_signature_count = ${sorted.length};\n\n');
-	}
-
-	/**
-	 * The definitions of the pointers `names` gives for `indices` of a table, and the table the entry point fills them from:
-	 * `hlc_KIND_refs` (each pointer's address) and `hlc_KIND_ref_indices`, in index order.
-	 */
-	function references(buffer:StringBuf, type:String, kind:String, indices:Array<Int>, names:Int->String):Void {
-		indices.sort((a, b) -> a - b);
-		for (index in indices)
-			buffer.add('$type *${names(index)};\n');
-		buffer.add('const int hlc_${kind}_ref_count = ${indices.length};\n');
-		buffer.add('$type **const hlc_${kind}_refs[] = {');
-		for (index in indices)
-			buffer.add('&${names(index)},');
-		buffer.add('NULL};\nconst int hlc_${kind}_ref_indices[] = {${indices.concat([-1]).join(",")}};\n\n');
-	}
-
-	/**
-	 * The module image: this module with every function body a stub, which the runtime decodes into its types, globals,
-	 * natives and constants (`hl_code_read`, `hl_module_init`) before the slots are pointed at the C functions; the slot table;
-	 * and the layouts the C code assumes, which the runtime checks against its own before running anything.
-	 */
-	function image():String {
-		var stubbed = new HlCode();
-		stubbed.ints = code.ints;
-		stubbed.floats = code.floats;
-		stubbed.strings = code.strings;
-		stubbed.types = code.types;
-		stubbed.globals = code.globals;
-		stubbed.natives = code.natives;
-		stubbed.constants = code.constants;
-		stubbed.entryPoint = code.entryPoint;
-		// The functions' names, which stack traces show as the JIT's do.
-		stubbed.debugSections =
-			[for (section in code.debugSections) if (section.kind == HlWriter.FUNCTION_IDENTITIES) section];
-		stubbed.functions = [for (fn in code.functions) {
-			var signature = types.signature(fn.type);
-			new HlFunction(fn.type, fn.functionIndex, signature.arguments.concat([signature.result]),
-				[compiler.hl.HlFunction.HlInstruction.Return(signature.arguments.length)]);
-		}];
-		var bytes = HlWriter.encode(stubbed).flatten();
-		var buffer = new StringBuf();
-		// As little-endian 64-bit words, the byte order of every HashLink target: a C compiler reads an eighth of the numbers it
-		// would read as bytes.
-		buffer.add('const int hlc_image_size = ${bytes.length};\n');
-		buffer.add("const unsigned long long hlc_image[] = {");
-		var index = 0;
-		while (index < bytes.length) {
-			if (index % 128 == 0)
-				buffer.add("\n");
-			// The word's hexadecimal digits, most significant first, without leading zeros.
-			buffer.add("0x");
-			var started = false, nibble = 15;
-			while (nibble >= 0) {
-				var at = index + (nibble >> 1),
-					value = at < bytes.length ? (bytes.get(at) >> ((nibble & 1) << 2)) & 15 : 0;
-				if (started || value != 0 || nibble == 0) {
-					buffer.addChar(value < 10 ? "0".code + value : "A".code + value - 10);
-					started = true;
-				}
-				nibble--;
-			}
-			buffer.addChar(",".code);
-			index += 8;
-		}
-		buffer.add("0};\n\n");
-		buffer.add('const int hlc_slot_count = ${slotTypes.length};\n');
-		buffer.add('const int hlc_entry = ${code.entryPoint};\n');
-		buffer.add("void *hlc_functions[] = {");
-		for (slot in 0...slotTypes.length)
-			buffer.add((slot % 4 == 0 ? "\n\t" : " ")
-				+ (slotTypes[slot] >= 0 && !native[slot] ? '(void*)${functionPointer(slot)},' : "NULL,"));
-		buffer.add("\n\tNULL};\n\n");
-		// By C name, for the stack capture: a function the C compiler inlined is a frame when it is a generated one.
-		var named = [for (slot in 0...slotTypes.length) if (slotTypes[slot] >= 0 && !native[slot]) slot];
-		named.sort((a, b) -> Reflect.compare(cNames[a], cNames[b]));
-		buffer.add('const int hlc_function_name_count = ${named.length};\n');
-		buffer.add("const struct { const char *name; int slot; } hlc_function_names[] = {");
-		for (slot in named)
-			buffer.add('\n\t{"${cNames[slot]}",$slot},');
-		buffer.add("\n\t{NULL,-1}};\n\n");
-		trampolines(buffer);
-		// What the files name by stable names, each pointed at by the entry point before anything runs: the type descriptors, the
-		// globals, the natives' pointers and the inline allocation descriptors.
-		references(buffer, "hl_type", "type", [for (type in used.types.keys()) type], index -> typeNames[index]);
-		references(buffer, "void", "global", [for (global in used.globals.keys()) global], index -> globalNames[index]);
-		references(buffer, "void", "native", [for (slot in used.natives.keys()) slot], slot -> nativePointers[slot]);
-		var allocations = [for (type in allocationTypes.keys()) type];
-		allocations.sort((a, b) -> a - b);
-		buffer.add('const int hlc_alloc_count = ${allocations.length};\n');
-		buffer.add('const int hlc_alloc_types[] = {${allocations.concat([-1]).join(",")}};\n');
-		for (type in allocations)
-			buffer.add('hl_jit_alloc_data ${allocationNames[type]};\n');
-		buffer.add("hl_jit_alloc_data *const hlc_alloc_refs[] = {");
-		for (type in allocations)
-			buffer.add('&${allocationNames[type]},');
-		buffer.add("NULL};\n\n");
-		// The C compiler's line table keeps a `#line` path relative to its working directory when the path is under it, so the
-		// stack traces read the paths as written from here (`hlc_stack.c`).
-		var paths = [for (path in sourcePaths.keys()) path];
-		paths.sort(Reflect.compare);
-		buffer.add('const int hlc_source_path_count = ${paths.length};\n');
-		buffer.add("const char *const hlc_source_paths[] = {");
-		for (path in paths)
-			buffer.add('\n\t${quote(path)},');
-		buffer.add("\n\tNULL};\n\n");
-		buffer.add('const int hlc_global_count = ${globalOffsets.length};\n');
-		buffer.add('const int hlc_global_offsets[] = {${globalOffsets.concat([-1]).join(",")}};\n\n');
-		buffer.add("/* Object layouts: type, field count, then field index and offset pairs; -1 ends the list. */\n");
-		buffer.add("const int hlc_object_layouts[] = {\n");
-		for (index in 0...code.types.length)
-			if (types.isObject(index)) {
-				var fields = [for (field in types.fields(index)) if (!types.isVoid(field.type)) field];
-				buffer.add('\t$index,${fields.length},');
-				for (field in fields)
-					buffer.add('${field.index},(int)offsetof(${types.structName(index)},f${field.index}),');
-				buffer.add("\n");
-			}
-		buffer.add("\t-1};\n");
-		return buffer.toString();
 	}
 }

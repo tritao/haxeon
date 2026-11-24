@@ -65,6 +65,9 @@ class NativeRegistry {
 		return result;
 	}
 
+	public function has(name:String):Bool
+		return definitions.exists(name);
+
 	/** Whether a native is named `prefix.something`. */
 	public function hasChild(prefix:String):Bool
 		return parents.exists(prefix);

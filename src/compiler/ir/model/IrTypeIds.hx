@@ -7,6 +7,7 @@ import compiler.ir.model.Ir.IrType;
  * seen, so ids may index tables but must never decide the order of anything a compile writes. An `IrBody` holds its types as these
  * ids, so two of its types compare as two integers.
  */
+@:nullSafety(Strict)
 class IrTypeIds {
 	final ids = new IrTypeMap<Int>();
 	final types:Array<IrType> = [];

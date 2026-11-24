@@ -1,0 +1,154 @@
+---
+import Diagram from './Diagram.astro';
+import CodeCard from '../CodeCard.astro';
+import binding from './geometry.hxi?raw';
+import { docsUrl } from '../../../docs.mjs';
+const header = `typedef struct geo_point {
+  double x;
+  double y;
+} geo_point;
+
+/* The distance between two points. */
+double geo_distance(const geo_point *a,
+                    const geo_point *b);
+
+/* Moves point by (dx, dy) in place. */
+void geo_translate(geo_point *point,
+                   double dx, double dy);`;
+const code = `import Geometry;
+
+function main() {
+	var origin = new Point();
+	var corner = new Point();
+	corner.x = 3.0;
+	corner.y = 4.0;
+	var d = Geometry.distance(origin, corner);
+	Sys.println('distance: $d');
+
+	Geometry.translate(corner, 1.0, 1.0);
+	Sys.println('moved to: \${corner.x}, \${corner.y}');
+}`;
+const output = `distance: 5
+moved to: 4, 5`;
+---
+
+<section id="interop">
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow">C and C++</span>
+      <h2>Call C and C++ without a bridge.</h2>
+      <p class="lede">
+        Point Haxeon at a header. Structs keep their C layout, strings cross as UTF-8, and handles
+        the library owns close exactly once.
+      </p>
+    </div>
+    <div class="trio" data-example="geometry">
+      <div>
+        <h3>geometry.h</h3>
+        <CodeCard code={header} lang="c" />
+      </div>
+      <div>
+        <h3>Generated geometry.hxi</h3>
+        <CodeCard code={binding} lang="hxi" />
+      </div>
+      <div>
+        <h3>Main.hx</h3>
+        <CodeCard {code} lang="haxe" command="haxeon run" {output} />
+      </div>
+    </div>
+    <Diagram>
+      <svg
+        class="drawing"
+        viewBox="0 0 1000 200"
+        role="img"
+        aria-label="C and Haxeon point at the same 16 bytes of geo_point"
+      >
+        <defs>
+          <marker
+            id="ah2"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            orient="auto-start-reverse"
+          >
+            <path d="M0 0L10 5L0 10z" class="accf"></path>
+          </marker>
+        </defs>
+        <text x="300" y="30" class="ttl">geo_point · 16 bytes</text>
+        <path d="M302 56H582M302 56v8M582 56v8" class="ln"></path><text
+          x="442"
+          y="50"
+          text-anchor="middle"
+        >
+          double x
+        </text>
+        <path d="M590 56H870M590 56v8M870 56v8" class="ln"></path><text
+          x="730"
+          y="50"
+          text-anchor="middle"
+        >
+          double y
+        </text>
+        {
+          Array.from({ length: 16 }, (_, byte) => (
+            <rect x={300 + byte * 36} y="72" width="36" height="40" class="box" />
+          ))
+        }
+        <text x="300" y="134" text-anchor="middle">0</text><text
+          x="588"
+          y="134"
+          text-anchor="middle"
+        >
+          8
+        </text><text x="876" y="134" text-anchor="middle">16</text>
+        <rect x="20" y="40" width="210" height="36" rx="6" class="codebox"></rect><text
+          x="125"
+          y="63"
+          text-anchor="middle"
+          class="codet"
+        >
+          C geo_point *a
+        </text>
+        <rect x="20" y="124" width="210" height="36" rx="6" class="codebox"></rect><text
+          x="125"
+          y="147"
+          text-anchor="middle"
+          class="codet"
+        >
+          Haxeon Point corner
+        </text>
+        <path d="M230 58C265 58 268 84 296 86" class="acc" marker-end="url(#ah2)"></path>
+        <path d="M230 142C265 142 268 100 296 98" class="acc" marker-end="url(#ah2)"></path>
+        <text x="300" y="178">
+          Both sides read and write the same bytes: no copying, no conversion layer.
+        </text>
+      </svg>
+    </Diagram>
+    <div class="ctas">
+      <a class="btn ghost" href={docsUrl('guides/04-calling-c-and-cpp.md')}
+        >Read the C and C++ guide</a
+      >
+    </div>
+  </div>
+</section>
+
+<style>
+  .trio {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--hx-space-4);
+    --ec-codeFontSize: 0.78rem;
+    --hx-output-size: 0.78rem;
+  }
+  .trio h3 {
+    font-size: 0.95rem;
+    margin-bottom: var(--hx-space-2);
+  }
+  @media (max-width: 1100px) {
+    .trio {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

@@ -20,7 +20,6 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstExpression;
 import compiler.core.CancellationToken;
-import compiler.modules.ModuleState.SemanticDependencyKind;
 
 abstract SemanticSymbolId(String) from String to String {
 	public inline function new(module:String, declaration:String)
@@ -65,14 +64,6 @@ typedef SemanticCallEdge = {
 	final span:SourceSpan;
 }
 
-/** Dependency on a declaration established from a successfully typed node. */
-typedef ResolvedSemanticReference = {
-	final owner:String;
-	final target:String;
-	final targetId:SemanticSymbolId;
-	final kind:SemanticDependencyKind;
-}
-
 /** Revision-local declaration and resolved-local facts emitted by the compiler. */
 class SemanticIndex {
 	public final revision:Int;
@@ -84,7 +75,6 @@ class SemanticIndex {
 	final referenceKeys:Map<String, Map<String, Bool>> = [];
 	final signatures:Map<String, SemanticSignatureInfo> = [];
 	final callEdges:Array<SemanticCallEdge> = [];
-	final resolvedReferences:Array<ResolvedSemanticReference> = [];
 	final completionLocals:Array<SemanticCompletionLocal> = [];
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
@@ -110,9 +100,6 @@ class SemanticIndex {
 	final module:String;
 	var cancellation:Null<CancellationToken>;
 	var currentCaller:Null<SemanticSymbolId>;
-	var currentCallerName:Null<String>;
-	var currentAbstractDependencies:Map<String, Bool> = [];
-	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
 	var checkpointCount:Int = 0;
 
 	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:TokenTable) {
@@ -137,7 +124,7 @@ class SemanticIndex {
 			if (binding != null)
 				bind(id, binding.span);
 		}
-		for (enumDecl in declarations.enums)
+		for (enumDecl in declarations.enums.withoutReads())
 			for (enumCase in enumDecl.cases) {
 				var parameters = [for (index in 0...enumCase.params.length) {
 					var parameter = enumCase.params[index];
@@ -147,7 +134,7 @@ class SemanticIndex {
 					enumDecl.name + "." + enumCase.name + "(" + parameters.join(", ") + ")", parameters,
 					enumDecl.name);
 			}
-		for (classDecl in declarations.classes)
+		for (classDecl in declarations.classes.withoutReads())
 			for (method in classDecl.methods)
 				if (method.name == "new") {
 					var parameters = [
@@ -157,11 +144,11 @@ class SemanticIndex {
 					setDeclaredSignature(classDecl.name, classDecl.name + "(" + parameters.join(", ") + ")", parameters,
 						classDecl.name);
 				}
-		for (fn in declarations.classes)
+		for (fn in declarations.classes.withoutReads())
 			indexDeclarationTypes(fn.name, fn.fields, fn.methods, declarations);
-		for (fn in declarations.interfaces)
+		for (fn in declarations.interfaces.withoutReads())
 			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
-		for (fn in declarations.abstracts)
+		for (fn in declarations.abstracts.withoutReads())
 			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
 	}
 
@@ -305,12 +292,9 @@ class SemanticIndex {
 		declareLocals(fn, fn.statements);
 		indexCompletionLocals(fn.statements, fn.span, 0);
 		currentCaller = functionId;
-		currentCallerName = fn.name;
-		currentAbstractDependencies = [];
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
 		indexCallTokens(fn, functionId, resolve);
 		currentCaller = null;
-		currentCallerName = null;
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
 		cancellation = null;
@@ -384,7 +368,7 @@ class SemanticIndex {
 			depth:Int):Void {
 		for (statement in statements)
 			switch statement {
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					indexRecoveredStatements(functionKey, [inner], scope, depth);
 				case UninitializedDeclaration(name, type, span):
 					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
@@ -435,7 +419,7 @@ class SemanticIndex {
 	function indexRecoveredStatementUses(statements:Array<AstStatement>):Void {
 		for (statement in statements)
 			switch statement {
-				case PrivateAccessStatement(inner, _):
+				case AnnotatedStatement(_, inner, _):
 					indexRecoveredStatementUses([inner]);
 				case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Return(value, _),
 					Throw(value, _), Expression(value, _):
@@ -488,7 +472,7 @@ class SemanticIndex {
 
 	function indexRecoveredExpression(expression:AstExpression):Void {
 		switch expression {
-			case PrivateAccessExpression(inner, _):
+			case AnnotatedExpression(_, inner, _):
 				indexRecoveredExpression(inner);
 			case ErrorExpression(_):
 			case Variable(name, span):
@@ -678,8 +662,28 @@ class SemanticIndex {
 	public function symbol(id:SemanticSymbolId):Null<IndexedSemanticSymbol>
 		return symbols.get(id);
 
-	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo>
-		return signatures.get(id);
+	public function signature(id:SemanticSymbolId):Null<SemanticSignatureInfo> {
+		var signature = signatures.get(id);
+		if (signature != null)
+			return signature;
+		var symbol = symbols.get(id), declaration = symbol == null ? null : declaredFunctions.get(symbol.name);
+		if (declaration == null)
+			return null;
+		var typeParameters = declaration.typeParameters ?? [],
+			name = typeParameters.length == 0
+				? declaration.name : declaration.name + "<" + typeParameters.join(", ") + ">",
+			parameters = [
+				for (argument in declaration.arguments)
+					(argument.optional || argument.defaultValue != null ? "?" : "") + argument.name + ":"
+					+ displayAstType(argument.type)
+			],
+			result = displayAstType(declaration.result);
+		return {
+			label: name + "(" + parameters.join(", ") + "):" + result,
+			parameters: parameters,
+			result: result
+		};
+	}
 
 	public function calls():Array<SemanticCallEdge> {
 		var result = callEdges.copy();
@@ -713,9 +717,6 @@ class SemanticIndex {
 		return result;
 	}
 
-	public function resolvedDependencies():Array<ResolvedSemanticReference>
-		return resolvedReferences.copy();
-
 	/** Index a typed field initializer under its field declaration identity. */
 	/**
 	 * Indexes the typed initializer of field `owner`, whose type is `type`. An unannotated field has no declared type to index
@@ -730,9 +731,6 @@ class SemanticIndex {
 			declarationTypes.set(field, type);
 			inferredFieldTypes.set(owner, type);
 		}
-		currentCallerName = owner;
-		currentAbstractDependencies = [];
-		currentDependencyKind = SemanticDependencyKind.Initializer;
 		var synthetic:TypedFunction = {
 			name: owner, role: UserFunction,
 			owner: null,
@@ -747,8 +745,6 @@ class SemanticIndex {
 		};
 		indexExpression(synthetic, expression, resolve, resolveEnumCase);
 		currentCaller = null;
-		currentCallerName = null;
-		currentDependencyKind = SemanticDependencyKind.Body;
 	}
 
 	public function indexTypeReferences(resolve:String->Null<SemanticSymbolId>, ?token:CancellationToken):Void {
@@ -993,7 +989,6 @@ class SemanticIndex {
 		if (expression.semanticReference != null)
 			bindNamed(resolve, expression.semanticReference, expression.span);
 		completionTypes.push({span: expression.span, type: expression.type});
-		indexAbstractTypeDependencies(expression.type, resolve, null);
 		switch expression.expression {
 			case TLocal(identity), TCaptured(identity):
 				var id = localId(fn, identity);
@@ -1249,44 +1244,12 @@ class SemanticIndex {
 			bind(id, token.span);
 	}
 
-	function indexAbstractTypeDependencies(type:CompilerType, resolve:String->Null<SemanticSymbolId>,
-			explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Void {
-		switch type {
-			case TAbstract(name, arguments, representation):
-				for (argument in arguments) indexAbstractTypeDependencies(argument, resolve, explored);
-				if (!currentAbstractDependencies.exists(name)) {
-					currentAbstractDependencies.set(name, true);
-					var id = resolve(name);
-					if (id != null) recordResolvedReference(name, id);
-					indexAbstractTypeDependencies(representation, resolve, explored);
-				}
-			case TNullable(element), TArray(element),
-				TIterator(element): indexAbstractTypeDependencies(element, resolve, explored);
-			case TMap(key, value), TKeyPath(key, value, _):
-				indexAbstractTypeDependencies(key, resolve, explored);
-				indexAbstractTypeDependencies(value, resolve, explored);
-			case TInstance(_, _, arguments): for (argument in arguments) indexAbstractTypeDependencies(argument,
-				resolve, explored);
-			case TFunction(arguments, result, _):
-				for (argument in arguments) indexAbstractTypeDependencies(argument, resolve, explored);
-				indexAbstractTypeDependencies(result, resolve, explored);
-			case TAnonymous(_, fields):
-				if (explored == null) explored = [];
-				if (explored.indexOf(fields) < 0) {
-					explored.push(fields);
-					for (field in fields) indexAbstractTypeDependencies(field.type, resolve, explored);
-				}
-			default:
-		}
-	}
-
 	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Null<SemanticSymbolId> {
 		var id = resolve(name),
 			token = referenceToken(tokens, span, sourceName(name));
 		if (id != null) {
 			if (token != null)
 				bind(id, token.span);
-			recordResolvedReference(name, id);
 		}
 		return id;
 	}
@@ -1306,25 +1269,10 @@ class SemanticIndex {
 			return;
 		var id = resolve(enumName, index);
 		if (id != null) {
-			recordResolvedReference(enumName, id);
 			var token = enumReferenceToken(tokens, span, sourceName(Std.string(id)));
 			if (token != null)
 				bind(id, token.span);
 		}
-	}
-
-	function recordResolvedReference(target:String, targetId:SemanticSymbolId):Void {
-		if (currentCallerName == null)
-			return;
-		for (edge in resolvedReferences)
-			if (edge.owner == currentCallerName && edge.targetId == targetId && edge.kind == currentDependencyKind)
-				return;
-		resolvedReferences.push({
-			owner: currentCallerName,
-			target: target,
-			targetId: targetId,
-			kind: currentDependencyKind
-		});
 	}
 
 	static function enumReferenceToken(tokens:TokenTable, expression:SourceSpan, name:String):Null<Token> {

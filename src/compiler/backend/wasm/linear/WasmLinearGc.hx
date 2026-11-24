@@ -25,9 +25,10 @@ class WasmLinearGc {
 		builder.emit(I32Load(WasmLayout.HEAP_STATE_HEAP_TOP));
 	}
 
-	public static function wrapRuntimeFunctions(context:WasmLinearContext, count:Int):Void {
+	/** Wraps the runtime functions at `positions` among the module's defined functions. */
+	public static function wrapRuntimeFunctions(context:WasmLinearContext, positions:Array<Int>):Void {
 		var module = context.module;
-		for (index in 0...count) {
+		for (index in positions) {
 			var fn = module.functions[index];
 			// The collector's own functions and the allocator hold no references; linked C functions are not rewritten.
 			if (fn.name == "__haxeon_gc_mark" || fn.name == "__haxeon_gc_trace" || fn.name == "__haxeon_gc_collect"
@@ -57,7 +58,15 @@ class WasmLinearGc {
 				default: false;
 			}))
 				rootSlots.push(fn.type.parameters.length + index);
-		if (rootSlots.length == 0 && !runtimeNeutral)
+		// A collection only starts inside a call, so the frame has to be current at each call and nowhere else; a helper
+		// that makes no call needs no frame at all.
+		var makesCalls = false;
+		for (instruction in fn.body)
+			if (isRuntimeCall(instruction) || isRuntimeIndirectCall(instruction)) {
+				makesCalls = true;
+				break;
+			}
+		if (!makesCalls || (rootSlots.length == 0 && !runtimeNeutral))
 			return fn;
 		var frame:Null<Int> = null,
 			locals = fn.locals.copy(),
@@ -99,7 +108,7 @@ class WasmLinearGc {
 			body = guardBuilder.body.copy();
 		}
 		for (instruction in fn.body) {
-			if (frame != null && (isRuntimeCall(instruction) || (runtimeNeutral && isRuntimeIndirectCall(instruction))))
+			if (frame != null && (isRuntimeCall(instruction) || isRuntimeIndirectCall(instruction)))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
 			if ((switch (instruction) {
 				case Return: true;
@@ -108,8 +117,6 @@ class WasmLinearGc {
 				emitRuntimeRootFrameRestore(body, frame, context);
 			}
 			body.push(instruction);
-			if (frame != null && isRuntimeLocalWrite(instruction))
-				appendRuntimeRootSnapshot(body, frame, rootSlots);
 			if (runtimeNeutral && context.pendingExceptionFlag != null) {
 				var callType = runtimeCallType(context.module, instruction);
 				if (callType != null)
@@ -210,12 +217,6 @@ class WasmLinearGc {
 	static function isRuntimeCall(instruction:WasmInstruction):Bool
 		return switch instruction {
 			case Call(_): true;
-			default: false;
-		};
-
-	static function isRuntimeLocalWrite(instruction:WasmInstruction):Bool
-		return switch instruction {
-			case LocalSet(_), LocalTee(_): true;
 			default: false;
 		};
 

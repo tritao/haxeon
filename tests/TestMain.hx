@@ -155,6 +155,16 @@ class TestMain {
 		expectCompileError('function main():Int return true >= false ? 42 : 0;',
 			"Comparison requires matching numeric operands");
 		Sys.println("PASS: String ordering accepts matching strings without weakening mixed or boolean ordering");
+		// A type's path is its package and name: a root `Math` beside a module's main type is the standard library's, which
+		// Haxe rejects whether or not anything uses it; one in a package is a different path.
+		expectCompileError('class Math { public static function add(a:Int, b:Int):Int return a + b; } function main():Int return Math.add(20, 22);',
+			"Type name Math is redefined from module Main", true);
+		var packagedMath = new Compiler(null, CompilerIntrinsics.configuration());
+		packagedMath.addStandardLibrarySourceRoot("stdlib");
+		packagedMath.update("app/Main.hx",
+			"package app; class Math { public static function add(a:Int, b:Int):Int return a + b; } function main():Int return Math.add(20, 22);");
+		packagedMath.compile("app.Main");
+		Sys.println("PASS: a type at a standard library type's path is a redefinition on every target");
 		Frontend.compile('function main():Int { return 0x2A; }');
 		var separatedInteger =
 			new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
@@ -1175,6 +1185,10 @@ class TestMain {
 			[{name: "get", signature: "():String"}])
 			.compatibility != MethodSignatureChanged)
 			throw "Method signature change was not classified as reload-incompatible";
+		if (types.declareClass("demo.Box", null, [{name: "value", type: "Int"}],
+			[{name: "get", signature: "():String"}, {name: "set", signature: "(Int):Void"}])
+			.compatibility != MethodsChanged)
+			throw "An added method was not classified as a change of the class's methods";
 		if (types.declareClass("demo.Box", null, [{name: "value", type: "String"}],
 			[{name: "get", signature: "():Int"}]).compatibility != LayoutChanged)
 			throw "Field layout change was not classified as reload-incompatible";
@@ -1348,26 +1362,36 @@ class TestMain {
 		wireCollisionCompiler.update("Main.hx",
 			"import foo.Bar; function main():Int { var left:Bar = new Bar(); var right:foo_Bar = new foo_Bar(); return haxeon.wire.MessagePack.encode(left).length + haxeon.wire.MessagePack.encode(right).length; }");
 		wireCollisionCompiler.compile("Main");
-		expectCompileError('@:wire class MissingId { public var id:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new MissingId()).length; }',
-			'MessagePack record field "MissingId.id" requires @:id(n)');
+		expectCompileError('@:wire class MissingId { @:id(1) public var numbered:Int; public var id:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new MissingId()).length; }',
+			'Wire member "MissingId.id" needs @:id(n): cannot mix named and numbered members', true);
+		expectCompileError('typedef Mixed = { @:id(1) var first:Int; var second:Int; } function main():Int { var value:Mixed = {first: 1, second: 2}; return haxeon.wire.MessagePack.encode(value).length; }',
+			'Wire member "Mixed.second" needs @:id(n): cannot mix named and numbered members', true);
+		expectCompileError('typedef Bad = { var content:Dynamic; } function main():Int { var value:Bad = {content: null}; return haxeon.wire.MessagePack.encode(value).length; }',
+			'Wire record field "Bad.content" has unsupported type "TDynamic"', true);
+		expectCompileError('@:wire typedef First = { @:id(1) var value:Int; } @:wire typedef Second = { @:id(2) var value:Int; } function main():Int { var value:First = {value: 1}; return haxeon.wire.MessagePack.encode(value).length; }',
+			'Wire typedefs "First" and "Second" have the same structural type', true);
 		expectCompileError('@:wire class DuplicateId { @:id(1) public var left:Int; @:id(1) public var right:Int; } function main():Int { return haxeon.wire.MessagePack.encode(new DuplicateId()).length; }',
-			'MessagePack record fields "DuplicateId.left" and "DuplicateId.right" use duplicate @:id(1)');
+			'MessagePack record fields "DuplicateId.left" and "DuplicateId.right" use duplicate @:id(1)', true);
 		expectCompileError('@:wire class UnsupportedWireDefault { @:id(1) public var value:Int = 1 + 2; } function main():Int { return haxeon.wire.MessagePack.encode(new UnsupportedWireDefault()).length; }',
-			'MessagePack record field "UnsupportedWireDefault.value" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal');
+			'MessagePack record field "UnsupportedWireDefault.value" has an unsupported wire default; use a literal, null, enum constructor, or simple array/map literal',
+			true);
 		expectCompileError('@:wire class RecursiveWire { @:id(1) public var child:Null<RecursiveWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_19:class_RecursiveWire -> class_RecursiveWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveWire -> nullable_19:class_RecursiveWire -> class_RecursiveWire)',
+			true);
 		expectCompileError('@:wire class RecursiveArrayWire { @:id(1) public var children:Array<RecursiveArrayWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveArrayWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_24:class_RecursiveArrayWire -> class_RecursiveArrayWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveArrayWire -> array_24:class_RecursiveArrayWire -> class_RecursiveArrayWire)',
+			true);
 		expectCompileError('@:wire class RecursiveMapWire { @:id(1) public var children:Map<String, RecursiveMapWire>; } function main():Int { return haxeon.wire.MessagePack.encode(new RecursiveMapWire()).length; }',
-			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)');
+			'MessagePack record schema cannot be recursive (class_RecursiveMapWire -> map_string_22:class_RecursiveMapWire -> class_RecursiveMapWire)',
+			true);
 		expectCompileError('function main():Int { var values:Map<Bool, Int> = []; return haxeon.wire.MessagePack.encode(values).length; }',
-			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile');
-		expectCompileError('@:wire enum MissingEnumId { Value; } function main():Int { return haxeon.wire.MessagePack.encode(Value).length; }',
-			'MessagePack enum constructor "MissingEnumId.Value" requires @:id(n)');
+			'MessagePack does not support type "TMap(TBool,TInt)" in the current wire profile', true);
+		expectCompileError('@:wire enum MissingEnumId { @:id(1) First; Value; } function main():Int { return haxeon.wire.MessagePack.encode(Value).length; }',
+			'Wire member "MissingEnumId.Value" needs @:id(n): cannot mix named and numbered members', true);
 		expectCompileError('@:wire enum DuplicateEnumId { @:id(1) Left; @:id(1) Right; } function main():Int { return haxeon.wire.MessagePack.encode(Left).length; }',
-			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)');
+			'MessagePack enum "DuplicateEnumId" constructors "Left" and "Right" use duplicate @:id(1)', true);
 		expectCompileError('function main():Int { haxeon.wire.MessagePack.decode(haxeon.wire.MessagePack.encode(1)); return 0; }',
-			'MessagePack.decode requires an expected result type');
+			'MessagePack.decode requires an expected result type', true);
 		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
 			'Struct "Thing" does not conform to Equatable');
 		var temporaryStruct =
@@ -1470,7 +1494,8 @@ class TestMain {
 		expectCompileError('interface Diffable {} struct Unhashable {} class Snapshot implements Diffable { public var value:Unhashable; public function new() {} } function main():Int return haxeon.Diff.fingerprint(new Snapshot());',
 			'Cannot synthesize Diff.fingerprint for "Snapshot": field "value" does not conform to Hashable');
 		expectCompileError('@:wire enum RecursiveEnumWire { @:id(1) Node(value:Null<RecursiveEnumWire>); } function main():Int { return haxeon.wire.MessagePack.encode(Node(null)).length; }',
-			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)');
+			'MessagePack enum schema cannot be recursive (enum_RecursiveEnumWire -> nullable_22:enum_RecursiveEnumWire -> enum_RecursiveEnumWire)',
+			true);
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
 			'Type "PayloadMapKey" does not conform to Hashable');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
@@ -2437,9 +2462,16 @@ class TestMain {
 		}
 	}
 
-	static function expectCompileError(source:String, expected:String):Void {
+	/** With `modules`, `source` is module Main of a build with the standard library, whose own modules are in reach. */
+	static function expectCompileError(source:String, expected:String, modules = false):Void {
 		try {
-			Frontend.compile(source);
+			if (modules) {
+				var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+				compiler.addStandardLibrarySourceRoot("stdlib");
+				compiler.update("Main.hx", source);
+				compiler.compile("Main");
+			} else
+				Frontend.compile(source);
 			throw 'compiler accepted invalid source; expected "$expected"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.message != expected)

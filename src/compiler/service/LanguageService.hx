@@ -222,25 +222,15 @@ class LanguageService {
 	var editorDefines:Map<String, String> = [];
 
 	/**
-	 * Makes the Haxeon root the working directory, unless `stdlib` is already in it: the service resolves `stdlib` from there, and
-	 * a launcher (`haxeon lsp`, `haxeon lint`) need not run it from the root.
+	 * The standard library every configuration compiles with: the SDK's, which `haxeon lsp` and `haxeon lint` name
+	 * (`build.HaxeonSdk.stdlib`), or `stdlib` in the working directory, where the checkout's tests run.
 	 */
-	public static function useHaxeonRoot():Void {
-		if (sys.FileSystem.exists("stdlib"))
-			return;
-		var root = Sys.getEnv("HAXEON_ROOT");
-		// The haxeon command names the checkout it belongs to.
-		if (root == null || root.length == 0)
-			root = Sys.getEnv("HAXEON_HOME");
-		if (root == null || root.length == 0)
-			root = haxe.io.Path.directory(haxe.io.Path.directory(sys.FileSystem.absolutePath(Sys.programPath())));
-		if (sys.FileSystem.exists(haxe.io.Path.join([root, "stdlib"])))
-			Sys.setCwd(root);
-	}
+	final stdlib:String;
 
-	public function new(?identityState:haxe.io.Bytes) {
+	public function new(?identityState:haxe.io.Bytes, stdlib:String = "stdlib") {
+		this.stdlib = stdlib;
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
-		compiler.addStandardLibrarySourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot(stdlib);
 	}
 
 	public function update(path:String, source:String):ModuleState {
@@ -269,9 +259,13 @@ class LanguageService {
 		return removed;
 	}
 
+	/**
+	 * Selects the compiler of a project configuration and gives it the configuration's defines and null-safety rules, the ones the
+	 * project's build passes (`project.CompilerInputs`), so the editor reports what a build reports.
+	 */
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>,
 			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration,
-			ffiIdentity:String = ""):Void {
+			ffiIdentity:String = "", ?nullSafety:Array<compiler.NullSafetyRule>):Void {
 		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
 		if (activeConfiguration != key) {
 			// Typed declarations and frozen FFI models belong to one configuration.
@@ -279,7 +273,7 @@ class LanguageService {
 			var selected = configurationCompilers.get(key);
 			if (selected == null) {
 				selected = new Compiler(compiler.exportIdentityState(), CompilerIntrinsics.configuration(), ffi);
-				selected.addStandardLibrarySourceRoot("stdlib");
+				selected.addStandardLibrarySourceRoot(stdlib);
 				for (path => source in editorSources)
 					selected.update(path, source);
 				configurationCompilers.set(key, selected);
@@ -297,6 +291,7 @@ class LanguageService {
 		documentationIndex.clear();
 		structuralIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
+		compiler.options = compiler.options.withNullSafety(nullSafety == null ? [] : nullSafety);
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult
@@ -943,23 +938,23 @@ class LanguageService {
 								kind: "enumCase",
 								detail: '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})'
 							});
-			for (classDecl in ast.classes)
-				if (classDecl.name == qualifier) {
-					for (field in classDecl.fields)
-						if (field.isStatic && (prefix.length == 0 || StringTools.startsWith(field.name, prefix)))
-							result.push({
-								label: field.name,
-								kind: "field",
-								detail: '${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}'
-							});
-					for (method in classDecl.methods)
-						if (method.isStatic && (prefix.length == 0 || StringTools.startsWith(method.name, prefix)))
-							result.push({
-								label: method.name,
-								kind: "method",
-								detail: methodDetail(state, ast, classDecl.name, method)
-							});
+			if (semanticContext == null || semanticContext.receiver == null) {
+				var owner = memberQualifier(state.source, position, true);
+				for (entry in ast.imports)
+					if ((entry.alias ?? sourceName(entry.path)) == owner) {
+						owner = entry.path;
+						break;
+					}
+				for (candidate in compiler.modules) {
+					var declarations = effectiveAst(candidate);
+					if (declarations != null)
+						for (classDecl in declarations.classes)
+							if ((candidate == state && classDecl.name == owner)
+								|| ModuleCanonicalizer.qualifiedTypeName(declarations.packageName, classDecl.name)
+								== owner)
+								addClassMembers(candidate, declarations, classDecl, true, prefix, result);
 				}
+			}
 			if (result.length > 0) {
 				sortCompletion(result);
 				tagResults(result, state);
@@ -1531,22 +1526,14 @@ class LanguageService {
 		switch type {
 			case TNullable(element):
 				addInstanceMembers(element, prefix, result);
-			case TInstance(Class, name, []):
+			case TInstance(Class, name, _):
 				for (state in compiler.modules) {
 					var ast = effectiveAst(state);
 					if (ast != null)
 						for (classDecl in ast.classes)
-							if (classDecl.name == name) {
-								for (field in classDecl.fields)
-									if (!field.isStatic)
-										addMember(field.name, "field",
-											'${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}', prefix,
-											result);
-								for (method in classDecl.methods)
-									if (!method.isStatic)
-										addMember(method.name, "method",
-											methodDetail(state, ast, classDecl.name, method),
-											prefix, result);
+							if (classDecl.name == name
+								|| ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name) == name) {
+								addClassMembers(state, ast, classDecl, false, prefix, result);
 								if (classDecl.base != null)
 									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base),
 										[]), prefix, result);
@@ -1577,6 +1564,7 @@ class LanguageService {
 				addMember("exists", "method", "exists(key):Bool", prefix, result);
 				addMember("keys", "method", "keys():Array", prefix, result);
 				addMember("values", "method", "values():Array", prefix, result);
+				addMember("keyValueIterator", "method", "keyValueIterator():KeyValueIterator", prefix, result);
 				addMember("remove", "method", "remove(key):Bool", prefix, result);
 				addMember("clear", "method", "clear():Void", prefix, result);
 				addMember("size", "method", "size():Int", prefix, result);
@@ -1586,6 +1574,17 @@ class LanguageService {
 				addMember("substring", "method", "substring(start,end):String", prefix, result);
 			default:
 		}
+	}
+
+	static function addClassMembers(state:ModuleState, ast:compiler.syntax.Ast.AstProgram,
+			declaration:compiler.syntax.Ast.AstClass, isStatic:Bool, prefix:String, result:Array<CompletionItem>):Void {
+		for (field in declaration.fields)
+			if (field.isStatic == isStatic)
+				addMember(field.name, "field", '${field.name}:${fieldTypeText(state, ast, declaration.name, field)}',
+					prefix, result);
+		for (method in declaration.methods)
+			if (method.isStatic == isStatic)
+				addMember(method.name, "method", methodDetail(state, ast, declaration.name, method), prefix, result);
 	}
 
 	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>,
@@ -2158,7 +2157,7 @@ class LanguageService {
 		return source.slice(start, end);
 	}
 
-	static function memberQualifier(source:SourceFile, position:Int):Null<String> {
+	static function memberQualifier(source:SourceFile, position:Int, qualified:Bool = false):Null<String> {
 		var end = position < 0 ? 0 : position > source.bytes.length ? source.bytes.length : position, start = end;
 		while (start > 0 && isIdentifierPart(source.bytes.get(start - 1)))
 			start--;
@@ -2167,6 +2166,13 @@ class LanguageService {
 		var qualifierEnd = start - 1, qualifierStart = qualifierEnd;
 		while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
 			qualifierStart--;
+		if (qualified)
+			while (qualifierStart >= 2 && source.bytes.get(qualifierStart - 1) == ".".code
+				&& isIdentifierPart(source.bytes.get(qualifierStart - 2))) {
+				qualifierStart -= 2;
+				while (qualifierStart > 0 && isIdentifierPart(source.bytes.get(qualifierStart - 1)))
+					qualifierStart--;
+			}
 		return source.slice(qualifierStart, qualifierEnd);
 	}
 

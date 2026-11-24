@@ -7,6 +7,7 @@ import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 
 /** Explicit encoding for control-flow terminators in persisted IR functions. */
+@:nullSafety(Strict)
 class IrTerminatorCodec {
 	public static function write(output:BytesOutput, terminator:IrTerminator):Void
 		switch terminator {

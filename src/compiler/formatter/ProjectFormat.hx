@@ -6,19 +6,26 @@ import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
+import toml.TomlParser;
 
 /**
- * The formatting of a source file, from its project: the `format` section of the nearest haxeon.json above it that has one, else the
- * standard style (tabs, 120 columns). `haxeon fmt`, `haxeon lint --fix` and the language server all ask here, so a file formats the
- * same from every tool and editor.
+ * The formatting of a source file, from its project: the `format` section of the nearest manifest (haxeon.toml or haxeon.json) above
+ * it that has one, else the standard style (tabs, 120 columns). `haxeon fmt`, `haxeon lint --fix` and the language server all ask
+ * here, so a file formats the same from every tool and editor.
  *
- *   "format": {"indent": "tabs" | "spaces", "indentWidth": 4, "lineWidth": 120}
+ *   [format]
+ *   indent = "tabs"  # or "spaces"
+ *   indentWidth = 4
+ *   lineWidth = 120
+ *
+ * (`"format": {"indent": "tabs", "indentWidth": 4, "lineWidth": 120}` in JSON.)
  *
  * Every key is optional. `indentWidth` is the width of one indentation level: the number of spaces, or the columns a tab counts for
- * when lines are measured. A nested haxeon.json without a `format` section (a package's tests) takes its enclosing project's.
+ * when lines are measured. A nested manifest without a `format` section (a package's tests) takes its enclosing project's.
  */
 class ProjectFormat {
-	static inline final MANIFEST = "haxeon.json";
+	/** The manifest names, as project.PackageManifest.find looks for them (which also refuses a directory with both). */
+	static final MANIFESTS = ["haxeon.toml", "haxeon.json"];
 
 	/** Directory -> the configuration that applies to files in it, filled as lookups walk up. */
 	final cache = new Map<String, FormatConfig>();
@@ -38,12 +45,13 @@ class ProjectFormat {
 				break;
 			}
 			visited.push(directory);
-			var manifest = Path.join([directory, MANIFEST]);
-			if (FileSystem.exists(manifest)) {
-				config = read(manifest);
-				if (config != null)
-					break;
+			for (name in MANIFESTS) {
+				var manifest = Path.join([directory, name]);
+				if (config == null && FileSystem.exists(manifest))
+					config = read(manifest);
 			}
+			if (config != null)
+				break;
 			var parent = Path.directory(directory);
 			if (parent == directory || parent == "")
 				break;
@@ -60,9 +68,10 @@ class ProjectFormat {
 	public static function read(manifest:String):Null<FormatConfig> {
 		var raw:Dynamic;
 		try
-			raw = Json.parse(File.getContent(manifest))
+			raw = Path.extension(manifest) == "toml"
+				? TomlParser.parse(File.getContent(manifest)) : Json.parse(File.getContent(manifest))
 		catch (error:Dynamic)
-			throw new InternalError('$manifest: not valid JSON: $error');
+			throw new InternalError('$manifest: not valid ${Path.extension(manifest) == "toml" ? "TOML" : "JSON"}: $error');
 		var section:Dynamic = Reflect.field(raw, "format");
 		if (section == null)
 			return null;

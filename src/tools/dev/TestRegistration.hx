@@ -10,11 +10,10 @@ import sys.io.File;
  * never run. The `test-registration` suite of tests/suites.txt runs it; tests/driver/TestCatalog.hx checks tests/programs the same way.
  *
  * The test files are the scripts (`.sh`, `.py`, `.ps1`), the `.hxml` entry files and the `*Main.hx` mains directly in a directory of
- * tests/ (tests/bench holds benchmarks, one level deeper, and is not checked), and tests/TestMain.hx. A file is run when what runs the
- * tests names it: a suite command of tests/suites.txt, the test driver (tests/driver, which the driver-default suite runs), a GitHub
- * workflow, or a file one of those reaches in turn (a test script, a helper script under scripts/, an hxml file, a test main, a source
- * file beside the mains). A file names another by its file name (`test-hot-reload.sh`, `plugin-test.hxml`) or, for Haxe, by its class
- * name (`ModuleMain`), as a whole word.
+ * tests/, and tests/TestMain.hx. A file is run when what runs the tests names it: a suite command of tests/suites.txt, the test driver
+ * (tests/driver, which the driver-default suite runs), a GitHub workflow, or a file one of those reaches in turn (a test script, a
+ * helper script under scripts/, an hxml file, a test main, a source file beside the mains). A file names another by its file name
+ * (`test-hot-reload.sh`, `plugin-test.hxml`) or, for Haxe, by its class name (`ModuleMain`), as a whole word.
  *
  * tests/unregistered.txt lists the files that are deliberately not run, each with its reason: helpers, manual tools, and tests that
  * fail today or need what CI does not have. A listed file that something runs, or that does not exist, is an error too, so the list
@@ -87,12 +86,12 @@ class TestRegistration {
 
 	/**
 	 * The files that carry a reference on when something reaches them: the test files, the other files beside them (sources a main
-	 * calls, helper scripts) and the scripts under scripts/ and packages' tools/. Program, fixture and benchmark sources run no tests.
+	 * calls, helper scripts) and the scripts under scripts/ and packages' tools/. Program and fixture sources run no tests.
 	 */
 	static function carriers(home:String, tests:Array<String>):Array<String> {
 		var result = tests.copy(), seen = [for (path in tests) path => true];
 		for (directory in directories(home, "tests"))
-			if (["driver", "programs", "fixtures", "bench"].indexOf(directory) < 0)
+			if (["driver", "programs", "fixtures"].indexOf(directory) < 0)
 				for (path in files(home, 'tests/$directory'))
 					if (!seen.exists(path))
 						result.push(path);

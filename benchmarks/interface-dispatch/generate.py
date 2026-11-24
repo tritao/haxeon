@@ -4,6 +4,8 @@ dispatched when the value is the object, measured on HashLink.
 
   python3 generate.py N OUT.hx
 
+  direct    a call on an array of one concrete class, the floor
+  virtual   the call through the shared base class (HashLink's own method table)
   linear    a chain of class-id comparisons (the closed-world switch the Wasm backends emit)
   jump      `switch` on the class id
   binary    a binary search on the class id
@@ -75,13 +77,16 @@ w("""
 		Sys.println(StringTools.rpad(name, " ", 11) + Math.round(value * 100) / 100);
 
 	static function main():Int {
-		var objects:Array<Base> = [], views:Array<Reader> = [];
+		var objects:Array<Base> = [], views:Array<Reader> = [], direct:Array<C0> = [];
 		for (i in 0...COUNT) {
 			var o:Base = make(i % %(n)d, i);
 			objects.push(o);
 			views.push(o);
+			direct.push(new C0(i));
 		}
 		Sys.println("implementors %(n)d (ns per call)");
+		show("direct", best(() -> { var s = 0; for (i in 0...CALLS) s += direct[i & (COUNT - 1)].read(); return s; }));
+		show("virtual", best(() -> { var s = 0; for (i in 0...CALLS) s += objects[i & (COUNT - 1)].read(); return s; }));
 		show("today", best(() -> { var s = 0; for (i in 0...CALLS) s += views[i & (COUNT - 1)].read(); return s; }));
 		show("linear", best(() -> { var s = 0; for (i in 0...CALLS) { var o = objects[i & (COUNT - 1)]; s += viaLinear(o, o.id); } return s; }));
 		show("jump", best(() -> { var s = 0; for (i in 0...CALLS) { var o = objects[i & (COUNT - 1)]; s += viaJump(o, o.id); } return s; }));

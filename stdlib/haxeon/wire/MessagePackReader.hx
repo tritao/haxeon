@@ -51,13 +51,19 @@ class MessagePackReader {
 		return bufferedMarker == null && input.position == totalBytes;
 
 	/** Returns whether the next value is nil without consuming it. */
-	public function isNil():Bool {
-		if (bufferedMarker != null)
-			return bufferedMarker == 0xc0;
-		if (input.position >= totalBytes)
-			return false;
-		bufferedMarker = input.readByte();
-		return bufferedMarker == 0xc0;
+	public function isNil():Bool
+		return peekMarker() == 0xc0;
+
+	/** Returns whether the next value is a string without consuming it. */
+	public function isString():Bool {
+		var marker = peekMarker();
+		return (marker >= 0xa0 && marker <= 0xbf) || marker == 0xd9 || marker == 0xda || marker == 0xdb;
+	}
+
+	function peekMarker():Int {
+		if (bufferedMarker == null && input.position < totalBytes)
+			bufferedMarker = input.readByte();
+		return bufferedMarker ?? -1;
 	}
 
 	public function readNil():Void
@@ -69,7 +75,8 @@ class MessagePackReader {
 			return false;
 		if (marker == 0xc3)
 			return true;
-		unexpected(marker, "boolean");
+		#if haxe_ver
+		return #end unexpected(marker, "boolean");
 	}
 
 	public function readInt():Int {
@@ -97,7 +104,8 @@ class MessagePackReader {
 			case 0xcf, 0xd3:
 				throw new MessagePackError("MessagePack Int64 requires readInt64");
 			default:
-				unexpected(marker, "integer");
+				#if haxe_ver
+				return #end unexpected(marker, "integer");
 		}
 	}
 
@@ -129,7 +137,8 @@ class MessagePackReader {
 			case 0xd3:
 				return haxe.Int64.make(input.readInt32(), input.readInt32());
 			default:
-				unexpected(marker, "integer");
+				#if haxe_ver
+				return #end unexpected(marker, "integer");
 		}
 	}
 
@@ -190,7 +199,8 @@ class MessagePackReader {
 			case 0xc9:
 				length = readLength32("extension");
 			default:
-				unexpected(marker, "extension");
+				#if haxe_ver
+				return #end unexpected(marker, "extension");
 		}
 		var type = signedByte(readByte());
 		return {type: type, value: readBytes(length)};
@@ -293,7 +303,8 @@ class MessagePackReader {
 			return checkedLength(readUInt16(), kind);
 		if (marker == largeTag)
 			return readLength32(kind);
-		unexpected(marker, kind);
+		#if haxe_ver
+		return #end unexpected(marker, kind);
 	}
 
 	function readLength32(kind:String):Int {
@@ -359,7 +370,8 @@ class MessagePackReader {
 			unexpected(marker, kind);
 	}
 
+	// Stock Haxe needs explicit returns at value sites because it does not use @:noReturn for flow analysis.
 	@:noReturn
-	static function unexpected(marker:Int, expected:String):Void
-		throw new MessagePackError('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}');
+	static function unexpected(marker:Int, expected:String):#if haxe_ver Dynamic #else
+		Void #end throw new MessagePackError('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}');
 }

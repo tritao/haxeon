@@ -548,7 +548,10 @@ class IrInterpreter {
 				"__array_pop_ref":
 				var popped = interpArray(arguments[0]);
 				popped.values.length == 0 ? null : popped.values.pop();
-			case "__string_length": Std.string(arguments[0]).length;
+			case "__string_length":
+				if (arguments[0] == null)
+					throw "Null access .length";
+				Std.string(arguments[0]).length;
 			case "__string_concat": Std.string(arguments[0]) + Std.string(arguments[1]);
 			case "__string_concat3": Std.string(arguments[0]) + Std.string(arguments[1]) + Std.string(arguments[2]);
 			case "__string_equal": arguments[0] == null || arguments[1] == null ? arguments[0]
