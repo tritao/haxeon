@@ -1,11 +1,11 @@
 ---
-export type Status = 'Supported' | 'Experimental' | 'In progress';
+export type Status = 'Supported' | 'Experimental' | 'In progress' | 'Planned';
 
 interface Props {
   status: Status;
 }
 const { status } = Astro.props;
-const state = { Supported: 'ok', Experimental: 'exp', 'In progress': 'plan' }[status];
+const state = { Supported: 'ok', Experimental: 'exp', 'In progress': 'plan', Planned: 'plan' }[status];
 ---
 
 <span class:list={['st', state]}><slot>{status}</slot></span>
