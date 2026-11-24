@@ -15,6 +15,12 @@ const backends = [
   { platform: 'macOS', api: 'Metal', shader: 'MSL', status: 'Experimental' },
   { platform: 'Windows', api: 'Direct3D 11', shader: 'HLSL 5', status: 'Experimental' },
 ];
+const features = [
+  { platform: 'Linux', compute: 'With OpenGL 4.3 drivers', timestamps: 'Yes' },
+  { platform: 'Web', compute: 'No', timestamps: 'No' },
+  { platform: 'macOS', compute: 'Yes', timestamps: 'If the GPU supports them' },
+  { platform: 'Windows', compute: 'Yes', timestamps: 'Yes' },
+];
 const record = circuitRenderer.match(/^\tpublic function record\([^\n]*\{[\s\S]*?^\t\}/m);
 if (!record) throw new Error('Missing CircuitRenderer.record in the GPU page sample');
 const sample = record[0]
@@ -92,32 +98,43 @@ const sample = record[0]
 
     <section>
       <div class="wrap">
-        <div class="head"><h2>What the API covers</h2></div>
-        <div class="grid three">
-          <Card compact>
-            <h3>Resources</h3>
-            <p>Create buffers, images and samplers, and update dynamic buffers each frame. <a href={gpu('Buffer')}><code>Buffer</code></a></p>
-          </Card>
-          <Card compact>
-            <h3>Pipelines and shaders</h3>
-            <p>Build a pipeline from a shader, a vertex layout and render state. <a href={gpu('Pipeline')}><code>Pipeline</code></a></p>
-          </Card>
-          <Card compact>
-            <h3>Passes</h3>
-            <p>Open render, compute and copy passes, to the window or to your own attachments. <a href={gpu('Renderer')}><code>Renderer</code></a></p>
-          </Card>
-          <Card compact>
-            <h3>Commands and batches</h3>
-            <p>Record commands into a buffer and seal passes into a batch you can submit again. <a href={gpu('CommandBuffer')}><code>CommandBuffer</code></a></p>
-          </Card>
-          <Card compact>
-            <h3>Frames and timing</h3>
-            <p>Draw on each frame callback or request frames on demand, and time GPU work where supported. <a href={gpuDocs + '#frame-callbacks'}><code>onFrameTick</code></a></p>
-          </Card>
-          <Card compact>
-            <h3>Limits and device loss</h3>
-            <p>Query features and limits before optional operations, and recreate the renderer after device loss. <a href={gpu('Features')}><code>Features</code></a></p>
-          </Card>
+        <div class="head"><h2>How the API fits together</h2></div>
+        <div class="split api">
+          <Diagram spaced>
+            <svg class="drawing" viewBox="0 0 360 268" role="img" aria-labelledby="gpu-api-title">
+              <title id="gpu-api-title">A Renderer creates buffers, images, samplers, shaders and pipelines. They are bound in a CommandBuffer, sealed into a Batch and submitted to a surface frame.</title>
+              <rect class="box" x="55" y="2" width="250" height="32" rx="6" />
+              <rect class="box" x="55" y="56" width="250" height="48" rx="6" />
+              <rect class="box" x="55" y="126" width="250" height="32" rx="6" />
+              <rect class="box" x="55" y="180" width="250" height="32" rx="6" />
+              <rect class="box" x="55" y="234" width="250" height="32" rx="6" />
+              <path class="acc" d="M180 34v20m-4-5 4 5 4-5M180 104v20m-4-5 4 5 4-5M180 158v20m-4-5 4 5 4-5M180 212v20m-4-5 4 5 4-5" />
+              <text x="190" y="49">creates</text>
+              <text x="190" y="119">bound in</text>
+              <text x="190" y="173">sealed in</text>
+              <text x="190" y="227">submitted to</text>
+              <a href={gpu('Renderer')}><text class="lnk" x="180" y="23" text-anchor="middle">Renderer</text></a>
+              <text x="180" y="76" text-anchor="middle"><a href={gpu('Buffer')}><tspan class="lnk">Buffer</tspan></a> · <a href={gpu('Image')}><tspan class="lnk">Image</tspan></a> · <a href={gpu('Sampler')}><tspan class="lnk">Sampler</tspan></a></text>
+              <text x="180" y="95" text-anchor="middle"><a href={gpu('Shader')}><tspan class="lnk">Shader</tspan></a> → <a href={gpu('Pipeline')}><tspan class="lnk">Pipeline</tspan></a></text>
+              <a href={gpu('CommandBuffer')}><text class="lnk" x="180" y="147" text-anchor="middle">CommandBuffer</text></a>
+              <a href={gpu('Batch')}><text class="lnk" x="180" y="201" text-anchor="middle">Batch</text></a>
+              <text class="ttl" x="180" y="255" text-anchor="middle">Surface frame</text>
+            </svg>
+          </Diagram>
+          <div class="stack">
+            <Card compact>
+              <h3>Frames only when needed</h3>
+              <p>Switch a surface to <a href={gpuDocs + '#frame-callbacks'}>on-demand frames</a> and request one when something changes, so an idle app does not redraw.</p>
+            </Card>
+            <Card compact>
+              <h3>Record once, submit again</h3>
+              <p>Seal passes and their commands into a batch, then submit the same batch on later frames without recording it again.</p>
+            </Card>
+            <Card compact>
+              <h3>Clear failures</h3>
+              <p>Errors name the operation that failed, including device loss. Misuse, such as binding a resource from another renderer, is rejected before it reaches the GPU.</p>
+            </Card>
+          </div>
         </div>
       </div>
     </section>
@@ -129,6 +146,7 @@ const sample = record[0]
           <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. Write shaders for each API you target; they are not translated between APIs.</p>
         </div>
         <div class="split">
+          <div class="tables">
           <table aria-label="GPU backends">
             <thead><tr><th scope="col">Platform</th><th scope="col">Graphics API</th><th scope="col">Shaders</th><th scope="col">Status</th></tr></thead>
             <tbody>
@@ -137,6 +155,16 @@ const sample = record[0]
               ))}
             </tbody>
           </table>
+          <table aria-label="Optional GPU features by backend">
+            <thead><tr><th scope="col">Platform</th><th scope="col">Compute</th><th scope="col">GPU timestamps</th></tr></thead>
+            <tbody>
+              {features.map(({ platform, compute, timestamps }) => (
+                <tr><th scope="row">{platform}</th><td>{compute}</td><td>{timestamps}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          <p class="note">Image and buffer readback work on every backend.</p>
+          </div>
           <Diagram spaced>
             <svg class="drawing" viewBox="0 0 360 204" role="img" aria-labelledby="gpu-stack-title">
               <title id="gpu-stack-title">Your draw code calls the GPU layer, which runs on sokol_gfx and the platform graphics API.</title>
@@ -162,11 +190,11 @@ const sample = record[0]
         <div class="grid">
           <Card compact>
             <h3>Native handles</h3>
-            <p>Pass renderer, shader and pipeline handles to NativeKit’s C GPU API, or borrow the underlying device and context where available. <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}>C GPU bindings</a></p>
+            <p>Pass renderer, shader and pipeline handles to <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}>NativeKit’s C GPU API</a>, or borrow the underlying device and context where available.</p>
           </Card>
           <Card compact>
             <h3>Your own graphics code</h3>
-            <p>Keep an existing renderer in C or C++ and call it through a C interface. <a href={docsUrl('reference/C_HEADER_FFI.md')}>C FFI</a></p>
+            <p>Keep an existing renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>the C FFI</a>.</p>
           </Card>
         </div>
       </div>
@@ -201,6 +229,9 @@ const sample = record[0]
     align-items: start;
   }
   .stack { display: grid; gap: var(--hx-space-5); }
+  .api { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+  .tables { display: grid; gap: var(--hx-space-5); }
+  .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
   figure, .grid p, .stack p { margin: 0; }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
   .viewport-light, :global([data-theme='light']) .viewport-dark { display: none; }
