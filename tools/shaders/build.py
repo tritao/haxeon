@@ -69,7 +69,7 @@ def shader_run(command, check, style, project):
         if "non-opaque uniforms outside a block" in message:
             message = "Declare numeric uniforms inside a layout(std140, binding=N) uniform block"
         elif "'#version'" in message:
-            message = "Remove #version; the shader tool sets the version for each target"
+            message = "Remove #version. The shader tool sets the version for each target."
         key = (path, line, column, message)
         if key in seen:
             continue
@@ -156,7 +156,7 @@ def compile_module(args, driver, generator, compiler, identity, name, path, vari
                       max(item.stat().st_mtime_ns, item.stat().st_ctime_ns) > started
                       for item, sha in after.items())
         if changed:
-            raise ValueError("shader inputs changed during generation; run the build again")
+            raise ValueError("Shader inputs changed during generation. Run the build again.")
         publish(output, hx)
         publish(record, json.dumps({"signature": fingerprint,
                                     "dependencies": sorted(map(str, dependencies)),

@@ -52,6 +52,7 @@ Language:
 - [KEY_PATHS.md](reference/KEY_PATHS.md): compiler-checked references to stored fields.
 - [SCOPED_CLEANUP.md](reference/SCOPED_CLEANUP.md): `scoped` variables.
 - [NATIVE_MEMORY.md](reference/NATIVE_MEMORY.md): native values and memory.
+- [WRITING_SHADERS.md](reference/WRITING_SHADERS.md): shader modules, vertex layouts, and build integration.
 - [C_HEADER_FFI.md](reference/C_HEADER_FFI.md): importing C and C++ headers.
 
 Libraries:

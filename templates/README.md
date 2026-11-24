@@ -23,3 +23,7 @@ are its output with the guides' changes, so a change to the template's `haxeon.t
 
 The app template uses the UI counter on desktop and a managed entry point on Android and web.
 The Android project packages the SDK host and generated assets. The web page loads the SDK Wasm host.
+
+The app template includes an optional `shaders/Quad.glsl`. Move it under
+`src/shaders/` to build it with the project. See
+[Writing shaders](../docs/reference/WRITING_SHADERS.md).

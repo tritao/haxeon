@@ -48,7 +48,7 @@ class ShaderProvider {
 			python = Sys.systemName() == "Windows" ? "python" : "python3";
 		var inputs = [tools.build, tools.driver, tools.generator];
 		var outputs = [ShaderInputs.sources(output), ShaderInputs.dependencies(output)];
-		// The shader tool checks its dependency graph and compiler digest per module; it only rewrites changed output.
+		// The shader tool checks its inputs per module and rewrites changed output.
 		return new ExecutionAction(new ActionId(ACTION_PREFIX + project.rootPackage.name), [], inputs, outputs,
 			"Generate shader modules",
 			Process(python, args, project.root, []), false, true);

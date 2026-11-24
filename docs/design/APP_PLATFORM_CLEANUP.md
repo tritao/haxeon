@@ -71,13 +71,14 @@ sources carry the `#version` and precision lines.
 ### Where it stands
 
 NativeKit generates normalized reflection and C tables. The UI uses the tables
-and keeps its original shader source header byte-identical. Circuit Run's
-generated `shaders.Maze` module provides the program and vertex layout.
+and keeps its original shader source header byte-identical.
 `Shader.create(renderer, program)` passes the table through HXI, and NativeKit
-selects the target. The Haxe generator also emits checked native uniform layouts. Generated
-record names include their module name to keep declarations such as
-`vs_params` independent across shaders. Generated files and manifests remain checked in until build
-integration is in place.
+selects the target. Haxe also gets checked native uniform layouts with
+module-prefixed record names so shaders can reuse names such as `vs_params`.
+
+Circuit Run has one authored shader and imports `shaders.Maze` from the build.
+The project build and watch loop use the same per-target generator and cache.
+See [Writing shaders](../reference/WRITING_SHADERS.md) for paths and examples.
 
 ### End state
 
@@ -98,7 +99,7 @@ batch.uniforms(Maze.vsParams, {mvp: matrix});
 - **No manifest and no generated files in the app.** `.glsl` files under the
   project's shader root are discovered. Variants, which are rare, are
   declared in `haxeon.json`.
-- **The build runs it.** `haxeon build`, `check` and `dev` compile shaders
+- **The build runs it.** `haxeon build`, `check` and `run --watch` compile shaders
   before typing: the SDK's pinned `sokol-shdc`, NativeKit's normalization to
   `nkgpu-shader-reflection/1`, then the Haxe generator, writing to a build
   source root. Results are cached by the content of the source and its
