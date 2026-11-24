@@ -80,7 +80,7 @@ span.toArray()          // a managed copy
 An owner is a `NativeSpanOwner` whose `isClosed()` reports when the memory
 may no longer be read; reads through a span with a closed owner throw. FFI
 functions produce spans from `@span` pointer results and accept them through
-`_span` companions (see `C_HEADER_FFI.md`). Native scalar element types such
+`_span` companions (see [Arrays](C_HEADER_FFI.md#arrays)). Native scalar element types such
 as `UInt16` can be viewed and passed on, but not yet read with `get`, since
 they cannot be returned as Haxe values.
 

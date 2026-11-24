@@ -35,5 +35,5 @@ Look up Haxeon language features, commands, libraries and target behavior.
 ## C and C++ interop
 
 - [Calling a C or C++ library](../guides/04-calling-c-and-cpp.md) walks through building and calling a native library.
-- [C header FFI](C_HEADER_FFI.md) explains how to import and audit C and C++ headers.
+- [C and C++ header import](C_HEADER_FFI.md) explains how to import, call and audit C and C++ headers.
 - [Native memory](NATIVE_MEMORY.md) explains native values, pointers and ownership.

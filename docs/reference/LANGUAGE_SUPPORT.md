@@ -442,16 +442,9 @@ on purpose.
 
 ## C header import
 
-A standalone Clang-based importer can generate deterministic, target-specific
-raw HXI declarations from a constrained C ABI. It preserves record layouts and
-keeps system-header implementation details out of the generated interface. A
-strict parser validates types, layouts, symbols, and ABI metadata before use. See
-[C header FFI import](C_HEADER_FFI.md) for usage and the supported subset.
-The runtime also contains a restricted libffi-based ordinary-C symbol bridge;
-the pinned vendored libffi is statically linked into the runtime library, with
-no separate libffi runtime dependency. Windows x64 builds compile the pinned
-sources directly with CMake and MSVC, without a Cygwin build dependency. This
-remains deliberately separate from HashLink's `@:hlNative` convention.
+Haxeon imports C headers, and a small subset of C++, into checked interfaces with generated Haxe modules, and calls them
+through its own ordinary-C bridge, separate from HashLink's `@:hlNative` convention. See
+[C and C++ header import](C_HEADER_FFI.md).
 
 The native-memory model keeps GC-managed Haxe objects separate from fixed-layout
 native records. See [native values and memory](NATIVE_MEMORY.md) for the
