@@ -32,8 +32,8 @@ const sample = ['new', 'record'].map((name) => {
     <section class="page-intro paper">
       <div class="wrap">
         <div class="head">
-          <h1 id="_top" tabindex="-1">Draw on the GPU from Haxeon.</h1>
-          <p class="lede">Add custom drawing to your Haxeon app with a thin, portable GPU layer. Buffers, pipelines and passes are objects in your code, and Haxeon submits your work through the platform’s graphics API.</p>
+          <h1 id="_top" tabindex="-1">A portable GPU layer, built in.</h1>
+          <p class="lede">Add your own drawing to an app. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
           <ul class="chips" aria-label="Graphics backends">
             {backends.map(({ api, status }) => <li>{api} · {status}</li>)}
           </ul>
@@ -137,7 +137,7 @@ const sample = ['new', 'record'].map((name) => {
       <div class="wrap">
         <div class="head">
           <h2>Backends and shaders</h2>
-          <p class="lede">Write shaders for each graphics API you target. Haxeon does not translate shaders between APIs. Circuit Run embeds desktop GLSL and selects a GLSL ES variant for WebGL2 at build time.</p>
+          <p class="lede">Write shaders for each graphics API you target. They are not translated between APIs. Circuit Run embeds desktop GLSL and selects a GLSL ES variant for WebGL2 at build time.</p>
         </div>
         <table aria-label="GPU backends">
           <thead><tr><th scope="col">Platform</th><th scope="col">Graphics API</th><th scope="col">Shader language</th><th scope="col">Status</th></tr></thead>
@@ -160,7 +160,7 @@ const sample = ['new', 'record'].map((name) => {
           </Card>
           <Card>
             <h3>Your own graphics code</h3>
-            <p>Keep your renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>Haxeon’s C FFI</a>. Expose a C interface for C++ code.</p>
+            <p>Keep your renderer in C or C++ and call it through <a href={docsUrl('reference/C_HEADER_FFI.md')}>the C FFI</a>. Expose a C interface for C++ code.</p>
           </Card>
           <Card>
             <h3>Compute and readback</h3>
