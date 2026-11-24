@@ -877,21 +877,15 @@ class TypingSession {
 		return answer;
 	}
 
-	/** Payload enum keys use their declared hash and equality in the ordinary specialized map. */
+	/** Select and register the concrete storage for a Map. */
 	public function mapName(key:CompilerType, value:CompilerType):Null<String> {
-		var payloadKey = isPayloadEnumKey(key),
-			hashable = DeclaredConformance.has(this, key, "Hashable");
-		if (payloadKey && !hashable)
-			return null;
-		var builtin = payloadKey ? null : RuntimeType.mapName(key, value);
-		if (builtin == null && !hashable)
-			return null;
-		if (requiresSpecializedMap(key, value)) {
-			runtimeDependencyTracker.record(currentContext.name, RuntimeType.SPECIALIZED_MAP);
-			representation.specializedMapOwner(key, value);
-			return RuntimeType.SPECIALIZED_MAP;
+		var owner = mapOwner(key, value);
+		if (owner != null) {
+			runtimeDependencyTracker.record(currentContext.name, owner);
+			representation.specializedMapOwner(owner, key, value);
+			return owner;
 		}
-		return builtin;
+		return isPayloadEnumKey(key) ? null : RuntimeType.mapName(key, value);
 	}
 
 	public function isPayloadEnumKey(key:CompilerType):Bool {
@@ -910,10 +904,20 @@ class TypingSession {
 	public function specializedMapKey(key:CompilerType):CompilerType
 		return isPayloadEnumKey(key) ? key : RuntimeType.specializedMapKey(key);
 
-	public function requiresSpecializedMap(key:CompilerType, value:CompilerType):Bool
-		return isPayloadEnumKey(key)
-			|| RuntimeType.usesSpecializedMap(key, value, mapValueType,
-			type -> DeclaredConformance.has(this, type, "Hashable"));
+	public function mapOwner(key:CompilerType, value:CompilerType):Null<String> {
+		var hashable = DeclaredConformance.has(this, key, "Hashable");
+		// Payload enum keys use their declared hash and equality.
+		if (isPayloadEnumKey(key))
+			return hashable ? RuntimeType.SPECIALIZED_MAP : null;
+		if (!hashable && RuntimeType.mapName(key, value) == null)
+			return switch key {
+				case TInstance(NominalKind.Class | NominalKind.Interface, _, _) if (!relations.isStruct(key)):
+					RuntimeType.OBJECT_MAP;
+				default: null;
+			};
+		return RuntimeType.usesSpecializedMap(key, value, mapValueType, _ -> hashable)
+			? RuntimeType.SPECIALIZED_MAP : null;
+	}
 
 	function mapValueType(type:CompilerType):Bool
 		return switch type {

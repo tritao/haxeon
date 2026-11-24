@@ -209,6 +209,15 @@ class CallResolver {
 		}
 	}
 
+	public function typeCollectionProtocolMethod(receiver:TypedExpression, name:String, scope:Scope):TypedExpression
+		return switch receiver.type {
+			case TArray(_):
+				typeArrayMethod(receiver, name, [], receiver.span, scope);
+			case TMap(_, _):
+				typeMapMethod(receiver, name, [], receiver.span, scope);
+			default: throw new InternalError("Expected a collection receiver");
+		};
+
 	/**
 	 * `receiver.name(arguments)`: a member of the receiver's type, else a static extension (`StaticExtensions`), tried only once
 	 * the type has no member `name`, as in Haxe. `declaredReceiver` is the receiver as written when its type is nullable
@@ -2381,7 +2390,7 @@ class CallResolver {
 					"E1002");
 			function isReferenceIdentityType(type:CompilerType):Bool
 				return switch type {
-					case TDynamic, TTypeParameter(_,
+					case TAnonymous(_, _), TDynamic, TTypeParameter(_,
 						_), TString, TBytes, THlBytes, TArray(_), TIterator(_), TMap(_, _),
 						TInstance(NominalKind.Interface, _, _): true;
 					case TInstance(NominalKind.Class, _, _): !session.relations.isStruct(type);
@@ -3130,6 +3139,7 @@ class CallResolver {
 		if (arguments.length + 1 > method.arguments.length)
 			fail("E1008", '$kind.$name expects ${method.arguments.length - 1} arguments, got ${arguments.length}',
 				span);
+		session.runtimeDependencyTracker.record(session.currentContext.name, library);
 		var prepared = typeGenericCallArguments(method, arguments, scope, span, [receiver]);
 		return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, library, true,
 			prepared.substitutions);

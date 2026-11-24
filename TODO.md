@@ -340,12 +340,10 @@ The Haxe code Haxeon rejects or runs differently is listed in
   and reports it. Typing it once at the declaration too, and discarding the
   result, would report it.
 - **Maps.** A `Map` typed as `Dynamic` still prints its runtime handle
-  (`~map_string_i32:...`), since its key and value types are gone; a Map or Array
-  passed where a `KeyValueIterable` is expected is rejected; `ObjectMap` has no
-  `keys`, `iterator`, `keyValueIterator` or `copy` (on HashLink they need the
-  `hokeys` native array); an explicit cast of a map of maps to
-  `Map<String, Dynamic>` crashes in the runtime cast; and enum keys iterate in
-  insertion order where Haxe on HashLink prints them in declaration order.
+  (`~map_string_i32:...`), since its key and value types are gone. An explicit
+  cast of a map of maps to `Map<String, Dynamic>` crashes in the runtime cast.
+  Enum keys iterate in insertion order where Haxe on HashLink prints them in
+  declaration order.
 - **Generic owners specialized only from annotated members.** An owner whose
   member holds its parameter inside a structure is specialized (`3c1041b09`),
   but only when the member's type is written; one inferred from the body is not

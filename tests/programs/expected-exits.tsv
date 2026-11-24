@@ -142,6 +142,8 @@ map-for-in	52
 map-nested-values	42
 map-key-value-for-in	42
 map-key-value-iterator	42
+key-value-iterable-collections	42
+implicit-collection-runtime	42
 map-nullable-get	42
 map-unboxed-values	42
 map-string-equality	42

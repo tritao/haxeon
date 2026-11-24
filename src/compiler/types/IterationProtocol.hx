@@ -127,9 +127,13 @@ class IterationProtocol {
 			case TArray(element):
 				if (name == "iterator")
 					return {type: TFunction([], TIterator(element), []), owner: null};
-			case TMap(_, element):
+				if (name == "keyValueIterator")
+					return {type: TFunction([], keyValueContract("KeyValueIterator", TInt, element), []), owner: null};
+			case TMap(key, element):
 				if (name == "iterator")
 					return {type: TFunction([], TIterator(element), []), owner: null};
+				if (name == "keyValueIterator")
+					return {type: TFunction([], keyValueContract("KeyValueIterator", key, element), []), owner: null};
 			case TIterator(element):
 				if (name == "hasNext")
 					return {type: TFunction([], TBool, []), owner: null};

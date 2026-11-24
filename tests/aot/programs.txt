@@ -300,6 +300,8 @@ key-path-nullable
 key-path-observable
 key-paths
 key-path-semantics
+key-value-iterable-collections
+implicit-collection-runtime
 known-null-field
 lambda
 lambda-count

@@ -6,14 +6,7 @@ import compiler.syntax.Ast.AstType;
 
 /** Collects qualified source dependencies referenced by syntax trees. */
 class DependencyScanner {
-	/**
-	 * Marks a name that is only a dependency when a source module of that name exists: a type written in a local
-	 * annotation, a cast, or a catch clause may as well be a built-in (`Dynamic`), a type parameter, or a type that is
-	 * resolved elsewhere, so the module analyzer keeps such a name only when it names a module.
-	 */
-	public static inline final OPTIONAL_PREFIX = "?";
-
-	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>,
+	public static function scanStatement(s:AstStatement, dependencies:ScannedDependencies,
 			?typeParameters:Array<String>):Void
 		switch s {
 			case AnnotatedStatement(_, inner, _):
@@ -22,7 +15,7 @@ class DependencyScanner {
 			case UninitializedDeclaration(_, type, _):
 				scanAnnotation(type, dependencies, typeParameters);
 			case ScopedDeclaration(_, type, e, _):
-				dependencies.set("Disposable", true);
+				dependencies.required.set("Disposable", true);
 				if (type != null)
 					scanAnnotation(type, dependencies, typeParameters);
 				scanExpression(e, dependencies, typeParameters);
@@ -51,7 +44,7 @@ class DependencyScanner {
 					// A typed catch tests what haxe.Exception's catch helpers make of the thrown value (TypedCatchSubject),
 					// when the standard library has them.
 					if (!catchClause.type.match(NamedType("Dynamic")))
-						dependencies.set(OPTIONAL_PREFIX + compiler.runtime.RuntimeType.EXCEPTION, true);
+						dependencies.optional.set(compiler.runtime.RuntimeType.EXCEPTION, true);
 					for (x in catchClause.statements)
 						scanStatement(x, dependencies, typeParameters);
 				}
@@ -100,7 +93,7 @@ class DependencyScanner {
 				scanExpression(e, dependencies, typeParameters);
 		}
 
-	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>,
+	public static function scanExpression(e:AstExpression, dependencies:ScannedDependencies,
 			?typeParameters:Array<String>):Void
 		switch e {
 			case AnnotatedExpression(_, inner, _):
@@ -164,6 +157,7 @@ class DependencyScanner {
 				for (value in values)
 					scanExpression(value, dependencies, typeParameters);
 			case MapLiteral(entries, _):
+				dependencies.companionOwners.set("Map", true);
 				for (mapEntry in entries) {
 					scanExpression(mapEntry.key, dependencies, typeParameters);
 					scanExpression(mapEntry.value, dependencies, typeParameters);
@@ -174,6 +168,7 @@ class DependencyScanner {
 					scanExpression(predicate, dependencies, typeParameters);
 				scanExpression(value, dependencies, typeParameters);
 			case MapComprehension(_, _, iterable, predicate, key, value, _):
+				dependencies.companionOwners.set("Map", true);
 				scanExpression(iterable, dependencies, typeParameters);
 				if (predicate != null)
 					scanExpression(predicate, dependencies, typeParameters);
@@ -198,12 +193,12 @@ class DependencyScanner {
 					scanExpression(a, dependencies, typeParameters);
 			case Call(name, args, _):
 				if (compiler.runtime.ArrayLibrary.providesLastOf(name))
-					dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+					dependencies.required.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
 				if (compiler.runtime.MapLibrary.providesLastOf(name))
-					dependencies.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
+					dependencies.required.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
 				// The stdlib may implement it in Haxe (`RuntimeType.STRING_FROM_CHAR_CODE`).
 				if (name == "String.fromCharCode")
-					dependencies.set(OPTIONAL_PREFIX + compiler.runtime.RuntimeType.STRING_CODES, true);
+					dependencies.optional.set(compiler.runtime.RuntimeType.STRING_CODES, true);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
@@ -212,13 +207,20 @@ class DependencyScanner {
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
 			case New(typeName, args, _), NewGeneric(typeName, _, args, _):
-				dependencies.set(typeName, true);
+				dependencies.required.set(typeName, true);
+				switch e {
+					case NewGeneric(_, typeArguments, _, _):
+						for (type in typeArguments)
+							scanAnnotation(type, dependencies, typeParameters);
+					default:
+				}
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
-			case NewArray(_, length, _):
+			case NewArray(element, length, _):
+				scanAnnotation(element, dependencies, typeParameters);
 				scanExpression(length, dependencies, typeParameters);
 			case NativeLayoutQuery(_, type, _, _):
-				scanType(type, dependencies, typeParameters);
+				scanType(type, dependencies.required, dependencies.companionOwners, typeParameters);
 			case KeyPathLiteral(root, _, _):
 				// The parser cannot yet distinguish a qualified root from its field suffix.
 				// Load existing source prefixes; the typer diagnoses an unresolved root.
@@ -226,12 +228,16 @@ class DependencyScanner {
 					case NamedType(name):
 						var candidate = name;
 						while (candidate.length > 0) {
-							dependencies.set(OPTIONAL_PREFIX + candidate, true);
+							dependencies.optional.set(candidate, true);
 							candidate = compiler.core.QualifiedName.parentOrEmpty(candidate);
 						}
-					default: scanType(root, dependencies, typeParameters);
+					default: scanType(root, dependencies.required, dependencies.companionOwners, typeParameters);
 				}
-			case NewMap(_, _, _):
+			case NewMap(key, value, _):
+				if (mayUseObjectMap(key, null))
+					dependencies.companionOwners.set("Map", true);
+				scanAnnotation(key, dependencies, typeParameters);
+				scanAnnotation(value, dependencies, typeParameters);
 			case Lambda(arguments, statements, _, _, _, _, generic):
 				if (generic != null) {
 					typeParameters = typeParameters == null
@@ -243,71 +249,72 @@ class DependencyScanner {
 				// referenced only inside their bodies are dependencies too.
 				for (argument in arguments)
 					if (argument.type != null)
-						scanType(argument.type, dependencies, typeParameters);
+						scanType(argument.type, dependencies.required, dependencies.companionOwners, typeParameters);
 				for (statement in statements)
 					scanStatement(statement, dependencies, typeParameters);
 			default:
 		}
 
 	/** A call that may be an array or map method implemented in the stdlib needs that module loaded. */
-	static function scanLibraryMethod(methodName:String, dependencies:Map<String, Bool>):Void {
+	static function scanLibraryMethod(methodName:String, dependencies:ScannedDependencies):Void {
 		if (compiler.runtime.ArrayLibrary.provides(methodName))
-			dependencies.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
+			dependencies.required.set(compiler.runtime.ArrayLibrary.CLASS_NAME, true);
 		if (compiler.runtime.MapLibrary.provides(methodName))
-			dependencies.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
+			dependencies.required.set(compiler.runtime.MapLibrary.CLASS_NAME, true);
 	}
 
-	static function scanQualifiedDependency(name:String, dependencies:Map<String, Bool>):Void {
+	static function scanQualifiedDependency(name:String, dependencies:ScannedDependencies):Void {
 		addQualifiedOwner(name, dependencies);
 	}
 
 	/** Like `scanType`, for names that count as dependencies only when they name a source module. */
-	static function scanAnnotation(type:AstType, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void {
-		var names:Map<String, Bool> = [];
-		scanType(type, names, typeParameters);
-		for (name in names.keys())
-			dependencies.set(OPTIONAL_PREFIX + name, true);
+	static function scanAnnotation(type:AstType, dependencies:ScannedDependencies, ?typeParameters:Array<String>):Void {
+		scanType(type, dependencies.optional, dependencies.companionOwners, typeParameters);
 	}
 
-	static function scanType(type:AstType, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void
+	static function scanType(type:AstType, names:Map<String, Bool>, companionOwners:Map<String, Bool>,
+			?typeParameters:Array<String>):Void
 		switch type {
 			case NamedType(name):
 				if (typeParameters == null || typeParameters.indexOf(name) < 0)
-					dependencies.set(name, true);
+					names.set(name, true);
 			case AppliedType(name, arguments):
+				if (name == "KeyValueIterable")
+					companionOwners.set(name, true);
 				if (name != "KeyPath" && name != "WritableKeyPath"
 					&& (typeParameters == null || typeParameters.indexOf(name) < 0))
-					dependencies.set(name, true);
+					names.set(name, true);
 				for (argument in arguments)
-					scanType(argument, dependencies, typeParameters);
+					scanType(argument, names, companionOwners, typeParameters);
 			case ArrayType(element) | NullableType(element):
-				scanType(element, dependencies, typeParameters);
+				scanType(element, names, companionOwners, typeParameters);
 			case MapType(key, value):
-				scanType(key, dependencies, typeParameters);
-				scanType(value, dependencies, typeParameters);
+				if (mayUseObjectMap(key, typeParameters))
+					companionOwners.set("Map", true);
+				scanType(key, names, companionOwners, typeParameters);
+				scanType(value, names, companionOwners, typeParameters);
 			case FunctionType(arguments, result, _):
 				for (argument in arguments)
-					scanType(argument, dependencies, typeParameters);
-				scanType(result, dependencies, typeParameters);
+					scanType(argument, names, companionOwners, typeParameters);
+				scanType(result, names, companionOwners, typeParameters);
 			case AnonymousType(fields):
-				for (field in fields)
-					scanType(field.type, dependencies, typeParameters);
+				for (field in fields) {
+					if (field.name == "keyValueIterator")
+						companionOwners.set("KeyValueIterable", true);
+					scanType(field.type, names, companionOwners, typeParameters);
+				}
 			case _:
 		}
 
-	/**
-		Records the types a cast names as optional dependencies (`false`): their modules load when
-		they exist, but a name that is no module (`Dynamic`, a type parameter) is not missing.
-	**/
-	static function scanOptionalType(type:AstType, dependencies:Map<String, Bool>):Void {
-		var names:Map<String, Bool> = [];
-		scanType(type, names);
-		for (name in names.keys())
-			if (!dependencies.exists(name))
-				dependencies.set(name, false);
-	}
+	/** Only a nominal reference key can select ObjectMap. Generic constructors scan without excluding their parameters. */
+	public static function mayUseObjectMap(key:AstType, ?parameters:Array<String>):Bool
+		return switch key {
+			case NamedType(name), AppliedType(name, _):
+				name != "Int" && name != "String" && (parameters == null || parameters.indexOf(name) < 0);
+			default: false;
+		};
 
-	static function addQualifiedOwner(name:String, dependencies:Map<String, Bool>):Void {
+	static function addQualifiedOwner(name:String, dependencies:ScannedDependencies):Void {
 		var length = name.length, segmentStart = 0, hasSeparator = false;
 		for (cursor in 0...length)
 			if (name.charCodeAt(cursor) == 46) {
@@ -321,7 +328,7 @@ class DependencyScanner {
 				if (cursor > segmentStart) {
 					var first = name.charCodeAt(segmentStart);
 					if (first >= 65 && first <= 90) {
-						dependencies.set(name.substring(0, cursor), true);
+						dependencies.required.set(name.substring(0, cursor), true);
 						return;
 					}
 				}

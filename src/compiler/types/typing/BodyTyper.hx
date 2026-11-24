@@ -85,6 +85,8 @@ class BodyTyper implements BodyTyping {
 		// A `@:to` function is called as the abstract's other instance methods are, in the body being typed.
 		this.conversionResolver = new ConversionResolver(session,
 			(receiver, method, span) -> callResolver.typeAbstractAccessorCall(receiver, method, [], span,
+			context.scope ?? new Scope()),
+			(receiver, method) -> callResolver.typeCollectionProtocolMethod(receiver, method,
 			context.scope ?? new Scope()));
 		session.representation.useConversions(conversionResolver);
 		this.inlineConstantResolver = new InlineConstantResolver(session, this);

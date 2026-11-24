@@ -166,21 +166,6 @@ class IrInlineEnumEligibility {
 					escape(argument, "native signature");
 				escape(native.result, "native signature");
 			}
-		// Reflection helpers are generated after storage selection and can expose every registered layout.
-		if (IrObjectReflection.usedByProgram(program)) {
-			var reflectedNames = reflectableObjects == null ? [] : reflectableObjects,
-				reflected = [for (name in reflectedNames) name => true];
-			for (object in program.objects) {
-				// Anonymous records have runtime layouts too. A Dynamic/reflection edge can reach
-				// one even when it was created inside a Dynamic object literal.
-				if (!object.isValue && SemanticSignature.isAnonymousName(object.name))
-					reflected.set(object.name, true);
-				if (object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
-					reflected.set(object.name, true);
-			}
-			var unsupported = reflectedUnsupportedEnums(reflected);
-			for (name in unsupported.keys()) block(name, "registered reflection layout");
-		}
 		for (native in program.cNatives) {
 			for (argument in native.arguments)
 				escape(argument, "C native signature");
@@ -199,6 +184,21 @@ class IrInlineEnumEligibility {
 					reached.set(name, true);
 					block(name, rooted[index]);
 				}
+		// Registered layouts are a conservative reflection fallback. Report a traced escape first.
+		if (IrObjectReflection.usedByProgram(program)) {
+			var reflectedNames = reflectableObjects == null ? [] : reflectableObjects,
+				reflected = [for (name in reflectedNames) name => true];
+			for (object in program.objects) {
+				// Anonymous records have runtime layouts too. A Dynamic/reflection edge can reach
+				// one even when it was created inside a Dynamic object literal.
+				if (!object.isValue && SemanticSignature.isAnonymousName(object.name))
+					reflected.set(object.name, true);
+				if (object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
+					reflected.set(object.name, true);
+			}
+			var unsupported = reflectedUnsupportedEnums(reflected);
+			for (name in unsupported.keys()) block(name, "registered reflection layout");
+		}
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);

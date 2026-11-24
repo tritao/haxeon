@@ -13,6 +13,7 @@ import compiler.types.Type.NominalKind;
  * covered by an end-to-end runtime test.
  */
 class RuntimeType {
+	public static inline final OBJECT_MAP = "haxe.ds.ObjectMap";
 	public static inline final SPECIALIZED_MAP = "haxeon.collections.HashMap";
 
 	/** The operators whose operand is Dynamic, which the typer calls where an operand is Dynamic. */
@@ -55,7 +56,14 @@ class RuntimeType {
 	public static function programModules(wasm:Bool, hasNative:String->Bool):Array<String> {
 		var intrinsics = hasNative(STD_INTRINSIC);
 		var modules = [
-			for (module in [SPECIALIZED_MAP, DYNAMIC_OPS, REFLECT, STD, FLOAT_BITS, INT64])
+			for (module in [
+				SPECIALIZED_MAP,
+				DYNAMIC_OPS,
+				REFLECT,
+				STD,
+				FLOAT_BITS,
+				INT64
+			])
 				if (intrinsics || (module != DYNAMIC_OPS && module != REFLECT && module != STD)) module
 		];
 		// Only targets without native dynamic objects allocate the stdlib's class for a Dynamic object literal.
@@ -66,11 +74,20 @@ class RuntimeType {
 
 	/**
 	 * The modules that come with `module` in the graph, because typing a use of what it declares makes a call into them that no
-	 * source names: the reactive runtime with `Observable`, and the stdlib modules implementing the platform methods of
-	 * `haxe.io.Bytes` (`PlatformAbi.implementationModules`).
+	 * source names. For built-in types without source modules, the dependency scan adds companions where source syntax can
+	 * select them. Typing records the actual selections.
 	 */
 	public static function companionModules(module:String):Array<String>
-		return module == OBSERVABLE ? [OBSERVABLE_SOURCE, REACTIVE_RUNTIME] : PlatformAbi.implementationModules(module);
+		return switch module {
+			case OBSERVABLE: [OBSERVABLE_SOURCE, REACTIVE_RUNTIME];
+			case "KeyValueIterable": [ArrayLibrary.CLASS_NAME, MapLibrary.CLASS_NAME];
+			case "Map": [OBJECT_MAP];
+			default: PlatformAbi.implementationModules(module);
+		};
+
+	/** The implicit ObjectMap implementation uses Std, which requires the compiler intrinsics. */
+	public static function hasCompanion(module:String, hasNative:String->Bool):Bool
+		return module != OBJECT_MAP || hasNative(STD_INTRINSIC);
 
 	/**
 	 * Whether the graph adds `module` before typing when typing can call it: a program module, a companion, or `STRING_CODES`, which
@@ -79,7 +96,7 @@ class RuntimeType {
 	public static function isTypedDependency(module:String):Bool {
 		if (module == STRING_CODES || programModules(true, _ -> true).indexOf(module) >= 0)
 			return true;
-		for (owner in [OBSERVABLE, PlatformAbi.BYTES])
+		for (owner in [OBSERVABLE, PlatformAbi.BYTES, "KeyValueIterable", "Map"])
 			if (companionModules(owner).indexOf(module) >= 0)
 				return true;
 		return false;

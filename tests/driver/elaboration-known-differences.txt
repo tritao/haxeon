@@ -39,6 +39,8 @@ generic-struct-class	owner specialization: a specialized subclass of a generic b
 open-literal-helpers	shared specialization: a [shape] body's field of an anonymous structure element
 specialized-struct-map	owner specialization: a constrained owner's method result of a nullable struct
 generic-structure-member	structure literal: an object literal of a structure holding the body's own parameter keeps the parameter to lowering
+implicit-collection-runtime	ObjectMap specialization: the erased body leaves the key type parameter unsubstituted
+key-value-iterable-collections	nested generic call: a callee specialized at the body's own parameter (item 4)
 key-value-iteration	structure literal: an object literal of a structure holding the body's own parameter keeps the parameter to lowering (haxeon.MapMethods.keyValueIterator)
 map-key-value-iterator	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 generic-null-argument	nested generic call: a callee specialized at the body's own parameter (item 4)

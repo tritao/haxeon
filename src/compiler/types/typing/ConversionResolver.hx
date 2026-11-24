@@ -25,10 +25,14 @@ class ConversionResolver {
 	/** Calls the abstract instance method named on a value of the abstract: a `@:to` function's call (`CallResolver`). */
 	final abstractMethodCall:(receiver:TypedExpression, method:String, span:SourceSpan) -> TypedExpression;
 
+	final collectionMethodCall:(receiver:TypedExpression, method:String) -> TypedExpression;
+
 	public function new(session:TypingSession,
-			abstractMethodCall:(receiver:TypedExpression, method:String, span:SourceSpan) -> TypedExpression) {
+			abstractMethodCall:(receiver:TypedExpression, method:String, span:SourceSpan) -> TypedExpression,
+			collectionMethodCall:(receiver:TypedExpression, method:String) -> TypedExpression) {
 		this.session = session;
 		this.abstractMethodCall = abstractMethodCall;
+		this.collectionMethodCall = collectionMethodCall;
 	}
 
 	/** A Never value takes the expected type; a block's value is its result, so the result takes it too. */
@@ -546,7 +550,11 @@ class ConversionResolver {
 				case TFunction([], result, _): result;
 				default: throw new InternalError("Expected protocol method");
 			};
-			var call = IterationProtocol.call(session, captured, field.name);
+			var call = switch (captured.type) {
+				case TArray(_), TMap(_, _) if (field.name == "keyValueIterator"):
+					collectionMethodCall(captured, field.name);
+				default: IterationProtocol.call(session, captured, field.name);
+			};
 			var converted = coerce(call, result, "iteration method result");
 			session.closureConversion.addEnvironment(environment, captures);
 			session.closureConversion.addFunction({

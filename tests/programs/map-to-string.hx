@@ -59,5 +59,11 @@ function main():Int {
 	trace(objects);
 	trace(structures);
 	#end
+	var firstStructure = {id: 3};
+	var secondStructure = {id: 3};
+	structures.set(firstStructure, 5);
+	structures.set(secondStructure, 6);
+	if (structures.get(firstStructure) != 5 || structures.get(secondStructure) != 6)
+		throw "ObjectMap must distinguish anonymous keys with equal fields";
 	return 42;
 }

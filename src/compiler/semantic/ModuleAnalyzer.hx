@@ -8,6 +8,7 @@ import compiler.modules.ModuleSourceLoader;
 import compiler.modules.ModuleState;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.PlatformAbi;
+import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
@@ -153,7 +154,7 @@ class ModuleAnalyzer {
 			state.diagnostics.push(error.diagnostic);
 			throw error;
 		}
-		var ast = state.parsedAst(), dependencies:Map<String, Bool> = [];
+		var ast = state.parsedAst(), scanned = new ScannedDependencies(), dependencies = scanned.required;
 		for (imported in ast.imports) {
 			var importPath = imported.path;
 			var importedModules = importedSourceModules(importPath);
@@ -172,46 +173,35 @@ class ModuleAnalyzer {
 				for (importedModule in importedModules)
 					dependencies.set(importedModule, true);
 		}
-		for (fn in ast.functions)
-			for (statement in fn.statements)
-				DependencyScanner.scanStatement(statement, dependencies, fn.typeParameters);
-		for (classDecl in ast.classes)
+		scanFunctionBodies(ast.functions, [], scanned);
+		for (classDecl in ast.classes) {
 			for (field in classDecl.fields) {
 				var initializer = field.initializer;
 				if (initializer != null)
-					DependencyScanner.scanExpression(initializer, dependencies, classDecl.typeParameters);
+					DependencyScanner.scanExpression(initializer, scanned, classDecl.typeParameters);
 			}
-		for (classDecl in ast.classes) {
-			var ownerTypeParameters = classDecl.typeParameters;
-			for (method in classDecl.methods)
-				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies,
-						ownerTypeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
+			scanFunctionBodies(classDecl.methods, classDecl.typeParameters, scanned);
 		}
-		for (abstractDecl in ast.abstracts) {
-			var ownerTypeParameters = abstractDecl.typeParameters;
-			for (method in abstractDecl.methods)
-				for (statement in method.statements)
-					DependencyScanner.scanStatement(statement, dependencies,
-						ownerTypeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
-		}
+		for (enumDecl in ast.enums)
+			scanFunctionBodies(enumDecl.methods ?? [], enumDecl.typeParameters, scanned);
+		for (abstractDecl in ast.abstracts)
+			scanFunctionBodies(abstractDecl.methods, abstractDecl.typeParameters, scanned);
 		for (abstractDecl in ast.abstracts)
 			if (abstractDecl.values != null)
 				for (value in abstractDecl.values)
-					DependencyScanner.scanExpression(value.value, dependencies);
+					DependencyScanner.scanExpression(value.value, scanned);
 		// A type named only in an annotation, cast or catch clause is a dependency when a source module has that name.
 		// The dependency is the module that resolved: for `Types.Kind` in package `pk` that is `pk.Types`, while the
 		// dotted type name itself names no module and the later passes do not qualify dotted names.
-		for (key in [for (key in dependencies.keys()) key])
-			if (StringTools.startsWith(key, DependencyScanner.OPTIONAL_PREFIX)) {
-				dependencies.remove(key);
-				var typeName = key.substr(DependencyScanner.OPTIONAL_PREFIX.length);
-				var module = sourceModuleForDependency(typeName);
-				if (module == null && ast.packageName != null)
-					module = sourceModuleForDependency(ast.packageName + "." + typeName);
-				if (module != null)
-					dependencies.set(module, true);
-			}
+		for (owner in scanned.companionOwners.keys())
+			addCompanionDependencies(owner, dependencies);
+		for (typeName in scanned.optional.keys()) {
+			var module = sourceModuleForDependency(typeName);
+			if (module == null && ast.packageName != null)
+				module = sourceModuleForDependency(ast.packageName + "." + typeName);
+			if (module != null)
+				dependencies.set(module, true);
+		}
 		for (classDecl in ast.classes) {
 			dependencies.remove(classDecl.name);
 			for (field in classDecl.fields)
@@ -246,17 +236,6 @@ class ModuleAnalyzer {
 				dependencies.remove(dependency);
 		var packageName = ast.packageName;
 		for (dependency in [for (dependency in dependencies.keys()) dependency]) {
-			// An optional dependency is kept only as the module it names, if any.
-			if (dependencies.get(dependency) == false) {
-				dependencies.remove(dependency);
-				var optional = packageName != null
-					&& dependency.indexOf(".") < 0 ? sourceModuleForDependency(packageName + "." + dependency) : null;
-				if (optional == null)
-					optional = sourceModuleForDependency(dependency);
-				if (optional != null && optional != state.name)
-					dependencies.set(optional, true);
-				continue;
-			}
 			// `Module.SubType` names a module of this package, as a bare type name does.
 			if (packageName != null && isModuleRelativePath(dependency)) {
 				var relativeModule = sourceModuleForDependency(packageName + "." + dependency);
@@ -380,13 +359,19 @@ class ModuleAnalyzer {
 		for (fn in ast.functions)
 			addFunctionTypeDependencies(fn, state, dependencies);
 		// What typing a use of this module's declarations calls comes with it (`RuntimeType.companionModules`).
-		for (companion in compiler.runtime.RuntimeType.companionModules(state.name)) {
+		addCompanionDependencies(state.name, dependencies);
+		state.dependencies = [for (name in dependencies.keys()) name];
+		state.dependencies.sort(Reflect.compare);
+	}
+
+	function addCompanionDependencies(owner:String, dependencies:Map<String, Bool>):Void {
+		for (companion in RuntimeType.companionModules(owner)) {
+			if (!RuntimeType.hasCompanion(companion, natives.has))
+				continue;
 			var module = sourceModuleForDependency(companion);
 			if (module != null)
 				dependencies.set(module, true);
 		}
-		state.dependencies = [for (name in dependencies.keys()) name];
-		state.dependencies.sort(Reflect.compare);
 	}
 
 	public function importAliases(imports:Array<compiler.syntax.Ast.AstImport>):Map<String, String> {
@@ -536,6 +521,16 @@ class ModuleAnalyzer {
 		return new LookupParse(state.source, conditional.defines, tokens, program, embedded.inputs());
 	}
 
+	static function scanFunctionBodies(functions:Array<AstFunction>, ownerParameters:Array<String>,
+			dependencies:ScannedDependencies):Void {
+		for (fn in functions) {
+			var parameters = ownerParameters.length == 0 ? fn.typeParameters
+				: ownerParameters.concat(fn.typeParameters ?? []);
+			for (statement in fn.statements)
+				DependencyScanner.scanStatement(statement, dependencies, parameters);
+		}
+	}
+
 	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>,
 			?ownerParameters:Array<String>):Void {
 		var parameters = (ownerParameters == null ? [] : ownerParameters).concat(fn.typeParameters == null
@@ -558,6 +553,8 @@ class ModuleAnalyzer {
 						dependencies.set(owner, true);
 				}
 			case AppliedType(name, arguments):
+				if (name == "KeyValueIterable")
+					addCompanionDependencies(name, dependencies);
 				if (parameters == null || parameters.indexOf(name) < 0) {
 					var ast = state.parsedAst(),
 						owner = sourceModuleForType(name, ast.packageName);
@@ -569,6 +566,8 @@ class ModuleAnalyzer {
 			case ArrayType(element), NullableType(element):
 				addModuleTypeDependency(element, state, dependencies, parameters);
 			case MapType(key, value):
+				if (DependencyScanner.mayUseObjectMap(key, parameters))
+					addCompanionDependencies("Map", dependencies);
 				addModuleTypeDependency(key, state, dependencies, parameters);
 				addModuleTypeDependency(value, state, dependencies, parameters);
 			case FunctionType(arguments, result, _):
@@ -576,8 +575,11 @@ class ModuleAnalyzer {
 					addModuleTypeDependency(argument, state, dependencies, parameters);
 				addModuleTypeDependency(result, state, dependencies, parameters);
 			case AnonymousType(fields):
-				for (field in fields)
+				for (field in fields) {
+					if (field.name == "keyValueIterator")
+						addCompanionDependencies("KeyValueIterable", dependencies);
 					addModuleTypeDependency(field.type, state, dependencies, parameters);
+				}
 			default:
 		}
 

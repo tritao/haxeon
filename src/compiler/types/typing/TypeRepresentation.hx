@@ -404,9 +404,9 @@ class TypeRepresentation {
 		for (signature => name in previous) if (retained.exists(name)) ownerAliases.set(signature, name);
 
 	/** Record the typer's selected map representation under the source Map type as well as its generic owner. */
-	public function specializedMapOwner(key:CompilerType, value:CompilerType):Void {
-		var owner = genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [
-			session.specializedMapKey(key),
+	public function specializedMapOwner(className:String, key:CompilerType, value:CompilerType):Void {
+		var owner = genericOwner(TInstance(NominalKind.Class, className, [
+			className == RuntimeType.OBJECT_MAP ? key : session.specializedMapKey(key),
 			value
 		]));
 		if (owner != null) ownerAliases.set(SemanticSignature.type(TMap(key, value)), owner.name);
@@ -427,9 +427,10 @@ class TypeRepresentation {
 				discoverOwners(representation, explored, origin);
 			case TNullable(inner), TArray(inner), TIterator(inner): discoverOwners(inner, explored, origin);
 			case TMap(key, value):
-				if (session.requiresSpecializedMap(key, value)) {
-					if (origin != null) session.runtimeDependencyTracker.record(origin, RuntimeType.SPECIALIZED_MAP);
-					specializedMapOwner(key, value);
+				var owner = session.mapOwner(key, value);
+				if (owner != null) {
+					if (origin != null) session.runtimeDependencyTracker.record(origin, owner);
+					specializedMapOwner(owner, key, value);
 				}
 				discoverOwners(key, explored, origin);
 				discoverOwners(value, explored, origin);
@@ -577,7 +578,7 @@ class TypeRepresentation {
 	function heldAsHandle(type:CompilerType):Bool
 		return switch type {
 			case TMap(key, value): RuntimeType.mapName(key, value) != null
-				&& !session.requiresSpecializedMap(key, value);
+				&& session.mapOwner(key, value) == null;
 			case TNativeAbstract(_): true;
 			case TAbstract(_, _, representation), TNullable(representation): heldAsHandle(representation);
 			default: false;
@@ -928,7 +929,8 @@ class TypeRepresentation {
 
 	function mapStorageName(key:CompilerType, value:CompilerType):Null<String> {
 		var name = session.mapName(key, value);
-		return name == RuntimeType.SPECIALIZED_MAP ? ownerAliases.get(SemanticSignature.type(TMap(key, value))) : name;
+		return (name == RuntimeType.SPECIALIZED_MAP || name == RuntimeType.OBJECT_MAP)
+			? ownerAliases.get(SemanticSignature.type(TMap(key, value))) : name;
 	}
 
 	static function mapBoundaryType(type:CompilerType):CompilerType

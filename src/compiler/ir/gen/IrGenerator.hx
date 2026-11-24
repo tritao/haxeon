@@ -1442,7 +1442,16 @@ class IrGenerator {
 	function lowerSpecializedMapCall(builder:IrLocalsBuilder, map:IrValue, operation:String, arguments:Array<IrValue>,
 			key:CompilerType, value:CompilerType,
 			result:IrType):IrValue {
-		return builder.call(specializedMapOwner(key, value) + "." + operation, [map].concat(arguments), result);
+		var owner = specializedMapOwner(key, value);
+		// Collection lowering consumes snapshots, while ObjectMap.keys() returns an iterator.
+		if (compiler.semantic.GeneratedNames.specializedFunction(owner)
+			== compiler.semantic.GeneratedNames.ownerOrigin(RuntimeType.OBJECT_MAP))
+			operation = switch operation {
+				case "keys": "keyArray";
+				case "values": "valueArray";
+				default: operation;
+			};
+		return builder.call(owner + "." + operation, [map].concat(arguments), result);
 	}
 
 	/**

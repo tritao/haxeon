@@ -122,8 +122,10 @@ class DeclaredConformance {
 			if (TypeRepresentation.mentionsTypeParameter(knownKey)
 				|| TypeRepresentation.mentionsTypeParameter(knownValue))
 				return;
-			requestHashableMapKey(session, knownKey, span);
-			if (session.mapName(knownKey, knownValue) == null)
+			var runtime = session.mapName(knownKey, knownValue);
+			if (runtime != RuntimeType.OBJECT_MAP)
+				requestHashableMapKey(session, knownKey, span);
+			if (runtime == null)
 				BodyTyper.fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 		});
 
