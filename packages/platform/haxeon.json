@@ -25,5 +25,10 @@
       "docs"
     ]
   },
-  "target": "host"
+  "target": "host",
+  "dependencies": {
+    "haxeon-nativekit": {
+      "path": "../nativekit"
+    }
+  }
 }
