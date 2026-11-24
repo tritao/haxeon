@@ -2,140 +2,197 @@
   "programs": {
     "maze": {
       "default": {
-        "backends": {
-          "glsl300es": {
-            "attrs": [
-              {
-                "base_type": "Float",
-                "glsl_name": "position",
-                "slot": 0,
-                "type": "vec2"
-              },
-              {
-                "base_type": "Float",
-                "glsl_name": "rgb",
-                "slot": 1,
-                "type": "vec3"
-              }
-            ],
-            "stages": {
-              "fragment": {
-                "entry": "main",
-                "source": "shader_maze_glsl300es_fragment"
-              },
-              "vertex": {
-                "entry": "main",
-                "source": "shader_maze_glsl300es_vertex"
-              }
-            }
-          },
-          "glsl410": {
-            "attrs": [
-              {
-                "base_type": "Float",
-                "glsl_name": "position",
-                "slot": 0,
-                "type": "vec2"
-              },
-              {
-                "base_type": "Float",
-                "glsl_name": "rgb",
-                "slot": 1,
-                "type": "vec3"
-              }
-            ],
-            "stages": {
-              "fragment": {
-                "entry": "main",
-                "source": "shader_maze_glsl410_fragment"
-              },
-              "vertex": {
-                "entry": "main",
-                "source": "shader_maze_glsl410_vertex"
-              }
-            }
-          },
-          "hlsl5": {
-            "attrs": [
-              {
-                "base_type": "Float",
-                "hlsl_sem_index": 0,
-                "hlsl_sem_name": "TEXCOORD",
-                "slot": 0,
-                "type": "vec2"
-              },
-              {
-                "base_type": "Float",
-                "hlsl_sem_index": 1,
-                "hlsl_sem_name": "TEXCOORD",
-                "slot": 1,
-                "type": "vec3"
-              }
-            ],
-            "stages": {
-              "fragment": {
-                "entry": "main",
-                "source": "shader_maze_hlsl5_fragment"
-              },
-              "vertex": {
-                "entry": "main",
-                "source": "shader_maze_hlsl5_vertex"
-              }
-            }
-          },
-          "metal_ios": {
-            "attrs": [
-              {
-                "base_type": "Float",
-                "slot": 0,
-                "type": "vec2"
-              },
-              {
-                "base_type": "Float",
-                "slot": 1,
-                "type": "vec3"
-              }
-            ],
-            "stages": {
-              "fragment": {
-                "entry": "main0",
-                "source": "shader_maze_metal_ios_fragment"
-              },
-              "vertex": {
-                "entry": "main0",
-                "source": "shader_maze_metal_ios_vertex"
-              }
-            }
-          },
-          "metal_macos": {
-            "attrs": [
-              {
-                "base_type": "Float",
-                "slot": 0,
-                "type": "vec2"
-              },
-              {
-                "base_type": "Float",
-                "slot": 1,
-                "type": "vec3"
-              }
-            ],
-            "stages": {
-              "fragment": {
-                "entry": "main0",
-                "source": "shader_maze_metal_macos_fragment"
-              },
-              "vertex": {
-                "entry": "main0",
-                "source": "shader_maze_metal_macos_vertex"
-              }
-            }
-          }
-        },
         "defines": [],
         "dependencies": [
           "maze.glsl"
-        ]
+        ],
+        "targets": {
+          "glsl300es": {
+            "attributes": [
+              {
+                "format": "float2",
+                "name": "position",
+                "semantic": {
+                  "index": 0,
+                  "name": "TEXCOORD"
+                },
+                "slot": 0
+              },
+              {
+                "format": "float3",
+                "name": "rgb",
+                "semantic": {
+                  "index": 1,
+                  "name": "TEXCOORD"
+                },
+                "slot": 1
+              }
+            ],
+            "image_sampler_pairs": [],
+            "images": [],
+            "samplers": [],
+            "stages": {
+              "fragment": {
+                "entry_point": "main",
+                "source": "shader_maze_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry_point": "main",
+                "source": "shader_maze_glsl300es_vertex"
+              }
+            },
+            "storage_buffers": [],
+            "uniform_blocks": []
+          },
+          "glsl410": {
+            "attributes": [
+              {
+                "format": "float2",
+                "name": "position",
+                "semantic": {
+                  "index": 0,
+                  "name": "TEXCOORD"
+                },
+                "slot": 0
+              },
+              {
+                "format": "float3",
+                "name": "rgb",
+                "semantic": {
+                  "index": 1,
+                  "name": "TEXCOORD"
+                },
+                "slot": 1
+              }
+            ],
+            "image_sampler_pairs": [],
+            "images": [],
+            "samplers": [],
+            "stages": {
+              "fragment": {
+                "entry_point": "main",
+                "source": "shader_maze_glsl410_fragment"
+              },
+              "vertex": {
+                "entry_point": "main",
+                "source": "shader_maze_glsl410_vertex"
+              }
+            },
+            "storage_buffers": [],
+            "uniform_blocks": []
+          },
+          "hlsl5": {
+            "attributes": [
+              {
+                "format": "float2",
+                "name": "position",
+                "semantic": {
+                  "index": 0,
+                  "name": "TEXCOORD"
+                },
+                "slot": 0
+              },
+              {
+                "format": "float3",
+                "name": "rgb",
+                "semantic": {
+                  "index": 1,
+                  "name": "TEXCOORD"
+                },
+                "slot": 1
+              }
+            ],
+            "image_sampler_pairs": [],
+            "images": [],
+            "samplers": [],
+            "stages": {
+              "fragment": {
+                "entry_point": "main",
+                "source": "shader_maze_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry_point": "main",
+                "source": "shader_maze_hlsl5_vertex"
+              }
+            },
+            "storage_buffers": [],
+            "uniform_blocks": []
+          },
+          "metal_ios": {
+            "attributes": [
+              {
+                "format": "float2",
+                "name": "position",
+                "semantic": {
+                  "index": 0,
+                  "name": "TEXCOORD"
+                },
+                "slot": 0
+              },
+              {
+                "format": "float3",
+                "name": "rgb",
+                "semantic": {
+                  "index": 1,
+                  "name": "TEXCOORD"
+                },
+                "slot": 1
+              }
+            ],
+            "image_sampler_pairs": [],
+            "images": [],
+            "samplers": [],
+            "stages": {
+              "fragment": {
+                "entry_point": "main0",
+                "source": "shader_maze_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry_point": "main0",
+                "source": "shader_maze_metal_ios_vertex"
+              }
+            },
+            "storage_buffers": [],
+            "uniform_blocks": []
+          },
+          "metal_macos": {
+            "attributes": [
+              {
+                "format": "float2",
+                "name": "position",
+                "semantic": {
+                  "index": 0,
+                  "name": "TEXCOORD"
+                },
+                "slot": 0
+              },
+              {
+                "format": "float3",
+                "name": "rgb",
+                "semantic": {
+                  "index": 1,
+                  "name": "TEXCOORD"
+                },
+                "slot": 1
+              }
+            ],
+            "image_sampler_pairs": [],
+            "images": [],
+            "samplers": [],
+            "stages": {
+              "fragment": {
+                "entry_point": "main0",
+                "source": "shader_maze_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry_point": "main0",
+                "source": "shader_maze_metal_macos_vertex"
+              }
+            },
+            "storage_buffers": [],
+            "uniform_blocks": []
+          }
+        }
       }
     }
   },

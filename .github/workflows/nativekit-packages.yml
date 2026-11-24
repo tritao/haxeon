@@ -39,13 +39,16 @@ jobs:
           sudo apt-get install -y ninja-build python3-yaml
           revision=1062752a891c95b2bfeed9e356562d88f9df84ac
           mkdir -p "$RUNNER_TEMP/glslang"
-          curl -fsSL "https://codeload.github.com/KhronosGroup/glslang/tar.gz/$revision" |
-            tar xz -C "$RUNNER_TEMP/glslang" --strip-components=1
+          archive="$RUNNER_TEMP/glslang.tar.gz"
+          curl -fsSL "https://codeload.github.com/KhronosGroup/glslang/tar.gz/$revision" -o "$archive"
+          echo "46a05bba7675a3ab1912a0908183b9eee8daa06bb8047943bac54a6f0de2cfce  $archive" | sha256sum --check
+          tar xzf "$archive" -C "$RUNNER_TEMP/glslang" --strip-components=1
           cmake -S "$RUNNER_TEMP/glslang" -B "$RUNNER_TEMP/glslang-build" -GNinja \
             -DCMAKE_BUILD_TYPE=Release -DENABLE_OPT=OFF -DGLSLANG_TESTS=OFF
           cmake --build "$RUNNER_TEMP/glslang-build" --target glslang-standalone --parallel 2
           ln -s "$RUNNER_TEMP/glslang-build/StandAlone/glslang" "$RUNNER_TEMP/glslangValidator"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          echo "NATIVEKIT_GLSLANG_SHA256=$(sha256sum "$RUNNER_TEMP/glslangValidator" | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - run: ./packages/ui/tools/check-shaders.sh
       - run: ./packages/gpu/tools/check-shaders.sh --check
 

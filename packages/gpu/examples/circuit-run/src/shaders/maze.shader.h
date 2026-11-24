@@ -16,9 +16,9 @@ static const nkgpu_shader_table_attribute maze_default_attributes[] = {
     {1, "rgb", "TEXCOORD", 1},
 };
 static const nkgpu_shader_table_entry maze_default_table[] = {
-    {NKGPU_BACKEND_GLES3, 0, NKGPU_SHADERLANGUAGE_GLSL, shader_maze_glsl300es_vertex, shader_maze_glsl300es_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
-    {NKGPU_BACKEND_GLCORE, 0, NKGPU_SHADERLANGUAGE_GLSL, shader_maze_glsl410_vertex, shader_maze_glsl410_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
-    {NKGPU_BACKEND_D3D11, 0, NKGPU_SHADERLANGUAGE_HLSL5, shader_maze_hlsl5_vertex, shader_maze_hlsl5_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
-    {NKGPU_BACKEND_METAL, 1, NKGPU_SHADERLANGUAGE_MSL, shader_maze_metal_ios_vertex, shader_maze_metal_ios_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
-    {NKGPU_BACKEND_METAL, 0, NKGPU_SHADERLANGUAGE_MSL, shader_maze_metal_macos_vertex, shader_maze_metal_macos_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL300ES, shader_maze_glsl300es_vertex, shader_maze_glsl300es_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_GLSL410, shader_maze_glsl410_vertex, shader_maze_glsl410_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_HLSL5, shader_maze_hlsl5_vertex, shader_maze_hlsl5_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_IOS, shader_maze_metal_ios_vertex, shader_maze_metal_ios_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
+    {NKGPU_SHADER_TARGET_METAL_MACOS, shader_maze_metal_macos_vertex, shader_maze_metal_macos_fragment, maze_default_attributes, 2, NULL, 0, NULL, 0, NULL, 0},
 };
