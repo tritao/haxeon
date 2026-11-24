@@ -11,7 +11,6 @@ import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrProviders;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.TypeKey;
 import compiler.core.InternalError;
@@ -103,7 +102,6 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	final helpers = new IrOptionalHelpers();
 
 	// What the pass reads the functions' bodies with.
-	var types:Null<IrTypeIds>;
 	final builder:Null<IrBodyBuilder>;
 
 	/** The functions in program order, for the candidates' scalar forms (`finish`). */
@@ -122,10 +120,8 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 	var askedNow:Map<String, Bool> = [];
 
 	/** With `lineage`, the session's memo derives the scalar forms and helpers (`IrFunctionStages.derived`). */
-	public function new(declarations:Array<IrObject>, ?types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:IrLineage,
-			checks = false) {
+	public function new(declarations:Array<IrObject>, ?builder:IrBodyBuilder, ?lineage:IrLineage, checks = false) {
 		this.declarations = declarations;
-		this.types = types;
 		this.builder = builder;
 		this.lineage = lineage;
 		this.checks = checks;
@@ -136,12 +132,9 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 
 	/**
 	 * `originals` with their optional values in scalar slots, followed by the scalar forms, receiver checks and helpers they call,
-	 * without a memo; the wrappers join the declarations. Read as their bodies made with the pass's types (those of the functions'
-	 * bodies when not given).
+	 * without a memo; the wrappers join the declarations. Read as their bodies.
 	 */
 	public function rewrite(originals:Array<IrFunction>):Array<IrFunction> {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(originals);
 		return IrFunctionStages.apply(STAGE, this, originals);
 	}
 
@@ -156,7 +149,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		for (arg in fn.arguments)
 			if (nullableObject(arg.type) != null)
 				summary |= NULLABLE_OBJECTS;
-		var body = fn.bodyIn(bodyTypes(), builder);
+		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -170,13 +163,6 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			}
 		}
 		return summary;
-	}
-
-	function bodyTypes():IrTypeIds {
-		var table = types;
-		if (table == null)
-			throw new InternalError("The optional scalar flow reads bodies with the program's types");
-		return table;
 	}
 
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
@@ -272,7 +258,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 			}
 			// The helpers the function calls: the rewritten one's are read from its body, which the stages after this one read.
 			if (result != fn || summary & CALLS_HELPERS != 0)
-				helpers.scan(result.bodyIn(bodyTypes(), builder), reader);
+				helpers.scan(result.encodedBody(builder), reader);
 			result;
 		});
 	}
@@ -291,10 +277,10 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 
 	/** A function derived from `input` (`IrFunctionStages.derived`), made by `make` reading through the reader it is given. */
 	function derive(name:String, input:Int, make:() -> IrFunction):IrFunction
-		return IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, bodyTypes(), builder,
+		return IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, builder,
 			reader -> readingWith(reader, () -> {
 				var made = make();
-				helpers.scan(made.bodyIn(bodyTypes(), builder), reader);
+				helpers.scan(made.encodedBody(builder), reader);
 				made;
 			}));
 
@@ -426,7 +412,7 @@ class IrOptionalScalarFlow implements IrFunctionPass {
 		for (arg in fn.arguments)
 			if (optional(arg.type) != null)
 				return true;
-		var body = fn.bodyIn(bodyTypes(), builder);
+		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {

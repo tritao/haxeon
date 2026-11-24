@@ -6,7 +6,6 @@ import compiler.ir.model.IrBody;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.pipeline.IrFunctionStages;
@@ -32,7 +31,6 @@ class IrValueConstructors implements IrFunctionPass {
 	static inline final SUFFIX = ".new";
 
 	final program:IrProgram;
-	final types:IrTypeIds;
 	final scratch:IrPassScratch;
 	final lineage:Null<IrLineage>;
 
@@ -46,27 +44,23 @@ class IrValueConstructors implements IrFunctionPass {
 	final forms:Map<String, Int> = [];
 
 	/**
-	 * Expands `program`'s value constructor calls, on bodies made with `types` (those of the program's bodies when not given,
-	 * `IrTypeIds.ofFunctions`), without a memo. A function that changes becomes its edited body, owned by the next stage: edited in
-	 * place, or a copy when a cache holds the body.
+	 * Expands `program`'s value constructor calls, on bodies, without a memo. A function that changes becomes its edited body,
+	 * owned by the next stage: edited in place, or a copy when a cache holds the body.
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
+	public static function rewrite(program:IrProgram, ?scratch:IrPassScratch):Void {
 		program.functions = IrFunctionStages.apply("value-constructors",
-			new IrValueConstructors(program, types, scratch == null ? new IrPassScratch() : scratch, null),
+			new IrValueConstructors(program, scratch == null ? new IrPassScratch() : scratch, null),
 			program.functions);
 	}
 
-	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch, lineage:Null<IrLineage>) {
+	public function new(program:IrProgram, scratch:IrPassScratch, lineage:Null<IrLineage>) {
 		this.program = program;
-		this.types = types;
 		this.scratch = scratch;
 		this.lineage = lineage;
 	}
 
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		var body = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -91,7 +85,7 @@ class IrValueConstructors implements IrFunctionPass {
 			};
 			if (owner == null || !owner.isValue || fn.name != owner.name + SUFFIX)
 				continue;
-			var body = fn.bodyIn(types, builder);
+			var body = fn.encodedBody(builder);
 			if (body.blockCount() == 0 || body.blockCount() > 16)
 				continue;
 			var safe = true, count = 0;
@@ -139,7 +133,7 @@ class IrValueConstructors implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != CALLS_CONSTRUCTOR)
 			return fn;
-		var source = fn.bodyIn(types, scratch.bodyBuilder);
+		var source = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...source.blockCount()) {
 			var row = source.firstRow(block);
 			while (row >= 0) {

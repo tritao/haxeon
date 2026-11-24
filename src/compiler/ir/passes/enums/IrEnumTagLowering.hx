@@ -396,7 +396,6 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 	static inline final ADAPTERS = 0;
 
 	final program:IrProgram;
-	final types:IrTypeIds;
 	final builder:IrBodyBuilder;
 	final adapterEnums:Map<String, String> = [];
 	final boxNames:Map<String, String> = [];
@@ -413,9 +412,8 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 	/** The enums whose adapters the function being rewritten asked for, so it asks once. */
 	var asked:Map<String, Bool> = [];
 
-	public function new(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder) {
+	public function new(program:IrProgram, builder:IrBodyBuilder) {
 		this.program = program;
-		this.types = types;
 		this.builder = builder;
 		providers = new IrInlineEnumProviders(program);
 	}
@@ -441,9 +439,10 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 
 	/** The key of a provider fact: box or unbox, then the type ids of the request's type, argument and output, and its count. */
 	function providerKey(box:Bool, type:IrType, count:Int, argument:Null<IrType>, output:IrType):String
-		return (box ? "B" : "U") + types.id(type) + ":" + count + ":" + (argument == null ? -1 : types.id(argument))
+		return (box ? "B" : "U") + IrTypeIds.id(type) + ":" + count + ":"
+			+ (argument == null ? -1 : IrTypeIds.id(argument))
 			+ ":"
-			+ types.id(output);
+			+ IrTypeIds.id(output);
 
 	public function fact(kind:Int, key:String):Int {
 		var tables = lookups;
@@ -474,8 +473,8 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 	function providerFact(key:String):Int {
 		var parts = [for (part in key.substr(1).split(":")) Std.parseInt(part) ?? -1], argument = parts[2];
 		try {
-			return IrSymbol.of(providers.provider(key.charAt(0) == "B", types.type(parts[0]), parts[1],
-				argument < 0 ? null : types.type(argument), types.type(parts[3]))).id;
+			return IrSymbol.of(providers.provider(key.charAt(0) == "B", IrTypeIds.type(parts[0]), parts[1],
+				argument < 0 ? null : IrTypeIds.type(argument), IrTypeIds.type(parts[3]))).id;
 		} catch (error:InternalError) {
 			return IrFacts.UNKNOWN;
 		}
@@ -578,7 +577,7 @@ class IrTagEscapesPass implements IrFunctionPass implements IrTagEscapeReads {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		this.reader = reader;
 		asked = [];
-		var walk = new IrBodyTagEscapes(this), body = fn.bodyIn(types, builder), result = fn;
+		var walk = new IrBodyTagEscapes(this), body = fn.encodedBody(builder), result = fn;
 		if (walk.rewrite(body, false)) {
 			var edited = body.forEditing(builder);
 			walk.rewrite(edited, true);

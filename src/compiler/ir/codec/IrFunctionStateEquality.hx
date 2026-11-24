@@ -6,6 +6,7 @@ import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.verify.IrVerifier;
 import compiler.ir.model.SourceProvenance;
@@ -38,15 +39,15 @@ class IrFunctionStateEquality {
 		if (leftBody != null && rightBody != null)
 			return compareBodies(leftBody, rightBody, placed);
 		// One that is its body alone (a session releases the objects of what it keeps frozen, `IrFunction.releaseDecoded`) is not
-		// decoded: the other is encoded with its table and the bodies compared, after the header shows they could be the same.
+		// decoded: the other is encoded and the bodies compared, after the header shows they could be the same.
 		if (leftBody != null || rightBody != null) {
 			if (left.name != right.name || left.arguments.length != right.arguments.length
 				|| !IrVerifier.sameType(left.result, right.result))
 				return false;
 			if (leftBody != null)
-				return compareBodies(leftBody, IrBodyBuilder.encode(right, leftBody.types), placed);
+				return compareBodies(leftBody, IrBodyBuilder.encode(right), placed);
 			if (rightBody != null)
-				return compareBodies(IrBodyBuilder.encode(left, rightBody.types), rightBody, placed);
+				return compareBodies(IrBodyBuilder.encode(left), rightBody, placed);
 		}
 		if (left.name != right.name
 			|| !sameKind(left.kind, right.kind)
@@ -98,15 +99,13 @@ class IrFunctionStateEquality {
 		return compareBodies(left, right, false);
 
 	static function compareBodies(left:IrBody, right:IrBody, placed:Bool):Bool {
-		// Types are compared as types, through each body's own table (`IrBody.types`), never as ids: two compiles' bodies have
-		// tables of their own.
 		if (left == right)
 			return true;
 		if (left.name != right.name
 			|| !sameKind(left.kind, right.kind)
 			|| left.inlineHint != right.inlineHint
 			|| left.retention != right.retention
-			|| !IrVerifier.sameType(left.types.type(left.result), right.types.type(right.result))
+			|| !IrVerifier.sameType(IrTypeIds.type(left.result), IrTypeIds.type(right.result))
 			|| left.argumentCount() != right.argumentCount()
 			|| left.blockCount() != right.blockCount()
 			|| left.bindingCount() != right.bindingCount())

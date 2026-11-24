@@ -73,7 +73,6 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	/** How many operands read each value id of the function `IrClosureUses.read` is reading, its storage kept from one to the next. */
 	final useCounts:Array<Int> = [];
 
-	final types:IrTypeIds;
 	final scratch:IrPassScratch;
 	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
 
@@ -84,14 +83,12 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	final typeValues:Map<Int, IrType> = [];
 
 	/**
-	 * Rewrites `program`'s functions as bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the
-	 * program's bodies when not given, `IrTypeIds.ofFunctions`). A function that changes becomes its edited body: owned by the
-	 * next stage: edited in place, or a copy when a cache holds the body.
+	 * Rewrites `program`'s functions as bodies (docs/design/IR_CORE_COLUMNS.md, migration). A function that changes becomes its
+	 * edited body: owned by the next stage: edited in place, or a copy when a cache holds the body.
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void
+	public static function rewrite(program:IrProgram, ?scratch:IrPassScratch):Void
 		program.functions = compiler.ir.pipeline.IrFunctionStages.apply(STAGE,
-			new IrScalarClosures(program, types == null ? IrTypeIds.ofFunctions(program.functions) : types,
-			scratch == null ? new IrPassScratch() : scratch),
+			new IrScalarClosures(program, scratch == null ? new IrPassScratch() : scratch),
 			program.functions);
 
 	/**
@@ -102,11 +99,10 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	 * closure type their name digests, reading its ABI and the inline enums they box (`INLINE_ENUM`); the interface boxes and
 	 * checked casts they need are derived from them in stages of their own.
 	 */
-	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch,
+	public function new(program:IrProgram, scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.program = program;
 		this.lineage = lineage;
-		this.types = types;
 		this.scratch = scratch;
 		objects = [for (object in program.objects) object.name => object];
 		for (declaration in program.enums)
@@ -117,13 +113,13 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 
 	/** `fn`'s body, encoded when it has none; in a compile that keeps no session its objects go. */
 	function bodyOf(fn:IrFunction):IrBody {
-		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		var body = fn.encodedBody(scratch.bodyBuilder);
 		return body;
 	}
 
 	/** What the choice reads of a function: what it does with closures (`USES`), and its signature when it is not only reachable (`EXPOSED`). */
 	public function summarize(fn:IrFunction):Int
-		return (IrClosureUses.of(fn, types, scratch, useCounts, lineage).events.length > 0 ? USES_CLOSURES : 0)
+		return (IrClosureUses.of(fn, scratch, useCounts, lineage).events.length > 0 ? USES_CLOSURES : 0)
 			| (fn.retention != Reachable ? EXPOSED : 0);
 
 	/** The candidate closure types: what each function does with closures (by its summary), decided against the program. */
@@ -148,9 +144,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				excludeSignature(fn);
 			if (summary & USES_CLOSURES == 0)
 				continue;
-			var uses = IrClosureUses.of(fn, types, scratch, useCounts, lineage), events = uses.events, index = 0;
+			var uses = IrClosureUses.of(fn, scratch, useCounts, lineage), events = uses.events, index = 0;
 			while (index < events.length) {
-				var type = types.type(events[index + 1]);
+				var type = IrTypeIds.type(events[index + 1]);
 				switch events[index] {
 					case IrClosureUses.NOTE:
 						note(type);
@@ -161,7 +157,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 							excluded.set(key(type), true);
 					default:
 						if (note(type)
-							&& (isValue(types.type(events[index + 3]))
+							&& (isValue(IrTypeIds.type(events[index + 3]))
 							|| !names.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]])))
 							excluded.set(key(type), true);
 				}
@@ -253,7 +249,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		var keys = id < functionKeys.length ? functionKeys[id] : null;
 		if (keys == null) {
 			keys = [];
-			addFunctionKeys(types.type(id), keys);
+			addFunctionKeys(IrTypeIds.type(id), keys);
 			while (functionKeys.length <= id)
 				functionKeys.push(null);
 			functionKeys[id] = keys;
@@ -399,9 +395,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		// The adapters' interface boxes and checked casts are derived from each adapter's version, so a kept adapter keeps them.
 		var checks = lineage != null && lineage.checks;
 		generated = IrValueInterfaceBoxes.rewriteDerived(BOX_STAGE, generated.concat(generatedMakers), program.objects,
-			program.interfaces, rewritten, lineage, checks, types, scratch.bodyBuilder);
+			program.interfaces, rewritten, lineage, checks, scratch.bodyBuilder);
 		generated = IrCheckedDynamicCasts.rewriteBodies(CAST_STAGE, generated, program.objects, false, rewritten, false,
-			false, types, scratch.bodyBuilder, lineage, checks);
+			false, scratch.bodyBuilder, lineage, checks);
 		var result = rewritten.concat(generated);
 		program.functions = result;
 		var hasTypeTest = false;
@@ -494,7 +490,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 
 	/** Whether a type `body` holds changes: a value's (an argument's, a row's, a binding's), the result, a `TypeValue`'s. */
 	function needsRewrite(body:IrBody):Bool {
-		if (changesType(body.types.type(body.result)))
+		if (changesType(IrTypeIds.type(body.result)))
 			return true;
 		for (value in 0...body.valueLimit())
 			if (body.valueTypeId(IrValueId.of(value)) >= 0 && changesType(body.valueType(IrValueId.of(value))))
@@ -572,9 +568,9 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		for (value in 0...limit) {
 			var id = IrValueId.of(value), type = body.valueTypeId(id);
 			if (type >= 0)
-				body.setValueType(id, body.typeId(mapType(body.types.type(type))));
+				body.setValueType(id, body.typeId(mapType(IrTypeIds.type(type))));
 		}
-		body.setResult(body.typeId(mapType(body.types.type(body.result))));
+		body.setResult(body.typeId(mapType(IrTypeIds.type(body.result))));
 		return IrFunction.ofOwnedBody(body);
 	}
 
@@ -698,7 +694,7 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	function helper(name:String, make:compiler.ir.reuse.IrFactReader->IrFunction):IrFunction {
 		var known = lineage;
 		return compiler.ir.pipeline.IrFunctionStages.derived(STAGE, name, this,
-			compiler.ir.pipeline.IrFunctionStages.FROM_NAME, known, known != null && known.checks, types,
+			compiler.ir.pipeline.IrFunctionStages.FROM_NAME, known, known != null && known.checks,
 			scratch.bodyBuilder, make);
 	}
 
@@ -1105,8 +1101,8 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 }
 
 /**
- * What one function's rows do with closures, for the scalar closure ABI's choice (`IrScalarClosures.prepare`), by type ids of the
- * body's table: the types it notes as candidates (`NOTE`: closures it calls, turns `Dyn` or takes back from `Dyn`), the types it
+ * What one function's rows do with closures, for the scalar closure ABI's choice (`IrScalarClosures.prepare`), by type ids: the
+ * types it notes as candidates (`NOTE`: closures it calls, turns `Dyn` or takes back from `Dyn`), the types it
  * excludes with what they nest (`EXCLUDE`), and the closures it makes of functions by name (`STATIC`, `INSTANCE` with the
  * receiver's type), whose candidacy depends on the program. It depends on the body alone, so a session keeps it by the function's
  * version (`IrStageMemos.closureUses`).
@@ -1129,17 +1125,17 @@ class IrClosureUses {
 
 	function new() {}
 
-	public static function of(fn:IrFunction, types:IrTypeIds, scratch:IrPassScratch, useCounts:Array<Int>,
+	public static function of(fn:IrFunction, scratch:IrPassScratch, useCounts:Array<Int>,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrClosureUses {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
-			return read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
+			return read(fn.encodedBody(scratch.bodyBuilder), useCounts);
 		var memo = lineage.memos.contribution(IrScalarClosures.USES), known = memo.get(version);
 		if (known == null) {
-			known = read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
+			known = read(fn.encodedBody(scratch.bodyBuilder), useCounts);
 			memo.keep(version, known);
 		} else if (lineage.checks) {
-			var now = read(fn.bodyIn(types, scratch.bodyBuilder), useCounts);
+			var now = read(fn.encodedBody(scratch.bodyBuilder), useCounts);
 			if (now.events.join(",") != known.events.join(",") || now.names.join(",") != known.names.join(","))
 				throw new InternalError('--check-reuse: the closure uses reused for ${fn.name} differ from its body');
 		}
@@ -1161,7 +1157,7 @@ class IrClosureUses {
 	}
 
 	static function read(body:IrBody, useCounts:Array<Int>):IrClosureUses {
-		var uses = new IrClosureUses(), types = body.types;
+		var uses = new IrClosureUses();
 		// Most functions make no signature query, and need no map of them.
 		var signatureQueries:Null<Map<Int, Bool>> = null,
 			counts = IrPassScratch.filledInts(useCounts, body.valueLimit(), 0);
@@ -1196,7 +1192,7 @@ class IrClosureUses {
 						var input = body.valueType(body.operand(row, 0)),
 							callable = IrScalarClosures.functionType(input);
 						if (callable != null)
-							uses.event(NOTE, types.id(callable));
+							uses.event(NOTE, IrTypeIds.id(callable));
 						else
 							uses.event(EXCLUDE, body.valueTypeId(body.operand(row, 0)));
 					case IrOpcode.SafeCast:
@@ -1207,7 +1203,7 @@ class IrClosureUses {
 							case Dyn: true;
 							default: false;
 						}))
-							uses.event(NOTE, types.id(callable));
+							uses.event(NOTE, IrTypeIds.id(callable));
 						else
 							uses.event(EXCLUDE, body.valueTypeId(body.output(row)));
 						uses.event(EXCLUDE, body.valueTypeId(body.operand(row, 0)));

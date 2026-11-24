@@ -7,7 +7,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
 
@@ -102,6 +101,6 @@ class IrValueArrayRows {
 	 */
 	public static function standaloneBody(fn:IrFunction):IrBody {
 		var body = fn.body;
-		return body != null ? body.thaw() : IrBodyBuilder.encode(fn, new IrTypeIds());
+		return body != null ? body.thaw() : IrBodyBuilder.encode(fn);
 	}
 }

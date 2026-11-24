@@ -328,7 +328,7 @@ class InlineEnumLogicalArrayMain {
 		compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(p);
 		compiler.ir.passes.inlining.IrInliner.run(p,
 			new compiler.ir.passes.inlining.IrInliner
-			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(p.functions)),
+			.IrInlineCache(),
 			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.verify.IrVerifier.verify(p);

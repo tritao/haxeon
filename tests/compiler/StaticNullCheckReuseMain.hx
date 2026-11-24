@@ -2,7 +2,6 @@ import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 import compiler.ir.passes.nullability.IrStaticNullChecks;
@@ -17,7 +16,6 @@ import compiler.ir.reuse.IrStageMemo.IrStageMemos;
  */
 class StaticNullCheckReuseMain {
 	static final memos = new IrStageMemos(new IrFunctionVersions());
-	static final types = new IrTypeIds();
 
 	/** By name, the generator's function and its version: a new object takes a new version. */
 	static final generated:Map<String, {fn:IrFunction, version:Int}> = [];
@@ -27,7 +25,7 @@ class StaticNullCheckReuseMain {
 		for (fn in functions) {
 			var known = generated.get(fn.name);
 			if (known == null || known.fn != fn) {
-				fn.bodyIn(types);
+				fn.encodedBody();
 				fn.freezeBody();
 				generated.set(fn.name, {fn: fn, version: memos.versions.next()});
 			}
@@ -39,7 +37,7 @@ class StaticNullCheckReuseMain {
 		}, true);
 		lineage.enterBodies();
 		return IrFunctionStages.run(IrStaticNullChecks.STAGE,
-			new IrStaticNullChecks(objects, types, null, lineage, true),
+			new IrStaticNullChecks(objects, null, lineage, true),
 			input, lineage, true);
 	}
 
@@ -78,7 +76,7 @@ class StaticNullCheckReuseMain {
 		return IrFunctionStateCodec.encode(fn).toHex();
 
 	static function sameAsUncached(cached:Array<IrFunction>, input:Array<IrFunction>):Void {
-		var plain = IrStaticNullChecks.run(input, null, types);
+		var plain = IrStaticNullChecks.run(input, null);
 		expect(plain.length == cached.length, "a memoized run returns the same functions as a run without a memo");
 		for (index in 0...plain.length) {
 			expect(plain[index].name == cached[index].name, "a memoized run keeps the order");

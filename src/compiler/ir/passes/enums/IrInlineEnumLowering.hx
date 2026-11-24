@@ -35,7 +35,6 @@ import compiler.ir.reuse.IrStageMemo.IrLineage;
 class IrInlineEnumLowering {
 	final planner:IrInlineEnumLayout;
 	final eligibility:IrInlineEnumEligibility;
-	final types:IrTypeIds;
 	final helper:(name:String, enumName:String, constructor:Int, field:Int) -> String;
 	final values:Map<String, Bool>;
 	final contracts:Map<String, Bool>;
@@ -49,12 +48,11 @@ class IrInlineEnumLowering {
 	/** By type id: the id of the type with its selected enums as their value packets, or -1 not known yet. */
 	final mappedIds:Array<Int> = [];
 
-	function new(planner:IrInlineEnumLayout, eligibility:IrInlineEnumEligibility, types:IrTypeIds,
+	function new(planner:IrInlineEnumLayout, eligibility:IrInlineEnumEligibility,
 			helper:(name:String, enumName:String, constructor:Int, field:Int) -> String, values:Map<String, Bool>,
 			contracts:Map<String, Bool>, mapped:IrType->IrType, containsMapped:IrType->Bool) {
 		this.planner = planner;
 		this.eligibility = eligibility;
-		this.types = types;
 		this.helper = helper;
 		this.values = values;
 		this.contracts = contracts;
@@ -63,18 +61,14 @@ class IrInlineEnumLowering {
 	}
 
 	/**
-	 * `program` with its selected enums lowered, reading the functions' bodies made with `types` (those of the functions' bodies
-	 * when not given) and encoding a function that has none; a function it changes or makes is owned by the next
-	 * stage.
+	 * `program` with its selected enums lowered, reading the functions' bodies and encoding a function that has none; a function
+	 * it changes or makes is owned by the next stage.
 	 */
 	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
-			?reflectableObjects:Array<String>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
-			?lineage:IrLineage):IrProgram {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
+			?reflectableObjects:Array<String>, ?builder:IrBodyBuilder, ?lineage:IrLineage):IrProgram {
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
 			canonicalObjects);
-		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, types, builder, lineage);
+		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects, builder, lineage);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
 		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
@@ -198,7 +192,7 @@ class IrInlineEnumLowering {
 				ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, name)));
 		}
 		var pass:Null<IrInlineEnumLoweringPass> = null;
-		var lowering = new IrInlineEnumLowering(planner, eligibility, types, (name, enumName, constructor, field) -> {
+		var lowering = new IrInlineEnumLowering(planner, eligibility, (name, enumName, constructor, field) -> {
 			var current = pass;
 			if (current != null)
 				current.ask(name, enumName, constructor, field);
@@ -225,7 +219,7 @@ class IrInlineEnumLowering {
 				parts.push('interface ${entry.name}');
 			return parts.join("\n");
 		}
-		var lowered = new IrInlineEnumLoweringPass(lowering, types, builder, lineage, layout, helper);
+		var lowered = new IrInlineEnumLoweringPass(lowering, builder, lineage, layout, helper);
 		pass = lowered;
 		result.functions = IrFunctionStages.run(IrInlineEnumLoweringPass.STAGE, lowered, program.functions, lineage,
 			lineage != null && lineage.checks, builder);
@@ -243,7 +237,7 @@ class IrInlineEnumLowering {
 		result.functions = result.functions.concat(escapes);
 		// The word access natives the functions call: the lowered functions' as their rewrite asked for them, the rest read here.
 		for (fn in made.concat(escapes))
-			lowered.scanNatives(fn.bodyIn(types, builder), null);
+			lowered.scanNatives(fn.encodedBody(builder), null);
 		var existing = [for (native in result.natives) native.name => true];
 		for (native in IrInlineEnumWordAccess.natives())
 			if (native.name != "haxe.Int64.toInt" && lowered.called.exists(native.name)
@@ -272,7 +266,7 @@ class IrInlineEnumLowering {
 				mentions[index] = -1;
 		}
 		if (mentions[id] < 0)
-			mentions[id] = containsMapped(types.type(id)) ? 1 : 0;
+			mentions[id] = containsMapped(IrTypeIds.type(id)) ? 1 : 0;
 		return mentions[id] == 1;
 	}
 
@@ -287,7 +281,7 @@ class IrInlineEnumLowering {
 				mappedIds[index] = -1;
 		}
 		if (mappedIds[id] < 0)
-			mappedIds[id] = mentionsId(id) ? types.id(mapped(types.type(id))) : id;
+			mappedIds[id] = mentionsId(id) ? IrTypeIds.id(mapped(IrTypeIds.type(id))) : id;
 		return mappedIds[id];
 	}
 
@@ -619,7 +613,6 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 	static inline final CONSTRUCTOR_BITS = 15;
 
 	final lowering:IrInlineEnumLowering;
-	final types:IrTypeIds;
 	final builder:Null<IrBodyBuilder>;
 	final lineage:Null<IrLineage>;
 	final layout:() -> String;
@@ -638,11 +631,10 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 	/** The word access natives the functions call. */
 	public final called:Map<String, Bool> = [];
 
-	public function new(lowering:IrInlineEnumLowering, types:IrTypeIds, builder:Null<IrBodyBuilder>,
+	public function new(lowering:IrInlineEnumLowering, builder:Null<IrBodyBuilder>,
 			lineage:Null<IrLineage>,
 			layout:() -> String, helper:(name:String, enumName:String, constructor:Int, field:Int) -> IrFunction) {
 		this.lowering = lowering;
-		this.types = types;
 		this.builder = builder;
 		this.lineage = lineage;
 		this.layout = layout;
@@ -677,7 +669,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 		var known = lineage;
 		return IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, known,
 			known != null && known.checks,
-			types, builder, reader -> {
+			builder, reader -> {
 				reader.read(LAYOUT, "");
 				make();
 			});
@@ -717,7 +709,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 		var names = id < enumNames.length ? enumNames[id] : null;
 		if (names == null) {
 			names = [];
-			addEnums(types.type(id), names);
+			addEnums(IrTypeIds.type(id), names);
 			while (enumNames.length <= id)
 				enumNames.push(null);
 			enumNames[id] = names;
@@ -727,7 +719,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 	}
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
-		var body = fn.bodyIn(types, builder);
+		var body = fn.encodedBody(builder);
 		readEnums(body.result, reader);
 		for (value in 0...body.valueLimit())
 			readEnums(body.valueTypeId(IrValueId.of(value)), reader);
@@ -746,7 +738,7 @@ class IrInlineEnumLoweringPass implements IrFunctionPass {
 			reader.read(LAYOUT, "");
 			reader.read(CALLABLE, fn.name);
 		}
-		scanNatives(result.bodyIn(types, builder), reader);
+		scanNatives(result.encodedBody(builder), reader);
 		return result;
 	}
 

@@ -544,8 +544,7 @@ class IrNonNullFields {
 	static function read(fn:IrFunction, objects:Map<String, IrObject>, keys:IrFieldKeys):IrFieldStores {
 		var made = new IrFieldStores(),
 			known = fn.body,
-			body = known != null ? known : compiler.ir.model.IrBodyBuilder.encode(fn,
-				compiler.ir.model.IrTypeIds.ofFunctions([fn]));
+			body = known != null ? known : compiler.ir.model.IrBodyBuilder.encode(fn);
 		var receiver = IrValueId.of(-1);
 		var receiverClass = IrNonNullFacts.receiverClass(body);
 		if (receiverClass != null && IrNonNullFacts.isMethodReceiver(body, objects.get(receiverClass)))

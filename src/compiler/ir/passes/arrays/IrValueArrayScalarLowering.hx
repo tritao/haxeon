@@ -6,7 +6,6 @@ import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
-import compiler.ir.model.IrTypeIds;
 
 /**
  * Expand compiler-generated array element boundaries before scalar replacement on every target, on bodies: each call of a helper
@@ -24,26 +23,24 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 	final prefix = IrValueArrayElements.PREFIX;
 	final suffix:String;
 	final helpers:Map<String, IrBody>;
-	final types:IrTypeIds;
 	final scratch:IrPassScratch;
 	final lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>;
 	final versions:Map<String, Int> = [];
 
-	function new(suffix:String, helpers:Map<String, IrBody>, types:IrTypeIds, scratch:IrPassScratch,
+	function new(suffix:String, helpers:Map<String, IrBody>, scratch:IrPassScratch,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>) {
 		this.suffix = suffix;
 		this.helpers = helpers;
-		this.types = types;
 		this.scratch = scratch;
 		this.lineage = lineage;
 	}
 
 	/**
-	 * Expands the calls of `element`'s boundary helpers in `program`'s functions, whose bodies are `types`'s; in a session with
-	 * `lineage`, reusing what it made of each function whose version and helpers are unchanged. A function that changes becomes
+	 * Expands the calls of `element`'s boundary helpers in `program`'s functions; in a session with `lineage`,
+	 * reusing what it made of each function whose version and helpers are unchanged. A function that changes becomes
 	 * its edited body, edited in place when the stage owns it, else on a copy.
 	 */
-	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool, types:IrTypeIds,
+	public static function rewrite(program:IrProgram, element:IrType, expandAll:Bool,
 			scratch:IrPassScratch, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
 		var builder = scratch.bodyBuilder;
 		// The helpers as they are before any expansion: a helper's own body may be expanded below.
@@ -55,14 +52,14 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 				&& (expandAll
 				|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "optional-")
 				|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "iterator-next:"))) {
-				var body = fn.bodyIn(types, builder);
+				var body = fn.encodedBody(builder);
 				helpers.set(fn.name, body.frozen ? body : IrBodyBuilder.copy(body, builder));
 			}
 		if (!helpers.keys().hasNext())
 			return;
 		program.functions = compiler.ir.pipeline.IrFunctionStages.run("value-array-scalar:"
 			+ compiler.ir.model.IrTypeIdentity.text(element),
-			new IrValueArrayScalarLowering(suffix, helpers, types, scratch, lineage), program.functions, lineage,
+			new IrValueArrayScalarLowering(suffix, helpers, scratch, lineage), program.functions, lineage,
 			lineage != null && lineage.checks, builder);
 	}
 
@@ -71,7 +68,7 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 		return StringTools.startsWith(name, prefix) && StringTools.endsWith(name, suffix);
 
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		var body = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -97,7 +94,7 @@ class IrValueArrayScalarLowering implements compiler.ir.pipeline.IrFunctionPass 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (summary != CALLS)
 			return fn;
-		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		var body = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {

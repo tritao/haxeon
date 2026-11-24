@@ -62,20 +62,19 @@ class IrInlineEnumEligibility {
 	final rejected:Array<Int>;
 
 	/**
-	 * The enums of `program` that may be lowered to value packets, reading the functions' bodies made with `types` (those of the
-	 * functions' bodies when not given), encoding a function that has none.
+	 * The enums of `program` that may be lowered to value packets, reading the functions' bodies, encoding a function that has
+	 * none.
 	 */
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>,
-			?types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
+			?builder:IrBodyBuilder, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.planner = planner;
 		this.lineage = lineage;
-		var bodyTypes = types == null ? IrTypeIds.ofFunctions(program.functions) : types;
 		// What each function lets escape or keeps in value form, read once per version in a session (`IrInlineEnumUses`); the
 		// reach follows the closures and map stores the records name.
-		var uses = [for (fn in program.functions) IrInlineEnumUses.of(fn, bodyTypes, builder, lineage)];
+		var uses = [for (fn in program.functions) IrInlineEnumUses.of(fn, builder, lineage)];
 		reflectionReach = new IrEnumEscapeReach(program, _ -> false);
 		for (record in uses)
-			record.follow(reflectionReach, bodyTypes);
+			record.follow(reflectionReach);
 		declarations = [for (declaration in program.enums) declaration.name => declaration];
 		objects = [for (object in program.objects) object.name => object];
 		contracts = [for (contract in program.interfaces) contract.name => contract];
@@ -175,7 +174,7 @@ class IrInlineEnumEligibility {
 			escape(native.result, "C native signature");
 		}
 		for (index in 0...program.functions.length)
-			replay(program.functions[index], uses[index], bodyTypes, program.entryPoint);
+			replay(program.functions[index], uses[index], program.entryPoint);
 		// One walk for every reason: an enum is blocked for the first reason, in order, whose roots reach it.
 		var rooted = [for (reason in escapeOrder) if (escapeRoots.get(reason) != null) reason],
 			reachedEach = reflectionReach.collectEach(ESCAPES, [for (reason in rooted) escapeRoots.get(reason) ?? []],
@@ -208,7 +207,7 @@ class IrInlineEnumEligibility {
 	}
 
 	/** What one function's rows let escape or keep in value form (its record, `IrInlineEnumUses`), and its verified callable descriptors. */
-	function replay(fn:IrFunction, uses:IrInlineEnumUses, types:IrTypeIds, entryPoint:String):Void {
+	function replay(fn:IrFunction, uses:IrInlineEnumUses, entryPoint:String):Void {
 		if (fn.retention == Expose || fn.name == entryPoint) {
 			for (argument in fn.arguments)
 				escape(argument.type, "host signature");
@@ -217,7 +216,7 @@ class IrInlineEnumEligibility {
 		var events = uses.events, index = 0;
 		while (index < events.length) {
 			var kind = events[index],
-				type = types.type(events[index + 1]),
+				type = IrTypeIds.type(events[index + 1]),
 				reason = IrInlineEnumUses.REASONS[events[index + 2]];
 			switch kind {
 				case IrInlineEnumUses.ESCAPE:
@@ -228,7 +227,7 @@ class IrInlineEnumEligibility {
 					if (!supportsCallableEscape(type))
 						escape(type, reason);
 				case IrInlineEnumUses.CAST:
-					var out = types.type(events[index + 3]);
+					var out = IrTypeIds.type(events[index + 3]);
 					if (!((switch type {
 						case Dyn: true;
 						default: false;
@@ -255,7 +254,7 @@ class IrInlineEnumEligibility {
 		index = 0;
 		while (index < descriptors.length) {
 			var id = descriptors[index],
-				type = types.type(descriptors[index + 1]),
+				type = IrTypeIds.type(descriptors[index + 1]),
 				closures = descriptors[index + 2],
 				tests = descriptors[index + 3],
 				arrays = descriptors[index + 4],
@@ -579,16 +578,16 @@ class IrInlineEnumUses {
 
 	function new() {}
 
-	public static function of(fn:IrFunction, types:IrTypeIds, builder:Null<IrBodyBuilder>,
+	public static function of(fn:IrFunction, builder:Null<IrBodyBuilder>,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInlineEnumUses {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
-			return read(fn.bodyIn(types, builder));
+			return read(fn.encodedBody(builder));
 		var memo = lineage.memos.contribution(IrInlineEnumEligibility.USES), known = memo.get(version);
 		if (known == null) {
-			known = read(fn.bodyIn(types, builder));
+			known = read(fn.encodedBody(builder));
 			memo.keep(version, known);
-		} else if (lineage.checks && !known.same(read(fn.bodyIn(types, builder))))
+		} else if (lineage.checks && !known.same(read(fn.encodedBody(builder))))
 			throw new compiler.core
 				.InternalError('--check-reuse: the inline enum uses reused for ${fn.name} differ from its body');
 		return known;
@@ -599,16 +598,16 @@ class IrInlineEnumUses {
 			&& closures.join(",") == other.closures.join(",") && mapStores.join(",") == other.mapStores.join(",");
 
 	/** Gives `reach` the closures and map stores of the function. */
-	public function follow(reach:IrEnumEscapeReach, types:IrTypeIds):Void {
+	public function follow(reach:IrEnumEscapeReach):Void {
 		var index = 0;
 		while (index < closures.length) {
-			reach.closureEnvironment(types.type(closures[index]), types.type(closures[index + 1]));
+			reach.closureEnvironment(IrTypeIds.type(closures[index]), IrTypeIds.type(closures[index + 1]));
 			index += 2;
 		}
 		index = 0;
 		while (index < mapStores.length) {
-			reach.mapContent(types.type(mapStores[index]), types.type(mapStores[index + 1]),
-				types.type(mapStores[index + 2]));
+			reach.mapContent(IrTypeIds.type(mapStores[index]), IrTypeIds.type(mapStores[index + 1]),
+				IrTypeIds.type(mapStores[index + 2]));
 			index += 3;
 		}
 	}
@@ -635,7 +634,7 @@ class IrInlineEnumUses {
 		};
 
 	static function read(body:IrBody):IrInlineEnumUses {
-		var uses = new IrInlineEnumUses(), types = body.types;
+		var uses = new IrInlineEnumUses();
 		var descriptors:Null<Map<Int, Int>> = null, nulls:Map<Int, Bool> = [];
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);

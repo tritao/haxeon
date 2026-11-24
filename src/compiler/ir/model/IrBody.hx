@@ -40,9 +40,6 @@ class IrBody {
 	/** The type id of the function's result. */
 	public var result(default, null):Int;
 
-	/** The program's type ids, which this body's type ids index. */
-	public final types:IrTypeIds;
-
 	/** Whether a cache may hold this body: then it is never edited again. */
 	public var frozen(default, null) = false;
 
@@ -107,7 +104,6 @@ class IrBody {
 		this.inlineHint = inlineHint;
 		this.retention = retention;
 		if (shared != null) {
-			types = shared.types;
 			opcodes = shared.opcodes;
 			outputs = shared.outputs;
 			auxes = shared.auxes;
@@ -137,7 +133,6 @@ class IrBody {
 		} else {
 			if (builder == null)
 				throw new InternalError('IR body $name has neither a builder nor a body to share');
-			types = builder.types;
 			opcodes = builder.opcodes.copy();
 			outputs = builder.outputs.copy();
 			auxes = builder.auxes.copy();
@@ -249,7 +244,7 @@ class IrBody {
 
 	/** The type a `TypeValue` row or an intrinsic names. */
 	public inline function typeOperand(row:Int):IrType
-		return types.type(auxes[row]);
+		return IrTypeIds.type(auxes[row]);
 
 	/** How many blocks a terminator row can go to. */
 	public function successorCount(row:Int):Int
@@ -340,7 +335,7 @@ class IrBody {
 		return valueTypes[value];
 
 	public inline function valueType(value:IrValueId):IrType
-		return types.type(valueTypes[value]);
+		return IrTypeIds.type(valueTypes[value]);
 
 	public inline function valueName(value:IrValueId):String
 		return valueNames[value];
@@ -573,9 +568,9 @@ class IrBody {
 		return IrValueId.of(id);
 	}
 
-	/** The id of `type` in this body's type table. */
+	/** The id of `type` (`IrTypeIds`). */
 	public inline function typeId(type:IrType):Int
-		return types.id(type);
+		return IrTypeIds.id(type);
 
 	/**
 	 * Starts a row: its operands are the ones `pushOperand` appends until `endRow` makes it. Its auxiliary run, when it has one,
@@ -909,13 +904,14 @@ class IrBody {
 		var values:Array<Null<IrValue>> = [];
 		values.resize(valueTypes.length);
 		var arguments = [for (id in argumentIds) valueOf(id, values)];
-		return new IrFunction(name, arguments, types.type(result), decodeBlocks(values), kind, decodeBindings(values),
+		return new IrFunction(name, arguments, IrTypeIds.type(result), decodeBlocks(values), kind,
+			decodeBindings(values),
 			inlineHint, retention);
 	}
 
 	/** The arguments of the function this body is (`IrFunction.ofBody`), which `decodeRest` decodes the rest with. */
 	public function decodeArguments():Array<IrValue>
-		return [for (id in argumentIds) new IrValue(id, valueNames[id], types.type(valueTypes[id]))];
+		return [for (id in argumentIds) new IrValue(id, valueNames[id], IrTypeIds.type(valueTypes[id]))];
 
 	/** The blocks and bindings of the function this body is, given its arguments as `decodeArguments` made them. */
 	public function decodeRest(arguments:Array<IrValue>):{blocks:Array<IrBlock>, bindings:Array<IrDebugBinding>} {
@@ -959,8 +955,8 @@ class IrBody {
 	 * Where `fn` and the function its body decodes to first differ, or null when they are equal: every function the compiler makes
 	 * must have a body (`IrVerifier.verifyReusing` with `CompileOptions.checkIrBody`).
 	 */
-	public static function roundTripDifference(fn:IrFunction, types:IrTypeIds):Null<String> {
-		var body = IrBodyBuilder.encode(fn, types), layout = body.layoutDifference();
+	public static function roundTripDifference(fn:IrFunction):Null<String> {
+		var body = IrBodyBuilder.encode(fn), layout = body.layoutDifference();
 		if (layout != null)
 			return 'layout: $layout';
 		return compiler.ir.codec.IrFunctionStateEquality.difference(fn, body.toFunction());
@@ -969,7 +965,7 @@ class IrBody {
 	function valueOf(id:Int, values:Array<Null<IrValue>>):IrValue {
 		var value = values[id];
 		if (value == null) {
-			value = new IrValue(id, valueNames[id], types.type(valueTypes[id]));
+			value = new IrValue(id, valueNames[id], IrTypeIds.type(valueTypes[id]));
 			values[id] = value;
 		}
 		return value;
@@ -1004,7 +1000,7 @@ class IrBody {
 			case IrOpcode.MemoryStore: MemoryStore(at(0), at(1), aux);
 			case IrOpcode.ConstBool: ConstBool(out(), aux == 1);
 			case IrOpcode.ConstNull: ConstNull(out());
-			case IrOpcode.TypeValue: TypeValue(out(), types.type(aux));
+			case IrOpcode.TypeValue: TypeValue(out(), IrTypeIds.type(aux));
 			case IrOpcode.ToDyn: ToDyn(out(), at(0));
 			case IrOpcode.IntToFloat: IntToFloat(out(), at(0));
 			case IrOpcode.IntToInt64: IntToInt64(out(), at(0));
@@ -1055,15 +1051,16 @@ class IrBody {
 				operandValues(row, 0, values));
 			case IrOpcode.EnumIndex: EnumIndex(out(), at(0));
 			case IrOpcode.EnumField: EnumField(out(), at(0), ints[aux], ints[aux + 1]);
-			case IrOpcode.EnumDynamicBox: Intrinsic(out(), EnumDynamicBox(types.type(aux)),
+			case IrOpcode.EnumDynamicBox: Intrinsic(out(), EnumDynamicBox(IrTypeIds.type(aux)),
 				operandValues(row, 0, values));
-			case IrOpcode.EnumDynamicView: Intrinsic(out(), EnumDynamicView(types.type(aux)),
+			case IrOpcode.EnumDynamicView: Intrinsic(out(), EnumDynamicView(IrTypeIds.type(aux)),
 				operandValues(row, 0, values));
-			case IrOpcode.EnumTagBox: Intrinsic(out(), EnumTagBox(types.type(aux)), operandValues(row, 0, values));
-			case IrOpcode.EnumTagUnbox: Intrinsic(out(), EnumTagUnbox(types.type(aux)), operandValues(row, 0, values));
-			case IrOpcode.InlineEnumBox: Intrinsic(out(), InlineEnumBox(types.type(aux)),
+			case IrOpcode.EnumTagBox: Intrinsic(out(), EnumTagBox(IrTypeIds.type(aux)), operandValues(row, 0, values));
+			case IrOpcode.EnumTagUnbox: Intrinsic(out(), EnumTagUnbox(IrTypeIds.type(aux)),
 				operandValues(row, 0, values));
-			case IrOpcode.InlineEnumUnbox: Intrinsic(out(), InlineEnumUnbox(types.type(aux)),
+			case IrOpcode.InlineEnumBox: Intrinsic(out(), InlineEnumBox(IrTypeIds.type(aux)),
+				operandValues(row, 0, values));
+			case IrOpcode.InlineEnumUnbox: Intrinsic(out(), InlineEnumUnbox(IrTypeIds.type(aux)),
 				operandValues(row, 0, values));
 			default: throw new InternalError('IR body row $row is not an instruction');
 		};

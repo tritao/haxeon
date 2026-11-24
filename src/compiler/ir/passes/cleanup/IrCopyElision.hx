@@ -3,6 +3,7 @@ package compiler.ir.passes.cleanup;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.names.IrReferenceIdentity;
 import compiler.ir.model.IrValueId;
@@ -524,7 +525,7 @@ class IrBodyCopyElision {
 					case IrOpcode.Call:
 						var callee = fn.symbol(row).name, target = bodyOf(callee);
 						var constructor = target != null
-							&& (switch target.types.type(target.result) {
+							&& (switch IrTypeIds.type(target.result) {
 								case Void: true;
 								default: false;
 							})

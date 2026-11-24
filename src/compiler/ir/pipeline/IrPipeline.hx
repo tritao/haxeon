@@ -29,7 +29,6 @@ import compiler.ir.passes.scalars.IrScalarArguments;
 import compiler.ir.passes.scalars.IrScalarClosures;
 import compiler.ir.passes.scalars.IrScalarReplacement;
 import compiler.ir.passes.nullability.IrStaticNullChecks;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 import compiler.ir.passes.arrays.IrValueArrayProgramRewrite;
 import compiler.ir.passes.values.IrValueConstructors;
@@ -376,7 +375,7 @@ class IrPipeline {
 	static function checkedDynamicCasts(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrCheckedDynamicCasts(assembly.objects, assembly.generator.profile.nativeReflectionDispatch, null,
 			false,
-			false, IrCheckedDynamicCasts.STAGE, context.lineage, context.options.checkReuse, bodyTypes(context),
+			false, IrCheckedDynamicCasts.STAGE, context.lineage, context.options.checkReuse,
 			context.passScratch.bodyBuilder);
 
 	/** An exported function is exposed; one already exposed is kept as it is, so it keeps its identity from build to build. */
@@ -435,7 +434,7 @@ class IrPipeline {
 
 	static function inlineEnums(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var enumOutput = IrInlineEnumLowering.run(assembly.enumInput, context.laneTarget, context.canonicalObjects,
-			assembly.reflectableObjects, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage);
+			assembly.reflectableObjects, context.passScratch.bodyBuilder, context.lineage);
 		assembly.functions = enumOutput.functions;
 		assembly.objects = enumOutput.objects;
 		assembly.interfaces = enumOutput.interfaces;
@@ -446,12 +445,12 @@ class IrPipeline {
 	}
 
 	static function optionalScalarFlow(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrOptionalScalarFlow(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
+		return new IrOptionalScalarFlow(assembly.objects, context.passScratch.bodyBuilder,
 			context.lineage,
 			context.options.checkReuse);
 
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
-		return new IrStaticNullChecks(assembly.objects, bodyTypes(context), context.passScratch.bodyBuilder,
+		return new IrStaticNullChecks(assembly.objects, context.passScratch.bodyBuilder,
 			context.lineage,
 			context.options.checkReuse);
 
@@ -486,19 +485,18 @@ class IrPipeline {
 
 	/** What `stage` derives its helpers through (`IrDerivedHelpers`), in the session's memo when there is one. */
 	static function derivedHelpers(stage:String, context:IrPipelineContext):IrDerivedHelpers
-		return new IrDerivedHelpers(stage, context.lineage, context.options.checkReuse, bodyTypes(context),
+		return new IrDerivedHelpers(stage, context.lineage, context.options.checkReuse,
 			context.passScratch.bodyBuilder);
 
 	/** Encodes `functions`: in a session they are a cache's (the encode point's or a stage's), so their bodies are frozen. */
 	static function encodeAll(functions:Array<IrFunction>, context:IrPipelineContext):Void {
-		var types = bodyTypes(context),
-			builder = context.passScratch.bodyBuilder,
+		var builder = context.passScratch.bodyBuilder,
 			retained = context.options.keepSession;
 		// A session keeps the frozen body alone: the stages after this point read bodies, the memos before it hand on a function
 		// they reuse without reading it, and the whole-program scans read bodies (`IrSourceRehash`, `IrStaticReferences`, the
 		// contributions); what a later build reads as objects is decoded again from its body.
 		for (fn in functions) {
-			fn.bodyIn(types, builder);
+			fn.encodedBody(builder);
 			if (retained)
 				fn.freezeBody(builder);
 			fn.releaseDecoded();
@@ -516,7 +514,7 @@ class IrPipeline {
 			assembly.functions = existing.concat(IrCheckedDynamicCasts.rewriteBodies("reflection-casts",
 				functions.slice(start), assembly.objects, assembly.generator.profile.nativeReflectionDispatch, existing,
 				true,
-				true, bodyTypes(context), context.passScratch.bodyBuilder, context.lineage,
+				true, context.passScratch.bodyBuilder, context.lineage,
 				context.options.checkReuse));
 		}
 		return assembly;
@@ -524,7 +522,6 @@ class IrPipeline {
 
 	static function optionalFieldStorage(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrOptionalFieldStorage(assembly.objects, context.lineage, context.options.checkReuse,
-			bodyTypes(context),
 			context.passScratch.bodyBuilder);
 
 	/** The objects hold the optional fields' slots in place of the fields. */
@@ -546,7 +543,7 @@ class IrPipeline {
 
 	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrFunctionPass
 		return new IrNullableScalarFieldsPass(new IrNullableScalarFields(assembly.objects),
-			bodyTypes(context), context.passScratch.bodyBuilder);
+			context.passScratch.bodyBuilder);
 
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var program = IrProgramAssembler.finish(assembly, context);
@@ -560,7 +557,7 @@ class IrPipeline {
 		var program = assembly.program;
 		if (program == null)
 			throw new InternalError("The enum tag escapes run on the finished program");
-		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
+		return new IrTagEscapesPass(program, context.passScratch.bodyBuilder);
 	}
 
 	/** The finished program's functions are the stage's. */
@@ -573,7 +570,7 @@ class IrPipeline {
 	// Target stages.
 
 	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrClosedEnumTagAbi(program, context.reflectable, bodyTypes(context), context.passScratch.bodyBuilder,
+		return new IrClosedEnumTagAbi(program, context.reflectable, context.passScratch.bodyBuilder,
 			context.lineage);
 
 	/** The program with the closed tags projected in its tables too. */
@@ -583,7 +580,7 @@ class IrPipeline {
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
-			bodyTypes(context), context.passScratch, context.lineage);
+			context.passScratch, context.lineage);
 		return program;
 	}
 
@@ -592,22 +589,22 @@ class IrPipeline {
 	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrValueConstructors(program, bodyTypes(context), context.passScratch, context.lineage);
+		return new IrValueConstructors(program, context.passScratch, context.lineage);
 
 	/** The last value phi scalarization before scalar replacement. */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return IrValuePhiScalarization.pass(program, bodyTypes(context), context.passScratch, context.lineage);
+		return IrValuePhiScalarization.pass(program, context.passScratch, context.lineage);
 
 	/** Wasm's scalar argument ABI, with value lanes. */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrScalarArguments(program, true, bodyTypes(context), context.passScratch, context.lineage);
+		return new IrScalarArguments(program, true, context.passScratch, context.lineage);
 
 	/** HashLink's scalar argument and result ABI. */
 	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrScalarArguments(program, false, bodyTypes(context), context.passScratch, context.lineage);
+		return new IrScalarArguments(program, false, context.passScratch, context.lineage);
 
 	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrScalarClosures(program, bodyTypes(context), context.passScratch, context.lineage);
+		return new IrScalarClosures(program, context.passScratch, context.lineage);
 
 	static function scalarReplacementObjects(program:IrProgram, context:IrPipelineContext):IrProgram {
 		context.scalarObjects = IrObjectTable.of([for (object in program.objects) object.name => object]);
@@ -618,31 +615,19 @@ class IrPipeline {
 	static function scalarReplacement(program:IrProgram, context:IrPipelineContext):IrFunctionPass {
 		var scalarObjects = context.scalarObjects,
 			hashLink = !context.isWasm(),
-			types = bodyTypes(context),
 			scratch = context.passScratch;
-		return new IrValueObjectRows(IrOpcode.ValueInit, scalarObjects, types, scratch.bodyBuilder,
-			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, types, scratch, hashLink),
+		return new IrValueObjectRows(IrOpcode.ValueInit, scalarObjects, scratch.bodyBuilder,
+			fn -> IrScalarReplacement.rewriteBody(fn, scalarObjects, scratch, hashLink),
 			compiler.ir.passes.values.IrInlineValueLayout.declarationsFact(program.objects, context.lineage));
 	}
 
 	static function nullableScalarFlow(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrNullableScalarFlow(program, bodyTypes(context), context.passScratch, context.lineage,
+		return new IrNullableScalarFlow(program, context.passScratch, context.lineage,
 			context.options.checkReuse);
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
 	static function lateEnumTagEscapes(program:IrProgram, context:IrPipelineContext):IrFunctionPass
-		return new IrTagEscapesPass(program, bodyTypes(context), context.passScratch.bodyBuilder);
-
-	/**
-	 * The type ids of the bodies from here to the inliner: its cache's, so it takes the functions' bodies as they are. The
-	 * functions are encoded at the first stage that reads bodies (docs/design/IR_CORE_COLUMNS.md, migration).
-	 */
-	static function bodyTypes(context:IrPipelineContext):IrTypeIds {
-		var cache = context.inlineCache;
-		if (cache == null)
-			throw new InternalError("The stages over bodies need the session's inline cache");
-		return cache.types;
-	}
+		return new IrTagEscapesPass(program, context.passScratch.bodyBuilder);
 
 	/** Runs also when only load/store forwarding is enabled: it compares and publishes the final IR. */
 	static function inliner(program:IrProgram, context:IrPipelineContext):IrProgram {

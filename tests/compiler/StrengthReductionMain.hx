@@ -8,7 +8,7 @@ import haxe.io.FPHelper;
 class StrengthReductionMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function reduce(fn:IrFunction):IrFunction {
-		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn);
 		return IrStrengthReduction.runBody(body) ? body.toFunction() : fn;
 	}
 

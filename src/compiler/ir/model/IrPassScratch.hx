@@ -56,7 +56,7 @@ class IrPassScratch {
 	public final copyElision = new IrBodyCopyElision();
 
 	/** The builder that copies and compactions of bodies reuse (`IrBody.freeze`, `IrBody.thaw`). */
-	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
+	public final bodyBuilder = new IrBodyBuilder();
 
 	/** The inliner's expansion of a call by a branching callee, its tables reused. */
 	public final callExpansion = new IrBodyCallExpansion();

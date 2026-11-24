@@ -9,7 +9,6 @@ import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.passes.scalars.IrScalarReplacement;
@@ -18,23 +17,23 @@ import compiler.ir.passes.values.IrInlineValueLayout.IrInlineValueSlot;
 /** Split a value phi into scalar snapshots when every incoming value is known to exist. */
 @:nullSafety(Strict)
 class IrValuePhiScalarization {
-	/** `rewriteBodies` with the program's type ids (`IrTypeIds.ofFunctions`) and fresh scratch, the result owned by the next stage. */
+	/** `rewriteBodies` with fresh scratch, the result owned by the next stage. */
 	public static function rewrite(program:IrProgram):Void
-		rewriteBodies(program, IrTypeIds.ofFunctions(program.functions), new IrPassScratch());
+		rewriteBodies(program, new IrPassScratch());
 
 	/**
-	 * Splits the value phis of `program`'s functions on bodies (docs/design/IR_CORE_COLUMNS.md, migration): each function is read as its body (`bodyIn` with `types`),
-	 * which this stage encodes when it is the pipeline's first over bodies. A function that changes becomes its edited body: owned by
-	 * the next stage (edited in place, or a copy when a cache holds the body); one nothing changes
-	 * stays the same object.
+	 * Splits the value phis of `program`'s functions on bodies (docs/design/IR_CORE_COLUMNS.md, migration): each function is read
+	 * as its body (`encodedBody`), which this stage encodes when it is the pipeline's first over bodies. A function that
+	 * changes becomes its edited body: owned by the next stage (edited in place, or a copy when a cache holds the body); one
+	 * nothing changes stays the same object.
 	 */
-	public static function rewriteBodies(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch):Void
+	public static function rewriteBodies(program:IrProgram, scratch:IrPassScratch):Void
 		program.functions = compiler.ir.pipeline.IrFunctionStages.apply("value-phi-scalarization",
-			pass(program, types, scratch),
+			pass(program, scratch),
 			program.functions);
 
 	/** `rewriteBodies` per function (`IrValueObjectRows`): a function with a value phi is rewritten. */
-	public static function pass(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch,
+	public static function pass(program:IrProgram, scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrValueObjectRows {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects),
@@ -46,9 +45,8 @@ class IrValuePhiScalarization {
 		return new IrValueObjectRows(
 			IrOpcode.Phi,
 			table,
-			types,
 			scratch.bodyBuilder,
-			fn -> rewriteBody(fn, objects, table, layouts, packets, types, scratch),
+			fn -> rewriteBody(fn, objects, table, layouts, packets, scratch),
 			// What a rewrite reads of the declarations: the value objects, and which of them are enum packets.
 			IrInlineValueLayout.declarationsFact(program.objects, lineage,
 				"\npackets " + [for (declaration in program.enums) declaration.inlineStorage].join(","))
@@ -57,9 +55,9 @@ class IrValuePhiScalarization {
 
 	/** `runBody` on `fn`'s body: `fn` itself when nothing changes. */
 	public static function rewriteBody(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable,
-			layouts:IrInlineValueLayout, alwaysPresent:Null<Map<String, Bool>>, types:IrTypeIds,
+			layouts:IrInlineValueLayout, alwaysPresent:Null<Map<String, Bool>>,
 			scratch:IrPassScratch):IrFunction {
-		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder);
+		var builder = scratch.bodyBuilder, body = fn.encodedBody(builder);
 		if (!hasValuePhi(body, objects))
 			return fn;
 		var edited = body.forEditing(builder), before = edited.edits;

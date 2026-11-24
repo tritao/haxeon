@@ -7,7 +7,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.names.IrReceiverCheck;
 
@@ -31,7 +30,7 @@ class IrNonNullFacts {
 	 */
 	public function new(fn:IrFunction, checkedDereferences = false, ?objectNamed:String->Null<IrObject>,
 			?fields:String->Map<String, Bool>) {
-		var body = fn.body != null ? fn.body : IrBodyBuilder.encode(fn, IrTypeIds.ofFunctions([fn])),
+		var body = fn.body != null ? fn.body : IrBodyBuilder.encode(fn),
 			tables = new IrNonNullScratch(),
 			receiverClass = receiverClass(body),
 			receiver = receiverClass != null && objectNamed != null

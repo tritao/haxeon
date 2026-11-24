@@ -7,7 +7,6 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrTypeIdentity;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.scalars.IrScalarArguments;
@@ -63,7 +62,6 @@ class IrNullableScalarFlow implements IrFunctionPass {
 	public static inline final EQUAL = 1;
 
 	final program:IrProgram;
-	final types:IrTypeIds;
 	final scratch:IrPassScratch;
 	final lineage:Null<IrLineage>;
 	final checks:Bool;
@@ -75,24 +73,20 @@ class IrNullableScalarFlow implements IrFunctionPass {
 	/** By candidate, the version of the function its specialization is made from. */
 	final inputs:Map<String, Int> = [];
 
-	public function new(program:IrProgram, types:IrTypeIds, scratch:IrPassScratch, lineage:Null<IrLineage>,
-			checks:Bool) {
+	public function new(program:IrProgram, scratch:IrPassScratch, lineage:Null<IrLineage>, checks:Bool) {
 		this.program = program;
-		this.types = types;
 		this.scratch = scratch;
 		this.lineage = lineage;
 		this.checks = checks;
 	}
 
 	/**
-	 * Rewrites `program`'s functions, reading them as bodies made with `types` (`IrTypeIds.ofFunctions` when not given), without a
-	 * memo: a function that changes becomes its edited body, owned by the next stage (`IrFunction.ofOwnedBody`).
+	 * Rewrites `program`'s functions, reading them as bodies, without a memo: a function that changes becomes its edited body,
+	 * owned by the next stage (`IrFunction.ofOwnedBody`).
 	 */
-	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch):Void {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
+	public static function rewrite(program:IrProgram, ?scratch:IrPassScratch):Void {
 		program.functions = IrFunctionStages.apply(STAGE,
-			new IrNullableScalarFlow(program, types, scratch == null ? new IrPassScratch() : scratch, null, false),
+			new IrNullableScalarFlow(program, scratch == null ? new IrPassScratch() : scratch, null, false),
 			program.functions);
 	}
 
@@ -162,7 +156,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		while (changed) {
 			changed = false;
 			for (fn in [for (fn in chosen) fn])
-				if (!analysis.analyze(fn.bodyIn(types, builder), true)) {
+				if (!analysis.analyze(fn.encodedBody(builder), true)) {
 					chosen.remove(fn.name);
 					changed = true;
 				}
@@ -197,7 +191,7 @@ class IrNullableScalarFlow implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		var flow = analysis();
 		flow.reader = reader;
-		var result = rewritten(flow, fn, types, scratch.bodyBuilder, false);
+		var result = rewritten(flow, fn, scratch.bodyBuilder, false);
 		flow.reader = null;
 		return result;
 	}
@@ -214,9 +208,9 @@ class IrNullableScalarFlow implements IrFunctionPass {
 			if (candidates.exists(fn.name)) {
 				var input = inputs.get(fn.name) ?? 0;
 				result.push(IrFunctionStages.derived(STAGE, specializationName(fn.name), this, input, lineage, checks,
-					types, builder, reader -> {
+					builder, reader -> {
 						flow.reader = reader;
-						var made = rewritten(flow, fn, types, builder, true);
+						var made = rewritten(flow, fn, builder, true);
 						flow.reader = null;
 						made;
 					}));
@@ -227,7 +221,6 @@ class IrNullableScalarFlow implements IrFunctionPass {
 			var type = helpers.get(name);
 			if (type != null)
 				result.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, lineage, checks,
-					types,
 					builder, _ -> helper(name, type)));
 		}
 		return result;
@@ -269,9 +262,8 @@ class IrNullableScalarFlow implements IrFunctionPass {
 	}
 
 	/** `fn` with its nullable scalars split, or its specialization (`clone`); `fn` itself when nothing changes. */
-	static function rewritten(flow:IrBodyNullableScalars, fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
-			clone:Bool):IrFunction {
-		var body = fn.bodyIn(types, builder);
+	static function rewritten(flow:IrBodyNullableScalars, fn:IrFunction, builder:IrBodyBuilder, clone:Bool):IrFunction {
+		var body = fn.encodedBody(builder);
 		if (!flow.analyze(body, clone) || !flow.splits())
 			return fn;
 		var built = flow.build(body, builder, clone);

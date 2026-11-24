@@ -3,7 +3,6 @@ package compiler.ir.passes.inlining;
 import compiler.ir.tools.IrInstrumentation.IrInstrumentationScope;
 import compiler.ir.tools.IrAllocationReport;
 import compiler.ir.model.IrBody;
-import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.passes.cleanup.IrCopyElision;
 import compiler.ir.passes.cleanup.IrDeadPureValues;
 import compiler.ir.model.IrFieldStorage;
@@ -100,9 +99,6 @@ class IrObjectFact {
 class IrInlineCache {
 	public var published:Map<String, IrFunction> = [];
 
-	/** The type ids every body the inliner keeps is made with, for the session. */
-	public var types(default, null) = new IrTypeIds();
-
 	/** Each function's source as a frozen body, kept while the source is the same object, so it is encoded once. */
 	public var originals:Map<String, {source:IrFunction, body:IrBody}> = [];
 
@@ -149,11 +145,7 @@ class IrInlineCache {
 		nextPositionalPrints = [];
 	}
 
-	/** A cache whose bodies are made with `types`: the program's table, when its functions already have bodies. */
-	public function new(?types:IrTypeIds) {
-		if (types != null)
-			this.types = types;
-	}
+	public function new() {}
 
 	/** Where the cache keeps a function or body that is not frozen, or null when everything it keeps is (`--check-reuse`). */
 	public function unfrozen():Null<String> {
@@ -185,7 +177,6 @@ class IrInlineCache {
 	public function copy():IrInlineCache {
 		// Each map is replaced as a whole by the run that changes it, never changed in place, so the copy shares them.
 		var result = new IrInlineCache();
-		result.types = types;
 		result.originals = originals;
 		result.published = published;
 		result.instrumented = instrumented;
@@ -303,9 +294,6 @@ class IrInliner implements IrFactSource {
 	 * cleaned form, made from the source alone, is this compile's.
 	 */
 	final sameAsLast:Array<Null<IrStageEntry>> = [];
-
-	/** The type ids of every body of this run: the cache's. */
-	final types:IrTypeIds;
 
 	final voidType:Int;
 	final receiverCheckSymbol:Int;
@@ -450,8 +438,7 @@ class IrInliner implements IrFactSource {
 		this.profile = profile;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
-		types = cache.types;
-		voidType = types.id(Void);
+		voidType = IrTypeIds.id(Void);
 		receiverCheckSymbol = IrReceiverCheck.symbol();
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
@@ -811,14 +798,10 @@ class IrInliner implements IrFactSource {
 
 	/**
 	 * `fn`'s body as the stages before this one left it, frozen: the one it has (docs/design/IR_CORE_COLUMNS.md, the conversion
-	 * point is before this stage), else its encoding, kept. A body made with other type ids (a session that started its cache
-	 * over) cannot have rows spliced into this run's bodies, so it is encoded again, not kept.
+	 * point is before this stage), else its encoding, kept.
 	 */
 	function sourceBody(fn:IrFunction):IrBody {
-		var known = fn.body;
-		if (known != null && known.types != types)
-			return IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
-		var body = fn.bodyIn(types, passScratch.bodyBuilder);
+		var body = fn.encodedBody(passScratch.bodyBuilder);
 		// A session's cache keeps the source body (`originals`), so it is frozen; else the inliner owns it.
 		return memoizes ? fn.freezeBody(passScratch.bodyBuilder) : body;
 	}
@@ -1315,7 +1298,6 @@ class IrInliner implements IrFactSource {
 				spliceCall(body, index, call, callee);
 				continue;
 			}
-			sameTypeIds(body, callee);
 			nextBlock = passScratch.callExpansion.expand(body, index, call, callee, nextBlock,
 				needsReceiverCheck(body, call));
 			// Continue with the first inlined block; calls left in it were not candidates.
@@ -1338,19 +1320,12 @@ class IrInliner implements IrFactSource {
 		};
 	}
 
-	/** Callee rows are copied as they are, so the callee's type ids must be the caller's. */
-	function sameTypeIds(body:IrBody, callee:IrBody):Void {
-		if (body.types != types || callee.types != types)
-			throw new InternalError('Inliner found ${callee.name} or ${body.name} with type ids of another program');
-	}
-
 	/**
 	 * Replaces the call at row `call` of block `block` (an index) by the straight-line callee's rows, values renamed: its
 	 * receiver check and upcasts, its instructions, and a `ConstVoid` for a void call; otherwise the call's output stands for
 	 * the value the callee returned (an alias, swept after the last call is inlined).
 	 */
 	function spliceCall(body:IrBody, block:Int, call:Int, callee:IrBody):Void {
-		sameTypeIds(body, callee);
 		var where = body.provenance(call), output = body.output(call), rows = madeRows;
 		rows.resize(0);
 		var values = IrPassScratch.filledInts(calleeValues, callee.valueLimit(), -1);

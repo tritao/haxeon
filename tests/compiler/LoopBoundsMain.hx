@@ -5,7 +5,6 @@ import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 
 class LoopBoundsMain {
@@ -23,7 +22,7 @@ class LoopBoundsMain {
 		if (found == null)
 			throw "missing function " + name;
 		var before = IrFunctionStateCodec.encode(found),
-			body = IrBodyBuilder.encode(found, IrTypeIds.ofFunctions([found])),
+			body = IrBodyBuilder.encode(found),
 			proof = new IrLoopBounds(IrLoopBounds.pureNativeCalls(program.natives)).reset(body,
 				new IrBodyGraph().reset(body)),
 			result = 0;

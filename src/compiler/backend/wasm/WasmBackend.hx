@@ -51,7 +51,7 @@ class WasmBackend implements Backend {
 			if (body == null)
 				continue;
 			if (builder == null)
-				builder = new IrBodyBuilder(body.types);
+				builder = new IrBodyBuilder();
 			result.functions[index] = IrFunction.ofBody(IrBodyBuilder.renumbered(body, builder).freeze(false));
 		}
 		return result;

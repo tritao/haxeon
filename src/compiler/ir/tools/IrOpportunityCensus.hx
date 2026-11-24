@@ -6,7 +6,6 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.passes.inlining.IrInliner;
@@ -150,7 +149,7 @@ class IrOpportunityCensus {
 
 	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>, objects:Map<String, IrObject>, allowInline:Bool,
 			?smallFunctions:Map<String, Bool>):CensusRow {
-		var body = IrBodyBuilder.encode(fn, IrTypeIds.ofFunctions([fn])),
+		var body = IrBodyBuilder.encode(fn),
 			bounds = new IrLoopBounds(pureCalls).reset(body, new IrBodyGraph().reset(body)),
 			definitions:Map<Int, IrInstruction> = [],
 			allocations:Array<CensusAllocation> = [];

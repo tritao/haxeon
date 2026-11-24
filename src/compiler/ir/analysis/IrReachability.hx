@@ -5,6 +5,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrProgramIndex;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.reuse.IrFunctionMemo;
 
 import compiler.core.InternalError;
@@ -370,7 +371,7 @@ class IrBodyEdges {
 					var type = body.valueTypeId(output);
 					if (!mentioned.exists(type)) {
 						mentioned.set(type, true);
-						add(MENTION, "", body.types.type(type));
+						add(MENTION, "", IrTypeIds.type(type));
 					}
 				}
 				switch opcode {

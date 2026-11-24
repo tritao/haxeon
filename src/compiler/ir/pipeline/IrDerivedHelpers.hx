@@ -4,7 +4,6 @@ import compiler.core.InternalError;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.reuse.IrFactReader;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
 
@@ -19,18 +18,16 @@ class IrDerivedHelpers implements IrFunctionPass {
 	final stage:String;
 	final lineage:Null<IrLineage>;
 	final checks:Bool;
-	final types:Null<IrTypeIds>;
 	final builder:Null<IrBodyBuilder>;
 
 	/** The text of the declaration of `kind` (the stage's numbering) and `key`, which the stage sets before it makes a helper. */
 	public var print:(kind:Int, key:String) -> String = (_, _) -> "";
 
-	/** Helpers for `stage`; in a session with `lineage`, made with `types` and frozen past the encode point. */
-	public function new(stage:String, ?lineage:IrLineage, checks = false, ?types:IrTypeIds, ?builder:IrBodyBuilder) {
+	/** Helpers for `stage`; in a session with `lineage`, frozen past the encode point. */
+	public function new(stage:String, ?lineage:IrLineage, checks = false, ?builder:IrBodyBuilder) {
 		this.stage = stage;
 		this.lineage = lineage;
 		this.checks = checks;
-		this.types = types;
 		this.builder = builder;
 		// The declarations are this run's: what a fact printed before is printed again when next asked for.
 		if (lineage != null)
@@ -39,14 +36,12 @@ class IrDerivedHelpers implements IrFunctionPass {
 
 	/** The helper `name`, which `make` makes, reading the declarations it is made of through the reader. */
 	public function make(name:String, make:IrFactReader->IrFunction):IrFunction {
-		var known = types;
-		if (lineage == null || known == null) {
+		if (lineage == null) {
 			var reader = new IrFactReader(stage, this, compiler.ir.reuse.IrFacts.unshared());
 			reader.begin(false);
 			return make(reader);
 		}
-		return IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, lineage, checks, known, builder,
-			make);
+		return IrFunctionStages.derived(stage, name, this, IrFunctionStages.FROM_NAME, lineage, checks, builder, make);
 	}
 
 	public function fact(kind:Int, key:String):Int {

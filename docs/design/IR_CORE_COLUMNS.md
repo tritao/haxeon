@@ -22,7 +22,7 @@ would give directly (a value's definition, its type, its uses).
    index into a pool), a provenance id, and the links that order rows within their block. Values are typed ids
    (`IrValueId`): a value's type is a column indexed by value id, its defining row another, and its debug name a column
    only debug output reads.
-2. **Types and symbols are ids.** Types are dense ids from one `IrTypeIds` per program, given where the generator lowers a
+2. **Types and symbols are ids.** Types are dense ids from the process-wide `IrTypeIds`, given where the generator lowers a
    type, field and function names interned `IrSymbol` ids. Comparing two types or two names is comparing two integers.
 3. **Passes edit bodies in place.** A pass changes rows, operands and links of a body it owns; nothing is copied per
    edit. `IrBodyBuilder` makes new bodies: the generator's, inlined copies, and compactions. A pass that only reads keeps
@@ -85,7 +85,7 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    (`IrFunction.ofBody`; a function the stage left as it was keeps its source object and gets its source body), and its blocks
    and bindings are decoded from the body the first time something reads them, once: the verifier when verification is on, the
    reports, instrumentation, the Wasm backends, the session's comparisons of functions. A function made after the stage, or
-   one without a body, is encoded once when a body reader asks for it (`IrFunction.bodyIn`). On the HashLink path the readers
+   one without a body, is encoded once when a body reader asks for it (`IrFunction.encodedBody`). On the HashLink path the readers
    are bodies: the plain build's reachability walk and table trim, the shared runtime calls (a copy of a body with its call
    symbols replaced, `IrBodyBuilder.copyWithAuxes`), the runtime enum descriptors, natives discovery, function identities, and
    HlLower itself (edge blocks on a copy, `PhiEdges.splitBody`; non-null facts with `IrNonNullFacts.analyzeBody`; exact
@@ -94,7 +94,7 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 4. The program-level passes, from the last back to the first, each moving the conversion before it; `IrBuilder` emits
    rows.
    *Scalar replacement, nullable-scalar-flow and enum-tag-escapes read bodies*: the encode is at scalar replacement's entry
-   (`bodyIn` with the inline cache's type ids), and the inliner takes each function's body as it has it. A function a stage
+   (`encodedBody`), and the inliner takes each function's body as it has it. A function a stage
    changes is its frozen body (`IrFunction.ofBody`), made in place on a thawed copy or rebuilt into a body the stage owns; one
    it leaves as it was stays the same object. In a session, a function the passes before the conversion point rebuild the
    same as last time is replaced by last compile's object (`stableBodySources`), which has its body, as the inliner does with
@@ -145,8 +145,7 @@ edits left garbage in replaces the function's body with a compacted copy (`IrFun
 keeps its identity, but a holder of the old body object has a body the function no longer is, so code that takes a function's
 body to edit it reads `fn.body` again after a cache froze it. The inline cache freezes what it keeps where it takes it
 (`IrInlineCache.stable` and each cache's insertion), and `--check-reuse` checks that everything it keeps is frozen at the end of
-the inliner stage (`IrInlineCache.unfrozen`). Every body of a program reads its types from one table (the session's
-`IrInlineCache.types`), checked after every stage (`IrStageHooks`) and where a body is asked for (`IrFunction.bodyIn`). Keys are
+the inliner stage (`IrInlineCache.unfrozen`). Every body reads its types from the one process-wide table (`IrTypeIds`). Keys are
 function names; reuse is by object identity of the `IrFunction` an entry was made from.
 
 - **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
@@ -218,7 +217,7 @@ block ids (phi inputs, try blocks, branch targets) and two int arrays (`StaticDa
   static data bytes, try blocks, `MakeEnum` and `EnumField` pairs, branch and switch targets. `IrBody` lists the meaning
   per opcode.
 - **Names are `IrSymbol` ids**, process-wide interned. String literals are not names and stay in a per-body pool.
-- **Types are ids** from one `IrTypeIds` per program; the body holds the table it was made with. Until the generator emits
+- **Types are ids** from the process-wide `IrTypeIds`, like `IrSymbol`. Until the generator emits
   bodies, the encoder gives the ids; then the generator gives them where it lowers a type, and HlLower maps a type id to
   its HashLink type through a table instead of a structural lookup per register.
 - **Floats** in a per-body `Float` pool, which keeps their bits (`-0.0`, NaN payloads).

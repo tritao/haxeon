@@ -100,7 +100,6 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	final table:IrObjectTable;
 	final layouts:IrInlineValueLayout;
 	final resolution:IrMethodResolution;
-	final types:IrTypeIds;
 	final scratch:IrPassScratch;
 	final argumentsOnly:Bool;
 	final byName:Map<String, IrFunction>;
@@ -122,21 +121,17 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	final inputs:Map<String, Int> = [];
 
 	/**
-	 * Splits value joins and rewrites `program`'s functions and calls for the scalar ABI, on bodies made with `types` (those of
-	 * the program's bodies when not given, `IrTypeIds.ofFunctions`), which this stage encodes when it is the pipeline's first over
-	 * bodies. A function that changes becomes its edited body: owned by the next stage: edited in
+	 * Splits value joins and rewrites `program`'s functions and calls for the scalar ABI, on bodies, which this stage encodes when it
+	 * is the pipeline's first over bodies. A function that changes becomes its edited body: owned by the next stage: edited in
 	 * place, or a copy when a cache holds the body. With `argumentsOnly` (Wasm), no result slots and no receiver checks.
 	 */
-	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false, ?types:IrTypeIds,
-			?scratch:IrPassScratch):Void {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
+	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false, ?scratch:IrPassScratch):Void {
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		// Call rewriting judges value arguments by their uses, which a value join hides.
-		IrValuePhiScalarization.rewriteBodies(program, types, scratch);
+		IrValuePhiScalarization.rewriteBodies(program, scratch);
 		program.functions = compiler.ir.pipeline.IrFunctionStages.apply("scalar-arguments",
-			new IrScalarArguments(program, argumentsOnly, types, scratch), program.functions);
+			new IrScalarArguments(program, argumentsOnly, scratch), program.functions);
 	}
 
 	/**
@@ -146,12 +141,11 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	 * reads the value layouts (`REWRITE`) and the target of each such method call (`METHOD`). The clones are added in `finish`,
 	 * derived from their candidates' versions with the same reads.
 	 */
-	public function new(program:IrProgram, argumentsOnly:Bool, types:IrTypeIds, scratch:IrPassScratch,
+	public function new(program:IrProgram, argumentsOnly:Bool, scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage) {
 		this.program = program;
 		this.lineage = lineage;
 		this.argumentsOnly = argumentsOnly;
-		this.types = types;
 		this.scratch = scratch;
 		objects = [for (object in program.objects) object.name => object];
 		table = IrObjectTable.of(objects);
@@ -224,7 +218,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		var fn = byName.get(name);
 		if (fn == null)
 			throw new InternalError('Missing scalar ABI candidate "$name"');
-		return fn.bodyIn(types, scratch.bodyBuilder);
+		return fn.encodedBody(scratch.bodyBuilder);
 	}
 
 	/** What `choose` chose, as names. */
@@ -245,7 +239,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 
 	/** `--check-reuse`: choosing again gives the kept choice. */
 	function checkChoice(functions:Array<IrFunction>, summaries:Array<Int>, kept:ScalarArgumentChoice):Void {
-		var fresh = new IrScalarArguments(program, argumentsOnly, types, scratch, null);
+		var fresh = new IrScalarArguments(program, argumentsOnly, scratch, null);
 		fresh.choose(functions, summaries);
 		var now = fresh.chosen();
 		if (!sameNames(now.candidates, kept.candidates) || !sameNames(now.pinned, kept.pinned)
@@ -279,8 +273,8 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			var fn = functions[position];
 			if (summaries[position] & SIGNATURE == 0 || !mayBeCandidate(fn))
 				continue;
-			var body = fn.bodyIn(types, scratch.bodyBuilder);
-			var resultType = body.types.type(body.result),
+			var body = fn.encodedBody(scratch.bodyBuilder);
+			var resultType = IrTypeIds.type(body.result),
 				hasValue = isValue(resultType),
 				eligible = true,
 				pinnedEligible = !argumentsOnly,
@@ -460,7 +454,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	}
 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
-		var body = fn.bodyIn(types, scratch.bodyBuilder);
+		var body = fn.encodedBody(scratch.bodyBuilder);
 		// The calls a function makes go to a candidate or not by the candidates; a method call's target by the classes
 		// (`METHOD`), and a rewrite's slots by the value layouts (`REWRITE`).
 		reader.read(CANDIDATES, "");
@@ -540,7 +534,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			}
 		}
 		for (fn in rewritten)
-			discover(fn.bodyIn(types, scratch.bodyBuilder));
+			discover(fn.encodedBody(scratch.bodyBuilder));
 		while (pending.length > 0) {
 			var name = pending.pop();
 			if (name == null)
@@ -560,12 +554,12 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	function closureNames(fn:IrFunction):Array<String> {
 		var known = lineage, version = known == null ? 0 : known.versionOf(fn);
 		if (known == null || version == 0)
-			return readClosureNames(fn.bodyIn(types, scratch.bodyBuilder));
+			return readClosureNames(fn.encodedBody(scratch.bodyBuilder));
 		var memo = known.memos.contribution(CLOSURE_NAMES), names = memo.get(version);
 		if (names == null) {
-			names = readClosureNames(fn.bodyIn(types, scratch.bodyBuilder));
+			names = readClosureNames(fn.encodedBody(scratch.bodyBuilder));
 			memo.keep(version, names);
-		} else if (known.checks && names.join(",") != readClosureNames(fn.bodyIn(types, scratch.bodyBuilder)).join(","))
+		} else if (known.checks && names.join(",") != readClosureNames(fn.encodedBody(scratch.bodyBuilder)).join(","))
 			throw new InternalError('--check-reuse: the closures reused for ${fn.name} differ from its body');
 		return names;
 	}
@@ -615,7 +609,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	 */
 	function keepsValue(body:IrBody, specialized:IrBody, first:Int):Bool {
 		var places = new IrScalarValuePlaces(specialized, name -> objects.get(name)),
-			resultType = body.types.type(body.result),
+			resultType = IrTypeIds.type(body.result),
 			valueResult = isValue(resultType);
 		for (block in 0...specialized.blockCount()) {
 			var row = specialized.firstRow(block);
@@ -667,9 +661,9 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		var known = lineage, candidate = byName.get(name);
 		if (candidate == null)
 			throw new InternalError('Missing scalar ABI candidate "$name"');
-		var source = candidate.bodyIn(types, scratch.bodyBuilder);
+		var source = candidate.encodedBody(scratch.bodyBuilder);
 		return compiler.ir.pipeline.IrFunctionStages.derived("scalar-arguments", cloneName(name, pinned), this,
-			inputs.get(name) ?? 0, known, known != null && known.checks, types, scratch.bodyBuilder, reader -> {
+			inputs.get(name) ?? 0, known, known != null && known.checks, scratch.bodyBuilder, reader -> {
 				reader.read(CANDIDATES, "");
 				readCandidateCalls(source, reader);
 				reader.read(REWRITE, "");
@@ -753,7 +747,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		};
 
 	function fieldOnly(body:IrBody, arg:IrValueId, candidates:Map<String, IrBody>):Bool {
-		var aliases = aliasesOf(body, arg), valueResult = isValue(body.types.type(body.result));
+		var aliases = aliasesOf(body, arg), valueResult = isValue(IrTypeIds.type(body.result));
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -980,10 +974,10 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		var origin = SourceProvenance.generated("scalar-argument");
 		function define(name:String, type:IrType):IrValueId {
 			var id = IrValueId.of(next++);
-			builder.defineValue(id, name, source.types.id(type));
+			builder.defineValue(id, name, IrTypeIds.id(type));
 			return id;
 		}
-		var resultType = source.types.type(source.result),
+		var resultType = IrTypeIds.type(source.result),
 			returnSlots = isValue(resultType) ? slots(resultType) : [],
 			outputs:Array<IrValueId> = [];
 		// The entry rows, written once the entry block begins: opcode, output, auxiliary field, and up to two operands (-1 for none).
@@ -1073,7 +1067,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		for (index in 0...source.bindingCount())
 			builder.copyBinding(source, index, source.bindingValue(index));
 		return builder.finishAs(PREFIX + (preserveReceiver ? "$receiver:" : "") + source.name, ScalarArguments,
-			returnSlots.length > 0 ? source.types.id(Void) : source.result, source.inlineHint, Reachable);
+			returnSlots.length > 0 ? IrTypeIds.id(Void) : source.result, source.inlineHint, Reachable);
 	}
 
 	/**
@@ -1240,7 +1234,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 					expanded.push(current);
 				}
 			}
-			var targetResult = target.types.type(target.result),
+			var targetResult = IrTypeIds.type(target.result),
 				returnSlots = isValue(targetResult) ? slots(targetResult) : [],
 				references:Array<IrValueId> = [];
 			for (slot in returnSlots) {

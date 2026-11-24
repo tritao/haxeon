@@ -9,7 +9,7 @@ import compiler.ir.verify.IrVerifier;
 class DeadPureValuesMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function removeDeadValues(fn:IrFunction):IrFunction {
-		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn);
 		return IrDeadPureValues.runBody(body, new compiler.ir.model.IrPassScratch()) ? body.toFunction() : fn;
 	}
 

@@ -9,7 +9,6 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrTypeIdentity;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.inlining.IrInliner;
@@ -76,7 +75,6 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 	final layouts:IrInlineValueLayout;
 	final lineage:Null<IrLineage>;
 	final checks:Bool;
-	var types:Null<IrTypeIds>;
 	var builder:Null<IrBodyBuilder>;
 
 	/** The functions the stage is given, in program order: the value methods are specialized from them. */
@@ -97,13 +95,11 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 	/** The plans by `key`. */
 	final byKey:Map<String, OptionalFieldPlan> = [];
 
-	/** With `lineage`, the session's memo derives the helpers, and `types` and `builder` read the bodies. */
-	public function new(declarations:Array<IrObject>, ?lineage:IrLineage, checks = false, ?types:IrTypeIds,
-			?builder:IrBodyBuilder) {
+	/** With `lineage`, the session's memo derives the helpers, and `builder` reads the bodies. */
+	public function new(declarations:Array<IrObject>, ?lineage:IrLineage, checks = false, ?builder:IrBodyBuilder) {
 		this.declarations = declarations;
 		this.lineage = lineage;
 		this.checks = checks;
-		this.types = types;
 		this.builder = builder;
 		objects = [for (object in declarations) object.name => object];
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
@@ -186,25 +182,17 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 
 	/**
 	 * Replace logical reads and writes, including generated reflection operations, with field-specific accessors, without a memo.
-	 * On IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the functions' bodies when not given):
+	 * On IR bodies (docs/design/IR_CORE_COLUMNS.md, migration):
 	 * a function that changes becomes its edited body, owned by the next stage. The accessors and the value methods specialized
 	 * to a field path are built as functions and encoded.
 	 */
-	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
-		this.types = types ?? IrTypeIds.ofFunctions(functions);
+	public function rewrite(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
 		this.builder = builder;
 		return IrFunctionStages.apply(STAGE, this, functions);
 	}
 
-	function bodyTypes():IrTypeIds {
-		var known = types;
-		if (known == null)
-			throw new InternalError("The optional field storage reads bodies with the program's types");
-		return known;
-	}
-
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(bodyTypes(), builder);
+		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -265,7 +253,6 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 			// A helper of `plan` named `name`, which `make` builds, rewritten as the program's functions are.
 			function helper(name:String, make:() -> IrFunction):Void
 				all.push(IrFunctionStages.derived(STAGE, name, this, IrFunctionStages.FROM_NAME, lineage, checks,
-					bodyTypes(),
 					builder, reader -> {
 						reader.read(PLAN, planKey);
 						rewritten(make(), reader);
@@ -296,7 +283,7 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 			if (original == null)
 				throw new InternalError('Missing value method "${request.method}" for optional field');
 			var known = lineage, input = known == null ? 0 : known.versionOf(original), method:IrFunction = original;
-			all.push(IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, bodyTypes(), builder,
+			all.push(IrFunctionStages.derived(STAGE, name, this, input, lineage, checks, builder,
 				reader -> {
 					reader.read(DECLARATIONS, "");
 					rewritten(specializeMethod(name, request, method), reader);
@@ -318,7 +305,7 @@ class IrOptionalFieldStorage implements IrFunctionPass {
 	 * the classes it accesses through `reader` and asking for the specialized methods it calls; `fn` itself when it has none.
 	 */
 	function rewritten(fn:IrFunction, reader:IrFactReader):IrFunction {
-		var body = fn.bodyIn(bodyTypes(), builder), changes = false, specialized:Null<Map<String, Bool>> = null;
+		var body = fn.encodedBody(builder), changes = false, specialized:Null<Map<String, Bool>> = null;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {

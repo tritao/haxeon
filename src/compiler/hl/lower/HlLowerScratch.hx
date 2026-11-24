@@ -9,7 +9,6 @@ import compiler.ir.cfg.PhiEdges;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrPassScratch.IrNonNullScratch;
 import compiler.ir.model.IrPassScratch.IrValueMarks;
-import compiler.ir.model.IrTypeIds;
 
 /**
  * The tables `HlLower` fills for each function it lowers, kept from one function to the next so that lowering a program
@@ -29,7 +28,7 @@ class HlLowerScratch {
 	/** The edge blocks lowering gives a body, and the builder of the copies they are added to. */
 	public final phiEdges = new PhiEdges();
 
-	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
+	public final bodyBuilder = new IrBodyBuilder();
 
 	/** Per value id: its register (-1 before its definition), whether it is a null constant, how many operands read it. */
 	public final registers:Array<Int> = [];

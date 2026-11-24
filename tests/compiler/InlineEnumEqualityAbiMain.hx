@@ -187,7 +187,7 @@ class InlineEnumEqualityAbiMain {
 			target == HashLink)];
 		compiler.ir.passes.inlining.IrInliner.run(program,
 			new compiler.ir.passes.inlining.IrInliner
-			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+			.IrInlineCache(),
 			target == HashLink ? compiler.ir.pipeline.TargetProfile.hashLink : compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.verify.IrVerifier.verify(program);

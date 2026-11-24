@@ -7,7 +7,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.passes.values.IrInlineValueLayout;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOpcode;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.TypeKey;
 import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
@@ -47,15 +46,13 @@ class IrOptionalValueFlow {
 
 	/**
 	 * `functions` followed by the copy, box and unbox helpers their calls name, built as functions. The calls are read from the
-	 * functions' bodies made with `types` (those of the functions' bodies when not given), encoding a function that has none.
+	 * functions' bodies, encoding a function that has none.
 	 */
-	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>, ?types:IrTypeIds,
+	public static function addHelpers(functions:Array<IrFunction>, objects:Array<IrObject>,
 			?builder:IrBodyBuilder):Array<IrFunction> {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(functions);
 		var helpers = new IrOptionalHelpers();
 		for (fn in functions)
-			helpers.scan(fn.bodyIn(types, builder), null);
+			helpers.scan(fn.encodedBody(builder), null);
 		return helpers.append(functions, objects);
 	}
 

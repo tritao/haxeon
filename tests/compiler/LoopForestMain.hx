@@ -4,7 +4,6 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
 
@@ -54,7 +53,7 @@ class LoopForestMain {
 		b.jump(outer);
 		b.select(exit);
 		b.returnValue(i);
-		var body = IrBodyBuilder.encode(new IrFunction("loops", b.arguments, I32, b.blocks, Ordinary), new IrTypeIds()),
+		var body = IrBodyBuilder.encode(new IrFunction("loops", b.arguments, I32, b.blocks, Ordinary)),
 			forest = new IrLoopForest(body, new IrBodyGraph().reset(body));
 		expect(forest.count() == 2, 'two loops, found ${forest.count()}');
 		var outerLoop = forest.loopOf(outer.id), innerLoop = forest.loopOf(inner.id);

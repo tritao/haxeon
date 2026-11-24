@@ -9,6 +9,7 @@ import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
@@ -77,14 +78,12 @@ class HlLower {
 	final requestKeys:compiler.hl.incremental.HlRequestKeys;
 
 	/**
-	 * By type id in the bodies' table (`typesById`), the HashLink type lowering gave the type and the number its request is
-	 * recorded under, or -1: a register's type is then two array reads, not two lookups by the type's structure.
+	 * By type id, the HashLink type lowering gave the type and the number its request is recorded under, or -1: a register's
+	 * type is then two array reads, not two lookups by the type's structure.
 	 */
 	final typeIndicesById:Array<Int> = [];
 
 	final typeKeysById:Array<Int> = [];
-
-	var typesById:Null<compiler.ir.model.IrTypeIds> = null;
 
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
@@ -97,12 +96,6 @@ class HlLower {
 
 	/** The body of the function being lowered (`lowerFunction`), null before the first; its methods read it through `requireBody`. */
 	var body:Null<IrBody> = null;
-
-	/**
-	 * The type ids of the bodies lowering encodes, for functions that have none (`IrFunction.bodyIn`): the program's, so every
-	 * body of the program shares one table.
-	 */
-	var bodyTypes = new compiler.ir.model.IrTypeIds();
 
 	/** `allocateTemporary`, made once: the scalar locals of each function take their registers through it. */
 	final allocateRegister:IrType->Int;
@@ -401,14 +394,11 @@ class HlLower {
 		if (selected != null)
 			for (name in selected)
 				selectedNames.set(name, true);
-		var types:Null<compiler.ir.model.IrTypeIds> = null;
 		for (fn in program.functions)
 			if (selected == null || selectedNames.exists(fn.name)) {
 				var own = memo == null ? null : memo.get(fn);
 				if (own == null) {
-					if (types == null)
-						types = compiler.ir.model.IrTypeIds.ofFunctions(program.functions);
-					own = functionNatives(fn, types);
+					own = functionNatives(fn);
 					if (memo != null)
 						memo.set(fn, own);
 				}
@@ -420,10 +410,10 @@ class HlLower {
 	}
 
 	/** The runtime natives lowering the rows of `fn` calls, each once, in the order they come; they depend on nothing else. */
-	static function functionNatives(fn:IrFunction, types:compiler.ir.model.IrTypeIds):Array<IrNative> {
+	static function functionNatives(fn:IrFunction):Array<IrNative> {
 		var own:Array<IrNative> = [],
 			valueArrayRead = compiler.ir.model.IrSymbol.of(HlLoweringDecisions.VALUE_ARRAY_READ_I32).id,
-			body = fn.bodyIn(types);
+			body = fn.encodedBody();
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
 			while (row >= 0 && row != terminator) {
@@ -466,7 +456,6 @@ class HlLower {
 		}
 
 	function lowerProgramWithNatives(program:IrProgram, runtimeNatives:Array<IrNative>):Bool {
-		bodyTypes = compiler.ir.model.IrTypeIds.ofFunctions(program.functions);
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var hasFunctionIndices = false;
@@ -959,7 +948,7 @@ class HlLower {
 			start = -1,
 			end = -1,
 			line = 0,
-			body = fn.bodyIn(bodyTypes, scratch.bodyBuilder);
+			body = fn.encodedBody(scratch.bodyBuilder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block), terminator = body.terminatorRow(block);
 			while (row >= 0 && row != terminator) {
@@ -1218,9 +1207,9 @@ class HlLower {
 		});
 	}
 
-	/** The body `fn` is lowered from: its own (`IrFunction.bodyIn`), with an edge block on each branch into a block with phis. */
+	/** The body `fn` is lowered from: its own (`IrFunction.encodedBody`), with an edge block on each branch into a block with phis. */
 	function loweringBody(fn:IrFunction):IrBody
-		return scratch.phiEdges.splitBody(fn.bodyIn(bodyTypes, scratch.bodyBuilder), scratch.bodyBuilder);
+		return scratch.phiEdges.splitBody(fn.encodedBody(scratch.bodyBuilder), scratch.bodyBuilder);
 
 	/** The body of the function being lowered, which every method that lowers part of it reads. */
 	inline function requireBody():IrBody {
@@ -1233,11 +1222,6 @@ class HlLower {
 	function lowerFunction(source:IrBody):HlFunction {
 		this.body = source;
 		var body = source;
-		if (body.types != typesById) {
-			typesById = body.types;
-			typeIndicesById.resize(0);
-			typeKeysById.resize(0);
-		}
 		nextLabel = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= nextLabel)
@@ -1529,7 +1513,7 @@ class HlLower {
 					assignment.position, instructions.length, scopeEnds)
 			});
 		}
-		var name = body.name, argumentCount = body.argumentCount(), result = body.types.type(body.result);
+		var name = body.name, argumentCount = body.argumentCount(), result = IrTypeIds.type(body.result);
 		var key = view.typedInterfaceKey(name);
 		if (key != null) {
 			var handleType = IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE),
@@ -2941,7 +2925,7 @@ class HlLower {
 		return index;
 	}
 
-	/** `internType` of the type with id `id` in the body's table, remembered by id (`typeIndicesById`). */
+	/** `internType` of the type with id `id`, remembered by id (`typeIndicesById`). */
 	function internTypeId(id:Int):Int {
 		while (typeIndicesById.length <= id) {
 			typeIndicesById.push(-1);
@@ -2949,14 +2933,14 @@ class HlLower {
 		}
 		var index = typeIndicesById[id];
 		if (index < 0) {
-			index = HlRemap.typeIndex(symbols, requireBody().types.type(id));
+			index = HlRemap.typeIndex(symbols, IrTypeIds.type(id));
 			typeIndicesById[id] = index;
 		}
 		var keys = recordedKeys;
 		if (keys != null) {
 			var key = typeKeysById[id];
 			if (key < 0) {
-				key = requestKeys.keyOf(TypeOf(requireBody().types.type(id), index));
+				key = requestKeys.keyOf(TypeOf(IrTypeIds.type(id), index));
 				typeKeysById[id] = key;
 			}
 			requestKeys.recordKey(key, index, keys, recordedAnswers);

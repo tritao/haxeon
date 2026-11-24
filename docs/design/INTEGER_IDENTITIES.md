@@ -43,7 +43,7 @@ Each family gets one kind of id, one interner and one owner. Two scopes exist:
 |---|---|---|---|---|
 | Functions | global | `IrSymbol` | `IrSymbol.of` | calls carry it; definitions and consumers still by name |
 | Objects (IR classes and records) | global | `IrSymbol` of the object's name | `IrSymbol.of` | by name |
-| Types | global | `IrTypeIds` id | `IrTypeIds.id` | bodies hold ids, one table per session; see "Types" below |
+| Types | global | `IrTypeIds` id | `IrTypeIds.id` | bodies hold ids from one process-wide table; see "Types" below |
 | Declarations (classes, enums, abstracts, typedefs) | global | `DeclarationId` | a process-wide interner of qualified paths | by qualified name |
 | Members | per declaration | index into the declaration's member list | declaration indexing | by member name |
 | Bindings (a local's declaration) | local | dense `Int` per function body | `BindingWalker` | `name@offset` strings |
@@ -94,7 +94,7 @@ Stages 1 and 2 are independent and can go in either order; 3 comes before 4 and 
 
 ## Types
 
-Status: step 1 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
+Status: steps 1 and 2 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
 
 **What it is worth.** Sampled on the frozen input before step 1, the work done on an `IrType`'s structure (hashing and
 probing `IrTypeMap`, `IrTypeIdentity.same` and `sameList`, the `TypeKey` and `HlSymbolTable.typeKey` texts) was 2.9% of a
@@ -116,15 +116,16 @@ id they already have: an array read instead of a structural hash. A type that ne
 
 **Construction.** Ids are given where a type enters a body, as today (`IrBodyBuilder`, a pass's `typeId`); no
 construction site goes through a pool. The table keeps the instance it was first given and hands it back for the id, so
-the types read from bodies are shared. Step 2 makes that instance the table's own (its parts the table's instances, its
-argument list copied), so a caller that changes a list it passed cannot change a key.
+the types read from bodies are shared. That instance is the table's own: its parts are interned first and it is rebuilt
+from their instances, its argument list a copy, so a caller that changes a list it passed cannot change a key, and a
+type's parts have ids too.
 
-**Lifetime and threads.** Today the session's inline cache owns the table every program body uses (`IrInlineCache.types`),
-and private builders make their own (`IrPassScratch`, `HlLowerScratch`, `HlcModule`, tests), so an id means something only
-with its table: a cache by id has to check the table, and bodies made with another table are refused
-(`IrFunction.bodyIn`, `IrStage.checkTables`, `IrInliner.sameTypeIds`). Step 2 makes the table process-wide, as `IrSymbol`
-is: ids only grow and always denote the same type, interning takes a lock (the compile and census threads both encode),
-and `type(id)` reads fixed-size chunks without one. A server then keeps ids across builds with nothing to translate. It
+**Lifetime and threads.** Before step 2 the session's inline cache owned the table every program body used
+(`IrInlineCache.types`), and private builders made their own (`IrPassScratch`, `HlLowerScratch`, `HlcModule`, tests), so
+an id meant something only with its table: a cache by id had to check the table, and bodies made with another table were
+refused (`IrFunction.bodyIn`, `IrStage.checkTables`, `IrInliner.sameTypeIds`). Step 2 made the table process-wide, as
+`IrSymbol` is: ids only grow and always denote the same type, interning takes a lock (the compile and census threads both
+encode), and `type(id)` reads the id's array without one. A server then keeps ids across builds with nothing to translate. It
 grows by one entry per distinct type the process has seen; an edit that renumbers lambdas adds new names and so new
 types. Like `IrSymbol` it is never compacted, and its growth shows in the server's live data.
 
@@ -141,8 +142,14 @@ remembers an answer. The self-compile's bytes are the check for each step.
    index and request number (`HlLower.internTypeId`); the reachability edges deduplicate the types values mention by
    id instead of by `TypeKey` text. Three files. Body edit -2.2% and signature edit -2.3% main-thread instructions, cold
    allocation -2.2%, one-shot self-compile -0.66% instructions.
-2. *One process-wide table.* `IrTypeIds` becomes static like `IrSymbol` and owns its instances; `IrBody.types`, the
-   table parameters and the table checks go. Mechanical, about 45 files, most of them a parameter removed.
+2. *One process-wide table* (done). `IrTypeIds` is static like `IrSymbol` and owns its instances; `IrBody.types`, the
+   table parameters, the table checks and the private tables are gone, and `IrFunction.bodyIn(types)` is
+   `encodedBody()`. 49 compiler files and 19 tests, most of them a parameter removed. Two changes from the plan, both
+   for speed: reads are one array read, not `IrSymbol`'s chunks (an array that is replaced by a longer copy when full,
+   under the lock; the second indirection of chunks cost 0.6% of a one-shot self-compile), and the types without parts
+   have fixed first ids, so most lookups take neither the lock nor a hash. One-shot self-compile -0.08% instructions;
+   no-op -0.6%, body edit -0.5%, signature edit -0.3% main-thread instructions; allocation and server live data
+   unchanged (the session's table was already kept for the session).
 3. *Server caches by id.* `HlSymbolTable.typeIndex` (an array by id in its copy-on-write state, dropped by
    `renameTypes`), `HlRequestKeys.types`, `references` and `typeKeys`, with step 1's per-lowering arrays moving there;
    `RuntimeAbi.writeKey` and `IrSharedRuntimeCalls` by id. About six files.

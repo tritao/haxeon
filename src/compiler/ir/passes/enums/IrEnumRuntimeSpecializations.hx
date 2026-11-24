@@ -39,7 +39,7 @@ class IrEnumRuntimeSpecializations {
 	 * `fn`'s version with `lineage` (`IrStageMemos.enumMentions`), else read now.
 	 */
 	static function mentionsOf(fn:IrFunction, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>,
-			shared:IrMentionScratch):Array<String> {
+			shared:Array<Bool>):Array<String> {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
 			return readMentions(fn, shared);
@@ -54,26 +54,19 @@ class IrEnumRuntimeSpecializations {
 
 	/**
 	 * Reads `mentionsOf`. A function past the encode point is read as its body, each type once; one before it, as its objects. With
-	 * `shared`, a type an earlier body with the same table visited is not visited again: what is read is then only what that union
+	 * `shared`, by type id, a type an earlier body visited is not visited again: what is read is then only what that union
 	 * lacks, for a caller that keeps no contribution.
 	 */
-	static function readMentions(fn:IrFunction, shared:Null<IrMentionScratch>):Array<String> {
+	static function readMentions(fn:IrFunction, shared:Null<Array<Bool>>):Array<String> {
 		var names:Array<String> = [], body = fn.body;
 		if (body != null) {
-			var visited:Array<Bool> = [];
-			if (shared != null) {
-				if (shared.types != body.types) {
-					shared.types = body.types;
-					shared.visited.resize(0);
-				}
-				visited = shared.visited;
-			}
+			var visited:Array<Bool> = shared ?? [];
 			inline function visitId(id:Int):Void {
 				while (visited.length <= id)
 					visited.push(false);
 				if (!visited[id]) {
 					visited[id] = true;
-					mentions(body.types.type(id), names);
+					mentions(IrTypeIds.type(id), names);
 				}
 			}
 			for (index in 0...body.argumentCount())
@@ -130,7 +123,7 @@ class IrEnumRuntimeSpecializations {
 				visit(result);
 			default:
 		}
-		var shared = new IrMentionScratch();
+		var shared:Array<Bool> = [];
 		for (fn in functions)
 			for (name in mentionsOf(fn, lineage, shared))
 				require(name);
@@ -159,13 +152,4 @@ class IrEnumRuntimeSpecializations {
 		return [for (declaration in enums) if (EnumRuntimeType.declaration(declaration.name) == declaration.name
 			|| required.exists(declaration.name)) declaration];
 	}
-}
-
-/** The types a run of `IrEnumRuntimeSpecializations.materialize` without a memo has visited, by id of one table. */
-@:nullSafety(Strict)
-private class IrMentionScratch {
-	public var types:Null<IrTypeIds> = null;
-	public final visited:Array<Bool> = [];
-
-	public function new() {}
 }

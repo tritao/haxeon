@@ -5,6 +5,7 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.names.IrReceiverCheck;
@@ -57,7 +58,7 @@ class IrBodyCallExpansion {
 				actual = body.resolve(actual);
 			var formalType = callee.valueTypeId(formal), actualType = body.valueTypeId(actual);
 			if (formalType == actualType
-				|| IrVerifier.sameType(body.types.type(actualType), body.types.type(formalType)))
+				|| IrVerifier.sameType(IrTypeIds.type(actualType), IrTypeIds.type(formalType)))
 				values[formal] = actual;
 			else {
 				var upcast = body.newValue(callee.valueName(formal), formalType);

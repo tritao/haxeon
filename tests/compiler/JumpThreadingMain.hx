@@ -11,13 +11,13 @@ import compiler.ir.verify.IrVerifier;
 class JumpThreadingMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function threadJumps(fn:IrFunction):IrFunction {
-		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn);
 		return IrJumpThreading.runBody(body, new compiler.ir.model.IrPassScratch()) ? body.toFunction() : fn;
 	}
 
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function threadConstantBranches(fn:IrFunction):IrFunction {
-		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn);
 		return IrJumpThreading.threadConstantBranchesBody(body, new compiler.ir.model.IrPassScratch())
 			? body.toFunction() : fn;
 	}

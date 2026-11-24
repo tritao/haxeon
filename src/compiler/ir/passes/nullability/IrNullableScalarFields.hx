@@ -10,7 +10,6 @@ import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.TypeKey;
 
 /**
@@ -26,14 +25,12 @@ class IrNullableScalarFields {
 		objects = [for (object in declarations) object.name => object];
 
 	/**
-	 * `functions` with their stores normalized, read as their bodies made with `types` (those of the functions' bodies when not
-	 * given): a function that changes becomes its edited body, owned by the next stage; the normalizers come last.
+	 * `functions` with their stores normalized, read as their bodies: a function that changes becomes its edited body, owned by
+	 * the next stage; the normalizers come last.
 	 */
-	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder):Array<IrFunction> {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(functions);
+	public function rewrite(functions:Array<IrFunction>, ?builder:IrBodyBuilder):Array<IrFunction> {
 		return compiler.ir.pipeline.IrFunctionStages.apply("nullable-scalar-fields",
-			new IrNullableScalarFieldsPass(this, types, builder), functions);
+			new IrNullableScalarFieldsPass(this, builder), functions);
 	}
 
 	/** The rewritten functions with the normalizers made, which come last. */
@@ -184,17 +181,15 @@ class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass 
 	static inline final STORES = 1;
 
 	final fields:IrNullableScalarFields;
-	final types:IrTypeIds;
 	final builder:Null<IrBodyBuilder>;
 
-	public function new(fields:IrNullableScalarFields, types:IrTypeIds, ?builder:IrBodyBuilder) {
+	public function new(fields:IrNullableScalarFields, ?builder:IrBodyBuilder) {
 		this.fields = fields;
-		this.types = types;
 		this.builder = builder;
 	}
 
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(types, builder);
+		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -221,7 +216,7 @@ class IrNullableScalarFieldsPass implements compiler.ir.pipeline.IrFunctionPass 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
 		if (summary != STORES)
 			return fn;
-		var body = fn.bodyIn(types, builder);
+		var body = fn.encodedBody(builder);
 		if (!fields.needsRewrite(body, reader))
 			return fn;
 		var edited = body.forEditing(builder);

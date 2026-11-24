@@ -4,7 +4,6 @@ import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.model.SourceProvenance.Located;
@@ -151,10 +150,9 @@ class IrBodyMain {
 					scopeEnd: 12
 				}
 			], true, Keep);
-		var types = new IrTypeIds();
-		check(fn, types);
+		check(fn);
 		var opcodes:Map<Int, Bool> = [];
-		var body = IrBodyBuilder.encode(fn, types);
+		var body = IrBodyBuilder.encode(fn);
 		for (row in 0...body.rowLimit())
 			opcodes.set(body.opcode(row), true);
 		for (opcode in 0...compiler.ir.model.IrOpcode.COUNT)
@@ -187,12 +185,12 @@ class IrBodyMain {
 		edits(body);
 		// A function with no blocks, no arguments and a second value table round-trips too.
 		nextId = 0;
-		check(new IrFunction("Main.empty", [], Void, [], Ordinary), types);
+		check(new IrFunction("Main.empty", [], Void, [], Ordinary));
 		// The check catches a value whose id carries two types: one column cannot hold both.
 		var clash = new IrBlock(0);
 		clash.instructions.push(new Located(ConstInt(new IrValue(0, "x", I32), 1), user));
 		clash.terminator = new Located(Return(new IrValue(0, "x", I64)), user);
-		if (IrBody.roundTripDifference(new IrFunction("Main.clash", [], I32, [clash], Ordinary), types) == null)
+		if (IrBody.roundTripDifference(new IrFunction("Main.clash", [], I32, [clash], Ordinary)) == null)
 			throw "A value id with two types must not round-trip";
 		// The pipeline's round trip is its own option, off by default, and implies verification.
 		var options = compiler.CompileOptions.fromArguments(["--no-verify-ir", "--check-ir-body"]);
@@ -217,7 +215,7 @@ class IrBodyMain {
 	 */
 	static function editsSoundly(what:String, fn:IrFunction,
 			bodyPass:(IrBody, compiler.ir.model.IrPassScratch) -> Bool):IrFunction {
-		var scratch = new compiler.ir.model.IrPassScratch(), body = IrBodyBuilder.encode(fn, new IrTypeIds());
+		var scratch = new compiler.ir.model.IrPassScratch(), body = IrBodyBuilder.encode(fn);
 		if (!bodyPass(body, scratch))
 			throw 'IrBody: the $what test function must change';
 		var layout = body.layoutDifference();
@@ -243,9 +241,8 @@ class IrBodyMain {
 	 */
 	static function samePass(what:String, fn:IrFunction, objectPass:IrFunction->IrFunction,
 			bodyPass:(IrBody, compiler.ir.model.IrPassScratch) -> Bool):Void {
-		var types = new IrTypeIds(),
-			scratch = new compiler.ir.model.IrPassScratch(),
-			body = IrBodyBuilder.encode(fn, types),
+		var scratch = new compiler.ir.model.IrPassScratch(),
+			body = IrBodyBuilder.encode(fn),
 			expected = objectPass(fn);
 		if (expected == fn || !bodyPass(body, scratch))
 			throw 'IrBody: the $what test function must change';
@@ -266,9 +263,9 @@ class IrBodyMain {
 	 * to the object result but for how values are numbered; and it gives back a function it leaves as it was as the same object.
 	 */
 	static function sameStage(what:String, fn:IrFunction, expected:IrFunction,
-			stage:(IrFunction, IrTypeIds, compiler.ir.model.IrPassScratch) -> IrFunction):Void {
-		var types = new IrTypeIds(), scratch = new compiler.ir.model.IrPassScratch();
-		var result = stage(fn, types, scratch);
+			stage:(IrFunction, compiler.ir.model.IrPassScratch) -> IrFunction):Void {
+		var scratch = new compiler.ir.model.IrPassScratch();
+		var result = stage(fn, scratch);
 		if (expected == fn || result == fn)
 			throw 'IrBody: the $what test function must change';
 		var body = result.body;
@@ -282,7 +279,7 @@ class IrBodyMain {
 			throw 'IrBody: $what on a body differs from its object version: $difference';
 		var unchanged = new IrFunction("Main.unchanged", [], Void, [block(0, [], Return(value("nothing", Void)))],
 			Ordinary);
-		if (stage(unchanged, types, scratch) != unchanged)
+		if (stage(unchanged, scratch) != unchanged)
 			throw 'IrBody: $what must give back a function it does not change';
 	}
 
@@ -291,13 +288,12 @@ class IrBodyMain {
 	 * from the body's next id, its object version from the decoding's, so both are compared renumbered (`IrBodyBuilder.renumbered`).
 	 */
 	static function differenceButIds(expected:IrFunction, body:IrBody):Null<String>
-		return IrFunctionStateEquality.difference(IrBodyBuilder.renumbered(IrBodyBuilder.encode(expected,
-			body.types)).toFunction(),
+		return IrFunctionStateEquality.difference(IrBodyBuilder.renumbered(IrBodyBuilder.encode(expected)).toFunction(),
 			IrBodyBuilder.renumbered(body).toFunction());
 
 	/** A thaw of a frozen body shares its columns until its first edit, which leaves the frozen body as it was. */
 	static function sharedThaw(fn:IrFunction):Void {
-		var types = new IrTypeIds(), frozen = IrBodyBuilder.encode(fn, types).freeze(false);
+		var frozen = IrBodyBuilder.encode(fn).freeze(false);
 		var copy = frozen.thaw(), untouched = frozen.thaw();
 		if (copy.edited || IrFunctionStateEquality.difference(fn, untouched.toFunction()) != null)
 			throw 'IrBody: a thaw must read as the body it was thawed from';
@@ -608,8 +604,7 @@ class IrBodyMain {
 			true));
 		sameStage("scalar replacement stage", construct,
 			compiler.ir.passes.scalars.IrScalarReplacement.rewrite(construct, objects, false, true),
-			(fn, types, scratch) -> compiler.ir.passes.scalars.IrScalarReplacement.rewriteBody(fn, objects, types,
-			scratch, true));
+			(fn, scratch) -> compiler.ir.passes.scalars.IrScalarReplacement.rewriteBody(fn, objects, scratch, true));
 	}
 
 	/** A value copy passed to a callee that only reads it is replaced by its source, and the callee is consulted. */
@@ -632,22 +627,22 @@ class IrBodyMain {
 			main.instructions.push(new Located(instruction, SourceProvenance.generated("body-pass-test")));
 		var fn = new IrFunction("Main.copies", [source], I32, [main], Ordinary);
 		var consulted:Array<String> = [];
-		var readerBody = IrBodyBuilder.encode(reader, new IrTypeIds());
-		expect(compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(fn, new IrTypeIds()))
+		var readerBody = IrBodyBuilder.encode(reader);
+		expect(compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(fn))
 			&& !compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(readerBody), "finding value copies");
 		var elided = editsSoundly("copy elision", fn,
 			(body, scratch) -> compiler.ir.passes.cleanup.IrCopyElision.runBody(body,
 			name -> name == "Main.reader" ? readerBody : null,
 			(type, method) -> null, name -> consulted.push(name), scratch));
-		expect(!compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(elided, new IrTypeIds()))
+		expect(!compiler.ir.passes.cleanup.IrCopyElision.hasCopiesBody(IrBodyBuilder.encode(elided))
 			&& consulted.indexOf("Main.reader") >= 0, "copy elision passes the source and consults the callee");
 	}
 
-	static function check(fn:IrFunction, types:IrTypeIds):Void {
-		var difference = IrBody.roundTripDifference(fn, types);
+	static function check(fn:IrFunction):Void {
+		var difference = IrBody.roundTripDifference(fn);
 		if (difference != null)
 			throw 'Round trip of ${fn.name} failed: $difference';
-		var decoded = IrBodyBuilder.encode(fn, types).toFunction();
+		var decoded = IrBodyBuilder.encode(fn).toFunction();
 		if (!IrFunctionStateEquality.same(decoded, fn))
 			throw 'Round trip of ${fn.name} is not symmetric';
 	}

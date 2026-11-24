@@ -14,7 +14,6 @@ import compiler.ir.model.SourceProvenance.Located;
 @:allow(compiler.ir.model.IrBody)
 @:nullSafety(Strict)
 class IrBodyBuilder {
-	var types:IrTypeIds;
 	final opcodes:Array<Int> = [];
 	final outputs:Array<Int> = [];
 	final auxes:Array<Int> = [];
@@ -65,12 +64,10 @@ class IrBodyBuilder {
 	/** By value id of the body being renumbered, its new id or -1 (`renumbered`). */
 	final renumbering:Array<Int> = [];
 
-	public function new(types:IrTypeIds)
-		this.types = types;
+	public function new() {}
 
-	/** Empties the builder for another body, whose types are numbered in `types`. */
-	public function reset(types:IrTypeIds):Void {
-		this.types = types;
+	/** Empties the builder for another body. */
+	public function reset():Void {
 		opcodes.resize(0);
 		outputs.resize(0);
 		auxes.resize(0);
@@ -101,11 +98,11 @@ class IrBodyBuilder {
 	}
 
 	/** The body of `fn`, every value, row and binding of it, in its order; made with `builder` when given, which is reset first. */
-	public static function encode(fn:IrFunction, types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
+	public static function encode(fn:IrFunction, ?builder:IrBodyBuilder):IrBody {
 		if (builder == null)
-			builder = new IrBodyBuilder(types);
+			builder = new IrBodyBuilder();
 		else
-			builder.reset(types);
+			builder.reset();
 		for (argument in fn.arguments)
 			builder.argumentIds.push(builder.value(argument));
 		for (block in fn.blocks) {
@@ -126,7 +123,7 @@ class IrBodyBuilder {
 	 * and type, so rows can be copied as they are. Rows, blocks and bindings start empty.
 	 */
 	public function startFrom(source:IrBody):Void {
-		reset(source.types);
+		reset();
 		var count = source.valueTypes.length;
 		valueTypes.resize(count);
 		valueNames.resize(count);
@@ -243,7 +240,7 @@ class IrBodyBuilder {
 	/** `source` without the rows its edits unlinked or the runs they left: its blocks, rows and bindings in order, rebuilt. */
 	public static function compact(source:IrBody, ?builder:IrBodyBuilder):IrBody {
 		if (builder == null)
-			builder = new IrBodyBuilder(source.types);
+			builder = new IrBodyBuilder();
 		builder.startFrom(source);
 		for (block in 0...source.blockCount()) {
 			builder.beginBlock(source.blockId(block));
@@ -265,8 +262,8 @@ class IrBodyBuilder {
 	 */
 	public static function renumbered(source:IrBody, ?builder:IrBodyBuilder):IrBody {
 		if (builder == null)
-			builder = new IrBodyBuilder(source.types);
-		builder.reset(source.types);
+			builder = new IrBodyBuilder();
+		builder.reset();
 		var ids = IrPassScratch.filledInts(builder.renumbering, source.valueLimit(), -1);
 		for (index in 0...source.argumentCount())
 			builder.argumentIds.push(builder.renumber(source, ids, source.argument(index)));
@@ -313,8 +310,8 @@ class IrBodyBuilder {
 	/** A copy of `source` with the same layout, column for column, which no edit made: freezing it keeps it as it is. */
 	public static function copy(source:IrBody, ?builder:IrBodyBuilder):IrBody {
 		if (builder == null)
-			builder = new IrBodyBuilder(source.types);
-		builder.reset(source.types);
+			builder = new IrBodyBuilder();
+		builder.reset();
 		copyColumn(builder.opcodes, source.opcodes);
 		copyColumn(builder.outputs, source.outputs);
 		copyColumn(builder.auxes, source.auxes);
@@ -379,7 +376,7 @@ class IrBodyBuilder {
 			}
 		}
 		if (valueTypes[id] < 0) {
-			valueTypes[id] = types.id(value.type);
+			valueTypes[id] = IrTypeIds.id(value.type);
 			valueNames[id] = value.name;
 		}
 		return id;
@@ -435,7 +432,7 @@ class IrBodyBuilder {
 
 	public function finish(name:String, kind:IrFunctionKind, result:IrType, inlineHint:Bool,
 			retention:IrRetention):IrBody
-		return new IrBody(this, name, kind, types.id(result), inlineHint, retention);
+		return new IrBody(this, name, kind, IrTypeIds.id(result), inlineHint, retention);
 
 	static inline function symbol(name:String):Int
 		return IrSymbol.of(name).id;
@@ -489,7 +486,7 @@ class IrBodyBuilder {
 			case ConstNull(output):
 				row(IrOpcode.ConstNull, value(output), 0, where);
 			case TypeValue(output, type):
-				row(IrOpcode.TypeValue, value(output), types.id(type), where);
+				row(IrOpcode.TypeValue, value(output), IrTypeIds.id(type), where);
 			case ToDyn(output, input):
 				unary(IrOpcode.ToDyn, output, input, where);
 			case IntToFloat(output, input):
@@ -611,17 +608,17 @@ class IrBodyBuilder {
 				operandList(arguments);
 				switch operation {
 					case EnumDynamicBox(type):
-						row(IrOpcode.EnumDynamicBox, value(output), types.id(type), where);
+						row(IrOpcode.EnumDynamicBox, value(output), IrTypeIds.id(type), where);
 					case EnumDynamicView(type):
-						row(IrOpcode.EnumDynamicView, value(output), types.id(type), where);
+						row(IrOpcode.EnumDynamicView, value(output), IrTypeIds.id(type), where);
 					case EnumTagBox(type):
-						row(IrOpcode.EnumTagBox, value(output), types.id(type), where);
+						row(IrOpcode.EnumTagBox, value(output), IrTypeIds.id(type), where);
 					case EnumTagUnbox(type):
-						row(IrOpcode.EnumTagUnbox, value(output), types.id(type), where);
+						row(IrOpcode.EnumTagUnbox, value(output), IrTypeIds.id(type), where);
 					case InlineEnumBox(type):
-						row(IrOpcode.InlineEnumBox, value(output), types.id(type), where);
+						row(IrOpcode.InlineEnumBox, value(output), IrTypeIds.id(type), where);
 					case InlineEnumUnbox(type):
-						row(IrOpcode.InlineEnumUnbox, value(output), types.id(type), where);
+						row(IrOpcode.InlineEnumUnbox, value(output), IrTypeIds.id(type), where);
 				}
 		}
 	}

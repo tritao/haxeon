@@ -31,8 +31,6 @@ private class ValueArrayFunctionIndex {
 	/** The keys of a type that names none, shared by every such type. */
 	final none:Array<String> = [];
 
-	public final types:IrTypeIds;
-
 	final builder:IrBodyBuilder;
 	var summaries:Map<String, ValueArraySummary> = [];
 	var dynamicDone:Map<String, IrFunction> = [];
@@ -46,8 +44,7 @@ private class ValueArrayFunctionIndex {
 	final enumKeys:Map<String, String> = [];
 	final tagKeys:Map<String, String> = [];
 
-	public function new(elements:Array<IrType>, types:IrTypeIds, builder:IrBodyBuilder) {
-		this.types = types;
+	public function new(elements:Array<IrType>, builder:IrBodyBuilder) {
 		this.builder = builder;
 		for (element in elements)
 			switch element {
@@ -65,7 +62,7 @@ private class ValueArrayFunctionIndex {
 
 	/** `fn`'s body: the one it is, or its encoding, kept. */
 	public inline function bodyOf(fn:IrFunction):IrBody
-		return fn.bodyIn(types, builder);
+		return fn.encodedBody(builder);
 
 	public function originalFunctions(functions:Array<IrFunction>):Map<String, IrFunction> {
 		for (fn in functions)
@@ -108,7 +105,7 @@ private class ValueArrayFunctionIndex {
 					visit(result);
 				default:
 			}
-		visit(types.type(id));
+		visit(IrTypeIds.type(id));
 		var result = found == null ? none : found;
 		while (typeKeys.length <= id)
 			typeKeys.push(null);
@@ -171,20 +168,17 @@ class IrValueArrayProgramRewrite {
 	public static final ARRAY_TYPES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<Int>>("array-types");
 
 	/**
-	 * Discover every concrete value array in the assembled program before generating any helpers. The functions' bodies are made
-	 * with `types` (those of the program's bodies when not given, `IrTypeIds.ofFunctions`); a function that changes becomes its
-	 * edited body, owned by the next stage. With `lineage`, each element's rewrite and the allocation lowering reuse what they made
+	 * Discover every concrete value array in the assembled program before generating any helpers. A function that changes becomes
+	 * its edited body, owned by the next stage. With `lineage`, each element's rewrite and the allocation lowering reuse what they made
 	 * of each function the session has at the same version.
 	 */
-	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget, ?types:IrTypeIds,
+	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget,
 			?scratch:IrPassScratch, ?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		var builder = scratch.bodyBuilder;
 		for (fn in program.functions)
-			fn.bodyIn(types, builder);
+			fn.encodedBody(builder);
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			inlineEnums:Map<String, Bool> =
 				[for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
@@ -242,18 +236,18 @@ class IrValueArrayProgramRewrite {
 		// function names of them is read once per version in a session (`arrayTypesOf`).
 		var visited:Array<Bool> = [];
 		for (fn in program.functions)
-			for (id in arrayTypesOf(fn, types, builder, lineage))
+			for (id in arrayTypesOf(fn, builder, lineage))
 				if (id >= visited.length || !visited[id]) {
 					while (visited.length <= id)
 						visited.push(false);
 					visited[id] = true;
-					visit(types.type(id));
+					visit(IrTypeIds.type(id));
 				}
 		var keyed = [for (key => element in elements) {
 			key:key, element:element
 		}];
 		keyed.sort((a, b) -> Reflect.compare(a.key, b.key));
-		var index = new ValueArrayFunctionIndex([for (entry in keyed) entry.element], types, builder),
+		var index = new ValueArrayFunctionIndex([for (entry in keyed) entry.element], builder),
 			slotNamespace = nextSlotNamespace(program),
 			declarations:Null<String> = null;
 		// What every element's rewrite reads of the value objects, printed once.
@@ -266,22 +260,22 @@ class IrValueArrayProgramRewrite {
 		for (entry in keyed)
 			rewriteIndexed(program, entry.element, pointerBits, target, index, slotNamespace++, scratch, lineage,
 				valueDeclarations);
-		IrArrayFactory.lower(program, types, scratch, lineage);
-		IrVerifier.verifyValueArraysLowered(program, types, lineage);
+		IrArrayFactory.lower(program, scratch, lineage);
+		IrVerifier.verifyValueArraysLowered(program, lineage);
 		encodeAll(program, index);
 	}
 
 	/** The ids of the types `fn`'s arguments, result, rows and descriptors have that name an array or an iterator. */
-	static function arrayTypesOf(fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
+	static function arrayTypesOf(fn:IrFunction, builder:IrBodyBuilder,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Array<Int> {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
-			return readArrayTypes(fn.bodyIn(types, builder));
+			return readArrayTypes(fn.encodedBody(builder));
 		var memo = lineage.memos.contribution(ARRAY_TYPES), known = memo.get(version);
 		if (known == null) {
-			known = readArrayTypes(fn.bodyIn(types, builder));
+			known = readArrayTypes(fn.encodedBody(builder));
 			memo.keep(version, known);
-		} else if (lineage.checks && known.join(",") != readArrayTypes(fn.bodyIn(types, builder)).join(","))
+		} else if (lineage.checks && known.join(",") != readArrayTypes(fn.encodedBody(builder)).join(","))
 			throw new InternalError('--check-reuse: the array types reused for ${fn.name} differ from its body');
 		return known;
 	}
@@ -297,7 +291,7 @@ class IrValueArrayProgramRewrite {
 	static function readArrayTypes(body:IrBody):Array<Int> {
 		var found:Array<Int> = [];
 		function add(id:Int):Void
-			if (id >= 0 && found.indexOf(id) < 0 && namesArray(body.types.type(id)))
+			if (id >= 0 && found.indexOf(id) < 0 && namesArray(IrTypeIds.type(id)))
 				found.push(id);
 		for (index in 0...body.argumentCount())
 			add(body.valueTypeId(body.argument(index)));
@@ -321,8 +315,8 @@ class IrValueArrayProgramRewrite {
 	static final NO_ARRAY_TYPES:Array<Int> = [];
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
-		var types = IrTypeIds.ofFunctions(program.functions), scratch = new IrPassScratch();
-		var index = new ValueArrayFunctionIndex([element], types, scratch.bodyBuilder);
+		var scratch = new IrPassScratch();
+		var index = new ValueArrayFunctionIndex([element], scratch.bodyBuilder);
 		rewriteIndexed(program, element, pointerBits, target, index, nextSlotNamespace(program), scratch);
 		encodeAll(program, index);
 	}
@@ -489,7 +483,7 @@ class IrValueArrayProgramRewrite {
 				program.functions[position] = compiler.ir.pipeline.IrFunctionStages.derived(stage, fn.name, pass,
 					origin == null
 					? compiler.ir.pipeline.IrFunctionStages.FROM_NAME : originalVersions.get(origin) ?? 0,
-					lineage, checks, index.types, builder, reader -> {
+					lineage, checks, builder, reader -> {
 						reader.read(ValueArrayElementPass.ELEMENT, "");
 						fn;
 					});
@@ -498,8 +492,8 @@ class IrValueArrayProgramRewrite {
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)
 				nullableScalars = true;
-		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars, index.types,
-			scratch, lineage);
+		IrValueArrayScalarLowering.rewrite(program, element, target != HashLink || nullableScalars, scratch,
+			lineage);
 		var nativeNames:Map<String, Bool> = [for (native in program.natives) native.name => true];
 		for (native in factory.natives().concat(factory.helpers.natives()).concat(elements.natives()))
 			if (!nativeNames.exists(native.name)) {

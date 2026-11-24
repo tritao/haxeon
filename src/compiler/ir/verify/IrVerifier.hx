@@ -7,7 +7,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrOperands;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeTools;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
@@ -41,16 +40,13 @@ class IrVerifier {
 		new compiler.ir.reuse.IrStageMemo.IrContributionKey<String>("checked-value-arrays");
 
 	/** After value-array lowering, ordinary array instructions must never address lane storage. */
-	/** No ordinary array operation reads inline value lanes, on the functions' bodies (`types`, the program's when not given). */
 	/**
 	 * No ordinary array operation reads or writes an array of inline value lanes. With `lineage`, a function the session checked at
 	 * the same version against the same value classes, inline enums and reference natives is not read again (not under
 	 * `--check-reuse`).
 	 */
-	public static function verifyValueArraysLowered(program:IrProgram, ?types:IrTypeIds,
+	public static function verifyValueArraysLowered(program:IrProgram,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
 		var valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			valueEnums:Map<String, Bool> = [
 				for (declaration in program.enums)
@@ -65,10 +61,8 @@ class IrVerifier {
 		// By type id: 1 when a lane array, 0 when not, unset when not yet seen.
 		var lanes:Array<Int> = [];
 		function laneArray(body:IrBody, value:IrValueId):Bool {
-			// A body made with other ids (a test's) is not cached.
-			var shared = body.types == types,
-				id = body.valueTypeId(value),
-				known = shared && id < lanes.length ? lanes[id] : -1;
+			var id = body.valueTypeId(value),
+				known = id < lanes.length ? lanes[id] : -1;
 			if (known < 0) {
 				known = switch body.valueType(value) {
 					case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name) ? 1 : 0;
@@ -76,10 +70,9 @@ class IrVerifier {
 					case Array(EnumTag(_)): 1;
 					default: 0;
 				};
-				while (shared && lanes.length <= id)
+				while (lanes.length <= id)
 					lanes.push(-1);
-				if (shared)
-					lanes[id] = known;
+				lanes[id] = known;
 			}
 			return known == 1;
 		}
@@ -99,7 +92,7 @@ class IrVerifier {
 					continue;
 				memo.keep(version, key);
 			}
-			var body = fn.bodyIn(types);
+			var body = fn.encodedBody();
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
 				while (row >= 0) {
@@ -358,7 +351,7 @@ class IrVerifier {
 	 * it verifies must also round-trip through an `IrBody` (docs/design/IR_CORE_COLUMNS.md).
 	 */
 	public static function verifyReusing(program:IrProgram, memo:IrVerifyMemo, checkBodies:Bool = false):Void {
-		verifySelected(program, null, memo, checkBodies ? new IrTypeIds() : null);
+		verifySelected(program, null, memo, checkBodies);
 	}
 
 	/** Verify shared program metadata and only the named function bodies. */
@@ -366,9 +359,9 @@ class IrVerifier {
 		verifySelected(program, names, null);
 	}
 
-	/** With `bodies`, each verified function's body round trip is checked too, its types numbered there. */
+	/** With `checkBodies`, each verified function's body round trip is checked too. */
 	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>, memo:Null<IrVerifyMemo>,
-			?bodies:IrTypeIds):Void {
+			checkBodies = false):Void {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> = [];
 		var closureCasts:Map<String, String> = [];
 		for (fn in program.functions)
@@ -572,8 +565,8 @@ class IrVerifier {
 					verifyFunction(fn, tables.signatures, tables.objects, tables.interfaces, tables.enums,
 						tables.globals, tables.scalarFunctions,
 						tables.carrierSlots, tables.physicalValues, tables.closureCasts);
-					if (bodies != null) {
-						var difference = IrBody.roundTripDifference(fn, bodies);
+					if (checkBodies) {
+						var difference = IrBody.roundTripDifference(fn);
 						if (difference != null)
 							throw new InternalError('IR body round trip: $difference');
 					}

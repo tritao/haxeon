@@ -10,7 +10,6 @@ import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrProgram;
 import compiler.ir.model.Ir.IrType;
 import compiler.ir.model.IrBodyBuilder;
-import compiler.ir.model.IrTypeIds;
 
 /** One generated C file: its path in the output directory and its text. */
 typedef HlcFile = {
@@ -404,16 +403,14 @@ class HlcModule {
 
 	/** Lowers every function of the program and writes the files. */
 	public function emit():Array<HlcFile> {
-		// The program's table: every body of a program shares one (`IrStageHooks`), so one lowered here reads its ids as the rest.
 		var lowering = new HlcFunctionLower(this),
-			bodyTypes = IrTypeIds.ofFunctions(program.functions),
-			builder = new IrBodyBuilder(new IrTypeIds()),
+			builder = new IrBodyBuilder(),
 			files:Map<String, StringBuf> = [],
 			fileOrder:Array<String> = [];
 		var functions = [for (fn in program.functions) if (slots.exists(fn.name) && !native[slots.get(fn.name)]) fn];
 		functions.sort((a, b) -> slots.get(a.name) - slots.get(b.name));
 		var defined:Map<Int, Bool> = [];
-		var bodies = [for (fn in functions) fn.bodyIn(bodyTypes, builder)];
+		var bodies = [for (fn in functions) fn.encodedBody(builder)];
 		// Everything the functions use is interned first, in slot order, so the names are settled before any C is written and
 		// lowering only reads the tables.
 		for (index in 0...functions.length)

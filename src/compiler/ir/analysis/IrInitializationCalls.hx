@@ -5,7 +5,6 @@ import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
-import compiler.ir.model.IrTypeIds;
 
 /**
  * Calls that can execute while evaluating a function, excluding callbacks only stored for later. Each function gives, from its body
@@ -387,35 +386,35 @@ class IrInitCalls {
 	@:processWide("an empty summary, only ever read")
 	static final NO_STORES = new IrInitCalls(0, false);
 
-	/** What `fn` stores: kept by the session for its version with `lineage`, else read now from its body made with `types`. */
-	public static function stores(fn:IrFunction, types:IrTypeIds, builder:Null<IrBodyBuilder>,
+	/** What `fn` stores: kept by the session for its version with `lineage`, else read now from its body. */
+	public static function stores(fn:IrFunction, builder:Null<IrBodyBuilder>,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInitCalls
-		return kept(fn, types, builder, lineage, false);
+		return kept(fn, builder, lineage, false);
 
-	/** What `fn` calls: kept by the session for its version with `lineage`, else read now from its body made with `types`. */
-	public static function calls(fn:IrFunction, types:IrTypeIds, builder:Null<IrBodyBuilder>,
+	/** What `fn` calls: kept by the session for its version with `lineage`, else read now from its body. */
+	public static function calls(fn:IrFunction, builder:Null<IrBodyBuilder>,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrInitCalls
-		return kept(fn, types, builder, lineage, true);
+		return kept(fn, builder, lineage, true);
 
-	static function kept(fn:IrFunction, types:IrTypeIds, builder:Null<IrBodyBuilder>,
+	static function kept(fn:IrFunction, builder:Null<IrBodyBuilder>,
 			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, calls:Bool):IrInitCalls {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
-			return read(fn, types, builder, calls);
+			return read(fn, builder, calls);
 		var memo = lineage.memos.contribution(calls ? IrInitializationCalls.CALLS : IrInitializationCalls.STORES),
 			known = memo.get(version);
 		if (known == null) {
-			known = read(fn, types, builder, calls);
+			known = read(fn, builder, calls);
 			memo.keep(version, known);
-		} else if (lineage.checks && known.toString() != read(fn, types, builder, calls).toString())
+		} else if (lineage.checks && known.toString() != read(fn, builder, calls).toString())
 			throw new compiler.core
 				.InternalError('--check-reuse: the initialization calls reused for ${fn.name} differ from its body');
 		return known;
 	}
 
 	/** What `fn` gives, read from its body: what it calls with `calls`, else what it stores. */
-	public static function read(fn:IrFunction, types:IrTypeIds, builder:Null<IrBodyBuilder>, calls:Bool):IrInitCalls {
-		var body = fn.bodyIn(types, builder);
+	public static function read(fn:IrFunction, builder:Null<IrBodyBuilder>, calls:Bool):IrInitCalls {
+		var body = fn.encodedBody(builder);
 		var made = new IrInitCalls(body.argumentCount(), switch fn.result {
 			case Function(_, _), Dyn: true;
 			case _: false;

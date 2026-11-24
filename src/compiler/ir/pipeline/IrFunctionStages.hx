@@ -131,11 +131,11 @@ class IrFunctionStages {
 	 * A function `stage` makes in its `finish` besides the functions' own forms, named `name`: a specialization or a rewrite of the
 	 * function of version `input` (which keeps that version when `make` returns it), or a helper (`FROM_NAME`). With `lineage`, last build's when it was made from the same input and the facts it
 	 * read still hold (its requests are replayed); else `make` makes it with a reader that records what it reads and asks for, in the
-	 * stage's own facts, and past the encode point it is encoded with `types` and frozen. Call it while the stage runs, after
+	 * stage's own facts, and past the encode point it is encoded and frozen. Call it while the stage runs, after
 	 * `prepare`.
 	 */
 	public static function derived(stage:String, name:String, pass:IrFunctionPass, input:Int, lineage:Null<IrLineage>,
-			checks:Bool, types:compiler.ir.model.IrTypeIds, builder:Null<compiler.ir.model.IrBodyBuilder>,
+			checks:Bool, builder:Null<compiler.ir.model.IrBodyBuilder>,
 			make:IrFactReader->IrFunction):IrFunction {
 		if (lineage == null) {
 			var reader = new IrFactReader(stage, pass, IrFacts.unshared());
@@ -167,7 +167,7 @@ class IrFunctionStages {
 			var kept = input > 0 && lineage.versionOf(made) == input;
 			// What the memo keeps is frozen, so the stages after this one edit copies.
 			if (lineage.bodies && !kept) {
-				made.bodyIn(types, builder);
+				made.encodedBody(builder);
 				made.freezeBody(builder);
 			}
 			entry = new IrStageEntry(input, reader.recorded(), made, kept ? input : memos.versions.next(), 0,

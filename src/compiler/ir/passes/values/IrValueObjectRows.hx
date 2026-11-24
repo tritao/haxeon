@@ -6,7 +6,6 @@ import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrObjectTable;
 import compiler.ir.model.IrOpcode;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.pipeline.IrFunctionIndex;
 import compiler.ir.pipeline.IrFunctionPass;
 import compiler.ir.reuse.IrFactReader;
@@ -28,17 +27,15 @@ class IrValueObjectRows implements IrFunctionPass {
 
 	final opcode:IrOpcode;
 	final objects:IrObjectTable;
-	final types:IrTypeIds;
 	final builder:IrBodyBuilder;
 	final rewrite:IrFunction->IrFunction;
 	final declarations:() -> Int;
 
-	public function new(opcode:IrOpcode, objects:IrObjectTable, types:IrTypeIds, builder:IrBodyBuilder,
+	public function new(opcode:IrOpcode, objects:IrObjectTable, builder:IrBodyBuilder,
 			rewrite:IrFunction->IrFunction, declarations:() -> Int) {
 		this.declarations = declarations;
 		this.opcode = opcode;
 		this.objects = objects;
-		this.types = types;
 		this.builder = builder;
 		this.rewrite = rewrite;
 	}
@@ -50,7 +47,7 @@ class IrValueObjectRows implements IrFunctionPass {
 		};
 
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(types, builder);
+		var body = fn.encodedBody(builder);
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -75,7 +72,7 @@ class IrValueObjectRows implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary != OBJECT_ROWS)
 			return fn;
-		var body = fn.bodyIn(types, builder), found = false;
+		var body = fn.encodedBody(builder), found = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0 && !found) {

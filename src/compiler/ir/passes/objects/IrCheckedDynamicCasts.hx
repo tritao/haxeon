@@ -44,15 +44,14 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 	final stage:String;
 	final lineage:Null<IrLineage>;
 	final checks:Bool;
-	final types:Null<IrTypeIds>;
 	final builder:Null<IrBodyBuilder>;
 
 	public static inline final STAGE = "checked-dynamic-casts";
 
-	/** With `lineage` (and the `types` and `builder` of its bodies), the helpers are derived in the memo of `stage`. */
+	/** With `lineage` (and the `builder` of its bodies), the helpers are derived in the memo of `stage`. */
 	public function new(objects:Array<IrObject>, checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>,
 			checkValueObjects:Bool, checkFunctionCasts:Bool, stage = STAGE, ?lineage:IrLineage, checks = false,
-			?types:IrTypeIds, ?builder:IrBodyBuilder) {
+			?builder:IrBodyBuilder) {
 		declarations = [for (object in objects) object.name => object];
 		this.existingFunctions = existingFunctions;
 		this.checkObjects = checkObjects;
@@ -61,7 +60,6 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		this.stage = stage;
 		this.lineage = lineage;
 		this.checks = checks;
-		this.types = types;
 		this.builder = builder;
 	}
 
@@ -124,32 +122,30 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 		};
 
 	/**
-	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types`, in the stage `stage`: a checked cast
+	 * `rewrite` on IR bodies (docs/design/IR_CORE_COLUMNS.md, migration), in the stage `stage`: a checked cast
 	 * becomes a call of its helper in place, in the body itself, or a copy when a cache holds it. The helpers are built as
 	 * functions and encoded. With `lineage` each function's rewrite is derived from its version and the declarations it read
 	 * (`IrFunctionStages.derived`), and so are the helpers.
 	 */
 	public static function rewriteBodies(stage:String, functions:Array<IrFunction>, objects:Array<IrObject>,
 			checkObjects:Bool, existingFunctions:Null<Array<IrFunction>>, checkValueObjects:Bool,
-			checkFunctionCasts:Bool,
-			types:IrTypeIds, builder:IrBodyBuilder, ?lineage:IrLineage, checks = false):Array<IrFunction> {
+			checkFunctionCasts:Bool, builder:IrBodyBuilder, ?lineage:IrLineage, checks = false):Array<IrFunction> {
 		var pass = new IrCheckedDynamicCasts(objects, checkObjects, existingFunctions, checkValueObjects,
-			checkFunctionCasts, stage, lineage, checks, types, builder);
+			checkFunctionCasts, stage, lineage, checks, builder);
 		pass.index(functions);
 		if (lineage != null)
 			lineage.memos.facts.begin();
 		var rewritten = [
 			for (fn in functions)
 				IrFunctionStages.derived(stage, fn.name, pass, lineage == null ? 0 : lineage.versionOf(fn), lineage,
-				checks,
-				types, builder, reader -> pass.rewriteBody(fn, reader))
+				checks, builder, reader -> pass.rewriteBody(fn, reader))
 		];
 		return rewritten.concat(pass.generated);
 	}
 
 	/** `fn`'s body with its checked casts calling their helpers, which it asks for; `fn` itself when it has none. */
 	function rewriteBody(fn:IrFunction, reader:IrFactReader):IrFunction {
-		var body = fn.bodyIn(bodyTypes(), builder), dyn = bodyTypes().id(Dyn), found = false;
+		var body = fn.encodedBody(builder), dyn = IrTypeIds.id(Dyn), found = false;
 		// Whether `row` is a cast from Dyn that is checked, reading what decides it.
 		function checked(body:IrBody, row:Int):Bool {
 			if (body.opcode(row) != IrOpcode.SafeCast || body.valueTypeId(body.operand(row, 0)) != dyn)
@@ -181,13 +177,6 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 			}
 		}
 		return IrFunction.ofOwnedBody(edited);
-	}
-
-	function bodyTypes():IrTypeIds {
-		var known = types;
-		if (known == null)
-			throw new InternalError("Checked casts on bodies need the program's types");
-		return known;
 	}
 
 	static function isDyn(type:IrType):Bool
@@ -259,11 +248,10 @@ class IrCheckedDynamicCasts implements IrFunctionPass {
 			return new IrFunction(name, builder.arguments, type, builder.blocks,
 				Provider(TypeKey.of(type), ProviderOperation.CheckedCast));
 		}
-		var bodies = types;
-		generated.push(lineage == null || bodies == null ? make(new IrFactReader(stage, this,
+		generated.push(lineage == null ? make(new IrFactReader(stage, this,
 			compiler.ir.reuse.IrFacts.unshared())) : IrFunctionStages.derived(stage, name, this,
-			IrFunctionStages.FROM_NAME, lineage, checks, bodies,
-			builder, make));
+			IrFunctionStages.FROM_NAME, lineage, checks, builder,
+			make));
 		return name;
 	}
 }

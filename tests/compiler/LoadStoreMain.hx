@@ -13,7 +13,7 @@ import compiler.ir.passes.inlining.IrInliner.IrInlineCache;
 class LoadStoreMain {
 	/** The pass on `fn`'s body: `fn` itself when it changes nothing, else the edited body decoded. */
 	static function forward(fn:IrFunction, ?objects:IrObjectTable):IrFunction {
-		var body = compiler.ir.model.IrBodyBuilder.encode(fn, new compiler.ir.model.IrTypeIds());
+		var body = compiler.ir.model.IrBodyBuilder.encode(fn);
 		return IrLoadStoreForwarding.runBody(body, objects, new compiler.ir.model.IrPassScratch())
 			? body.toFunction() : fn;
 	}

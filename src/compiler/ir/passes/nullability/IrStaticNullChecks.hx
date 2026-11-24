@@ -8,7 +8,6 @@ import compiler.ir.model.IrBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.TypeKey;
 import compiler.ir.analysis.IrInitializationCalls.IrInitCalls;
@@ -51,7 +50,6 @@ class IrStaticNullChecks implements IrFunctionPass {
 
 	final objects:Null<Array<IrObject>>;
 	final valueTypes:Map<String, Bool> = [];
-	final types:IrTypeIds;
 	final builder:Null<IrBodyBuilder>;
 	final lineage:Null<IrLineage>;
 	final checks:Bool;
@@ -61,30 +59,27 @@ class IrStaticNullChecks implements IrFunctionPass {
 
 	var reached:Map<String, Bool> = [];
 
-	/** A run over functions whose bodies are made with `types`, with `objects`; in a session with `lineage`. */
-	public function new(objects:Null<Array<IrObject>>, types:IrTypeIds, ?builder:IrBodyBuilder, ?lineage:IrLineage,
+	/** A run over functions with `objects`; in a session with `lineage`. */
+	public function new(objects:Null<Array<IrObject>>, ?builder:IrBodyBuilder, ?lineage:IrLineage,
 			checks = false) {
 		this.objects = objects;
 		if (objects != null)
 			for (object in objects)
 				if (object.isValue)
 					valueTypes.set(object.name, true);
-		this.types = types;
 		this.builder = builder;
 		this.lineage = lineage;
 		this.checks = checks;
 	}
 
-	/** `functions` with the checks, without a memo: read as their bodies made with `types` (those of the functions' bodies when not given). */
-	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?types:IrTypeIds,
+	/** `functions` with the checks, without a memo: read as their bodies. */
+	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>,
 			?builder:IrBodyBuilder):Array<IrFunction>
-		return IrFunctionStages.apply(STAGE,
-			new IrStaticNullChecks(objects, types ?? IrTypeIds.ofFunctions(functions), builder),
-			functions);
+		return IrFunctionStages.apply(STAGE, new IrStaticNullChecks(objects, builder), functions);
 
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(types, builder),
-			flags = IrInitCalls.stores(fn, types, builder, lineage).relevant ? STORES : 0;
+		var body = fn.encodedBody(builder),
+			flags = IrInitCalls.stores(fn, builder, lineage).relevant ? STORES : 0;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -100,9 +95,9 @@ class IrStaticNullChecks implements IrFunctionPass {
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		var stores:Array<Null<IrInitCalls>> = [
 			for (index in 0...functions.length)
-				summaries[index] & STORES != 0 ? IrInitCalls.stores(functions[index], types, builder, lineage) : null
+				summaries[index] & STORES != 0 ? IrInitCalls.stores(functions[index], builder, lineage) : null
 		];
-		var calls = new IrInitializationCalls(functions, stores, fn -> IrInitCalls.calls(fn, types, builder, lineage),
+		var calls = new IrInitializationCalls(functions, stores, fn -> IrInitCalls.calls(fn, builder, lineage),
 			names.get, objects);
 		reached = calls.reachable("__init", names.exists);
 	}
@@ -116,7 +111,7 @@ class IrStaticNullChecks implements IrFunctionPass {
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
 		if (summary & READS_STATIC == 0 || reader.read(REACHED, fn.name) == 0)
 			return fn;
-		var body = fn.bodyIn(types, builder);
+		var body = fn.encodedBody(builder);
 		var origins = staticOrigins(body);
 		var edited:Null<IrBody> = null;
 		for (block in 0...body.blockCount()) {
@@ -172,9 +167,9 @@ class IrStaticNullChecks implements IrFunctionPass {
 			if (helper != null)
 				result.push(IrFunctionStages.derived(STAGE, helperName, this, IrFunctionStages.FROM_NAME, lineage,
 					checks,
-					types, builder, _ -> {
+					builder, _ -> {
 						var made = check(helperName, helper.name, helper.valueType);
-						made.bodyIn(types, builder);
+						made.encodedBody(builder);
 						made;
 					}));
 		}

@@ -14,7 +14,6 @@ import compiler.ir.model.IrOperands;
 import compiler.ir.passes.nullability.IrOptionalScalarFlow;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeTools;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
@@ -105,13 +104,13 @@ class IrScalarReplacement {
 		return scratch.scalarReplacement.runOn(body, objects, forcePhis, constructFields);
 
 	/**
-	 * `rewrite` on `fn`'s body (`bodyIn` with `types`), for the pipeline's stage: `fn` itself when nothing changes, else its
+	 * `rewrite` on `fn`'s body (`encodedBody`), for the pipeline's stage: `fn` itself when nothing changes, else its
 	 * edited body. The body is edited in place when the stage owns it, else a copy (one a cache holds is frozen), and the result
 	 * is owned by the next stage.
 	 */
-	public static function rewriteBody(fn:IrFunction, objects:IrObjectTable, types:IrTypeIds, scratch:IrPassScratch,
+	public static function rewriteBody(fn:IrFunction, objects:IrObjectTable, scratch:IrPassScratch,
 			constructFields:Bool):IrFunction {
-		var builder = scratch.bodyBuilder, body = fn.bodyIn(types, builder);
+		var builder = scratch.bodyBuilder, body = fn.encodedBody(builder);
 		if (!hasCandidates(body, objects))
 			return fn;
 		var edited = body.forEditing(builder), before = edited.edits;

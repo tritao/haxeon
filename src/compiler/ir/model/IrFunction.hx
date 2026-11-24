@@ -89,10 +89,10 @@ enum IrFunctionKind {
  *
  * A function the inliner stage made is its frozen body (`ofBody`, docs/design/IR_CORE_COLUMNS.md): the backends read the body,
  * and the blocks and debug bindings are decoded from it the first time something reads them, once. A function is never changed
- * once made, so a body a reader encodes for it (`bodyIn`) stays its own.
+ * once made, so a body a reader encodes for it (`encodedBody`) stays its own.
  *
  * Between the stages that read bodies a function's body is not frozen unless a cache holds the function (`freezeBody`): the
- * stage after the one that made it owns it (`ofOwnedBody`, `bodyIn`) and edits it in place, and a function made from the edited
+ * stage after the one that made it owns it (`ofOwnedBody`, `encodedBody`) and edits it in place, and a function made from the edited
  * body replaces this one, which is not read again. A stage given a frozen body edits a copy.
  */
 @:allow(compiler.ir.model.IrBody)
@@ -105,7 +105,7 @@ class IrFunction {
 	public var blocks(get, never):Array<IrBlock>;
 	public var debugBindings(get, never):Array<IrDebugBinding>;
 
-	/** The body this function is, when one was made: the one it was made from (`ofBody`), or one `bodyIn` encoded. */
+	/** The body this function is, when one was made: the one it was made from (`ofBody`), or one `encodedBody` encoded. */
 	public var body(default, null):Null<IrBody> = null;
 
 	/** The blocks and bindings, null until decoded from `body`. */
@@ -174,7 +174,7 @@ class IrFunction {
 
 	/** The function `body` is, which the stage after the one that made it owns and may edit in place (no cache holds it). */
 	public static function ofOwnedBody(body:IrBody):IrFunction {
-		var fn = new IrFunction(body.name, body.decodeArguments(), body.types.type(body.result), NOT_DECODED, body.kind,
+		var fn = new IrFunction(body.name, body.decodeArguments(), IrTypeIds.type(body.result), NOT_DECODED, body.kind,
 			NO_BINDINGS, body.inlineHint, body.retention);
 		fn.decodedBlocks = null;
 		fn.decodedBindings = null;
@@ -183,20 +183,15 @@ class IrFunction {
 	}
 
 	/**
-	 * This function's body: the one it is, or else its encoding with `types`, kept, so it is made once. An encoding is owned by
-	 * the stages over bodies, which edit it in place, until a cache takes the function (`freezeBody`).
+	 * This function's body: the one it is, or else its encoding, kept, so it is made once. An encoding is owned by the stages over
+	 * bodies, which edit it in place, until a cache takes the function (`freezeBody`).
 	 */
-	public function bodyIn(types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
+	public function encodedBody(?builder:IrBodyBuilder):IrBody {
 		census |= CENSUS_READ;
 		var known = body;
-		// Every body of a program has its table (`IrStageHooks`): one made with another is a caller's mistake, which would read
-		// its type ids wrong.
-		if (known != null) {
-			if (known.types != types)
-				throw new InternalError('IR function $name has a body made with another type table');
+		if (known != null)
 			return known;
-		}
-		var encoded = IrBodyBuilder.encode(this, types, builder);
+		var encoded = IrBodyBuilder.encode(this, builder);
 		body = encoded;
 		return encoded;
 	}

@@ -53,7 +53,6 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 
 	final program:IrProgram;
 	final reflectableObjects:Null<Array<String>>;
-	final types:IrTypeIds;
 	final builder:IrBodyBuilder;
 	final lineage:Null<IrLineage>;
 	var closed:Map<String, Bool> = [];
@@ -70,25 +69,20 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	/** The program with the closed tags projected, once the run is finished: the program itself when no tag is closed. */
 	public var projected(default, null):Null<IrProgram> = null;
 
-	public function new(program:IrProgram, reflectableObjects:Null<Array<String>>, types:IrTypeIds,
-			builder:IrBodyBuilder, lineage:Null<IrLineage>) {
+	public function new(program:IrProgram, reflectableObjects:Null<Array<String>>, builder:IrBodyBuilder,
+			lineage:Null<IrLineage>) {
 		this.program = program;
 		this.reflectableObjects = reflectableObjects;
-		this.types = types;
 		this.builder = builder;
 		this.lineage = lineage;
 	}
 
 	/**
-	 * `program` with the closed tags projected, read from the functions' bodies, made with `types` (those of the program's bodies
-	 * when not given), without a memo.
+	 * `program` with the closed tags projected, read from the functions' bodies, without a memo.
 	 */
-	public static function run(program:IrProgram, ?reflectableObjects:Array<String>, ?types:IrTypeIds,
-			?scratch:IrPassScratch):IrProgram {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
-		var pass = new IrClosedEnumTagAbi(program, reflectableObjects, types,
-			scratch == null ? new IrBodyBuilder(types) : scratch.bodyBuilder, null);
+	public static function run(program:IrProgram, ?reflectableObjects:Array<String>, ?scratch:IrPassScratch):IrProgram {
+		var pass = new IrClosedEnumTagAbi(program, reflectableObjects,
+			scratch == null ? new IrBodyBuilder() : scratch.bodyBuilder, null);
 		IrFunctionStages.apply("closed-enum-tag-abi", pass, program.functions);
 		return pass.result();
 	}
@@ -130,7 +124,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 			var names = id < tagNames.length ? tagNames[id] : null;
 			if (names == null) {
 				names = [];
-				addTags(types.type(id), names);
+				addTags(IrTypeIds.type(id), names);
 				while (tagNames.length <= id)
 					tagNames.push(null);
 				tagNames[id] = names;
@@ -140,7 +134,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		}
 		var known = id < changing.length ? changing[id] : -1;
 		if (known < 0) {
-			known = changes(types.type(id)) ? 1 : 0;
+			known = changes(IrTypeIds.type(id)) ? 1 : 0;
 			while (changing.length <= id)
 				changing.push(-1);
 			changing[id] = known;
@@ -211,7 +205,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 			kept = last == null ? null : last.holds(program, given, [], functions, (fn, record) -> {
 				if (rootsOfKind(fn))
 					return null;
-				var now = IrTagEscapeRecord.of(fn, types, builder, known);
+				var now = IrTagEscapeRecord.of(fn, builder, known);
 				return now.same(record) ? now : null;
 			});
 		if (kept != null) {
@@ -223,7 +217,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 				last.giveBack(memo, known);
 			closed = choose(functions, names);
 			kept = new IrWalkRecord(program, given, [], functions.copy(),
-				[for (fn in functions) IrTagEscapeRecord.of(fn, types, builder, known)], closed.copy());
+				[for (fn in functions) IrTagEscapeRecord.of(fn, builder, known)], closed.copy());
 		}
 		known.memos.keepResult(CHOICE, kept);
 	}
@@ -260,7 +254,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 				rooted.push(false);
 			if (!rooted[id]) {
 				rooted[id] = true;
-				roots.push(types.type(id));
+				roots.push(IrTypeIds.type(id));
 			}
 		}
 
@@ -293,7 +287,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 					escape(a.type);
 				escape(fn.result);
 			}
-			var record = IrTagEscapeRecord.of(fn, types, builder, lineage);
+			var record = IrTagEscapeRecord.of(fn, builder, lineage);
 			for (id in record.escaped)
 				escapeId(id);
 			var callees = record.callees, arguments = record.arguments;
@@ -314,14 +308,14 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 			}
 			var closures = record.closures, index = 0;
 			while (index < closures.length) {
-				reach.closureEnvironment(types.type(closures[index]), types.type(closures[index + 1]));
+				reach.closureEnvironment(IrTypeIds.type(closures[index]), IrTypeIds.type(closures[index + 1]));
 				index += 2;
 			}
 			var stores = record.mapStores;
 			index = 0;
 			while (index < stores.length) {
-				reach.mapContent(types.type(stores[index]), types.type(stores[index + 1]),
-					types.type(stores[index + 2]));
+				reach.mapContent(IrTypeIds.type(stores[index]), IrTypeIds.type(stores[index + 1]),
+					IrTypeIds.type(stores[index + 2]));
 				index += 3;
 			}
 		}
@@ -348,7 +342,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		if (reader.read(ANY_CLOSED, "") == 0)
 			return fn;
 		this.reader = reader;
-		var result = projectFunction(fn, fn.bodyIn(types, builder));
+		var result = projectFunction(fn, fn.encodedBody(builder));
 		this.reader = null;
 		return result;
 	}
@@ -423,7 +417,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		for (value in 0...body.valueLimit()) {
 			var id = IrValueId.of(value), type = body.valueTypeId(id);
 			if (type >= 0 && changesId(type))
-				body.setValueType(id, body.typeId(physical(body.types.type(type))));
+				body.setValueType(id, body.typeId(physical(IrTypeIds.type(type))));
 		}
 		var i32 = body.typeId(I32);
 		for (block in 0...body.blockCount()) {
@@ -441,7 +435,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 				row = body.nextRow(row);
 			}
 		}
-		body.setResult(body.typeId(physical(body.types.type(body.result))));
+		body.setResult(body.typeId(physical(IrTypeIds.type(body.result))));
 		return IrFunction.ofOwnedBody(body);
 	}
 
@@ -474,11 +468,11 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 }
 
 /**
- * What one function lets escape, for the closed tag ABI's choice (`IrClosedEnumTagAbi.prepare`), by type ids of the body's
- * table: the types its instructions hand to `Dyn`, a type value, a throw or a cast; each call's callee with the position and
- * type of each argument (an argument escapes when the callee is a native, or takes `Dyn` there); the closures it makes with
- * their receivers, and the map stores, which the escape reach follows. Only types that can lead to an enum are kept. It depends
- * on the body alone, so a session keeps it by the function's version (`IrStageMemos.tagEscapes`).
+ * What one function lets escape, for the closed tag ABI's choice (`IrClosedEnumTagAbi.prepare`), by type ids: the types its
+ * instructions hand to `Dyn`, a type value, a throw or a cast; each call's callee with the position and type of each argument (an
+ * argument escapes when the callee is a native, or takes `Dyn` there); the closures it makes with their receivers, and the map
+ * stores, which the escape reach follows. Only types that can lead to an enum are kept. It depends on the body alone, so a
+ * session keeps it by the function's version (`IrStageMemos.tagEscapes`).
  */
 @:nullSafety(Strict)
 class IrTagEscapeRecord {
@@ -501,16 +495,16 @@ class IrTagEscapeRecord {
 
 	function new() {}
 
-	public static function of(fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder,
+	public static function of(fn:IrFunction, builder:IrBodyBuilder,
 			lineage:Null<IrLineage>):IrTagEscapeRecord {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
-			return read(fn.bodyIn(types, builder));
+			return read(fn.encodedBody(builder));
 		var memo = lineage.memos.contribution(IrClosedEnumTagAbi.ESCAPES), known = memo.get(version);
 		if (known == null) {
-			known = read(fn.bodyIn(types, builder));
+			known = read(fn.encodedBody(builder));
 			memo.keep(version, known);
-		} else if (lineage.checks && !known.same(read(fn.bodyIn(types, builder))))
+		} else if (lineage.checks && !known.same(read(fn.encodedBody(builder))))
 			throw new InternalError('--check-reuse: the tag escapes reused for ${fn.name} differ from its body');
 		return known;
 	}
@@ -539,14 +533,14 @@ class IrTagEscapeRecord {
 		};
 
 	function escape(body:IrBody, value:IrValueId):Void
-		escapeType(body.types, body.valueTypeId(value));
+		escapeType(body.valueTypeId(value));
 
-	function escapeType(types:IrTypeIds, id:Int):Void
-		if (leads(types.type(id)) && escaped.indexOf(id) < 0)
+	function escapeType(id:Int):Void
+		if (leads(IrTypeIds.type(id)) && escaped.indexOf(id) < 0)
 			escaped.push(id);
 
 	static function read(body:IrBody):IrTagEscapeRecord {
-		var record = new IrTagEscapeRecord(), types = body.types;
+		var record = new IrTagEscapeRecord();
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
@@ -554,7 +548,7 @@ class IrTagEscapeRecord {
 					case IrOpcode.EnumDynamicBox | IrOpcode.EnumDynamicView | IrOpcode.EnumTagBox
 						| IrOpcode.EnumTagUnbox
 						| IrOpcode.InlineEnumBox | IrOpcode.InlineEnumUnbox | IrOpcode.TypeValue:
-						record.escapeType(types, body.aux(row));
+						record.escapeType(body.aux(row));
 					case IrOpcode.ToDyn | IrOpcode.ToVirtual | IrOpcode.EnumIndex | IrOpcode.Throw | IrOpcode.Rethrow:
 						record.escape(body, body.operand(row, 0));
 					case IrOpcode.SafeCast:
@@ -564,7 +558,7 @@ class IrTagEscapeRecord {
 						var name = body.symbol(row).name, count = body.operandCount(row);
 						for (index in 0...count) {
 							var type = body.valueTypeId(body.operand(row, index));
-							if (!leads(types.type(type)))
+							if (!leads(IrTypeIds.type(type)))
 								continue;
 							if (!record.hasArgument(name, index, type)) {
 								record.callees.push(name);

@@ -7,7 +7,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.model.IrSymbol;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.pipeline.IrProgramAssembler;
 
 /** Typed allocation request. Its result records the element until storage selection is complete.
@@ -20,9 +19,9 @@ class IrArrayFactory {
 
 	/** A standalone backend can receive semantic IR without the frontend's lane pipeline. */
 	public static function physical(program:IrProgram):IrProgram {
-		var types = IrTypeIds.ofFunctions(program.functions), name = IrSymbol.of(NAME).id, pending = false;
+		var name = IrSymbol.of(NAME).id, pending = false;
 		for (fn in program.functions)
-			if (requests(fn.bodyIn(types), name)) {
+			if (requests(fn.encodedBody(), name)) {
 				pending = true;
 				break;
 			}
@@ -40,22 +39,19 @@ class IrArrayFactory {
 		result.parameterDefaults = program.parameterDefaults;
 		result.positionalPlaces = program.positionalPlaces;
 		result.positionalSources = program.positionalSources;
-		lower(result, types);
+		lower(result);
 		return result;
 	}
 
 	/**
-	 * Emits the remaining allocation requests of `program`'s functions, on their bodies (made with `types`, those of the program's
-	 * bodies when not given), per function (`IrArrayFactoryPass`): with `lineage`, a function the session has at the same version is
+	 * Emits the remaining allocation requests of `program`'s functions, on their bodies, per function (`IrArrayFactoryPass`): with `lineage`, a function the session has at the same version is
 	 * last build's lowering, unread. A function that changes becomes its edited body, owned by the next stage.
 	 */
-	public static function lower(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch,
+	public static function lower(program:IrProgram, ?scratch:IrPassScratch,
 			?lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void {
-		if (types == null)
-			types = IrTypeIds.ofFunctions(program.functions);
-		var builder = scratch == null ? new compiler.ir.model.IrBodyBuilder(types) : scratch.bodyBuilder;
+		var builder = scratch == null ? new compiler.ir.model.IrBodyBuilder() : scratch.bodyBuilder;
 		program.functions = compiler.ir.pipeline.IrFunctionStages.run(IrArrayFactoryPass.STAGE,
-			new IrArrayFactoryPass(program, types, builder), program.functions, lineage,
+			new IrArrayFactoryPass(program, builder), program.functions, lineage,
 			lineage != null && lineage.checks,
 			builder);
 	}
@@ -131,14 +127,12 @@ class IrArrayFactoryPass implements compiler.ir.pipeline.IrFunctionPass {
 	static inline final TYPED = 0;
 
 	final program:IrProgram;
-	final types:IrTypeIds;
 	final builder:compiler.ir.model.IrBodyBuilder;
 	final name = IrSymbol.of(IrArrayFactory.NAME).id;
 	var typed = false;
 
-	public function new(program:IrProgram, types:IrTypeIds, builder:compiler.ir.model.IrBodyBuilder) {
+	public function new(program:IrProgram, builder:compiler.ir.model.IrBodyBuilder) {
 		this.program = program;
-		this.types = types;
 		this.builder = builder;
 	}
 
@@ -152,7 +146,7 @@ class IrArrayFactoryPass implements compiler.ir.pipeline.IrFunctionPass {
 		return compiler.ir.reuse.IrFacts.UNKNOWN;
 
 	public function transform(fn:IrFunction, summary:Int, reader:compiler.ir.reuse.IrFactReader):IrFunction {
-		var body = fn.bodyIn(types, builder);
+		var body = fn.encodedBody(builder);
 		if (!IrArrayFactory.requests(body, name))
 			return fn;
 		var edited = body.forEditing(builder);

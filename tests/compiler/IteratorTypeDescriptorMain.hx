@@ -245,7 +245,7 @@ class IteratorTypeDescriptorMain {
 			compiler.ir.passes.nullability.IrNullableScalarFlow.rewrite(program);
 			compiler.ir.passes.inlining.IrInliner.run(program,
 				new compiler.ir.passes.inlining.IrInliner
-				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				.IrInlineCache(),
 				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,
@@ -279,7 +279,7 @@ class IteratorTypeDescriptorMain {
 			var program = runtime.compile("Main").ir;
 			compiler.ir.passes.inlining.IrInliner.run(program,
 				new compiler.ir.passes.inlining.IrInliner
-				.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+				.IrInlineCache(),
 				compiler.ir.pipeline.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,

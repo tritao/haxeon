@@ -8,7 +8,6 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrTypeIdentity;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrTypeMap;
 
 /**
@@ -82,8 +81,7 @@ class IrSharedRuntimeCalls {
 		}
 		// A helper's own call is the one that keeps the fast path.
 		var result = program.copy(),
-			types = IrTypeIds.ofFunctions(program.functions),
-			builder = new IrBodyBuilder(types),
+			builder = new IrBodyBuilder(),
 			rows:Array<Int> = [],
 			targets:Array<Int> = [];
 		result.functions = [];
@@ -103,7 +101,7 @@ class IrSharedRuntimeCalls {
 				continue;
 			}
 			// Frozen: a rewritten function shares its columns (`IrBody.withAuxes`).
-			fn.bodyIn(types, builder);
+			fn.encodedBody(builder);
 			var body = fn.freezeBody(builder), calls:Array<SharedCall> = [];
 			rows.resize(0);
 			targets.resize(0);

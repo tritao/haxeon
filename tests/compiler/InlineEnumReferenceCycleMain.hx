@@ -95,7 +95,7 @@ function main():Int return 42;
 			target == HashLink)];
 		compiler.ir.passes.inlining.IrInliner.run(program,
 			new compiler.ir.passes.inlining.IrInliner
-			.IrInlineCache(compiler.ir.model.IrTypeIds.ofFunctions(program.functions)),
+			.IrInlineCache(),
 			compiler.ir.pipeline.TargetProfile.wasm,
 			new CompileOptions({inlining: inlineEnabled}));
 		IrVerifier.verify(program);

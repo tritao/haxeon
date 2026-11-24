@@ -3,7 +3,6 @@ package compiler.ir.pipeline;
 import compiler.ir.passes.arrays.IrArrayFactory;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrBuilder;
 import compiler.ir.passes.enums.IrEnumRuntimeSpecializations;
 import compiler.ir.analysis.IrExactTypeFacts;
@@ -735,15 +734,11 @@ class IrProgramAssembler {
 		program.cNatives = cNatives == null ? [] : cNatives;
 		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true],
 			needsUnreachable = false;
-		var cache = context.inlineCache;
-		if (cache == null)
-			throw new InternalError("The runtime surface reads bodies, whose type ids are the inline cache's");
-		var types = cache.types,
-			builder = context.passScratch.bodyBuilder;
+		var builder = context.passScratch.bodyBuilder;
 		var lineage = context.lineage, cNativeKey = [for (native in program.cNatives) native.name].join("\n");
 		for (index in 0...allFunctions.length) {
 			var fn = allFunctions[index],
-				needs = IrRuntimeNeeds.of(fn, types, builder, cNativeNames, cNativeKey, lineage),
+				needs = IrRuntimeNeeds.of(fn, builder, cNativeNames, cNativeKey, lineage),
 				flags = needs.flags;
 			if (flags & IrRuntimeNeeds.INT64_TO_INT != 0)
 				needsInt64ToInt = true;
@@ -785,7 +780,7 @@ class IrProgramAssembler {
 				// The function stops being the one the assembly holds, whose array may be a cache's.
 				if (allFunctions == assembly.functions)
 					allFunctions = allFunctions.copy();
-				allFunctions[index] = cNativeCalls(fn.bodyIn(types, builder), cNativeNames, builder);
+				allFunctions[index] = cNativeCalls(fn.encodedBody(builder), cNativeNames, builder);
 			}
 		}
 		program.interfaces = interfaces == null ? [] : interfaces;
@@ -1392,17 +1387,17 @@ class IrRuntimeNeeds {
 	function new(cNativeKey:String)
 		this.cNativeKey = cNativeKey;
 
-	public static function of(fn:IrFunction, types:IrTypeIds, builder:IrBodyBuilder, cNativeNames:Map<String, Bool>,
+	public static function of(fn:IrFunction, builder:IrBodyBuilder, cNativeNames:Map<String, Bool>,
 			cNativeKey:String, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):IrRuntimeNeeds {
 		var version = lineage == null ? 0 : lineage.versionOf(fn);
 		if (lineage == null || version == 0)
-			return read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
+			return read(fn.encodedBody(builder), cNativeNames, cNativeKey);
 		var memo = lineage.memos.contribution(IrProgramAssembler.RUNTIME_NEEDS), known = memo.get(version);
 		if (known == null || known.cNativeKey != cNativeKey) {
-			known = read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
+			known = read(fn.encodedBody(builder), cNativeNames, cNativeKey);
 			memo.keep(version, known);
 		} else if (lineage.checks) {
-			var now = read(fn.bodyIn(types, builder), cNativeNames, cNativeKey);
+			var now = read(fn.encodedBody(builder), cNativeNames, cNativeKey);
 			if (now.flags != known.flags || now.fastPaths.join(",") != known.fastPaths.join(",")
 				|| now.maps.join(",") != known.maps.join(",") || now.mapHandles.join(",") != known.mapHandles.join(","))
 				throw new InternalError('--check-reuse: the runtime needs reused for ${fn.name} differ from its body');
