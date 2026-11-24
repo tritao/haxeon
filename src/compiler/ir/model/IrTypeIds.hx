@@ -42,6 +42,16 @@ class IrTypeIds {
 		return result;
 	}
 
+	/** Whether two lists of type ids name the same types, in order. */
+	public static function sameList(left:Array<Int>, right:Array<Int>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
+	}
+
 	/** The type with id `id`, which must be one `id` has given: the table's own instance, shared by everything that reads it. */
 	public static inline function type(id:Int):IrType
 		return byId[id];

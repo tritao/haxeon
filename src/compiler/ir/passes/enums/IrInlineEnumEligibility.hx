@@ -601,13 +601,12 @@ class IrInlineEnumUses {
 	public function follow(reach:IrEnumEscapeReach):Void {
 		var index = 0;
 		while (index < closures.length) {
-			reach.closureEnvironment(IrTypeIds.type(closures[index]), IrTypeIds.type(closures[index + 1]));
+			reach.closureEnvironment(closures[index], closures[index + 1]);
 			index += 2;
 		}
 		index = 0;
 		while (index < mapStores.length) {
-			reach.mapContent(IrTypeIds.type(mapStores[index]), IrTypeIds.type(mapStores[index + 1]),
-				IrTypeIds.type(mapStores[index + 2]));
+			reach.mapContent(mapStores[index], mapStores[index + 1], mapStores[index + 2]);
 			index += 3;
 		}
 	}

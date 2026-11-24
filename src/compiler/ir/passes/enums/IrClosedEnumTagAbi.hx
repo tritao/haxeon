@@ -308,14 +308,13 @@ class IrClosedEnumTagAbi extends IrFunctionPass {
 			}
 			var closures = record.closures, index = 0;
 			while (index < closures.length) {
-				reach.closureEnvironment(IrTypeIds.type(closures[index]), IrTypeIds.type(closures[index + 1]));
+				reach.closureEnvironment(closures[index], closures[index + 1]);
 				index += 2;
 			}
 			var stores = record.mapStores;
 			index = 0;
 			while (index < stores.length) {
-				reach.mapContent(IrTypeIds.type(stores[index]), IrTypeIds.type(stores[index + 1]),
-					IrTypeIds.type(stores[index + 2]));
+				reach.mapContent(stores[index], stores[index + 1], stores[index + 2]);
 				index += 3;
 			}
 		}

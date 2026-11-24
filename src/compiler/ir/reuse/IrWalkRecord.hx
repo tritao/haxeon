@@ -3,6 +3,7 @@ package compiler.ir.reuse;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrTypeIdentity;
+import compiler.ir.model.IrTypeIds;
 
 /**
  * A whole-program walk a session keeps with what it read, so the next build takes its result while the program gives the walk the
@@ -24,10 +25,10 @@ class IrWalkRecord<S, R> {
 	final staticFields:Array<IrStaticField>;
 	final enums:Array<IrEnum>;
 
-	/** What the caller gave the walk besides the program: its roots and settings, as names and as types. */
+	/** What the caller gave the walk besides the program: its roots and settings, as names and as type ids. */
 	final given:Array<String>;
 
-	final givenTypes:Array<IrType>;
+	final givenTypes:Array<Int>;
 
 	/** The functions whose declarations the walk read. */
 	final functions:Array<IrFunction>;
@@ -38,7 +39,7 @@ class IrWalkRecord<S, R> {
 	public final result:R;
 
 	/** The record of a walk of `program`, given `given` and `givenTypes`, that read `functions` and `summaries` and found `result`. */
-	public function new(program:IrProgram, given:Array<String>, givenTypes:Array<IrType>, functions:Array<IrFunction>,
+	public function new(program:IrProgram, given:Array<String>, givenTypes:Array<Int>, functions:Array<IrFunction>,
 			summaries:Array<Null<S>>, result:R) {
 		objects = program.objects.copy();
 		interfaces = program.interfaces.copy();
@@ -58,10 +59,10 @@ class IrWalkRecord<S, R> {
 	 * `read(fn, last)` is the summary of reached function `fn` now when it has the edges of `last`, else null. A function that stayed
 	 * is not looked at: the record keeps its summary, which a walk done again takes back (`eachSummary`).
 	 */
-	public function holds(program:IrProgram, given:Array<String>, givenTypes:Array<IrType>, functions:Array<IrFunction>,
+	public function holds(program:IrProgram, given:Array<String>, givenTypes:Array<Int>, functions:Array<IrFunction>,
 			read:(IrFunction, S) -> Null<S>):Null<IrWalkRecord<S, R>> {
 		if (functions.length != this.functions.length || !IrObjectTools.sameNames(given, this.given)
-			|| !IrTypeIdentity.sameList(givenTypes, this.givenTypes) || !sameTables(program))
+			|| !IrTypeIds.sameList(givenTypes, this.givenTypes) || !sameTables(program))
 			return null;
 		var kept:Null<Array<Null<S>>> = null;
 		for (index in 0...functions.length) {

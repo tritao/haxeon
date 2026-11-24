@@ -7,12 +7,12 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrProgramIndex;
 import compiler.ir.model.IrProviders;
+import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.enums.IrEnumDynamicDispatch;
 import compiler.ir.passes.nullability.IrOptionalFieldStorage;
 import compiler.ir.reuse.IrStageMemo.IrContributionKey;
 import compiler.ir.reuse.IrWalkRecord;
-import compiler.ir.verify.IrVerifier;
 
 /** What a walk starts from: function names that are reached whatever calls them, and types that exist from the start. */
 typedef IrWalkRoots = {
@@ -214,7 +214,7 @@ class IrTypeAwareWalk {
 			keepCreatedClassMethods ? "keep created class methods" : "",
 			classDependencies == null ? "" : classDependencies.symbols.join(" ") + "\n" + classDependencies.inputs
 		].concat(roots.functions),
-			givenTypes = roots.types.copy(),
+			givenTypes = [for (type in roots.types) IrTypeIds.id(type)],
 			memos = lineage.memos,
 			memo = memos.contribution(SUMMARIES),
 			scratch = IrWalkSummary.scratch(),
@@ -546,7 +546,7 @@ private class IrTypeAwareWalkState {
 		for (name in summary.instanceClosures)
 			reach(name, false);
 		for (type in summary.types)
-			create(type);
+			create(IrTypeIds.type(type));
 		for (name in summary.globals) {
 			var type = staticTypes.get(name);
 			if (type != null)
@@ -729,8 +729,8 @@ class IrWalkSummary {
 	public final staticClosures:Array<String> = [];
 	public final instanceClosures:Array<String> = [];
 
-	/** The types made, converted to or from `Dyn`: `MakeEnum`, `ToDyn`, `SafeCast`. */
-	public final types:Array<IrType> = [];
+	/** The ids of the types made, converted to or from `Dyn`: `MakeEnum`, `ToDyn`, `SafeCast`. */
+	public final types:Array<Int> = [];
 
 	/** The static fields read or written. */
 	public final globals:Array<String> = [];
@@ -815,11 +815,11 @@ class IrWalkSummary {
 					case InstanceClosure(_, target, _):
 						once(summary.instanceClosures, target.name);
 					case MakeEnum(_, typeName, _, _):
-						summary.types.push(Enum(typeName));
+						summary.types.push(IrTypeIds.id(Enum(typeName)));
 					case ToDyn(_, value):
-						summary.types.push(value.type);
+						summary.types.push(IrTypeIds.id(value.type));
 					case SafeCast(output, _):
-						summary.types.push(output.type);
+						summary.types.push(IrTypeIds.id(output.type));
 					case GlobalGet(_, name), GlobalSet(name, _):
 						once(summary.globals, name);
 					case MethodCall(_, object, method, _, _):
@@ -863,14 +863,11 @@ class IrWalkSummary {
 			|| !names(left.calls, right.calls) || !names(left.staticClosures, right.staticClosures)
 			|| !names(left.instanceClosures, right.instanceClosures) || !names(left.globals, right.globals)
 			|| !names(left.siteTypes, right.siteTypes) || !names(left.siteMethods, right.siteMethods)
-			|| left.siteInterfaces.length != right.siteInterfaces.length || left.types.length != right.types.length
+			|| left.siteInterfaces.length != right.siteInterfaces.length || !IrTypeIds.sameList(left.types, right.types)
 			|| left.intrinsics.length != right.intrinsics.length)
 			return false;
 		for (index in 0...left.siteInterfaces.length)
 			if (left.siteInterfaces[index] != right.siteInterfaces[index])
-				return false;
-		for (index in 0...left.types.length)
-			if (!IrVerifier.sameType(left.types[index], right.types[index]))
 				return false;
 		for (index in 0...left.intrinsics.length)
 			if (Std.string(left.intrinsics[index]) != Std.string(right.intrinsics[index]))

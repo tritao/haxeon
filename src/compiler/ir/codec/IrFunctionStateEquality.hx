@@ -6,7 +6,6 @@ import compiler.ir.model.IrBodyBuilder;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.model.IrOpcode;
-import compiler.ir.model.IrTypeIds;
 import compiler.ir.model.IrValueId;
 import compiler.ir.verify.IrVerifier;
 import compiler.ir.model.SourceProvenance;
@@ -105,7 +104,7 @@ class IrFunctionStateEquality {
 			|| !sameKind(left.kind, right.kind)
 			|| left.inlineHint != right.inlineHint
 			|| left.retention != right.retention
-			|| !IrVerifier.sameType(IrTypeIds.type(left.result), IrTypeIds.type(right.result))
+			|| left.result != right.result
 			|| left.argumentCount() != right.argumentCount()
 			|| left.blockCount() != right.blockCount()
 			|| left.bindingCount() != right.bindingCount())
@@ -135,9 +134,10 @@ class IrFunctionStateEquality {
 		return true;
 	}
 
+	/** Two bodies' types are ids of one table (`IrTypeIds`), so equal types are equal ids. */
 	static function bodyValue(left:IrBody, a:IrValueId, right:IrBody, b:IrValueId):Bool
 		return (a:Int) == (b:Int) && left.valueName(a) == right.valueName(b)
-			&& IrVerifier.sameType(left.valueType(a), right.valueType(b));
+			&& left.valueTypeId(a) == right.valueTypeId(b);
 
 	/** Whether row `x` of `left` and row `y` of `right` are the same instruction or terminator, from the same place. */
 	static function sameRow(left:IrBody, x:Int, right:IrBody, y:Int, placed:Bool):Bool {
@@ -156,14 +156,12 @@ class IrFunctionStateEquality {
 		var ints = switch opcode {
 			case IrOpcode.ConstFloat: return sameFloat(left.float(x), right.float(y));
 			case IrOpcode.ConstString: return left.string(x) == right.string(y);
-			case IrOpcode.TypeValue, IrOpcode.EnumDynamicBox, IrOpcode.EnumDynamicView, IrOpcode.EnumTagBox,
-				IrOpcode.EnumTagUnbox, IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
-				return IrVerifier.sameType(left.typeOperand(x), right.typeOperand(y));
 			case IrOpcode.Phi: count;
 			case IrOpcode.StaticDataAddress: 1 + left.auxInt(x, 0);
 			case IrOpcode.BeginTry: 3;
 			case IrOpcode.EndTry, IrOpcode.MakeEnum, IrOpcode.EnumField, IrOpcode.Branch: 2;
 			case IrOpcode.Switch: 2 + left.auxInt(x, 1);
+			// A type operand (`typeOperand`) is a type id, so it is compared here too.
 			default: return left.aux(x) == right.aux(y);
 		};
 		for (index in 0...ints)

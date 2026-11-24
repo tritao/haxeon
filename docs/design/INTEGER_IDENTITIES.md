@@ -94,7 +94,7 @@ Stages 1 and 2 are independent and can go in either order; 3 comes before 4 and 
 
 ## Types
 
-Status: steps 1 to 3 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
+Status: steps 1 to 4 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
 
 **What it is worth.** Sampled on the frozen input before step 1, the work done on an `IrType`'s structure (hashing and
 probing `IrTypeMap`, `IrTypeIdentity.same` and `sameList`, the `TypeKey` and `HlSymbolTable.typeKey` texts) was 2.9% of a
@@ -157,9 +157,14 @@ remembers an answer. The self-compile's bytes are the check for each step.
    change from the plan: `RuntimeAbi.writeKey` stays, since the types it writes are declarations' (object fields,
    signatures), which have no id, and finding one is a structural hash that costs what writing the text does; it moves
    with step 5. Body edit -1.3% and signature edit -0.2% main-thread instructions, allocation -0.3%.
-4. *Kept records by id.* The escape reach's stores and `IrWalkRecord`'s given types as id lists, so a kept walk
-   compares integers (`IrTypeIdentity.sameList` was 1.1% of a body edit), with `IrTypeAwareWalk` and `IrVerifyMemo`.
-   About six files.
+4. *Kept records by id* (done). The escape reach's stores and logs, and `IrWalkRecord`'s given types, are id lists, so a
+   kept walk compares integers; the callers of `closureEnvironment` and `mapContent` already held ids. In
+   `IrTypeAwareWalk`, a walk summary's types are ids. `IrVerifyMemo` holds no types of its own: its answers are
+   declarations (step 5), and what it compares by type is a kept function against the new one
+   (`IrFunctionStateEquality`), whose bodies now compare their types, results and type operands as ids. Seven files.
+   Main-thread instructions unchanged within noise (body edit +0.25%, signature edit +0.1%, no-op -0.3%): the escape
+   reach's roots come from declarations (native signatures, reflected classes), so their ids are found by a structural
+   hash per build, which costs about what the comparison did; that part moves with step 5.
 5. *Declarations by id* (`IrValue.type`, function results, object fields), only if a profile after step 4 still
    shows structural type work: it is the IR core's declaration side and touches most passes.
 
