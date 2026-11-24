@@ -244,6 +244,11 @@ class IrLineage {
 	final cellSeen:Array<Int> = [];
 	var cellCount = 0;
 
+	/** By slot, the function the last build's input had and the generator's version of it (`generatedVersion`). */
+	final inputFunctions:Array<Null<IrFunction>> = [];
+
+	final inputVersions:Array<Int> = [];
+
 	/** How many names stand for a function in this build. */
 	var live = 0;
 
@@ -268,7 +273,7 @@ class IrLineage {
 		if (lineage.cellCount > functions.length * 2)
 			lineage.sweep();
 		for (index in 0...functions.length) {
-			var fn = functions[index], version = generated(fn.name);
+			var fn = functions[index], version = lineage.generatedVersion(fn, generated);
 			if (version > 0)
 				lineage.set(fn, version);
 			else
@@ -277,12 +282,35 @@ class IrLineage {
 		return lineage;
 	}
 
+	/**
+	 * The generator's version of `fn` (`generated`): the one an earlier build's input had when `fn` is that same function, since a
+	 * version names one function object; else asked, and kept for the next build when the generator holds it. `--check-reuse` asks every time and compares.
+	 */
+	function generatedVersion(fn:IrFunction, generated:String->Int):Int {
+		var slot = slots.of(fn);
+		if (slot < inputFunctions.length && inputFunctions[slot] == fn) {
+			var known = inputVersions[slot];
+			if (checks && generated(fn.name) != known)
+				throw new compiler.core
+					.InternalError('--check-reuse: the generator gives ${fn.name} another version than it gave the same function before');
+			return known;
+		}
+		var version = generated(fn.name);
+		if (version > 0) {
+			inputFunctions[slot] = fn;
+			inputVersions[slot] = version;
+		}
+		return version;
+	}
+
 	/** Frees the slots no function had in the last build, with their cells and their entries in the stage memos. */
 	function sweep():Void {
 		var stale:Array<Int> = [], before = memos.build - 1;
 		for (slot in 0...slots.count)
 			if (slots.used(slot) && (slot >= cellBuilds.length || cellBuilds[slot] < before)) {
 				stale.push(slot);
+				if (slot < inputFunctions.length)
+					inputFunctions[slot] = null;
 				if (slot < cellFunctions.length && cellFunctions[slot] != null) {
 					cellFunctions[slot] = null;
 					cellBuilds[slot] = 0;
