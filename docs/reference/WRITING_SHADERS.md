@@ -145,5 +145,5 @@ compute pipeline from `Shader.create(renderer, Particles.step)` with
 `Pipeline.beginCompute`. A graphics program that reads only storage
 buffers uses `VertexLayout.none`. Bind storage buffers with
 `CommandBuffer.applyStorageBuffer` and record `dispatch` in a batch's
-`computePass()`. [Particles](../../packages/gpu/examples/particles/) runs
+`computePass()`. [Particles](https://github.com/tritao/haxeon/tree/main/packages/gpu/examples/particles) runs
 a compute step and draws the result each frame.
