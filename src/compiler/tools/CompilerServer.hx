@@ -46,6 +46,7 @@ class CompilerServer {
 
 	/** Serves requests until idle, publishing how to reach it at `statePath` (the rendezvous `CompilerClient` reads). */
 	public static function serve(statePath:String):Void {
+		ProcessMemory.compileServer();
 		var token = secureToken();
 		var listener = new Socket(), session = new CompilerSession();
 		listener.bind(new Host("127.0.0.1"), 0);
@@ -80,7 +81,7 @@ class CompilerServer {
 						break;
 					continue;
 				}
-				var client = listener.accept(), answered = false, activity = false;
+				var client = listener.accept(), answered = false, activity = false, compiled = false;
 				// The request being served, once its arguments parsed: its diagnostics are printed as it asks.
 				var request:Null<CompilerRequest> = null;
 				client.setTimeout(600);
@@ -116,6 +117,7 @@ class CompilerServer {
 							recordLiveState(session);
 							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, $retyped functions retyped');
 						case Compile(arguments):
+							compiled = true;
 							var started = Sys.time();
 							#if hl
 							var memoryBefore = hl.Gc.stats();
@@ -159,6 +161,9 @@ class CompilerServer {
 				}
 				if (!answered)
 					client.close();
+				// Only after a compile: a collection after pings would land on the next edit's path.
+				if (compiled)
+					ProcessMemory.betweenRequests();
 				if (activity)
 					idleDeadline = Sys.time() + idleSeconds;
 			}

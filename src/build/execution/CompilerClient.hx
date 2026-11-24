@@ -134,12 +134,9 @@ class CompilerClient {
 									+ " && export "
 									+ libraryVariable
 									+ "="
-									+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
-									// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
-									// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-									// The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
+									+ SysTools.quoteUnixArg(libraryPath) // The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
 									// binary such as nohup starts, and the worker would start without the runtime's library path.
-									+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
+									+ " && trap '' HUP && "
 									+ detach
 									+ launch
 									+ " &"
@@ -422,10 +419,7 @@ class CompilerClient {
 			.filter(value -> value != null && value.length > 0)
 			.join(";");
 		var launch = launchArguments.map(quote);
-		var threshold = ProcessRunner.environmentValue("HL_GC_MARK_THRESHOLD");
-		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && set "HL_GC_MARK_THRESHOLD='
-			+ (threshold == null || threshold.length == 0 ? "0.4" : threshold)
-			+ '" && start "" /b '
+		return Sys.command('cd /d ${quote(home)} && set "PATH=$path" && start "" /b '
 			+ launch.join(" ")
 			+ " > "
 			+ quote(logPath)

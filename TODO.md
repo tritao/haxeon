@@ -280,9 +280,10 @@ Design debt and levers left once the peak work lands:
 - **Does a plain `Compiler` build live by default?** The Compiler API with
   default options builds live (field migrations and all); decide whether that
   is the intended default.
-- **The collection policy.** The peak is the last collection's survivors plus
-  the 1 GB trigger; a trigger tied to the live data is a policy to measure,
-  not necessarily more collections.
+- **The one-shot collection policy.** The peak is the last collection's
+  survivors plus the 1 GB trigger; a trigger tied to the live data, as the
+  compile server now uses (`ProcessMemory.compileServer`), is a policy to
+  measure for one-shot compiles too, not necessarily more collections.
 
 ### Generated code optimizations
 

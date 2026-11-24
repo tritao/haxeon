@@ -56,7 +56,9 @@ A one-shot compile should end without a collection: every piece of memory has a 
 session data at exit, build data at the end of the build, phase data at the end of its phase, unit data at the end of
 its unit), and the collector is a safety net, not the mechanism. A collection in a normal one-shot compile then means
 something escaped, and the diagnostics name it; the compile server and language service still collect, since their
-session data changes over time.
+session data changes over time. The compile server collects at its request boundaries: once after each compile's
+response, off the edit's path, with a trigger sized by the live data that collection found (`ProcessMemory`), so a
+small edit runs without a collection.
 
 Why not by allocating less alone: with a byte-count trigger the peak is the last collection's survivors plus up to a
 trigger's worth of allocation, and where the trigger fires relative to the phases decides it. Crossing below a trigger

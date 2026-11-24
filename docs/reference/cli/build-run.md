@@ -78,6 +78,11 @@ as a HashLink program compiled once per compiler version (Windows interprets it)
 retain the one-shot path. The normal CLI's local fingerprint checks run before
 contacting a worker, so unchanged bytecode is still skipped entirely.
 
+A worker sets its own collector policy (`compiler.tools.ProcessMemory`): it runs a full collection after each compile's
+response has been sent, and during a compile it collects only once it has allocated three quarters of what the last
+collection found alive. A small edit therefore usually runs without a collection, and the worker's peak stays a bounded
+multiple of its session's live data. A request that arrives during that collection waits for it to finish.
+
 Shared-cache hashing reuses content digests within one build invocation. Set
 `HAXEON_DISABLE_ARTIFACT_CACHE=1` to disable the shared artifact cache while
 retaining local fingerprint checks. It is no longer necessary to disable it to
