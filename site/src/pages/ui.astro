@@ -3,7 +3,7 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import Diagram from '../components/home/Diagram.astro';
-import Showcase from '../components/home/Showcase.astro';
+import PlatformTable from '../components/PlatformTable.astro';
 import counter from '../../../docs/guides/examples/01-first-app/my_app/src/Main.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 
@@ -13,51 +13,6 @@ const packageDocs = repositorySource('packages/ui/README.md');
 const showcase = repositorySource('packages/ui/examples/ui_showcase/README.md');
 const source = counter.match(/^\tfunction view\(\):View \{[\s\S]*?^\t\}/m)![0];
 const view = source.replace(/^\t/gm, '');
-
-const features = [
-  {
-    title: 'Views and layout',
-    entries: [
-      ['Compose keyed views into rows and columns and update them from state.', basics + '#layout-and-text'],
-      ['Route pointer and keyboard events and manage focus.', repositorySource('packages/ui/haxe/haxeon/ui/core')],
-      ['Recognize taps and drags and animate view properties.', showcase],
-    ],
-  },
-  {
-    title: 'Text',
-    entries: [
-      ['Shape multilingual text with bidirectional runs and line wrapping.', packageDocs],
-      ['Edit single- and multiline text with selection and IME composition.', showcase],
-    ],
-  },
-  {
-    title: 'Widgets',
-    entries: [
-      ['Build forms with buttons, toggles and text fields.', basics + '#forms'],
-      ['Window large collections with virtualized lists, trees and grids.', packageDocs],
-      ['Show dialogs, popups, menus and tooltips over your content.', repositorySource('packages/ui/haxe/haxeon/ui/widgets/overlays')],
-      ['Share keyboard navigation and a virtual result list between search pickers and the command palette.', packageDocs + '#search-pickers-and-tooltips'],
-    ],
-  },
-  {
-    title: 'Theme and accessibility',
-    entries: [
-      ['Switch between built-in light and dark themes or supply your own tokens.', basics + '#theming'],
-      ['Expose roles, labels, values and actions through the semantic tree on supported surfaces.', repositorySource('packages/ui/haxe/haxeon/ui/semantics')],
-    ],
-  },
-];
-
-const platformDocs = repositorySource('packages/platform/README.md');
-const platformBindings = repositorySource('packages/platform/bindings/nativekit.hxi');
-const platformSource = repositorySource('packages/platform/src/haxeon/platform');
-const platforms = [
-  ['Linux', 'Desktop runner with OpenGL and live editing.', firstApp + '#other-platforms'],
-  ['macOS', 'Desktop runner with Metal and live editing.', firstApp + '#other-platforms'],
-  ['Windows', 'Desktop runner with Direct3D 11 and live editing.', firstApp + '#other-platforms'],
-  ['Android', 'Apps get a Gradle runner from haxeon create: debug APKs, and live editing on a device (patches and reloads are checked on an emulator in CI). The UI toolkit is an opt-in library of the host, not yet in the app template.', docsUrl('reference/ANDROID.md')],
-  ['Web', 'The generated app runner runs the same UI counter as the desktop template using WebAssembly and WebGL2. Live editing in the browser is pending.', firstApp + '#other-platforms'],
-];
 ---
 
 <StarlightPage
@@ -74,48 +29,65 @@ const platforms = [
       <div class="wrap">
         <div class="head">
           <h1 id="_top" tabindex="-1">A native UI toolkit, built in.</h1>
-          <p class="lede">
-            Haxeon draws retained views on the GPU using the same toolkit across platforms, and supported
-            live edits keep your running app’s state.
-          </p>
+          <p class="lede">Retained views drawn on the GPU, the same on every platform. Supported live edits keep your running app’s state.</p>
           <div class="ctas">
-            <a class="btn primary" href={docsUrl('guides/00-get-started.md')}>Get started</a>
-            <a class="btn ghost" href={basics}>UI basics</a>
+            <a class="btn primary" href={basics}>UI basics</a>
+            <a class="btn ghost" href="/ui/showcase/">Open the Showcase</a>
           </div>
         </div>
-        <h2 class="sample-heading">A counter with state</h2>
-        <div class="sample">
-          <CodeCard code={view} lang="haxe" title="src/Main.hx" example="ui-counter" />
-          <figure>
-            <img src="/ui/counter.png" width="480" height="320" alt="The native counter window after two clicks, with Click me and Reset buttons." />
-            <figcaption>
-              A <code>Signal</code> holds the count. The app redraws when its value changes.{' '}
-              <a href={firstApp + '#change-the-ui'}>Run the counter in Your first app.</a>
-            </figcaption>
-          </figure>
+        <div class="live-showcase">
+          <img class="showcase-light" src="/ui/showcase-light.png" width="1280" height="900" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
+          <img class="showcase-dark" src="/ui/showcase-dark.png" width="1280" height="900" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
+          <button class="btn primary" type="button" data-showcase-src="/ui/showcase/?embed" data-pending>Start the live Showcase</button>
+          <p role="status" hidden></p>
         </div>
       </div>
     </section>
 
     <section>
       <div class="wrap">
-        <div class="head"><h2>Build the interface</h2></div>
-        <div class="grid">
-          {features.map(({ title, entries }) => (
-            <Card>
-              <h3>{title}</h3>
-              <ul>{entries.map(([label, href]) => <li><a href={href}>{label}</a></li>)}</ul>
-            </Card>
-          ))}
+        <div class="head">
+          <h2>Your first view</h2>
+          <p class="lede">A view is built from your app’s state. A <code>Signal</code> holds the count, and the window redraws when its value changes.</p>
         </div>
-        <div class="services">
-          <h3>Native services</h3>
-          <p>Use the <code>platform</code> package to call OS services where the host provides them.</p>
-          <ul>
-            <li><a href={platformDocs}>Open file and message dialogs and read the clipboard.</a></li>
-            <li><a href={platformBindings}>Integrate native menus, tray icons and notifications through the service bindings.</a></li>
-            <li><a href={platformSource}>Embed a web view and watch for file changes.</a></li>
-          </ul>
+        <div class="sample">
+          <CodeCard code={view} lang="haxe" title="src/Main.hx" example="ui-counter" />
+          <figure class="window">
+            <img src="/ui/counter-window.png" width="260" height="208" alt="The counter window after two clicks: My first app, You clicked 2 times, and Click me and Reset buttons." />
+          </figure>
+        </div>
+        <p class="note"><a href={firstApp + '#change-the-ui'}>Build it in Your first app</a></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head"><h2>Build the interface</h2></div>
+        <div class="grid three">
+          <Card compact>
+            <h3>Views and layout</h3>
+            <p>Compose keyed views into <a href={basics + '#layout-and-text'}>rows and columns</a>, rebuilt from your app’s state each frame.</p>
+          </Card>
+          <Card compact>
+            <h3>Text</h3>
+            <p>Shape <a href={packageDocs}>multilingual text</a> with bidirectional runs and line wrapping, and edit it with selection and IME composition.</p>
+          </Card>
+          <Card compact>
+            <h3>Widgets</h3>
+            <p>Build <a href={basics + '#forms'}>forms</a> from buttons, toggles, sliders and text fields, and show large collections in virtualized lists, trees and grids.</p>
+          </Card>
+          <Card compact>
+            <h3>Overlays and input</h3>
+            <p>Show dialogs, menus, popups and tooltips over your content. Route pointer and keyboard input, manage focus, and animate <a href={showcase}>taps and drags</a>.</p>
+          </Card>
+          <Card compact>
+            <h3>Theme and accessibility</h3>
+            <p>Switch between light and dark <a href={basics + '#theming'}>themes</a> or supply your own tokens, and expose roles, labels and actions in a semantic tree.</p>
+          </Card>
+          <Card compact>
+            <h3>Native services</h3>
+            <p>Open file dialogs, read the clipboard, add menus, tray icons and notifications, and embed a web view through the <a href={repositorySource('packages/platform/README.md')}><code>platform</code> package</a>.</p>
+          </Card>
         </div>
       </div>
     </section>
@@ -124,24 +96,38 @@ const platforms = [
       <div class="wrap">
         <div class="head">
           <h2>How it is built</h2>
-          <p class="lede">Haxe views describe the interface. The UI layer resolves layout, prepares text and builds a render plan. The GPU layer submits it through the host graphics API.</p>
+          <p class="lede">Your views describe the interface. The UI layer resolves layout, prepares text and builds a render plan, which the GPU layer submits through the platform’s graphics API.</p>
         </div>
-        <div class="pipeline">
+        <div class="split">
           <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 204" role="img" aria-labelledby="ui-pipeline-title">
+            <svg class="drawing" viewBox="0 0 360 262" role="img" aria-labelledby="ui-pipeline-title">
               <title id="ui-pipeline-title">Your views flow through UI layout, text and render planning, then the GPU layer and the platform graphics API.</title>
-              <rect class="box" x="55" y="2" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="52" width="250" height="48" rx="6" />
-              <rect class="box" x="55" y="118" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="168" width="250" height="32" rx="6" />
-              <path class="acc" d="M180 34v16m-4-5 4 5 4-5M180 100v16m-4-5 4 5 4-5M180 150v16m-4-5 4 5 4-5" />
-              <text class="ttl" x="180" y="23" text-anchor="middle">Your views</text>
-              <text class="ttl" x="180" y="72" text-anchor="middle">UI layer</text>
-              <text x="180" y="89" text-anchor="middle">Layout · Text · Render plan</text>
-              <text class="ttl" x="180" y="139" text-anchor="middle">GPU layer</text>
-              <text class="ttl" x="180" y="189" text-anchor="middle">Platform graphics API</text>
+              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
+              <rect class="box" x="55" y="156" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="224" width="250" height="36" rx="6" />
+              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 192v30m-4-5 4 5 4-5" />
+              <text class="ttl" x="180" y="25" text-anchor="middle">Your views</text>
+              <text class="ttl" x="180" y="93" text-anchor="middle">UI layer</text>
+              <text x="180" y="113" text-anchor="middle">Layout · Text · Render plan</text>
+              <text class="ttl" x="180" y="179" text-anchor="middle"><a href="/gpu/"><tspan class="lnk">GPU layer</tspan></a></text>
+              <text class="ttl" x="180" y="247" text-anchor="middle">Platform graphics API</text>
             </svg>
           </Diagram>
+          <div class="stack">
+            <Card compact>
+              <h3>Rebuilt from state, repainted where it changed</h3>
+              <p>Each frame builds the view tree from your state. The UI keeps what did not change and repaints only what did.</p>
+            </Card>
+            <Card compact>
+              <h3>Text shaped by the toolkit</h3>
+              <p>HarfBuzz shapes text, SheenBidi orders bidirectional runs and libunibreak finds line breaks, the same way on every platform.</p>
+            </Card>
+            <Card compact>
+              <h3>The same pixels everywhere</h3>
+              <p>The toolkit draws its own widgets instead of wrapping each platform’s, so a layout looks the same on Linux, macOS, Windows and the web.</p>
+            </Card>
+          </div>
         </div>
       </div>
     </section>
@@ -149,42 +135,11 @@ const platforms = [
     <section>
       <div class="wrap">
         <div class="head">
-          <h2>Widget gallery</h2>
-          <p class="lede">Explore the controls and their states in the <a href={showcase}>UI Showcase</a>.</p>
+          <h2>Platforms</h2>
+          <p class="lede">The native platform ABI is still evolving, and which services are available depends on the host.</p>
         </div>
-        <div class="live-showcase">
-          <img src="/ui/showcase-dark.png" width="1280" height="900" loading="lazy" alt="Preview of the UI Showcase controls" />
-          <button class="btn primary" type="button" data-showcase-src="/ui/showcase/?embed" hidden>Start live Showcase</button>
-          <a href="/ui/showcase/" target="_blank" rel="noopener">Open Showcase in its own tab</a>
-          <p role="status" hidden></p>
-        </div>
-        <div class="grid gallery">
-          {['light', 'dark'].map((theme) => (
-            <figure>
-              <a href={`/ui/showcase-${theme}.png`}>
-                <img src={`/ui/showcase-${theme}.png`} width="1280" height="900" loading="lazy" alt={`UI Showcase controls in the ${theme} theme, including buttons, switches and a slider.`} />
-              </a>
-              <figcaption>Controls in the {theme} theme</figcaption>
-            </figure>
-          ))}
-        </div>
-        <h3 class="apps-heading">Apps built with it</h3>
-        <Showcase />
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head">
-          <h2>Platform status</h2>
-          <p class="lede">The toolkit is experimental. The native platform ABI is still evolving, and service availability depends on the host.</p>
-        </div>
-        <dl class="platforms">
-          {platforms.map(([name, status, href]) => (
-            <div><dt><a href={href}>{name}</a></dt><dd>{status}</dd></div>
-          ))}
-        </dl>
-        <p class="note">iOS app tooling is still in progress.</p>
+        <PlatformTable />
+        <p class="note">On Android the UI toolkit is an opt-in library of the host, not yet in the app template. <a href={docsUrl('reference/ANDROID.md')}>Android reference</a></p>
       </div>
     </section>
   </div>
@@ -192,46 +147,37 @@ const platforms = [
 
 <style>
   .page-intro .head .ctas { margin-top: 0; }
-  .landing-content .sample-heading { margin-bottom: var(--hx-space-4); }
-  .sample,
-  .grid {
+  .grid, .sample {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--hx-space-5);
   }
-  .sample { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
+  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .sample { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
+  .split {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: var(--hx-space-5);
+    align-items: stretch;
+  }
+  .split > :global(.figure) { display: grid; align-content: center; }
+  .stack { display: grid; gap: var(--hx-space-5); align-content: start; }
   figure { margin: 0; }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
-  figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
-  ul { margin: 0; padding-inline-start: 1.25rem; }
-  li + li { margin-top: var(--hx-space-2); }
-  .services,
-  .landing-content .apps-heading { margin-top: var(--hx-space-6); }
-  .services p { margin-block: var(--hx-space-3); }
-  .pipeline { max-width: 32rem; }
-  .platforms { margin: 0; }
-  .platforms div {
-    display: grid;
-    grid-template-columns: minmax(6rem, 1fr) 4fr;
-    gap: var(--hx-space-3);
-    padding: var(--hx-space-3) 0;
-    border-top: 1px solid var(--sl-color-gray-5);
-  }
-  dt { font-weight: 600; }
-  dd { margin: 0; }
+  .window img { max-width: 22rem; }
+  .grid p, .stack p { margin: 0; }
+  .showcase-light, :global([data-theme='light']) .showcase-dark { display: none; }
+  :global([data-theme='light']) .showcase-light { display: block; }
+  .drawing .lnk { fill: var(--sl-color-text-accent); text-decoration: underline; }
   @media (max-width: 55rem) {
-    .sample,
-    .grid { grid-template-columns: minmax(0, 1fr); }
-  }
-  @media (max-width: 30rem) {
-    .platforms div { grid-template-columns: minmax(0, 1fr); gap: var(--hx-space-1); }
+    .grid, .sample, .split { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
 
 <script>
   const start = document.querySelector<HTMLButtonElement>('[data-showcase-src]');
   if (start) {
-    start.hidden = false;
+    delete start.dataset.pending;
     start.addEventListener('click', () => {
       const frame = document.createElement('iframe');
       frame.title = 'Haxeon UI Showcase';
@@ -278,6 +224,7 @@ const platforms = [
 <style>
   .live-showcase { position: relative; display: grid; justify-items: start; gap: 0.75rem; margin-bottom: 2rem; }
   .live-showcase [hidden] { display: none; }
+  .live-showcase [data-pending] { visibility: hidden; }
   .live-showcase img, .live-showcase :global(iframe) { width: 100%; height: auto; }
   .live-showcase :global(iframe) { aspect-ratio: 3 / 2; border: 0; min-height: 600px; }
   .live-showcase:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
