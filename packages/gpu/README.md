@@ -41,6 +41,9 @@ unavailable on the current backend.
 
 ## Examples
 
+[Triangle](examples/triangle/) is the smallest GPU app: one shader, one vertex
+buffer and one draw.
+
 [Circuit Run](examples/circuit-run/) is a Linux and WebGL2 maze-chase sample
 that submits a GPU maze and a retained UI HUD to one platform surface.
 

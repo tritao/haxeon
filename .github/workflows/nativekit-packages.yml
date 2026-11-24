@@ -74,6 +74,8 @@ jobs:
         run: ./packages/ui/tools/test-haxeon-framework.sh
       - name: Test project shader generation
         run: ./packages/gpu/tools/test-shader-build.sh
+      - name: Run the GPU examples
+        run: ./packages/gpu/tools/test-examples.sh
       - uses: browser-actions/setup-chrome@v2
         id: chrome
         with:
