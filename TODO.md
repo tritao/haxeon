@@ -109,7 +109,10 @@ Longer-term direction is in `ROADMAP.md`.
   uniform records with `@:repr("C")` and compile-time `sizeof` and
   `offsetof` assertions and an FFI path for
   resolving and creating programs directly from their compiled C tables
-  by ID. Writing shaders in Haxeon itself is deferred to
+  by ID. The end state, with shaders compiled by `haxeon build`, and the
+  order of work are in
+  [docs/design/APP_PLATFORM_CLEANUP.md](docs/design/APP_PLATFORM_CLEANUP.md)
+  step 7. Writing shaders in Haxeon itself is deferred to
   [docs/design/SHADERS.md](docs/design/SHADERS.md).
 
 ## Compiler follow-ups

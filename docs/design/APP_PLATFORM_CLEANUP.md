@@ -64,18 +64,121 @@ and benchmarks drive the same loop with explicit frame times.
 
 App shaders use NativeKit's shader toolchain
 ([NativeKit ADR 0021](../../vendor/nativekit/docs/decisions/0021-shader-toolchain.md)):
-one GLSL source in `sokol-shdc` form, compiled at build time to `glsl410`,
-`glsl300es`, `hlsl5` and Metal, with checked-in output and a `--check` mode.
-The generated sources carry the `#version` and precision lines; the edited
-source stays backend-neutral.
+one GLSL source in `sokol-shdc` form, compiled to `glsl410`, `glsl300es`,
+`hlsl5` and Metal. The edited source stays backend-neutral; the generated
+sources carry the `#version` and precision lines.
+
+### Where it stands
 
 The shared NativeKit generator produces C tables and versioned reflection.
-The UI uses the C tables and keeps its existing shader source header
-byte-identical. CI checks regeneration for UI and Circuit Run.
+The UI uses the C tables and keeps its shader source header byte-identical.
+Circuit Run declares the maze once in `maze.glsl`; `generate-shader-haxe.py`
+turns its reflection into a checked-in `MazeShader.hx`, and CI checks both
+regenerations.
 
-Circuit Run declares the maze once in `maze.glsl`. Its generated Haxe
-module selects the variant from the renderer's live backend. The remaining
-Haxe shader interface work is tracked in `TODO.md`.
+That works, but it is a script pipeline, not something an app author uses:
+the app checks in three generated files (`MazeShader.hx`,
+`maze.reflection.json`, `maze.shader.h`) and a manifest, the GPU package's
+`check-shaders.sh` names Circuit Run, every target embeds every backend's
+source, and the generated `switch renderer.backend()` repeats the variant
+choice that `nkgpu_shader_create_from_table` already makes in C.
+`Renderer.backend()` also returns the FFI enum.
+
+### End state
+
+The author writes one file and imports it:
+
+```
+src/shaders/Maze.glsl      // @vs / @fs / @program; no #version, no target branches
+```
+
+```haxe
+import shaders.Maze;
+
+var shader = Maze.create(renderer);
+var pipeline = Pipeline.begin(renderer, shader, Maze.Vertex.layout)...
+batch.uniforms(Maze.vsParams, {mvp: matrix});
+```
+
+- **No manifest and no generated files in the app.** `.glsl` files under the
+  project's shader root are discovered. Variants, which are rare, are
+  declared in `haxeon.json`.
+- **The build runs it.** `haxeon build`, `check` and `dev` compile shaders
+  before typing: the SDK's pinned `sokol-shdc`, NativeKit's normalization to
+  `nkgpu-shader-reflection/1`, then the Haxe generator, writing to a build
+  source root. Results are cached by the content of the source and its
+  includes and the compiler checksum; the build server redoes only changed
+  shaders.
+- **One source of truth.** Reflection gives the program descriptor, the
+  vertex layout (no hand-written stride or attribute formats) and uniform
+  records with std140 layout. An interface change breaks the Haxe that uses
+  it at compile time.
+- **Variant choice in one place.** `Maze.create` hands the program table to
+  `nkgpu_shader_create_from_table`; Haxe does not switch on the backend. A
+  target embeds only its backends: glsl300es on Wasm and Android, glsl410 on
+  Linux, hlsl5 on Windows, Metal on Apple platforms.
+- **Diagnostics in the author's source.** `sokol-shdc` errors become
+  `Maze.glsl:12: ...` in Haxeon's diagnostic format, and common dialect
+  mistakes (a `#version` line, a uniform outside a block) get a message that
+  states the rule.
+
+For people and agents alike, the generated API has to be readable without
+running anything clever:
+
+- **Fixed names.** `Maze.glsl` is module `shaders.Maze`; each `@program` is a
+  field; uniform block `vs_params` is record `VsParams` and field
+  `vsParams`; attributes form `Maze.Vertex`.
+- **A stable, documented output path** for the generated modules, plus IDE
+  hover, so the API can be read and searched.
+- **One canonical example**: a "Writing shaders" guide with a full shader
+  (attributes, a uniform block, a texture) and the Haxe that uses it, and a
+  shader in the app template. Authors copy the nearest example.
+
+### Ownership
+
+- **NativeKit owns the driver**: running the pinned compiler, walking
+  includes, normalized JSON, C tables, `--check`. It is one implementation for
+  C and Haxeon consumers. It becomes a native tool shipped in the SDK, so app
+  authors need no Python; offering `sokol-shdc` a `bare_json` output upstream
+  removes its YAML parsing.
+- **Haxeon owns the build step and the generator**: JSON in, typed module out.
+- **C consumers keep checked-in output** (UIKit, SceneKit): their CMake builds
+  must not need the tool. Haxeon projects generate at build time because the
+  SDK always carries it.
+- **`sokol-shdc` stays unforked.** The SDK ships or fetches the pinned
+  upstream binary, verified by SHA-256 per host. A missing reflection field
+  is a small generic patch offered upstream. Only if upstream refuses a change
+  we need do we carry that patch on the pinned commit and build `sokol-shdc`
+  in CI.
+
+### Remaining work, in order
+
+1. **NativeKit driver.** The reflection becomes a NativeKit-defined schema
+   (attributes with format and HLSL semantic, uniform blocks with std140
+   offsets, images with sample type, samplers), not `sokol-shdc`'s YAML keys
+   passed through. Table entries name one `nkgpu_shader_target`
+   (`GLSL410`, `GLSL300ES`, `HLSL5`, `METAL_MACOS`, `METAL_IOS`) instead of
+   backend, language and a `metal_ios` flag. Pin `sokol-shdc` and
+   `glslangValidator` by SHA-256. Record the distribution and no-fork policy
+   above in ADR 0021.
+2. **Haxe creation through the C table.** `Shader.create(renderer, program)`
+   calls `nkgpu_shader_create_from_table`; add struct-array passing to the
+   bindings if they lack it. The generated `switch` goes, and so does the
+   public `Renderer.backend()` returning the FFI enum.
+3. **Generator output.** Uniform records with `@:repr("C")` and compile-time
+   `sizeof`/`offsetof` checks, `Vertex.layout` from the attributes, the fixed
+   names above. Tested against the UI reflection, since the maze has no
+   uniforms.
+4. **Build integration.** Shader discovery, the cached build step, per-target
+   embedding, diagnostics mapping, the generated source root.
+5. **Circuit Run on it.** `Maze.glsl` and an import; delete `MazeShader.hx`,
+   `maze.reflection.json`, `maze.shader.h`, `shaders.json` and the Circuit Run
+   lines in `packages/gpu/tools/check-shaders.sh`. Run it on Windows and macOS
+   (D3D11 and Metal), which its GLSL-only shaders never supported.
+6. **Docs.** The "Writing shaders" guide and the template shader.
+7. **Later.** The native driver binary in the SDK, `bare_json` upstream,
+   shader hot reload in `haxeon dev`, precompiled DXBC and metallib once
+   Windows and macOS CI hosts exist.
 
 ## Rejected
 
