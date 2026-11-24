@@ -360,6 +360,27 @@ The Haxe code Haxeon rejects or runs differently is listed in
   Haxeon-built program (watch-event JSON: alphabetical against declaration
   order). Haxe leaves it unspecified; decide what Haxeon guarantees and match
   stock HashLink where users see it (`haxe.Json`).
+- **`@:structInit` classes (next typer batch).** Haxe builds an instance of a
+  `@:structInit` class from an object literal wherever the class is the
+  expected type: a typed local, an argument, a return or a field. Fields with an
+  initializer may be left out; a declared constructor takes the literal's
+  fields as its parameters by name. Haxeon has no `@:structInit`. Lower the
+  literal to `new` plus the field stores, through the expected-type path that
+  object literals already use. Then convert the UI style classes
+  (`packages/ui/bindings/haxe/haxeon/ui/LayoutStyle.hx` and similar: their
+  defaults move from `new()` to field initializers; check the generated
+  `Diffable` field masks) and the guides that write `new LayoutStyle()`
+  followed by field sets.
+- **C#-style object initializers, only if `@:structInit` leaves real gaps.**
+  `new T(args) { field = value, ... }` would add constructor arguments plus
+  fields, sets through property setters, and nested updates of an existing
+  object, but it is a Haxeon-only dialect: code using it no longer builds with
+  stock Haxe, and the parser, formatter, language service and lint all need
+  it. Decide after the UI conversion above shows what `@:structInit` cannot
+  express. If it goes ahead, write a design note first: the exact syntax (not
+  valid Haxe today), lowering to `new` plus ordinary assignments, and where
+  Haxeon-only syntax is allowed (apps and Haxeon-only packages, not packages
+  meant to build with stock Haxe).
 - **Lone surrogates.** Printing a String with a lone high surrogate swallows
   the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
   conversion takes it as the pair's low half.

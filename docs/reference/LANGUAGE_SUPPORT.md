@@ -361,6 +361,8 @@ HashLink):
   `write` (`getContent` and `saveContent` work), and the `Type` API on a class or enum held as a value (`typeof`, `getClass`,
   `getSuperClass`, `resolveClass`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
   does not have yet.
+- `@:structInit` classes: an object literal where such a class is expected (`var style:LayoutStyle = {childGap: 12};`)
+  is a type mismatch.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
 - A generic call whose type argument is a type variable something after the call still fixes (`var values = [];
