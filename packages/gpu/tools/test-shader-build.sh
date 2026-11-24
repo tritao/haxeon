@@ -6,6 +6,15 @@ work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 project="$work/project with spaces"
 mkdir -p "$project/src/shaders" "$project/includes" "$project/library/src/shaders"
+mkdir "$work/no-python"
+for command in python python3; do
+    printf '#!/bin/sh\nprintf "Unexpected Python dependency\\n" >&2\nexit 99\n' > "$work/no-python/$command"
+    chmod +x "$work/no-python/$command"
+done
+haxeon() {
+    PATH="$work/no-python:$PATH" "$root/scripts/haxeon" "$@"
+}
+
 cd "$project"
 
 python3 - "$root" <<'PY'
@@ -57,7 +66,7 @@ class Main {
 }
 HX
 
-"$root/scripts/haxeon" check --project haxeon.json
+haxeon check --project haxeon.json
 output=build/host/generated
 first="$output/shaders/First.hx"
 second="$output/shaders/Second.hx"
@@ -79,16 +88,16 @@ PY
 }
 original=$(signature "$first")
 independent=$(signature "$second")
-"$root/scripts/haxeon" check --project haxeon.json
+haxeon check --project haxeon.json
 [[ $(signature "$first") == "$original" ]]
 [[ $(signature "$second") == "$independent" ]]
 sed -i 's/return 0.5/return 0.75/' includes/Colors.glsl
-"$root/scripts/haxeon" build --compiler-only --project haxeon.json
+haxeon build --compiler-only --project haxeon.json
 [[ $(signature "$first") != "$original" ]]
 [[ $(signature "$second") == "$independent" ]]
 
 sed -i 's/return 0.75/return unknown_symbol/' includes/Colors.glsl
-if "$root/scripts/haxeon" check --project haxeon.json --diagnostic-format short > "$work/error.log" 2>&1; then
+if haxeon check --project haxeon.json --diagnostic-format short > "$work/error.log" 2>&1; then
     echo "Expected GLSL type checking to fail" >&2
     exit 1
 fi
@@ -96,7 +105,7 @@ rg '^includes/Colors.glsl:2:1: E4001:.*unknown_symbol' "$work/error.log"
 sed -i 's/return unknown_symbol/return 0.75/' includes/Colors.glsl
 rm src/shaders/Second.glsl
 sed -i '/import shaders.Second;/d; s/Second.Vertex.stride/16/' src/Main.hx
-"$root/scripts/haxeon" check --project haxeon.json
+haxeon check --project haxeon.json
 [[ ! -e "$second" ]]
 rm src/shaders/First.glsl
 rmdir src/shaders
@@ -115,7 +124,7 @@ data = json.loads(manifest.read_text())
 del data["shaderVariants"]
 manifest.write_text(json.dumps(data))
 PYTHON
-"$root/scripts/haxeon" check --project haxeon.json
+haxeon check --project haxeon.json
 [[ ! -e "$first" ]]
 rg -qF "$output/shaders/LibraryQuad.hx" "$output/shaders.sources"
 mkdir "$work/stock-haxe"

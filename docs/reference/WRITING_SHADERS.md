@@ -74,10 +74,9 @@ control.
 Generation reuses each unchanged module. The cache covers its source,
 transitive includes, variant settings, and the verified shader compiler.
 Only the active target's compiled shader source reaches the Haxe module.
-During the Python-based SDK tool's rollout, shader projects need Python
-3.9 or newer and PyYAML. Set `HAXEON_SHADER_PYTHON` to use another Python
-installation. The tool downloads and checks the pinned compiler on first
-use. Standalone NativeKit shader regeneration can also validate the
+Released SDKs include the pinned shader compiler. A source checkout
+can reuse a verified cached compiler or download it on first use.
+Standalone NativeKit shader regeneration can also validate the
 generated GLSL with its separately pinned validator.
 
 For source-defined variants, add define sets keyed by Haxe module in

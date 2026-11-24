@@ -90,6 +90,20 @@ class ReleasePackage {
 					Path.join([root, entry])
 				]);
 		var bin = Path.join([root, Path.withoutDirectory(HashLinkPath.directory(sdk))]);
+		var shaderCompiler = build.shader.ShaderBuild.pinnedCompiler(sdk);
+		cmake(home, [
+			"-E",
+			"copy",
+			Path.join([home, "licenses", "sokol-shdc.txt"]),
+			Path.join([root, "LICENSE-sokol-shdc.txt"])
+		]);
+		cmake(home, [
+			"-E",
+			"copy",
+			shaderCompiler,
+			Path.join([bin, Path.withoutDirectory(HashLinkPath.executable(sdk, "sokol-shdc"))])
+		]);
+
 		for (entry in FileSystem.readDirectory(bin))
 			if (PUBLISHING_LEFTOVER.match(entry))
 				FileSystem.deleteFile(Path.join([bin, entry]));

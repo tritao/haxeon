@@ -102,9 +102,9 @@ Longer-term direction is in `ROADMAP.md`.
   (`plans/ASSETS.md` AS-D3). Bind the official C implementation, with its
   SIMD paths, through HXI: one-shot and streaming hashing, checked against
   the official test vectors.
-- **Ship the native shader driver.** The Python driver is already integrated
-  into app builds and the watch loop. SDK distribution of the native tool,
-  upstream `bare_json`, and live shader replacement are tracked in
+- **Share the shader driver with NativeKit.** App builds use the SDK driver.
+  NativeKit's standalone C regeneration still uses its Python tool.
+  Upstream `bare_json` and live shader replacement are tracked in
   [docs/design/APP_PLATFORM_CLEANUP.md](docs/design/APP_PLATFORM_CLEANUP.md)
   step 7. Writing shaders in Haxeon itself is deferred to
   [docs/design/SHADERS.md](docs/design/SHADERS.md).

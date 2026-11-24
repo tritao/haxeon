@@ -1,4 +1,5 @@
 package tools;
+import build.shader.ShaderBuild;
 
 import build.AotCompiler;
 import build.BuildOutput;
@@ -214,6 +215,7 @@ class HaxeonCli {
 				case "lsp": languageServer(arguments);
 				case "ffi": ffi(arguments);
 				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
+				case "__generate-shaders": ShaderBuild.run(arguments, haxeonHome());
 				case "version", "--version": version();
 				case "help" if (arguments.length > 0): commandHelp(arguments.join(" "));
 				case "help", "--help", "-h": usage();

@@ -77,7 +77,9 @@ selects the target. Haxe also gets checked native uniform layouts with
 module-prefixed record names so shaders can reuse names such as `vs_params`.
 
 Circuit Run has one authored shader and imports `shaders.Maze` from the build.
-The project build and watch loop use the same per-target generator and cache.
+The SDK CLI runs the per-target generator for app builds and the watch loop.
+Releases carry the verified shader compiler. Standalone C regeneration still
+uses NativeKit’s Python driver.
 See [Writing shaders](../reference/WRITING_SHADERS.md) for paths and examples.
 
 ### End state

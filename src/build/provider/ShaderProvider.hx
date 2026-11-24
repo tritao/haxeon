@@ -6,7 +6,6 @@ import build.execution.ExecutionAction;
 import build.lowering.LoweringContext;
 import compiler.core.UsageError;
 import haxe.Json;
-import haxe.io.Path;
 import project.ResolvedProject;
 import project.ShaderInputs;
 import sys.FileSystem;
@@ -33,26 +32,22 @@ class ShaderProvider {
 			case Other("ios"): "metal_ios";
 			case Other(name): throw new UsageError('Shader generation does not support $name');
 		};
-		var tools = HaxeonSdk.shaderTools(context.compilerHome);
+		var command = HashLinkPath.executable(context.compilerHome, "haxeon");
 		var args = [
-			tools.build,
-			"--driver", tools.driver,
-			"--generator", tools.generator,
-			"--output", output,
-			"--project", project.root,
-			"--target", target,
-			"--diagnostics", Std.string(context.reportStyle.diagnosticFormat),
-			"--variants", Json.stringify(variants)
-		].concat(roots);
-		var python = Sys.getEnv("HAXEON_SHADER_PYTHON");
-		if (python == null || python == "")
-			python = Sys.systemName() == "Windows" ? "python" : "python3";
-		var inputs = [tools.build, tools.driver, tools.generator];
+			"__generate-shaders",
+			project.root,
+			output,
+			target,
+			Std.string(context.reportStyle.diagnosticFormat),
+			Json.stringify(variants),
+			Json.stringify(roots)
+		];
+		var inputs = [command];
 		var outputs = [ShaderInputs.sources(output), ShaderInputs.dependencies(output)];
 		// The shader tool checks its inputs per module and rewrites changed output.
 		return new ExecutionAction(new ActionId(ACTION_PREFIX + project.rootPackage.name), [], inputs, outputs,
 			"Generate shader modules",
-			Process(python, args, project.root, []), false, true);
+			Process(command, args, project.root, []), false, true);
 	}
 
 	static function projectVariants(project:ResolvedProject):Dynamic {

@@ -338,16 +338,6 @@ foreach(_script IN ITEMS haxeon-native haxeon-frame-pointers haxeon-instrument h
     VERBATIM)
   list(APPEND _sdk_native_scripts "${HAXEON_SDK_DIR}/cmake/${_script}.cmake")
 endforeach()
-set(_shader_driver "${CMAKE_SOURCE_DIR}/vendor/nativekit/modules/gpu/tools/shaders.py")
-if(EXISTS "${_shader_driver}")
-  add_custom_target(haxeon-shader-tools
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_SDK_DIR}/tools/shaders"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_shader_driver}"
-      "${CMAKE_SOURCE_DIR}/tools/shaders/build.py" "${CMAKE_SOURCE_DIR}/packages/gpu/tools/generate-shader-haxe.py"
-      "${HAXEON_SDK_DIR}/tools/shaders"
-    VERBATIM)
-endif()
-
 add_custom_target(haxeon-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E make_directory "${_sdk_lib}" "${HAXEON_SDK_DIR}/include" "${HAXEON_SDK_DIR}/src"
     "${HAXEON_SDK_DIR}/cmake"
@@ -366,10 +356,6 @@ add_custom_target(haxeon-sdk ALL
   COMMENT "Staging the Haxeon SDK in ${HAXEON_SDK_DIR}"
   VERBATIM
 )
-
-if(TARGET haxeon-shader-tools)
-  add_dependencies(haxeon-sdk haxeon-shader-tools)
-endif()
 
 include(cmake/haxeon-platforms.cmake)
 
