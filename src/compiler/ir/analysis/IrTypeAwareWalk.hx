@@ -7,11 +7,11 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOperands;
 import compiler.ir.model.IrProgramIndex;
 import compiler.ir.model.IrProviders;
-import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.TypeKey;
 import compiler.ir.passes.enums.IrEnumDynamicDispatch;
 import compiler.ir.passes.nullability.IrOptionalFieldStorage;
 import compiler.ir.reuse.IrStageMemo.IrContributionKey;
+import compiler.ir.reuse.IrWalkRecord;
 import compiler.ir.verify.IrVerifier;
 
 /** What a walk starts from: function names that are reached whatever calls them, and types that exist from the start. */
@@ -64,7 +64,7 @@ typedef IrClassDependencies = {
 	/** The functions the code generated for this class in place of the native with this symbol calls; throws when one that must exist does not. */
 	final of:(String, String) -> Array<String>;
 
-	/** What `of` reads besides the program's objects and function names, as text (`IrWalkTables`). */
+	/** What `of` reads besides the program's objects and function names, as text (`IrWalkRecord`). */
 	final inputs:String;
 }
 
@@ -107,31 +107,85 @@ class IrTypeAwareWalk {
 
 	/**
 	 * `run` with the default dynamic sites and no providers required, in a session that keeps the walk as `key`: last build's result
-	 * while the program gives the walk what it gave it last build (`IrWalkRecord.holds`), else walked again and kept. With
-	 * `--check-reuse` a kept result is walked again and compared. The result is the caller's to change.
+	 * while the program gives the walk what it gave it last build (`IrWalkRecord`), else walked again and kept. With `--check-reuse`
+	 * a kept result is walked again and compared. The result is the caller's to change.
 	 */
-	public static function runKept(key:IrContributionKey<IrWalkRecord>, program:IrProgram, roots:IrWalkRoots,
-			keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>,
+	public static function runKept(key:IrContributionKey<IrWalkRecord<IrWalkSummary, IrWalkResult>>, program:IrProgram,
+			roots:IrWalkRoots, keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>,
 			lineage:compiler.ir.reuse.IrStageMemo.IrLineage):IrWalkResult {
-		var memos = lineage.memos,
-			tables = IrWalkTables.of(program, roots, keepCreatedClassMethods, classDependencies),
+		// The settings and what the class dependencies read besides the program, then the roots.
+		var given = [
+			keepCreatedClassMethods ? "keep created class methods" : "",
+			classDependencies == null ? "" : classDependencies.symbols.join(" ") + "\n" + classDependencies.inputs
+		].concat(roots.functions),
+			givenTypes = roots.types.copy(),
+			memos = lineage.memos,
+			memo = memos.contribution(SUMMARIES),
+			scratch = IrWalkSummary.scratch(),
 			last = memos.lastResult(key),
-			kept = last == null ? null : last.holds(program, tables, lineage);
+			kept = last == null ? null : last.holds(program, given, givenTypes, program.functions, (fn, summary) -> {
+				if (lineage.versionOf(fn) == 0)
+					return null;
+				var now = IrWalkSummary.of(fn, lineage, scratch);
+				return IrWalkSummary.same(summary, now) ? now : null;
+			}, (fn, _) -> memo.get(lineage.versionOf(fn)));
 		if (kept != null) {
 			if (lineage.checks) {
 				var now = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, lineage);
-				if (!IrWalkRecord.sameResult(now, kept.result))
+				if (!sameResult(now, kept.result))
 					throw new compiler.core
 						.InternalError('--check-reuse: the walk ${key.name} reused a result that differs from walking the program now');
 			}
 			memos.keepResult(key, kept);
-			return IrWalkRecord.copy(kept.result);
+			return copyResult(kept.result);
 		}
 		var result = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, lineage),
-			record = IrWalkRecord.of(program, tables, result, lineage);
-		if (record != null)
-			memos.keepResult(key, record);
-		return IrWalkRecord.copy(result);
+			summaries:Array<Null<IrWalkSummary>> = [];
+		// A function the walk reached is kept by its summary, which a function with no version has none of.
+		for (fn in program.functions) {
+			if (!result.reached.exists(fn.name)) {
+				summaries.push(null);
+				continue;
+			}
+			var version = lineage.versionOf(fn), summary = version == 0 ? null : memo.get(version);
+			if (summary == null)
+				return copyResult(result);
+			summaries.push(summary);
+		}
+		memos.keepResult(key,
+			new IrWalkRecord(program, given, givenTypes, program.functions.copy(), summaries, result));
+		return copyResult(result);
+	}
+
+	/** `result` with its own sets, for a caller that changes them. */
+	static function copyResult(result:IrWalkResult):IrWalkResult
+		return {
+			reached: result.reached.copy(),
+			created: result.created.copy(),
+			createdClasses: result.createdClasses.copy(),
+			demanded: result.demanded.copy(),
+			missingProviders: result.missingProviders.copy(),
+			providersReached: result.providersReached,
+			declarationOnly: result.declarationOnly.copy(),
+			calledNatives: result.calledNatives.copy()
+		};
+
+	/** Whether two walks found the same, for `--check-reuse`. */
+	static function sameResult(left:IrWalkResult, right:IrWalkResult):Bool {
+		function same(a:Map<String, Bool>, b:Map<String, Bool>):Bool {
+			for (key in a.keys())
+				if (!b.exists(key))
+					return false;
+			for (key in b.keys())
+				if (!a.exists(key))
+					return false;
+			return true;
+		}
+		return same(left.reached, right.reached) && same(left.created, right.created)
+			&& same(left.createdClasses, right.createdClasses) && same(left.demanded, right.demanded)
+			&& same(left.declarationOnly, right.declarationOnly) && same(left.calledNatives, right.calledNatives)
+			&& left.providersReached == right.providersReached
+			&& left.missingProviders.join("\n") == right.missingProviders.join("\n");
 	}
 
 	/** The natives that act as dynamic sites, and the provider operations (without detail) they need of each type. */
@@ -725,209 +779,4 @@ class IrWalkSummary {
 				return false;
 		return true;
 	}
-}
-
-/**
- * What a type-aware walk a session keeps (`IrTypeAwareWalk.runKept`) read of the program, and what it found. The walk reads the
- * tables (`IrWalkTables`), each function's name, provider row, retention and signature, and the summary of each function it
- * reached. A build with the same tables and whose functions are the same objects, or, for one that is not, the same declaration
- * and, when it was reached, a summary with the same edges, walks to the same result: a function the walk did not reach adds
- * nothing through its own edges.
- */
-@:nullSafety(Strict)
-class IrWalkRecord {
-	public final tables:IrWalkTables;
-	public final functions:Array<IrFunction>;
-
-	/** By position in `functions`: the summary the walk followed, or null for a function it did not reach. */
-	public final summaries:Array<Null<IrWalkSummary>>;
-
-	public final result:IrWalkResult;
-
-	function new(tables:IrWalkTables, functions:Array<IrFunction>, summaries:Array<Null<IrWalkSummary>>,
-			result:IrWalkResult) {
-		this.tables = tables;
-		this.functions = functions;
-		this.summaries = summaries;
-		this.result = result;
-	}
-
-	/** The record of a walk of `program` that found `result`; null when a function it reached has no version to keep its summary by. */
-	public static function of(program:IrProgram, tables:IrWalkTables, result:IrWalkResult,
-			lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Null<IrWalkRecord> {
-		var memo = lineage.memos.contribution(IrTypeAwareWalk.SUMMARIES), summaries:Array<Null<IrWalkSummary>> = [];
-		for (fn in program.functions) {
-			if (!result.reached.exists(fn.name)) {
-				summaries.push(null);
-				continue;
-			}
-			var version = lineage.versionOf(fn), summary = version == 0 ? null : memo.get(version);
-			if (summary == null)
-				return null;
-			summaries.push(summary);
-		}
-		return new IrWalkRecord(tables, program.functions.copy(), summaries, result);
-	}
-
-	/**
-	 * This walk's result as the record of a walk of `program` now, with `tables`; null when the program gives the walk something
-	 * else. The summaries of the functions it reached are kept for the next build.
-	 */
-	public function holds(program:IrProgram, tables:IrWalkTables,
-			lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Null<IrWalkRecord> {
-		var now = program.functions;
-		if (now.length != functions.length || !tables.same(this.tables))
-			return null;
-		var memo = lineage.memos.contribution(IrTypeAwareWalk.SUMMARIES),
-			scratch = IrWalkSummary.scratch(),
-			kept:Null<Array<Null<IrWalkSummary>>> = null;
-		for (index in 0...now.length) {
-			var fn = now[index], last = functions[index], summary = summaries[index];
-			if (fn == last) {
-				// Kept for the walk that may come next, while the function stays.
-				if (summary != null)
-					memo.get(lineage.versionOf(fn));
-				continue;
-			}
-			if (fn.name != last.name || !sameDeclaration(fn, last))
-				return null;
-			if (summary == null)
-				continue;
-			if (lineage.versionOf(fn) == 0)
-				return null;
-			var current = IrWalkSummary.of(fn, lineage, scratch);
-			if (!IrWalkSummary.same(summary, current))
-				return null;
-			if (kept == null)
-				kept = summaries.copy();
-			kept[index] = current;
-		}
-		return new IrWalkRecord(tables, now.copy(), kept == null ? summaries : kept, result);
-	}
-
-	/** Whether two functions of one name declare the same to the walk: provider row, retention and signature. */
-	public static function sameDeclaration(left:IrFunction, right:IrFunction):Bool {
-		if (left.retention != right.retention || left.arguments.length != right.arguments.length
-			|| !IrVerifier.sameType(left.result, right.result))
-			return false;
-		for (index in 0...left.arguments.length)
-			if (!IrVerifier.sameType(left.arguments[index].type, right.arguments[index].type))
-				return false;
-		return switch [left.provides, right.provides] {
-			case [None, None]: true;
-			case [Serves(leftType, leftOperation), Serves(rightType, rightOperation)]:
-				leftOperation == rightOperation && leftType.toString() == rightType.toString();
-			default: false;
-		};
-	}
-
-	/** `result` with its own sets, for a caller that changes them. */
-	public static function copy(result:IrWalkResult):IrWalkResult
-		return {
-			reached: result.reached.copy(),
-			created: result.created.copy(),
-			createdClasses: result.createdClasses.copy(),
-			demanded: result.demanded.copy(),
-			missingProviders: result.missingProviders.copy(),
-			providersReached: result.providersReached,
-			declarationOnly: result.declarationOnly.copy(),
-			calledNatives: result.calledNatives.copy()
-		};
-
-	/** Whether two walks found the same, for `--check-reuse`. */
-	public static function sameResult(left:IrWalkResult, right:IrWalkResult):Bool {
-		function same(a:Map<String, Bool>, b:Map<String, Bool>):Bool {
-			for (key in a.keys())
-				if (!b.exists(key))
-					return false;
-			for (key in b.keys())
-				if (!a.exists(key))
-					return false;
-			return true;
-		}
-		return same(left.reached, right.reached) && same(left.created, right.created)
-			&& same(left.createdClasses, right.createdClasses) && same(left.demanded, right.demanded)
-			&& same(left.declarationOnly, right.declarationOnly) && same(left.calledNatives, right.calledNatives)
-			&& left.providersReached == right.providersReached
-			&& left.missingProviders.join("\n") == right.missingProviders.join("\n");
-	}
-}
-
-/**
- * The tables a walk reads (`IrWalkRecord`): its roots and settings, the objects (bases, interfaces, field names and types, methods),
- * the interfaces' bases, the natives' symbols, results and generated dependencies, the C natives' results, the static fields'
- * types and what the class dependencies read besides. It keeps copies of the program's lists: the entries are never changed once
- * made, but a later stage may add to a list.
- */
-@:nullSafety(Strict)
-class IrWalkTables {
-	final keepCreatedClassMethods:Bool;
-	final roots:Array<String>;
-	final rootTypes:Array<IrType>;
-	final objects:Array<IrObject>;
-	final interfaces:Array<IrInterface>;
-	final natives:Array<IrNative>;
-	final cNatives:Array<IrCNative>;
-	final staticFields:Array<IrStaticField>;
-	final dependencies:String;
-
-	function new(program:IrProgram, roots:IrWalkRoots, keepCreatedClassMethods:Bool,
-			dependencies:Null<IrClassDependencies>) {
-		this.keepCreatedClassMethods = keepCreatedClassMethods;
-		this.roots = roots.functions.copy();
-		rootTypes = roots.types.copy();
-		objects = program.objects.copy();
-		interfaces = program.interfaces.copy();
-		natives = program.natives.copy();
-		cNatives = program.cNatives.copy();
-		staticFields = program.staticFields.copy();
-		this.dependencies = dependencies == null ? "" : dependencies.symbols.join(" ") + "\n" + dependencies.inputs;
-	}
-
-	public static function of(program:IrProgram, roots:IrWalkRoots, keepCreatedClassMethods:Bool,
-			dependencies:Null<IrClassDependencies>):IrWalkTables
-		return new IrWalkTables(program, roots, keepCreatedClassMethods, dependencies);
-
-	/** Whether `other` gives a walk what these give it. */
-	public function same(other:IrWalkTables):Bool {
-		if (keepCreatedClassMethods != other.keepCreatedClassMethods || dependencies != other.dependencies
-			|| !IrObjectTools.sameNames(roots, other.roots) || rootTypes.length != other.rootTypes.length
-			|| objects.length != other.objects.length || interfaces.length != other.interfaces.length
-			|| natives.length != other.natives.length || cNatives.length != other.cNatives.length
-			|| staticFields.length != other.staticFields.length)
-			return false;
-		for (index in 0...rootTypes.length)
-			if (!IrTypeIdentity.same(rootTypes[index], other.rootTypes[index]))
-				return false;
-		for (index in 0...objects.length)
-			if (!IrObjectTools.sameShape(objects[index], other.objects[index]))
-				return false;
-		for (index in 0...interfaces.length) {
-			var left = interfaces[index], right = other.interfaces[index];
-			if (left != right && (left.name != right.name || !IrObjectTools.sameNames(left.bases, right.bases)))
-				return false;
-		}
-		for (index in 0...natives.length) {
-			var left = natives[index], right = other.natives[index];
-			if (left != right
-				&& (left.name != right.name || left.symbol != right.symbol
-				|| !IrTypeIdentity.same(left.result, right.result)
-				|| !sameOptionalNames(left.generatedFunctionDependencies, right.generatedFunctionDependencies)))
-				return false;
-		}
-		for (index in 0...cNatives.length) {
-			var left = cNatives[index], right = other.cNatives[index];
-			if (left != right && (left.name != right.name || !IrTypeIdentity.same(left.result, right.result)))
-				return false;
-		}
-		for (index in 0...staticFields.length) {
-			var left = staticFields[index], right = other.staticFields[index];
-			if (left != right && (left.name != right.name || !IrTypeIdentity.same(left.type, right.type)))
-				return false;
-		}
-		return true;
-	}
-
-	static function sameOptionalNames(left:Null<Array<String>>, right:Null<Array<String>>):Bool
-		return left == null || right == null ? left == right : IrObjectTools.sameNames(left, right);
 }

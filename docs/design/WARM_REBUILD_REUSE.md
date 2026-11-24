@@ -18,13 +18,13 @@ makes from the same sources, and its work is proportional to the edit.
 - **IR stages on bodies:** each stage moved onto IR bodies keeps what it made of each function, with the facts it read
   (`IrStageMemo`), and reuses it while the function and the facts are unchanged. The session caching model is in
   [IR_CORE_COLUMNS.md](IR_CORE_COLUMNS.md#session-caching-model).
-- **Whole-program walks:** the reachability walks of a plain build keep their result with what they read
-  (`IrWalkRecord`): copies of the program's tables, its functions, and the summary of each function a walk reached. A
-  build reuses the result while the tables are the same and each changed function declares the same and, when it was
-  reached, has a summary with the same edges; any other change walks again. The HashLink plain build's own walk and
-  table trim keep theirs the same way (`HlReachRecord`), with the trim summary of each reached function.
-  The enum escape reaches keep theirs the same way (`IrReachRecord`), with the closures and map stores they were given
-  and each answer about a supported callable.
+- **Whole-program walks:** every kept walk keeps its result with what it read in one record (`IrWalkRecord`): copies of
+  the program's tables, what its caller gave it (roots, settings, root types), the functions whose declarations it read,
+  and the summary of each function it reached. A build reuses the result while the tables and the given inputs are the
+  same and each changed function declares the same and, when it was reached, has a summary with the same edges; any
+  other change walks again. The type-aware walks summarize a function as `IrWalkSummary`, the HashLink plain build's
+  walk and table trim as `IrBodyEdges`; the enum escape reaches follow no function's edges and give the closures and
+  map stores they read as inputs, and keep each answer about a supported callable with their results.
 - **Inlining:** `IrInlineCache` keeps each inlined function with everything its result depended on.
 - **Lowering (HashLink):** a function is lowered with relocations instead of table indices (`HlLoweredFunction`); a link step
   assigns the indices in the order a cold lowering would, so cold and warm output are equal by construction.

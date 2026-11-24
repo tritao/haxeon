@@ -2,10 +2,10 @@ package compiler.ir.analysis;
 
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
-import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeMap;
 import compiler.ir.reuse.IrStageMemo.IrContributionKey;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
+import compiler.ir.reuse.IrWalkRecord;
 
 import compiler.ir.model.Ir;
 import compiler.semantic.SemanticSignature;
@@ -28,7 +28,7 @@ class IrEnumEscapeReach {
 	final objectClosures:Map<String, Map<String, Bool>> = [];
 	var implementersBuilt = false;
 
-	/** The program this reach was made for (`IrReachInputs`). */
+	/** The program this reach was made for (`collectEach`). */
 	final program:IrProgram;
 
 	/** The closures' environments given (`closureEnvironment`), as pairs in order, and the map stores (`mapContent`), as triples. */
@@ -174,29 +174,47 @@ class IrEnumEscapeReach {
 		return walker(supportsCallableEscape)(roots);
 
 	/** `collect` in a session that keeps the result as `key` (`collectEach`). */
-	public function collectKept(key:IrContributionKey<IrReachRecord>, roots:Array<IrType>,
+	public function collectKept(key:IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>, roots:Array<IrType>,
 			supportsCallableEscape:IrType->Bool, lineage:Null<IrLineage>):Map<String, Bool>
 		return collectEach(key, [roots], supportsCallableEscape, lineage)[0];
 
 	/**
 	 * The enums one walk reaches after each list of `lists` (`walker`), each a map of its own. In a session that keeps the results
-	 * as `key`, last build's while this reach reads what last build's did (`IrReachInputs`), the lists are the same and
+	 * as `key` (`IrWalkRecord`), last build's while this reach reads what last build's did, the lists are the same and
 	 * `supportsCallableEscape` answers what it answered then; else walked and kept. With `--check-reuse` kept results are walked
 	 * again and compared.
+	 *
+	 * Besides the program's tables, a reach reads the signature of the function each object method names, the closures and map
+	 * stores it was given in order, and the lists. It follows no function's edges, so its record keeps no summaries.
 	 */
-	public function collectEach(key:IrContributionKey<IrReachRecord>, lists:Array<Array<IrType>>,
+	public function collectEach(key:IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>, lists:Array<Array<IrType>>,
 			supportsCallableEscape:IrType->Bool, lineage:Null<IrLineage>):Array<Map<String, Bool>> {
 		if (lineage == null)
 			return walkEach(lists, supportsCallableEscape);
+		var methodFunctions:Array<IrFunction> = [];
+		for (object in program.objects)
+			for (method in object.methods) {
+				var fn = functions.get(method.functionName.name);
+				if (fn != null)
+					methodFunctions.push(fn);
+			}
+		var given = ['closures ${closureLog.length}', 'maps ${mapLog.length}'],
+			givenTypes = closureLog.concat(mapLog);
+		for (roots in lists) {
+			given.push('roots ${roots.length}');
+			for (root in roots)
+				givenTypes.push(root);
+		}
 		var memos = lineage.memos,
 			last = memos.lastResult(key),
-			inputs = new IrReachInputs(program, functions, closureLog, mapLog);
-		if (last != null && last.holds(inputs, lists, supportsCallableEscape)) {
-			if (lineage.checks && !IrReachRecord.sameResults(walkEach(lists, supportsCallableEscape), last.results))
+			kept = last == null ? null : last.holds(program, given, givenTypes, methodFunctions, (_, _) -> null,
+				(_, _) -> {});
+		if (kept != null && sameAnswers(kept.result, supportsCallableEscape)) {
+			if (lineage.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.result.results))
 				throw new compiler.core
 					.InternalError('--check-reuse: the escape reach ${key.name} reused results that differ from walking it now');
-			memos.keepResult(key, new IrReachRecord(inputs, last.lists, last.asked, last.answers, last.results));
-			return [for (result in last.results) result.copy()];
+			memos.keepResult(key, kept);
+			return [for (result in kept.result.results) result.copy()];
 		}
 		var asked:Array<IrType> = [], answers:Array<Bool> = [];
 		var results = walkEach(lists, type -> {
@@ -205,9 +223,36 @@ class IrEnumEscapeReach {
 			answers.push(answer);
 			answer;
 		});
-		memos.keepResult(key, new IrReachRecord(inputs, [for (roots in lists) roots.copy()], asked, answers,
-			[for (result in results) result.copy()]));
+		memos.keepResult(key,
+			new IrWalkRecord(program, given, givenTypes, methodFunctions, [for (_ in methodFunctions) null], {
+				results: [for (result in results) result.copy()],
+				asked: asked,
+				answers: answers
+			}));
 		return results;
+	}
+
+	/** Whether `supportsCallableEscape` answers what the walk that found `kept` was answered. */
+	static function sameAnswers(kept:IrEscapeResults, supportsCallableEscape:IrType->Bool):Bool {
+		for (index in 0...kept.asked.length)
+			if (supportsCallableEscape(kept.asked[index]) != kept.answers[index])
+				return false;
+		return true;
+	}
+
+	/** Whether two walks found the same, for `--check-reuse`. */
+	static function sameResults(left:Array<Map<String, Bool>>, right:Array<Map<String, Bool>>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length) {
+			for (name in left[index].keys())
+				if (!right[index].exists(name))
+					return false;
+			for (name in right[index].keys())
+				if (!left[index].exists(name))
+					return false;
+		}
+		return true;
 	}
 
 	function walkEach(lists:Array<Array<IrType>>, supportsCallableEscape:IrType->Bool):Array<Map<String, Bool>> {
@@ -406,143 +451,11 @@ class IrEnumEscapeReach {
 }
 
 /**
- * What an escape reach reads of its program besides the roots (`IrEnumEscapeReach.collectEach`): the objects, interfaces, enums and
- * static fields, as copies of the program's lists (whose entries are never changed once made), the function each object method
- * names, whose signature it reads, and the closures and map stores it was given, in order.
+ * The results of an escape reach a session keeps (`IrEnumEscapeReach.collectEach`), with each type the walk asked whether it is a
+ * supported callable and the answer it got.
  */
-@:nullSafety(Strict)
-class IrReachInputs {
-	final objects:Array<IrObject>;
-	final interfaces:Array<IrInterface>;
-	final enums:Array<IrEnum>;
-	final staticFields:Array<IrStaticField>;
-	final methodFunctions:Array<Null<IrFunction>>;
-	final closureLog:Array<IrType>;
-	final mapLog:Array<IrType>;
-
-	public function new(program:IrProgram, functions:Map<String, IrFunction>, closureLog:Array<IrType>,
-			mapLog:Array<IrType>) {
-		objects = program.objects.copy();
-		interfaces = program.interfaces.copy();
-		enums = program.enums.copy();
-		staticFields = program.staticFields.copy();
-		methodFunctions =
-			[for (object in objects) for (method in object.methods) functions.get(method.functionName.name)];
-		this.closureLog = closureLog.copy();
-		this.mapLog = mapLog.copy();
-	}
-
-	/** Whether `other` gives a reach what these give it. */
-	public function same(other:IrReachInputs):Bool {
-		if (objects.length != other.objects.length || interfaces.length != other.interfaces.length
-			|| enums.length != other.enums.length || staticFields.length != other.staticFields.length
-			|| methodFunctions.length != other.methodFunctions.length || !sameTypes(closureLog, other.closureLog)
-			|| !sameTypes(mapLog, other.mapLog))
-			return false;
-		for (index in 0...objects.length)
-			if (!IrObjectTools.sameShape(objects[index], other.objects[index]))
-				return false;
-		for (index in 0...interfaces.length) {
-			var left = interfaces[index], right = other.interfaces[index];
-			if (left != right && (left.name != right.name || !IrObjectTools.sameNames(left.bases, right.bases)))
-				return false;
-		}
-		for (index in 0...enums.length)
-			if (!sameEnum(enums[index], other.enums[index]))
-				return false;
-		for (index in 0...staticFields.length) {
-			var left = staticFields[index], right = other.staticFields[index];
-			if (left != right && (left.name != right.name || !IrTypeIdentity.same(left.type, right.type)))
-				return false;
-		}
-		for (index in 0...methodFunctions.length)
-			if (!sameSignature(methodFunctions[index], other.methodFunctions[index]))
-				return false;
-		return true;
-	}
-
-	static function sameEnum(left:IrEnum, right:IrEnum):Bool {
-		if (left == right)
-			return true;
-		if (left.name != right.name || left.cases.length != right.cases.length)
-			return false;
-		for (index in 0...left.cases.length)
-			if (!sameTypes(left.cases[index].params, right.cases[index].params))
-				return false;
-		return true;
-	}
-
-	static function sameSignature(left:Null<IrFunction>, right:Null<IrFunction>):Bool {
-		if (left == right)
-			return true;
-		if (left == null || right == null)
-			return false;
-		if (left.arguments.length != right.arguments.length || !IrTypeIdentity.same(left.result, right.result))
-			return false;
-		for (index in 0...left.arguments.length)
-			if (!IrTypeIdentity.same(left.arguments[index].type, right.arguments[index].type))
-				return false;
-		return true;
-	}
-
-	public static function sameTypes(left:Array<IrType>, right:Array<IrType>):Bool {
-		if (left.length != right.length)
-			return false;
-		for (index in 0...left.length)
-			if (!IrTypeIdentity.same(left[index], right[index]))
-				return false;
-		return true;
-	}
-}
-
-/**
- * The results of an escape reach a session keeps (`IrEnumEscapeReach.collectEach`), with what they were walked from: the reach's
- * inputs, the lists of roots, and each type the walk asked whether it is a supported callable, with the answer.
- */
-@:nullSafety(Strict)
-class IrReachRecord {
-	public final inputs:IrReachInputs;
-	public final lists:Array<Array<IrType>>;
-	public final asked:Array<IrType>;
-	public final answers:Array<Bool>;
-	public final results:Array<Map<String, Bool>>;
-
-	public function new(inputs:IrReachInputs, lists:Array<Array<IrType>>, asked:Array<IrType>, answers:Array<Bool>,
-			results:Array<Map<String, Bool>>) {
-		this.inputs = inputs;
-		this.lists = lists;
-		this.asked = asked;
-		this.answers = answers;
-		this.results = results;
-	}
-
-	/** Whether a walk of a reach reading `inputs` from `lists`, asking `supportsCallableEscape`, finds these results. */
-	public function holds(inputs:IrReachInputs, lists:Array<Array<IrType>>, supportsCallableEscape:IrType->Bool):Bool {
-		if (lists.length != this.lists.length)
-			return false;
-		for (index in 0...lists.length)
-			if (!IrReachInputs.sameTypes(lists[index], this.lists[index]))
-				return false;
-		if (!inputs.same(this.inputs))
-			return false;
-		for (index in 0...asked.length)
-			if (supportsCallableEscape(asked[index]) != answers[index])
-				return false;
-		return true;
-	}
-
-	/** Whether two walks found the same, for `--check-reuse`. */
-	public static function sameResults(left:Array<Map<String, Bool>>, right:Array<Map<String, Bool>>):Bool {
-		if (left.length != right.length)
-			return false;
-		for (index in 0...left.length) {
-			for (name in left[index].keys())
-				if (!right[index].exists(name))
-					return false;
-			for (name in right[index].keys())
-				if (!left[index].exists(name))
-					return false;
-		}
-		return true;
-	}
+typedef IrEscapeResults = {
+	final results:Array<Map<String, Bool>>;
+	final asked:Array<IrType>;
+	final answers:Array<Bool>;
 }

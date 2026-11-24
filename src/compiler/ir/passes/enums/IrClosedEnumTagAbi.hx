@@ -2,7 +2,8 @@ package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
-import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
+import compiler.ir.analysis.IrEnumEscapeReach.IrEscapeResults;
+import compiler.ir.reuse.IrWalkRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -36,7 +37,8 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 
 	/** The escape reach of the closed tags' choice, which a session keeps (`IrEnumEscapeReach.collectKept`). */
 	@:processWide("a kept reach's key, only ever read")
-	public static final REACH = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("closed-tag-reach");
+	public static final REACH =
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("closed-tag-reach");
 
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;

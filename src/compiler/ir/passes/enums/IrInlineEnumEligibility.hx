@@ -1,7 +1,8 @@
 package compiler.ir.passes.enums;
 
 import compiler.ir.analysis.IrEnumEscapeReach;
-import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
+import compiler.ir.analysis.IrEnumEscapeReach.IrEscapeResults;
+import compiler.ir.reuse.IrWalkRecord;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrBodyBuilder;
@@ -26,12 +27,14 @@ class IrInlineEnumEligibility {
 	/** The escape reach of the reflected layouts, which a session keeps (`IrEnumEscapeReach.collectKept`). */
 	@:processWide("a kept reach's key, only ever read")
 	public static final REFLECTED =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("inline-enum-reflected-reach");
+		new compiler.ir.reuse.IrStageMemo
+		.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("inline-enum-reflected-reach");
 
 	/** The escape reach of the escape reasons, which a session keeps (`IrEnumEscapeReach.collectEach`). */
 	@:processWide("a kept reach's key, only ever read")
 	public static final ESCAPES =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("inline-enum-escape-reach");
+		new compiler.ir.reuse.IrStageMemo
+		.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("inline-enum-escape-reach");
 
 	@:processWide("a contribution memo's key, only ever read")
 	public static final USES =

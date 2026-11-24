@@ -2,7 +2,8 @@ package compiler.ir.passes.enums;
 
 import compiler.core.InternalError;
 import compiler.ir.analysis.IrEnumEscapeReach;
-import compiler.ir.analysis.IrEnumEscapeReach.IrReachRecord;
+import compiler.ir.analysis.IrEnumEscapeReach.IrEscapeResults;
+import compiler.ir.reuse.IrWalkRecord;
 import compiler.ir.analysis.IrTypeAwareWalk.IrWalkSummary;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrBuilder;
@@ -41,7 +42,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	/** The escape reach of the reflection decision, which a session keeps (`IrEnumEscapeReach.collectKept`). */
 	@:processWide("a kept reach's key, only ever read")
 	public static final OBSERVED =
-		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrReachRecord>("enum-dispatch-reach");
+		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("enum-dispatch-reach");
 
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";

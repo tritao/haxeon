@@ -109,7 +109,7 @@ class IrReachability {
 	 * stay, and so does every class their types mention.
 	 */
 	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk,
-			?memo:IrFunctionMemo<IrTrimSummary>):Void {
+			?memo:IrFunctionMemo<IrBodyEdges>):Void {
 		var fatal = false, globals:Map<String, Bool> = [];
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var kept:Map<String, Bool> = [], classes:Array<String> = [];
@@ -121,12 +121,13 @@ class IrReachability {
 		function mention(type:IrType):Void
 			namedClasses(type, keep);
 		for (fn in program.functions) {
-			var summary = memo == null ? null : memo.get(fn);
-			if (summary == null) {
-				summary = trimSummary(fn);
-				if (memo != null)
-					memo.set(fn, summary);
+			var summary = memo == null ? IrBodyEdges.trimmed(fn) : memo.get(fn);
+			if (summary == null && memo != null) {
+				summary = IrBodyEdges.of(fn);
+				memo.set(fn, summary);
 			}
+			if (summary == null)
+				continue;
 			if (summary.fatal)
 				fatal = true;
 			for (name in summary.globals)
@@ -151,64 +152,8 @@ class IrReachability {
 		program.objects = [for (object in program.objects) if (kept.exists(object.name)) object];
 	}
 
-	/** What `trimTables` keeps for function `fn`, which depends on nothing else. */
-	public static function trimSummary(fn:IrFunction):IrTrimSummary {
-		// An `Unreachable` terminator lowers to a call of the fatal native, which no `Call` instruction names.
-		var fatal = false,
-			globals:Array<String> = [],
-			seenGlobals:Map<String, Bool> = [],
-			classes:Array<String> = [],
-			seenClasses:Map<String, Bool> = [];
-		function global(name:String):Void
-			if (!seenGlobals.exists(name)) {
-				seenGlobals.set(name, true);
-				globals.push(name);
-			}
-		function keep(name:String):Void
-			if (!seenClasses.exists(name)) {
-				seenClasses.set(name, true);
-				classes.push(name);
-			}
-		var body = fn.body;
-		if (body != null) {
-			for (block in 0...body.blockCount()) {
-				var terminator = body.terminatorRow(block);
-				if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Unreachable)
-					fatal = true;
-				var row = body.firstRow(block);
-				while (row >= 0) {
-					var opcode = body.opcode(row);
-					if (opcode == IrOpcode.GlobalGet || opcode == IrOpcode.GlobalSet)
-						global(body.symbol(row).name);
-					row = body.nextRow(row);
-				}
-			}
-		} else
-			for (block in fn.blocks) {
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Unreachable:
-							fatal = true;
-						default:
-					}
-				for (located in block.instructions)
-					switch located.value {
-						case GlobalGet(_, name), GlobalSet(name, _):
-							global(name);
-						default:
-					}
-			}
-		functionTypes(fn, (_, type) -> namedClasses(type, keep));
-		return {fatal: fatal, globals: globals, classes: classes};
-	}
-
-	/** Whether two functions give `trimTables` the same. */
-	public static function sameTrimSummary(left:IrTrimSummary, right:IrTrimSummary):Bool
-		return left == right || left.fatal == right.fatal && IrObjectTools.sameNames(left.globals, right.globals)
-			&& IrObjectTools.sameNames(left.classes, right.classes);
-
 	/** Calls `keep` with every class `type` names. */
-	static function namedClasses(type:IrType, keep:String->Void):Void
+	public static function namedClasses(type:IrType, keep:String->Void):Void
 		switch type {
 			case Obj(name):
 				keep(name);
@@ -351,11 +296,12 @@ class IrReachability {
 	}
 }
 
-/** What `IrReachability.trimTables` reads of one function: whether a block of it ends unreachable, and the globals and classes it names. */
 /**
- * What `IrReachabilityWalk` reads of a body, in row order (`IrBodyEdges.of`): the walk replays it instead of reading the rows, so
- * a session that keeps it while the function is the same object (`IrFunctionMemo`) reads only the bodies an edit made. A type
- * mentioned again, a class constructed again and a dispatch made again change nothing in a walk, so each is listed once.
+ * What a plain build's reachability walk (`IrReachabilityWalk`) and its trim (`IrReachability.trimTables`) read of one function. The
+ * walk's part is the body in row order, which the walk replays instead of reading the rows, so a session that keeps it while the
+ * function is the same object (`IrFunctionMemo`) reads only the bodies an edit made; a function in blocks has none (the walk reads
+ * its blocks). A type mentioned again, a class constructed again and a dispatch made again change nothing in a walk, so each is
+ * listed once. The trim's part is whether a block ends unreachable and the globals and classes the function names.
  */
 @:nullSafety(Strict)
 class IrBodyEdges {
@@ -377,10 +323,34 @@ class IrBodyEdges {
 	/** A mention's type, a dispatch's method name (as `IrType.Obj`); null otherwise. */
 	public final details:Array<Null<IrType>> = [];
 
+	/** Whether a block ends unreachable: that terminator lowers to a call of the fatal native, which no `Call` instruction names. */
+	public var fatal(default, null) = false;
+
+	/** The globals the function reads or writes, and the classes its types name, each once. */
+	public final globals:Array<String> = [];
+
+	public final classes:Array<String> = [];
+
 	function new() {}
 
-	public static function of(body:IrBody):IrBodyEdges {
-		var summary = new IrBodyEdges(), seen:Map<String, Bool> = [];
+	/** What `fn` gives the walk and the trim. */
+	public static function of(fn:IrFunction):IrBodyEdges {
+		var summary = new IrBodyEdges(), body = fn.body;
+		if (body != null)
+			summary.readEdges(body);
+		summary.readTrim(fn);
+		return summary;
+	}
+
+	/** The trim's part alone, for a build that keeps no summaries: its walk reads the bodies. */
+	public static function trimmed(fn:IrFunction):IrBodyEdges {
+		var summary = new IrBodyEdges();
+		summary.readTrim(fn);
+		return summary;
+	}
+
+	function readEdges(body:IrBody):Void {
+		var summary = this, seen:Map<String, Bool> = [];
 		function add(kind:Int, name:String, detail:Null<IrType>):Void {
 			summary.kinds.push(kind);
 			summary.names.push(name);
@@ -432,15 +402,60 @@ class IrBodyEdges {
 				row = body.nextRow(row);
 			}
 		}
-		return summary;
 	}
 
-	/** Whether two bodies give a walk the same steps. */
+	function readTrim(fn:IrFunction):Void {
+		var seenGlobals:Map<String, Bool> = [], seenClasses:Map<String, Bool> = [];
+		function global(name:String):Void
+			if (!seenGlobals.exists(name)) {
+				seenGlobals.set(name, true);
+				globals.push(name);
+			}
+		function keep(name:String):Void
+			if (!seenClasses.exists(name)) {
+				seenClasses.set(name, true);
+				classes.push(name);
+			}
+		var body = fn.body;
+		if (body != null) {
+			for (block in 0...body.blockCount()) {
+				var terminator = body.terminatorRow(block);
+				if (terminator >= 0 && body.opcode(terminator) == IrOpcode.Unreachable)
+					fatal = true;
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					var opcode = body.opcode(row);
+					if (opcode == IrOpcode.GlobalGet || opcode == IrOpcode.GlobalSet)
+						global(body.symbol(row).name);
+					row = body.nextRow(row);
+				}
+			}
+		} else
+			for (block in fn.blocks) {
+				if (block.terminator != null)
+					switch block.terminator.value {
+						case Unreachable:
+							fatal = true;
+						default:
+					}
+				for (located in block.instructions)
+					switch located.value {
+						case GlobalGet(_, name), GlobalSet(name, _):
+							global(name);
+						default:
+					}
+			}
+		IrReachability.functionTypes(fn, (_, type) -> IrReachability.namedClasses(type, keep));
+	}
+
+	/** Whether two functions give the walk and the trim the same. */
 	public static function same(left:IrBodyEdges, right:IrBodyEdges):Bool {
 		if (left == right)
 			return true;
 		var count = left.kinds.length;
-		if (count != right.kinds.length)
+		if (count != right.kinds.length || left.fatal != right.fatal
+			|| !IrObjectTools.sameNames(left.globals, right.globals)
+			|| !IrObjectTools.sameNames(left.classes, right.classes))
 			return false;
 		for (index in 0...count) {
 			if (left.kinds[index] != right.kinds[index] || left.names[index] != right.names[index])
@@ -454,12 +469,6 @@ class IrBodyEdges {
 		}
 		return true;
 	}
-}
-
-typedef IrTrimSummary = {
-	final fatal:Bool;
-	final globals:Array<String>;
-	final classes:Array<String>;
 }
 
 /** One walk over a program that takes more roots as they appear. */
@@ -535,7 +544,7 @@ class IrReachabilityWalk {
 				}
 				var summary = known.get(fn);
 				if (summary == null) {
-					summary = IrBodyEdges.of(body);
+					summary = IrBodyEdges.of(fn);
 					known.set(fn, summary);
 				}
 				replay(summary, pending);
