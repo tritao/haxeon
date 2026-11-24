@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.24)
+project(debug_probe C CXX)
+include("${HAXEON_GENERATED_DIR}/haxeon.cmake")
+find_package(Haxeon REQUIRED CONFIG)
+haxeon_add_app(debug_probe)

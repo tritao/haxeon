@@ -1,10 +1,12 @@
 import * as vscode from "vscode";
 import {LanguageClient, LanguageClientOptions, ServerOptions} from "vscode-languageclient/node";
 import {ProfilerPanel} from "./profilerPanel";
+import {registerDebugger} from "./debug";
 
 let client: LanguageClient | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  registerDebugger(context);
   const config = vscode.workspace.getConfiguration("haxeon");
   const serverOptions: ServerOptions = {
     command: config.get<string>("server.path", "haxeon"),

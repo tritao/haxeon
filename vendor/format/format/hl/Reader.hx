@@ -109,6 +109,7 @@ class Reader {
 		case 14:
 			return HRef(getType());
 		case 15:
+			if (version >= 8) getString();
 			return HVirtual([for( i in 0...uindex() ) { name : getString(), t : HAt(uindex()) }]);
 		case 16:
 			return HDynObj;
@@ -138,6 +139,10 @@ class Reader {
 			return HPacked({ v : HAt(uindex()) });
 		case 23:
 			return HGUID;
+		case 24:
+			uindex();
+			for (_ in 0...uindex()) uindex();
+			return HI32;
 		case x:
 			throw "Unsupported type value " + x;
 		}
@@ -306,7 +311,7 @@ class Reader {
 		if( i.readString(3) != "HLB" )
 			throw "Invalid HL file";
 		version = _read();
-		if( version <= 1 || version > 7 )
+		if( version <= 1 || version > 8 )
 			throw "HL Version " + version + " is not supported";
 		flags = haxe.EnumFlags.ofInt(uindex());
 		var nints = uindex();
@@ -488,6 +493,8 @@ class Reader {
 		0,
 		3,
 		3,
+		1,
+		2,
 		1,
 	];
 

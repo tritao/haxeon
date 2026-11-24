@@ -216,4 +216,6 @@ enum Opcode {
 	OPrefetch( r : Reg, field : Index<ObjField>, mode : Int );
 	OAsm( op : Int, value : Int, r : RegOpt );
 	OCatch( i : Index<Global> );
+	OCleanupTrap(dst:Reg, delta:Int);
+	OEndCleanupTrap(last:Bool);
 }

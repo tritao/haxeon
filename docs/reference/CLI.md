@@ -244,6 +244,10 @@ exit, and a fatal signal attempts a last flush; SIGKILL can lose the buffered ta
 `Sys.stdout().flush()` flushes explicitly, and `HL_STDOUT_FLUSH=1` flushes after every
 print (`haxeon script.hx` sets it, so a script's lines appear as they are printed).
 
+`run --debug-port PORT` builds a host development project and waits for a debugger on a loopback port
+before entering the program. The VS Code extension provides F5 launch and a local attach configuration.
+See [Debug in VS Code](../guides/00-get-started.md#debug-in-vs-code).
+
 For function breakpoints during debugging, set `inline = false` in `haxeon.toml`; inlining is on otherwise. The
 choice applies to the root project's compilation, including dependencies, and participates in action and compiler memo
 fingerprints. It does not disable the other IR passes. Direct compiler calls turn it off with `--no-inline`.

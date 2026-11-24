@@ -59,6 +59,8 @@ private typedef BuildOptions = {
 	final device:Null<String>;
 	final defines:Array<String>;
 	final runtimeArguments:Array<String>;
+	final debugPort:Null<Int>;
+	final launchPlan:Null<String>;
 	final plan:Bool;
 	final explain:Bool;
 	final timings:Bool;
@@ -871,8 +873,11 @@ class HaxeonCli {
 			resolutionMs = Sys.time() * 1000.0 - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target,
 			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
-		if (command == Check)
+		if (command == Check) {
+			if (options.debugPort != null || options.launchPlan != null)
+				throw new UsageError('"--debug-port" and "--launch-plan" require "haxeon run"');
 			return check(options, project, targetInfo, resolutionMs);
+		}
 		if (launch && targetInfo.isWasm())
 			throw new InternalError('Use "haxeon build --target $target" to build for WebAssembly.');
 		if (launch && targetInfo.equals(Target.detectHost()))
@@ -899,6 +904,9 @@ class HaxeonCli {
 			throw new UsageError('Option "--watch" currently requires a host or Android project');
 		if ((options.restart || options.strictLive) && targetInfo.isAndroid())
 			throw new UsageError('The Android debug host patches every edit; "--restart" and "--strict-live" are for host projects');
+		if ((options.debugPort != null || options.launchPlan != null)
+			&& (command != Run || !hostBuild || options.watch || options.profile || options.buildMode != "development"))
+			throw new UsageError('"--debug-port" and "--launch-plan" require a host development "haxeon run" without watching or profiling');
 		if (command == Test && !hostBuild)
 			throw new UsageError('"haxeon test" runs a host project\'s tests; "$target" is not the host');
 		if (!launch && options.device != null)
@@ -998,11 +1006,33 @@ class HaxeonCli {
 						resolvedPackage.name
 					])
 			];
+			var cwd = scriptRun ? invokedFrom : project.root,
+				arguments:Array<String> = [];
+			if (options.debugPort != null)
+				arguments = runner == null ? ["--debug-wait", "--debug", Std.string(options.debugPort)]
+					: ['--vm-debug-port=${options.debugPort}'];
+			if (runner == null)
+				arguments.push(output);
+			arguments = arguments.concat(options.runtimeArguments);
+			var environment = launchEnvironment(),
+				libraryPath = runtimeLibraryPath(home, nativeDirectories);
+			environment.set(libraryPath.name, libraryPath.value);
+			if (options.launchPlan != null) {
+				File.saveContent(resolvePath(options.launchPlan, invokedFrom), Json.stringify({
+					command: hashlink,
+					arguments: arguments,
+					cwd: cwd,
+					program: output,
+					classPaths: [for (resolved in project.packages.packages) for (root in resolved.sourceRoots) root],
+					environment: environment
+				}));
+				return 0;
+			}
 			// On Windows the app finds its libraries through PATH, but builds choose their compiler worker by a fingerprint
 			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
 			// identity, and a live app can be patched instead of reloaded.
 			var buildPath = environmentCopy("PATH");
-			configureRuntimeLibraryPath(home, nativeDirectories);
+			Sys.putEnv(libraryPath.name, libraryPath.value);
 			var runPath = environmentCopy("PATH");
 			if (options.watch) {
 				var liveHost:Null<String> = null;
@@ -1085,8 +1115,7 @@ class HaxeonCli {
 			if (!options.quiet && options.verbosity.atLeast(Verbosity.Normal))
 				Sys.println('Launching ${runner != null ? runner : output}');
 			// A script runs where it was invoked; a project in its root.
-			var status = ProcessRunner.run(hashlink, (runner != null ? [] : [output]).concat(options.runtimeArguments),
-				scriptRun ? invokedFrom : project.root, launchEnvironment());
+			var status = ProcessRunner.run(hashlink, arguments, cwd, environment);
 			return command == Test ? testStatus(options, status) : status;
 		}
 		if (targetInfo.isWasm()) {
@@ -1590,6 +1619,8 @@ class HaxeonCli {
 			device:Null<String> = null,
 			defines = [],
 			runtimeArguments = [],
+			debugPort:Null<Int> = null,
+			launchPlan:Null<String> = null,
 			plan = false,
 			explain = false,
 			timings = false,
@@ -1673,7 +1704,8 @@ class HaxeonCli {
 				diagnosticFormat = parseDiagnosticFormat(argument.substr("--diagnostic-format=".length));
 			else if (argument == "--project" || argument == "--target" || argument == "--build-mode"
 				|| argument == "--output" || argument == "--define"
-				|| argument == "--device" || argument == "--jobs" || argument == "--gradle-inputs") {
+				|| argument == "--device" || argument == "--jobs" || argument == "--gradle-inputs"
+				|| argument == "--debug-port" || argument == "--launch-plan") {
 				if (index >= arguments.length)
 					throw new UsageError('Option "$argument" requires a value');
 				var value = arguments[index++];
@@ -1691,6 +1723,14 @@ class HaxeonCli {
 						defines.push(value);
 					case "--device":
 						device = value;
+					case "--debug-port":
+						debugPort = Std.parseInt(value);
+						if (!~/^[0-9]+$/.match(value) || debugPort == null || debugPort < 1 || debugPort > 65535)
+							throw new UsageError('Option "--debug-port" requires a port from 1 to 65535');
+					case "--launch-plan":
+						if (value.length == 0)
+							throw new UsageError('Option "--launch-plan" requires a file path');
+						launchPlan = value;
 					case "--gradle-inputs":
 						gradleInputs = resolvePath(value, Sys.getCwd());
 					case "--jobs":
@@ -1756,6 +1796,8 @@ class HaxeonCli {
 			device: device,
 			defines: defines,
 			runtimeArguments: runtimeArguments,
+			debugPort: debugPort,
+			launchPlan: launchPlan,
 			plan: plan,
 			explain: explain,
 			timings: timings,
@@ -1798,6 +1840,8 @@ class HaxeonCli {
 			device: null,
 			defines: [],
 			runtimeArguments: runtimeArguments,
+			debugPort: null,
+			launchPlan: null,
 			plan: false,
 			explain: false,
 			timings: timings,
@@ -2051,10 +2095,8 @@ class HaxeonCli {
 		return null;
 	}
 
-	static function configureRuntimeLibraryPath(home:String, ?extraDirectories:Array<String>):Void {
-		var directories = HashLinkPath.libraryPath(home);
-		if (extraDirectories != null)
-			directories = directories.concat(extraDirectories);
+	static function runtimeLibraryPath(home:String, extraDirectories:Array<String>):{name:String, value:String} {
+		var directories = HashLinkPath.libraryPath(home).concat(extraDirectories);
 		var variable = switch Sys.systemName() {
 			case "Windows": "PATH";
 			case "Mac": "DYLD_LIBRARY_PATH";
@@ -2063,7 +2105,7 @@ class HaxeonCli {
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing.length > 0)
 			directories.push(existing);
-		Sys.putEnv(variable, directories.join(Sys.systemName() == "Windows" ? ";" : ":"));
+		return {name: variable, value: directories.join(Sys.systemName() == "Windows" ? ";" : ":")};
 	}
 
 	/**

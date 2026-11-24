@@ -92,6 +92,17 @@ ok: Fontconfig development files (pkg-config fontconfig)
 A `missing:` line names what it did not find, and the end of the report prints the command above that installs it on
 your system. [The CLI reference](../reference/CLI.md) says what each check looks at.
 
+## Debug in VS Code
+
+Install the Haxeon extension and open a folder containing `haxeon.toml`. Set a breakpoint in a `.hx` file
+and press **F5**. If prompted, choose **Haxeon**. The extension builds and starts the host development target
+with its bundled debugger so you can step through the code and inspect the call stack and variables.
+
+The debugger supports x64 Linux, Windows, and Intel macOS. If VS Code cannot find the CLI on its `PATH`,
+set `haxeon.server.path` to the Haxeon executable. To attach to a local application instead, start it with
+`haxeon run --debug-port 6112` and add a **Haxeon: Attach** configuration with the same port. Attaching to
+an already running process requires the OS's native debugging permissions.
+
 ## Next
 
 [Your first app](01-first-app.md) creates an app, runs it, changes it while it runs, and builds it for shipping.

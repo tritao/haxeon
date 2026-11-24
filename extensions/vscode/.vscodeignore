@@ -1,0 +1,6 @@
+.gitignore
+.adapter-build/**
+.vscode/**
+scripts/**
+src/**
+tsconfig.json

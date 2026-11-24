@@ -146,6 +146,8 @@ class CliHelp {
 					].concat(BUILD_OPTIONS).concat([
 						"  --quiet                      Print the build only if it fails",
 						"  --device SERIAL              The Android device to run on",
+						"  --debug-port PORT            Wait for a debugger on a local port (host development only)",
+						"  --launch-plan PATH           Build the host development program and write its launch details as JSON",
 						"  --watch                      On source edits, patch the running app when its entry class has the",
 						"                               live entry points (start, tick, saveState, restoreState, close),",
 						"                               else rebuild and relaunch it",

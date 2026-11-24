@@ -190,8 +190,8 @@ are launch items. Domain, hosting and publication of release versions are open.
   `haxeon run` opens and `haxeon run --watch` edits.
 - Guides 1 to 5 written and their code compiled in CI.
 - The home page recording, and the UI Showcase on the web.
-- A VS Code extension over the existing language server, with the debugger in it: today debugging goes through the
-  vendored HashLink debug adapter, which users set up on their own, so "debug in VS Code" is not one step yet.
+- The VS Code extension bundles the HashLink debugger. F5 builds and debugs a host development project directly
+  from a folder containing `haxeon.toml` on supported x64 hosts.
 - The internal reference pages moved out of the published set (done: `docs/internals/`).
 
 ## After launch
