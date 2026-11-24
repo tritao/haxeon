@@ -42,8 +42,7 @@ class DynamicStructureGenerator {
 				var request = session.programOutput.requests.dynamicStructures.get(helper);
 				if (request == null)
 					throw new InternalError('Missing dynamic structure request "$helper"');
-				var owner = compiler.core.QualifiedName.parent(request.origin),
-					context = session.enterBody(request.origin, null, owner == null ? "$dynamic-structure" : owner);
+				var context = session.enterHelperBody(request.origin, "$dynamic-structure");
 				try {
 					var span = session.helperSpan(request.type, request.span),
 						fn:TypedFunction = {

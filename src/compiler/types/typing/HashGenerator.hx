@@ -42,8 +42,7 @@ class HashGenerator {
 				var requested = session.programOutput.requests.hashes.get(name);
 				if (requested == null)
 					throw new InternalError('Missing hash-generation request "$name"');
-				var owner = compiler.core.QualifiedName.parent(requested.origin),
-					context = session.enterBody(requested.origin, null, owner == null ? "$hash" : owner);
+				var context = session.enterHelperBody(requested.origin, "$hash");
 				try {
 					generated.set(name, hashFunction(session, requested));
 					var custom = EnumConformanceMethods.method(session, requested.type, "hash");

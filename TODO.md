@@ -505,13 +505,6 @@ typer's drain order) and 5 (live pruning).
   global or function relinks the functions after it" in WARM_REBUILD_REUSE.md,
   which says why this stays). Per function, load/store forwarding's field
   dataflow is the inliner's largest part.
-- **A warm signature edit differs from a cold build.** After perf-guard's
-  signature edit, the compile server's plain module has one more function,
-  type and string than a cold compile of the same tree, and so does the body
-  edit after it (seen on `952a7455d` too, so before the kept walk and
-  tables). The body edits before it are equal to cold. Find what the warm
-  build keeps that a cold one does not (the edited constructor's old adapter
-  is the first suspect) and add the case to `WarmRebuildReuseMain`.
 - **What a kept build still does per function:** `HlLoweringView.holds`
   checks every kept function's facts (about 1% of a body edit), and the
   metadata tables are interned afresh and compared with the kept ones

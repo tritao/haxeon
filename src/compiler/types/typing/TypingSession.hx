@@ -929,7 +929,20 @@ class TypingSession {
 	}
 
 	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String,
-			?sourceFunctionName:String):TypingContext {
+			?sourceFunctionName:String):TypingContext
+		return enter(name, typeSubstitutions, ownerOverride, sourceFunctionName, true);
+
+	/**
+	 * Enters the body of `origin`, the code a generated helper was first requested from, to type the helper as that code sees it;
+	 * `ownerless` is the owner when `origin` has none. Every build types its helpers again from the program's requests, so this
+	 * is no unit of `origin`'s: it neither counts as typing `origin` nor records reads for it, which would replace what `origin`
+	 * read in a build that keeps its body.
+	 */
+	public function enterHelperBody(origin:String, ownerless:String):TypingContext
+		return enter(origin, null, parentPath(origin) ?? ownerless, null, false);
+
+	function enter(name:String, typeSubstitutions:Null<Map<String, CompilerType>>, ownerOverride:Null<String>,
+			sourceFunctionName:Null<String>, unit:Bool):TypingContext {
 		var isLambda = compiler.semantic.LambdaName.is(name),
 			owner = codeOwner(ownerOverride != null ? ownerOverride : isLambda
 				? currentContext.lexicalOwner : parentPath(name)),
@@ -943,7 +956,7 @@ class TypingSession {
 			body.resolution = currentContext.resolution;
 		}
 		// A unit's outermost body: a top-level one, or a declaration's unit typed on demand inside another body.
-		if (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth) {
+		if (unit && (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth)) {
 			programOutput.records.typedUnits.set(name, true);
 			if (sharedReadDepths.length == 0 || sharedReadDepths[sharedReadDepths.length - 1] != bodyContexts.length)
 				body.recordsReads = beginReads(name);

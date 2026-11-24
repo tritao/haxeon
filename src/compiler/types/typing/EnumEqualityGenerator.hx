@@ -59,8 +59,7 @@ class EnumEqualityGenerator {
 				var request = session.programOutput.requests.enumEqualities.get(name);
 				if (request == null)
 					throw new InternalError('Missing enum equality request "$name"');
-				var owner = compiler.core.QualifiedName.parent(request.origin),
-					context = session.enterBody(request.origin, null, owner == null ? "$enum-equality" : owner);
+				var context = session.enterHelperBody(request.origin, "$enum-equality");
 				try {
 					var reflective = name == session.helperNames.named(REFLECTIVE_PREFIX, request.type),
 						custom = reflective ? null : EnumConformanceMethods.method(session, request.type, "equals");

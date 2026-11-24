@@ -1,6 +1,7 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.CompileOptions;
 import compiler.Compiler;
+import compiler.Compiler.CompileResult;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 
@@ -55,8 +56,18 @@ class WarmRebuildReuseMain {
 	static final driverSource =
 		"class Driver { public static function report():Report return {metrics: {count: 1, notes: []}, ok: true}; }";
 
+	/**
+	 * A constructor whose class has a field of an enum type: the field's reflected equality is a helper typed in the context of the
+	 * constructor (its class's first method) every build, also one that keeps the constructor's body.
+	 */
+	static final holderSource =
+		"class Holder { public final shape:Shape; public function new(shape:Shape) { if (shape == null) throw new Failure(\"no shape\"); this.shape = shape; } }";
+
+	static final failureSource =
+		"class Failure extends haxe.Exception { public function new(message:String, ?previous:haxe.Exception) super(message, previous); }";
+
 	static final mainSource =
-		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && new Holder(Square(1)).shape != null && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -71,6 +82,8 @@ class WarmRebuildReuseMain {
 			"Ops.hx" => opsSource,
 			"Report.hx" => reportSource,
 			"Driver.hx" => driverSource,
+			"Holder.hx" => holderSource,
+			"Failure.hx" => failureSource,
 			"Main.hx" => mainSource
 		];
 
@@ -140,37 +153,39 @@ class WarmRebuildReuseMain {
 					StringTools.replace(reportSource, "final notes:Array<String>;", "final note:String;"));
 				files.set("Driver.hx", StringTools.replace(driverSource, "notes: []", "note: \"\""));
 			});
+		// The constructor's callers must see the new optional argument even after a build that kept the caller's body and typed the
+		// helpers of its class again.
+		edit(failures, "after a signature edit of a constructor a kept constructor calls, after a body edit elsewhere",
+			files -> files.set("Failure.hx",
+			StringTools.replace(failureSource, "?previous:haxe.Exception)", "?previous:haxe.Exception, ?code:Int)")),
+			false,
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
 		liveFieldInitializer(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
 	}
 
-	/** An edit is built in a warm session twice: as it is, and checking its reuse, which also lowers every function afresh and compares. */
+	/**
+	 * An edit is built in a warm session twice: as it is, and checking its reuse, which also lowers every function afresh and compares.
+	 * `before` is an edit built in the session first.
+	 */
 	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void,
-			shifts:Bool = false):Void {
-		attempt(failures, label, false, change, false, shifts);
-		attempt(failures, label + ", checked", false, change, true, shifts);
+			shifts:Bool = false, ?before:Map<String, String>->Void):Void {
+		attempt(failures, label, false, change, false, shifts, before);
+		attempt(failures, label + ", checked", false, change, true, shifts, before);
 	}
 
 	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void,
 			?check:Bool = false,
-			?shifts:Bool = false):Void {
+			?shifts:Bool = false, ?before:Map<String, String>->Void):Void {
 		try {
 			var files = initialSources(), compiler = newCompiler(files);
 			compiler.options = new CompileOptions({checkReuse: check});
 			var first = compiler.compile("Main");
-			var before = [for (path in files.keys()) path];
-			change(files);
-			for (path => text in files)
-				compiler.update(path, text);
-			for (path in before)
-				if (!files.exists(path))
-					compiler.remove(path);
-			// A session that is asked to build again registers its source roots again, which is what makes the compiler build rather than
-			// return its last result.
-			compiler.addSourceRoot("stdlib");
-			var warm = compiler.compile("Main"),
+			if (before != null)
+				first = rebuild(compiler, files, before);
+			var warm = rebuild(compiler, files, change),
 				freshCompiler = newCompiler(files),
 				fresh = freshCompiler.compile("Main");
 			var reuse = warm.metrics.reuse;
@@ -197,6 +212,22 @@ class WarmRebuildReuseMain {
 		} catch (error:Dynamic) {
 			failures.push('$label: ${Std.string(error)}');
 		}
+	}
+
+	/** Applies `change` to `files` and to `compiler`'s session, and builds again. */
+	static function rebuild(compiler:Compiler, files:Map<String, String>,
+			change:Map<String, String>->Void):CompileResult {
+		var before = [for (path in files.keys()) path];
+		change(files);
+		for (path => text in files)
+			compiler.update(path, text);
+		for (path in before)
+			if (!files.exists(path))
+				compiler.remove(path);
+		// A session that is asked to build again registers its source roots again, which is what makes the compiler build rather than
+		// return its last result.
+		compiler.addSourceRoot("stdlib");
+		return compiler.compile("Main");
 	}
 
 	/**

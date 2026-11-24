@@ -59,8 +59,7 @@ class ValueEqualityGenerator {
 				if (requested == null)
 					throw new InternalError('Missing value equality request "$name"');
 				// Helpers can originate in a lambda after its typing context has already been popped.
-				var owner = compiler.core.QualifiedName.parent(requested.origin),
-					context = session.enterBody(requested.origin, null, owner == null ? "$value-equality" : owner);
+				var context = session.enterHelperBody(requested.origin, "$value-equality");
 				try {
 					generated.set(name, compareFunction(session, requested, compare));
 					session.leaveBody(context);
