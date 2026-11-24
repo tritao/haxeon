@@ -72,11 +72,11 @@ class AppRunner {
 		if (msvc && !MsvcEnvironment.ensure(Target.detectHost().arch))
 			throw new UsageError("Building a Windows app needs MSVC: install Visual Studio's C++ tools");
 		var ninja = NativeCMakeProvider.ninjaExecutable(home);
+		// A configure that failed leaves the cache without Ninja's graph, and `cmake --build` would then fail on every later build
+		// without saying why; such a tree is configured again.
 		var binary = buildDirectory(project, platform),
-			configure = !FileSystem.exists(Path.join([
-				binary,
-				"CMakeCache.txt"
-			]));
+			configure = !FileSystem.exists(Path.join([binary, "CMakeCache.txt"]))
+				|| !FileSystem.exists(Path.join([binary, "build.ninja"]));
 		if (configure) {
 			var status = ProcessRunner.run("cmake", [
 				"-S",

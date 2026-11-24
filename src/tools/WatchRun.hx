@@ -337,6 +337,9 @@ class WatchRun {
 			if (profile != null)
 				profile.startRecorder();
 			Sys.println('haxeon: running $output' + (profile == null ? "" : ' (profiling to ${profile.capture})'));
+			// Tools that read the watch's output from a file wait for this line, and an app that prints nothing would leave
+			// it in the buffer.
+			Sys.stdout().flush();
 			return process;
 		} catch (error:haxe.Exception) {
 			Sys.setCwd(previous);

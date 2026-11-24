@@ -126,7 +126,17 @@ running app's `patch-applied` event (the watch-events file), and split into the 
 the compile up to the published patch, the host's pickup and the runtime's apply. It gates the median body edit and the signature
 edit with a wide tolerance (wall varies with load; it catches a wait added on the path), the functions each patch carries, and, from
 a second session whose builds each end with a full collection, the server's live data after the edits and its growth over them.
-The first run builds haxeon-ui's native libraries, which takes minutes; later runs keep them.
+The first run builds haxeon-ui's native libraries, which takes minutes; later runs keep them. The ui app builds NativeKit and
+haxeon-ui's own native libraries, whose submodules `bootstrap-tools.sh` does not fetch; the guard checks that they are at their
+pins before it starts, and names the command that puts them there. In a fresh worktree, before the guard:
+
+```sh
+git submodule update --init --recursive vendor/nativekit packages/ui
+./scripts/build-native.sh
+```
+
+After a pin moves, the same command brings them back to it. The guard keeps the app's native build (`out/perf-guard/live/ui-app`)
+between runs, and configures it again after a configure that failed.
 `--only=self-compile`, `--only=incremental`, `--only=small-project` or `--only=live` runs one part. The `edit-replay-short` suite (`wave`)
 replays the last two commits that change `src/compiler` as warm builds in one server, each checked against a fresh build;
 `edit-replay` (`ci`) replays four.

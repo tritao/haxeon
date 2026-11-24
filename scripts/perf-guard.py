@@ -836,6 +836,7 @@ def live_apps(work):
                     (os.path.join("src", "model", "Report.hx"), "static function label(value:Int):String",
                      "static function label(value:Int, ?suffix:String):String"))]
     if shutil.which("xvfb-run"):
+        check_ui_submodules()
         apps.append(LiveApp("ui", ui, os.path.join("src", "Main.hx"),
                             lambda index: ("times')" if index == 0 else f"times ({index})')", f"times ({index + 1})')"),
                             (os.path.join("src", "Main.hx"), "static function options():UiHostOptions",
@@ -843,6 +844,22 @@ def live_apps(work):
     else:
         print("perf-guard: live ui: skipped (no xvfb-run)")
     return apps
+
+
+# The native sources the ui app builds: NativeKit and haxeon-ui's own libraries, each with submodules of its own, which
+# bootstrap-tools.sh does not fetch.
+UI_SUBMODULES = [os.path.join("vendor", "nativekit"), os.path.join("packages", "ui")]
+
+
+def check_ui_submodules():
+    """Fails, naming the command that fixes it, when a submodule the ui app builds is not checked out at its pin: a worktree
+    that has none gets as far as the native build and fails there, one at another revision fails on a header."""
+    status = subprocess.run(["git", "submodule", "status", "--recursive", "--"] + UI_SUBMODULES, cwd=ROOT, check=True,
+                            stdout=subprocess.PIPE, text=True).stdout
+    stale = [line[1:].split()[1] for line in status.splitlines() if line[:1] in ("-", "+", "U")]
+    if stale:
+        raise SystemExit("perf-guard: the live ui app needs these submodules at their pins: " + ", ".join(stale) + "; run "
+                         "git submodule update --init --recursive " + " ".join(UI_SUBMODULES))
 
 
 def live_project(work, app):
