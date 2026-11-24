@@ -170,8 +170,7 @@ running anything clever:
 4. **Build integration.** Shader discovery, the cached build step, per-target
    embedding, diagnostics mapping, the generated source root.
 5. **Circuit Run on it.** `Maze.glsl` and an import; delete `MazeShader.hx`,
-   `maze.reflection.json`, `maze.shader.h`, `shaders.json` and the Circuit Run
-   lines in `packages/gpu/tools/check-shaders.sh`. Run it on Windows and macOS
+   `maze.reflection.json`, `maze.shader.h` and `shaders.json`. Run it on Windows and macOS
    (D3D11 and Metal), which its GLSL-only shaders never supported.
 6. **Docs.** The "Writing shaders" guide and the template shader.
 7. **Later.** `bare_json` upstream,

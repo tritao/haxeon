@@ -4,90 +4,28 @@ set -euo pipefail
 package_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 haxeon_dir=${HAXEON_DIR:-"$(cd "$package_dir/../.." && pwd)"}
 nativekit_dir=${NATIVEKIT_DIR:-"$haxeon_dir/vendor/nativekit"}
-platform_dir="$haxeon_dir/packages/platform"
-gpu_dir="$haxeon_dir/packages/gpu"
 build_dir=${NATIVEKIT_BUILD_DIR:-"$nativekit_dir/build-gpu"}
 
 cmake -S "$nativekit_dir" -B "$build_dir" -GNinja -DCMAKE_BUILD_TYPE=Debug \
     -DNK_BUILD_GPU=ON -DNK_BUILD_TESTS=ON -DNK_BUILD_EXAMPLES=ON
 cmake --build "$build_dir"
-HAXEON_DIR="$haxeon_dir" "$gpu_dir/tools/update-haxeon-hxi.sh" --check
-if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
-	"$haxeon_dir/scripts/build-runtime.sh"
-elif [[ -x "$haxeon_dir/scripts/build-native.sh" ]]; then
-	(cd "$haxeon_dir" && ./scripts/build-native.sh)
-else
-	echo "test-haxeon: Haxeon runtime build script not found" >&2
-	exit 2
-fi
+HAXEON_DIR="$haxeon_dir" "$package_dir/tools/update-haxeon-hxi.sh" --check
+(cd "$haxeon_dir" && ./scripts/build-native.sh)
 
-hashlink_runtime="$("$haxeon_dir/scripts/hashlink-path.sh")/hl"
-if [[ ! -x "$hashlink_runtime" ]]; then
-	echo "test-haxeon: missing checkout-built HashLink; run scripts/build-native.sh first" >&2
-	exit 2
-fi
+project="$package_dir/tests"
+HAXEON_NATIVE_READY=1 "$haxeon_dir/scripts/haxeon" build --compiler-only --project "$project/haxeon.json"
+output="$project/../../../out/packages/gpu/tests/host"
+generated="$output/generated/shaders/Fixture.hx"
+grep -qF '@:assertLayout(48, "shift", 0, "weights", 16, "weights_1", 32)' "$generated"
+grep -qF 'public var weights_1_c3:Float32;' "$generated"
+grep -qF 'textures: [{view: 0, sampler: 0, stage: ShaderStage.Fragment, type: ImageType.TwoD, name: "tex_smp"}]' "$generated"
+grep -qF 'layout: new VertexLayout(16, [{slot: 0, bufferIndex: 0, offset: 0, format: VertexFormat.Float2}, {slot: 1, bufferIndex: 0, offset: 8, format: VertexFormat.Float2}])' "$generated"
 
-(cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
-    --output="$build_dir/haxeon-triangle.hl" \
-    --entry=Triangle \
-    --root="$gpu_dir/tests" \
-    --root="$gpu_dir/src" \
-    --root="$platform_dir/src" \
-    --ffi-interface="$platform_dir/bindings/nativekit.hxi" \
-    --ffi-projection="$platform_dir/bindings/nativekit.hxmap" \
-    --ffi-interface="$platform_dir/bindings/nativekit-net.hxi" \
-    --ffi-projection="$platform_dir/bindings/nativekit-net.hxmap" \
-    --ffi-interface="$gpu_dir/bindings/nativekit-gpu.hxi" \
-    --ffi-projection="$gpu_dir/bindings/nativekit-gpu.hxmap" \
-    "$gpu_dir/tests/shaders/Fixture.hx" \
-    "$gpu_dir/src/haxeon/gpu/ShaderUniformBlock.hx" \
-    "$gpu_dir/tests/Triangle.hx" \
-    "$gpu_dir/src/haxeon/gpu/Buffer.hx" \
-    "$gpu_dir/src/haxeon/gpu/BufferDesc.hx" \
-    "$gpu_dir/src/haxeon/gpu/AttachmentAction.hx" \
-    "$gpu_dir/src/haxeon/gpu/Batch.hx" \
-    "$gpu_dir/src/haxeon/gpu/CommandBuffer.hx" \
-    "$gpu_dir/src/haxeon/gpu/Enums.hx" \
-    "$gpu_dir/src/haxeon/gpu/Features.hx" \
-    "$gpu_dir/src/haxeon/gpu/Image.hx" \
-    "$gpu_dir/src/haxeon/gpu/ImageFormatSupport.hx" \
-    "$gpu_dir/src/haxeon/gpu/Limits.hx" \
-    "$gpu_dir/src/haxeon/gpu/Pipeline.hx" \
-    "$gpu_dir/src/haxeon/gpu/Readback.hx" \
-    "$gpu_dir/src/haxeon/gpu/Renderer.hx" \
-    "$gpu_dir/src/haxeon/gpu/Sampler.hx" \
-    "$gpu_dir/src/haxeon/gpu/ShaderProgram.hx" \
-    "$gpu_dir/src/haxeon/gpu/VertexLayout.hx" \
-    "$gpu_dir/src/haxeon/gpu/Shader.hx" \
-    "$platform_dir/src/haxeon/platform/Surface.hx" \
-    "$platform_dir/src/haxeon/platform/SurfaceFrame.hx" \
-    "$platform_dir/src/haxeon/platform/SurfaceFrameStep.hx" \
-    "$gpu_dir/src/haxeon/gpu/Timestamp.hx" \
-    "$gpu_dir/src/haxeon/gpu/Uniforms.hx" \
-    "$gpu_dir/src/haxeon/gpu/GpuResult.hx" \
-    "$gpu_dir/src/haxeon/gpu/ImageDesc.hx" \
-    "$gpu_dir/src/haxeon/gpu/RenderPassDesc.hx" \
-    "$platform_dir/src/haxeon/platform/GraphicsImageRef.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/NativeEvent.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/HttpEventDecoder.hx" \
-    "$platform_dir/src/haxeon/platform/http/HttpResponse.hx" \
-    "$platform_dir/src/haxeon/platform/event/EventPump.hx" \
-    "$platform_dir/src/haxeon/platform/event/PlatformEvent.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/EventSnapshot.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/EventBytes.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/WindowEventDecoder.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/InputEventDecoder.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/ServiceEventDecoder.hx" \
-    "$platform_dir/src/haxeon/platform/internal/event/ResourceEventDecoder.hx" \
-    "$platform_dir/src/haxeon/platform/async/Requests.hx" \
-    "$platform_dir/src/haxeon/platform/Window.hx" \
-    "$platform_dir/src/haxeon/platform/WebView.hx" \
-    "$platform_dir/src/haxeon/platform/Runtime.hx")
-
+hashlink_dir=$("$haxeon_dir/scripts/hashlink-path.sh")
 set +e
 (cd "$haxeon_dir/out" && \
-	LD_LIBRARY_PATH="$build_dir/modules/gpu:$build_dir:$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-	xvfb-run -a "$hashlink_runtime" "$build_dir/haxeon-triangle.hl")
+	LD_LIBRARY_PATH="$build_dir/modules/gpu:$build_dir:$haxeon_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+	xvfb-run -a "$hashlink_dir/hl" "$output/main.hl")
 status=$?
 set -e
 if [[ $status -ne 42 ]]; then

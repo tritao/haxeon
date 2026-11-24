@@ -17,20 +17,16 @@ haxeon() {
 
 cd "$project"
 
-python3 - "$root" <<'PY'
-import json
-from pathlib import Path
-import sys
-
-gpu = Path(sys.argv[1]) / "packages" / "gpu"
-Path("haxeon.json").write_text(json.dumps({
-    "version": 1,
-    "package": {"name": "shader-build-test"},
-    "entry": "Main",
-    "dependencies": {"haxeon-gpu": {"path": str(gpu)}, "shader-library": {"path": "library"}},
-    "shaderVariants": {"shaders.First": {"default": [], "preview": ["PREVIEW"]}},
-}))
-PY
+ln -s "$root/packages" "$work/packages"
+cat > haxeon.json <<'JSON'
+{
+  "version": 1,
+  "package": {"name": "shader-build-test"},
+  "entry": "Main",
+  "shaderVariants": {"shaders.First": {"default": [], "preview": ["PREVIEW"]}},
+  "dependencies": {"haxeon-gpu": {"path": "../packages/gpu"}, "shader-library": {"path": "library"}}
+}
+JSON
 
 cp "$root/templates/app/shaders/Quad.glsl" src/shaders/Second.glsl
 cp src/shaders/Second.glsl library/src/shaders/LibraryQuad.glsl
@@ -77,14 +73,8 @@ rg -qF "$project/includes/Colors.glsl" "$output/shaders.dependencies"
 rg -q "^enum LibraryQuadQuadVariant" "$output/shaders/LibraryQuad.hx"
 
 signature() {
-    python3 - "$@" <<'PY'
-import hashlib
-from pathlib import Path
-import sys
-
-for source in map(Path, sys.argv[1:]):
-    print(source.stat().st_mtime_ns, hashlib.sha256(source.read_bytes()).hexdigest())
-PY
+    stat -c '%y' "$1"
+    sha256sum < "$1"
 }
 original=$(signature "$first")
 independent=$(signature "$second")
@@ -115,15 +105,7 @@ class Main {
 		return 0;
 }
 HX
-python3 - <<'PYTHON'
-import json
-from pathlib import Path
-
-manifest = Path("haxeon.json")
-data = json.loads(manifest.read_text())
-del data["shaderVariants"]
-manifest.write_text(json.dumps(data))
-PYTHON
+sed -i '/"shaderVariants"/d' haxeon.json
 haxeon check --project haxeon.json
 [[ ! -e "$first" ]]
 rg -qF "$output/shaders/LibraryQuad.hx" "$output/shaders.sources"

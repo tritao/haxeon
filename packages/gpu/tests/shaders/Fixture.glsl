@@ -19,6 +19,9 @@ in vec2 texcoord;
 out vec4 color;
 void main() {
     color = texture(sampler2D(tex, smp), texcoord);
+#ifdef PREVIEW
+    color.rgb *= 0.5;
+#endif
 }
 @end
 

@@ -43,6 +43,7 @@ import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import shaders.Fixture;
+import shaders.Fixture.FixtureFixtureVariant;
 
 class Triangle {
 	static final vertexLayout = new VertexLayout(28, [
@@ -401,7 +402,8 @@ class Triangle {
 			runtime.events.poll();
 			if (!ready && surfaceReady) {
 				renderer = Renderer.create(surface);
-				scoped var reflectedShader = Fixture.create(renderer);
+				scoped var reflectedShader = Fixture.create(renderer, FixtureFixtureVariant.Default);
+				scoped var previewShader = Fixture.create(renderer, FixtureFixtureVariant.Preview);
 				if (Fixture.vsParams.slot != 0 || Fixture.vsParams.size != 48)
 					throw "Reflected uniform block slot or size changed";
 				commandBuffer = renderer.commandBuffer(64);

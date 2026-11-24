@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "package": {
+    "name": "gpu-tests"
+  },
+  "entry": "Triangle",
+  "sourceRoots": [
+    "."
+  ],
+  "scopeSourceRoots": false,
+  "outputDir": "../../../out/packages/gpu/tests",
+  "dependencies": {
+    "haxeon-gpu": {
+      "path": ".."
+    }
+  },
+  "shaderVariants": {
+    "shaders.Fixture": {
+      "default": [],
+      "preview": ["PREVIEW"]
+    }
+  }
+}

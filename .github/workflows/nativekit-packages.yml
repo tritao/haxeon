@@ -50,7 +50,6 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           echo "NATIVEKIT_GLSLANG_SHA256=$(sha256sum "$RUNNER_TEMP/glslangValidator" | cut -d' ' -f1)" >> "$GITHUB_ENV"
       - run: ./packages/ui/tools/check-shaders.sh --validator glslangValidator
-      - run: ./packages/gpu/tools/check-shaders.sh --validator glslangValidator
       - run: ctest --test-dir out/nativekit-shaders --output-on-failure
 
   ui:
