@@ -38,7 +38,8 @@ class UiOverlay implements Disposable {
 	public static function attach(window:Window, surface:Surface, events:EventPump, logicalWidth:Float,
 			?fonts:FontCollection):UiOverlay {
 		if (!Math.isFinite(logicalWidth) || logicalWidth <= 0.0)
-			throw BindingError.invalidArgument("UiOverlay.attach", "The overlay's logical width must be positive and finite");
+			throw BindingError.invalidArgument("UiOverlay.attach",
+				"The overlay's logical width must be positive and finite");
 		var overlay = new UiOverlay(surface, logicalWidth, fonts == null ? FontCollection.create() : fonts);
 		var attached = false;
 		defer if (!attached) overlay.dispose();

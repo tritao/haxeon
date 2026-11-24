@@ -58,7 +58,7 @@ class EventPump {
 	}
 
 	/**
-	 * Routes key, window close, surface ready, surface resize, and frame completion events by source.
+	 * Routes key, window close and resize, surface ready and resize, and frame completion events by source.
 	 * Returning true from a key handler stops subsequent handlers for that source.
 	 */
 	public function listenSource(source:Handle, listener:PlatformEvent->Bool):EventSubscription {
@@ -117,7 +117,7 @@ class EventPump {
 			failure = error;
 		}
 		var source = switch value {
-			case Key(source, _, _, _, _) | WindowClose(source) | SurfaceReady(source)
+			case Key(source, _, _, _, _) | WindowClose(source) | WindowResize(source, _, _) | SurfaceReady(source)
 				| SurfaceResize(source, _, _, _, _) | SurfaceFrameComplete(source, _, _): source;
 			case _: null;
 		};

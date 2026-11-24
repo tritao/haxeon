@@ -660,10 +660,9 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 */
 	extern fn nkgpu_batch_begin(renderer: nkgpu_renderer, out_batch: ptr<nkgpu_batch> @out) -> nkgpu_result;
 	/**
-	 * Destroys a batch and releases every resource it retained.
-	 *
-	 * The handle becomes invalid after this call and must not be reused. Destroying
-	 * a renderer also destroys its batches.
+	 * Releases the caller's batch handle. A frame step retains the sealed batch
+	 * and its resources until that step is released. Destroying a renderer also
+	 * destroys its remaining batches.
 	 */
 	extern fn nkgpu_batch_destroy(batch: nkgpu_batch) -> nkgpu_result;
 	/**

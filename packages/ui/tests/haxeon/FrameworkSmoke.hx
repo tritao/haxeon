@@ -1,3 +1,9 @@
+import haxeon.platform.BindingError;
+import haxeon.platform.BindingErrorKind;
+import haxeon.platform.FrameTick;
+import haxeon.platform.WindowOptions;
+import haxeon.ui.host.UiOverlay;
+import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import haxeon.platform.Runtime;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
@@ -4391,6 +4397,7 @@ class FrameworkSmoke {
 		if (cachedBuilds != 1
 			|| jitteredRoot != cachedRoot || cachedMetrics == null || !cachedMetrics.reusedSubmission) return 110;
 		if (!checkWindowChrome(context)) return 231;
+		checkUiOverlay();
 
 		var cleaned = 0;
 		context.stateStore.onDispose(initialId, function() {
@@ -4924,6 +4931,81 @@ class FrameworkSmoke {
 		if (midGradient == null || Math.abs(midGradient.start.red - 0.5) > 0.00001
 			|| Math.abs(midGradient.end.green - 0.45) > 0.00001) return 263;
 		return 0;
+	}
+
+	@:access(haxeon.ui.host.UiOverlay)
+	static function checkUiOverlay():Void {
+		var rejected = false;
+		try UiOverlay.attach(null, null, null, Math.NaN) catch (error:BindingError) {
+			rejected = error.kind == BindingErrorKind.InvalidArgument && error.operation == "UiOverlay.attach";
+		}
+		if (!rejected) throw "UiOverlay did not reject an invalid logical width";
+
+		scoped var runtime = Runtime.start();
+		var options = new WindowOptions(320, 192);
+		options.title = "UI overlay smoke";
+		var window = runtime.createWindow(options);
+		var surfaceOptions = new NativeSurfaceOptions();
+		surfaceOptions.set_width(320);
+		surfaceOptions.set_height(192);
+		var api = switch Sys.systemName() {
+			case "Mac": GraphicsApi.Metal;
+			case "Windows": GraphicsApi.D3d11;
+			case _: GraphicsApi.Opengl;
+		};
+		surfaceOptions.set_api(api);
+		surfaceOptions.set_flags(SurfaceFlags.Stencil);
+		if (api == GraphicsApi.Opengl) {
+			surfaceOptions.set_flags(SurfaceFlags.Stencil | SurfaceFlags.ForwardCompatible);
+			surfaceOptions.set_major_version(3);
+			surfaceOptions.set_minor_version(3);
+		}
+		var surface = window.createSurfaceNative(surfaceOptions);
+		var ready = false;
+		surface.onReady(function() ready = true);
+		var deadline = Sys.monotonicTime() + 5.0;
+		while (!ready && Sys.monotonicTime() < deadline)
+			if (!runtime.events.poll()) runtime.events.wait(0.01);
+		if (!ready) throw "UI overlay surface was not ready";
+
+		var overlay = UiOverlay.attach(window, surface, runtime.events, 320);
+		defer overlay.dispose();
+		var context = overlay.context;
+		var view = new OverlaySmokeView();
+		var draw = function(width:Int, height:Int) {
+			var frame = surface.acquireFrame();
+			defer frame.cancel();
+			scoped var step = overlay.frameStep(view, frame, new FrameTick(Sys.monotonicTime(), width, height, 0.016));
+		};
+		var size = NativeKit.nk_surface_get_framebuffer_size(surface.nativeHandle());
+		draw(size.out_width, size.out_height);
+		var builds = view.builds;
+		draw(size.out_width, size.out_height);
+		if (builds == 0 || view.builds != builds) throw "The overlay rebuilt a clean view";
+
+		overlay.invalidate();
+		draw(size.out_width, size.out_height);
+		if (view.builds <= builds) throw "Overlay invalidation did not rebuild the view";
+		builds = view.builds;
+		context.setStyleSheet(new StyleSheet("overlay-smoke"));
+		draw(size.out_width, size.out_height);
+		if (view.builds <= builds) throw "A dirty UI context did not rebuild the overlay";
+		builds = view.builds;
+
+		surface.setBounds(0, 0, 288, 160);
+		deadline = Sys.monotonicTime() + 5.0;
+		var resized = NativeKit.nk_surface_get_framebuffer_size(surface.nativeHandle());
+		while (resized.out_width == size.out_width && Sys.monotonicTime() < deadline) {
+			if (!runtime.events.poll()) runtime.events.wait(0.01);
+			resized = NativeKit.nk_surface_get_framebuffer_size(surface.nativeHandle());
+		}
+		if (resized.out_width == size.out_width) throw "UI overlay surface did not resize";
+		draw(resized.out_width, resized.out_height);
+		if (view.builds <= builds) throw "Resizing did not rebuild the overlay";
+
+		if (context.onAnimationFrameRequested == null) throw "The overlay did not connect frame requests";
+		overlay.dispose();
+		if (context.onAnimationFrameRequested != null) throw "Overlay disposal left a frame request connected";
 	}
 
 	static function checkWindowChrome(context:UiContext):Bool {
@@ -7030,5 +7112,17 @@ private class DecoratedButtonSmoke implements View {
 			node.computedStyle = computed;
 		}
 		return node;
+	}
+}
+
+
+private class OverlaySmokeView implements View {
+	public var builds(default, null) = 0;
+
+	public function new() {}
+
+	public function build(context:BuildContext):RenderNode {
+		builds++;
+		return new Text("Retained overlay").build(context);
 	}
 }

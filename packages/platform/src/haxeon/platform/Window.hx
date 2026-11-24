@@ -67,6 +67,20 @@ class Window implements Disposable {
 		}).ownedBy(children);
 	}
 
+	/** Observes changes to the window's logical client size. */
+	public function onResize(handler:Int->Int->Void):EventSubscription {
+		ensureCanCreate();
+		if (handler == null)
+			throw BindingError.invalidArgument("Window.onResize", "Resize handler is required");
+		return events.listenSource(new Handle(value.rawValue()), function(event) {
+			switch event {
+				case WindowResize(_, width, height): handler(width, height);
+				case _:
+			}
+			return false;
+		}).ownedBy(children);
+	}
+
 	/** Replaces the logical hit-test regions used by custom native window chrome. */
 	public function setDecorationRegions(regions:Array<WindowDecorationRegion>):Void
 		setDecorationRegionsNative([for (region in regions) region.nativeValue()]);
