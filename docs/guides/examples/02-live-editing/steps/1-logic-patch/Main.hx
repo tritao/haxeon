@@ -7,6 +7,7 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiDiagnosticsProvider;
+import haxeon.platform.AppLaunch;
 import haxeon.ui.host.UiHost;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
@@ -78,19 +79,24 @@ class Main {
 	}
 
 	/** `haxeon run`: open the window and run until it closes. */
-	static function main():Int
-		return UiHost.run(create, options());
+	static function main():Void
+		UiHost.run(create, options());
 
 	// `haxeon run --watch` sees these, keeps one process and calls them instead of `main`, so edits apply to the running app.
 
+	static var launch:Null<AppLaunch>;
+
 	public static function start(arguments:String):Void
-		UiHost.start(create, options());
+		launch = UiHost.open(create, options());
 
 	public static function tick():Int
-		return UiHost.tick();
+		return launch != null && launch.tick() ? 1 : 0;
 
-	public static function close():Int
-		return UiHost.close();
+	public static function close():Int {
+		if (launch != null) launch.dispose();
+		launch = null;
+		return 0;
+	}
 
 	public static function saveState():String
 		return Std.string(count.value);

@@ -1,6 +1,7 @@
 package haxeon.ui.host;
 
 import haxeon.platform.Surface;
+import haxeon.platform.SurfaceFrame;
 import haxeon.ui.style.Density;
 
 import NativeKitUI.UiStatus;
@@ -68,7 +69,7 @@ class UiHostRuntime implements Disposable {
 	function get_scale():Float return frameState.scale;
 	function get_surfaceReady():Bool return frameState.surfaceAvailable;
 
-	public function start(create:UiHostContext->UiApplication):Void {
+	public function start(create:UiHostContext->UiApplication, redrawOnInput:Bool = false):Void {
 		if (started || disposed || session.state == UiHostLifecycle.Failed || session.state == UiHostLifecycle.Stopping
 			|| session.state == UiHostLifecycle.Stopped) {
 			fail("application-start", "UI host runtime cannot be started more than once or after termination");
@@ -90,7 +91,7 @@ class UiHostRuntime implements Disposable {
 				frame = new UiSurfaceFrame(target, frameState.framebufferWidth, frameState.framebufferHeight);
 				created.context().density = context.touchPrimary ? Density.Touch : Density.Pointer;
 				binding = UiSurfaceBinding.attachNative(created.context(), window, target, context.events,
-					context.requestFrame);
+					context.requestFrame, redrawOnInput);
 				binding.setCoordinateScale(context.zoom);
 				session.transition(UiHostLifecycle.Running);
 			}
@@ -116,7 +117,7 @@ class UiHostRuntime implements Disposable {
 	public function setSurfaceReady(value:Bool):Void frameState.setSurfaceAvailable(value);
 
 	/** Renders at most once for the adapter's scheduling callback. */
-	public function render(timeSeconds:Float, repaintOnly:Bool = false):Bool {
+	public function render(timeSeconds:Float, repaintOnly:Bool = false, ?acquired:SurfaceFrame):Bool {
 		var frame = this.frame;
 		if (disposed || session.state != UiHostLifecycle.Running || !frameState.canRender() || application == null
 			|| renderer == null || frame == null)
@@ -159,7 +160,7 @@ class UiHostRuntime implements Disposable {
 			{
 				ProfileSpan.begin("ui.render");
 				defer ProfileSpan.end("ui.render");
-				frame.render(application.context(), renderer);
+				frame.render(application.context(), renderer, acquired);
 			}
 			lastContextRenderSeconds = Sys.time() - phaseStarted;
 			lastPaintSeconds = lastContextRenderSeconds;

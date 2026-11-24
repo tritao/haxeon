@@ -9,12 +9,13 @@ destination="$root/out/sdk/platforms/web/ui"
 EMSDK_QUIET=1 source "$nativekit/.tools/emsdk/emsdk_env.sh"
 emcmake cmake -S "$root/packages/ui" -B "$build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
-    -DNK_BUILD_SHARED=OFF -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=ON \
+    -DNK_BUILD_AUDIO=ON -DNK_BUILD_SHARED=OFF -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=ON \
     -DNKUI_NATIVEKIT_DIR="$nativekit" -DNKUI_HAXEON_DIR="$root" \
     -DNKUI_HAXEON_SDK_HOST=ON -DNKUI_HAXEON_SUBSET_FONTS=OFF -DNK_SOKOL_BACKEND=gles3
 cmake --build "$build" --target nativekit_ui_haxeon --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
 
 mkdir -p "$destination"
+cp "$root/stdlib/haxeon/wasm/haxeon-host.js" "$destination/../"
 cp "$build"/nativekit_ui_haxeon.{js,wasm} "$build/nativekit_haxeon_memory_contract.json" "$destination/"
 cp -R "$build/assets" "$destination/"
 {

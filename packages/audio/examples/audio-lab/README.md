@@ -1,7 +1,7 @@
 # Haxeon Audio Lab
 
 Audio Lab is the first companion-app slice for NativeKit audio. It is a real
-Haxeon desktop application, not a static UI mockup: preset buttons rebuild
+Haxeon desktop and browser application. Preset buttons rebuild
 NativeKit DSP patches, piano presses submit note events, and the cutoff slider
 submits a sample-accurate parameter ramp into the same renderer used by audio
 tests and the tracker model.
@@ -41,8 +41,7 @@ is cancelled. Rapid input and sustained tracker playback therefore keep running.
 Live events are submitted in chronological blocks with a 100 ms lookahead.
 
 The example namespace is `audiolab`. Its managed dependencies are
-`haxeon.audio` and `haxeon.ui`; `CMakeLists.txt` builds one shared NativeKit
-runtime with audio and GPU enabled, together with UI.
+`haxeon.audio` and `haxeon.ui`. Both runners use `Runtime.launch`.
 
 Build without launching the application:
 
@@ -57,3 +56,10 @@ Run the existing preset, automation, and tracker smoke check explicitly:
 ```
 
 The previous NativeKit `tools/test-audio-lab.sh` is now this example-owned tool.
+
+Build and serve the WebGL2 app with the browser SDK:
+
+```sh
+scripts/haxeon build --target wasm32 --project packages/audio/examples/audio-lab/haxeon.json
+python3 -m http.server --directory packages/audio/examples/audio-lab/build/web/wasm32 8080
+```

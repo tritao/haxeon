@@ -17,5 +17,15 @@
     }
   },
   "target": "host",
-  "outputDir": "build"
+  "outputDir": "build",
+  "app": {
+    "name": "Audio Lab",
+    "id": "dev.haxeon.audiolab",
+    "platforms": [
+      "linux",
+      "macos",
+      "web",
+      "windows"
+    ]
+  }
 }

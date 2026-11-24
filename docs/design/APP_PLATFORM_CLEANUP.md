@@ -6,7 +6,7 @@ Run (`packages/gpu/examples/circuit-run`) has no target conditionals and no
 custom defines: what differs between desktop and web belongs to the
 platform, UI and GPU packages.
 
-Circuit Run's remaining `#if circuit_run_web` sites, and the step that
+Circuit Run's remaining target conditionals, and the step that
 removes each:
 
 | Site | Removed by |
@@ -42,32 +42,16 @@ emoji fonts before it starts.
 
 ## 5. One app loop: `Runtime.launch` under `UiHost.run`
 
-There are now two entry systems: the platform's `Runtime.startApp` and
-`AppLoop` (Circuit Run, `Triangle`), and the UI's `UiHost.run` with
-`UiApplication` (the app template and guides), each with its own
-`#if wasm` session and tick export. They become one loop.
+Implemented. `Runtime.launch` owns the app and runtime and drains the last
+submitted frame before teardown. Apps register a frame-driving surface with
+`runtime.drive(surface)`; they can create additional windows. `UiHost.run`
+uses the same loop, and live runners keep a cooperative session from
+`UiHost.open`.
 
-```haxe
-static function main()
-    Runtime.launch(runtime -> new Main(runtime));
-```
-
-- `App` extends `Disposable`. It does not expose a single surface, so
-  multi-window apps fit; the app tells the loop which surface drives frames
-  once it has created it.
-- Desktop: `launch` runs the loop, then disposes the app and the runtime under
-  the first-exception rule.
-- Wasm: `launch` registers the loop and returns. One platform-owned export
-  advances it and returns a typed status; once the loop stops and its pending
-  frame completes, it disposes the app and the runtime.
-- `UiHost.run` becomes a `Runtime.launch` of an app that hosts a
-  `UiApplication`. Its `start`/`tick`/`close` statics and integer statuses go,
-  and its string throws (`Std.string(error)`, "UI host options are invalid")
-  become typed errors.
-- `haxeon build --target wasm32` already turns a template app into a page with
-  the SDK's WebGL2 host. Every web app uses it: Circuit Run and audio-lab drop
-  their `build-guest.sh`, `exports.js` and polling `index.html`, and
-  `--define=circuit_run_web` goes.
+The SDK's WebGL2 host drives the platform tick export. Circuit Run and Audio
+Lab build with `haxeon build --target wasm32` and share the SDK host,
+including its audio exports. Desktop diagnostics still support bounded
+captures and scripted input.
 
 ## 6. `ShowcaseWeb` on the same loop
 

@@ -47,7 +47,7 @@ class CircuitRenderer {
 		renderer = Renderer.create(surface);
 		commands = renderer.commandBuffer(64);
 		var shader = Shader.begin(renderer, ShaderLanguage.Glsl,
-		#if circuit_run_web
+		#if wasm
 		Embed.text("shaders/maze-web.vert.glsl"),
 			Embed.text("shaders/maze-web.frag.glsl")).build();
 		#else

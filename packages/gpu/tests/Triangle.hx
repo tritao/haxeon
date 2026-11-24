@@ -28,6 +28,7 @@ import haxeon.gpu.Shader;
 import haxeon.gpu.SurfaceOptions as GpuSurfaceOptions;
 import haxeon.gpu.Timestamp;
 import haxeon.platform.App;
+import haxeon.platform.AppLoop;
 import haxeon.platform.FrameRecorder;
 import haxeon.platform.FrameTick;
 import haxeon.platform.GraphicsImageRef;
@@ -45,7 +46,7 @@ class Triangle {
 	@:access(haxeon.platform.AppLoop)
 	static function verifyFrameCompletionRecovery(runtime:Runtime, surface:Surface, app:App):Void {
 		surface.setFrameMode(SurfaceFrameMode.OnDemand);
-		scoped var loop = runtime.startApp(surface, app);
+		scoped var loop = new AppLoop(runtime.events, surface, app, null);
 		var redraws = 0;
 		loop.frameSubscription = surface.onFrame(function(_, _) redraws++);
 		var source = new Handle(surface.nativeHandle().rawValue());
@@ -587,24 +588,32 @@ class Triangle {
 		runtime.events.dispatch(windowKey);
 		if (!keySubscription.isDisposed() || !closeSubscription.isDisposed() || keyCalls != 1)
 			throw "Window key routing persisted after disposal";
-		scoped var loopWindow = runtime.createWindowNative(windowOptions);
-		var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
-		var app = new TriangleLoopApp(loopSurface);
 		{
 			scoped var retryWindow = runtime.createWindowNative(windowOptions);
 			var retrySurface = retryWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
-			verifyFrameCompletionRecovery(runtime, retrySurface, app);
+			verifyFrameCompletionRecovery(runtime, retrySurface, new TriangleLoopApp(retrySurface));
 		}
+		runtime.dispose();
+
 		var recorded = 0;
-		runtime.run(loopSurface, app, new FrameRecorder(function(timing) {
-			if (timing.submittedSeconds == null || timing.submittedSeconds < timing.callbackSeconds)
-				throw "Frame recorder returned out-of-order timestamps";
-			recorded++;
-		}));
+		var app:Null<TriangleLoopApp> = null;
+		Runtime.launch(function(active) {
+			var loopWindow = active.createWindowNative(windowOptions);
+			var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
+			var launched = new TriangleLoopApp(loopSurface);
+			active.drive(loopSurface, new FrameRecorder(function(timing) {
+				if (timing.submittedSeconds == null || timing.submittedSeconds < timing.callbackSeconds)
+					throw "Frame recorder returned out-of-order timestamps";
+				recorded++;
+			}));
+			app = launched;
+			return launched;
+		});
+		if (app == null)
+			throw "The launch factory did not run";
 		app.verify();
 		if (recorded != 1)
 			throw "Frame recorder must report the submitted frame and skip the canceled frame";
-		runtime.dispose();
 
 		Sys.println("draws_per_frame=400");
 		Sys.println("immediate_cpu_ms_per_frame=" + immediateMs / 12.0);
@@ -621,6 +630,7 @@ private class TriangleLoopApp implements App {
 	var frames = 0;
 	var afterFrames = 0;
 	var completions = 0;
+	var disposed = false;
 
 	public function new(surface:Surface) {
 		this.surface = surface;
@@ -661,9 +671,14 @@ private class TriangleLoopApp implements App {
 	public function shouldQuit():Bool
 		return frames == 2;
 
+	public function dispose():Void {
+		disposed = true;
+		defer if (renderer != null) renderer.dispose();
+		if (batch != null) batch.dispose();
+	}
+
 	public function verify():Void {
-		if (frames != 2 || afterFrames != 2 || completions != 1)
-			throw "The loop quit without completing the submitted frame";
-		batch.dispose();
+		if (frames != 2 || afterFrames != 2 || completions != 1 || !disposed)
+			throw "The loop quit without completing the submitted frame and disposing the app";
 	}
 }

@@ -115,7 +115,8 @@ class AppRunner {
 			if (resolved.manifest.native == null)
 				continue;
 			var cmake = resolved.manifest.native.cmake;
-			if (cmake == null || (cmake.target != "nativekit_ui" && cmake.target != "haxeon_nativekit"))
+			if (cmake == null || (cmake.target != "nativekit_ui" && cmake.target != "haxeon_nativekit"
+				&& cmake.target != "nativekit_audio"))
 				throw new UsageError('Web app runners cannot build native package "${resolved.name}"');
 			needsHost = true;
 		}

@@ -552,8 +552,8 @@ class DesktopUiHost {
 					recordFailure("desktop-host", error);
 					session.fail("desktop-host", error);
 					Sys.println(options.title + ": " + Std.string(error));
-					if (session.error != null && session.error.stack.length > 0)
-						Sys.println(session.error.stack);
+					if (session.error != null && session.error.diagnosticStack.length > 0)
+						Sys.println(session.error.diagnosticStack);
 					active = false;
 					result = 1;
 				}
@@ -571,8 +571,8 @@ class DesktopUiHost {
 				if (message != null) detail = hostError.stage + ": " + Std.string(message);
 			}
 			Sys.println(options.title + ": " + detail);
-			var stack = session != null && session.error != null && session.error.stack.length > 0
-				? session.error.stack : haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+			var stack = session != null && session.error != null && session.error.diagnosticStack.length > 0
+				? session.error.diagnosticStack : haxe.CallStack.toString(haxe.CallStack.exceptionStack());
 			if (stack.length > 0) Sys.println(stack);
 			result = 1;
 		}

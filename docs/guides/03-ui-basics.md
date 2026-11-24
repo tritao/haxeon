@@ -52,8 +52,8 @@ static function create(host:UiHostContext):App {
 }
 
 /** `haxeon run`: open the window and run until it closes. */
-static function main():Int
-	return UiHost.run(create, options());
+static function main():Void
+	UiHost.run(create, options());
 ```
 
 The rest of `src/Main.hx` (`start`, `tick`, `close`, `saveState`, `restoreState`) lets `haxeon run --watch`

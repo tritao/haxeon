@@ -1,78 +1,33 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Circuit Run</title>
-  <style>
-    html { color-scheme: dark; background: #10131e; font: 16px system-ui, sans-serif; }
-    body { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 12px; margin: 16px; }
-    canvas { display: block; max-width: 100%; height: auto; }
-    p { margin: 0; }
-  </style>
-</head>
-<body>
-  <canvas id="canvas" width="540" height="452" tabindex="0" aria-label="Circuit Run"></canvas>
-  <p id="status" role="status">Loading Circuit Run…</p>
-  <script src="haxeon-host.js"></script>
-  <script>
-    const canvas = document.getElementById("canvas");
-    const status = document.getElementById("status");
-    let circuitHostMemory;
-    function notifyParent(state) {
-      if (parent !== window) parent.postMessage("haxeon-circuit-run-" + state, location.origin);
-    }
-    function report(error) {
-      status.textContent = "Circuit Run failed: " + error;
-      document.documentElement.dataset.circuitRun = "failed";
-      notifyParent("failed");
-      console.error(error);
-    }
-    var Module = {
-      canvas,
-      instantiateWasm(imports, receive) {
-        WebAssembly.instantiateStreaming(fetch("circuit_run.wasm"), imports)
-          .then(({instance}) => {
-            circuitHostMemory = Object.values(instance.exports).find(value => value instanceof WebAssembly.Memory);
-            receive(instance);
-          }).catch(report);
-        return {};
-      },
-      async onRuntimeInitialized() {
-        try {
-          const response = await fetch("nativekit_haxeon_memory_contract.json");
-          const config = await response.json();
-          const contract = {
-            version: config.version, pageSize: config.page_size,
-            hostBase: config.host_base, hostLimit: config.host_limit,
-            guestBase: config.guest_base, guestLimit: config.guest_limit, memorySize: config.memory_size
-          };
-          const {exports} = await HaxeonWasmHost.instantiate("circuit_run_guest.wasm", {
-            emscripten: Module, memory: circuitHostMemory, contract
-          });
-          exports["Main.main"]();
-          const tick = () => {
-            try {
-              const result = exports["Main.poll"]();
-              if (result < 0) throw new Error("frame processing failed");
-              if (result === 2) {
-                status.textContent = "Circuit Run closed";
-                return;
-              }
-              if (result === 1 && document.documentElement.dataset.circuitRun !== "ready") {
-                document.documentElement.dataset.circuitRun = "ready";
-                notifyParent("ready");
-                status.textContent = "Arrow keys to steer. R to restart. M to mute.";
-              }
-              requestAnimationFrame(tick);
-            } catch (error) { report(error); }
-          };
-          canvas.focus();
-          requestAnimationFrame(tick);
-        } catch (error) { report(error); }
-      }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Circuit Run</title>
+<style>
+    html, body { margin: 0; }
+    canvas { display: block; width: 100%; height: 100dvh; outline: none; }
+    #status { position: absolute; inset: 0 auto auto 0; margin: 12px; }
+</style>
+<canvas id="canvas" tabindex="0" aria-label="Circuit Run"></canvas>
+<p id="status" role="status">Loading…</p>
+<script src="haxeon-host.js"></script>
+<script type="module">
+    import { module } from "./haxeon-build.js";
+    const canvas = document.querySelector("#canvas");
+    const status = document.querySelector("#status");
+    // A page that embeds the game, such as the website, waits for these before revealing it.
+    const notifyParent = state => {
+        if (parent !== window) parent.postMessage("haxeon-circuit-run-" + state, location.origin);
     };
-  </script>
-  <script src="circuit_run.js"></script>
-</body>
+    const fail = error => {
+        status.hidden = false;
+        status.textContent = error.message;
+        notifyParent("failed");
+    };
+    HaxeonWasmHost.mountApp(module, canvas, {
+        onPresented() { status.hidden = true; canvas.focus(); notifyParent("ready"); },
+        onStopped() { status.hidden = false; status.textContent = "Circuit Run closed"; },
+        onError: fail
+    }).catch(fail);
+</script>
 </html>

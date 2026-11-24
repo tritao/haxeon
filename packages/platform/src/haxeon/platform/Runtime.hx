@@ -15,6 +15,10 @@ class Runtime implements Disposable {
 	var disposed:Bool = false;
 	var disposing:Bool = false;
 
+	var drivingSurface:Null<Surface>;
+	var frameRecorder:Null<FrameRecorder>;
+	var pollWork:Null<Void->Null<Float>>;
+
 	private function new() {
 		events = new EventPump();
 	}
@@ -44,19 +48,49 @@ class Runtime implements Disposable {
 		return window;
 	}
 
-	/** Starts before SurfaceReady is dispatched. A browser host drives the returned loop with tick(). */
-	public function startApp(surface:Surface, app:App, ?recorder:FrameRecorder):AppLoop {
-		ensureLive();
-		if (surface == null || app == null || !surface.usesEventPump(events))
-			throw BindingError.invalidArgument("Runtime.startApp",
-				"An app and a surface using this runtime's event pump are required");
-		return new AppLoop(events, surface, app, recorder);
+	/** Owns the app until it quits. On web, the browser drives the registered app. */
+	public static function launch(create:Runtime->App, ?options:RuntimeOptions):Void {
+		#if wasm
+		BrowserHost.requireIdle();
+		BrowserHost.attach(openApp(create, options));
+		#else
+		openApp(create, options).run();
+		#end
 	}
 
-	/** Drives an app until it quits and any queued frame has completed. */
-	public function run(surface:Surface, app:App, ?recorder:FrameRecorder):Void {
-		scoped var loop = startApp(surface, app, recorder);
-		loop.run();
+	/** Opens a managed app for a host that supplies the individual ticks. */
+	public static function openApp(create:Runtime->App, ?options:RuntimeOptions):AppLaunch {
+		if (create == null)
+			throw BindingError.invalidArgument("Runtime.openApp", "An application factory is required");
+		var runtime = start(options);
+		var app:Null<App> = null;
+		var opened = false;
+		defer if (!opened) {
+			defer runtime.dispose();
+			if (app != null) app.dispose();
+		}
+		app = create(runtime);
+		var surface = runtime.drivingSurface;
+		if (app == null || surface == null)
+			throw BindingError.invalidArgument("Runtime.launch",
+				"The application must register a frame-driving surface");
+		var launch = new AppLaunch(runtime, app,
+			new AppLoop(runtime.events, surface, app, runtime.frameRecorder, runtime.pollWork));
+		opened = true;
+		return launch;
+	}
+
+	/**
+	 * Registers the surface that schedules application frames. Other windows can own their own surfaces.
+	 * Optional poll work runs after native events and can return a shorter desktop wait in seconds.
+	 */
+	public function drive(surface:Surface, ?recorder:FrameRecorder, ?poll:Void->Null<Float>):Void {
+		ensureLive();
+		if (surface == null || !surface.usesEventPump(events) || drivingSurface != null)
+			throw BindingError.invalidArgument("Runtime.drive", "An unused frame driver from this runtime is required");
+		drivingSurface = surface;
+		frameRecorder = recorder;
+		pollWork = poll;
 	}
 
 	/** Destroys owned children, then ends the NativeKit generation. */

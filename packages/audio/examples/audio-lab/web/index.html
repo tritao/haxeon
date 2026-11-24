@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audio Lab</title>
+<style>
+    html, body { margin: 0; }
+    canvas { display: block; width: 100%; height: 100dvh; outline: none; }
+    #status { position: absolute; inset: 0 auto auto 0; margin: 12px; }
+</style>
+<canvas id="canvas" tabindex="0" aria-label="Audio Lab"></canvas>
+<p id="status" role="status">Loading…</p>
+<script src="haxeon-host.js"></script>
+<script type="module">
+    import { module } from "./haxeon-build.js";
+    const canvas = document.querySelector("#canvas");
+    const status = document.querySelector("#status");
+    const fail = error => { status.hidden = false; status.textContent = error.message; };
+    HaxeonWasmHost.mountApp(module, canvas, {
+        onPresented() { status.hidden = true; canvas.focus(); },
+        onStopped() { status.hidden = false; status.textContent = "Audio Lab closed"; },
+        onError: fail
+    }).catch(fail);
+</script>
+</html>

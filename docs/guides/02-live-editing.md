@@ -174,14 +174,19 @@ functions `start`, `tick`, `close`, `saveState` and `restoreState`: it keeps the
 for each step of the app until it returns 0, and `close` at the end. The template's `Main` has all of them:
 
 ```haxe
+static var launch:Null<AppLaunch>;
+
 public static function start(arguments:String):Void
-	UiHost.start(create, options());
+	launch = UiHost.open(create, options());
 
 public static function tick():Int
-	return UiHost.tick();
+	return launch != null && launch.tick() ? 1 : 0;
 
-public static function close():Int
-	return UiHost.close();
+public static function close():Int {
+	if (launch != null) launch.dispose();
+	launch = null;
+	return 0;
+}
 ```
 
 Patches are applied between two calls to `tick`, so no code is half-way through when it changes.

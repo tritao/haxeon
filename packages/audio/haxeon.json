@@ -26,6 +26,7 @@
     "interfaces": [
       "bindings/nativekit-audio.hxi"
     ],
+    "wasmInterfaces": ["bindings/nativekit-audio-wasm.hxi"],
     "projections": [
       "bindings/nativekit-audio.hxmap"
     ]

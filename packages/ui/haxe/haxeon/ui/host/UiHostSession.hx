@@ -11,20 +11,19 @@ enum UiHostLifecycle implements Equatable {
 }
 
 /** Structured host error retained after asynchronous startup or frame failure. */
-class UiHostError {
+class UiHostError extends haxe.Exception {
 	public final stage:String;
-	public final message:String;
 	public final cause:Dynamic;
-	public final stack:String;
+	public final diagnosticStack:String;
 
 	public function new(stage:String, cause:Dynamic) {
+		super(Std.string(cause), Std.isOfType(cause, haxe.Exception) ? cast cause : null);
 		this.stage = stage;
 		this.cause = cause;
-		this.message = Std.string(cause);
-		this.stack = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
+		this.diagnosticStack = haxe.CallStack.toString(haxe.CallStack.exceptionStack());
 	}
 
-	public function toString():String return stage + ": " + message;
+	override public function toString():String return stage + ": " + message;
 }
 
 /** Nonblocking handle for a hosted application's complete lifetime. */
@@ -41,6 +40,7 @@ class UiHostSession implements Disposable {
 	@:allow(haxeon.ui.host.UiHostRuntime)
 	@:allow(haxeon.ui.host.BrowserUiHost)
 	@:allow(haxeon.ui.host.DesktopUiHost)
+	@:allow(haxeon.ui.host.HostedUiApp)
 	function transition(next:UiHostLifecycle):Void {
 		if (state == next) return;
 		var valid = switch (state) {

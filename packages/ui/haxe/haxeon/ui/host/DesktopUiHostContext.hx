@@ -14,6 +14,7 @@ class DesktopUiHostContext extends UiHostContext {
 	/** An application may defer closing while it asks to save a document. */
 	@:allow(haxeon.ui.host.DesktopUiHost)
 	@:allow(haxeon.ui.host.BrowserUiHost)
+	@:allow(haxeon.ui.host.HostedUiApp)
 	private function new(fonts:FontCollection, events:EventPump, window:WindowHandle, surface:SurfaceHandle,
 			close:Void->Void, scheduleFrame:Void->Void) {
 		super(fonts, events, close, scheduleFrame);

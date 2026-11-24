@@ -206,5 +206,64 @@ var HaxeonWasmHost = (() => {
     return {instance, memory};
   }
 
-  return {instantiate, memoryContract, emscriptenContract, instantiateEmscripten, HaxeonExit};
+  /** Schedules the single platform loop registered by the guest's main. */
+  function runApp(exports, {onPresented, onFrame, onStopped, onError} = {}) {
+    const tick = exports["haxeon.platform.BrowserHost.tick"];
+    if (typeof tick !== "function")
+      throw new Error("The app is missing its platform tick export");
+    let presented = false;
+    function advance() {
+      try {
+        const status = tick();
+        if (status === 2) {
+          onStopped?.();
+          return;
+        }
+        if (status === 1) {
+          if (!presented) {
+            presented = true;
+            onPresented?.();
+          }
+          onFrame?.(exports);
+        }
+        requestAnimationFrame(advance);
+      } catch (error) {
+        if (onError) onError(error);
+        else throw error;
+      }
+    }
+    requestAnimationFrame(advance);
+  }
+
+  /** Loads the SDK's WebGL2 host and starts a managed app on its canvas. */
+  async function mountApp(module, canvas, callbacks) {
+    const hostUrl = new URL("./ui/nativekit_ui_haxeon.js", document.baseURI);
+    let memory;
+    const emscripten = await new Promise((resolve, reject) => {
+      window.Module = {
+        canvas,
+        instantiateWasm(imports, receiveInstance) {
+          instantiateEmscripten(new URL("nativekit_ui_haxeon.wasm", hostUrl), imports)
+            .then(result => {
+              memory = result.memory;
+              receiveInstance(result.instance);
+            }).catch(reject);
+          return {};
+        },
+        onRuntimeInitialized() { resolve(window.Module); },
+        onAbort(reason) { reject(new Error(reason)); }
+      };
+      const script = document.createElement("script");
+      script.src = hostUrl;
+      script.onerror = () => reject(new Error("Could not load the WebGL2 UI host"));
+      document.head.append(script);
+    });
+    const contract = emscriptenContract(emscripten, memory);
+    const guest = await instantiate(module, {emscripten, memory, contract});
+    guest.exports.main();
+    runApp(guest.exports, callbacks);
+    return guest.exports;
+  }
+
+  return {instantiate, memoryContract, emscriptenContract, instantiateEmscripten, runApp, mountApp, HaxeonExit};
 })();

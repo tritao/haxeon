@@ -1,50 +1,31 @@
 package haxeon.ui.host;
 
+import haxeon.platform.AppLaunch;
+import haxeon.platform.BindingError;
+import haxeon.platform.Runtime;
+import haxeon.platform.RuntimeOptions;
+
 /** Runs a UI application on the current platform. */
 class UiHost {
-	#if wasm
-	static var session:Null<BrowserUiHostSession> = null;
-
-	public static function run(create:UiHostContext->UiApplication, options:UiHostOptions):Int {
-		start(create, options);
-		return 0;
+	public static function run(create:UiHostContext->UiApplication, options:UiHostOptions):Void {
+		var runtimeOptions = configure(create, options);
+		Runtime.launch(runtime -> new HostedUiApp(runtime, options, create), runtimeOptions);
 	}
 
-	public static function start(create:UiHostContext->UiApplication, options:UiHostOptions):Void
-		session = BrowserUiHost.start(options, create);
-
-	public static function tick(time:Float = 0):Int {
-		var active = session;
-		if (active == null) return 0;
-		var status = active.advance(time);
-		if (status < 0) throw Std.string(active.error);
-		return status;
+	/** Opens a UI application for a desktop runner that supplies ticks, such as live mode. */
+	public static function open(create:UiHostContext->UiApplication, options:UiHostOptions):AppLaunch {
+		var runtimeOptions = configure(create, options);
+		return Runtime.openApp(runtime -> new HostedUiApp(runtime, options, create), runtimeOptions);
 	}
 
-	public static function close():Int {
-		if (session != null) session.dispose();
-		session = null;
-		return 0;
+	static function configure(create:UiHostContext->UiApplication, options:UiHostOptions):RuntimeOptions {
+		if (options == null || create == null)
+			throw BindingError.invalidArgument("UiHost.run", "UI options and an application factory are required");
+		options.validate();
+		var runtimeOptions = new RuntimeOptions();
+		runtimeOptions.applicationId = options.applicationId;
+		runtimeOptions.applicationName = options.title;
+		runtimeOptions.eventQueueCapacity = options.eventQueueCapacity;
+		return runtimeOptions;
 	}
-	#else
-	static var session:Null<DesktopUiHostSession> = null;
-
-	public static function run(create:UiHostContext->UiApplication, options:UiHostOptions):Int {
-		start(create, options);
-		while (tick() != 0) {}
-		return close();
-	}
-
-	public static function start(create:UiHostContext->UiApplication, options:UiHostOptions):Void
-		session = DesktopUiHost.open(new DesktopUiHostOptions(options).withArguments(Sys.args()), create);
-
-	public static function tick(time:Float = 0):Int
-		return session != null && session.tick() ? 1 : 0;
-
-	public static function close():Int {
-		var active = session;
-		session = null;
-		return active == null ? 0 : active.close();
-	}
-	#end
 }

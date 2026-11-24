@@ -1,6 +1,5 @@
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.App;
-import haxeon.platform.AppLoop;
 import haxeon.platform.FrameRecorder;
 import haxeon.platform.FrameTick;
 import haxeon.platform.Surface;
@@ -16,12 +15,11 @@ class Main implements App {
 	static inline var stepSeconds = 1.0 / Circuit.ticksPerSecond;
 
 	final game = new Circuit();
-	final sounds:Sounds;
+	final sounds = new Sounds();
 	var surface:Surface;
 	var renderer:CircuitRenderer;
 	var hud:UiOverlay;
 	var hudView:CircuitHud;
-	final runtime:Runtime;
 
 	var running = true;
 
@@ -29,74 +27,12 @@ class Main implements App {
 	var previousDrone:Position;
 	var accumulator = 0.0;
 
-	#if circuit_run_web
-	static var app:Main;
-	static var loop:AppLoop;
+	public static function main():Void
+		Runtime.launch(runtime -> new Main(runtime));
 
-	public static function main():Void {
-		var runtime = Runtime.start();
-		var sounds = new Sounds();
-		app = new Main(runtime, sounds);
-		try {
-			app.start();
-			loop = runtime.startApp(app.surface, app);
-		} catch (error:Dynamic) {
-			shutdown();
-			throw error;
-		}
-	}
-
-	public static function poll():Int {
-		if (app == null)
-			return -1;
-		try {
-			if (!loop.tick()) {
-				shutdown();
-				return 2;
-			}
-		} catch (error:Dynamic) {
-			Sys.println("Circuit Run frame failed: " + Std.string(error));
-			shutdown();
-			return -1;
-		}
-		return loop.firstFramePresented ? 1 : 0;
-	}
-
-	public static function shutdown():Void {
-		if (app == null)
-			return;
-		if (loop != null && !loop.stop())
-			return;
-		var stopped = app;
-		app = null;
-		defer stopped.runtime.dispose();
-		defer stopped.sounds.dispose();
-		defer stopped.dispose();
-		if (loop != null) {
-			loop.dispose();
-			loop = null;
-		}
-	}
-	#else
-	static function main():Void {
-		scoped var runtime = Runtime.start();
-		scoped var sounds = new Sounds();
-		var app = new Main(runtime, sounds);
-		defer app.dispose();
-		app.start();
-		var recorder = Sys.getEnv("CIRCUIT_RUN_TIMING") == "1"
-			? new FrameRecorder(function(timing) Sys.println('frame ${timing.frameId} callback=${timing.callbackSeconds} submitted=${timing.submittedSeconds}'),
-			function(timing, seconds) Sys.println('frame ${timing.frameId} presented=${seconds}')) : null;
-		runtime.run(app.surface, app, recorder);
-	}
-	#end
-
-	function new(runtime:Runtime, sounds:Sounds) {
-		this.runtime = runtime;
-		this.sounds = sounds;
-	}
-
-	function start():Void {
+	function new(runtime:Runtime) {
+		var initialized = false;
+		defer if (!initialized) dispose();
 		var options = new WindowOptions(CircuitRenderer.width, CircuitRenderer.surfaceHeight);
 		options.title = "Circuit Run | Arrows to steer, R to restart, M to mute";
 		options.flags = WindowFlags.Resizable;
@@ -108,6 +44,11 @@ class Main implements App {
 		window.onClose(function() running = false);
 		window.onKey(handleKey);
 		snapshotPositions();
+		var recorder = Sys.getEnv("CIRCUIT_RUN_TIMING") == "1"
+			? new FrameRecorder(function(timing) Sys.println('frame ${timing.frameId} callback=${timing.callbackSeconds} submitted=${timing.submittedSeconds}'),
+			function(timing, seconds) Sys.println('frame ${timing.frameId} presented=${seconds}')) : null;
+		runtime.drive(surface, recorder);
+		initialized = true;
 	}
 
 	public function afterFrame():Void
@@ -116,7 +57,8 @@ class Main implements App {
 	public function shouldQuit():Bool
 		return !running;
 
-	function dispose():Void {
+	public function dispose():Void {
+		defer sounds.dispose();
 		if (hud != null) hud.dispose();
 	}
 

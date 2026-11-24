@@ -13,6 +13,7 @@ class AppLoop implements Disposable {
 	final surface:Surface;
 	final app:App;
 	final recorder:Null<FrameRecorder>;
+	final poll:Null<Void->Null<Float>>;
 	final readySubscription:EventSubscription;
 	final lostSubscription:EventSubscription;
 	final completionSubscription:EventSubscription;
@@ -23,6 +24,7 @@ class AppLoop implements Disposable {
 	var lastFrameAt:Null<Float>;
 	var stopped = false;
 	var surfaceLost = false;
+	var redrawDeferred = false;
 	var disposed = false;
 	var disposalRequested = false;
 	var failure:Null<haxe.Exception>;
@@ -30,11 +32,13 @@ class AppLoop implements Disposable {
 	public var firstFramePresented(default, null) = false;
 
 	@:allow(haxeon.platform.Runtime)
-	private function new(events:EventPump, surface:Surface, app:App, recorder:Null<FrameRecorder>) {
+	private function new(events:EventPump, surface:Surface, app:App, recorder:Null<FrameRecorder>,
+			?poll:Void->Null<Float>) {
 		loop = new EventLoop(events);
 		this.surface = surface;
 		this.app = app;
 		this.recorder = recorder;
+		this.poll = poll;
 		readySubscription = surface.onReady(function() {
 			var wasLost = surfaceLost;
 			surfaceLost = false;
@@ -52,6 +56,7 @@ class AppLoop implements Disposable {
 						if (!stopped && !app.shouldQuit()) surface.requestFrame();
 					} else
 						fail(new NativeKitError(result, "AppLoop.frame", "Rendering or presentation failed"));
+					requestDeferredRedraw();
 				}
 			});
 		} catch (error:haxe.Exception) {
@@ -67,11 +72,11 @@ class AppLoop implements Disposable {
 		return pending == null;
 	}
 
-	/** Pumps one browser tick without blocking. Returns false once any submitted frame has completed and the app has stopped. */
-	public function tick():Bool
-		return advance(false);
+	/** Pumps one tick. Returns false after the app stops and any submitted frame completes. */
+	public function tick(wait:Bool = false):Bool
+		return advance(wait);
 
-	@:allow(haxeon.platform.Runtime)
+	@:allow(haxeon.platform.AppLaunch)
 	function run():Void
 		EventLoop.run(function() return advance(true));
 
@@ -81,7 +86,9 @@ class AppLoop implements Disposable {
 		try {
 			loop.step(function(hadEvent) {
 				stopped = stopped || app.shouldQuit();
-				return wait && !hadEvent && !frameRan && (!stopped || pending != null) ? 0.1 : null;
+				var wake = stopped || poll == null ? null : poll();
+				return wait && !hadEvent && !frameRan && (!stopped || pending != null)
+					? (wake == null ? 0.1 : Math.min(0.1, wake)) : null;
 			});
 			if (recorder != null) {
 				var timing = submittedTiming;
@@ -93,6 +100,7 @@ class AppLoop implements Disposable {
 				frameRan = false;
 				if (failure == null)
 					app.afterFrame();
+				requestDeferredRedraw();
 			}
 			stopped = stopped || app.shouldQuit();
 		} catch (error:haxe.Exception) {
@@ -119,8 +127,12 @@ class AppLoop implements Disposable {
 	}
 
 	function draw(width:Int, height:Int):Void {
-		if (stopped || surfaceLost || frameRan || pending != null || width <= 0 || height <= 0)
+		if (stopped || surfaceLost || width <= 0 || height <= 0)
 			return;
+		if (frameRan || pending != null) {
+			redrawDeferred = true;
+			return;
+		}
 		try {
 			if (app.shouldQuit())
 				return;
@@ -146,6 +158,13 @@ class AppLoop implements Disposable {
 			lastFrameAt = now;
 			app.frame(tick, frame);
 		} catch (error:haxe.Exception) fail(error);
+	}
+
+	function requestDeferredRedraw():Void {
+		if (redrawDeferred && pending == null && !stopped && !surfaceLost && !app.shouldQuit()) {
+			redrawDeferred = false;
+			surface.requestFrame();
+		}
 	}
 
 	function fail(error:haxe.Exception):Void {

@@ -1,6 +1,7 @@
 package haxeon.ui.host;
 
 import haxeon.platform.Surface;
+import haxeon.platform.SurfaceFrame;
 import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
@@ -28,6 +29,13 @@ class UiSurfaceFrame {
 	public function prepare(renderer:Renderer):Int
 		return renderer.prepare(target);
 
-	public function render(context:UiContext, renderer:Renderer):Void
-		context.render(renderer, target, dimensions);
+	public function render(context:UiContext, renderer:Renderer, ?acquired:SurfaceFrame):Void {
+		if (acquired == null) {
+			context.render(renderer, target, dimensions);
+		} else {
+			var step = context.frameStep(renderer, acquired, dimensions);
+			defer step.dispose();
+			acquired.submit([step]);
+		}
+	}
 }

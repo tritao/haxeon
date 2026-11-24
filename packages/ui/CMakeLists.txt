@@ -795,11 +795,13 @@ if(NK_BUILD_EXAMPLES)
             set(NKUI_HAXEON_HOST_EXPORTS "${CMAKE_CURRENT_BINARY_DIR}/nativekit_ui_host_exports.json")
             option(NKUI_HAXEON_SDK_HOST "Export the browser SDK's UI bindings" OFF)
             if(NKUI_HAXEON_SDK_HOST)
+                target_link_libraries(nativekit_ui_haxeon PRIVATE NativeKit::audio)
                 set(NKUI_HAXEON_EXPORT_SOURCE "-")
                 set(NKUI_HAXEON_HOST_INTERFACES
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/audio/bindings/nativekit-audio-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-wasm.hxi"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui-browser-wasm.hxi")
             else()

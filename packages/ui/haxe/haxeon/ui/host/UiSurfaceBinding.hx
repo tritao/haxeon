@@ -24,8 +24,8 @@ class UiSurfaceBinding implements Disposable {
 
 	/** Also supports hosts whose window and surface are managed by native code. */
 	public static function attachNative(context:UiContext, window:WindowHandle, surface:Surface,
-			events:EventPump, ?requestFrame:Void->Void):UiSurfaceBinding {
-		return connect(context, window, surface, events, false, null, requestFrame);
+			events:EventPump, ?requestFrame:Void->Void, redrawOnInput:Bool = false):UiSurfaceBinding {
+		return connect(context, window, surface, events, redrawOnInput, null, requestFrame);
 	}
 
 	static function connect(context:UiContext, window:WindowHandle, surface:Surface, events:EventPump,

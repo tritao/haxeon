@@ -41,9 +41,9 @@ For WebGL2, build the browser host with the NativeKit Emscripten SDK and serve
 the output over HTTP.
 
 ```sh
-packages/gpu/examples/circuit-run/web/build.sh
-python3 -m http.server --directory packages/gpu/examples/circuit-run/build/web 8080
+scripts/haxeon build --target wasm32 --project packages/gpu/examples/circuit-run/haxeon.json
+python3 -m http.server --directory packages/gpu/examples/circuit-run/build/web/wasm32 8080
 ```
 
-Open `http://localhost:8080`. If Emscripten is outside the NativeKit checkout,
-set `EMSDK` to its installation directory.
+Open `http://localhost:8080`. A source SDK builds its web host via
+`scripts/build-web-sdk.sh`.

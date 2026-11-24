@@ -50,6 +50,7 @@ class CompilerProvider {
 				],
 			inputs:Array<String> = [];
 		if (context.webHost != null) {
+			arguments.push("--export=haxeon.platform.BrowserHost.tick");
 			var contract = haxe.io.Path.join([context.webHost, "nativekit_haxeon_memory_contract.json"]);
 			arguments.push("--wasm-import-memory");
 			if (target == "wasm-gc")

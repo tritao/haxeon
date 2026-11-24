@@ -71,7 +71,7 @@ function main() {
 			"haxeon-build.js",
 			"main.wasm",
 			"ui/nativekit_ui_haxeon.wasm",
-			"ui/assets/IBMPlexSans-Regular.ttf"
+			"ui/assets/IBMPlexSansArabic-Regular.ttf"
 		])
 			if (!FileSystem.exists(Path.join([bundle, file])))
 				Script.fail('FAIL: the web bundle lacks $file');

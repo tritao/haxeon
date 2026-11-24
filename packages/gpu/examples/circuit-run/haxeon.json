@@ -4,7 +4,9 @@
     "name": "haxeon-circuit-run"
   },
   "entry": "Main",
-  "sourceRoots": ["src"],
+  "sourceRoots": [
+    "src"
+  ],
   "scopeSourceRoots": false,
   "dependencies": {
     "haxeon-gpu": {
@@ -17,20 +19,16 @@
       "path": "../../../ui"
     }
   },
-  "native": {
-    "cmake": {
-      "source": ".",
-      "target": "circuit_run_native",
-      "inputs": [
-        "CMakeLists.txt",
-        "../../../ui/CMakeLists.txt",
-        "../../../../vendor/nativekit/CMakeLists.txt",
-        "../../../../vendor/nativekit/modules/gpu/CMakeLists.txt",
-        "../../../../vendor/nativekit/modules/audio/CMakeLists.txt"
-      ],
-      "library": "nativekit_ui"
-    }
-  },
   "target": "host",
-  "outputDir": "build"
+  "outputDir": "build",
+  "app": {
+    "name": "Circuit Run",
+    "id": "dev.haxeon.circuitrun",
+    "platforms": [
+      "linux",
+      "macos",
+      "web",
+      "windows"
+    ]
+  }
 }

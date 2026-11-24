@@ -19,7 +19,7 @@ import haxeon.ui.core.View;
 /** Retains a view between draws into a surface frame owned by the application. */
 class UiOverlay implements Disposable {
 	final surface:Surface;
-	final logicalWidth:Float;
+	final fixedLogicalWidth:Null<Float>;
 	final layout:LayoutFrame;
 	final frameInfo:FrameInfo;
 	final fonts:FontCollection;
@@ -29,6 +29,7 @@ class UiOverlay implements Disposable {
 	var resizeSubscription:EventSubscription;
 	var owner:DisposalRegistration;
 	var lastView:View;
+	var surfaceLogicalWidth = 0;
 	var lastWidth = 0;
 	var lastHeight = 0;
 	var dirty = true;
@@ -37,10 +38,11 @@ class UiOverlay implements Disposable {
 	/**
 	 * Borrows the window and surface. Takes ownership of supplied fonts after
 	 * validating the logical width, including when subsequent setup fails.
+	 * Omit the width to lay out in the surface's logical pixels.
 	 */
-	public static function attach(window:Window, surface:Surface, events:EventPump, logicalWidth:Float,
+	public static function attach(window:Window, surface:Surface, events:EventPump, ?logicalWidth:Float,
 			?fonts:FontCollection):UiOverlay {
-		if (!Math.isFinite(logicalWidth) || logicalWidth <= 0.0)
+		if (logicalWidth != null && (!Math.isFinite(logicalWidth) || logicalWidth <= 0.0))
 			throw BindingError.invalidArgument("UiOverlay.attach",
 				"The overlay's logical width must be positive and finite");
 		var overlay = new UiOverlay(surface, logicalWidth, fonts == null ? FontCollection.create() : fonts);
@@ -56,24 +58,29 @@ class UiOverlay implements Disposable {
 		return overlay;
 	}
 
-	function new(surface:Surface, logicalWidth:Float, fonts:FontCollection) {
+	function new(surface:Surface, logicalWidth:Null<Float>, fonts:FontCollection) {
 		this.surface = surface;
-		this.logicalWidth = logicalWidth;
+		fixedLogicalWidth = logicalWidth;
 		this.fonts = fonts;
-		layout = new LayoutFrame(logicalWidth, 1.0);
-		frameInfo = new FrameInfo(logicalWidth, 1.0, 1, 1, 1.0);
+		layout = new LayoutFrame(logicalWidth ?? 1.0, 1.0);
+		frameInfo = new FrameInfo(logicalWidth ?? 1.0, 1.0, 1, 1, 1.0);
 	}
 
-	function scaleFor(width:Int):Float return width / logicalWidth;
-
 	function resize(width:Int, height:Int, framebufferWidth:Int, framebufferHeight:Int):Void {
-		if (width > 0) binding.setCoordinateScale(scaleFor(width));
+		if (width <= 0) return;
+		if (fixedLogicalWidth != null) {
+			binding.setCoordinateScale(width / fixedLogicalWidth);
+		} else if (surfaceLogicalWidth != width) {
+			surfaceLogicalWidth = width;
+			dirty = true;
+		}
 	}
 
 	public function frameStep(view:View, frame:SurfaceFrame, tick:FrameTick):SurfaceFrameStep {
 		if (disposed)
 			throw BindingError.disposed("UiOverlay.frameStep", "The UI overlay has been disposed");
-		var scale = scaleFor(tick.width);
+		var logicalWidth:Float = fixedLogicalWidth ?? (surfaceLogicalWidth > 0 ? surfaceLogicalWidth : tick.width);
+		var scale = tick.width / logicalWidth;
 		var height = tick.height / scale;
 		if (dirty || lastView != view || context.isDirty() || context.needsAnimationFrame
 			|| tick.width != lastWidth || tick.height != lastHeight) {
