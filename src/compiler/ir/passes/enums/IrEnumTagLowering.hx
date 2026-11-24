@@ -1050,6 +1050,11 @@ class IrBodyTagEscapes {
  */
 @:nullSafety(Strict)
 class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeReads {
+	/** The tag equalities something calls, kept with the walk summaries they were found from. */
+	@:processWide("a kept walk's key, only ever read")
+	static final CALLED_EQUALITIES = new compiler.ir.reuse.IrStageMemo
+		.IrContributionKey<compiler.ir.reuse.IrWalkRecord<IrWalkSummary, Map<String, Bool>>>("called-tag-equalities");
+
 	// Facts.
 	static inline final ELIGIBLE = 0;
 	static inline final TAG_EQUALITY = 1;
@@ -1449,28 +1454,38 @@ class IrEnumTagLoweringPass implements IrFunctionPass implements IrTagEscapeRead
 	public function finish(functions:Array<IrFunction>):Array<IrFunction> {
 		if (!names.keys().hasNext())
 			return functions;
-		// A tag equality nothing calls goes: its callers compare tags. What a function calls is its walk summary (`IrWalkSummary`).
-		var kept:Map<String, Bool> = [], scratch = IrWalkSummary.scratch();
-		kept.set(program.entryPoint, true);
-		for (fn in functions.concat(generated)) {
+		// A tag equality nothing calls goes: its callers compare tags. The wrappers are made each build, so what they call is
+		// a root, as are the entry, the methods and what natives depend on.
+		var equalities:Map<String, IrFunction> = [], roots:Array<String> = [], scratch = IrWalkSummary.scratch();
+		for (fn in functions)
+			if (tagEqualities.exists(fn.name))
+				equalities.set(fn.name, fn);
+		function root(name:String):Void
+			if (equalities.exists(name))
+				roots.push(name);
+		root(program.entryPoint);
+		for (fn in generated) {
 			if (fn.retention != Reachable)
-				kept.set(fn.name, true);
+				root(fn.name);
 			var summary = IrWalkSummary.of(fn, lineage, scratch);
 			for (name in summary.calls)
-				kept.set(name, true);
+				root(name);
 			for (name in summary.staticClosures)
-				kept.set(name, true);
+				root(name);
 			for (name in summary.instanceClosures)
-				kept.set(name, true);
+				root(name);
 		}
 		for (object in program.objects)
 			for (method in object.methods)
-				kept.set(method.functionName.name, true);
+				root(method.functionName.name);
 		for (native in program.natives)
 			if (native.generatedFunctionDependencies != null)
 				for (name in native.generatedFunctionDependencies)
-					kept.set(name, true);
-		var result = [for (fn in functions) if (!tagEqualities.exists(fn.name) || kept.exists(fn.name)) fn];
+					root(name);
+		var kept = compiler.ir.analysis.IrTypeAwareWalk.referenced(CALLED_EQUALITIES, program, functions, equalities,
+			roots,
+			false, lineage);
+		var result = [for (fn in functions) if (!equalities.exists(fn.name) || kept.exists(fn.name)) fn];
 		// The wrappers are made each build: their escapes are finished here, as a rewritten function's are in its transform.
 		var wrappers = IrInlineEnumRequests.resolve(program, generated);
 		if (boxNames.keys().hasNext())

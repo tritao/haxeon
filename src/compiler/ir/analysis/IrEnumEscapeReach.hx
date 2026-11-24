@@ -2,6 +2,7 @@ package compiler.ir.analysis;
 
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
+import compiler.ir.model.IrTypeIdentity;
 import compiler.ir.model.IrTypeMap;
 import compiler.ir.reuse.IrStageMemo.IrContributionKey;
 import compiler.ir.reuse.IrStageMemo.IrLineage;
@@ -15,10 +16,11 @@ import compiler.semantic.SemanticSignature;
  */
 @:nullSafety(Strict)
 class IrEnumEscapeReach {
-	final objects:Map<String, IrObject>;
-	final contracts:Map<String, IrInterface>;
-	final declarations:Map<String, IrEnum>;
-	final functions:Map<String, IrFunction>;
+	// The program's tables by name, made when the reach first walks (`index`): a session that keeps the walk reads none of them.
+	final objects:Map<String, IrObject> = [];
+	final contracts:Map<String, IrInterface> = [];
+	final declarations:Map<String, IrEnum> = [];
+	final functions:Map<String, IrFunction> = [];
 	final staticFieldsByOwner:Map<String, Array<IrStaticField>> = [];
 	final mapContents = new IrTypeMap<Array<IrType>>();
 	final subclasses:Map<String, Array<IrObject>> = [];
@@ -27,6 +29,7 @@ class IrEnumEscapeReach {
 	final interfaceClosures:Map<String, Map<String, Bool>> = [];
 	final objectClosures:Map<String, Map<String, Bool>> = [];
 	var implementersBuilt = false;
+	var indexed = false;
 
 	/** The program this reach was made for (`collectEach`). */
 	final program:IrProgram;
@@ -36,13 +39,114 @@ class IrEnumEscapeReach {
 
 	final mapLog:Array<IrType> = [];
 
-	/** `scans`, when given, tells the functions whose closures and map stores to read: the others have none. */
-	public function new(program:IrProgram, ?scans:IrFunction->Bool) {
+	/**
+	 * What each function gives the reach: the closures it makes, as pairs of the closure's type and its receiver's, and the map
+	 * stores, as triples of the map's type, the key's and the value's.
+	 */
+	@:processWide("a contribution memo's key, only ever read")
+	public static final STORES = new IrContributionKey<Array<Array<IrType>>>("escape-stores");
+
+	/**
+	 * `scans`, when given, tells the functions whose closures and map stores to read: the others have none. With `lineage`, what
+	 * each function gives is read once per version (`STORES`).
+	 */
+	public function new(program:IrProgram, ?scans:IrFunction->Bool, ?lineage:IrLineage) {
 		this.program = program;
-		objects = [for (entry in program.objects) entry.name => entry];
-		contracts = [for (entry in program.interfaces) entry.name => entry];
-		declarations = [for (entry in program.enums) entry.name => entry];
-		functions = [for (entry in program.functions) entry.name => entry];
+		for (fn in program.functions) {
+			if (scans != null && !scans(fn))
+				continue;
+			var version = lineage == null ? 0 : lineage.versionOf(fn), stores:Null<Array<Array<IrType>>> = null;
+			if (lineage != null && version != 0) {
+				var memo = lineage.memos.contribution(STORES);
+				stores = memo.get(version);
+				if (stores == null) {
+					stores = storesOf(fn);
+					memo.keep(version, stores);
+				} else if (lineage.checks && !sameStores(stores, storesOf(fn)))
+					throw new compiler.core
+						.InternalError('--check-reuse: the escape stores reused for ${fn.name} differ from its instructions');
+			} else
+				stores = storesOf(fn);
+			for (type in stores[0])
+				closureLog.push(type);
+			for (type in stores[1])
+				mapLog.push(type);
+		}
+	}
+
+	static function sameStores(left:Array<Array<IrType>>, right:Array<Array<IrType>>):Bool
+		return IrTypeIdentity.sameList(left[0], right[0]) && IrTypeIdentity.sameList(left[1], right[1]);
+
+	/** What `fn` gives the reach (`STORES`); a function read past the encode point is its body, one before it its objects. */
+	static function storesOf(fn:IrFunction):Array<Array<IrType>> {
+		var closures:Array<IrType> = [], maps:Array<IrType> = [], body = fn.body;
+		if (body != null)
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.InstanceClosure:
+							closures.push(body.valueType(body.output(row)));
+							closures.push(body.valueType(body.operand(row, 0)));
+						case IrOpcode.Call if (body.operandCount(row) >= 3 && mapSetter(body.symbol(row).name)):
+							maps.push(body.valueType(body.operand(row, 0)));
+							maps.push(body.valueType(body.operand(row, 1)));
+							maps.push(body.valueType(body.operand(row, body.operandCount(row) - 1)));
+						default:
+					}
+					row = body.nextRow(row);
+				}
+			}
+				else
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case InstanceClosure(output, _, receiver):
+								closures.push(output.type);
+								closures.push(receiver.type);
+							case Call(_, name, arguments) if (arguments.length >= 3 && mapSetter(name.name)):
+								maps.push(arguments[0].type);
+								maps.push(arguments[1].type);
+								maps.push(arguments[arguments.length - 1].type);
+							default:
+						}
+		return [closures, maps];
+	}
+
+	/** Indexes the program's tables by name, and the closures and map stores given by type, once, before the reach first walks. */
+	function index():Void {
+		if (indexed)
+			return;
+		indexed = true;
+		var position = 0;
+		while (position < closureLog.length) {
+			var closure = closureLog[position], environments = closureEnvironments.get(closure);
+			if (environments == null) {
+				environments = [];
+				closureEnvironments.set(closure, environments);
+			}
+			environments.push(closureLog[position + 1]);
+			position += 2;
+		}
+		position = 0;
+		while (position < mapLog.length) {
+			var map = mapLog[position], contents = mapContents.get(map);
+			if (contents == null) {
+				contents = [];
+				mapContents.set(map, contents);
+			}
+			contents.push(mapLog[position + 1]);
+			contents.push(mapLog[position + 2]);
+			position += 3;
+		}
+		for (entry in program.objects)
+			objects.set(entry.name, entry);
+		for (entry in program.interfaces)
+			contracts.set(entry.name, entry);
+		for (entry in program.enums)
+			declarations.set(entry.name, entry);
+		for (entry in program.functions)
+			functions.set(entry.name, entry);
 		for (field in program.staticFields) {
 			var separator = field.name.indexOf(".");
 			while (separator >= 0) {
@@ -69,67 +173,23 @@ class IrEnumEscapeReach {
 				children.push(object);
 			}
 		}
-		// A function read past the encode point is its body; one before it, its objects.
-		for (fn in functions) {
-			if (scans != null && !scans(fn))
-				continue;
-			var body = fn.body;
-			if (body != null)
-				for (block in 0...body.blockCount()) {
-					var row = body.firstRow(block);
-					while (row >= 0) {
-						switch body.opcode(row) {
-							case IrOpcode.InstanceClosure:
-								closureEnvironment(body.valueType(body.output(row)),
-									body.valueType(body.operand(row, 0)));
-							case IrOpcode.Call if (body.operandCount(row) >= 3 && mapSetter(body.symbol(row).name)):
-								mapContent(body.valueType(body.operand(row, 0)), body.valueType(body.operand(row, 1)),
-									body.valueType(body.operand(row, body.operandCount(row) - 1)));
-							default:
-						}
-						row = body.nextRow(row);
-					}
-				}
-					else
-					for (block in fn.blocks)
-						for (located in block.instructions)
-							switch located.value {
-								case InstanceClosure(output, _, receiver):
-									closureEnvironment(output.type, receiver.type);
-								case Call(_, name, arguments) if (arguments.length >= 3 && mapSetter(name.name)):
-									mapContent(arguments[0].type, arguments[1].type,
-										arguments[arguments.length - 1].type);
-								default:
-							}
-		}
 	}
 
 	public static function mapSetter(name:String):Bool
 		return StringTools.startsWith(name, "__map_") && StringTools.contains(name, "_ref_")
 			&& StringTools.endsWith(name, "_set");
 
+	/** Gives the reach a closure of type `closure` over `receiver`; before it walks. */
 	public function closureEnvironment(closure:IrType, receiver:IrType):Void {
 		closureLog.push(closure);
 		closureLog.push(receiver);
-		var environments = closureEnvironments.get(closure);
-		if (environments == null) {
-			environments = [];
-			closureEnvironments.set(closure, environments);
-		}
-		environments.push(receiver);
 	}
 
+	/** Gives the reach a store of `key` and `value` in a map of type `map`; before it walks. */
 	public function mapContent(map:IrType, key:IrType, value:IrType):Void {
 		mapLog.push(map);
 		mapLog.push(key);
 		mapLog.push(value);
-		var contents = mapContents.get(map);
-		if (contents == null) {
-			contents = [];
-			mapContents.set(map, contents);
-		}
-		contents.push(key);
-		contents.push(value);
 	}
 
 	/** Opaque native handles do not expose the contents of a container stored behind them.
@@ -191,13 +251,6 @@ class IrEnumEscapeReach {
 			supportsCallableEscape:IrType->Bool, lineage:Null<IrLineage>):Array<Map<String, Bool>> {
 		if (lineage == null)
 			return walkEach(lists, supportsCallableEscape);
-		var methodFunctions:Array<IrFunction> = [];
-		for (object in program.objects)
-			for (method in object.methods) {
-				var fn = functions.get(method.functionName.name);
-				if (fn != null)
-					methodFunctions.push(fn);
-			}
 		var given = ['closures ${closureLog.length}', 'maps ${mapLog.length}'],
 			givenTypes = closureLog.concat(mapLog);
 		for (roots in lists) {
@@ -205,10 +258,15 @@ class IrEnumEscapeReach {
 			for (root in roots)
 				givenTypes.push(root);
 		}
+		// The functions the methods name, in program order, found without indexing every function by name.
+		var methodNames:Map<String, Bool> = [];
+		for (object in program.objects)
+			for (method in object.methods)
+				methodNames.set(method.functionName.name, true);
+		var methodFunctions = [for (fn in program.functions) if (methodNames.exists(fn.name)) fn];
 		var memos = lineage.memos,
 			last = memos.lastResult(key),
-			kept = last == null ? null : last.holds(program, given, givenTypes, methodFunctions, (_, _) -> null,
-				(_, _) -> {});
+			kept = last == null ? null : last.holds(program, given, givenTypes, methodFunctions, (_, _) -> null);
 		if (kept != null && sameAnswers(kept.result, supportsCallableEscape)) {
 			if (lineage.checks && !sameResults(walkEach(lists, supportsCallableEscape), kept.result.results))
 				throw new compiler.core
@@ -224,7 +282,8 @@ class IrEnumEscapeReach {
 			answer;
 		});
 		memos.keepResult(key,
-			new IrWalkRecord(program, given, givenTypes, methodFunctions, [for (_ in methodFunctions) null], {
+			new IrWalkRecord(program, given, givenTypes, methodFunctions, [for (_ in methodFunctions) null],
+			{
 				results: [for (result in results) result.copy()],
 				asked: asked,
 				answers: answers
@@ -265,6 +324,7 @@ class IrEnumEscapeReach {
 	 * reaches through what an earlier one visited, that one reached already, so the walk visits each part of the program once.
 	 */
 	public function walker(supportsCallableEscape:IrType->Bool):Array<IrType>->Map<String, Bool> {
+		index();
 		var unsupported:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [],
 			inspectedMaps = new IrTypeMap<Bool>(), // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead

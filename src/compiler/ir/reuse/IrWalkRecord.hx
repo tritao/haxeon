@@ -55,22 +55,20 @@ class IrWalkRecord<S, R> {
 
 	/**
 	 * This walk's result as the record of a walk of `program` now; null when the program or the caller gives the walk something else.
-	 * `read(fn, last)` is the summary of reached function `fn` now when it has the edges of `last`, else null; `keep(fn, summary)`
-	 * is told of each reached function that stayed, so the session keeps its summary for the walk that may come next.
+	 * `read(fn, last)` is the summary of reached function `fn` now when it has the edges of `last`, else null. A function that stayed
+	 * is not looked at: the record keeps its summary, which a walk done again takes back (`eachSummary`).
 	 */
 	public function holds(program:IrProgram, given:Array<String>, givenTypes:Array<IrType>, functions:Array<IrFunction>,
-			read:(IrFunction, S) -> Null<S>, keep:(IrFunction, S) -> Void):Null<IrWalkRecord<S, R>> {
+			read:(IrFunction, S) -> Null<S>):Null<IrWalkRecord<S, R>> {
 		if (functions.length != this.functions.length || !IrObjectTools.sameNames(given, this.given)
 			|| !IrTypeIdentity.sameList(givenTypes, this.givenTypes) || !sameTables(program))
 			return null;
 		var kept:Null<Array<Null<S>>> = null;
 		for (index in 0...functions.length) {
-			var fn = functions[index], last = this.functions[index], summary = summaries[index];
-			if (fn == last) {
-				if (summary != null)
-					keep(fn, summary);
+			var fn = functions[index], last = this.functions[index];
+			if (fn == last)
 				continue;
-			}
+			var summary = summaries[index];
 			if (fn.name != last.name || !sameDeclaration(fn, last))
 				return null;
 			if (summary == null)
@@ -84,6 +82,29 @@ class IrWalkRecord<S, R> {
 		}
 		return new IrWalkRecord(program, given, givenTypes, functions.copy(), kept ?? summaries, result);
 	}
+
+	/**
+	 * Gives `memo` back the summaries the walk followed of the functions that still stand in `lineage`, for a walk done again:
+	 * while the record held, nothing asked the memo for them, so it may have let them go.
+	 */
+	public function giveBack(memo:compiler.ir.reuse.IrStageMemo.IrContributionMemo<S>,
+			lineage:compiler.ir.reuse.IrStageMemo.IrLineage):Void
+		for (index in 0...functions.length) {
+			var summary = summaries[index];
+			if (summary == null)
+				continue;
+			var version = lineage.versionOf(functions[index]);
+			if (version != 0 && memo.get(version) == null)
+				memo.keep(version, summary);
+		}
+
+	/** Tells `each` of every reached function and the summary the walk followed, for a walk done again (`giveBack`). */
+	public function eachSummary(each:(IrFunction, S) -> Void):Void
+		for (index in 0...functions.length) {
+			var summary = summaries[index];
+			if (summary != null)
+				each(functions[index], summary);
+		}
 
 	/** Whether two functions of one name declare the same to a walk: provider row, retention and signature. */
 	static function sameDeclaration(left:IrFunction, right:IrFunction):Bool {
@@ -101,15 +122,29 @@ class IrWalkRecord<S, R> {
 		};
 	}
 
+	/**
+	 * The last two lists of objects found the same shape, the kept one and the program's: the records kept at one place in the
+	 * pipeline hold the same objects, so each after the first compares them by identity.
+	 */
+	@:processWide("a pair of lists whose objects are never changed, replaced whole; a stale pair only costs a full comparison")
+	static var sameShapes:Null<{
+		kept:Array<IrObject>,
+		now:Array<IrObject>
+	}> = null;
+
 	/** Whether `program`'s tables give a walk what these gave it. */
 	function sameTables(program:IrProgram):Bool {
 		if (program.objects.length != objects.length || program.interfaces.length != interfaces.length
 			|| program.natives.length != natives.length || program.cNatives.length != cNatives.length
 			|| program.staticFields.length != staticFields.length || program.enums.length != enums.length)
 			return false;
-		for (index in 0...objects.length)
-			if (!IrObjectTools.sameShape(program.objects[index], objects[index]))
-				return false;
+		var shapes = sameShapes;
+		if (shapes == null || !sameEntries(shapes.kept, objects) || !sameEntries(shapes.now, program.objects)) {
+			for (index in 0...objects.length)
+				if (!IrObjectTools.sameShape(program.objects[index], objects[index]))
+					return false;
+			sameShapes = {kept: objects, now: program.objects.copy()};
+		}
 		for (index in 0...interfaces.length) {
 			var left = program.interfaces[index], right = interfaces[index];
 			if (left == right)
@@ -155,6 +190,16 @@ class IrWalkRecord<S, R> {
 				if (!IrTypeIdentity.sameList(left.cases[item].params, right.cases[item].params))
 					return false;
 		}
+		return true;
+	}
+
+	/** Whether two lists hold the same objects, in order. */
+	static function sameEntries(left:Array<IrObject>, right:Array<IrObject>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
 		return true;
 	}
 

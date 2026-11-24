@@ -44,6 +44,11 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	public static final OBSERVED =
 		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("enum-dispatch-reach");
 
+	/** The reflective equality helpers something reaches, kept with the walk summaries they were found from. */
+	@:processWide("a kept walk's key, only ever read")
+	static final DROPPED = new compiler.ir.reuse.IrStageMemo
+		.IrContributionKey<IrWalkRecord<IrWalkSummary, Map<String, Bool>>>("enum-dispatch-dropped");
+
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
 
@@ -78,7 +83,10 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	final requests:Map<String, IrType> = [];
 	final equalities:Map<String, String> = [];
 	final reflectiveEqualities:Map<String, String> = [];
-	var occupied:Map<String, Bool> = [];
+	/** The program's functions by name, and the helper names the stage took besides: the names a helper may not take. */
+	var functionNames:Null<IrFunctionIndex> = null;
+
+	final taken:Map<String, Bool> = [];
 	/** The requests in the order of their keys. */
 	var requested:Array<EnumDynamicRequest> = [];
 	final boxNames:Map<String, String> = [];
@@ -153,7 +161,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, index:IrFunctionIndex):Void {
 		var boxes:Map<String, Bool> = [], views:Map<String, Bool> = [], closing:Map<String, Bool> = [];
-		occupied = [for (fn in functions) fn.name => true];
+		functionNames = index;
 		for (position in 0...functions.length) {
 			var fn = functions[position], flags = summaries[position];
 			switch fn.kind {
@@ -207,7 +215,8 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 				for (argument in native.arguments) IrEnumEscapeReach.addNativeRoot(roots, argument);
 				IrEnumEscapeReach.addNativeRoot(roots, native.result);
 			}
-			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name)).collectKept(OBSERVED, roots,
+			var observed = new IrEnumEscapeReach(program, fn -> closing.exists(fn.name), lineage).collectKept(OBSERVED,
+				roots,
 				_ -> false, lineage);
 			for (fn in functions) switch fn.kind {
 				case EnumEquality(_) if (fn.arguments.length == 2):
@@ -223,7 +232,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 			var helper = reflectiveEqualities.get(id);
 			if (helper != null) reflectiveRoots.push(helper);
 		}
-		dropped = droppedReflectiveHelpers(functions, reflectiveRoots, lineage);
+		dropped = droppedReflectiveHelpers(functions, reflectiveRoots, lineage, program);
 		for (fn in functions) if (reached(fn) && !dropped.exists(fn.name)) switch fn.kind {
 			case EnumEquality(true) if (fn.arguments.length == 2
 				&& isEnum(fn.arguments[0].type)): register(fn.arguments[0].type);
@@ -238,11 +247,11 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 		var named = [for (request in requested) {
 			var id = request.id,
 				type = request.type,
-				box = symbol(occupied, helperName(BOX_PREFIX, type)),
-				view = symbol(occupied, helperName(VIEW_PREFIX, type));
+				box = claim(helperName(BOX_PREFIX, type)),
+				view = claim(helperName(VIEW_PREFIX, type));
 			boxNames.set(id, box);
 			viewNames.set(id, view);
-			unboxNames.set(id, symbol(occupied, helperName(UNBOX_PREFIX, type)));
+			unboxNames.set(id, claim(helperName(UNBOX_PREFIX, type)));
 			{
 				request:request, box:box, view:view
 			};
@@ -296,7 +305,7 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 			for (given in names)
 				if (given == name)
 					return false;
-		return occupied.exists(name);
+		return occupied(name);
 	}
 
 	/** The unbox helper of `type`: the registered one, else its content name. */
@@ -361,9 +370,9 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 			var id = key(type), helper = unboxNames.get(id);
 			if (helper == null) {
 				helper = helperName(UNBOX_PREFIX, type);
-				if (occupied.exists(helper))
+				if (occupied(helper))
 					throw new InternalError('A function of the program has the name of the enum unbox helper "$helper"');
-				occupied.set(helper, true);
+				taken.set(helper, true);
 				unboxNames.set(id, helper);
 			}
 			unboxes.set(helper, type);
@@ -404,58 +413,36 @@ class IrEnumDynamicDispatch implements IrFunctionPass {
 	}
 
 	/**
-	 * The typed reflective equality helpers neither the roots nor a function outside them reaches, which the stage drops; the
-	 * calls and closures each function makes are its walk summary (`IrWalkSummary`).
+	 * The typed reflective equality helpers neither the roots nor a function outside them reaches, which the stage drops
+	 * (`IrTypeAwareWalk.referenced`, kept as `DROPPED` in a session with `program`, the tables of the functions).
 	 */
 	static function droppedReflectiveHelpers(functions:Array<IrFunction>, roots:Array<String>,
-			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Map<String, Bool> {
-		var helpers:Map<String, IrFunction> = [],
-			live:Map<String, Bool> = [],
-			pending:Array<String> = [],
-			scratch = IrWalkSummary.scratch();
+			lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>, program:Null<IrProgram>):Map<String, Bool> {
+		var helpers:Map<String, IrFunction> = [];
 		for (fn in functions) switch fn.kind {
 			case EnumEquality(true): helpers.set(fn.name, fn);
 			default:
 		}
-		var dropped:Map<String, Bool> = [];
-		if (!helpers.keys().hasNext())
-			return dropped;
-		function mark(name:String):Void {
-			if (helpers.exists(name) && !live.exists(name)) {
-				live.set(name, true);
-				pending.push(name);
-			}
-		}
-		for (name in roots) mark(name);
-		function scan(fn:IrFunction):Void {
-			var summary = IrWalkSummary.of(fn, lineage, scratch);
-			for (name in summary.calls) mark(name);
-			for (name in summary.staticClosures) mark(name);
-			for (name in summary.instanceClosures) mark(name);
-		}
-		for (fn in functions)
-			if (!helpers.exists(fn.name)) scan(fn);
-		else if (fn.retention != compiler.ir.model.IrFunction.IrRetention.Reachable) mark(fn.name);
-		var index = 0;
-		// Only helpers are marked, so each pending name has one.
-		while (index < pending.length) {
-			var helper = helpers.get(pending[index++]);
-			if (helper != null) scan(helper);
-		}
-		for (name in helpers.keys())
-			if (!live.exists(name))
-				dropped.set(name, true);
-		return dropped;
+		var live = compiler.ir.analysis.IrTypeAwareWalk.referenced(DROPPED, program, functions, helpers, roots, true,
+			lineage);
+		return [for (name in helpers.keys()) if (!live.exists(name)) name => true];
 	}
 
 	static function isEnum(type:IrType):Bool return switch type {
 		case Enum(_): true;
 		default: false;
 	};
-	static function symbol(occupied:Map<String, Bool>, base:String):String {
+	/** Whether a function of the program or a helper the stage named has `name`. */
+	function occupied(name:String):Bool {
+		var index = functionNames;
+		return taken.exists(name) || index != null && index.exists(name);
+	}
+
+	/** `base`, or the first name after it that nothing has, taken for a helper. */
+	function claim(base:String):String {
 		var name = base, suffix = 0;
-		while (occupied.exists(name)) name = base + "_" + suffix++;
-		occupied.set(name, true);
+		while (occupied(name)) name = base + "_" + suffix++;
+		taken.set(name, true);
 		return name;
 	}
 	static function typeTestName(type:IrType, exact:Bool):String

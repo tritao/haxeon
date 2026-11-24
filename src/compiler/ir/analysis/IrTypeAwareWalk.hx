@@ -106,6 +106,102 @@ class IrTypeAwareWalk {
 	}
 
 	/**
+	 * The functions of `targets` that are referenced: named by `roots`, not only reachable, or called or closed over by a function
+	 * of `functions` that is not a target, and with `transitive` by a target referenced; without it, the targets count as any
+	 * other function. What a function calls and closes over is its walk summary (`IrWalkSummary`). In a session with `program`, the
+	 * program of `functions`, the result is kept as `key` with the summaries it read (`IrWalkRecord`), so a build whose functions
+	 * make the same calls takes it; with `--check-reuse` a kept result is found again and compared. The result is the caller's.
+	 */
+	public static function referenced(key:IrContributionKey<IrWalkRecord<IrWalkSummary, Map<String, Bool>>>,
+			program:Null<IrProgram>, functions:Array<IrFunction>, targets:Map<String, IrFunction>, roots:Array<String>,
+			transitive:Bool, lineage:Null<compiler.ir.reuse.IrStageMemo.IrLineage>):Map<String, Bool> {
+		var live:Map<String, Bool> = [];
+		if (!targets.keys().hasNext())
+			return live;
+		var scratch = IrWalkSummary.scratch(),
+			session = program == null ? null : lineage,
+			last = session == null ? null : session.memos.lastResult(key),
+			given = [transitive ? "transitive" : ""].concat(roots),
+			kept = last == null || session == null || program == null ? null : last.holds(program, given, [], functions,
+				(fn, summary) -> {
+					if (session.versionOf(fn) == 0)
+						return null;
+					var now = IrWalkSummary.of(fn, session, scratch);
+					return IrWalkSummary.same(summary, now) ? now : null;
+				});
+		if (kept != null && session != null) {
+			if (session.checks
+				&& !sameNames(referenced(key, null, functions, targets, roots, transitive, null), kept.result))
+				throw new compiler.core
+					.InternalError('--check-reuse: the walk ${key.name} reused references that differ from walking now');
+			session.memos.keepResult(key, kept);
+			return kept.result.copy();
+		}
+		if (last != null && session != null)
+			last.giveBack(session.memos.contribution(SUMMARIES), session);
+		var pending:Array<String> = [];
+		function mark(name:String):Void {
+			if (targets.exists(name) && !live.exists(name)) {
+				live.set(name, true);
+				pending.push(name);
+			}
+		}
+		for (name in roots)
+			mark(name);
+		function scan(fn:IrFunction):Void {
+			var summary = IrWalkSummary.of(fn, lineage, scratch);
+			for (name in summary.calls)
+				mark(name);
+			for (name in summary.staticClosures)
+				mark(name);
+			for (name in summary.instanceClosures)
+				mark(name);
+		}
+		for (fn in functions)
+			if (!transitive || !targets.exists(fn.name))
+				scan(fn);
+			else if (fn.retention != compiler.ir.model.IrFunction.IrRetention.Reachable)
+				mark(fn.name);
+		if (!transitive)
+			for (fn in functions)
+				if (fn.retention != compiler.ir.model.IrFunction.IrRetention.Reachable)
+					mark(fn.name);
+		var index = 0;
+		// Only targets are marked, so each pending name has one.
+		while (transitive && index < pending.length) {
+			var target = targets.get(pending[index++]);
+			if (target != null)
+				scan(target);
+		}
+		if (session != null && program != null) {
+			// Each function the walk scanned is kept by its summary, which a function with no version has none of.
+			var summaries:Array<Null<IrWalkSummary>> = [];
+			for (fn in functions) {
+				if (transitive && targets.exists(fn.name) && !live.exists(fn.name)) {
+					summaries.push(null);
+					continue;
+				}
+				if (session.versionOf(fn) == 0)
+					return live;
+				summaries.push(IrWalkSummary.of(fn, session, scratch));
+			}
+			session.memos.keepResult(key,
+				new IrWalkRecord(program, given, [], functions.copy(), summaries, live.copy()));
+		}
+		return live;
+	}
+
+	static function sameNames(left:Map<String, Bool>, right:Map<String, Bool>):Bool {
+		for (name in left.keys())
+			if (!right.exists(name))
+				return false;
+		for (name in right.keys())
+			if (!left.exists(name))
+				return false;
+		return true;
+	}
+
+	/**
 	 * `run` with the default dynamic sites and no providers required, in a session that keeps the walk as `key`: last build's result
 	 * while the program gives the walk what it gave it last build (`IrWalkRecord`), else walked again and kept. With `--check-reuse`
 	 * a kept result is walked again and compared. The result is the caller's to change.
@@ -128,7 +224,7 @@ class IrTypeAwareWalk {
 					return null;
 				var now = IrWalkSummary.of(fn, lineage, scratch);
 				return IrWalkSummary.same(summary, now) ? now : null;
-			}, (fn, _) -> memo.get(lineage.versionOf(fn)));
+			});
 		if (kept != null) {
 			if (lineage.checks) {
 				var now = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, lineage);
@@ -139,6 +235,8 @@ class IrTypeAwareWalk {
 			memos.keepResult(key, kept);
 			return copyResult(kept.result);
 		}
+		if (last != null)
+			last.giveBack(memo, lineage);
 		var result = run(program, roots, null, false, keepCreatedClassMethods, classDependencies, lineage),
 			summaries:Array<Null<IrWalkSummary>> = [];
 		// A function the walk reached is kept by its summary, which a function with no version has none of.

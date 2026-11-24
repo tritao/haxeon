@@ -35,7 +35,7 @@ class HlPlainBuild {
 					summaries.walk.set(fn, now);
 				}
 				return IrBodyEdges.same(edges, now) ? now : null;
-			}, (fn, edges) -> summaries.walk.set(fn, edges));
+			});
 		if (kept != null && summaries != null) {
 			var plain = apply(program, kept.result);
 			if (checkReuse) {
@@ -49,6 +49,8 @@ class HlPlainBuild {
 			summaries.reach = kept;
 			return plain;
 		}
+		if (last != null && summaries != null)
+			last.eachSummary((fn, edges) -> if (summaries.walk.get(fn) == null) summaries.walk.set(fn, edges));
 		var plain = walk(program, summaries);
 		if (checkReuse)
 			IrReachability.checkTables(plain.program);
