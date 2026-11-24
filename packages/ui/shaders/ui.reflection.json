@@ -1,0 +1,5349 @@
+{
+  "programs": {
+    "blur": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_blur_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_blur_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "blur_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "blur_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "blur_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "blur_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_blur_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_blur_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "blur_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "blur_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "blur_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "blur_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_blur_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_blur_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "blur_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "blur_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_blur_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_blur_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "blur_vs_params"
+              },
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "blur_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_blur_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_blur_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "blur_vs_params"
+              },
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "blur_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "effect.glsl"
+        ]
+      }
+    },
+    "box_shadow": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_box_shadow_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_box_shadow_glsl300es_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "box_shadow_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "box_shadow_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 4,
+                    "glsl_name": "box_shadow_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_224",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 64,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "box_shadow_fs_params"
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_box_shadow_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_box_shadow_glsl410_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "box_shadow_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "box_shadow_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 4,
+                    "glsl_name": "box_shadow_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_224",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 64,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "box_shadow_fs_params"
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_box_shadow_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_box_shadow_hlsl5_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "box_shadow_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_224",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 64,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "box_shadow_fs_params"
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_box_shadow_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_box_shadow_metal_ios_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "box_shadow_vs_params"
+              },
+              {
+                "inst_name": "_224",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 64,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "box_shadow_fs_params"
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_box_shadow_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_box_shadow_metal_macos_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "box_shadow_vs_params"
+              },
+              {
+                "inst_name": "_224",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 64,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "box_shadow_fs_params"
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "effect.glsl"
+        ]
+      }
+    },
+    "composite": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_composite_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_composite_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "composite_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "composite_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "composite_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_27",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "composite_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_composite_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_composite_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "composite_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "composite_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "composite_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_27",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "composite_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_composite_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_composite_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "composite_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_27",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "composite_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_composite_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_composite_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "composite_vs_params"
+              },
+              {
+                "inst_name": "_27",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "composite_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_composite_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_composite_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "composite_vs_params"
+              },
+              {
+                "inst_name": "_27",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "composite_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "composite.glsl"
+        ]
+      }
+    },
+    "drop_shadow": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_drop_shadow_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_drop_shadow_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "drop_shadow_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "drop_shadow_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 3,
+                    "glsl_name": "drop_shadow_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "drop_shadow_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_drop_shadow_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_drop_shadow_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "drop_shadow_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "drop_shadow_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 3,
+                    "glsl_name": "drop_shadow_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "drop_shadow_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_drop_shadow_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_drop_shadow_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "drop_shadow_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "drop_shadow_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_drop_shadow_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_drop_shadow_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "drop_shadow_vs_params"
+              },
+              {
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "drop_shadow_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_drop_shadow_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_drop_shadow_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "drop_shadow_vs_params"
+              },
+              {
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "drop_shadow_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "effect.glsl"
+        ]
+      }
+    },
+    "effect": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_effect_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_effect_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "effect_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "effect_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 5,
+                    "glsl_name": "effect_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_33",
+                "members": [
+                  {
+                    "array_count": 5,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 80,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "effect_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_effect_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_effect_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "effect_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "effect_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 5,
+                    "glsl_name": "effect_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_33",
+                "members": [
+                  {
+                    "array_count": 5,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 80,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "effect_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_effect_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_effect_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "effect_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_33",
+                "members": [
+                  {
+                    "array_count": 5,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 80,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "effect_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_effect_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_effect_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "effect_vs_params"
+              },
+              {
+                "inst_name": "_33",
+                "members": [
+                  {
+                    "array_count": 5,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 80,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "effect_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_effect_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_effect_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "effect_vs_params"
+              },
+              {
+                "inst_name": "_33",
+                "members": [
+                  {
+                    "array_count": 5,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 80,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "effect_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "effect.glsl"
+        ]
+      }
+    },
+    "mask": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              },
+              {
+                "name": "mask_smp",
+                "sampler_type": "filtering",
+                "slot": 1,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_mask_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_mask_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              },
+              {
+                "glsl_name": "mask_tex_mask_smp",
+                "name": "mask_tex_mask_smp",
+                "sampler_name": "mask_smp",
+                "sampler_slot": 1,
+                "slot": 1,
+                "stage": "fragment",
+                "view_name": "mask_tex",
+                "view_slot": 1
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "mask_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "mask_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 3,
+                    "glsl_name": "mask_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_32",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "mask_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              },
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "mask_tex",
+                  "sample_type": "float",
+                  "slot": 1,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              },
+              {
+                "name": "mask_smp",
+                "sampler_type": "filtering",
+                "slot": 1,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_mask_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_mask_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              },
+              {
+                "glsl_name": "mask_tex_mask_smp",
+                "name": "mask_tex_mask_smp",
+                "sampler_name": "mask_smp",
+                "sampler_slot": 1,
+                "slot": 1,
+                "stage": "fragment",
+                "view_name": "mask_tex",
+                "view_slot": 1
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "mask_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "mask_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 3,
+                    "glsl_name": "mask_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_32",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "mask_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              },
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "mask_tex",
+                  "sample_type": "float",
+                  "slot": 1,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              },
+              {
+                "hlsl_register_s_n": 1,
+                "name": "mask_smp",
+                "sampler_type": "filtering",
+                "slot": 1,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_mask_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_mask_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              },
+              {
+                "name": "mask_tex_mask_smp",
+                "sampler_name": "mask_smp",
+                "sampler_slot": 1,
+                "slot": 1,
+                "stage": "fragment",
+                "view_name": "mask_tex",
+                "view_slot": 1
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "mask_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_32",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "mask_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              },
+              {
+                "texture": {
+                  "hlsl_register_t_n": 1,
+                  "multisampled": false,
+                  "name": "mask_tex",
+                  "sample_type": "float",
+                  "slot": 1,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              },
+              {
+                "msl_sampler_n": 1,
+                "name": "mask_smp",
+                "sampler_type": "filtering",
+                "slot": 1,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_mask_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_mask_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              },
+              {
+                "name": "mask_tex_mask_smp",
+                "sampler_name": "mask_smp",
+                "sampler_slot": 1,
+                "slot": 1,
+                "stage": "fragment",
+                "view_name": "mask_tex",
+                "view_slot": 1
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "mask_vs_params"
+              },
+              {
+                "inst_name": "_32",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "mask_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              },
+              {
+                "texture": {
+                  "msl_texture_n": 1,
+                  "multisampled": false,
+                  "name": "mask_tex",
+                  "sample_type": "float",
+                  "slot": 1,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              },
+              {
+                "msl_sampler_n": 1,
+                "name": "mask_smp",
+                "sampler_type": "filtering",
+                "slot": 1,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_mask_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_mask_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              },
+              {
+                "name": "mask_tex_mask_smp",
+                "sampler_name": "mask_smp",
+                "sampler_slot": 1,
+                "slot": 1,
+                "stage": "fragment",
+                "view_name": "mask_tex",
+                "view_slot": 1
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_29",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "mask_vs_params"
+              },
+              {
+                "inst_name": "_32",
+                "members": [
+                  {
+                    "array_count": 3,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 48,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "mask_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              },
+              {
+                "texture": {
+                  "msl_texture_n": 1,
+                  "multisampled": false,
+                  "name": "mask_tex",
+                  "sample_type": "float",
+                  "slot": 1,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "effect.glsl"
+        ]
+      }
+    },
+    "path": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_path_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_path_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "path_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_31",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "path_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 24,
+                    "glsl_name": "path_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 24,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 384,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "path_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_path_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_path_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "path_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_31",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "path_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 24,
+                    "glsl_name": "path_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 24,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 384,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "path_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_path_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_path_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_31",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "path_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 24,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 384,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "path_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_path_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_path_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_31",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "path_vs_params"
+              },
+              {
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 24,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 384,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "path_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_path_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_path_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_31",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "path_vs_params"
+              },
+              {
+                "inst_name": "_55",
+                "members": [
+                  {
+                    "array_count": 24,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 384,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "path_fs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "path.glsl"
+        ]
+      }
+    },
+    "solid": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_solid_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_solid_glsl300es_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "solid_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_25",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "solid_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "solid_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_12",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "solid_fs_params"
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_solid_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_solid_glsl410_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "solid_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_25",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "solid_vs_params"
+              },
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "solid_fs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_12",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "solid_fs_params"
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_solid_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_solid_hlsl5_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_25",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "solid_vs_params"
+              },
+              {
+                "hlsl_register_b_n": 1,
+                "inst_name": "_12",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "solid_fs_params"
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_solid_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_solid_metal_ios_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "inst_name": "_25",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "solid_vs_params"
+              },
+              {
+                "inst_name": "_12",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "solid_fs_params"
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_solid_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_solid_metal_macos_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "inst_name": "_25",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "solid_vs_params"
+              },
+              {
+                "inst_name": "_12",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 1,
+                "size": 16,
+                "slot": 1,
+                "stage": "fragment",
+                "struct_name": "solid_fs_params"
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "solid.glsl"
+        ]
+      }
+    },
+    "surface_mesh": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec3"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 1,
+                "type": "vec4"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_surface_mesh_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_surface_mesh_glsl300es_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 4,
+                    "glsl_name": "surface_mesh_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_16",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 64,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "surface_mesh_vs_params"
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec3"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 1,
+                "type": "vec4"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_surface_mesh_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_surface_mesh_glsl410_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 4,
+                    "glsl_name": "surface_mesh_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_16",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 64,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "surface_mesh_vs_params"
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec3"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec4"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_surface_mesh_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_surface_mesh_hlsl5_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_16",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 64,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "surface_mesh_vs_params"
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec3"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec4"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_surface_mesh_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_surface_mesh_metal_ios_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "inst_name": "_16",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 64,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "surface_mesh_vs_params"
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec3"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec4"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_surface_mesh_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_surface_mesh_metal_macos_vertex"
+              }
+            },
+            "uniform_blocks": [
+              {
+                "inst_name": "_16",
+                "members": [
+                  {
+                    "array_count": 4,
+                    "array_stride": 16,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 64,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "surface_mesh_vs_params"
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "surface_mesh.glsl"
+        ]
+      }
+    },
+    "text_alpha": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_alpha_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_alpha_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "text_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_alpha_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_alpha_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "text_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 2,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_alpha_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_alpha_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_text_alpha_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_text_alpha_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_text_alpha_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_text_alpha_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "text.glsl"
+        ]
+      }
+    },
+    "text_color": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_color_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_color_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "text_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_color_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_color_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "text_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 2,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_color_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_color_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_text_color_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_text_color_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_text_color_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_text_color_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "text.glsl"
+        ]
+      }
+    },
+    "text_sdf": {
+      "default": {
+        "backends": {
+          "glsl300es": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_sdf_glsl300es_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_sdf_glsl300es_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "text_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "glsl410": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "glsl_name": "position",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "uv0",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "glsl_name": "color0",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_sdf_glsl410_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_sdf_glsl410_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "glsl_name": "tex_smp",
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "glsl_uniforms": [
+                  {
+                    "array_count": 1,
+                    "glsl_name": "text_vs_params",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "hlsl5": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 0,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 1,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "hlsl_sem_index": 2,
+                "hlsl_sem_name": "TEXCOORD",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "hlsl_register_s_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main",
+                "source": "ui_shader_text_sdf_hlsl5_fragment"
+              },
+              "vertex": {
+                "entry": "main",
+                "source": "ui_shader_text_sdf_hlsl5_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "hlsl_register_b_n": 0,
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "hlsl_register_t_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_ios": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_text_sdf_metal_ios_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_text_sdf_metal_ios_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          },
+          "metal_macos": {
+            "attrs": [
+              {
+                "base_type": "Float",
+                "slot": 0,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 1,
+                "type": "vec2"
+              },
+              {
+                "base_type": "Float",
+                "slot": 2,
+                "type": "vec4"
+              }
+            ],
+            "samplers": [
+              {
+                "msl_sampler_n": 0,
+                "name": "smp",
+                "sampler_type": "filtering",
+                "slot": 0,
+                "stage": "fragment"
+              }
+            ],
+            "stages": {
+              "fragment": {
+                "entry": "main0",
+                "source": "ui_shader_text_sdf_metal_macos_fragment"
+              },
+              "vertex": {
+                "entry": "main0",
+                "source": "ui_shader_text_sdf_metal_macos_vertex"
+              }
+            },
+            "texture_sampler_pairs": [
+              {
+                "name": "tex_smp",
+                "sampler_name": "smp",
+                "sampler_slot": 0,
+                "slot": 0,
+                "stage": "fragment",
+                "view_name": "tex",
+                "view_slot": 0
+              }
+            ],
+            "uniform_blocks": [
+              {
+                "inst_name": "_34",
+                "members": [
+                  {
+                    "array_count": 1,
+                    "name": "value",
+                    "offset": 0,
+                    "type": "vec4"
+                  }
+                ],
+                "msl_buffer_n": 0,
+                "size": 16,
+                "slot": 0,
+                "stage": "vertex",
+                "struct_name": "text_vs_params"
+              }
+            ],
+            "views": [
+              {
+                "texture": {
+                  "msl_texture_n": 0,
+                  "multisampled": false,
+                  "name": "tex",
+                  "sample_type": "float",
+                  "slot": 0,
+                  "stage": "fragment",
+                  "type": "2d"
+                }
+              }
+            ]
+          }
+        },
+        "defines": [],
+        "dependencies": [
+          "text.glsl"
+        ]
+      }
+    }
+  },
+  "schema": "nkgpu-shader-reflection/1"
+}

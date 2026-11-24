@@ -69,28 +69,13 @@ one GLSL source in `sokol-shdc` form, compiled at build time to `glsl410`,
 The generated sources carry the `#version` and precision lines; the edited
 source stays backend-neutral.
 
-What exists: the UI package's `tools/generate-shaders.py` runs `sokol-shdc`
-over `packages/ui/shaders` and checks in a C header, with
-`tools/check-shaders.sh`. `sokol-shdc` is not pinned or fetched, and no CI job
-runs the check.
+The shared NativeKit generator produces C tables and versioned reflection.
+The UI uses the C tables and keeps its existing shader source header
+byte-identical. CI checks regeneration for UI and Circuit Run.
 
-Needed, in order:
-
-1. ADR 0021's first migration step: the shared tool in `modules/gpu/tools`
-   with a pinned `sokol-shdc`, the manifest, `nkgpu_shader_create_from_table()`
-   and the `nkgpu-shader-reflection/1` JSON. The UI shaders move to it with
-   byte-identical output, and CI runs `--check`.
-2. The Haxeon generator from that JSON (see the shader-interface item in
-   `TODO.md`): typed uniform records, a descriptor per program, creation by
-   program ID.
-3. The GPU package creates a program for the renderer's live backend, so app
-   code does not pass a shader language.
-4. Circuit Run's maze becomes one program; `maze-web.*.glsl` and the
-   conditional in `CircuitRenderer` are deleted.
-
-Until then Circuit Run keeps its two GLSL files. First check which GPU backend
-Windows and macOS use for it: if D3D11 or Metal, its GLSL-only shaders do not
-run there today.
+Circuit Run declares the maze once in `maze.glsl`. Its generated Haxe
+module selects the variant from the renderer's live backend. The remaining
+Haxe shader interface work is tracked in `TODO.md`.
 
 ## Rejected
 

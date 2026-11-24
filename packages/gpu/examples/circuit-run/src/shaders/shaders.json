@@ -1,0 +1,13 @@
+{
+  "reflection": "maze.reflection.json",
+  "embed_sources": true,
+  "sources": [
+    {
+      "file": "maze.glsl",
+      "programs": [
+        "maze"
+      ]
+    }
+  ],
+  "tables": "maze.shader.h"
+}

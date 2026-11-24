@@ -52,6 +52,10 @@ class Renderer implements Disposable {
 		return value;
 	}
 
+	/** The backend selected for this renderer. */
+	public function backend():nativekit.ffi.NativeKitGpu.Backend
+		return NativeKitGpu.nkgpu_query_backend(nativeHandle());
+
 	/** Returns optional backend capabilities through the portable GPU envelope. */
 	public function features():Features {
 		ensureLive();

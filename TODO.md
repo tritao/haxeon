@@ -102,22 +102,15 @@ Longer-term direction is in `ROADMAP.md`.
   (`plans/ASSETS.md` AS-D3). Bind the official C implementation, with its
   SIMD paths, through HXI: one-shot and streaming hashing, checked against
   the official test vectors.
-- **No generator for shader interfaces.** NativeKit's shader toolchain
-  (NativeKit ADR 0021) emits a versioned JSON reflection per program
-  (`nkgpu-shader-reflection/1`). Add a generator in `packages/gpu/tools`
-  that turns it into checked-in `.hx` modules, the way HXI bindings are
-  generated and checked:
-  - uniform blocks as `@:repr("C")` records with explicit padding, so the C
-    layout equals std140, asserted with `sizeof` and `offsetof`;
-  - a typed descriptor per program: its variants as an enum, binding slots,
-    and the attribute layout a vertex packer must match;
-  - creation through the program's C table by ID;
-  - a `--check` mode for CI.
-
-  It reads plain JSON, never `sokol-shdc`'s YAML. Writing shaders in Haxeon
-  itself is a deferred plan in [docs/design/SHADERS.md](docs/design/SHADERS.md).
-  App shaders need it too: [docs/design/APP_PLATFORM_CLEANUP.md](docs/design/APP_PLATFORM_CLEANUP.md)
-  step 7.
+- **Finish native shader interfaces for Haxe.** The generator in
+  `packages/gpu/tools` reads NativeKit reflection and emits Haxe bindings
+  with typed uniform values and packing at the reflected std140 offsets.
+  Circuit Run uses it and CI checks the generated output. Still open:
+  uniform records with `@:repr("C")` and compile-time `sizeof` and
+  `offsetof` assertions and an FFI path for
+  resolving and creating programs directly from their compiled C tables
+  by ID. Writing shaders in Haxeon itself is deferred to
+  [docs/design/SHADERS.md](docs/design/SHADERS.md).
 
 ## Compiler follow-ups
 

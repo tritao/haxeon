@@ -8,7 +8,7 @@
 
 #include "frame_resources.h"
 #include "prepare/text_raster.h"
-#include "ui_shader_sources.h"
+#include "ui_shader_tables.h"
 
 #include "adapter_internal.h"
 #include "nativekit_gpu.h"
@@ -1380,269 +1380,27 @@ enum class UiShaderKind {
     SurfaceMesh
 };
 
-struct ShaderSources {
-    const char *vertex;
-    const char *fragment;
-    nkgpu_shader_language language;
-};
-
-ShaderSources shader_sources(nkgpu_backend backend, UiShaderKind kind) {
+bool create_shader(UiRendererImpl::State &state, UiShaderKind kind, nkgpu_shader &out_shader) {
     using namespace shader_source;
-    const bool es = backend == NKGPU_BACKEND_GLES3;
-    const bool d3d11 = backend == NKGPU_BACKEND_D3D11;
-    const bool metal = backend == NKGPU_BACKEND_METAL;
-    const auto gl = [es](const char *vertex410, const char *fragment410, const char *vertex300,
-                         const char *fragment300) {
-        return es ? ShaderSources{vertex300, fragment300, NKGPU_SHADERLANGUAGE_GLSL}
-                  : ShaderSources{vertex410, fragment410, NKGPU_SHADERLANGUAGE_GLSL};
+    const auto create = [&](const auto &table) {
+        return gpu_result(state, nkgpu_shader_create_from_table(
+                                     state.renderer, table, std::size(table), &out_shader));
     };
     switch (kind) {
-    case UiShaderKind::Solid:
-        if (d3d11)
-            return {ui_shader_solid_hlsl5_vertex, ui_shader_solid_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_solid_metal_macos_vertex, ui_shader_solid_metal_macos_fragment,
-                    NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_solid_glsl410_vertex, ui_shader_solid_glsl410_fragment,
-                  ui_shader_solid_glsl300es_vertex, ui_shader_solid_glsl300es_fragment);
-    case UiShaderKind::Path:
-        if (d3d11)
-            return {ui_shader_path_hlsl5_vertex, ui_shader_path_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_path_metal_macos_vertex, ui_shader_path_metal_macos_fragment,
-                    NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_path_glsl410_vertex, ui_shader_path_glsl410_fragment,
-                  ui_shader_path_glsl300es_vertex, ui_shader_path_glsl300es_fragment);
-    case UiShaderKind::AlphaGlyph:
-        if (d3d11)
-            return {ui_shader_text_alpha_hlsl5_vertex, ui_shader_text_alpha_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_text_alpha_metal_macos_vertex,
-                    ui_shader_text_alpha_metal_macos_fragment, NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_text_alpha_glsl410_vertex, ui_shader_text_alpha_glsl410_fragment,
-                  ui_shader_text_alpha_glsl300es_vertex, ui_shader_text_alpha_glsl300es_fragment);
-    case UiShaderKind::SdfGlyph:
-        if (d3d11)
-            return {ui_shader_text_sdf_hlsl5_vertex, ui_shader_text_sdf_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_text_sdf_metal_macos_vertex, ui_shader_text_sdf_metal_macos_fragment,
-                    NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_text_sdf_glsl410_vertex, ui_shader_text_sdf_glsl410_fragment,
-                  ui_shader_text_sdf_glsl300es_vertex, ui_shader_text_sdf_glsl300es_fragment);
-    case UiShaderKind::ColorGlyph:
-        if (d3d11)
-            return {ui_shader_text_color_hlsl5_vertex, ui_shader_text_color_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_text_color_metal_macos_vertex,
-                    ui_shader_text_color_metal_macos_fragment, NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_text_color_glsl410_vertex, ui_shader_text_color_glsl410_fragment,
-                  ui_shader_text_color_glsl300es_vertex, ui_shader_text_color_glsl300es_fragment);
-    case UiShaderKind::Composite:
-        if (d3d11)
-            return {ui_shader_composite_hlsl5_vertex, ui_shader_composite_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_composite_metal_macos_vertex,
-                    ui_shader_composite_metal_macos_fragment, NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_composite_glsl410_vertex, ui_shader_composite_glsl410_fragment,
-                  ui_shader_composite_glsl300es_vertex, ui_shader_composite_glsl300es_fragment);
-    case UiShaderKind::Effect:
-        if (d3d11)
-            return {ui_shader_effect_hlsl5_vertex, ui_shader_effect_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_effect_metal_macos_vertex, ui_shader_effect_metal_macos_fragment,
-                    NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_effect_glsl410_vertex, ui_shader_effect_glsl410_fragment,
-                  ui_shader_effect_glsl300es_vertex, ui_shader_effect_glsl300es_fragment);
-    case UiShaderKind::Blur:
-        if (d3d11)
-            return {ui_shader_blur_hlsl5_vertex, ui_shader_blur_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_blur_metal_macos_vertex, ui_shader_blur_metal_macos_fragment,
-                    NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_blur_glsl410_vertex, ui_shader_blur_glsl410_fragment,
-                  ui_shader_blur_glsl300es_vertex, ui_shader_blur_glsl300es_fragment);
-    case UiShaderKind::DropShadow:
-        if (d3d11)
-            return {ui_shader_drop_shadow_hlsl5_vertex, ui_shader_drop_shadow_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_drop_shadow_metal_macos_vertex,
-                    ui_shader_drop_shadow_metal_macos_fragment, NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_drop_shadow_glsl410_vertex, ui_shader_drop_shadow_glsl410_fragment,
-                  ui_shader_drop_shadow_glsl300es_vertex, ui_shader_drop_shadow_glsl300es_fragment);
-    case UiShaderKind::BoxShadow:
-        if (d3d11)
-            return {ui_shader_box_shadow_hlsl5_vertex, ui_shader_box_shadow_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_box_shadow_metal_macos_vertex,
-                    ui_shader_box_shadow_metal_macos_fragment, NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_box_shadow_glsl410_vertex, ui_shader_box_shadow_glsl410_fragment,
-                  ui_shader_box_shadow_glsl300es_vertex, ui_shader_box_shadow_glsl300es_fragment);
-    case UiShaderKind::Mask:
-        if (d3d11)
-            return {ui_shader_mask_hlsl5_vertex, ui_shader_mask_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_mask_metal_macos_vertex, ui_shader_mask_metal_macos_fragment,
-                    NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_mask_glsl410_vertex, ui_shader_mask_glsl410_fragment,
-                  ui_shader_mask_glsl300es_vertex, ui_shader_mask_glsl300es_fragment);
-    case UiShaderKind::SurfaceMesh:
-        if (d3d11)
-            return {ui_shader_surface_mesh_hlsl5_vertex, ui_shader_surface_mesh_hlsl5_fragment,
-                    NKGPU_SHADERLANGUAGE_HLSL5};
-        if (metal)
-            return {ui_shader_surface_mesh_metal_macos_vertex,
-                    ui_shader_surface_mesh_metal_macos_fragment, NKGPU_SHADERLANGUAGE_MSL};
-        return gl(ui_shader_surface_mesh_glsl410_vertex, ui_shader_surface_mesh_glsl410_fragment,
-                  ui_shader_surface_mesh_glsl300es_vertex,
-                  ui_shader_surface_mesh_glsl300es_fragment);
+    case UiShaderKind::Solid: return create(solid_default_table);
+    case UiShaderKind::Path: return create(path_default_table);
+    case UiShaderKind::AlphaGlyph: return create(text_alpha_default_table);
+    case UiShaderKind::SdfGlyph: return create(text_sdf_default_table);
+    case UiShaderKind::ColorGlyph: return create(text_color_default_table);
+    case UiShaderKind::Composite: return create(composite_default_table);
+    case UiShaderKind::Effect: return create(effect_default_table);
+    case UiShaderKind::Blur: return create(blur_default_table);
+    case UiShaderKind::DropShadow: return create(drop_shadow_default_table);
+    case UiShaderKind::BoxShadow: return create(box_shadow_default_table);
+    case UiShaderKind::Mask: return create(mask_default_table);
+    case UiShaderKind::SurfaceMesh: return create(surface_mesh_default_table);
     }
-    return {nullptr, nullptr, NKGPU_SHADERLANGUAGE_GLSL};
-}
-
-bool add_uniform(UiRendererImpl::State &state, nkgpu_shader_builder builder, uint32_t slot,
-                 uint32_t member, const char *name, nkgpu_uniform_type type, uint32_t count = 1) {
-    return gpu_result(state, nkgpu_shader_uniform(builder, slot, member, name, type, count));
-}
-
-bool create_shader(UiRendererImpl::State &state, UiShaderKind kind, nkgpu_shader &out_shader) {
-    const ShaderSources sources = shader_sources(nkgpu_query_backend(state.renderer), kind);
-    if (!sources.vertex || !sources.fragment)
-        return fail(state, "UI shader source is unavailable for this graphics backend");
-    nkgpu_shader_builder builder{};
-    if (!gpu_result(state, nkgpu_shader_begin(state.renderer, sources.language, sources.vertex,
-                                              sources.fragment, &builder)))
-        return false;
-    const char *attributes[3]{};
-    uint32_t attribute_count = 0;
-    switch (kind) {
-    case UiShaderKind::Solid:
-        attributes[attribute_count++] = "position";
-        break;
-    case UiShaderKind::Path:
-    case UiShaderKind::Composite:
-    case UiShaderKind::Effect:
-    case UiShaderKind::Blur:
-    case UiShaderKind::DropShadow:
-    case UiShaderKind::BoxShadow:
-    case UiShaderKind::Mask:
-        attributes[attribute_count++] = "position";
-        attributes[attribute_count++] = "uv0";
-        break;
-    case UiShaderKind::AlphaGlyph:
-    case UiShaderKind::SdfGlyph:
-    case UiShaderKind::ColorGlyph:
-        attributes[attribute_count++] = "position";
-        attributes[attribute_count++] = "uv0";
-        attributes[attribute_count++] = "color0";
-        break;
-    case UiShaderKind::SurfaceMesh:
-        attributes[attribute_count++] = "position";
-        attributes[attribute_count++] = "color0";
-        break;
-    }
-    for (uint32_t location = 0; location < attribute_count; ++location) {
-        if (!gpu_result(state, nkgpu_shader_attribute(builder, location, attributes[location],
-                                                      "TEXCOORD", location)))
-            return false;
-    }
-    const char *vertex_block = nullptr;
-    uint32_t vertex_size = 16;
-    const char *fragment_block = nullptr;
-    uint32_t fragment_size = 0;
-    bool textured = false;
-    switch (kind) {
-    case UiShaderKind::Solid:
-        vertex_block = "solid_vs_params";
-        fragment_block = "solid_fs_params";
-        fragment_size = 16;
-        break;
-    case UiShaderKind::Path:
-        vertex_block = "path_vs_params";
-        fragment_block = "path_fs_params";
-        fragment_size = sizeof(PathUniforms);
-        textured = true;
-        break;
-    case UiShaderKind::AlphaGlyph:
-    case UiShaderKind::SdfGlyph:
-    case UiShaderKind::ColorGlyph:
-        vertex_block = "text_vs_params";
-        textured = true;
-        break;
-    case UiShaderKind::Composite:
-        vertex_block = "composite_vs_params";
-        fragment_block = "composite_fs_params";
-        fragment_size = 16;
-        textured = true;
-        break;
-    case UiShaderKind::Effect:
-        vertex_block = "effect_vs_params";
-        fragment_block = "effect_fs_params";
-        fragment_size = sizeof(ColorMatrixUniforms);
-        textured = true;
-        break;
-    case UiShaderKind::Blur:
-        vertex_block = "blur_vs_params";
-        fragment_block = "blur_fs_params";
-        fragment_size = sizeof(BlurUniforms);
-        textured = true;
-        break;
-    case UiShaderKind::DropShadow:
-        vertex_block = "drop_shadow_vs_params";
-        fragment_block = "drop_shadow_fs_params";
-        fragment_size = sizeof(DropShadowUniforms);
-        textured = true;
-        break;
-    case UiShaderKind::BoxShadow:
-        vertex_block = "box_shadow_vs_params";
-        fragment_block = "box_shadow_fs_params";
-        fragment_size = sizeof(BoxShadowUniforms);
-        break;
-    case UiShaderKind::Mask:
-        vertex_block = "mask_vs_params";
-        fragment_block = "mask_fs_params";
-        fragment_size = sizeof(MaskUniforms);
-        textured = true;
-        break;
-    case UiShaderKind::SurfaceMesh:
-        vertex_block = "surface_mesh_vs_params";
-        vertex_size = 64;
-        break;
-    }
-    if (!gpu_result(
-            state, nkgpu_shader_uniform_block(builder, 0, NKGPU_SHADERSTAGE_VERTEX, vertex_size)) ||
-        !add_uniform(state, builder, 0, 0, vertex_block, NKGPU_UNIFORMTYPE_FLOAT4,
-                     kind == UiShaderKind::SurfaceMesh ? 4 : 1))
-        return false;
-    if (fragment_block &&
-        (!gpu_result(state, nkgpu_shader_uniform_block(builder, 1, NKGPU_SHADERSTAGE_FRAGMENT,
-                                                       fragment_size)) ||
-         !add_uniform(state, builder, 1, 0, fragment_block, NKGPU_UNIFORMTYPE_FLOAT4,
-                      kind == UiShaderKind::Path         ? kPathShaderVec4Count
-                      : kind == UiShaderKind::Effect     ? 5
-                      : kind == UiShaderKind::DropShadow ? 3
-                      : kind == UiShaderKind::BoxShadow  ? 4
-                      : kind == UiShaderKind::Mask       ? 3
-                                                         : 1)))
-        return false;
-    if (textured && !gpu_result(state, nkgpu_shader_texture(builder, 0, 0,
-                                                            NKGPU_SHADERSTAGE_FRAGMENT, "tex_smp")))
-        return false;
-    if (kind == UiShaderKind::Mask &&
-        !gpu_result(state, nkgpu_shader_texture(builder, 1, 1, NKGPU_SHADERSTAGE_FRAGMENT,
-                                                "mask_tex_mask_smp")))
-        return false;
-    return gpu_result(state, nkgpu_shader_end(builder, &out_shader));
+    return fail(state, "unknown UI shader program");
 }
 
 struct VertexAttribute {
@@ -1716,24 +1474,14 @@ bool create_custom_effect(UiRendererImpl::State &state,
         if (!std::isfinite(value) || value < 0.0f)
             return fail(state, "invalid custom effect ink overflow");
     const nkgpu_backend backend = nkgpu_query_backend(state.renderer);
-    const ShaderSources standard = shader_sources(backend, UiShaderKind::Effect);
     const char *fragment = custom_fragment_source(backend, registration);
-    if (!standard.vertex || !fragment)
+    if (!fragment)
         return fail(state, "custom effect shader source is unavailable for this backend");
-    nkgpu_shader_builder builder{};
-    if (!gpu_result(state, nkgpu_shader_begin(state.renderer, standard.language, standard.vertex,
-                                              fragment, &builder)) ||
-        !gpu_result(state, nkgpu_shader_attribute(builder, 0, "position", "TEXCOORD", 0)) ||
-        !gpu_result(state, nkgpu_shader_attribute(builder, 1, "uv0", "TEXCOORD", 1)) ||
-        !gpu_result(state, nkgpu_shader_uniform_block(builder, 0, NKGPU_SHADERSTAGE_VERTEX, 16)) ||
-        !add_uniform(state, builder, 0, 0, "effect_vs_params", NKGPU_UNIFORMTYPE_FLOAT4) ||
-        !gpu_result(state, nkgpu_shader_uniform_block(
-                               builder, 1, NKGPU_SHADERSTAGE_FRAGMENT,
-                               static_cast<uint32_t>(sizeof(float) * kColorMatrixComponents))) ||
-        !add_uniform(state, builder, 1, 0, "effect_fs_params", NKGPU_UNIFORMTYPE_FLOAT4, 5) ||
-        !gpu_result(state,
-                    nkgpu_shader_texture(builder, 0, 0, NKGPU_SHADERSTAGE_FRAGMENT, "tex_smp")) ||
-        !gpu_result(state, nkgpu_shader_end(builder, &out_shader)))
+    auto standard = std::to_array(shader_source::effect_default_table);
+    for (auto &entry : standard)
+        entry.fragment = fragment;
+    if (!gpu_result(state, nkgpu_shader_create_from_table(
+                               state.renderer, standard.data(), standard.size(), &out_shader)))
         return false;
     const auto blend = premultiplied_blend();
     PipelineOptions options{};

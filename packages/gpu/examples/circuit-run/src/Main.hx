@@ -37,7 +37,12 @@ class Main implements App {
 		options.title = "Circuit Run | Arrows to steer, R to restart, M to mute";
 		options.flags = WindowFlags.Resizable;
 		var window = runtime.createWindow(options);
-		surface = window.createSurface(SurfaceOptions.forGpu(CircuitRenderer.width, CircuitRenderer.surfaceHeight));
+		var surfaceOptions = SurfaceOptions.forGpu(CircuitRenderer.width, CircuitRenderer.surfaceHeight);
+		if (surfaceOptions.api == GraphicsApi.Opengl) {
+			surfaceOptions.majorVersion = 4;
+			surfaceOptions.minorVersion = 1;
+		}
+		surface = window.createSurface(surfaceOptions);
 		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width);
 		hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
 

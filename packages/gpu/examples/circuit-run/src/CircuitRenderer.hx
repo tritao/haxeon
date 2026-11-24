@@ -6,7 +6,6 @@ import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Pipeline;
 import haxeon.gpu.Renderer;
-import haxeon.gpu.Shader;
 import haxeon.platform.Surface;
 
 import Circuit.Position;
@@ -46,17 +45,10 @@ class CircuitRenderer {
 	public function new(surface:Surface) {
 		renderer = Renderer.create(surface);
 		commands = renderer.commandBuffer(64);
-		var shader = Shader.begin(renderer, ShaderLanguage.Glsl,
-		#if wasm
-		Embed.text("shaders/maze-web.vert.glsl"),
-			Embed.text("shaders/maze-web.frag.glsl")).build();
-		#else
-		Embed.text("shaders/maze.vert.glsl"),
-			Embed.text("shaders/maze.frag.glsl")).build();
-		#end
+		var shader = MazeShader.create(renderer);
 		pipeline = Pipeline.begin(renderer, shader, stride)
-			.attribute(0, 0, 0, VertexFormat.Float2)
-			.attribute(1, 0, colorOffset, VertexFormat.Float3)
+			.attribute(MazeShader.position, 0, 0, VertexFormat.Float2)
+			.attribute(MazeShader.rgb, 0, colorOffset, VertexFormat.Float3)
 			.build();
 		var desc = new BufferDesc(vertices.length, BufferUsage.Vertex);
 		desc.dynamicUpdate = true;
