@@ -7,6 +7,7 @@ import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleMain from '../../../packages/gpu/examples/triangle/src/Main.hx?raw';
 import triangleShader from '../../../packages/gpu/examples/triangle/src/shaders/Triangle.glsl?raw';
 import particlesMain from '../../../packages/gpu/examples/particles/src/Main.hx?raw';
+import fountainView from '../../../packages/gpu/examples/viewport/src/FountainView.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
@@ -31,6 +32,8 @@ const method = (source: string, name: string) => {
 const ready = method(triangleMain, 'ready');
 const frame = method(triangleMain, 'frame');
 const computeFrame = method(particlesMain, 'frame');
+const viewportExample = 'packages/gpu/examples/viewport/';
+const viewportBuild = method(fountainView, 'build');
 const appLines = triangleMain.trimEnd().split('\n').length;
 ---
 
@@ -86,25 +89,18 @@ const appLines = triangleMain.trimEnd().split('\n').length;
 
     <section>
       <div class="wrap">
-        <div class="head"><h2>Inside your UI</h2></div>
-        <div class="split">
-          <figure>
-            <img class="viewport-light" src="/gpu/viewport-light.webp" width="778" height="502" loading="lazy" alt="A depth-tested cube drawn in a viewport panel of the UI Showcase." />
-            <img class="viewport-dark" src="/gpu/viewport-dark.webp" width="778" height="502" loading="lazy" alt="A depth-tested cube drawn in a viewport panel of the UI Showcase." />
-            <figcaption>A live cube in the <a href="/ui/showcase/">UI Showcase</a>’s 3D Views page.</figcaption>
-          </figure>
-          <div class="stack">
-            <Card compact>
-              <h3>A viewport in your layout</h3>
-              <p>You own the renderer. <a href={repositorySource('packages/ui/haxe/haxeon/ui/widgets/GpuViewport.hx')}><code>GpuViewport</code></a> composites your surface, handles pan and zoom, and redraws only when the camera or your content changes.</p>
-            </Card>
-            <Card compact>
-              <h3>Controls over a scene</h3>
-              <p>Draw your scene first, then draw retained UI on the same surface, as Circuit Run does for its counter and buttons.</p>
-            </Card>
-          </div>
+        <div class="head">
+          <h2>Inside your UI</h2>
+          <p class="lede">A <a href={repositorySource('packages/ui/haxe/haxeon/ui/widgets/GpuViewport.hx')}><code>GpuViewport</code></a> sits in your layout like any other view. Your app draws into an image; the viewport composites it, fits it to the space it gets, and pans and zooms with the pointer.</p>
         </div>
-        <p class="note"><a href="/ui/">Explore the UI toolkit</a></p>
+        <div class="grid first-frame">
+          <figure>
+            <img src="/gpu/viewport.webp" width="960" height="600" loading="lazy" alt="A window with a sidebar of controls (gravity and spread sliders, a warm colours switch and a reset button) beside a viewport showing an orange particle fountain." />
+          </figure>
+          <CodeCard code={viewportBuild} lang="haxe" title="src/FountainView.hx" />
+        </div>
+        <p class="note">To put controls over a full-window scene instead, draw the scene first and the UI on the same surface, as Circuit Run does for its HUD.</p>
+        <p class="note"><a href={repositorySource(viewportExample + 'src')}>Read the whole app</a> · <a href={repositorySource(viewportExample + 'README.md')}>Run it</a> · <a href="/ui/">Explore the UI toolkit</a></p>
       </div>
     </section>
 
@@ -214,18 +210,18 @@ const appLines = triangleMain.trimEnd().split('\n').length;
             <p class="note">Image and buffer readback work on every backend.</p>
           </div>
           <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 204" role="img" aria-labelledby="gpu-stack-title">
+            <svg class="drawing" viewBox="0 0 360 262" role="img" aria-labelledby="gpu-stack-title">
               <title id="gpu-stack-title">Your draw code calls the GPU layer, which runs on sokol_gfx and the platform graphics API.</title>
-              <rect class="box" x="55" y="2" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="52" width="250" height="48" rx="6" />
-              <rect class="box" x="55" y="118" width="250" height="32" rx="6" />
-              <rect class="box" x="55" y="168" width="250" height="32" rx="6" />
-              <path class="acc" d="M180 34v16m-4-5 4 5 4-5M180 100v16m-4-5 4 5 4-5M180 150v16m-4-5 4 5 4-5" />
-              <text class="ttl" x="180" y="23" text-anchor="middle">Your draw code</text>
-              <text class="ttl" x="180" y="72" text-anchor="middle">GPU layer</text>
-              <text x="180" y="89" text-anchor="middle">Buffers · Pipelines · Passes</text>
-              <text class="ttl" x="180" y="139" text-anchor="middle">sokol_gfx</text>
-              <text class="ttl" x="180" y="189" text-anchor="middle">OpenGL · WebGL2 · Metal · D3D11</text>
+              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
+              <rect class="box" x="55" y="156" width="250" height="36" rx="6" />
+              <rect class="box" x="55" y="224" width="250" height="36" rx="6" />
+              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 192v30m-4-5 4 5 4-5" />
+              <text class="ttl" x="180" y="25" text-anchor="middle">Your draw code</text>
+              <text class="ttl" x="180" y="93" text-anchor="middle">GPU layer</text>
+              <text x="180" y="113" text-anchor="middle">Buffers · Pipelines · Passes</text>
+              <text class="ttl" x="180" y="179" text-anchor="middle">sokol_gfx</text>
+              <text class="ttl" x="180" y="247" text-anchor="middle">OpenGL · WebGL2 · Metal · D3D11</text>
             </svg>
           </Diagram>
         </div>
@@ -290,8 +286,6 @@ const appLines = triangleMain.trimEnd().split('\n').length;
   .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
   figure, .grid p, .stack p { margin: 0; }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
-  .viewport-light, :global([data-theme='light']) .viewport-dark { display: none; }
-  :global([data-theme='light']) .viewport-light { display: block; }
   figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
   li + li { margin-top: var(--hx-space-2); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
