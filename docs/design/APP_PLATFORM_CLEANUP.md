@@ -18,21 +18,13 @@ removes each:
 
 ## 1. Frames that fail without breaking the surface
 
-`AppLoop` skips frames completed with `ErrorCancelled`. Two gaps remain:
-
-- NativeKit reports `NK_ERROR_CANCELLED` only when queued render work is
-  dropped without running. A surface lost to a minimize, resize or context
-  loss fails the frame's bind or a step with another result, and the app
-  stops. Give that case one result (for example `NK_ERROR_SURFACE_LOST`) that
-  `AppLoop` also skips, and test it with a real surface loss.
-- A skipped frame is not requested again. An on-demand app whose overlay
-  already cleared its dirty state keeps a stale picture until something else
-  requests a frame. `AppLoop` requests a new frame after a skip.
+Implemented. NativeKit reports `NK_ERROR_SURFACE_LOST` for frames invalidated
+by drawable loss. `AppLoop` retries skipped work and pauses acquisition from
+surface loss until the next readiness event.
 
 ## 2. Tidy `AppLoop`
 
-Group its fields before its methods; `firstFramePresented` and `stop()` are
-interleaved with the field declarations.
+Implemented with step 1. Fields are grouped before methods.
 
 ## 3. Surfaces follow their window
 

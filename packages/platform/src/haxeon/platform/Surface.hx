@@ -70,6 +70,16 @@ class Surface implements Disposable {
 		});
 	}
 
+	/** Observes loss of the surface drawable or context. */
+	public function onLost(handler:Void->Void):EventSubscription {
+		if (handler == null)
+			throw BindingError.invalidArgument("Surface.onLost", "Lost handler is required");
+		return listen(function(event) switch event {
+			case SurfaceLost(_): handler();
+			case _:
+		});
+	}
+
 	/** Observes logical and framebuffer resize dimensions for this surface. */
 	public function onResize(handler:Int->Int->Int->Int->Void):EventSubscription {
 		if (handler == null)

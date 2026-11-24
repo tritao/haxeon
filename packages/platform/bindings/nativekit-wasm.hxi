@@ -2395,6 +2395,10 @@ interface NativeKit @target("portable-abi32") @library("nativekit") {
 		NK_RESULT_HTTP_CONNECTION = -101;
 		NK_RESULT_HTTP_DNS = -100;
 		/**
+		 * A graphics surface lost its drawable or context during frame execution.
+		 */
+		NK_ERROR_SURFACE_LOST = -16;
+		/**
 		 * The user or operating system denied access required by the operation.
 		 */
 		NK_ERROR_PERMISSION_DENIED = -15;

@@ -44,13 +44,32 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 class Triangle {
 	@:access(haxeon.platform.AppLoop)
 	static function verifyFrameCompletionRecovery(runtime:Runtime, surface:Surface, app:App):Void {
+		surface.setFrameMode(SurfaceFrameMode.OnDemand);
 		scoped var loop = runtime.startApp(surface, app);
+		var redraws = 0;
+		loop.frameSubscription = surface.onFrame(function(_, _) redraws++);
 		var source = new Handle(surface.nativeHandle().rawValue());
 		var token = haxe.Int64.ofInt(17);
 		loop.pending = token;
 		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorCancelled));
 		if (loop.pending != null || loop.stopped || loop.failure != null || loop.firstFramePresented)
 			throw "A canceled submission stopped the loop or marked a frame as presented";
+		var deadline = Sys.monotonicTime() + 5.0;
+		while (redraws == 0 && Sys.monotonicTime() < deadline)
+			if (!runtime.events.poll()) runtime.events.wait(0.01);
+		if (redraws == 0)
+			throw "A canceled submission did not request another on-demand frame";
+		runtime.events.dispatch(PlatformEvent.SurfaceLost(source));
+		loop.pending = token;
+		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.ErrorSurfaceLost));
+		if (!loop.surfaceLost || loop.stopped || loop.pending != null)
+			throw "Surface loss did not pause the loop and release the pending frame";
+		loop.draw(1, 1);
+		if (loop.lastFrameAt != null)
+			throw "The loop tried to draw while its surface was lost";
+		runtime.events.dispatch(PlatformEvent.SurfaceReady(source));
+		if (loop.surfaceLost || loop.stopped)
+			throw "Surface readiness did not resume the loop";
 		loop.pending = token;
 		runtime.events.dispatch(PlatformEvent.SurfaceFrameComplete(source, token, Result.Ok));
 		if (loop.pending != null || loop.stopped || !loop.firstFramePresented)
@@ -571,7 +590,11 @@ class Triangle {
 		scoped var loopWindow = runtime.createWindowNative(windowOptions);
 		var loopSurface = loopWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
 		var app = new TriangleLoopApp(loopSurface);
-		verifyFrameCompletionRecovery(runtime, loopSurface, app);
+		{
+			scoped var retryWindow = runtime.createWindowNative(windowOptions);
+			var retrySurface = retryWindow.createSurface(GpuSurfaceOptions.forGpu(800, 600));
+			verifyFrameCompletionRecovery(runtime, retrySurface, app);
+		}
 		var recorded = 0;
 		runtime.run(loopSurface, app, new FrameRecorder(function(timing) {
 			if (timing.submittedSeconds == null || timing.submittedSeconds < timing.callbackSeconds)

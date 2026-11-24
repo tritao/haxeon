@@ -14,6 +14,7 @@ class AppLoop implements Disposable {
 	final app:App;
 	final recorder:Null<FrameRecorder>;
 	final readySubscription:EventSubscription;
+	final lostSubscription:EventSubscription;
 	final completionSubscription:EventSubscription;
 	var frameSubscription:Null<SurfaceFrameSubscription>;
 	var pending:Null<Int64>;
@@ -21,6 +22,7 @@ class AppLoop implements Disposable {
 	var frameRan = false;
 	var lastFrameAt:Null<Float>;
 	var stopped = false;
+	var surfaceLost = false;
 	var disposed = false;
 	var disposalRequested = false;
 	var failure:Null<haxe.Exception>;
@@ -33,20 +35,28 @@ class AppLoop implements Disposable {
 		this.surface = surface;
 		this.app = app;
 		this.recorder = recorder;
-		readySubscription = surface.onReady(startFrames);
+		readySubscription = surface.onReady(function() {
+			var wasLost = surfaceLost;
+			surfaceLost = false;
+			startFrames();
+			if (wasLost && !stopped && !app.shouldQuit()) surface.requestFrame();
+		});
 		try {
+			lostSubscription = surface.onLost(function() surfaceLost = true);
 			completionSubscription = surface.onFrameComplete(function(token, result) {
 				if (pending != null && token == pending) {
 					pending = null;
 					if (result == Result.Ok)
 						firstFramePresented = true;
-					// Cancellation ends the transaction without making the surface unusable.
-					else if (result != Result.ErrorCancelled)
+					else if (result == Result.ErrorCancelled || result == Result.ErrorSurfaceLost) {
+						if (!stopped && !app.shouldQuit()) surface.requestFrame();
+					} else
 						fail(new NativeKitError(result, "AppLoop.frame", "Rendering or presentation failed"));
 				}
 			});
 		} catch (error:haxe.Exception) {
-			readySubscription.dispose();
+			defer readySubscription.dispose();
+			if (lostSubscription != null) lostSubscription.dispose();
 			throw error;
 		}
 	}
@@ -109,7 +119,7 @@ class AppLoop implements Disposable {
 	}
 
 	function draw(width:Int, height:Int):Void {
-		if (stopped || frameRan || pending != null || width <= 0 || height <= 0)
+		if (stopped || surfaceLost || frameRan || pending != null || width <= 0 || height <= 0)
 			return;
 		try {
 			if (app.shouldQuit())
@@ -160,6 +170,7 @@ class AppLoop implements Disposable {
 
 	function detach():Void {
 		defer readySubscription.dispose();
+		defer lostSubscription.dispose();
 		defer completionSubscription.dispose();
 		if (frameSubscription != null)
 			frameSubscription.dispose();
