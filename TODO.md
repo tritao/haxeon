@@ -116,6 +116,8 @@ Longer-term direction is in `ROADMAP.md`.
 
   It reads plain JSON, never `sokol-shdc`'s YAML. Writing shaders in Haxeon
   itself is a deferred plan in [docs/design/SHADERS.md](docs/design/SHADERS.md).
+  App shaders need it too: [docs/design/APP_PLATFORM_CLEANUP.md](docs/design/APP_PLATFORM_CLEANUP.md)
+  step 7.
 
 ## Compiler follow-ups
 
