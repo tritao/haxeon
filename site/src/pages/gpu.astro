@@ -92,7 +92,6 @@ const appLines = triangleMain.trimEnd().split('\n').length;
           <ul class="chips" aria-label="Supported graphics backends">
             {available.map(({ api, status }) => <li><StatusBadge status={status}>{api}</StatusBadge></li>)}
           </ul>
-          <p>The GPU package is not a game engine. It has no scene graph, asset pipeline or physics.</p>
           <div class="ctas">
             <a class="btn primary" href={gpuDocs}>GPU package README</a>
             <a class="btn ghost" href={repositorySource(circuit + 'src')}>Circuit Run source</a>
