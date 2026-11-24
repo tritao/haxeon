@@ -116,8 +116,12 @@ void CubeSurfaceProducer::set_rotation(float radians) {
         generation_ = 1;
 }
 
+std::shared_ptr<const SurfaceProducer> CubeSurfaceProducer::snapshot_for_frame() const {
+    return std::make_shared<const CubeSurfaceProducer>(*this);
+}
+
 SurfaceRenderResult CubeSurfaceProducer::render(UiRenderer &renderer, ResourceId target,
-                                                const SurfaceDescriptor &description) {
+                                                const SurfaceDescriptor &description) const {
     if (description.width <= 0 || description.height <= 0)
         return SurfaceRenderResult::Failed;
     if (!renderer.beginSurfacePass(target, description, false))

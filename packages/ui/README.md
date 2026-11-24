@@ -381,14 +381,14 @@ handles from the frame that produced them.
 
 `SealedRenderPlan::seal()` crosses that boundary. A sealed plan owns the plan and
 every resource it references, so no layout frame, session, or display list has to
-stay alive, and a live `SurfaceProducer` - a callback by nature - is rejected
-rather than captured. Sealed plans are reference counted and execute through the
-same `execute_render_plan()` entry point, which is what will let one thread render
-frame N while another builds frame N+1.
+stay alive. A native `SurfaceProducer` can contribute an immutable snapshot for
+that frame. A producer without a snapshot or retained image stays on the
+synchronous path. Sealed plans use the same `execute_render_plan()` entry point
+on the render executor.
 
 Sealing takes an `OwnedFrameResources`: the type shares prepared data as immutable
-objects and retains graphics images, and it cannot hold borrowed bindings or a live
-`SurfaceProducer`, so the callback case is a compile error rather than a rule.
+objects, retains graphics images, and owns any producer snapshots independently
+of the mutable producer.
 Prepared text publishes those immutable objects itself through
 `TextEngine::published_glyphs()`, which returns the same snapshot for the same
 layout generation, geometry, scale, and mode, so sealing cost follows the number of

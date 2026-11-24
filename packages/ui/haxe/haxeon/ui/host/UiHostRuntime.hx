@@ -125,42 +125,52 @@ class UiHostRuntime implements Disposable {
 		var allocatedAt = AllocationProbe.now();
 		try {
 			callbackDepth++;
-			var phaseStarted = Sys.time();
-			var phaseAllocated = AllocationProbe.now();
-			{
-				ProfileSpan.begin("ui.prepare");
-				defer ProfileSpan.end("ui.prepare");
-				context.setGpuRenderer(frame.prepare(renderer));
-			}
-			lastPrepareSeconds = Sys.time() - phaseStarted;
-			lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
-			phaseStarted = Sys.time();
-			phaseAllocated = AllocationProbe.now();
 			// Include a whole animation wait when the frame ends it.
 			var animationWait = application.context().animationWaitSeconds();
 			var delta = frameState.nextDelta(timeSeconds, animationWait >= 0.0 ? animationWait + 0.1 : 0.1);
 			frame.configure(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight,
 				frameState.renderScale, delta);
-			context.repaintOnly = repaintOnly;
-			application.context().buildContext.environment.pixelDensity = frameState.renderScale;
-			{
-				ProfileSpan.begin("ui.submit");
-				defer ProfileSpan.end("ui.submit");
-				application.submit(frame.layout);
-			}
-			lastApplicationSubmitSeconds = Sys.time() - phaseStarted;
-			lastSubmitAllocatedBytes = AllocationProbe.now() - phaseAllocated;
-			context.repaintOnly = false;
-			if (session.state != UiHostLifecycle.Running || disposeRequested) {
-				callbackDepth--;
-				if (callbackDepth == 0 && disposeRequested) disposeNow();
-				return false;
-			}
-			phaseStarted = Sys.time();
-			{
-				ProfileSpan.begin("ui.render");
-				defer ProfileSpan.end("ui.render");
-				frame.render(application.context(), renderer, acquired);
+			var custom:Null<UiFrameApplication> = acquired != null && Std.isOfType(application, UiFrameApplication)
+				? cast application : null;
+			var phaseStarted = Sys.time();
+			var phaseAllocated = AllocationProbe.now();
+			var submitted = custom != null && custom.submitFrame(acquired, frame.dimensions, timeSeconds);
+			if (submitted) {
+				lastPrepareSeconds = 0.0;
+				lastPrepareAllocatedBytes = 0.0;
+				lastApplicationSubmitSeconds = 0.0;
+				lastSubmitAllocatedBytes = 0.0;
+			} else {
+				{
+					ProfileSpan.begin("ui.prepare");
+					defer ProfileSpan.end("ui.prepare");
+					context.setGpuRenderer(frame.prepare(renderer));
+				}
+				lastPrepareSeconds = Sys.time() - phaseStarted;
+				lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
+				phaseStarted = Sys.time();
+				phaseAllocated = AllocationProbe.now();
+				context.repaintOnly = repaintOnly;
+				application.context().buildContext.environment.pixelDensity = frameState.renderScale;
+				{
+					ProfileSpan.begin("ui.submit");
+					defer ProfileSpan.end("ui.submit");
+					application.submit(frame.layout);
+				}
+				lastApplicationSubmitSeconds = Sys.time() - phaseStarted;
+				lastSubmitAllocatedBytes = AllocationProbe.now() - phaseAllocated;
+				context.repaintOnly = false;
+				if (session.state != UiHostLifecycle.Running || disposeRequested) {
+					callbackDepth--;
+					if (callbackDepth == 0 && disposeRequested) disposeNow();
+					return false;
+				}
+				phaseStarted = Sys.time();
+				{
+					ProfileSpan.begin("ui.render");
+					defer ProfileSpan.end("ui.render");
+					frame.render(application.context(), renderer, acquired);
+				}
 			}
 			lastContextRenderSeconds = Sys.time() - phaseStarted;
 			lastPaintSeconds = lastContextRenderSeconds;
@@ -169,7 +179,7 @@ class UiHostRuntime implements Disposable {
 			// GPU time per frame, measured only while a capture records: it costs a GPU query per frame.
 			var recording = ProfileRecording.recording();
 			var timedRenderer = renderer;
-			if (timedRenderer != null) {
+			if (!submitted && timedRenderer != null) {
 				timedRenderer.setGpuFrameTiming(recording);
 				if (recording && timedRenderer.pollGpuFrameTime())
 					ProfileCounter.set("ui.frame.gpu_ns", timedRenderer.gpuFrameNanoseconds);

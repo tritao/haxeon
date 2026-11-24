@@ -69,9 +69,11 @@ class SurfaceProducer {
      * zero handle keeps the legacy callback path unchanged.
      */
     virtual nk_graphics_image retained_image() const { return {}; }
+    /** Captures independent native state for render-executor submission, when supported. */
+    virtual std::shared_ptr<const SurfaceProducer> snapshot_for_frame() const { return {}; }
     // Return Unavailable for a transient synchronization miss; Failed aborts the frame.
     virtual SurfaceRenderResult render(UiRenderer &renderer, ResourceId target,
-                                       const SurfaceDescriptor &description) = 0;
+                                       const SurfaceDescriptor &description) const = 0;
 };
 
 struct PreparedPathRef {
@@ -122,13 +124,13 @@ class FrameResources {
     // Its generation must describe the complete bound paint; zero uses id itself.
     bool bind_text(ResourceId id, const PreparedGlyphs &glyphs, uint64_t content_generation = 0,
                    ResourceId source_identity = {});
-    bool bind_surface(ResourceId id, SurfaceProducer &producer, uint64_t content_generation = 0);
+    bool bind_surface(ResourceId id, const SurfaceProducer &producer, uint64_t content_generation = 0);
     bool bind_graphics_image(ResourceId id, nk_graphics_image image,
                              uint64_t content_generation = 0);
     const PreparedPathRef *path(ResourceId id) const;
     const PreparedImageRef *image(ResourceId id) const;
     const PreparedGlyphs *text(ResourceId id) const;
-    SurfaceProducer *surface(ResourceId id) const;
+    const SurfaceProducer *surface(ResourceId id) const;
     const nk_graphics_image *graphics_image(ResourceId id) const;
     uint64_t content_generation(ResourceId id) const;
     ResourceId source_identity(ResourceId id) const;
@@ -138,7 +140,7 @@ class FrameResources {
     FrameBindings<PreparedPathRef> paths_;
     FrameBindings<PreparedImageRef> images_;
     FrameBindings<const PreparedGlyphs *> texts_;
-    FrameBindings<SurfaceProducer *> surfaces_;
+    FrameBindings<const SurfaceProducer *> surfaces_;
     FrameBindings<nk_graphics_image> graphics_images_;
     FrameBindings<uint64_t> content_generations_;
     FrameBindings<ResourceId> source_identities_;
@@ -164,12 +166,14 @@ class OwnedFrameResources final : public FrameResources {
     bool bind_graphics_image(ResourceId id, nk_graphics_image image,
                              uint64_t content_generation = 0);
 
+    bool bind_surface_snapshot(ResourceId id, const SurfaceProducer &producer);
+
     /* Borrowed bindings and live producers cannot belong to an owned set. */
     bool bind_path(ResourceId, const PreparedPathData &, uint32_t, uint64_t) = delete;
     bool bind_path(ResourceId, const PreparedPath &, uint32_t, uint64_t) = delete;
     bool bind_image(ResourceId, const PreparedTexture &, uint64_t) = delete;
     bool bind_text(ResourceId, const PreparedGlyphs &, uint64_t, ResourceId = {}) = delete;
-    bool bind_surface(ResourceId, SurfaceProducer &, uint64_t) = delete;
+    bool bind_surface(ResourceId, const SurfaceProducer &, uint64_t) = delete;
 
     void reset();
 

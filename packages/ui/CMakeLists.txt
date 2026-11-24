@@ -681,6 +681,7 @@ if(NK_BUILD_EXAMPLES)
                 "${CMAKE_CURRENT_SOURCE_DIR}/haxe/haxeon/ui/*.hx"
                 "${CMAKE_CURRENT_SOURCE_DIR}/bindings/haxe/haxeon/ui/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/platform/src/haxeon/platform/*.hx"
+                "${NKUI_HAXEON_DIR}/packages/gpu/src/haxeon/gpu/*.hx"
                 "${NKUI_HAXEON_DIR}/packages/editor/src/haxeon/editor/*.hx")
             set(NKUI_HAXEON_MEMORY_CONTRACT_VERSION 1)
             set(NKUI_HAXEON_WASM_PAGE_SIZE 65536)
@@ -734,6 +735,8 @@ if(NK_BUILD_EXAMPLES)
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net-wasm.hxi"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit-net.hxmap"
+                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+                    "${NKUI_HAXEON_DIR}/packages/gpu/bindings/nativekit-gpu.hxmap"
                     "${CMAKE_CURRENT_SOURCE_DIR}/bindings/nativekit-ui.hxmap"
                     "${NKUI_HAXEON_DIR}/packages/platform/bindings/nativekit.hxmap"
                     ${NKUI_HAXEON_GUEST_HX_DEPS}

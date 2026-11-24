@@ -13,6 +13,8 @@ class UiHostOptions {
 	public var fonts:Null<Array<UiFontAsset>> = null;
 	/** Called after a successful frame render. */
 	public var onFrameRendered:Null<Void->Void> = null;
+	/** Observes a managed host failure before it propagates to the runner. */
+	public var onError:Null<haxe.Exception->Void> = null;
 
 	public function new(?source:UiHostOptions) {
 		if (source == null) return;
@@ -23,6 +25,7 @@ class UiHostOptions {
 		eventQueueCapacity = source.eventQueueCapacity;
 		fonts = source.fonts;
 		onFrameRendered = source.onFrameRendered;
+		onError = source.onError;
 	}
 
 	public function validate():Void {

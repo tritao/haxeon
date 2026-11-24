@@ -22,9 +22,9 @@ SealedRenderPlan::seal(RenderPlan plan, OwnedFrameResources resources, RenderPla
     for (const auto &dependency : plan.dependencies) {
         if (internal_targets.count(dependency.producer.value))
             continue;
-        if (resources.graphics_image(dependency.producer))
+        if (resources.graphics_image(dependency.producer) || resources.surface(dependency.producer))
             continue;
-        fail(error, "sealed render plans cannot contain live surface producers");
+        fail(error, "sealed render plans require an owned surface dependency");
         return nullptr;
     }
     if (error)

@@ -851,8 +851,9 @@ struct WebShowcase {
             frame = NK_INVALID_HANDLE;
             steps[0] = steps[1] = NK_INVALID_HANDLE;
             if (nk_surface_present_frame(submitted_frame) != NK_ERROR_INVALID_HANDLE ||
-                nkgpu_batch_destroy(batch) != NKGPU_ERROR_WRONG_STATE)
+                nkgpu_batch_destroy(batch) != NKGPU_OK)
                 return false;
+            batch = {};
             nk_event completion{};
             completion.struct_size = sizeof(completion);
             if (nk_poll_event(&completion) != NK_OK ||

@@ -258,7 +258,7 @@ bool execute_render_plan(UiRenderer &renderer, const RenderPlan &plan,
             rendered_producers.insert(dependency.producer.value);
             continue;
         }
-        SurfaceProducer *producer = resources.surface(dependency.producer);
+        const SurfaceProducer *producer = resources.surface(dependency.producer);
         if (!producer)
             return fail(error, 0, 0, "surface producer is unavailable");
         if (!producer->ready()) {

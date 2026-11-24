@@ -216,7 +216,12 @@ class HostedUiApp implements App {
 	}
 
 	public function shouldQuit():Bool {
-		if (session.error != null) throw session.error;
+		var error = session.error;
+		if (error != null) {
+			var notify = options.onError;
+			defer if (notify != null) notify(error);
+			throw error;
+		}
 		return !session.isActive();
 	}
 

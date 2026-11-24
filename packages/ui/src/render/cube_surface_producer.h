@@ -16,7 +16,8 @@ class CubeSurfaceProducer final : public SurfaceProducer {
                   SurfaceDescriptor &description) const override;
     uint32_t generation() const override { return generation_; }
     SurfaceRenderResult render(UiRenderer &renderer, ResourceId target,
-                               const SurfaceDescriptor &description) override;
+                               const SurfaceDescriptor &description) const override;
+    std::shared_ptr<const SurfaceProducer> snapshot_for_frame() const override;
 
     /** Selects a deterministic rotation angle and invalidates the retained target. */
     void set_rotation(float radians);

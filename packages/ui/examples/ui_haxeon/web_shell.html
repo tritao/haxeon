@@ -122,8 +122,24 @@
       };
     }
 
+    function stopAndReport(result, message) {
+      function close() {
+        try {
+          if (guest["haxeon.platform.BrowserHost.stop"]()) {
+            setResult(result, message);
+          } else {
+            guest["haxeon.platform.BrowserHost.tick"]();
+            requestAnimationFrame(close);
+          }
+        } catch (error) {
+          setResult(21, guestFailureMessage("Haxeon Showcase shutdown failed: " + error, 21, 0));
+        }
+      }
+      close();
+    }
+
     function finishBenchmark() {
-      const result = guest["ShowcaseWeb.status"]();
+      const result = presented ? 0 : 1;
       const allocator = readAllocatorStats();
       const gcAllocations = readGcAllocationCount();
       const droppedFrames = benchmarkFrameIntervals.reduce((total, interval) =>
@@ -199,8 +215,7 @@
         };
       }
       document.documentElement.dataset.nativekitBenchmark = JSON.stringify(report);
-      guest["ShowcaseWeb.shutdown"]();
-      setResult(result, result === 0 ? "NativeKit Haxeon browser benchmark passed" :
+      stopAndReport(result, result === 0 ? "NativeKit Haxeon browser benchmark passed" :
         "NativeKit Haxeon browser benchmark failed (" + result + ")");
     }
 
@@ -353,7 +368,9 @@
       const startedAt = performance.now();
       let result;
       try {
-        result = guest["ShowcaseWeb.frame"](time);
+        result = time === null
+          ? guest["haxeon.platform.BrowserHost.tick"]()
+          : guest["haxeon.platform.BrowserHost.step"](time / 1000);
       } finally {
         activeHostApiFrame = null;
       }
@@ -403,12 +420,8 @@
           frameCount++;
           if (benchmarkFirstFrameAt === null)
             benchmarkFirstFrameAt = performance.now();
-          if (sample.result < 0) {
-            const diagnostic = guest["ShowcaseWeb.diagnostic"]();
-            setResult(-sample.result, guestFailureMessage("Haxeon Showcase frame failed",
-              sample.result, diagnostic));
-            return;
-          }
+          if (sample.result !== 1)
+            throw new Error("Showcase stopped before the benchmark finished");
           if (index + 1 === benchmarkWarmupFrames)
             benchmarkAllocatorBaseline = readAllocatorStats();
           if (index + 1 === benchmarkWarmupFrames)
@@ -425,23 +438,18 @@
       }
     }
 
-    function waitForCoreBenchmarkReady(time) {
+    function waitForCoreBenchmarkReady() {
       if (finished || !guest)
         return;
       try {
-        const sample = invokeShowcaseFrame(time);
-        frameCount++;
-        document.documentElement.dataset.nativekitFrames = String(frameCount);
-        if (sample.result < 0) {
-          const diagnostic = guest["ShowcaseWeb.diagnostic"]();
-          setResult(-sample.result, guestFailureMessage("Haxeon Showcase frame failed",
-            sample.result, diagnostic));
-          return;
-        }
-        if (guest["ShowcaseWeb.status"]() !== 0) {
+        const sample = invokeShowcaseFrame(0);
+        if (sample.result === 2)
+          throw new Error("Showcase stopped before presenting a frame");
+        if (sample.result !== 1) {
           requestAnimationFrame(waitForCoreBenchmarkReady);
           return;
         }
+        presented = true;
         benchmarkFirstFrameAt = performance.now();
         runCoreBenchmark();
       } catch (error) {
@@ -476,7 +484,6 @@
         })
         .then(instance => {
           guest = instance.exports;
-          let started;
           const initStarted = performance.now();
           try {
             if (benchmark && (benchmarkMode !== "browser" && benchmarkMode !== "core")) {
@@ -487,32 +494,11 @@
               setResult(27, "Unsupported benchmark scenario: " + benchmarkScenarioName);
               return;
             }
-            if (guest["ShowcaseWeb.configure"](visualWidth, visualHeight) !== 0) {
-              setResult(26, "Haxeon guest rejected the initial canvas size");
-              return;
-            }
-            if (guest["ShowcaseWeb.configureMode"](uiVisualCase !== null ? 0 : (visual ? 1 : 0)) !== 0) {
-              setResult(27, "Haxeon guest rejected the initial showcase page");
-              return;
-            }
-            if (uiVisualCase !== null &&
-                guest["ShowcaseWeb.configureUiVisual"](uiVisualCase) !== 0) {
-              setResult(27, "Haxeon guest rejected the UI visual case");
-              return;
-            }
-            if (benchmark && guest["ShowcaseWeb.configureBenchmark"](benchmarkScenario) !== 0) {
-              setResult(27, "Haxeon guest rejected the benchmark scenario");
-              return;
-            }
-            started = guest["ShowcaseWeb.main"]();
+            guest["ShowcaseWeb.configure"](visualWidth, visualHeight,
+              uiVisualCase === null && visual ? 1 : 0, uiVisualCase ?? -1, benchmark ? benchmarkScenario : -1);
+            guest.main();
           } catch (error) {
-            setResult(25, "Haxeon guest main failed: " + error.message);
-            return;
-          }
-          if (started !== 0) {
-            const diagnostic = guest["ShowcaseWeb.diagnostic"]();
-            setResult(started, guestFailureMessage("Haxeon Showcase failed to initialize",
-              started, diagnostic));
+            setResult(25, guestFailureMessage("Haxeon guest main failed: " + error.message, 25, 0));
             return;
           }
           benchmarkGuestInitMs = performance.now() - initStarted;
@@ -535,23 +521,25 @@
       if (finished || !guest)
         return;
       try {
-        const sample = invokeShowcaseFrame(visual ? (frameCount === 0 ? 0 : visualTime) : time);
+        const sample = invokeShowcaseFrame(visual ? (presented ? visualTime : 0) : benchmark ? time : null);
         const frameResult = sample.result;
-        frameCount++;
-        document.documentElement.dataset.nativekitFrames = String(frameCount);
-        if (benchmarkFirstFrameAt === null)
-          benchmarkFirstFrameAt = performance.now();
-        if (frameResult < 0) {
-            const diagnostic = guest["ShowcaseWeb.diagnostic"]();
-            setResult(-frameResult, guestFailureMessage("Haxeon Showcase frame failed",
-              frameResult, diagnostic));
+        if (frameResult === 2) {
+          setResult(presented ? 0 : 1);
           return;
         }
-        if (!presented && guest["ShowcaseWeb.status"]() === 0) {
+        if (!presented && frameResult === 1) {
           presented = true;
           if (embedded)
             parent.postMessage("haxeon-showcase-ready", location.origin);
         }
+        if (!presented) {
+          requestAnimationFrame(tick);
+          return;
+        }
+        frameCount++;
+        document.documentElement.dataset.nativekitFrames = String(frameCount);
+        if (benchmarkFirstFrameAt === null)
+          benchmarkFirstFrameAt = performance.now();
         if (benchmark && frameCount === benchmarkWarmupFrames)
           benchmarkAllocatorBaseline = readAllocatorStats();
         if (benchmark && frameCount === benchmarkWarmupFrames)
@@ -564,16 +552,14 @@
           }
         }
         if (smoke && frameCount >= 60) {
-          const result = guest["ShowcaseWeb.status"]();
-          guest["ShowcaseWeb.shutdown"]();
-          setResult(result);
+          stopAndReport(presented ? 0 : 1);
           return;
         }
         requestAnimationFrame(tick);
       } catch (error) {
         const allocator = readAllocatorStats();
-        setResult(21, "Haxeon Showcase frame failed: " + (error.stack || error.message) +
-          (allocator ? " | allocator=" + JSON.stringify(allocator) : ""));
+        setResult(21, guestFailureMessage("Haxeon Showcase frame failed: " + (error.stack || error.message)
+          + (allocator ? " | allocator=" + JSON.stringify(allocator) : ""), 21, 0));
       }
     }
 

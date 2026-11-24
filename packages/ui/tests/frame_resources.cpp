@@ -15,7 +15,7 @@ class TestProducer final : public SurfaceProducer {
         return true;
     }
     uint32_t generation() const override { return 7; }
-    SurfaceRenderResult render(UiRenderer &, ResourceId, const SurfaceDescriptor &) override {
+    SurfaceRenderResult render(UiRenderer &, ResourceId, const SurfaceDescriptor &) const override {
         return SurfaceRenderResult::Rendered;
     }
 };

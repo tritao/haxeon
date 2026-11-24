@@ -10,7 +10,7 @@ import haxeon.ui.core.UiContext;
 /** Reuses the layout frame and render target for every callback on one surface. */
 class UiSurfaceFrame {
 	public final layout:LayoutFrame;
-	final dimensions:FrameInfo;
+	public final dimensions:FrameInfo;
 	final target:Surface;
 
 	public function new(surface:Surface, width:Int, height:Int) {

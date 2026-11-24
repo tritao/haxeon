@@ -12,9 +12,6 @@ build_dir=${NATIVEKIT_WASM_BUILD_DIR:-"$repo_dir/build-wasm"}
 wasm_target=${NATIVEKIT_HAXEON_TARGET:-wasm32}
 wasm_target_file=${wasm_target//-/_}
 entry=${NATIVEKIT_UI_WASM_ENTRY:-ShowcaseWeb}
-if [[ $wasm_target == wasm-gc ]]; then
-	entry=${NATIVEKIT_UI_WASM_GC_ENTRY:-ShowcaseWebGcEntry}
-fi
 artifact=${NATIVEKIT_UI_WASM_ARTIFACT:-"$build_dir/nativekit_ui_showcase_${wasm_target_file}.wasm"}
 memory_contract=${NATIVEKIT_HAXEON_MEMORY_CONTRACT:-"$build_dir/nativekit_haxeon_memory_contract.json"}
 exception_mode=${NATIVEKIT_HAXEON_EXCEPTION_MODE:-legacy}
@@ -113,6 +110,9 @@ compiler_args=(
 	--root="$editor_dir/src"
 	--root="$module_dir/bindings/haxe"
 	--root="$haxeon_dir/packages/platform/src"
+	--root="$haxeon_dir/packages/gpu/src"
+	--ffi-interface="$haxeon_dir/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+	--ffi-projection="$haxeon_dir/packages/gpu/bindings/nativekit-gpu.hxmap"
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-wasm.hxi"
 	--ffi-projection="$haxeon_dir/packages/platform/bindings/nativekit.hxmap"
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit-net-wasm.hxi"
@@ -124,7 +124,6 @@ compiler_args=(
 	--ffi-projection="$module_dir/bindings/nativekit-ui-showcase.hxmap"
 	"$module_dir/examples/ui_showcase/Showcase.hx"
 	"$module_dir/examples/ui_showcase/ShowcaseWeb.hx"
-	"$module_dir/examples/ui_showcase/ShowcaseWebGcEntry.hx"
 	"$module_dir/examples/ui_showcase/UiExplorer.hx"
 	"$module_dir/examples/ui_showcase/ShowcaseCube.hx"
 	"$module_dir/haxe/haxeon/ui/core/"*.hx
@@ -167,7 +166,7 @@ compiler_args=(
 	"$haxeon_dir/packages/platform/src/haxeon/platform/WebView.hx"
 )
 
-wasm_exports=${NATIVEKIT_UI_WASM_EXPORTS:-ShowcaseWeb.main,ShowcaseWeb.configure,ShowcaseWeb.configureMode,ShowcaseWeb.configureUiVisual,ShowcaseWeb.configureBenchmark,ShowcaseWeb.frame,ShowcaseWeb.status,ShowcaseWeb.diagnostic,ShowcaseWeb.caretOffset,ShowcaseWeb.caretAffinity,ShowcaseWeb.caretDirection,ShowcaseWeb.shutdown}
+wasm_exports=${NATIVEKIT_UI_WASM_EXPORTS:-ShowcaseWeb.configure,ShowcaseWeb.caretOffset,ShowcaseWeb.caretAffinity,ShowcaseWeb.caretDirection,haxeon.platform.BrowserHost.tick,haxeon.platform.BrowserHost.step,haxeon.platform.BrowserHost.stop}
 IFS=',' read -r -a wasm_export_list <<< "$wasm_exports"
 for symbol in "${wasm_export_list[@]}"; do
 	[[ -n $symbol ]] && compiler_args+=("--export=$symbol")

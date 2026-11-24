@@ -4267,8 +4267,9 @@ static nkui_result renderer_render_frame_impl(nkui_renderer renderer, nkui_displ
                             valid = frame_resources.bind_surface(
                                 command.resource, *surface_slot->surface,
                                 static_cast<uint64_t>(surface_slot->surface->generation()));
-                            /* A live result producer is a callback and cannot be sealed. */
-                            sealable = false;
+                            if (valid && !owned_resources.bind_surface_snapshot(
+                                             command.resource, *surface_slot->surface))
+                                sealable = false;
                         }
                     } else {
                         valid = false;
@@ -5244,8 +5245,9 @@ static nkui_result layout_session_render_frame(nkui_renderer renderer,
                             frame_stage = "composite target: bind live surface";
                             valid = frame_resources.bind_surface(command.resource,
                                                                  *surface_slot->surface);
-                            /* A live result producer is a callback and cannot be sealed. */
-                            sealable = false;
+                            if (valid && !owned_resources.bind_surface_snapshot(
+                                             command.resource, *surface_slot->surface))
+                                sealable = false;
                         }
                     }
                 }

@@ -23,13 +23,17 @@ for target in hl wasm32 wasm-gc; do
     if [[ $target != hl ]]; then
         suffix=-wasm
         entry=ShowcaseWeb
-        [[ $target != wasm-gc ]] || entry=ShowcaseWebGcEntry
         options+=(--wasm-import-memory --wasm-memory-contract="$work/memory.json")
     fi
     if [[ $target != hl ]]; then
-        options+=(--ffi-interface="$ui/bindings/nativekit-ui-browser-wasm.hxi")
-        for symbol in main configure configureMode configureUiVisual configureBenchmark frame status diagnostic caretOffset caretAffinity caretDirection shutdown; do
+        options+=(--ffi-interface="$ui/bindings/nativekit-ui-browser-wasm.hxi"
+            --ffi-interface="$root/packages/gpu/bindings/nativekit-gpu-wasm.hxi"
+            --ffi-projection="$root/packages/gpu/bindings/nativekit-gpu.hxmap")
+        for symbol in configure caretOffset caretAffinity caretDirection; do
             options+=(--export="ShowcaseWeb.$symbol")
+        done
+        for symbol in tick step stop; do
+            options+=(--export="haxeon.platform.BrowserHost.$symbol")
         done
     fi
     [[ $target != wasm-gc ]] || options+=(--wasm-legacy-exceptions)

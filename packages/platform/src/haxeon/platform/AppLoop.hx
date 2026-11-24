@@ -24,6 +24,8 @@ class AppLoop implements Disposable {
 	var lastFrameAt:Null<Float>;
 	var stopped = false;
 	var surfaceLost = false;
+	var started = false;
+	var manualFrames = false;
 	var redrawDeferred = false;
 	var disposed = false;
 	var disposalRequested = false;
@@ -80,6 +82,25 @@ class AppLoop implements Disposable {
 	function run():Void
 		EventLoop.run(function() return advance(true));
 
+	@:allow(haxeon.platform.AppLaunch)
+	function stepFrame(timeSeconds:Float):Bool {
+		if (!manualFrames) {
+			manualFrames = true;
+			if (frameSubscription != null) {
+				frameSubscription.dispose();
+				frameSubscription = null;
+			}
+			lastFrameAt = null;
+		}
+		if (!advance(false)) return false;
+		if (!started || stopped || surfaceLost || pending != null) return true;
+		var size = nativekit.ffi.NativeKit.nk_surface_get_framebuffer_size(surface.nativeHandle());
+		if (size.status != Result.Ok)
+			fail(new NativeKitError(size.status, "AppLoop.stepFrame", "Could not query the framebuffer"));
+		else draw(size.out_width, size.out_height, timeSeconds);
+		return advance(false);
+	}
+
 	function advance(wait:Bool):Bool {
 		if (disposed)
 			return false;
@@ -116,17 +137,18 @@ class AppLoop implements Disposable {
 	}
 
 	function startFrames():Void {
-		if (stopped || frameSubscription != null)
+		if (stopped || started)
 			return;
 		try {
 			if (app.shouldQuit())
 				return;
 			app.ready();
-			frameSubscription = surface.onFrame(draw);
+			started = true;
+			if (!manualFrames) frameSubscription = surface.onFrame(function(w, h) draw(w, h));
 		} catch (error:haxe.Exception) fail(error);
 	}
 
-	function draw(width:Int, height:Int):Void {
+	function draw(width:Int, height:Int, ?timeSeconds:Float):Void {
 		if (stopped || surfaceLost || width <= 0 || height <= 0)
 			return;
 		if (frameRan || pending != null) {
@@ -136,9 +158,9 @@ class AppLoop implements Disposable {
 		try {
 			if (app.shouldQuit())
 				return;
-			var now = Sys.monotonicTime();
+			var now = timeSeconds ?? Sys.monotonicTime();
 			var previous = lastFrameAt;
-			var delta = previous == null ? 0.0 : Math.min(now - previous, maxFrameDeltaSeconds);
+			var delta = previous == null ? 0.0 : Math.max(0.0, Math.min(now - previous, maxFrameDeltaSeconds));
 			var tick = new FrameTick(now, width, height, delta);
 			var timing = recorder == null ? null : recorder.begin(surface, tick.timeSeconds);
 			var frame = surface.acquireFrame();

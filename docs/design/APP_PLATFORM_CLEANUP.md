@@ -55,8 +55,10 @@ captures and scripted input.
 
 ## 6. `ShowcaseWeb` on the same loop
 
-Replace its static fields with a `UiApplication` run through `UiHost.run`, and
-delete the old entry style.
+Implemented. `ShowcaseWeb` runs through `UiHost.run`. The UI Explorer and
+Graphics Lab use one window and one frame transaction. The Graphics Lab
+seals a snapshot of its rotating cube with the display list. Visual tests
+and benchmarks drive the same loop with explicit frame times.
 
 ## 7. Shaders through the shared toolchain
 

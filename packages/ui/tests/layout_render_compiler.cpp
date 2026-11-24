@@ -190,8 +190,12 @@ class MutableSurfaceProducer final : public SurfaceProducer {
         return true;
     }
     uint32_t generation() const override { return generation_value; }
-    SurfaceRenderResult render(UiRenderer &, ResourceId, const SurfaceDescriptor &) override {
+    SurfaceRenderResult render(UiRenderer &, ResourceId, const SurfaceDescriptor &) const override {
         return SurfaceRenderResult::Rendered;
+    }
+
+    std::shared_ptr<const SurfaceProducer> snapshot_for_frame() const override {
+        return std::make_shared<const MutableSurfaceProducer>(*this);
     }
 
     uint32_t generation_value = 1;
@@ -1284,7 +1288,7 @@ int main() {
             }
             uint32_t generation() const override { return 1; }
             SurfaceRenderResult render(UiRenderer &, ResourceId,
-                                       const SurfaceDescriptor &) override {
+                                       const SurfaceDescriptor &) const override {
                 return SurfaceRenderResult::Rendered;
             }
         } producer;
@@ -1626,6 +1630,20 @@ int main() {
     if (SealedRenderPlan::seal(std::move(unowned_source), OwnedFrameResources{}, &unowned_error) ||
         !unowned_error.message)
         return 65;
+
+    RenderPlan snapshot_source;
+    snapshot_source.passes.push_back(unowned_pass);
+    snapshot_source.dependencies.push_back({unowned_target, main_target});
+    OwnedFrameResources snapshot_resources;
+    MutableSurfaceProducer producer;
+    producer.generation_value = 42;
+    if (!snapshot_resources.bind_surface_snapshot(unowned_target, producer))
+        return 90;
+    auto sealed_snapshot = SealedRenderPlan::seal(std::move(snapshot_source), std::move(snapshot_resources));
+    producer.generation_value = 43;
+    if (!sealed_snapshot || !sealed_snapshot->resources().surface(unowned_target) ||
+        sealed_snapshot->resources().surface(unowned_target)->generation() != 42)
+        return 91;
 
     /*
      * An owned set shares prepared data instead of copying it, so a second

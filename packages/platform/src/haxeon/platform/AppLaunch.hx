@@ -26,6 +26,15 @@ class AppLaunch implements Disposable {
 		return active;
 	}
 
+	@:allow(haxeon.platform.BrowserHost)
+	function stepFrame(timeSeconds:Float):Bool {
+		if (disposed) return false;
+		var active = false;
+		defer if (!active) dispose();
+		active = loop.stepFrame(timeSeconds);
+		return active;
+	}
+
 	public function firstFramePresented():Bool
 		return loop.firstFramePresented;
 

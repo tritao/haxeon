@@ -45,7 +45,7 @@ bool FrameResources::bind_text(ResourceId id, const PreparedGlyphs &glyphs,
     return true;
 }
 
-bool FrameResources::bind_surface(ResourceId id, SurfaceProducer &producer,
+bool FrameResources::bind_surface(ResourceId id, const SurfaceProducer &producer,
                                   uint64_t content_generation) {
     if (!is_resource_id(id, ResourceKind::RenderTarget))
         return false;
@@ -68,7 +68,7 @@ const PreparedImageRef *FrameResources::image(ResourceId id) const { return imag
 const PreparedGlyphs *FrameResources::text(ResourceId id) const {
     const auto *value = texts_.get(id.value); return value ? *value : nullptr;
 }
-SurfaceProducer *FrameResources::surface(ResourceId id) const {
+const SurfaceProducer *FrameResources::surface(ResourceId id) const {
     const auto *value = surfaces_.get(id.value); return value ? *value : nullptr;
 }
 const nk_graphics_image *FrameResources::graphics_image(ResourceId id) const { return graphics_images_.get(id.value); }
@@ -124,6 +124,14 @@ bool OwnedFrameResources::bind_graphics_image(ResourceId id, nk_graphics_image i
     auto lease = std::make_shared<GraphicsImageLease>();
     lease->image = image;
     graphics_image_leases_[id.value] = std::move(lease);
+    return true;
+}
+
+bool OwnedFrameResources::bind_surface_snapshot(ResourceId id, const SurfaceProducer &producer) {
+    auto snapshot = producer.snapshot_for_frame();
+    if (!snapshot || !FrameResources::bind_surface(id, *snapshot, snapshot->generation()))
+        return false;
+    owners_.push_back(std::move(snapshot));
     return true;
 }
 

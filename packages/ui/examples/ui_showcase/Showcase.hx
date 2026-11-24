@@ -59,6 +59,7 @@ class Showcase implements Disposable {
 	final list:DisplayList;
 	final renderer:Renderer;
 	final fonts:FontCollection;
+	final ownsFonts:Bool;
 	final layoutSession:LayoutSession;
 	final layoutRoot:LayoutNode;
 	final layoutSidebar:LayoutNode;
@@ -164,10 +165,11 @@ class Showcase implements Disposable {
 	var surfaceBounds:Rect;
 	var footerBounds:Rect;
 
-	/** Takes ownership of the configured font collection. */
+	/** Uses the host fonts or takes ownership of a dedicated collection. */
 	@:allow(ShowcaseDesktop)
 	@:allow(ShowcaseWeb)
-	function new(fonts:FontCollection, ?multilingualText:String) {
+	function new(fonts:FontCollection, ?multilingualText:String, ownsFonts:Bool = true) {
+		this.ownsFonts = ownsFonts;
 		benchmarkBaseText = multilingualText == null ? "NativeKit — مرحبا — שלום — こんにちは 👋" : multilingualText;
 		resources = [];
 		list = DisplayList.create();
@@ -622,6 +624,15 @@ class Showcase implements Disposable {
 		layoutSession.renderOverlay(renderer, surface, frameInfo);
 	}
 
+	@:allow(ShowcaseWeb)
+	function submitFrame(frame:haxeon.platform.SurfaceFrame, info:FrameInfo):Void {
+		var canvasStep = renderer.frameStep(list, frame, info, false);
+		defer canvasStep.dispose();
+		var layoutStep = layoutSession.frameStep(renderer, frame, info);
+		defer layoutStep.dispose();
+		frame.submit([canvasStep, layoutStep]);
+	}
+
 	public function printStats():Void {
 		var stats = renderer.stats();
 		var info = list.info();
@@ -653,7 +664,7 @@ class Showcase implements Disposable {
 		list.dispose();
 		for (resource in resources)
 			resource.dispose();
-		fonts.dispose();
+		if (ownsFonts) fonts.dispose();
 	}
 
 	function format(value:Float):String

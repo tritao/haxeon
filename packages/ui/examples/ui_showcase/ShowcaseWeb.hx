@@ -1,548 +1,172 @@
-import haxeon.platform.Surface;
-import haxeon.platform.event.EventPump;
-import haxeon.platform.event.EventSubscription;
-import haxeon.platform.event.PlatformEvent;
-import haxeon.ui.UiResult.UiError;
-import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
-import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
-
-import haxeon.ui.FontCollection;
-import haxeon.ui.FontFamily;
-
 import haxe.CallStack;
-import haxe.io.Bytes;
+import haxeon.platform.BindingError;
+import haxeon.platform.SurfaceFrame;
+import haxeon.platform.event.EventSubscription;
+import haxeon.ui.FontFamily;
+import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
-import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.host.BrowserUiHost;
-import haxeon.ui.host.BrowserUiHostSession;
-import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.DesktopUiHostContext;
 import haxeon.ui.host.UiFontAsset;
+import haxeon.ui.host.UiFrameApplication;
+import haxeon.ui.host.UiHost;
+import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
-import haxeon.ui.host.UiHostSession.UiHostLifecycle;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
 
-private class ShowcaseExplorerApplication implements UiApplication {
-	final explorer:UiExplorer;
-	final requestFrame:Void->Void;
-	public function new(explorer:UiExplorer, requestFrame:Void->Void) {
-		this.explorer = explorer;
-		this.requestFrame = requestFrame;
-	}
-	public function context():UiContext return explorer.hostContext();
-	public function submit(frame:LayoutFrame):RenderNode {
-		var submitted = explorer.submitHostFrame(frame);
-		requestFrame();
-		return submitted;
-	}
-	public function dispose():Void explorer.dispose();
+private enum abstract ShowcaseBenchmark(Int) {
+	var None = -1;
+	var Full = 0;
+	var Static = 1;
+	var TextHeavy = 2;
+	var Editing = 3;
 }
 
-typedef ShowcaseWebFont = {
-	var name:String;
-	var uri:String;
-	var family:FontFamily;
-};
+private typedef ShowcaseOptions = {
+	final width:Int;
+	final height:Int;
+	final graphics:Bool;
+	final visualCase:Int;
+	final benchmark:ShowcaseBenchmark;
+}
 
-/** Browser host entry points for the Haxeon UI Explorer wasm guest. */
-class ShowcaseWeb {
-	static var graphics:Null<Showcase>;
-	static var explorer:Null<UiExplorer>;
-	static var explorerInput:Null<NativeInputAdapter>;
-	static var events:Null<EventPump>;
-	static var eventSubscription:Null<EventSubscription>;
-	static var webFontBytes:Null<Map<String, Bytes>>;
-	static var pendingWebFonts:Null<Map<String, ShowcaseWebFont>>;
-	static var pendingWebFontCount = 0;
-	static var initialized = false;
-	static var running = false;
-	static var ready = false;
-	static var window:WindowHandle = WindowHandle.invalid();
-	static var surface:SurfaceHandle = SurfaceHandle.invalid();
-	static var renderSurface:Null<Surface>;
-	static var logicalWidth:Float = 1200.0;
-	static var logicalHeight:Float = 800.0;
-	static var framebufferWidth = 0;
-	static var framebufferHeight = 0;
-	static var scale = 1.0;
-	static var started = -1.0;
-	static var rendered = 0;
-	static var result = 0;
-	static var failureStage = 0;
-	static var requestedWidth = 1200;
-	static var requestedHeight = 800;
-	static var benchmarkScenario = 0;
-	static var requestedMode = 0;
-	static var requestedUiVisualCase = -1;
-	static var graphicsMode = false;
-	static var openGraphicsRequested = false;
-	static var browserSession:Null<BrowserUiHostSession>;
+/** The UI Explorer and Graphics Lab share a window, fonts, and frame transaction. */
+class ShowcaseWeb implements UiFrameApplication {
+	static var configuration:Null<ShowcaseOptions>;
+	static var active:Null<ShowcaseWeb>;
 
-	static function reportException(error:Dynamic, breadcrumbs:String):Void {
-		var message = Std.string(error);
-		var stack = CallStack.toString(CallStack.exceptionStack(true));
-		NativeKitUIShowcase.nkui_showcase_diagnostic_report(failureStage,
-			message == null ? "Unknown Haxe exception" : message,
-			stack == null ? "" : stack, breadcrumbs);
+	final host:DesktopUiHostContext;
+	final config:ShowcaseOptions;
+	final explorer:UiExplorer;
+	final input:EventSubscription;
+	var graphics:Null<Showcase>;
+	var renderCount = 0;
+	var startedAt:Null<Float>;
+
+	public static function configure(width:Int, height:Int, mode:Int, visualCase:Int, benchmark:Int):Void {
+		if (width <= 0 || height <= 0 || mode < 0 || mode > 1 || visualCase < -1 || visualCase > 34
+			|| benchmark < -1 || benchmark > 3 || active != null)
+			throw BindingError.invalidArgument("ShowcaseWeb.configure", "Invalid showcase configuration");
+		configuration = {
+			width: width, height: height, graphics: mode == 1 || benchmark >= 0,
+			visualCase: visualCase, benchmark: cast benchmark
+		};
 	}
 
-	public static function configure(width:Int, height:Int):Int {
-		if (initialized || width <= 0 || height <= 0)
-			return 1;
-		requestedWidth = width;
-		requestedHeight = height;
-		logicalWidth = width;
-		logicalHeight = height;
-		return 0;
-	}
-
-	/** Selects the initial app: 0=UI Explorer, 1=focused Graphics Lab. */
-	public static function configureMode(mode:Int):Int {
-		if (initialized || (mode != 0 && mode != 1))
-			return 1;
-		requestedMode = mode;
-		return 0;
-	}
-
-	/** Selects a deterministic UI Explorer screenshot state, 0-34. */
-	public static function configureUiVisual(caseId:Int):Int {
-		if (initialized || caseId < 0 || caseId > 34)
-			return 1;
-		requestedUiVisualCase = caseId;
-		requestedMode = 0;
-		return 0;
-	}
-
-	/** Selects a repeatable workload: 0=full, 1=static, 2=text-heavy, 3=text-editing. */
-	public static function configureBenchmark(scenario:Int):Int {
-		if (initialized || scenario < 0 || scenario > 3)
-			return 1;
-		benchmarkScenario = scenario;
-		requestedMode = 1;
-		return 0;
-	}
-
-	public static function main():Int {
-		if (requestedMode == 0)
-			return startReusableHost();
+	public static function main():Void {
+		var config = configuration ?? {
+			width:1200, height:800, graphics:false, visualCase:-1, benchmark:None
+		};
+		var options = new UiHostOptions();
+		options.title = "Haxeon UI Explorer";
+		options.width = config.width;
+		options.height = config.height;
+		options.eventQueueCapacity = 64;
+		options.fonts = [
+			new UiFontAsset("IBMPlexSansArabic-Regular", "assets/IBMPlexSansArabic-Regular.ttf", FontFamily.Default),
+			new UiFontAsset("IBMPlexSansHebrew-Regular", "assets/IBMPlexSansHebrew-Regular.ttf", FontFamily.Default),
+			new UiFontAsset("IBMPlexSansJP-Regular", "assets/IBMPlexSansJP-Regular.ttf", FontFamily.Default),
+			new UiFontAsset("NotoEmoji-Regular", "assets/NotoEmoji-Regular.ttf", FontFamily.Emoji)
+		];
+		options.onError = reportException;
 		try {
-			var init = new InitOptions();
-			init.set_api_version(NativeKit.nk_api_version());
-			init.set_event_queue_capacity(64);
-			if (NativeKit.nk_init(init) != Result.Ok)
-				return fail(10);
-			initialized = true;
-
-			graphicsMode = requestedMode == 1;
-			var windowOptions = new NativeWindowOptions();
-			windowOptions.set_width(requestedWidth);
-			windowOptions.set_height(requestedHeight);
-			windowOptions.set_title("Haxeon UI Explorer");
-			windowOptions.set_flags(WindowFlags.Resizable);
-			windowOptions.set_owner(WindowHandle.invalid());
-			windowOptions.set_kind(WindowKind.Normal);
-			var createdWindow = NativeKit.nk_window_create(windowOptions);
-			if (createdWindow.status != Result.Ok)
-				return fail(11);
-			window = createdWindow.out_window.borrow();
-
-			var surfaceOptions = new NativeSurfaceOptions();
-			surfaceOptions.set_flags(SurfaceFlags.ForwardCompatible | SurfaceFlags.Stencil);
-			surfaceOptions.set_api(GraphicsApi.OpenglEs);
-			surfaceOptions.set_major_version(3);
-			surfaceOptions.set_width(requestedWidth);
-			surfaceOptions.set_height(requestedHeight);
-			var createdSurface = NativeKit.nk_surface_create(new Handle(window.rawValue()), surfaceOptions);
-			if (createdSurface.status != Result.Ok)
-				return fail(12);
-			surface = createdSurface.out_surface.borrow();
-			renderSurface = Surface.borrowNativeHandle(surface);
-			var activePump = new EventPump();
-			events = activePump;
-			eventSubscription = activePump.listen(handleEvent);
-			running = true;
-			try {
-				startWebFontLoads();
-			} catch (error:Dynamic) {
-				failureStage = 91;
-				reportException(error, "ShowcaseWeb.main > load-showcase-fonts");
-				return fail(22);
-			}
-			return 0;
-		} catch (error:Dynamic) {
-			failureStage = 92;
-			reportException(error, "ShowcaseWeb.main > initialize-runtime");
-			return fail(20);
-		}
-	}
-
-	/** Called by the browser host once per requestAnimationFrame tick. */
-	public static function frame(time:Float):Int {
-		if (browserSession != null) {
-			var activeSession:BrowserUiHostSession = cast browserSession;
-			if (openGraphicsRequested) {
-				openGraphicsRequested = false;
-				activeSession.dispose();
-				browserSession = null;
-				explorer = null;
-				initialized = false;
-				running = false;
-				requestedMode = 1;
-				graphicsMode = true;
-				return main() == 0 ? 1 : -result;
-			}
-			var advanced = activeSession.advance(time);
-			if (advanced > 0 && activeSession.state == UiHostLifecycle.Running) rendered++;
-			if (advanced < 0) {
-				result = 19;
-				failureStage = 2;
-			}
-			return advanced;
-		}
-		if (!running)
-			return result != 0 ? -result : 0;
-		try {
-			failureStage = 1;
-			while (running && events != null && events.poll()) {}
-			if (result != 0)
-				return -result;
-
-			if (openGraphicsRequested && explorer != null && !graphicsMode) {
-				openGraphicsRequested = false;
-				graphicsMode = true;
-				if (explorerInput != null)
-					explorerInput.detach();
-				graphics = new Showcase(createWebFonts());
-				graphics.setViewport(logicalWidth, logicalHeight);
-			}
-
-			var target = renderSurface;
-			if (running && ready && target != null && (graphics != null || explorer != null)) {
-				failureStage = 2;
-				if (benchmarkScenario == 3)
-					if (graphics != null)
-						graphics.benchmarkTextEdit(rendered);
-				if (NativeKit.nk_surface_make_current(surface) != Result.Ok)
-					return -fail(17);
-				if (started < 0.0)
-					started = time;
-				var elapsed = (time - started) / 1000.0;
-				if (graphicsMode && graphics != null) {
-					failureStage = 3;
-					graphics.encodeFrame(elapsed, logicalWidth, logicalHeight, framebufferWidth,
-						framebufferHeight, scale, false);
-					graphics.render(target, logicalWidth, logicalHeight, framebufferWidth,
-						framebufferHeight, scale);
-				} else if (explorer != null) {
-					failureStage = 100 + explorer.getDiagnosticStage();
-					explorer.render(elapsed);
-				}
-				failureStage = 4;
-				if (NativeKit.nk_surface_present(surface) != Result.Ok)
-					return -fail(18);
-				rendered++;
-				failureStage = 0;
-			}
-			return running ? 1 : 0;
-		} catch (error:UiError) {
-			if (explorer != null && explorer.getDiagnosticStage() > 0)
-				failureStage = 100 + explorer.getDiagnosticStage();
-			else
-				failureStage = 1000 + cast(error.status, Int);
-			reportException(error, "ShowcaseWeb.frame > native-ui-operation: " + error.operation);
-			return -fail(19);
-		} catch (error:Dynamic) {
-			if (explorer != null && explorer.getDiagnosticStage() > 0)
-				failureStage = 100 + explorer.getDiagnosticStage();
-			reportException(error, failureStage >= 130
-				? "ShowcaseWeb.frame > UiExplorer.render > UiContext.render"
-				: "ShowcaseWeb.frame > render");
-			return -fail(19);
-		}
-	}
-
-	public static function status():Int
-		return result != 0 ? result : (rendered > 0 ? 0 : 1);
-
-	public static function diagnostic():Int
-		return failureStage;
-
-	public static function caretOffset():Int
-		return graphics == null ? -1 : graphics.caretOffset();
-
-	public static function caretAffinity():Int
-		return graphics == null ? -1 : graphics.caretAffinity();
-
-	public static function caretDirection():Int
-		return graphics == null ? -1 : graphics.caretDirection();
-
-	public static function shutdown():Void {
-		if (browserSession != null) {
-			var activeSession:BrowserUiHostSession = cast browserSession;
-			activeSession.dispose();
-			browserSession = null;
-			explorer = null;
-			initialized = false;
-			running = false;
-			ready = false;
-			return;
-		}
-		running = false;
-		ready = false;
-		var eventPump = events;
-		if (eventSubscription != null)
-			eventSubscription.dispose();
-		eventSubscription = null;
-		events = null;
-		if (graphics != null)
-			graphics.dispose();
-		graphics = null;
-		if (explorerInput != null)
-			explorerInput.detach();
-		explorerInput = null;
-		if (explorer != null)
-			explorer.dispose();
-		explorer = null;
-		if (renderSurface != null) renderSurface.releaseBorrowed();
-		renderSurface = null;
-		if (surface.isValid())
-			NativeKit.nk_surface_destroy(surface);
-		surface = SurfaceHandle.invalid();
-		if (window.isValid())
-			NativeKit.nk_window_destroy(window);
-		window = WindowHandle.invalid();
-		if (initialized)
-			NativeKit.nk_shutdown();
-		if (eventPump != null)
-			eventPump.runtimeShutdown();
-		webFontBytes = null;
-		pendingWebFonts = null;
-		pendingWebFontCount = 0;
-		initialized = false;
-	}
-
-	static function fail(code:Int):Int {
-		if (result == 0)
-			result = code;
-		running = false;
-		return result;
-	}
-
-	static function startReusableHost():Int {
-		try {
-			var options = new UiHostOptions();
-			options.title = "Haxeon UI Explorer";
-			options.width = requestedWidth;
-			options.height = requestedHeight;
-			options.eventQueueCapacity = 64;
-			options.fonts = [for (font in webFontSpecs())
-				new UiFontAsset(font.name, font.uri, font.family)];
-			var startedSession = BrowserUiHost.start(options, function(context) {
-				explorer = new UiExplorer(context.fonts, "WEBGL2 · WASM", function() {
-					openGraphicsRequested = true;
-				}, false, null, null, null, false);
-				if (requestedUiVisualCase >= 0 && !explorer.setVisualCase(requestedUiVisualCase))
-					throw "UI Explorer rejected the requested visual case";
-				return new ShowcaseExplorerApplication(explorer, context.requestFrame);
-			});
-			browserSession = startedSession;
-			initialized = true;
-			running = startedSession.isActive();
-			if (startedSession.state == UiHostLifecycle.Failed) {
-				result = 20;
-				return result;
-			}
-			return 0;
-		} catch (error:Dynamic) {
-			failureStage = 92;
-			reportException(error, "ShowcaseWeb.main > reusable-browser-host");
-			return fail(20);
-		}
-	}
-
-	static function createWebFonts():FontCollection {
-		var fonts = FontCollection.create();
-		try {
-			fonts.addDefaultFonts();
-			if (webFontBytes == null)
-				throw "Web fonts have not finished loading";
-			for (font in webFontSpecs()) {
-				var data = webFontBytes.get(font.name);
-				if (data == null)
-					throw "Missing downloaded web font " + font.name;
-				fonts.addData(font.name, data, font.family);
-			}
-			return fonts;
-		} catch (error:Dynamic) {
-			fonts.dispose();
+			UiHost.run(context -> new ShowcaseWeb(cast context, config), options);
+		} catch (error:haxe.Exception) {
+			reportException(error);
 			throw error;
 		}
 	}
 
-	static function webFontSpecs():Array<ShowcaseWebFont> return [
-		{
-			name: "IBMPlexSansArabic-Regular",
-			uri: "assets/IBMPlexSansArabic-Regular.ttf",
-			family: FontFamily.Default
-		},
-		{
-			name: "IBMPlexSansHebrew-Regular",
-			uri: "assets/IBMPlexSansHebrew-Regular.ttf",
-			family: FontFamily.Default
-		},
-		{
-			name: "IBMPlexSansJP-Regular",
-			uri: "assets/IBMPlexSansJP-Regular.ttf",
-			family: FontFamily.Default
-		},
-		{
-			name: "NotoEmoji-Regular",
-			uri: "assets/NotoEmoji-Regular.ttf",
-			family: FontFamily.Emoji
-		}
-	];
-
-	static function startWebFontLoads():Void {
-		webFontBytes = new Map();
-		pendingWebFonts = new Map();
-		pendingWebFontCount = 0;
-		for (font in webFontSpecs()) {
-			var resource = new ResourceValue();
-			resource.set_struct_size(ResourceValue.byteSize());
-			resource.set_flags(ResourceFlags.Readable);
-			resource.set_uri(font.uri);
-			resource.set_mime_type("font/ttf");
-			resource.set_display_name(font.name);
-			var request = NativeKit.nk_resource_load_async_checked(resource);
-			pendingWebFonts.set(Std.string(request), font);
-			pendingWebFontCount++;
-		}
+	static function reportException(error:haxe.Exception):Void {
+		NativeKitUIShowcase.nkui_showcase_diagnostic_report(0, error.message,
+			CallStack.toString(error.stack), error.toString());
 	}
 
-	static function createShowcase(fonts:FontCollection):Void {
-		if (graphicsMode) {
-			var sampleText:Null<String> = null;
-			if (benchmarkScenario == 2) {
-				var repeated = new StringBuf();
-				for (_ in 0...8)
-					repeated.add("NativeKit — مرحبا — שלום — こんにちは 👋 · ");
-				sampleText = repeated.toString();
-			}
-			graphics = new Showcase(fonts, sampleText);
-			if (benchmarkScenario == 1)
-				graphics.setBenchmarkAnimation(false);
-		} else {
-			explorer = new UiExplorer(fonts, "WEBGL2 · WASM", function() {
-				openGraphicsRequested = true;
-			});
-			var target = renderSurface;
-			if (target == null)
-				throw "Create the showcase surface before attaching the explorer";
-			explorer.attachSurface(target);
-			explorer.setViewport(logicalWidth, logicalHeight, requestedWidth,
-				requestedHeight, scale);
-			if (requestedUiVisualCase >= 0 && !explorer.setVisualCase(requestedUiVisualCase))
-				throw "UI Explorer rejected the requested visual case";
-			if (events != null)
-				explorerInput = explorer.attachInput(events, new Handle(window.rawValue()));
-		}
-	}
-
-	static function handleWebFontLoaded(request:haxe.Int64, loadResult:Result, data:Bytes):Void {
-		if (pendingWebFonts == null)
-			return;
-		var key = Std.string(request);
-		var font = pendingWebFonts.get(key);
-		if (font == null)
-			return;
-		pendingWebFonts.remove(key);
-		if (loadResult != Result.Ok || data.length == 0) {
-			failureStage = 90;
-			reportException("Failed to load web font " + font.uri,
-				"ShowcaseWeb.font-load > " + font.name);
-			fail(22);
-			return;
-		}
-		if (webFontBytes == null)
-			webFontBytes = new Map();
-		webFontBytes.set(font.name, data);
-		pendingWebFontCount--;
-		if (pendingWebFontCount == 0) {
-			pendingWebFonts = null;
-			createShowcase(createWebFonts());
-		}
-	}
-
-	static function handleEvent(value:PlatformEvent):Void {
-		switch (value) {
-			case Raw(kind, _, request, loadResult, _, _, data)
-				if (kind == EventKind.ResourceDataComplete):
-				handleWebFontLoaded(request, loadResult, data);
-			case WindowClose(source) if (source.rawValue() == window.rawValue()):
-				running = false;
-			case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
-				if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok) {
-					fail(13);
-					return;
-				}
-			case WindowScaleChanged(source, newScale) if (source.rawValue() == window.rawValue()):
-				scale = newScale;
-			case SurfaceReady(source) if (source.rawValue() == surface.rawValue()):
-				if (NativeKit.nk_surface_make_current(surface) != Result.Ok) {
-					fail(14);
-					return;
-				}
-				var size = NativeKit.nk_surface_get_framebuffer_size(surface);
-				if (size.status != Result.Ok) {
-					fail(15);
-					return;
-				}
-				framebufferWidth = size.out_width;
-				framebufferHeight = size.out_height;
-				var windowScale = NativeKit.nk_window_get_scale(window);
-				if (windowScale.status != Result.Ok) {
-					fail(16);
-					return;
-				}
-				scale = windowScale.out_scale;
-				if (explorer != null)
-					explorer.setViewport(logicalWidth, logicalHeight, framebufferWidth,
-						framebufferHeight, scale);
-				ready = framebufferWidth > 0 && framebufferHeight > 0;
-			case SurfaceResize(source, width, height, newFramebufferWidth, newFramebufferHeight)
-				if (source.rawValue() == surface.rawValue()):
-				logicalWidth = width;
-				logicalHeight = height;
-				framebufferWidth = newFramebufferWidth;
-				framebufferHeight = newFramebufferHeight;
-				ready = framebufferWidth > 0 && framebufferHeight > 0;
-				if (explorer != null)
-					explorer.setViewport(logicalWidth, logicalHeight, framebufferWidth,
-						framebufferHeight, scale);
-			case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
-				ready = false;
-			case PointerMove(source, x,
-				y) if (source.rawValue() == window.rawValue() && graphicsMode && graphics != null):
-				graphics.updatePointer(x, y);
-			case PointerButton(source, _, action, _, x,
-				y) if (source.rawValue() == window.rawValue() && graphicsMode && graphics != null):
-				graphics.pointerButton(x, y, action == InputAction.Press);
-			case Key(source, key, _, action,
-				_) if (source.rawValue() == window.rawValue() && action == InputAction.Press && key == Key.Escape):
-				if (graphicsMode && explorer != null) {
-					graphicsMode = false;
-					if (graphics != null) {
-						graphics.dispose();
+	function new(host:DesktopUiHostContext, config:ShowcaseOptions) {
+		this.host = host;
+		this.config = config;
+		explorer = new UiExplorer(host.fonts, "WEBGL2 · WASM", openGraphics, false, null, null, null, false);
+		var opened = false;
+		defer if (!opened) dispose();
+		if (config.visualCase >= 0 && !explorer.setVisualCase(config.visualCase))
+			throw BindingError.invalidArgument("ShowcaseWeb", "UI Explorer rejected the visual case");
+		if (config.graphics) openGraphics();
+		input = host.events.listen(function(event) {
+			var lab = graphics;
+			switch event {
+				case PointerMove(source, x, y) if (lab != null && matches(source)):
+					lab.updatePointer(x, y);
+					host.requestFrame();
+				case PointerButton(source, _, action, _, x, y) if (lab != null && matches(source)):
+					lab.pointerButton(x, y, action == InputAction.Press);
+					host.requestFrame();
+				case Key(source, Key.Escape, _, InputAction.Press, _) if (matches(source)):
+					if (lab == null || config.graphics) host.requestClose();
+					else {
 						graphics = null;
+						lab.dispose();
+						host.requestFrame();
 					}
-					if (explorerInput != null && events != null)
-						explorerInput.attach(events);
-				} else
-					running = false;
-			case _:
-		}
+				case _:
+			}
+		});
+		active = this;
+		opened = true;
 	}
+
+	function matches(source:Handle):Bool
+		return source.rawValue() == host.window.rawValue() || source.rawValue() == host.surface.rawValue();
+
+	function openGraphics():Void {
+		if (graphics != null) return;
+		var text:Null<String> = null;
+		if (config.benchmark == TextHeavy) {
+			var repeated = new StringBuf();
+			for (_ in 0...8)
+				repeated.add("NativeKit — مرحبا — שלום — こんにちは 👋 · ");
+			text = repeated.toString();
+		}
+		var lab = new Showcase(host.fonts, text, false);
+		if (config.benchmark == Static) lab.setBenchmarkAnimation(false);
+		graphics = lab;
+		startedAt = null;
+		renderCount = 0;
+		host.requestFrame();
+	}
+
+	public function context():UiContext return explorer.hostContext();
+
+	public function submit(frame:LayoutFrame):RenderNode
+		return explorer.submitHostFrame(frame);
+
+	public function submitFrame(frame:SurfaceFrame, info:FrameInfo, timeSeconds:Float):Bool {
+		var lab = graphics;
+		if (lab == null) return false;
+		if (config.benchmark == Editing) lab.benchmarkTextEdit(renderCount);
+		if (startedAt == null) startedAt = timeSeconds;
+		var elapsed = Math.max(0.0, timeSeconds - startedAt);
+		lab.encodeFrame(elapsed, info.logicalWidth, info.logicalHeight, info.framebufferWidth,
+			info.framebufferHeight, info.pixelScale, false);
+		lab.submitFrame(frame, info);
+		renderCount++;
+		host.requestFrame();
+		return true;
+	}
+
+	public function dispose():Void {
+		if (active == this) active = null;
+		defer explorer.dispose();
+		defer if (graphics != null) graphics.dispose();
+		if (input != null) input.dispose();
+	}
+
+	public static function caretOffset():Int
+		return active == null || active.graphics == null ? -1 : active.graphics.caretOffset();
+
+	public static function caretAffinity():Int
+		return active == null || active.graphics == null ? -1 : active.graphics.caretAffinity();
+
+	public static function caretDirection():Int
+		return active == null || active.graphics == null ? -1 : active.graphics.caretDirection();
 }
