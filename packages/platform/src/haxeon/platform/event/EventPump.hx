@@ -64,11 +64,13 @@ class EventPump {
 		if (!source.isValid() || listener == null)
 			throw BindingError.invalidArgument("EventPump.listenSource", "A live source and listener are required");
 		var id = source.rawValue();
-		var routes = sourceListeners.get(id);
-		if (routes == null) {
-			routes = [];
-			sourceListeners.set(id, routes);
+		var known = sourceListeners.get(id);
+		if (known == null) {
+			known = [];
+			sourceListeners.set(id, known);
 		}
+		// The unsubscribe closure captures the list; a local never assigned again keeps its null check there.
+		final routes = known;
 		var route = new SourceRoute(listener);
 		routes.push(route);
 		return new EventSubscription(this, function() {

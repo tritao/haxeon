@@ -171,6 +171,8 @@ class FileWatch implements Disposable {
 			if (scopeKey != null && !contains(scopeKey, key))
 				continue;
 			var registration = registrations.get(key);
+			if (registration == null)
+				continue;
 			try {
 				register(registration.path, registration.recursive);
 			} catch (error:NativeKitError) {
