@@ -230,6 +230,7 @@ generic-interface
 generic-interface-value-carriers
 generic-managed-reference-closure
 generic-map-read-view
+generic-method-owner-arguments
 generic-method-void-statement
 generic-nullable-substitution
 generic-override-bridge

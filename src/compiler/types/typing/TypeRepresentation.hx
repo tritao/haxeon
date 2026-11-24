@@ -854,16 +854,33 @@ class TypeRepresentation {
 
 	/**
 	 * Resolve and adapt one generic call across its shared-body ABI boundary. `receiver` is the underlying type of the abstract
-	 * whose instance method `fn` is (`GenericSpecializationPolicy.decide`).
+	 * whose instance method `fn` is (`GenericSpecializationPolicy.decide`). `owner` is the generic class whose instance method `fn`
+	 * is, as its body takes it (`ownerLayout`): the body is typed and named for the owner's parameters as that gives them, before
+	 * its own.
 	 */
 	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>,
 			arguments:Array<TypedExpression>,
-			argumentTypesOf:GenericArgumentTypesResolver, ?receiver:AstType):GenericCallRepresentationResult {
+			argumentTypesOf:GenericArgumentTypesResolver, ?receiver:AstType,
+			?owner:CompilerType):GenericCallRepresentationResult {
 		// A generic call inside a local closure uses the types its shared body can pass.
 		var localRepresentation = session.currentContext.localTypeRepresentation,
-			physicalSubstitutions = localRepresentation == null ? semanticSubstitutions
+			physicalSubstitutions = localRepresentation == null ? copyMap(semanticSubstitutions)
 				: [for (parameter => type in semanticSubstitutions) parameter => localRepresentation(type)],
-			representation = genericFunction(fn, physicalSubstitutions, receiver),
+			ownerParameters:Array<String> = [],
+			ownerArguments:Array<CompilerType> = [];
+		switch owner {
+			case TInstance(Class, name, values):
+				ownerParameters = session.classDecls.required(name).typeParameters;
+				ownerArguments = values;
+				for (index in 0...ownerParameters.length)
+					physicalSubstitutions.set(ownerParameters[index], ownerArguments[index]);
+			default:
+		}
+		var own = genericFunction(fn, physicalSubstitutions, receiver),
+			representation:GenericRepresentationResult = {
+				substitutions: own.substitutions,
+				policies: [for (_ in ownerParameters) "owner"].concat(own.policies)
+			},
 			argumentTypes = argumentTypesOf(fn, representation.substitutions),
 			result:TypeRepresentationResult = {
 				semantic: session.declarations.types.resultType(fn, semanticSubstitutions),
@@ -874,11 +891,27 @@ class TypeRepresentation {
 			argumentTypes: argumentTypes,
 			arguments: adaptArguments(arguments, argumentTypes),
 			result: result,
-			typeArguments: [
+			typeArguments: ownerArguments.concat([
 				for (parameter in functionTypeParameters(fn))
 					requiredMapValue(representation.substitutions, parameter)
-			]
+			])
 		};
+	}
+
+	/**
+	 * The generic class `owner` of an instance method called on `receiver`, as the method's body takes it: with its parameters as the
+	 * owner's layout holds them, Dynamic in an erased owner and a specialization's own in a specialized one, as its other members
+	 * take them. Null when `owner` is no generic class.
+	 */
+	public function ownerLayout(receiver:CompilerType, owner:String):Null<CompilerType> {
+		var declaration = session.classDecls.get(owner);
+		if (declaration == null || declaration.typeParameters.length == 0)
+			return null;
+		var physical = methodSubstitutions(receiver, owner).physical;
+		return TInstance(Class, owner, [
+			for (parameter in declaration.typeParameters)
+				physical.get(parameter) ?? TDynamic
+		]);
 	}
 
 	/** Substitutions used by a shared body owned by a generic class/interface. */

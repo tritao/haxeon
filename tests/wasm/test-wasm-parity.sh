@@ -61,6 +61,7 @@ inline_cases=(
 	generic-interface-value-carriers
 	generic-erased-raw-pointer
 	generic-managed-reference-closure
+	generic-method-owner-arguments
 	generic-erased-bytes-reference-shapes
 	wasm-bytes-runtime-kinds
 	generic-erased-runtime-kinds
