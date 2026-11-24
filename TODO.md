@@ -309,14 +309,6 @@ JIT. Heavier passes run in release builds only, written on IR bodies.
 The Haxe code Haxeon rejects or runs differently is listed in
 [LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported).
 
-- **A closure in a generic method cast its captured value to the wrong
-  type.** A closure written inside a generic method of
-  `IrContributionMemo<T>`, reached through a cast from
-  `IrContributionMemo<Dynamic>`, failed on the server's signature edit with
-  "Can't cast IrTagEscapeRecord to IrWalkSummary", as if one specialization's
-  closure served another's `T`. Rewriting it as a plain loop
-  (`IrWalkRecord.giveBack`) avoided it; a small standalone program did not
-  reproduce it. Reduce it from that pattern and fix the closure's typing.
 - **`haxe.io.Bytes.ofData` and `fastGet`.** Both take Haxe's `BytesData`,
   which Haxeon has no type for (`getData` returns the raw `hl.Bytes`). On
   HashLink it is an object holding the pointer and the length; here it would

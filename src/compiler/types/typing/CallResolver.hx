@@ -792,8 +792,11 @@ class CallResolver {
 			offset = leading == null ? 0 : leading.length,
 			lambdas:Array<Int> = [];
 		// A parameter a `Dynamic` expectation of the result gives (`trace(one(i -> p))`) is what the arguments leave it: Dynamic
-		// only where they fix nothing, as Haxe's Dynamic unifies with any type.
-		var fallbacks = [for (parameter => type in substitutions) if (type.match(TDynamic)) parameter];
+		// only where they fix nothing, as Haxe's Dynamic unifies with any type. An owner's parameter is the receiver's.
+		var fallbacks = [
+			for (parameter => type in substitutions)
+				if (type.match(TDynamic) && parameters.contains(parameter)) parameter
+		];
 		for (parameter in fallbacks)
 			substitutions.remove(parameter);
 		function settleFallbacks():Bool {
@@ -1814,7 +1817,9 @@ class CallResolver {
 					fail("E1007", 'Instance method "$methodKey" requires an object', span);
 				receiver = typeExpressionValue(Variable("this", span), scope);
 			}
-			var preset:Map<String, CompilerType> = [],
+			// As through an explicit `this`: the owner's parameters are the receiver's.
+			var preset:Map<String, CompilerType> = receiver == null
+				? [] : session.representation.nominalSubstitutions(projectNominal(receiver.type, methodInfo.owner)),
 				parameters = BodyTyper.functionTypeParameters(method);
 			// A Void expectation is a statement whose result is discarded, not a result of type Void.
 			if (expectedType != null && !sameType(expectedType, TVoid))

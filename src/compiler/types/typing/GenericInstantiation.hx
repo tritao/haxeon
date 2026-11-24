@@ -149,9 +149,11 @@ class GenericInstantiation {
 			}
 		}
 		var abstractDeclaration = receiver == null || owner == null ? null : session.declarations.abstracts.get(owner),
+			ownerLayout = receiver == null
+				|| owner == null ? null : session.representation.ownerLayout(receiver.type, owner),
 			genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments,
 				(callee, calleeSubstitutions) -> bodyTyper.argumentTypesOf(callee, calleeSubstitutions),
-				abstractDeclaration == null ? null : abstractDeclaration.underlying),
+				abstractDeclaration == null ? null : abstractDeclaration.underlying, ownerLayout),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
 			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),
@@ -169,7 +171,7 @@ class GenericInstantiation {
 		if (receiver != null)
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))
 				? abstractReceiverType(requiredString(owner),
-				representationSubstitutions) : receiver.type;
+				representationSubstitutions) : ownerLayout ?? receiver.type;
 		session.useSharedUnit(specialization.name);
 		typeSpecializationBody(specialization.name, fn, owner, receiver == null ? isStatic : true,
 			representationReceiver, representationSubstitutions, representationArguments, false);

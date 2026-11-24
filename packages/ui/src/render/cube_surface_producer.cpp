@@ -22,8 +22,8 @@ constexpr std::array<SurfaceMeshVertex, 24> cube_vertices = {{
     {-1, 1, 1, 247, 171, 76, opaque},    {-1, 1, -1, 247, 171, 76, opaque},
     {-1, 1, 1, 143, 105, 245, opaque},   {1, 1, 1, 143, 105, 245, opaque},
     {1, 1, -1, 143, 105, 245, opaque},   {-1, 1, -1, 143, 105, 245, opaque},
-    {-1, -1, -1, 255, 207, 112, opaque}, {1, -1, -1, 255, 207, 112, opaque},
-    {1, -1, 1, 255, 207, 112, opaque},   {-1, -1, 1, 255, 207, 112, opaque},
+    {-1, -1, -1, 226, 232, 240, opaque}, {1, -1, -1, 226, 232, 240, opaque},
+    {1, -1, 1, 226, 232, 240, opaque},   {-1, -1, 1, 226, 232, 240, opaque},
 }};
 
 constexpr std::array<uint32_t, 36> make_cube_indices() {
