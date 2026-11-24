@@ -6,6 +6,7 @@ import Diagram from '../components/home/Diagram.astro';
 import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleMain from '../../../packages/gpu/examples/triangle/src/Main.hx?raw';
 import triangleShader from '../../../packages/gpu/examples/triangle/src/shaders/Triangle.glsl?raw';
+import particlesMain from '../../../packages/gpu/examples/particles/src/Main.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
@@ -21,13 +22,15 @@ const backends: { platform: string; api: string; status: Status; compute: string
 ];
 const available = backends.filter(({ status }) => status !== 'Planned');
 const triangle = 'packages/gpu/examples/triangle/';
-const method = (name: string) => {
-  const found = triangleMain.match(new RegExp(`^\\tpublic function ${name}\\([\\s\\S]*?^\\t\\}`, 'm'));
-  if (!found) throw new Error(`Missing Main.${name} in the triangle example`);
+const particles = 'packages/gpu/examples/particles/';
+const method = (source: string, name: string) => {
+  const found = source.match(new RegExp(`^\\tpublic function ${name}\\([\\s\\S]*?^\\t\\}`, 'm'));
+  if (!found) throw new Error(`Missing Main.${name} in a GPU example`);
   return found[0].replace(/^\t/gm, '');
 };
-const ready = method('ready');
-const frame = method('frame');
+const ready = method(triangleMain, 'ready');
+const frame = method(triangleMain, 'frame');
+const computeFrame = method(particlesMain, 'frame');
 const appLines = triangleMain.trimEnd().split('\n').length;
 ---
 
@@ -173,6 +176,22 @@ const appLines = triangleMain.trimEnd().split('\n').length;
             </Card>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Compute</h2>
+          <p class="lede">The Particles example moves 8,192 particles with a compute shader, then draws them from the same storage buffer. Nothing goes back to the CPU.</p>
+        </div>
+        <div class="grid first-frame">
+          <figure>
+            <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
+          </figure>
+          <CodeCard code={computeFrame} lang="haxe" title="Each frame · src/Main.hx" />
+        </div>
+        <p class="note"><a href={repositorySource(particles + 'src/shaders/Particles.glsl')}>Read the shaders</a> · <a href={repositorySource(particles + 'README.md')}>Run it</a></p>
       </div>
     </section>
 
