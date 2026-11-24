@@ -17,11 +17,11 @@ enum HlSymbolRequest {
 	ConstFloat(value:Float, index:Int);
 	ConstString(value:String, index:Int);
 
-	/** `HlLower.internType`: a function type goes through `internFunction`, any other through `internType`. */
-	TypeOf(type:IrType, index:Int);
+	/** `HlLower.internType` of the type with this id (`IrTypeIds`). */
+	TypeOf(type:Int, index:Int);
 
-	/** A reference to a type, for pointer-size-aware header access. */
-	RefTo(type:IrType, index:Int);
+	/** A reference to the type with this id, for pointer-size-aware header access. */
+	RefTo(type:Int, index:Int);
 
 	/** An object type laid out like a runtime header (`HlSymbolTable.internRuntimeHeader`). */
 	RuntimeHeader(kind:HlRuntimeHeader, index:Int);
@@ -94,13 +94,6 @@ class HlRemap {
 		map.set(from, to);
 		return true;
 	}
-
-	/** The index of `type`, the way lowering asks for it. */
-	public static function typeIndex(symbols:HlSymbolTable, type:IrType):Int
-		return switch type {
-			case Function(arguments, result): symbols.internFunction(arguments, result);
-			default: symbols.internType(type);
-		};
 
 	public static function methodSlotAnswer(symbols:HlSymbolTable, typeName:String, name:String):Int {
 		var slots = symbols.objectMethodSlots(typeName);

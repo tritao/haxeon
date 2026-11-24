@@ -4,7 +4,6 @@ import compiler.backend.c.HlcTypes.HlcUsage;
 import compiler.core.InternalError;
 import compiler.hl.HlCode;
 import compiler.hl.HlType;
-import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.model.Ir.IrObject;
 import compiler.ir.model.Ir.IrProgram;
@@ -254,7 +253,7 @@ class HlcModule {
 
 	/** The HashLink type of `type`, interned while the functions are collected and only looked up after. */
 	public function typeIndex(type:IrType):Int
-		return collected(HlRemap.typeIndex(symbols, type), 'type $type');
+		return collected(symbols.internType(type), 'type $type');
 
 	/** The runtime header type `kind` (`HlSymbolTable.internRuntimeHeader`), as `typeIndex`. */
 	public function runtimeHeader(kind:compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader):Int

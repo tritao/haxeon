@@ -3,7 +3,7 @@ package compiler.hl.incremental;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.model.IrTypeIdentity;
-import compiler.ir.model.IrTypeMap;
+import compiler.ir.model.IrTypeIds;
 import compiler.abi.NameRewrite;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
@@ -68,11 +68,11 @@ class HlSymbolTable {
 	var typeIndices:Map<String, Int> = [];
 
 	/**
-	 * `typeIndices` by the type's structure, so interning a type it already has builds no key text. It only learns facts
-	 * that hold for every table sharing `typeIndices` (an index never changes once given), so it belongs to this instance
-	 * alone and starts empty in a copy; `renameTypes` drops it with the keys it rewrites.
+	 * `typeIndices` by type id (`IrTypeIds`), or -1, so interning a type it already has is an array read. It only learns facts
+	 * that hold for every table sharing `typeIndices` (an index never changes once given), so it is shared and copied with
+	 * them (`fork`, `writable`), and a server's next build keeps it; `renameTypes` drops it with the keys it rewrites.
 	 */
-	var typeIndex = new IrTypeMap<Int>();
+	var typeIndex:Array<Int> = [];
 	var globalIndices:Map<String, Int> = [];
 	var objectIndices:Map<String, Int> = [];
 	var objectMethodIndices:Map<String, Map<String, Int>> = [];
@@ -132,6 +132,7 @@ class HlSymbolTable {
 		result.stringIndices = stringIndices;
 		result.floatIndices = floatIndices;
 		result.typeIndices = typeIndices;
+		result.typeIndex = typeIndex;
 		result.globalIndices = globalIndices;
 		result.stringConstants = stringConstants;
 		result.objectIndices = objectIndices;
@@ -158,7 +159,7 @@ class HlSymbolTable {
 		stringIndices = forked.stringIndices;
 		floatIndices = forked.floatIndices;
 		typeIndices = forked.typeIndices;
-		typeIndex = new IrTypeMap();
+		typeIndex = forked.typeIndex;
 		globalIndices = forked.globalIndices;
 		stringConstants = forked.stringConstants;
 		objectIndices = forked.objectIndices;
@@ -424,6 +425,7 @@ class HlSymbolTable {
 		if (copied & TYPES != 0) {
 			types = types.copy();
 			typeIndices = [for (key => value in typeIndices) key => value];
+			typeIndex = typeIndex.copy();
 			pendingTypes = [for (key => value in pendingTypes) key => value];
 		}
 		if (copied & GLOBALS != 0) {
@@ -586,17 +588,17 @@ class HlSymbolTable {
 
 	/** Compiler-only references used to access runtime headers with pointer-size-aware HashLink instructions. */
 	public function internReference(type:IrType):Int
-		return internReferenceByKey(type, typeKey(type));
+		return internReferenceId(IrTypeIds.id(type));
 
-	/** `internReference` for a type whose key (`typeKey`) the caller already has. */
-	public function internReferenceByKey(type:IrType, typeKey:String):Int {
-		var key = "ref:" + typeKey;
-		if (typeIndices.exists(key))
-			return typeIndices.get(key);
+	/** `internReference` of the type with id `id`; `key` is its `typeKey` when the caller has it already (`HlRequestAnswers`). */
+	public function internReferenceId(id:Int, ?key:String):Int {
+		var reference = "ref:" + (key ?? typeKey(IrTypeIds.type(id)));
+		if (typeIndices.exists(reference))
+			return typeIndices.get(reference);
 		writable(TYPES);
-		var parameter = internType(type), index = types.length;
+		var parameter = internTypeId(id), index = types.length;
 		types.push(HlTypeDef.Parameterized(HlType.Ref, parameter));
-		typeIndices.set(key, index);
+		typeIndices.set(reference, index);
 		return index;
 	}
 
@@ -608,21 +610,20 @@ class HlSymbolTable {
 		typeIndices.set(key, internType(I32));
 	}
 
-	public function internType(type:IrType):Int {
-		var known = typeIndex.get(type);
-		if (known != null)
+	public function internType(type:IrType):Int
+		return internTypeId(IrTypeIds.id(type));
+
+	/** `internType` of the type with id `id`; `key` is its `typeKey` when the caller has it already (`HlRequestAnswers`). */
+	public function internTypeId(id:Int, ?key:String):Int {
+		var known = id < typeIndex.length ? typeIndex[id] : -1;
+		if (known >= 0)
 			return known;
-		var index = internTypeByKey(type, typeKey(type));
-		typeIndex.set(type, index);
+		var type = IrTypeIds.type(id), index = internTypeByKey(type, key ?? typeKey(type));
+		while (typeIndex.length <= id)
+			typeIndex.push(-1);
+		typeIndex[id] = index;
 		return index;
 	}
-
-	/**
-	 * `internType` for a type whose key (`typeKey`) the caller already has, as the link step does (`HlRequestAnswers`): it does not
-	 * hash the type's structure, and leaves the structural index to `internType`.
-	 */
-	public function internTypeWithKey(type:IrType, key:String):Int
-		return internTypeByKey(type, key);
 
 	function internTypeByKey(type:IrType, key:String):Int {
 		if (typeIndices.exists(key))
@@ -962,7 +963,7 @@ class HlSymbolTable {
 			return;
 		ensureWritable();
 		typeIndices = rewrite.keys(typeIndices);
-		typeIndex = new IrTypeMap();
+		typeIndex = [];
 		objectIndices = rewrite.keys(objectIndices);
 		var methods:Map<String, Map<String, Int>> = [];
 		for (name => slots in objectMethodIndices)

@@ -1,7 +1,7 @@
 package compiler.hl.incremental;
 
 import compiler.core.InternalError;
-import compiler.ir.model.IrTypeMap;
+import compiler.ir.model.IrTypeIds;
 
 /**
  * Dense numbers for the questions lowering puts to the symbol tables and the function layout (`HlSymbolRequest`): one number per
@@ -27,13 +27,19 @@ class HlRequestKeys {
 	final literals:Map<String, Int> = [];
 	final functions:Map<String, Int> = [];
 	final globals:Map<String, Int> = [];
-	final types = new IrTypeMap<Int>();
-	final references = new IrTypeMap<Int>();
+
+	/**
+	 * By type id, the number of the type's request (`TypeOf`) and of its reference's (`RefTo`), or -1: lowering asks one for every
+	 * register, so finding it is an array read.
+	 */
+	final types:Array<Int> = [];
+
+	final references:Array<Int> = [];
 
 	/** The rest, which lowering asks far less often, by a text key. */
 	final others:Map<String, Int> = [];
 
-	/** By number, the symbol table's key of the type a type request names (`HlSymbolTable.typeKey`), made when first asked. */
+	/** By type id, the symbol table's key of the type (`HlSymbolTable.typeKey`), made when a type request first needs it. */
 	final typeKeys:Array<Null<String>> = [];
 
 	/** `seen[key]` is `recording` when the function being recorded asked `key` already. */
@@ -65,12 +71,12 @@ class HlRequestKeys {
 	public inline function interns(key:Int):Bool
 		return interning[key];
 
-	/** The symbol table's key of the type request `key` names (a `TypeOf` or `RefTo`). */
-	public function typeKey(key:Int, type:compiler.ir.model.Ir.IrType):String {
-		var known = typeKeys[key];
+	/** The symbol table's key of the type with id `type`, which a `TypeOf` or `RefTo` names. */
+	public function typeKey(type:Int):String {
+		var known = type < typeKeys.length ? typeKeys[type] : null;
 		if (known == null) {
-			known = HlSymbolTable.typeKey(type);
-			typeKeys[key] = known;
+			known = HlSymbolTable.typeKey(IrTypeIds.type(type));
+			typeKeys[type] = known;
 		}
 		return known;
 	}
@@ -86,8 +92,13 @@ class HlRequestKeys {
 	public function record(request:HlSymbolRequest, keys:Array<Int>, answers:Array<Int>):Void
 		recordKey(keyOf(request), answerOf(request), keys, answers);
 
-	/** `record` of the request numbered `key`, which a caller that asks it often keeps rather than finding it again. */
-	public function recordKey(key:Int, answer:Int, keys:Array<Int>, answers:Array<Int>):Void {
+	/** `record` of `TypeOf(type, index)`, which lowering asks for every register: it makes the request only when it is new. */
+	public function recordType(type:Int, index:Int, keys:Array<Int>, answers:Array<Int>):Void {
+		var key = byType(types, type);
+		recordKey(key >= 0 ? key : keyOf(TypeOf(type, index)), index, keys, answers);
+	}
+
+	function recordKey(key:Int, answer:Int, keys:Array<Int>, answers:Array<Int>):Void {
 		if (seen[key] == recording)
 			return;
 		seen[key] = recording;
@@ -112,25 +123,24 @@ class HlRequestKeys {
 			case ConstInt(value, _): ints.get(value);
 			case ConstFloat(value, _): floats.get(floatKey(value));
 			case ConstString(value, _): strings.get(value);
-			case TypeOf(type, _): types.get(type);
-			case RefTo(type, _): references.get(type);
+			case TypeOf(type, _): byType(types, type);
+			case RefTo(type, _): byType(references, type);
 			case StringLiteral(value, _): literals.get(value);
 			case GlobalByName(name, _): globals.get(name);
 			case FunctionRef(name, _): functions.get(name);
 			default: others.get(otherKey(request));
 		};
-		if (known != null)
+		if (known != null && known >= 0)
 			return known;
 		var key = requests.length;
 		requests.push(request);
 		seen.push(0);
-		typeKeys.push(null);
 		switch request {
 			case ConstInt(value, _): ints.set(value, key);
 			case ConstFloat(value, _): floats.set(floatKey(value), key);
 			case ConstString(value, _): strings.set(value, key);
-			case TypeOf(type, _): types.set(type, key);
-			case RefTo(type, _): references.set(type, key);
+			case TypeOf(type, _): setByType(types, type, key);
+			case RefTo(type, _): setByType(references, type, key);
 			case StringLiteral(value, _): literals.set(value, key);
 			case GlobalByName(name, _): globals.set(name, key);
 			case FunctionRef(name, _): functions.set(name, key);
@@ -151,6 +161,15 @@ class HlRequestKeys {
 			default: true;
 		});
 		return key;
+	}
+
+	static inline function byType(keys:Array<Int>, type:Int):Int
+		return type < keys.length ? keys[type] : -1;
+
+	static function setByType(keys:Array<Int>, type:Int, key:Int):Void {
+		while (keys.length <= type)
+			keys.push(-1);
+		keys[type] = key;
 	}
 
 	/** Floats are told apart by their bits, as the symbol table pools them. */

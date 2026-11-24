@@ -8,7 +8,7 @@ import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrTypeIdentity;
-import compiler.ir.model.IrTypeMap;
+import compiler.ir.model.IrTypeIds;
 
 /**
  * On HashLink the lowering writes a fast path in place of a call to some runtime functions (an array push, a byte read or write; see
@@ -48,18 +48,25 @@ class IrSharedRuntimeCalls {
 			added:Array<IrFunction> = [],
 			madeBefore:Map<String, IrFunction> = memo == null ? [] : memo.helpers,
 			made:Map<String, IrFunction> = [];
-		// The helper of each runtime function by signature, so a call site whose helper is known spells no name.
-		var named:Map<String, IrTypeMap<String>> = [];
-		function helper(name:String, arguments:Array<IrType>, result:IrType):String {
-			var signature = IrType.Function(arguments, result),
-				bySignature = named.get(name);
+		// The helper of each runtime function by signature id, so a call site whose helper is known spells no name.
+		var named:Map<String, Map<Int, String>> = [];
+		function helper(name:String, signature:Int):String {
+			var bySignature = named.get(name);
 			if (bySignature == null) {
-				bySignature = new IrTypeMap();
+				bySignature = [];
 				named.set(name, bySignature);
 			}
 			var known = bySignature.get(signature);
 			if (known != null)
 				return known;
+			var arguments:Array<IrType>, result:IrType;
+			switch IrTypeIds.type(signature) {
+				case Function(parameters, returned):
+					arguments = parameters;
+					result = returned;
+				default:
+					throw new compiler.core.InternalError('runtime call $name has no function signature');
+			}
 			var key = name + SUFFIX + IrTypeIdentity.listText(arguments) + "->"
 				+ IrTypeIdentity.text(result);
 			bySignature.set(signature, key);
@@ -95,7 +102,7 @@ class IrSharedRuntimeCalls {
 			var entry = known.get(fn.name);
 			if (entry != null && entry.source == fn) {
 				for (call in entry.calls)
-					helper(call.name, call.arguments, call.result);
+					helper(call.name, call.signature);
 				kept.set(fn.name, entry);
 				result.functions.push(entry.result);
 				continue;
@@ -111,13 +118,13 @@ class IrSharedRuntimeCalls {
 					if (body.opcode(row) == IrOpcode.Call && shared.exists(body.symbol(row).name)) {
 						var call:SharedCall = {
 							name: body.symbol(row).name,
-							arguments: [for (operand in 0...body.operandCount(row)) body.valueType(body.operand(row,
-								operand))],
-							result: body.valueType(body.output(row))
+							signature: IrTypeIds.id(IrType.Function([
+								for (operand in 0...body.operandCount(row)) body.valueType(body.operand(row, operand))
+							], body.valueType(body.output(row))))
 						};
 						calls.push(call);
 						rows.push(row);
-						targets.push(IrSymbol.of(helper(call.name, call.arguments, call.result)).id);
+						targets.push(IrSymbol.of(helper(call.name, call.signature)).id);
 					}
 					row = body.nextRow(row);
 				}
@@ -137,11 +144,10 @@ class IrSharedRuntimeCalls {
 	}
 }
 
-/** A runtime call `IrSharedRuntimeCalls` sends through a helper: the runtime function, its argument types and its result. */
+/** A runtime call `IrSharedRuntimeCalls` sends through a helper: the runtime function and the id of its function type. */
 typedef SharedCall = {
 	final name:String;
-	final arguments:Array<IrType>;
-	final result:IrType;
+	final signature:Int;
 }
 
 /** A function, its form with its runtime calls through helpers, and those calls. */

@@ -94,7 +94,7 @@ Stages 1 and 2 are independent and can go in either order; 3 comes before 4 and 
 
 ## Types
 
-Status: steps 1 and 2 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
+Status: steps 1 to 3 landed 2026-11-24. This settles the "canonical IR types" question: types get ids, not interned values.
 
 **What it is worth.** Sampled on the frozen input before step 1, the work done on an `IrType`'s structure (hashing and
 probing `IrTypeMap`, `IrTypeIdentity.same` and `sameList`, the `TypeKey` and `HlSymbolTable.typeKey` texts) was 2.9% of a
@@ -150,9 +150,13 @@ remembers an answer. The self-compile's bytes are the check for each step.
    have fixed first ids, so most lookups take neither the lock nor a hash. One-shot self-compile -0.08% instructions;
    no-op -0.6%, body edit -0.5%, signature edit -0.3% main-thread instructions; allocation and server live data
    unchanged (the session's table was already kept for the session).
-3. *Server caches by id.* `HlSymbolTable.typeIndex` (an array by id in its copy-on-write state, dropped by
-   `renameTypes`), `HlRequestKeys.types`, `references` and `typeKeys`, with step 1's per-lowering arrays moving there;
-   `RuntimeAbi.writeKey` and `IrSharedRuntimeCalls` by id. About six files.
+3. *Server caches by id* (done). `HlSymbolTable.typeIndex` is an array by id, shared and copied with `typeIndices` in the
+   table's copy-on-write groups, so a server's next build keeps it, and dropped by `renameTypes`; `HlRequestKeys.types`,
+   `references` and `typeKeys` are arrays by id, and type requests name their type by id (`TypeOf`, `RefTo`), so step
+   1's per-lowering arrays are gone; `IrSharedRuntimeCalls` keeps a call by its function type's id. Seven files. One
+   change from the plan: `RuntimeAbi.writeKey` stays, since the types it writes are declarations' (object fields,
+   signatures), which have no id, and finding one is a structural hash that costs what writing the text does; it moves
+   with step 5. Body edit -1.3% and signature edit -0.2% main-thread instructions, allocation -0.3%.
 4. *Kept records by id.* The escape reach's stores and `IrWalkRecord`'s given types as id lists, so a kept walk
    compares integers (`IrTypeIdentity.sameList` was 1.1% of a body edit), with `IrTypeAwareWalk` and `IrVerifyMemo`.
    About six files.

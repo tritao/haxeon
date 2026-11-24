@@ -77,14 +77,6 @@ class HlLower {
 	/** The numbers requests are recorded under (`HlRequestKeys`): the lowered cache's, or this lowering's own. */
 	final requestKeys:compiler.hl.incremental.HlRequestKeys;
 
-	/**
-	 * By type id, the HashLink type lowering gave the type and the number its request is recorded under, or -1: a register's
-	 * type is then two array reads, not two lookups by the type's structure.
-	 */
-	final typeIndicesById:Array<Int> = [];
-
-	final typeKeysById:Array<Int> = [];
-
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
 
@@ -2918,33 +2910,17 @@ class HlLower {
 		return index;
 	}
 
-	function internType(type:IrType):Int {
-		var index = HlRemap.typeIndex(symbols, type);
-		if (recordedKeys != null)
-			record(TypeOf(type, index));
-		return index;
-	}
+	function internType(type:IrType):Int
+		return internTypeId(IrTypeIds.id(type));
 
-	/** `internType` of the type with id `id`, remembered by id (`typeIndicesById`). */
+	/**
+	 * `internType` of the type with id `id`. The symbol table and the request numbers keep both answers by id, so a register's type
+	 * is two array reads.
+	 */
 	function internTypeId(id:Int):Int {
-		while (typeIndicesById.length <= id) {
-			typeIndicesById.push(-1);
-			typeKeysById.push(-1);
-		}
-		var index = typeIndicesById[id];
-		if (index < 0) {
-			index = HlRemap.typeIndex(symbols, IrTypeIds.type(id));
-			typeIndicesById[id] = index;
-		}
-		var keys = recordedKeys;
-		if (keys != null) {
-			var key = typeKeysById[id];
-			if (key < 0) {
-				key = requestKeys.keyOf(TypeOf(IrTypeIds.type(id), index));
-				typeKeysById[id] = key;
-			}
-			requestKeys.recordKey(key, index, keys, recordedAnswers);
-		}
+		var index = symbols.internTypeId(id), keys = recordedKeys;
+		if (keys != null)
+			requestKeys.recordType(id, index, keys, recordedAnswers);
 		return index;
 	}
 
@@ -2952,9 +2928,9 @@ class HlLower {
 		return internType(IrType.Function(arguments, result));
 
 	function internReference(type:IrType):Int {
-		var index = symbols.internReference(type);
+		var id = IrTypeIds.id(type), index = symbols.internReferenceId(id);
 		if (recordedKeys != null)
-			record(RefTo(type, index));
+			record(RefTo(id, index));
 		return index;
 	}
 
@@ -3013,8 +2989,9 @@ class HlLower {
 			index = publishedObjectType(name);
 		if (index == null)
 			throw new HlMissingEntity('Unknown IR object "$name"');
-		if (recordedKeys != null)
-			record(TypeOf(IrType.Obj(name), index));
+		var keys = recordedKeys;
+		if (keys != null)
+			requestKeys.recordType(IrTypeIds.id(IrType.Obj(name)), index, keys, recordedAnswers);
 		return index;
 	}
 
