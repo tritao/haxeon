@@ -5,7 +5,6 @@ import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
 import compiler.ir.names.IrReceiverCheck;
 import compiler.ir.names.IrReferenceIdentity;
-import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.Ir;
 import compiler.ir.model.IrPassScratch.IrValueMarks;
@@ -306,8 +305,8 @@ class IrBodyCopyElision {
 	/** Only pure computation may sit between the copy and the call, or the callee could see a later state of the source. */
 	function nothingRunsBetween(body:IrBody, block:Int, from:Int, to:Int):Bool {
 		if (checkSymbol < 0) {
-			checkSymbol = IrSymbol.of(IrReceiverCheck.NAME).id;
-			identitySymbol = IrSymbol.of(IrReferenceIdentity.NAME).id;
+			checkSymbol = IrReceiverCheck.symbol();
+			identitySymbol = IrReferenceIdentity.symbol();
 		}
 		var fresh = between;
 		fresh.clear();

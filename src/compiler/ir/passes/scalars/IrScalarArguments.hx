@@ -1067,7 +1067,7 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 				var checked = fresh("$hl:receiver-check", Void);
 				body.beginRow();
 				body.pushOperand(arguments[0]);
-				emit(IrOpcode.Call, checked, IrSymbol.of(IrReceiverCheck.NAME).id);
+				emit(IrOpcode.Call, checked, IrReceiverCheck.symbol());
 			}
 			var target = plan.pinned ? pinnedCandidates.get(plan.name) : candidates.get(plan.name),
 				expanded:Array<IrValueId> = [];

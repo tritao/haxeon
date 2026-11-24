@@ -5,7 +5,6 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
-import compiler.ir.model.IrSymbol;
 import compiler.ir.model.IrValueId;
 import compiler.ir.model.SourceProvenance;
 import compiler.ir.names.IrReceiverCheck;
@@ -85,7 +84,7 @@ class IrBodyCallExpansion {
 			var checked = body.newValue("$receiver-check", voidType);
 			body.beginRow();
 			body.pushOperand(body.operand(call, 0));
-			rows.push(body.endRow(IrOpcode.Call, checked, IrSymbol.of(IrReceiverCheck.NAME).id, where));
+			rows.push(body.endRow(IrOpcode.Call, checked, IrReceiverCheck.symbol(), where));
 		}
 		bindArgumentValues(body, call, callee, values, rows, where, false);
 		// Every definition first, so phis and back edges can refer to values defined later in block order.

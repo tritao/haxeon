@@ -81,8 +81,8 @@ private class IrBodyLoadStoreForwarding {
 			}
 		}
 		incomingFields(body, objects, scratch, tables);
-		var checkSymbol = IrSymbol.of(IrReceiverCheck.NAME).id,
-			identitySymbol = IrSymbol.of(IrReferenceIdentity.NAME).id;
+		var checkSymbol = IrReceiverCheck.symbol(),
+			identitySymbol = IrReferenceIdentity.symbol();
 		var fieldObjects = tables.fieldObjects, fieldNames = tables.fieldNames, fieldValues = tables.fieldValues;
 		var elementArrays = tables.elementArrays,
 			elementConstant = tables.elementConstant,
@@ -253,8 +253,8 @@ private class IrBodyLoadStoreForwarding {
 			for (i in 1...count)
 				into.intersect(outgoing[graph.predecessor(id, i)]);
 		}
-		var checkSymbol = IrSymbol.of(IrReceiverCheck.NAME).id,
-			identitySymbol = IrSymbol.of(IrReferenceIdentity.NAME).id;
+		var checkSymbol = IrReceiverCheck.symbol(),
+			identitySymbol = IrReferenceIdentity.symbol();
 		// A block with a row that forgets every field leaves with what the rows after the last such one give: its state is made
 		// once, from nothing. `resumeAt` is that row's successor, or -2 for a block that meets its predecessors.
 		var resumeAt = IrPassScratch.filledInts(tables.resumeAt, blockCount, -2), settled = tables.settled;

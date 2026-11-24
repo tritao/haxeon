@@ -452,7 +452,7 @@ class IrInliner implements IrFactSource {
 		this.cache = cache;
 		types = cache.types;
 		voidType = types.id(Void);
-		receiverCheckSymbol = IrSymbol.of(IrReceiverCheck.NAME).id;
+		receiverCheckSymbol = IrReceiverCheck.symbol();
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
 		var named = [for (fn in byName) fn];

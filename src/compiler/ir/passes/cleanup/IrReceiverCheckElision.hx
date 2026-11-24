@@ -5,7 +5,6 @@ import compiler.ir.model.Ir;
 import compiler.ir.model.IrBody;
 import compiler.ir.model.IrOpcode;
 import compiler.ir.model.IrPassScratch;
-import compiler.ir.model.IrSymbol;
 import compiler.ir.names.IrReceiverCheck;
 
 /** Remove receiver checks only when a shared must-analysis proves the receiver non-null. */
@@ -13,7 +12,7 @@ import compiler.ir.names.IrReceiverCheck;
 class IrReceiverCheckElision {
 	/** On a body, in place; whether it changed the body. `scratch` is the caller's, reused across functions. */
 	public static function runBody(body:IrBody, scratch:IrPassScratch):Bool {
-		var check = IrSymbol.of(IrReceiverCheck.NAME).id, hasCheck = false;
+		var check = IrReceiverCheck.symbol(), hasCheck = false;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0 && !hasCheck) {
