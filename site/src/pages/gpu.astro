@@ -36,7 +36,7 @@ const sample = record[0]
       <div class="wrap hero">
         <div class="head">
           <h1 id="_top" tabindex="-1">A portable GPU layer, built in.</h1>
-          <p class="lede">Add your own drawing to an app. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
+          <p class="lede">Add your own drawing to an app: charts, maps, editor viewports, games and compute work. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
           <ul class="chips" aria-label="Graphics backends">
             {backends.map(({ api, status }) => <li>{api} · {status}</li>)}
           </ul>
@@ -52,26 +52,6 @@ const sample = record[0]
           <p role="status" hidden></p>
           <figcaption>Circuit Run draws its maze and actors with one GPU draw per frame, with UI controls on top.</figcaption>
         </figure>
-      </div>
-    </section>
-
-    <section>
-      <div class="wrap">
-        <div class="head"><h2>What you can build</h2></div>
-        <div class="grid three">
-          <Card compact>
-            <h3>Views inside your app</h3>
-            <p>Draw a chart, map, preview or editor viewport alongside your app’s controls.</p>
-          </Card>
-          <Card compact>
-            <h3>Games and visualisations</h3>
-            <p>Draw a scene across the whole window and put your controls over it.</p>
-          </Card>
-          <Card compact>
-            <h3>Compute and image work</h3>
-            <p>Dispatch work over storage buffers or images and read the results back, on backends that support compute.</p>
-          </Card>
-        </div>
       </div>
     </section>
 
