@@ -74,10 +74,10 @@ control.
 Generation reuses each unchanged module. The cache covers its source,
 transitive includes, variant settings, and the verified shader compiler.
 Only the active target's compiled shader source reaches the Haxe module.
-Released SDKs include NativeKit’s shader driver and the pinned shader compiler. A source checkout
-can reuse a verified cached compiler or download it on first use.
-Standalone NativeKit shader regeneration can also validate the
-generated GLSL with its separately pinned validator.
+Released SDKs include NativeKit’s shader driver and the pinned shader compiler.
+On first use in a source checkout, the driver downloads the pinned compiler
+with `curl` if it cannot reuse a verified cached copy. NativeKit’s CI validates
+the generated GLSL for its shader fixtures. App builds skip that validation.
 
 For source-defined variants, add define sets keyed by Haxe module in
 `haxeon.json`:
@@ -93,6 +93,16 @@ For source-defined variants, add define sets keyed by Haxe module in
 }
 ```
 
-The generated module exposes the variants as a typed enum and takes a
-variant argument in `Quad.create`. Programs and variants in the same
-module share its vertex layout.
+The generated module declares a typed enum for the variants, named after the
+module: `QuadVariant` for the example above. `import shaders.Quad;` brings it
+into scope, and the variant is an argument of `Quad.create`:
+
+```haxe
+var shader = Quad.create(renderer, QuadVariant.Preview);
+```
+
+A module with several programs declares one enum per program that has
+variants, named after the module and the program: program `quad` in
+`Effects.glsl` takes `EffectsQuadVariant`. The prefix keeps the names distinct
+when several shader modules are imported together. Programs and variants in
+the same module share its vertex layout.

@@ -23,7 +23,7 @@ cat > haxeon.json <<'JSON'
   "version": 1,
   "package": {"name": "shader-build-test"},
   "entry": "Main",
-  "shaderVariants": {"shaders.First": {"default": [], "preview": ["PREVIEW"]}},
+  "shaderVariants": {"shaders.First": {"default": [], "preview": ["PREVIEW"]}, "shaders.Second": {"default": [], "preview": ["PREVIEW"]}},
   "dependencies": {"haxeon-gpu": {"path": "../packages/gpu"}, "shader-library": {"path": "library"}}
 }
 JSON
@@ -39,12 +39,16 @@ import shaders.LibraryQuad;
 class LibraryScene {
 	public static function stride():Int
 		return LibraryQuad.Vertex.stride;
+
+	public static function preview():LibraryQuadVariant
+		return LibraryQuadVariant.Preview;
 }
 HX
 {
     printf '%s\n' '@include ../../includes/Colors.glsl'
     sed -e '/^void main() {/i @include_block colors' \
         -e 's/vec4(position, 0.0, 1.0)/vec4(position * scale(), 0.0, 1.0)/' src/shaders/Second.glsl
+    printf '%s\n' '@program alternate_quad quad_vs quad_fs'
 } > src/shaders/First.glsl
 cat > includes/Colors.glsl <<'GLSL'
 @block colors
@@ -57,6 +61,12 @@ import shaders.Second;
 import LibraryScene;
 
 class Main {
+	static function preview():FirstQuadVariant
+		return FirstQuadVariant.Preview;
+
+	static function secondPreview():SecondVariant
+		return SecondVariant.Preview;
+
 	public static function main():Int
 		return First.Vertex.stride == Second.Vertex.stride && LibraryScene.stride() == 16 ? 0 : 1;
 }
@@ -66,11 +76,26 @@ haxeon check --project haxeon.json
 output=build/host/generated
 first="$output/shaders/First.hx"
 second="$output/shaders/Second.hx"
-rg -q '^enum FirstQuadVariant' "$first"
+rg -q '^enum FirstQuadVariant \{' "$first"
+rg -q '^enum FirstAlternateQuadVariant \{' "$first"
+rg -q '^enum SecondVariant \{' "$second"
 rg -q 'target: ShaderTarget.Glsl410' "$first"
 ! rg -q 'target: ShaderTarget.(Glsl300Es|Hlsl5|MetalMacos|MetalIos)' "$first"
 rg -qF "$project/includes/Colors.glsl" "$output/shaders.dependencies"
-rg -q "^enum LibraryQuadQuadVariant" "$output/shaders/LibraryQuad.hx"
+rg -q '^enum LibraryQuadVariant \{' "$output/shaders/LibraryQuad.hx"
+
+sdk_bin=$("$root/scripts/hashlink-path.sh")
+mkdir -p "$work/sdk/bin"
+cp "$sdk_bin/haxeon" "$work/sdk/bin/"
+ln -s "$sdk_bin/haxeon-cli.hl" "$work/sdk/bin/"
+ln -s "$sdk_bin/../haxeon-sdk.toml" "$work/sdk/"
+status=0
+"$work/sdk/bin/haxeon" __generate-shaders "$project" "$work/generated" glsl410 short '{}' \
+    '["src/shaders"]' > "$work/missing-driver.log" 2>&1 || status=$?
+[[ $status -eq 2 ]]
+diff -u <(printf '%s\n' 'haxeon: Missing nkgpu-shaders. Use a host SDK or build nkgpu-shaders for the host.') \
+    "$work/missing-driver.log"
+cat "$work/missing-driver.log"
 
 signature() {
     stat -c '%y' "$1"
@@ -94,7 +119,8 @@ fi
 rg '^includes/Colors.glsl:2:1: E4001:.*unknown_symbol' "$work/error.log"
 sed -i 's/return unknown_symbol/return 0.75/' includes/Colors.glsl
 rm src/shaders/Second.glsl
-sed -i '/import shaders.Second;/d; s/Second.Vertex.stride/16/' src/Main.hx
+sed -i 's/, "shaders.Second": {"default": \[\], "preview": \["PREVIEW"\]}//' haxeon.json
+sed -i '/import shaders.Second;/d; /static function secondPreview()/,+2d; s/Second.Vertex.stride/16/' src/Main.hx
 haxeon check --project haxeon.json
 [[ ! -e "$second" ]]
 rm src/shaders/First.glsl
@@ -123,4 +149,4 @@ class Main {
 }
 HX
 "$root/.tools/haxe/haxe" -cp "$work/stock-haxe" -main Main --interp
-echo "PASS: project and library shader discovery, variants, target filtering, cache reuse, include invalidation, diagnostics, and removal"
+echo "PASS: project and library shader discovery, variants, target filtering, cache reuse, include invalidation, diagnostics, missing driver, and removal"

@@ -28,8 +28,8 @@ class ShaderBuild {
 		var names = [for (name in sources.keys()) name], paths = [], dependencies:Map<String, Bool> = [];
 		names.sort(Reflect.compare);
 		if (names.length > 0) {
-			var driver = HashLinkPath.executable(home, "nkgpu-shaders");
-			var compiler = pinnedCompiler(home);
+			var driver = shaderDriver(home);
+			var compiler = resolveCompiler(driver);
 			var identity = [digest(driver), digest(compiler), digest(HashLinkPath.executable(home, "haxeon"))];
 			var bytecode = Path.join([HashLinkPath.directory(home), "haxeon-cli.hl"]);
 			if (FileSystem.exists(bytecode))
@@ -176,8 +176,17 @@ class ShaderBuild {
 		}
 	}
 
-	public static function pinnedCompiler(home:String):String {
+	static function shaderDriver(home:String):String {
 		var driver = HashLinkPath.executable(home, "nkgpu-shaders");
+		if (!FileSystem.exists(driver) || FileSystem.isDirectory(driver))
+			throw new UsageError("Missing nkgpu-shaders. Use a host SDK or build nkgpu-shaders for the host.");
+		return driver;
+	}
+
+	public static function pinnedCompiler(home:String):String
+		return resolveCompiler(shaderDriver(home));
+
+	static function resolveCompiler(driver:String):String {
 		var result = ProcessRunner.capture(driver, ["--print-compiler"]);
 		if (result.status != 0)
 			throw new UsageError(StringTools.trim(result.output));

@@ -74,7 +74,9 @@ class ShaderModule {
 		var names = [for (key in programs.keys()) key];
 		names.sort(Reflect.compare);
 		for (key in names) {
-			var field = camel(key), entries = programs.get(key), variantType = name + pascal(key) + "Variant";
+			var field = camel(key),
+				entries = programs.get(key),
+				variantType = name + (names.length == 1 ? "" : pascal(key)) + "Variant";
 			if (entries.length == 1) {
 				declarations.push('public static final $field = ${descriptor(entries[0].program, target)};');
 				if (names.length == 1)
