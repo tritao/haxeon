@@ -26,20 +26,21 @@ const view = source.replace(/^\t/gm, '');
 >
   <div class="landing-content">
     <section class="page-intro paper">
-      <div class="wrap">
+      <div class="wrap hero">
         <div class="head">
           <h1 id="_top" tabindex="-1">A native UI toolkit, built in.</h1>
-          <p class="lede">Retained views drawn on the GPU, the same on every platform. Supported live edits keep your running app’s state.</p>
+          <p class="lede">Describe a window from your app’s state, and the toolkit lays it out and draws it on the GPU, the same on every platform. Supported live edits keep your running app’s state.</p>
           <div class="ctas">
             <a class="btn primary" href={basics}>UI basics</a>
-            <a class="btn ghost" href="/ui/showcase/">Open the Showcase</a>
+            <a class="btn ghost" href={firstApp + '#change-the-ui'}>Your first app</a>
           </div>
         </div>
-        <div class="live-showcase">
-          <img class="showcase-light" src="/ui/showcase-light.png" width="1280" height="900" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
-          <img class="showcase-dark" src="/ui/showcase-dark.png" width="1280" height="900" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
-          <button class="btn primary" type="button" data-showcase-src="/ui/showcase/?embed" data-pending>Start the live Showcase</button>
-          <p role="status" hidden></p>
+        <div class="sample">
+          <CodeCard code={view} lang="haxe" title="src/Main.hx" example="ui-counter" />
+          <figure class="window">
+            <img src="/ui/counter-window.png" width="260" height="208" alt="The counter window after two clicks: My first app, You clicked 2 times, and Click me and Reset buttons." />
+            <figcaption>A <code>Signal</code> holds the count; the window redraws when it changes.</figcaption>
+          </figure>
         </div>
       </div>
     </section>
@@ -48,12 +49,12 @@ const view = source.replace(/^\t/gm, '');
       <div class="wrap">
         <div class="head">
           <h2>How it works</h2>
-          <p class="lede">You describe the window in Haxe. A native core lays it out, shapes its text and draws it on the GPU.</p>
+          <p class="lede">You describe the window in code. A native core lays it out, shapes its text and draws it on the GPU.</p>
         </div>
         <div class="split">
           <Diagram spaced>
             <svg class="drawing" viewBox="0 0 360 344" role="img" aria-labelledby="ui-design-title">
-              <title id="ui-design-title">Your views, in Haxe, feed the Haxe framework, which hands them to the native core for layout, text and the render plan; the GPU layer draws them through the platform graphics API.</title>
+              <title id="ui-design-title">Your views feed the UI framework, which hands them to the native core for layout, text and the render plan; the GPU layer draws them through the platform graphics API.</title>
               <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
               <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
               <rect class="box" x="55" y="156" width="250" height="54" rx="6" />
@@ -61,7 +62,7 @@ const view = source.replace(/^\t/gm, '');
               <rect class="box" x="55" y="306" width="250" height="36" rx="6" />
               <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 210v30m-4-5 4 5 4-5M180 278v26m-4-5 4 5 4-5" />
               <text class="ttl" x="180" y="25" text-anchor="middle">Your views</text>
-              <text class="ttl" x="180" y="93" text-anchor="middle">Haxe framework</text>
+              <text class="ttl" x="180" y="93" text-anchor="middle">UI framework</text>
               <text x="180" y="113" text-anchor="middle">State · Events · Semantics</text>
               <text class="ttl" x="180" y="179" text-anchor="middle">Native core</text>
               <text x="180" y="199" text-anchor="middle">Layout · Text · Render plan</text>
@@ -76,7 +77,7 @@ const view = source.replace(/^\t/gm, '');
             </Card>
             <Card compact>
               <h3>A retained core underneath</h3>
-              <p>Haxe owns behaviour: state, focus, events, semantics and animation. The native core owns layout, text and drawing. It keeps a retained display list, compiles it into a render plan and repaints only what changed.</p>
+              <p>Your code owns behaviour: state, focus, events, semantics and animation. The native core owns layout, text and drawing. It keeps a retained display list, compiles it into a render plan and repaints only what changed.</p>
             </Card>
             <Card compact>
               <h3>One renderer everywhere</h3>
@@ -90,79 +91,52 @@ const view = source.replace(/^\t/gm, '');
     <section>
       <div class="wrap">
         <div class="head">
-          <h2>What it does</h2>
-          <p class="lede">Everything an app needs, and the features that tools and editors are made of.</p>
+          <h2>Every app gets</h2>
+          <p class="lede">The building blocks of an interface, ready to compose.</p>
         </div>
-        <h3 class="group">For every app</h3>
-        <div class="grid three">
-          <Card compact>
-            <h3>Layout and text</h3>
-            <p>Rows, columns and scrolling, sized to <a href={basics + '#layout-and-text'}>grow, fit or stretch</a>. Multilingual text with bidirectional runs, wrapping, and editing with selection and IME composition.</p>
-          </Card>
-          <Card compact>
-            <h3>Widgets and data</h3>
-            <p>Buttons, toggles, sliders, text fields and selects, and large collections in virtualized <a href={basics + '#lists'}>lists</a>, trees and grids.</p>
-          </Card>
-          <Card compact>
-            <h3>Overlays and navigation</h3>
-            <p>Dialogs, menus, popups and tooltips over your content, and <a href={basics + '#navigation'}>tabs</a> and sidebars to move between views.</p>
-          </Card>
-          <Card compact>
-            <h3>Style and themes</h3>
-            <p>Light and dark <a href={basics + '#theming'}>themes</a> or your own tokens, with borders, backgrounds, blurs and colour effects.</p>
-          </Card>
-          <Card compact>
-            <h3>Input and motion</h3>
-            <p>Pointer and keyboard input with focus, <a href={repositorySource('packages/ui/haxe/haxeon/ui/gestures')}>gestures</a> from taps to pinches, and animation with tweens and springs.</p>
-          </Card>
-          <Card compact>
-            <h3>Accessibility</h3>
-            <p>Roles, labels, values and actions in a <a href={repositorySource('packages/ui/haxe/haxeon/ui/semantics')}>semantic tree</a>, and an audit that reports what is missing.</p>
-          </Card>
-        </div>
-        <h3 class="group">For tools and editors</h3>
-        <div class="grid three">
-          <Card compact>
-            <h3>Docking workspaces</h3>
-            <p>Panels that split, tab and dock, with <a href={repositorySource('packages/ui/haxe/haxeon/ui/docking')}>layouts</a> saved and restored between sessions.</p>
-          </Card>
-          <Card compact>
-            <h3>Property inspectors</h3>
-            <p>Typed editors for an object’s properties, with edits applied as <a href={packageDocs + '#property-inspectors-and-external-transactions'}>undoable transactions</a>.</p>
-          </Card>
-          <Card compact>
-            <h3>Commands and undo</h3>
-            <p>Menus, toolbars and a command palette share <a href={packageDocs + '#commands-shortcuts-and-edit-history'}>commands</a>, with scoped shortcuts and an edit history.</p>
-          </Card>
-          <Card compact>
-            <h3>Settings</h3>
-            <p>A registry of typed <a href={repositorySource('packages/ui/haxe/haxeon/ui/settings')}>settings</a>, stored for you, with rebindable keyboard shortcuts.</p>
-          </Card>
-          <Card compact>
-            <h3>Plots and viewports</h3>
-            <p>Plot series of data, and show your own GPU drawing in a <a href="/gpu/">viewport</a> that pans and zooms.</p>
-          </Card>
-          <Card compact>
-            <h3>Inspector and diagnostics</h3>
-            <p>Inspect any view’s layout, style and semantics while the app runs, with <a href={repositorySource('packages/ui/haxe/haxeon/ui/debug')}>frame metrics</a> and render costs.</p>
-          </Card>
-        </div>
+        <ul class="features">
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/></svg><h3>Layout and text</h3><p>Rows, columns and scrolling; multilingual text with wrapping and editing.</p></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="15" cy="12" r="2.5"/></svg><h3>Widgets and data</h3><p>Buttons, toggles, sliders and fields; virtualized lists, trees and grids.</p></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V4h13v13h-5"/></svg><h3>Overlays and navigation</h3><p>Dialogs, menus, popups and tooltips; tabs and sidebars.</p></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg><h3>Style and themes</h3><p>Light and dark themes or your own tokens; borders, blurs and colour effects.</p></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l6 16 2.5-6.5L20 10z"/></svg><h3>Input and motion</h3><p>Pointer, keyboard and focus; gestures from taps to pinches; tweens and springs.</p></li>
+          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4.5" r="1.8"/><path d="M5 8l7 1.5L19 8M12 9.5V14l-3 6M12 14l3 6"/></svg><h3>Accessibility</h3><p>Roles, labels, values and actions in a semantic tree, with an audit.</p></li>
+        </ul>
+        <p class="note"><a href={basics}>Build a small app with them in UI basics</a></p>
       </div>
     </section>
 
     <section>
       <div class="wrap">
         <div class="head">
-          <h2>Your first view</h2>
-          <p class="lede">A view is built from your app’s state. A <code>Signal</code> holds the count, and the window redraws when its value changes.</p>
+          <h2>Built for tools and editors</h2>
+          <p class="lede">The parts that editors, inspectors and other tools are made of, so you build the tool instead of its framework.</p>
         </div>
-        <div class="sample">
-          <CodeCard code={view} lang="haxe" title="src/Main.hx" example="ui-counter" />
-          <figure class="window">
-            <img src="/ui/counter-window.png" width="260" height="208" alt="The counter window after two clicks: My first app, You clicked 2 times, and Click me and Reset buttons." />
-          </figure>
+        <ul class="features tools">
+          <li><h3>Docking workspaces</h3><p>Panels that split, tab and dock, with layouts saved between sessions.</p></li>
+          <li><h3>Property inspectors</h3><p>Typed editors for an object’s properties, with undoable edits.</p></li>
+          <li><h3>Commands and undo</h3><p>Menus, toolbars and a command palette share commands, shortcuts and an edit history.</p></li>
+          <li><h3>Settings</h3><p>Typed settings stored for you, with rebindable keyboard shortcuts.</p></li>
+          <li><h3>Plots and viewports</h3><p>Series of data, and your own GPU drawing in a viewport that pans and zooms.</p></li>
+          <li><h3>Inspector and diagnostics</h3><p>Inspect any view’s layout, style and semantics while the app runs.</p></li>
+        </ul>
+        <p class="note"><a href={packageDocs}>Read the UI package documentation</a></p>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Try the Showcase</h2>
+          <p class="lede">Every control and its states, text in many scripts, graphics and 3D, with an inspector for each view.</p>
         </div>
-        <p class="note"><a href={firstApp + '#change-the-ui'}>Build it in Your first app</a></p>
+        <div class="live-showcase">
+          <img class="showcase-light" src="/ui/showcase-light.png" width="1280" height="900" loading="lazy" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
+          <img class="showcase-dark" src="/ui/showcase-dark.png" width="1280" height="900" loading="lazy" alt="The UI Showcase’s Controls page: buttons, switches, radio options, a slider and progress bars, with a component catalog and an inspector." />
+          <button class="btn primary" type="button" data-showcase-src="/ui/showcase/?embed" data-pending>Start the live Showcase</button>
+          <a href="/ui/showcase/" target="_blank" rel="noopener">Open it in its own tab</a>
+          <p role="status" hidden></p>
+        </div>
       </div>
     </section>
 
@@ -181,13 +155,8 @@ const view = source.replace(/^\t/gm, '');
 
 <style>
   .page-intro .head .ctas { margin-top: 0; }
-  .grid, .sample {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--hx-space-5);
-  }
-  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .sample { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--hx-space-6); align-items: start; }
+  .sample { display: grid; gap: var(--hx-space-4); justify-items: start; }
   .split {
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
@@ -196,17 +165,36 @@ const view = source.replace(/^\t/gm, '');
   }
   .split > :global(.figure) { display: grid; align-content: center; }
   .stack { display: grid; gap: var(--hx-space-5); align-content: start; }
+  .stack p { margin: 0; }
   figure { margin: 0; }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
-  .window img { max-width: 22rem; }
-  .grid p, .stack p { margin: 0; }
-  .landing-content .group { margin: 0 0 var(--hx-space-4); color: var(--sl-color-gray-2); }
-  .grid + .group { margin-top: var(--hx-space-6); }
+  .window img { width: auto; max-width: 100%; }
+  figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
+  .features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--hx-space-6) var(--hx-space-5);
+  }
+  .features li { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--hx-space-3); align-content: start; }
+  .features li > :not(.icon) { grid-column: 2; }
+  .tools li { grid-template-columns: minmax(0, 1fr); border-left: 2px solid var(--sl-color-accent); padding-left: var(--hx-space-4); }
+  .tools li > * { grid-column: 1; }
+  .features h3 { margin: 0 0 var(--hx-space-1); font-size: 1.05rem; }
+  .features p { margin: 0; color: var(--sl-color-gray-2); }
+  .icon { grid-row: span 2; width: 1.5rem; height: 1.5rem; color: var(--sl-color-accent); }
+  .icon :global(*) { fill: none; stroke: currentColor; stroke-width: var(--hx-stroke-icon); stroke-linecap: round; stroke-linejoin: round; }
   .showcase-light, :global([data-theme='light']) .showcase-dark { display: none; }
   :global([data-theme='light']) .showcase-light { display: block; }
   .drawing .lnk { fill: var(--sl-color-text-accent); text-decoration: underline; }
   @media (max-width: 55rem) {
-    .grid, .sample, .split { grid-template-columns: minmax(0, 1fr); }
+    .hero, .split { grid-template-columns: minmax(0, 1fr); }
+    .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 34rem) {
+    .features { grid-template-columns: minmax(0, 1fr); }
   }
 </style>
 
@@ -216,7 +204,7 @@ const view = source.replace(/^\t/gm, '');
     delete start.dataset.pending;
     start.addEventListener('click', () => {
       const frame = document.createElement('iframe');
-      frame.title = 'Haxeon UI Showcase';
+      frame.title = 'UI Showcase';
       frame.src = start.dataset.showcaseSrc!;
       const wrapper = start.parentElement!;
       const status = wrapper.querySelector('[role="status"]') as HTMLElement;
