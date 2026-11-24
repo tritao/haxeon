@@ -9,7 +9,7 @@ import compiler.types.typing.HelperRequests.HelperRequest;
 import haxe.crypto.Sha256;
 
 /**
- * The helpers that copy a `Dynamic` record into an anonymous structure, or into an array of them: one per target type, whichever
+ * The helpers that convert a `Dynamic` value to an anonymous structure or an array of structures: one per target type, whichever
  * functions convert to it, as the provider model has one function per operation and type. Typing records a request in the
  * unit's output (`request`); the helpers are generated from the program's merged requests once the bodies are typed, each body
  * built by `ConversionResolver.dynamicStructureBody` with the span of its type (`TypingSession.helperSpan`), never a requester's.
@@ -20,7 +20,7 @@ class DynamicStructureGenerator {
 	public static function name(target:CompilerType):String
 		return PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(target)).substr(0, 32);
 
-	/** Requests the helper copying a `Dynamic` value into `target` for `origin`, and returns its name. */
+	/** Requests the helper converting a `Dynamic` value to `target` for `origin`, and returns its name. */
 	public static function request(session:TypingSession, target:CompilerType, origin:String, span:SourceSpan):String {
 		var helper = name(target);
 		session.output.requests.add(DynamicStructureHelper(helper, {type: target, origin: origin, span: span}));

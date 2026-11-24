@@ -134,6 +134,7 @@ dynamic-modulo
 dynamic-number-cast
 dynamic-object-empty-array
 dynamic-object-literal
+dynamic-structure-identity
 dynamic-unbox
 empty-array-flow-inference
 empty-literal-inference

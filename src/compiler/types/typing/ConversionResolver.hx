@@ -384,8 +384,8 @@ class ConversionResolver {
 		};
 
 	/**
-	 * Dynamic records have no nominal $anon identity. Check and copy their fields at the boundary, in the one helper of the target
-	 * type (`DynamicStructureGenerator`).
+	 * Reuse the target record layout when present. Otherwise check and copy fields at the boundary, in the one helper
+	 * of the target type (`DynamicStructureGenerator`).
 	 */
 	function dynamicStructure(value:TypedExpression, expected:CompilerType):TypedExpression {
 		var target = structuralCopyTarget(expected);
@@ -427,7 +427,7 @@ class ConversionResolver {
 			default: false;
 		};
 
-	/** The body of the helper copying a `Dynamic` value (the argument `source`) into `target`, with the helper's own `span`. */
+	/** The body of the helper converting a `Dynamic` value (the argument `source`) into `target`, with the helper's own `span`. */
 	public function dynamicStructureBody(target:CompilerType, span:SourceSpan):Array<TypedStatement> {
 		var source = new TypedExpression(TLocal("source"), TDynamic, span);
 		var statements:Array<TypedStatement> = [];
@@ -439,6 +439,14 @@ class ConversionResolver {
 		var result:TypedExpression;
 		switch target {
 			case TAnonymous(name, fields):
+				// Typed field accesses use this record's offsets, so only the exact runtime type can be reused.
+				var matchesLayout = new TypedExpression(TCall("__object_has_exact_type", [
+					source,
+					new TypedExpression(TClassRef(name), target, span)
+				]), TBool, span);
+				statements.push(TIf(matchesLayout, [
+					TReturn(new TypedExpression(TCast(source), target, span), span)
+				], [], span));
 				var output:Array<compiler.types.TypedAst.TypedObjectField> = [];
 				for (field in fields) {
 					var key = new TypedExpression(TStringLiteral(field.name), TString, span);

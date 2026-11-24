@@ -97,17 +97,8 @@ class ObjectMap<K, V> {
 	public function set(key:K, value:V):Void
 		objectMapSet(handle, key, value);
 
-	public function get(key:K):Null<V> {
-		var value = objectMapGet(handle, key);
-		return value == null ? null : stored(value);
-	}
-
-	/**
-	 * A value the table holds, as the `V` it was stored as. The cast is made in a body shared by every reference type, so the
-	 * value crosses back as itself, where a cast to a structure type would copy it into a new record.
-	 */
-	static function stored<T>(value:Dynamic):T
-		return cast value;
+	public function get(key:K):Null<V>
+		return cast objectMapGet(handle, key);
 
 	public function exists(key:K):Bool
 		return objectMapExists(handle, key);

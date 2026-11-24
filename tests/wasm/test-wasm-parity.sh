@@ -74,6 +74,7 @@ inline_cases=(
 	scalar-closure-identity
 	specialized-map-scalar-keys
 	object-map-dynamic-struct-identity
+	dynamic-structure-identity
 	NativeU32RuntimeValues
 	hash-float-dependency
 	hash-float-extremes

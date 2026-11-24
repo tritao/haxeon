@@ -261,13 +261,19 @@ compiler-owned runtime ABI. Arrays support checked indexing, `.length`, `copy`,
 preserves object identity so aliases and fields continue to observe the same
 array. `exists(predicate)` short-circuits at the first match and evaluates its receiver and predicate once.
 
-Converting `Dynamic` to an anonymous structure checks required fields and field types, then copies them into
-compiler-owned record storage. Nested records and record fields containing arrays of records are copied recursively. Direct array casts
-remain checked storage views and preserve their identity. Optional missing
-fields remain null, and malformed fields raise a Haxe exception identifying the field. Recursive structural
-copy targets are rejected with E1016; convert their recursive fields explicitly. Typed recursive structures
-remain supported. These conversions, dynamic object literals, and field reflection are tested on HashLink,
-Wasm32, and Wasm GC.
+Converting `Dynamic` to an anonymous structure reuses a record of the exact target runtime type. The result
+compares equal by identity, and writes through it are visible through every alias. This includes matching
+nested records and records with optional fields. The target's typed field accesses use fixed offsets, so a
+class instance, a dynamic object, or an anonymous record of a different runtime type requires a new record.
+Stock Haxe on HashLink can alias these layouts through virtual views. With Haxeon's copy fallback, writes
+to the new record do not update the source, and the two compare unequal by identity. Nested conversions
+reuse matching records and copy mismatched ones. Arrays of records in the copy fallback are rebuilt, while
+direct array casts remain checked storage views and preserve their identity.
+
+The copy fallback checks required fields and field types. Optional missing fields remain null, and malformed
+fields raise a Haxe exception identifying the field. Recursive structural conversion targets are rejected
+with E1016 because the copy fallback cannot handle cycles. Typed recursive structures remain supported.
+These conversions, dynamic object literals, and field reflection are tested on HashLink, Wasm32, and Wasm GC.
 
 On HashLink, an in-capacity typed array push and in-range `Bytes.get`/`set` use inline instructions. Growth and
 out-of-range byte access use the existing runtime functions. Reference pushes retain the managed write barrier.

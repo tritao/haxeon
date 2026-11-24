@@ -7,6 +7,7 @@ import compiler.ir.passes.values.IrInlineValueLayout;
 import compiler.ir.passes.nullability.IrOptionalFieldStorage;
 import compiler.ir.passes.nullability.IrOptionalValueFlow;
 import compiler.ir.names.IrReferenceIdentity;
+import compiler.ir.analysis.IrExactTypeFacts;
 import compiler.ir.model.IrTypeTools;
 import compiler.ir.passes.objects.IrTypedInterfaceDispatch;
 import compiler.ir.verify.IrVerifier;
@@ -2653,7 +2654,8 @@ class IrGenerator {
 			case TCall("__reference_equal", [left, right]):
 				var operands = lowerOperands([left, right], builder, localTypes);
 				builder.call(IrReferenceIdentity.NAME, operands, Bool);
-			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"):
+			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"
+				|| intrinsic == IrExactTypeFacts.TEST):
 				if (args.length != 2)
 					throw new InternalError("Runtime type test requires value and type operands");
 				var input = lowerExpression(args[0], builder, localTypes),
