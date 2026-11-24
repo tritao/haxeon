@@ -137,7 +137,10 @@
 
 @media (max-width: 560px) {
   .landing-content > section {
-    padding-block: var(--hx-space-7);
+    padding-block: var(--hx-space-6);
+  }
+  .head {
+    margin-bottom: var(--hx-space-5);
   }
 }
 .page-intro .head {
