@@ -42,6 +42,19 @@ class IrNullableScalarFlow implements IrFunctionPass {
 
 	static inline final STAGE = "nullable-scalar-flow";
 
+	/**
+	 * The candidates the stage chose, by name, and the helpers their analysis called for, kept with the functions that may be a
+	 * candidate (`IrWalkRecord`).
+	 */
+	@:processWide("a kept choice's key, only ever read")
+	static final CHOICE = new compiler.ir.reuse.IrStageMemo.IrContributionKey<compiler.ir.reuse.IrWalkRecord<Bool, {
+		candidates:Array<String>,
+		helpers:Map<String, IrType>
+	}>>("nullable-scalar-choice");
+
+	/** The summary of a function with a nullable scalar argument and another result, which may be a candidate. */
+	static inline final MAY_BE_CANDIDATE = 1;
+
 	/** The fact of a function by name: 0 when it is not a candidate, else its arity and nullable scalar arguments. */
 	public static inline final CANDIDATE = 0;
 
@@ -90,35 +103,81 @@ class IrNullableScalarFlow implements IrFunctionPass {
 		return known;
 	}
 
-	public function summarize(fn:IrFunction):Int
+	public function summarize(fn:IrFunction):Int {
+		if (inner(fn.result) != null || isSpecialization(fn.name))
+			return 0;
+		for (arg in fn.arguments)
+			if (inner(arg.type) != null)
+				return MAY_BE_CANDIDATE;
 		return 0;
+	}
 
+	/**
+	 * The candidates, from the functions whose summaries say they may be one: those every caller can pass split, read from their
+	 * bodies. In a session the choice is kept (`CHOICE`) while those functions are the same.
+	 */
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
 		originals = functions;
-		var builder = scratch.bodyBuilder;
-		for (fn in functions) {
-			var hasArgument = false;
-			for (arg in fn.arguments)
-				if (inner(arg.type) != null)
-					hasArgument = true;
-			if (hasArgument && inner(fn.result) == null && !isSpecialization(fn.name))
-				candidates.set(fn.name, fn);
-		}
+		var known = lineage,
+			last = known == null ? null : known.memos.lastResult(CHOICE),
+			// The choice reads nothing of the program but these functions, so a changed one is chosen again.
+			kept = last == null ? null : last.holds(program, [], [], functions, (_, _) -> null);
 		var made = new IrBodyNullableScalars(scratch, candidates, helpers);
 		flow = made;
-		var changed = true;
+		if (kept != null) {
+			var choice = kept.result, chosen = [for (name in choice.candidates) name => true];
+			for (index in 0...functions.length)
+				if (summaries[index] & MAY_BE_CANDIDATE != 0 && chosen.exists(functions[index].name))
+					candidates.set(functions[index].name, functions[index]);
+			for (name => type in choice.helpers)
+				helpers.set(name, type);
+			if (checks) {
+				var now:Map<String, IrType> = [];
+				if (!sameNames(choose(functions, summaries, new Map(), now), candidates) || !sameNames(now, helpers))
+					throw new InternalError('--check-reuse: the nullable scalar flow reused a choice that differs from choosing now');
+			}
+		} else
+			choose(functions, summaries, candidates, helpers);
+		if (known != null) {
+			if (kept == null)
+				kept = new compiler.ir.reuse.IrWalkRecord(program, [], [], functions.copy(),
+					[for (summary in summaries) summary & MAY_BE_CANDIDATE != 0 ? true : null],
+					{candidates: [for (name in candidates.keys()) name], helpers: helpers.copy()});
+			known.memos.keepResult(CHOICE, kept);
+			for (name in candidates.keys())
+				inputs.set(name, known.version(name));
+		}
+	}
+
+	/**
+	 * Chooses into `chosen` the candidates among `functions` (by their summaries), which it returns; the helpers their analysis
+	 * calls for go to `needs`.
+	 */
+	function choose(functions:Array<IrFunction>, summaries:Array<Int>, chosen:Map<String, IrFunction>,
+			needs:Map<String, IrType>):Map<String, IrFunction> {
+		for (index in 0...functions.length)
+			if (summaries[index] & MAY_BE_CANDIDATE != 0)
+				chosen.set(functions[index].name, functions[index]);
+		var analysis = new IrBodyNullableScalars(scratch, chosen, needs), builder = scratch.bodyBuilder, changed = true;
 		while (changed) {
 			changed = false;
-			for (fn in [for (fn in candidates) fn])
-				if (!made.analyze(fn.bodyIn(types, builder), true)) {
-					candidates.remove(fn.name);
+			for (fn in [for (fn in chosen) fn])
+				if (!analysis.analyze(fn.bodyIn(types, builder), true)) {
+					chosen.remove(fn.name);
 					changed = true;
 				}
 		}
-		var known = lineage;
-		if (known != null)
-			for (name in candidates.keys())
-				inputs.set(name, known.version(name));
+		return chosen;
+	}
+
+	static function sameNames<T>(left:Map<String, T>, right:Map<String, T>):Bool {
+		for (name in left.keys())
+			if (!right.exists(name))
+				return false;
+		for (name in right.keys())
+			if (!left.exists(name))
+				return false;
+		return true;
 	}
 
 	public function fact(kind:Int, key:String):Int {

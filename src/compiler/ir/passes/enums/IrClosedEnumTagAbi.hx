@@ -40,6 +40,11 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	public static final REACH =
 		new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrWalkRecord<Bool, IrEscapeResults>>("closed-tag-reach");
 
+	/** The closed tags, kept with what each function lets escape (`IrTagEscapeRecord`). */
+	@:processWide("a kept choice's key, only ever read")
+	static final CHOICE = new compiler.ir.reuse.IrStageMemo
+		.IrContributionKey<IrWalkRecord<IrTagEscapeRecord, Map<String, Bool>>>("closed-tag-choice");
+
 	/** The fact of an enum tag: 1 when it is closed. */
 	static inline final CLOSED = 0;
 
@@ -185,11 +190,66 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 	public function summarize(fn:IrFunction):Int
 		return 0;
 
-	/** Chooses the closed tags: the payload-free enums that nothing lets escape. */
+	/**
+	 * Chooses the closed tags: the payload-free enums that nothing lets escape. In a session the choice is kept with what each
+	 * function lets escape (`CHOICE`), so a build whose functions let the same escape takes it.
+	 */
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
-		closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true];
-		if (!closed.keys().hasNext())
+		var known = lineage;
+		if (known == null) {
+			closed = choose(functions, names);
 			return;
+		}
+		var given = [
+			program.entryPoint,
+			IrObjectReflection.usedByProgram(program) ? "reflection" : "",
+			(reflectableObjects ?? []).join(",")
+		],
+			last = known.memos.lastResult(CHOICE),
+			memo = known.memos.contribution(ESCAPES),
+			// What a function's kind lets escape is not in its record: one of such a kind that changed is chosen again.
+			kept = last == null ? null : last.holds(program, given, [], functions, (fn, record) -> {
+				if (rootsOfKind(fn))
+					return null;
+				var now = IrTagEscapeRecord.of(fn, types, builder, known);
+				return now.same(record) ? now : null;
+			});
+		if (kept != null) {
+			closed = kept.result.copy();
+			if (known.checks && !sameNames(choose(functions, names), closed))
+				throw new InternalError('--check-reuse: the closed enum tag ABI reused a choice that differs from choosing now');
+		} else {
+			if (last != null)
+				last.giveBack(memo, known);
+			closed = choose(functions, names);
+			kept = new IrWalkRecord(program, given, [], functions.copy(),
+				[for (fn in functions) IrTagEscapeRecord.of(fn, types, builder, known)], closed.copy());
+		}
+		known.memos.keepResult(CHOICE, kept);
+	}
+
+	/** Whether `fn`'s kind lets types escape (`choose`). */
+	static function rootsOfKind(fn:IrFunction):Bool
+		return switch fn.kind {
+			case ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_), EnumTagAdapter(_, _): true;
+			default: false;
+		};
+
+	static function sameNames(left:Map<String, Bool>, right:Map<String, Bool>):Bool {
+		for (name in left.keys())
+			if (!right.exists(name))
+				return false;
+		for (name in right.keys())
+			if (!left.exists(name))
+				return false;
+		return true;
+	}
+
+	/** The closed tags of the program of `functions`. */
+	function choose(functions:Array<IrFunction>, names:IrFunctionIndex):Map<String, Bool> {
+		var closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true];
+		if (!closed.keys().hasNext())
+			return closed;
 		var natives = [for (n in program.natives) n.name => n];
 		var roots:Array<IrType> = [], rooted:Array<Bool> = [];
 		function escape(type:IrType):Void
@@ -278,6 +338,7 @@ class IrClosedEnumTagAbi implements IrFunctionPass {
 		}
 		for (name in reach.collectKept(REACH, roots, _ -> false, lineage).keys())
 			closed.remove(name);
+		return closed;
 	}
 
 	public function fact(kind:Int, key:String):Int
@@ -454,7 +515,7 @@ class IrTagEscapeRecord {
 		return known;
 	}
 
-	function same(other:IrTagEscapeRecord):Bool
+	public function same(other:IrTagEscapeRecord):Bool
 		return escaped.join(",") == other.escaped.join(",") && callees.join(",") == other.callees.join(",")
 			&& arguments.join(",") == other.arguments.join(",") && closures.join(",") == other.closures.join(",")
 			&& mapStores.join(",") == other.mapStores.join(",");

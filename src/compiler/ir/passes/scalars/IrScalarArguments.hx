@@ -31,6 +31,15 @@ private typedef ScalarCallPlan = {
 	final arguments:Array<IrValueId>;
 }
 
+/** The candidates `IrScalarArguments` chose, by name, which a session keeps (`IrScalarArguments.CHOICE`). */
+private typedef ScalarArgumentChoice = {
+	final candidates:Array<String>;
+	final pinned:Array<String>;
+	final freshOnly:Array<String>;
+	final terminalOnly:Array<String>;
+	final methodNames:Array<String>;
+}
+
 /**
  * Direct-call specialization for nonescaping value arguments; HashLink also supports scalar result slots. On IR bodies
  * (docs/design/IR_CORE_COLUMNS.md, migration): value joins are split first (`IrValuePhiScalarization`), then each candidate is
@@ -43,7 +52,27 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 	public static final CLOSURE_NAMES =
 		new compiler.ir.reuse.IrStageMemo.IrContributionKey<Array<String>>("closure-names");
 
+	/**
+	 * The choice of candidates, kept with what it read (`IrWalkRecord`): of each function that may be a candidate, all of it; of
+	 * each other function, the names of the functions it takes as closures (but for the Wasm ABI, which reads none).
+	 */
+	@:processWide("a kept choice's key, only ever read")
+	static final CHOICE = new compiler.ir.reuse.IrStageMemo
+		.IrContributionKey<compiler.ir.reuse.IrWalkRecord<Array<String>, ScalarArgumentChoice>>("scalar-argument-choice");
+
+	/** What the choice records of a function it reads whole (`CHOICE`): one that changed is chosen again. */
+	@:processWide("a marker compared by identity, never changed")
+	static final READ_WHOLE:Array<String> = [];
+
 	public static inline final PREFIX = "$scalar-arguments:";
+
+	// Summary bits: what the choice reads of a function.
+
+	/** A function the scalar ABI permits whose signature names a class, which may then be a candidate. */
+	static inline final SIGNATURE = 1;
+
+	/** A function that takes closures, whose targets the choice keeps. */
+	static inline final CLOSES = 2;
 
 	/** The fact of the candidates as a whole: their names, what kind each is and their signatures, interned (`IrFacts.intern`). */
 	static inline final CANDIDATES = 0;
@@ -132,23 +161,123 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		declarations = IrInlineValueLayout.declarationsFact(program.objects, lineage);
 	}
 
-	/** The candidates, chosen over the whole program; only functions with a value in their signature are read. */
+	/**
+	 * The candidates, chosen over the whole program from the functions the summaries name: those that may take the scalar ABI
+	 * (`SIGNATURE`) and those that take closures (`CLOSES`). In a session the choice is kept (`CHOICE`) while the program's tables
+	 * and those functions give it the same, and the clones are made only when a stage asks for one.
+	 */
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		originals = functions;
+		var known = lineage;
+		if (known == null) {
+			choose(functions, summaries);
+			return;
+		}
+		var memos = known.memos,
+			given = [argumentsOnly ? "arguments only" : ""],
+			last = memos.lastResult(CHOICE),
+			memo = memos.contribution(CLOSURE_NAMES),
+			kept = last == null ? null : last.holds(program, given, [], functions,
+				(fn, closures) -> closures == READ_WHOLE || mayBeCandidate(fn) ? null : sameNames(closures,
+				closureNames(fn)) ? closures : null);
+		if (kept != null) {
+			var choice = kept.result;
+			for (name in choice.candidates)
+				candidates.set(name, bodyNamed(name));
+			for (name in choice.pinned)
+				pinnedCandidates.set(name, bodyNamed(name));
+			for (name in choice.freshOnly)
+				freshOnly.set(name, true);
+			for (name in choice.terminalOnly)
+				terminalOnly.set(name, true);
+			for (name in choice.methodNames)
+				methodNames.set(name, true);
+			if (known.checks)
+				checkChoice(functions, summaries, choice);
+			memos.keepResult(CHOICE, kept);
+		} else {
+			if (last != null)
+				last.eachSummary((fn, closures) -> {
+					var version = known.versionOf(fn);
+					if (closures != READ_WHOLE && version != 0 && memo.get(version) == null)
+						memo.keep(version, closures);
+				});
+			choose(functions, summaries);
+			var read:Array<Null<Array<String>>> = [for (index in 0...functions.length) {
+				var fn = functions[index];
+				mayBeCandidate(fn) ? READ_WHOLE : argumentsOnly ? null : summaries[index] & CLOSES != 0
+					? closureNames(fn) : [];
+			}];
+			memos.keepResult(CHOICE,
+				new compiler.ir.reuse.IrWalkRecord(program, given, [], functions.copy(), read, chosen()));
+		}
+		candidatesPrint = printCandidates();
+		for (name in candidates.keys())
+			inputs.set(name, known.version(name));
+		for (name in pinnedCandidates.keys())
+			inputs.set(name, known.version(name));
+	}
+
+	/** The body of the function `name` of the program. */
+	function bodyNamed(name:String):IrBody {
+		var fn = byName.get(name);
+		if (fn == null)
+			throw new InternalError('Missing scalar ABI candidate "$name"');
+		return fn.bodyIn(types, scratch.bodyBuilder);
+	}
+
+	/** What `choose` chose, as names. */
+	function chosen():ScalarArgumentChoice {
+		function sorted(keys:Iterator<String>):Array<String> {
+			var names = [for (name in keys) name];
+			names.sort(Reflect.compare);
+			return names;
+		}
+		return {
+			candidates: sorted(candidates.keys()),
+			pinned: sorted(pinnedCandidates.keys()),
+			freshOnly: sorted(freshOnly.keys()),
+			terminalOnly: sorted(terminalOnly.keys()),
+			methodNames: sorted(methodNames.keys())
+		};
+	}
+
+	/** `--check-reuse`: choosing again gives the kept choice. */
+	function checkChoice(functions:Array<IrFunction>, summaries:Array<Int>, kept:ScalarArgumentChoice):Void {
+		var fresh = new IrScalarArguments(program, argumentsOnly, types, scratch, null);
+		fresh.choose(functions, summaries);
+		var now = fresh.chosen();
+		if (!sameNames(now.candidates, kept.candidates) || !sameNames(now.pinned, kept.pinned)
+			|| !sameNames(now.freshOnly, kept.freshOnly) || !sameNames(now.terminalOnly, kept.terminalOnly)
+			|| !sameNames(now.methodNames, kept.methodNames))
+			throw new InternalError('--check-reuse: the scalar ABI reused a choice of candidates that differs from choosing now');
+	}
+
+	static function sameNames(left:Array<String>, right:Array<String>):Bool
+		return IrObjectTools.sameNames(left, right);
+
+	/** Whether `fn` may be a candidate as the program's tables stand: a function the scalar ABI permits with a value in its signature. */
+	function mayBeCandidate(fn:IrFunction):Bool
+		return IrScalarAbiEligibility.permits(fn.kind, false) && signatureHasValue(fn);
+
+	/** The candidates, chosen over the whole program; only functions with a value in their signature are read. */
+	function choose(functions:Array<IrFunction>, summaries:Array<Int>):Void {
 		// Typed closure signatures are an ABI decision, including forwarding closures.
 		// Keep their scalar entry points available before IrScalarClosures rewrites
 		// indirect calls; judging those calls against the boxed ABI here creates a
 		// cycle that prevents allocation-free forwarding of value arguments/results.
 		var closureTargets:Map<String, Bool> = [];
 		if (!argumentsOnly)
-			for (fn in functions)
-				for (name in closureNames(fn))
-					closureTargets.set(name, true);
+			for (index in 0...functions.length)
+				if (summaries[index] & CLOSES != 0)
+					for (name in closureNames(functions[index]))
+						closureTargets.set(name, true);
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
-		for (fn in functions) {
-			if (!IrScalarAbiEligibility.permits(fn.kind, false) || !signatureHasValue(fn))
+		for (position in 0...functions.length) {
+			var fn = functions[position];
+			if (summaries[position] & SIGNATURE == 0 || !mayBeCandidate(fn))
 				continue;
 			var body = fn.bodyIn(types, scratch.bodyBuilder);
 			var resultType = body.types.type(body.result),
@@ -265,18 +394,28 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 				}
 			}
 		}
-		candidatesPrint = printCandidates();
-		var known = lineage;
-		if (known != null) {
-			for (name in clones.keys())
-				inputs.set(name, known.version(name));
-			for (name in pinnedClones.keys())
-				inputs.set(name, known.version(name));
-		}
 	}
 
-	public function summarize(fn:IrFunction):Int
-		return 0;
+	public function summarize(fn:IrFunction):Int {
+		var flags = 0;
+		if (IrScalarAbiEligibility.permits(fn.kind, false) && namesObject(fn))
+			flags |= SIGNATURE;
+		if (closureNames(fn).length > 0)
+			flags |= CLOSES;
+		return flags;
+	}
+
+	/** Whether `fn`'s signature names a class: only such a function can have a value in it, whichever classes are values. */
+	static function namesObject(fn:IrFunction):Bool {
+		inline function isObject(type:IrType):Bool
+			return type.match(Obj(_));
+		if (isObject(fn.result))
+			return true;
+		for (argument in fn.arguments)
+			if (isObject(argument.type))
+				return true;
+		return false;
+	}
 
 	public function fact(kind:Int, key:String):Int {
 		switch kind {
@@ -370,21 +509,19 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			return rewritten;
 		rewritten = rewritten.copy();
 		// Every candidate left has its clone.
-		for (fn in originals) {
-			var clone = clones.get(fn.name);
-			if (clone != null)
-				rewritten.push(publish(fn.name, clone));
-		}
-		if (!pinnedClones.keys().hasNext())
+		for (fn in originals)
+			if (candidates.exists(fn.name))
+				rewritten.push(publish(fn.name, false));
+		if (!pinnedCandidates.keys().hasNext())
 			return rewritten;
 		// Receiver-preserving variants are only useful when a rewritten call selects one.
 		// Keep their transitive dependencies, but do not publish every possible variant into
 		// the program: an unused variant still consumes module and JIT metadata.
-		var pinnedByName:Map<String, IrBody> = [],
+		var pinnedByName:Map<String, String> = [],
 			needed:Map<String, Bool> = [],
 			pending:Array<String> = [];
-		for (clone in pinnedClones)
-			pinnedByName.set(clone.name, clone);
+		for (name in pinnedCandidates.keys())
+			pinnedByName.set(cloneName(name, true), name);
 		function discover(body:IrBody):Void {
 			for (block in 0...body.blockCount()) {
 				var row = body.firstRow(block);
@@ -408,19 +545,14 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 			var name = pending.pop();
 			if (name == null)
 				break;
-			var dependency = pinnedByName.get(name);
-			if (dependency == null)
+			var source = pinnedByName.get(name);
+			if (source == null)
 				throw new InternalError('Missing receiver-preserving clone "$name"');
-			discover(dependency);
+			discover(cloneOf(source, true));
 		}
 		for (fn in originals)
-			if (pinnedCandidates.exists(fn.name)) {
-				var clone = pinnedClones.get(fn.name);
-				if (clone == null)
-					throw new InternalError('Missing receiver-preserving clone for "${fn.name}"');
-				if (needed.exists(clone.name))
-					rewritten.push(publish(fn.name, clone));
-			}
+			if (pinnedCandidates.exists(fn.name) && needed.exists(cloneName(fn.name, true)))
+				rewritten.push(publish(fn.name, true));
 		return rewritten;
 	}
 
@@ -510,23 +642,38 @@ class IrScalarArguments implements compiler.ir.pipeline.IrFunctionPass {
 		return false;
 	}
 
-	/** The function a clone this stage made is: frozen when a session keeps it. */
+	/** The name of the clone of candidate `name`, the receiver-preserving one when `pinned`. */
+	static function cloneName(name:String, pinned:Bool):String
+		return PREFIX + (pinned ? "$receiver:" : "") + name;
+
+	/** The clone of candidate `name`, made the first time it is asked for. */
+	function cloneOf(name:String, pinned:Bool):IrBody {
+		var made = pinned ? pinnedClones : clones, known = made.get(name);
+		if (known == null) {
+			var body = (pinned ? pinnedCandidates : candidates).get(name);
+			if (body == null)
+				throw new InternalError('Missing scalar ABI candidate "$name"');
+			known = specialize(body, pinned);
+			made.set(name, known);
+		}
+		return known;
+	}
+
 	/**
-	 * The clone `body` of the candidate `name`, derived (`IrFunctionStages.derived`): in a session last build's while the
-	 * candidate's version and what the clone read hold.
+	 * The clone of the candidate `name`, derived (`IrFunctionStages.derived`): in a session last build's while the candidate's
+	 * version and what the clone read hold, and made only otherwise.
 	 */
-	function publish(name:String, body:IrBody):IrFunction {
+	function publish(name:String, pinned:Bool):IrFunction {
 		var known = lineage, candidate = byName.get(name);
 		if (candidate == null)
 			throw new InternalError('Missing scalar ABI candidate "$name"');
 		var source = candidate.bodyIn(types, scratch.bodyBuilder);
-		return compiler.ir.pipeline.IrFunctionStages.derived("scalar-arguments", body.name, this, inputs.get(name) ?? 0,
-			known,
-			known != null && known.checks, types, scratch.bodyBuilder, reader -> {
+		return compiler.ir.pipeline.IrFunctionStages.derived("scalar-arguments", cloneName(name, pinned), this,
+			inputs.get(name) ?? 0, known, known != null && known.checks, types, scratch.bodyBuilder, reader -> {
 				reader.read(CANDIDATES, "");
 				readCandidateCalls(source, reader);
 				reader.read(REWRITE, "");
-				IrFunction.ofOwnedBody(body);
+				IrFunction.ofOwnedBody(cloneOf(name, pinned));
 			});
 	}
 
