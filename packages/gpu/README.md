@@ -47,6 +47,9 @@ buffer and one draw.
 [Particles](examples/particles/) moves 8,192 particles with a compute shader
 and draws them from the same storage buffer.
 
+[Viewport](examples/viewport/) puts GPU drawing in a UI layout: controls in a
+sidebar drive a compute fountain shown in a `GpuViewport`.
+
 [Circuit Run](examples/circuit-run/) is a Linux and WebGL2 maze-chase sample
 that submits a GPU maze and a retained UI HUD to one platform surface.
 

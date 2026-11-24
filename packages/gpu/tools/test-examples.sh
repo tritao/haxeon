@@ -6,7 +6,7 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 seconds=${GPU_EXAMPLE_SECONDS:-10}
 
-for example in triangle particles circuit-run; do
+for example in triangle particles viewport circuit-run; do
 	project="$root/packages/gpu/examples/$example/haxeon.json"
 	"$root/scripts/haxeon" build --project "$project"
 	set +e

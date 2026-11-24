@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "package": {
+    "name": "haxeon-gpu-viewport"
+  },
+  "entry": "Main",
+  "sourceRoots": [
+    "src"
+  ],
+  "scopeSourceRoots": false,
+  "dependencies": {
+    "haxeon-gpu": {
+      "path": "../.."
+    },
+    "haxeon-ui": {
+      "path": "../../../ui"
+    }
+  },
+  "target": "host",
+  "outputDir": "build",
+  "app": {
+    "name": "Viewport",
+    "id": "dev.haxeon.viewport",
+    "platforms": [
+      "linux",
+      "macos",
+      "windows"
+    ]
+  }
+}
