@@ -3,24 +3,51 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
 import Diagram from '../components/home/Diagram.astro';
+import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import circuitRenderer from '../../../packages/gpu/examples/circuit-run/src/CircuitRenderer.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
 
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
 const gpuDocs = repositorySource('packages/gpu/README.md');
 const circuit = 'packages/gpu/examples/circuit-run/';
-const backends = [
-  { platform: 'Linux', api: 'OpenGL 3.3 core', shader: 'GLSL', status: 'Supported' },
-  { platform: 'Web', api: 'WebGL2', shader: 'GLSL ES', status: 'Experimental' },
-  { platform: 'macOS', api: 'Metal', shader: 'MSL', status: 'Experimental' },
-  { platform: 'Windows', api: 'Direct3D 11', shader: 'HLSL 5', status: 'Experimental' },
+const backends: { platform: string; api: string; status: Status; compute: string; timestamps: string }[] = [
+  { platform: 'Linux', api: 'OpenGL 3.3 core', status: 'Supported', compute: 'GL 4.3+ drivers', timestamps: 'Yes' },
+  { platform: 'Web', api: 'WebGL2', status: 'Experimental', compute: 'No', timestamps: 'No' },
+  { platform: 'macOS', api: 'Metal', status: 'Experimental', compute: 'Yes', timestamps: 'Depends on GPU' },
+  { platform: 'Windows', api: 'Direct3D 11', status: 'Experimental', compute: 'Yes', timestamps: 'Yes' },
 ];
-const features = [
-  { platform: 'Linux', compute: 'With OpenGL 4.3 drivers', timestamps: 'Yes' },
-  { platform: 'Web', compute: 'No', timestamps: 'No' },
-  { platform: 'macOS', compute: 'Yes', timestamps: 'If the GPU supports them' },
-  { platform: 'Windows', compute: 'Yes', timestamps: 'Yes' },
-];
+const shaderSource = `@vs quad_vs
+layout(location=0) in vec2 position;
+layout(location=1) in vec2 uv;
+layout(std140, binding=0) uniform vs_params {
+    mat4 transform;
+};
+out vec2 texcoord;
+
+void main() {
+    gl_Position = transform * vec4(position, 0.0, 1.0);
+    texcoord = uv;
+}
+@end
+
+@fs quad_fs
+layout(binding=0) uniform texture2D tex;
+layout(binding=0) uniform sampler smp;
+in vec2 texcoord;
+layout(location=0) out vec4 color;
+
+void main() {
+    color = texture(sampler2D(tex, smp), texcoord);
+}
+@end
+
+@program quad quad_vs quad_fs`;
+const shaderUse = `import haxeon.gpu.Pipeline;
+import shaders.Quad;
+
+var shader = Quad.create(renderer);
+var pipeline = Pipeline.begin(renderer, shader,
+  Quad.Vertex.layout).build();`;
 const record = circuitRenderer.match(/^\tpublic function record\([^\n]*\{[\s\S]*?^\t\}/m);
 if (!record) throw new Error('Missing CircuitRenderer.record in the GPU page sample');
 const sample = record[0]
@@ -44,7 +71,7 @@ const sample = record[0]
           <h1 id="_top" tabindex="-1">A portable GPU layer, built in.</h1>
           <p class="lede">Add your own drawing to an app: charts, maps, editor viewports, games and compute work. Buffers, pipelines and passes are objects in your code, submitted through each platform’s graphics API.</p>
           <ul class="chips" aria-label="Graphics backends">
-            {backends.map(({ api, status }) => <li>{api} · {status}</li>)}
+            {backends.map(({ api, status }) => <li><StatusBadge status={status}>{api} · {status}</StatusBadge></li>)}
           </ul>
           <p>The GPU package is not a game engine. It has no scene graph, asset pipeline or physics.</p>
           <div class="ctas">
@@ -139,31 +166,46 @@ const sample = record[0]
       </div>
     </section>
 
+    <section>
+      <div class="wrap">
+        <div class="head">
+          <h2>Shaders</h2>
+          <p class="lede">Write a shader once in GLSL. The build compiles it for each backend with <a href="https://github.com/floooh/sokol-tools">sokol-shdc</a> and generates a typed module for it.</p>
+        </div>
+        <div class="grid">
+          <CodeCard code={shaderSource} lang="glsl" title="src/shaders/Quad.glsl" />
+          <div class="stack">
+            <CodeCard code={shaderUse} lang="haxe" title="src/Main.hx" />
+            <Card compact>
+              <h3>Typed, not hand-counted</h3>
+              <p><code>Quad.Vertex</code> gives the vertex layout, offsets and stride, and each uniform block becomes a record with checked std140 offsets.</p>
+            </Card>
+            <Card compact>
+              <h3>Rebuilt while you work</h3>
+              <p><code>haxeon run --watch</code> rebuilds a shader when it or one of its includes changes.</p>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="backends">
       <div class="wrap">
         <div class="head">
-          <h2>Backends and shaders</h2>
-          <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. Write shaders for each API you target; they are not translated between APIs.</p>
+          <h2>Backends</h2>
+          <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API.</p>
         </div>
-        <div class="split">
+        <div class="split backends">
           <div class="tables">
-          <table aria-label="GPU backends">
-            <thead><tr><th scope="col">Platform</th><th scope="col">Graphics API</th><th scope="col">Shaders</th><th scope="col">Status</th></tr></thead>
-            <tbody>
-              {backends.map(({ platform, api, shader, status }) => (
-                <tr><th scope="row">{platform}</th><td>{api}</td><td>{shader}</td><td>{status}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <table aria-label="Optional GPU features by backend">
-            <thead><tr><th scope="col">Platform</th><th scope="col">Compute</th><th scope="col">GPU timestamps</th></tr></thead>
-            <tbody>
-              {features.map(({ platform, compute, timestamps }) => (
-                <tr><th scope="row">{platform}</th><td>{compute}</td><td>{timestamps}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <p class="note">Image and buffer readback work on every backend.</p>
+            <table aria-label="GPU backends">
+              <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
+              <tbody>
+                {backends.map(({ platform, api, status, compute, timestamps }) => (
+                  <tr><th scope="row">{platform}<span class="api-name">{api}</span></th><td><StatusBadge status={status} /></td><td>{compute}</td><td>{timestamps}</td></tr>
+                ))}
+              </tbody>
+            </table>
+            <p class="note">Image and buffer readback work on every backend.</p>
           </div>
           <Diagram spaced>
             <svg class="drawing" viewBox="0 0 360 204" role="img" aria-labelledby="gpu-stack-title">
@@ -205,7 +247,6 @@ const sample = record[0]
         <div class="head"><h2>Not yet</h2></div>
         <ul class="not-yet">
           <li>Vulkan</li>
-          <li>Shader translation between graphics APIs</li>
           <li>Live editing for GPU apps: <a href={docsUrl('reference/CLI.md')}><code>haxeon run --watch</code></a> relaunches them on edits</li>
         </ul>
       </div>
@@ -228,10 +269,13 @@ const sample = record[0]
     gap: var(--hx-space-5);
     align-items: start;
   }
-  .stack { display: grid; gap: var(--hx-space-5); }
+  .stack { display: grid; gap: var(--hx-space-5); align-content: start; }
+  .api-name { display: block; font-weight: 400; font-size: 0.85rem; color: var(--sl-color-gray-3); }
   .api { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: stretch; }
   .api > :global(.figure) { display: grid; align-content: center; }
-  .tables { display: grid; gap: var(--hx-space-5); }
+  .tables { display: grid; gap: var(--hx-space-3); align-content: start; }
+  .backends { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: stretch; }
+  .backends > :global(.figure) { display: grid; align-content: center; }
   .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
   figure, .grid p, .stack p { margin: 0; }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
@@ -241,17 +285,10 @@ const sample = record[0]
   .not-yet { margin: 0; padding-inline-start: 1.25rem; }
   li + li { margin-top: var(--hx-space-2); }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; }
-  .chips li {
-    margin: 0;
-    padding: 3px 9px;
-    font-size: 0.8rem;
-    border-radius: var(--hx-radius-pill);
-    background: var(--sl-color-accent-low);
-    color: var(--sl-color-white);
-  }
+  .chips li { margin: 0; }
   table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
   th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--sl-color-gray-5); }
-  thead th { font: 600 0.75rem var(--sl-font-mono); color: var(--sl-color-gray-3); }
+  thead th { font: 600 0.75rem var(--sl-font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--sl-color-gray-3); }
   .circuit-preview { position: relative; display: grid; justify-items: start; gap: var(--hx-space-3); }
   .circuit-preview [hidden] { display: none; }
   .circuit-preview p { margin: 0; }
