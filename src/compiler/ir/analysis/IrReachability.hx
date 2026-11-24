@@ -350,7 +350,7 @@ class IrBodyEdges {
 	}
 
 	function readEdges(body:IrBody):Void {
-		var summary = this, seen:Map<String, Bool> = [];
+		var summary = this, seen:Map<String, Bool> = [], mentioned:Map<Int, Bool> = [];
 		function add(kind:Int, name:String, detail:Null<IrType>):Void {
 			summary.kinds.push(kind);
 			summary.names.push(name);
@@ -367,9 +367,11 @@ class IrBodyEdges {
 			while (row >= 0 && row != terminator) {
 				var output = body.output(row), opcode = body.opcode(row);
 				if (output.exists()) {
-					var type = body.valueType(output);
-					if (once(compiler.ir.model.TypeKey.of(type).toString()))
-						add(MENTION, "", type);
+					var type = body.valueTypeId(output);
+					if (!mentioned.exists(type)) {
+						mentioned.set(type, true);
+						add(MENTION, "", body.types.type(type));
+					}
 				}
 				switch opcode {
 					case IrOpcode.NewObject:

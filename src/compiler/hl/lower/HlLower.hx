@@ -76,6 +76,16 @@ class HlLower {
 	/** The numbers requests are recorded under (`HlRequestKeys`): the lowered cache's, or this lowering's own. */
 	final requestKeys:compiler.hl.incremental.HlRequestKeys;
 
+	/**
+	 * By type id in the bodies' table (`typesById`), the HashLink type lowering gave the type and the number its request is
+	 * recorded under, or -1: a register's type is then two array reads, not two lookups by the type's structure.
+	 */
+	final typeIndicesById:Array<Int> = [];
+
+	final typeKeysById:Array<Int> = [];
+
+	var typesById:Null<compiler.ir.model.IrTypeIds> = null;
+
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
 
@@ -1223,6 +1233,11 @@ class HlLower {
 	function lowerFunction(source:IrBody):HlFunction {
 		this.body = source;
 		var body = source;
+		if (body.types != typesById) {
+			typesById = body.types;
+			typeIndicesById.resize(0);
+			typeKeysById.resize(0);
+		}
 		nextLabel = 0;
 		for (block in 0...body.blockCount())
 			if (body.blockId(block) >= nextLabel)
@@ -2700,7 +2715,7 @@ class HlLower {
 			return registers[value];
 		var index = types.length;
 		registers[value] = index;
-		types.push(internType(body.valueType(value)));
+		types.push(internTypeId(body.valueTypeId(value)));
 		return index;
 	}
 
@@ -2923,6 +2938,29 @@ class HlLower {
 		var index = HlRemap.typeIndex(symbols, type);
 		if (recordedKeys != null)
 			record(TypeOf(type, index));
+		return index;
+	}
+
+	/** `internType` of the type with id `id` in the body's table, remembered by id (`typeIndicesById`). */
+	function internTypeId(id:Int):Int {
+		while (typeIndicesById.length <= id) {
+			typeIndicesById.push(-1);
+			typeKeysById.push(-1);
+		}
+		var index = typeIndicesById[id];
+		if (index < 0) {
+			index = HlRemap.typeIndex(symbols, requireBody().types.type(id));
+			typeIndicesById[id] = index;
+		}
+		var keys = recordedKeys;
+		if (keys != null) {
+			var key = typeKeysById[id];
+			if (key < 0) {
+				key = requestKeys.keyOf(TypeOf(requireBody().types.type(id), index));
+				typeKeysById[id] = key;
+			}
+			requestKeys.recordKey(key, index, keys, recordedAnswers);
+		}
 		return index;
 	}
 

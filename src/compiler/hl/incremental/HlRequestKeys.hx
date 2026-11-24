@@ -83,13 +83,16 @@ class HlRequestKeys {
 	 * Notes `request` for the function being recorded: appends its number and answer to `keys` and `answers` unless the function
 	 * asked it already (asking again changes nothing, and the answer is the same).
 	 */
-	public function record(request:HlSymbolRequest, keys:Array<Int>, answers:Array<Int>):Void {
-		var key = keyOf(request);
+	public function record(request:HlSymbolRequest, keys:Array<Int>, answers:Array<Int>):Void
+		recordKey(keyOf(request), answerOf(request), keys, answers);
+
+	/** `record` of the request numbered `key`, which a caller that asks it often keeps rather than finding it again. */
+	public function recordKey(key:Int, answer:Int, keys:Array<Int>, answers:Array<Int>):Void {
 		if (seen[key] == recording)
 			return;
 		seen[key] = recording;
 		keys.push(key);
-		answers.push(answerOf(request));
+		answers.push(answer);
 	}
 
 	/** The answer `request` recorded, as `HlRequestAnswers.answer` gives it. */
@@ -103,7 +106,8 @@ class HlRequestKeys {
 			case MethodSlotKnown(_, _, answer): answer;
 		};
 
-	function keyOf(request:HlSymbolRequest):Int {
+	/** The number of `request`, given the first time it is asked. */
+	public function keyOf(request:HlSymbolRequest):Int {
 		var known:Null<Int> = switch request {
 			case ConstInt(value, _): ints.get(value);
 			case ConstFloat(value, _): floats.get(floatKey(value));
