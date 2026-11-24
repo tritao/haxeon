@@ -2544,6 +2544,10 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 		 * Request a forward-compatible OpenGL context.
 		 */
 		NK_SURFACE_FORWARD_COMPATIBLE = 32;
+		/**
+		 * Follows the parent window content area instead of using fixed bounds.
+		 */
+		NK_SURFACE_FILL_WINDOW = 64;
 	}
 	/**
 	 * Scheduling mode of a graphics surface frame callback.

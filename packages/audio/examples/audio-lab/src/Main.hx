@@ -62,9 +62,6 @@ class Main {
 			switch (value) {
 				case WindowClose(source) if (source.rawValue() == windowHandle.rawValue()):
 					running = false;
-				case WindowResize(source, width, height) if (source.rawValue() == windowHandle.rawValue()):
-					if (width > 0 && height > 0)
-						surface.setBounds(0, 0, width, height);
 				case SurfaceResize(source, width, height, _, _) if (surface.ownsEventSource(source)):
 					logicalWidth = width;
 					logicalHeight = height;

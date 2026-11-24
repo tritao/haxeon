@@ -116,11 +116,7 @@ class Main implements App {
 		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width);
 		#end
 		hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
-		#if !circuit_run_web
-		window.onResize(function(width, height) {
-			if (width > 0 && height > 0) surface.setBounds(0, 0, width, height);
-		});
-		#end
+
 		window.onClose(function() running = false);
 		window.onKey(handleKey);
 		snapshotPositions();

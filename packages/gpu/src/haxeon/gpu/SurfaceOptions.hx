@@ -12,7 +12,8 @@ class SurfaceOptions {
 			throw haxeon.platform.BindingError.invalidArgument("SurfaceOptions.forGpu",
 				"Surface dimensions must be positive");
 		var options = new PlatformSurfaceOptions(width, height);
-		options.flags = (flags ?? SurfaceFlags.empty()) | SurfaceFlags.Depth | SurfaceFlags.Stencil;
+		options.flags = (flags ?? SurfaceFlags.empty()) | SurfaceFlags.Depth | SurfaceFlags.Stencil
+			| SurfaceFlags.FillWindow;
 		options.api = NativeKitGpu.nkgpu_default_graphics_api();
 		if (options.api == GraphicsApi.Opengl) {
 			options.flags = options.flags | SurfaceFlags.ForwardCompatible;

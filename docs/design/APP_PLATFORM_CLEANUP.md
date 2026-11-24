@@ -28,10 +28,9 @@ Implemented with step 1. Fields are grouped before methods.
 
 ## 3. Surfaces follow their window
 
-Add `NK_SURFACE_FILL_WINDOW` (`SurfaceFlags.FillWindow`): the backend keeps the
-surface bounds equal to the window's content area, as the web canvas already
-does. `SurfaceOptions.forGpu` sets it by default; apps that place surfaces
-themselves leave it off.
+Implemented. `SurfaceFlags.FillWindow` follows the window content area.
+`SurfaceOptions.forGpu` enables it by default. Apps with manually placed
+surfaces can clear the flag or create their own platform surface options.
 
 ## 4. Default fonts on every target
 
