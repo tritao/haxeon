@@ -55,6 +55,11 @@ class GpuViewport implements View {
 	var draggingPointer:Null<Int>;
 	var lastPointerX:Float;
 	var lastPointerY:Float;
+	/** While set, paints through `fitted`, fitted to the laid-out size with this margin. */
+	var fitMargin:Null<Float> = null;
+	final fitted:ViewportCamera;
+	var paintedWidth = 0.0;
+	var paintedHeight = 0.0;
 
 	public function new(key:String, content:ViewportContent, ?camera:ViewportCamera, ?style:LayoutStyle,
 			?label:String) {
@@ -62,6 +67,7 @@ class GpuViewport implements View {
 		this.key = key;
 		this.content = content;
 		this.camera = camera == null ? new ViewportCamera() : camera;
+		fitted = new ViewportCamera(1.0, 0.0, 0.0, this.camera.minZoom, this.camera.maxZoom);
 		this.style = style == null ? defaultStyle() : style.copy();
 		this.background = Color.rgba(0.055, 0.065, 0.08, 1.0);
 		this.backgroundTop = Color.rgba(0.894, 0.910, 0.922, 1.0);
@@ -103,11 +109,22 @@ class GpuViewport implements View {
 		return this;
 	}
 
-	public function fit(width:Float, height:Float, margin:Float = 16.0):Bool return camera.fit(content.width(),
-		content.height(),
-		width,
-		height,
-		margin);
+	/** Fits the content once on `camera`, ending any fitToView. */
+	public function fit(width:Float, height:Float, margin:Float = 16.0):Bool {
+		fitMargin = null;
+		return camera.fit(content.width(), content.height(), width, height, margin);
+	}
+
+	/**
+	 * Fits the content to the viewport's laid-out size and keeps it fitted as
+	 * the viewport resizes. The first pan or zoom continues from the fitted view
+	 * on `camera` and ends the fitting.
+	 */
+	public function fitToView(margin:Float = 16.0):GpuViewport {
+		if (!finite(margin) || margin < 0.0) throw "Viewport fit margin must be finite and non-negative";
+		fitMargin = margin;
+		return this;
+	}
 
 	public function setAppearance(background:Color, gridColor:Color, gridSize:Float = 1.0,
 			gridEnabled:Bool = true):Void {
@@ -147,7 +164,8 @@ class GpuViewport implements View {
 			node.computedStyle = computed;
 			node.semantics = new Semantics(AccessibilityRole.Group, label == null ? "GPU viewport" : label);
 			var cacheKey = "viewport:" + content.revision()
-				+ ":camera:" + camera.revision + ":appearance:" + appearanceKey() + ":overlay:" + overlayRevision;
+				+ ":camera:" + camera.revision + ":fit:" + (fitMargin == null ? "off" : Std.string(fitMargin))
+				+ ":appearance:" + appearanceKey() + ":overlay:" + overlayRevision;
 			node.onPaint(function(canvas, geometry) paint(canvas, geometry), cacheKey);
 			node.on(UiEventKind.PointerDown, function(event) {
 				if (!enabled || event.button != panButton) return;
@@ -159,6 +177,7 @@ class GpuViewport implements View {
 			});
 			node.on(UiEventKind.PointerMove, function(event) {
 				if (draggingPointer == null || event.pointerId != draggingPointer) return;
+				takeCamera();
 				camera.panByScreen(event.localX - lastPointerX, event.localY - lastPointerY);
 				lastPointerX = event.localX;
 				lastPointerY = event.localY;
@@ -168,6 +187,7 @@ class GpuViewport implements View {
 			node.on(UiEventKind.PointerCancel, finishPointer);
 			node.on(UiEventKind.Scroll, function(event) {
 				if (!enabled || event.deltaY == 0.0) return;
+				takeCamera();
 				camera.zoomAt(Math.pow(1.1, -event.deltaY / 100.0), event.localX, event.localY);
 
 				event.stopPropagation();
@@ -177,6 +197,16 @@ class GpuViewport implements View {
 		});
 	}
 
+	/** Hands navigation to `camera`, starting from the fitted view the user is looking at. */
+	function takeCamera():Void {
+		if (fitMargin == null) return;
+		if (paintedWidth > 0.0 && paintedHeight > 0.0)
+			camera.fit(content.width(), content.height(), paintedWidth, paintedHeight, fitMargin);
+		fitMargin = null;
+	}
+
+	function view():ViewportCamera return fitMargin == null ? camera : fitted;
+
 	function finishPointer(event:UiEvent):Void {
 		if (draggingPointer == null || event.pointerId != draggingPointer) return;
 		draggingPointer = null;
@@ -184,6 +214,13 @@ class GpuViewport implements View {
 	}
 
 	function paint(canvas:Canvas, geometry:ResolvedLayoutItem):Void {
+		paintedWidth = geometry.width;
+		paintedHeight = geometry.height;
+		var fitMargin = fitMargin;
+		if (fitMargin != null && geometry.width > 0.0 && geometry.height > 0.0 && content.width() > 0.0
+			&& content.height() > 0.0)
+			fitted.fit(content.width(), content.height(), geometry.width, geometry.height, fitMargin);
+		var shown = view();
 		canvas.fillLinearGradientRect(new Rect(0.0, 0.0, geometry.width, geometry.height),
 			0.0,
 			0.0,
@@ -194,8 +231,8 @@ class GpuViewport implements View {
 				new GradientStop(1.0, backgroundBottom)
 			]);
 		canvas.withState(function(viewCanvas) {
-			viewCanvas.translate(-camera.panX * camera.zoom, -camera.panY * camera.zoom);
-			viewCanvas.scale(camera.zoom, camera.zoom);
+			viewCanvas.translate(-shown.panX * shown.zoom, -shown.panY * shown.zoom);
+			viewCanvas.scale(shown.zoom, shown.zoom);
 			if (gridEnabled) paintGrid(viewCanvas, geometry);
 			content.paint(viewCanvas, new Rect(0.0, 0.0, content.width(), content.height()));
 		});
@@ -204,8 +241,9 @@ class GpuViewport implements View {
 
 	function paintGrid(canvas:Canvas, geometry:ResolvedLayoutItem):Void {
 		if (gridSize <= 0.0 || !finite(gridSize)) return;
-		var topLeft = camera.viewportToWorld(0.0, 0.0);
-		var bottomRight = camera.viewportToWorld(geometry.width, geometry.height);
+		var shown = view();
+		var topLeft = shown.viewportToWorld(0.0, 0.0);
+		var bottomRight = shown.viewportToWorld(geometry.width, geometry.height);
 		var startX = Math.floor(topLeft.x / gridSize) * gridSize;
 		var startY = Math.floor(topLeft.y / gridSize) * gridSize;
 		var endX = Math.ceil(bottomRight.x / gridSize) * gridSize;
@@ -227,15 +265,16 @@ class GpuViewport implements View {
 		}
 		if (x != startX || y != startY) canvas.strokeTransient(path.build(),
 			gridColor,
-			1.0 / camera.zoom,
+			1.0 / shown.zoom,
 			LineCap.Butt,
 			LineJoin.Miter);
 	}
 
+	/** Fills the space its parent leaves, beside other views in a row or column or alone. */
 	static function defaultStyle():LayoutStyle {
 		var result = new LayoutStyle();
-		result.width = LayoutAxis.stretch();
-		result.height = LayoutAxis.stretch();
+		result.width = LayoutAxis.grow();
+		result.height = LayoutAxis.grow();
 		return result;
 	}
 

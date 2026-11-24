@@ -867,6 +867,8 @@ class FrameworkSmoke {
 		if (!retainedRectanglesFollowThePaint()) return 278;
 		if (!retainedPaintFingerprintFollowsInputs())
 			throw "Retained paint fingerprint missed a content or interaction change";
+		if (!gpuViewportFitsToView())
+			throw "GPU viewport fitting missed a resize or lost the fitted view on navigation";
 		if (!hostPendingResourcesValid()) return 273;
 		if (!coordinateMathValid()) return 240;
 		var anchorIndex = new VirtualExtentIndex(100, 20.0, 40.0, 200.0, 0, 0, 2400.0);
@@ -4816,6 +4818,27 @@ class FrameworkSmoke {
 		var swept = count(canvas.retainedRects) == 10 && count(canvas.paintedRects) == 0;
 		canvas.releaseRetained();
 		return first.keys().hasNext() && reused && swept && count(canvas.retainedRects) == 0;
+	}
+
+	/** A fitted viewport follows its laid-out size without touching the camera, which navigation then takes over. */
+	@:access(haxeon.ui.widgets.GpuViewport) static function gpuViewportFitsToView():Bool {
+		function paintAt(viewport:GpuViewport, width:Float, height:Float):Void
+			viewport.paint(new Canvas(), new ResolvedLayoutItem(1, 0, 0.0, 0.0, width, height,
+				new Rect(0.0, 0.0, width, height), new Rect(0.0, 0.0, width, height), Transform2D.identity(), 0.0));
+		var camera = new ViewportCamera();
+		var viewport = new GpuViewport("fitted", new SmokeViewportContent(640.0, 480.0), camera).fitToView(0.0);
+		paintAt(viewport, 320.0, 180.0);
+		if (viewport.view().zoom != 0.375 || camera.zoom != 1.0 || camera.revision != 1) return false;
+		paintAt(viewport, 640.0, 480.0);
+		if (viewport.view().zoom != 1.0 || viewport.view().panX != 0.0) return false;
+		paintAt(viewport, 320.0, 180.0);
+		viewport.takeCamera();
+		if (viewport.view() != camera || camera.zoom != 0.375 || camera.panX != viewport.fitted.panX) return false;
+		paintAt(viewport, 640.0, 480.0);
+		if (camera.zoom != 0.375) return false;
+		var once = new GpuViewport("once", new SmokeViewportContent(640.0, 480.0)).fitToView();
+		once.fit(320.0, 240.0, 0.0);
+		return once.view() == once.camera && once.camera.zoom == 0.5;
 	}
 
 	@:access(haxeon.ui.core.RenderNode) static function retainedPaintFingerprintFollowsInputs():Bool {
