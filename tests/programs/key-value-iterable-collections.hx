@@ -92,11 +92,27 @@ class Main {
 		array.push(3);
 		lines.push(describe(held, Std.string));
 
+		// A stored structure comes back as the same object, as any reference value does.
+		var record = {count: 1};
+		var records = new ObjectMap<Key, {count:Int}>();
+		records.set(first, record);
+		records.set(second, {count: 2});
+		var stored:{count:Int} = records.get(first);
+		stored.count = 5;
+		lines.push(record.count + "," + (stored == record));
+		records.remove(first);
+		var remaining:{count:Int} = records.get(second);
+		lines.push(records.exists(first) + "," + remaining.count);
+		var recordMap:Map<Key, {count:Int}> = [first => record];
+		var fromMap:{count:Int} = recordMap.get(first);
+		lines.push(Std.string(fromMap == record));
+
 		// Expected output from stock Haxe 4.3.7.
 		var expected = [
 			"0=1,1=2", "3=4,5=6", "a=7,b=8", "Left=9,Right=10", "Number(1)=17,Number(2)=18", "same=11,same=12",
 			"same=13,same=14",
-			"109", "same=14,same=15", "2=27", "same=13,same=14", "0=1,1=2", "0=1,1=2,2=3"
+			"109", "same=14,same=15", "2=27", "same=13,same=14", "0=1,1=2", "0=1,1=2,2=3", "5,true",
+			"false,2", "true"
 		];
 		#if eval
 		for (line in lines)
