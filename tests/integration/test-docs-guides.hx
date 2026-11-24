@@ -121,7 +121,9 @@ function main() {
 		}
 		var log = Path.join([project, "build.log"]);
 		expectStatus(haxeon(["build"], project, log), 0, log, '${example.slug}: haxeon build');
-		if (app)
+		if (app && OWN_FRAME_LOOP.indexOf(example.slug) >= 0)
+			drawFor(project);
+		else if (app)
 			openWindow(project, ["run", "--"], "run");
 		else
 			runProgram(project);
@@ -371,6 +373,25 @@ function openWindow(project:String, arguments:Array<String>, name:String, ?execu
 		Script.fail('FAIL: ${Path.withoutDirectory(project)} ($name) rendered no frame; its log:\n${File.getContent(log)}');
 	if (PLATFORM == "linux" && !FileSystem.exists(Path.join([capture, "frame.png"])))
 		Script.fail('FAIL: ${Path.withoutDirectory(project)} ($name) wrote no frame.png; its log:\n${File.getContent(log)}');
+}
+
+/**
+ * Guides whose apps run their own frame loop through Runtime.launch instead of the UI host, so they take no `--frames`
+ * or `--capture`: each runs for a few seconds and passes if it is still drawing when the time is up.
+ */
+final OWN_FRAME_LOOP = ["06-gpu-basics"];
+
+function drawFor(project:String):Void {
+	var log = Path.join([project, "run.log"]), seconds = "8";
+	var command = [Script.haxeon(), "run"];
+	var status = hasXvfb() ? Script.run("xvfb-run", ["-a", "timeout", seconds].concat(command),
+		{cwd: project, log: log}) : Script.run("timeout", [seconds].concat(command), {
+			cwd: project,
+			log: log
+		});
+	if (status != 124)
+		Script.fail('FAIL: ${Path.withoutDirectory(project)} stopped with status $status within ${seconds}s; its log:\n'
+			+ File.getContent(log));
 }
 
 /** This machine's platform, as `[app].platforms` and the runners name it. */

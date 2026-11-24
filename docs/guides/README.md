@@ -8,6 +8,7 @@ Step-by-step guides to building apps with Haxeon. Read them in order: each one b
 3. [UI basics](03-ui-basics.md): layout, text, lists, forms, navigation and theming, in a small task list app.
 4. [Calling a C or C++ library](04-calling-c-and-cpp.md): import a header, build the library with CMake, and call it.
 5. [Shipping](05-shipping.md): a desktop executable built ahead of time, Android packages and the web, as far as each goes.
+6. [GPU basics](06-gpu-basics.md): draw with the GPU package, run a compute shader, and show GPU drawing inside a UI.
 
 The commands and options are in the [CLI reference](../reference/CLI.md), and the project file in the
 [manifest reference](../reference/MANIFEST.md).

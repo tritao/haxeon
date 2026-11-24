@@ -2,33 +2,18 @@ import haxeon.gpu.Buffer;
 import haxeon.gpu.CommandBuffer;
 import haxeon.gpu.Pipeline;
 import haxeon.gpu.Renderer;
-import haxeon.gpu.SurfaceOptions;
-import haxeon.platform.App;
 import haxeon.platform.FrameTick;
-import haxeon.platform.Runtime;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
-import haxeon.platform.WindowOptions;
 
 import shaders.Triangle;
 
-class Main implements App {
-	final surface:Surface;
-	var renderer:Renderer;
-	var commands:CommandBuffer;
-	var open = true;
+/** The GPU resources, created once the surface is ready, and the draw each frame. */
+class Scene {
+	final renderer:Renderer;
+	final commands:CommandBuffer;
 
-	public static function main():Void
-		Runtime.launch(runtime -> new Main(runtime));
-
-	function new(runtime:Runtime) {
-		var window = runtime.createWindow(new WindowOptions(640, 480));
-		window.onClose(() -> open = false);
-		surface = window.createSurface(SurfaceOptions.forGpu(640, 480));
-		runtime.drive(surface);
-	}
-
-	public function ready():Void {
+	public function new(surface:Surface) {
 		renderer = Renderer.create(surface);
 		var shader = Triangle.create(renderer);
 		var pipeline = Pipeline.begin(renderer, shader, Triangle.Vertex.layout).build();
@@ -44,7 +29,7 @@ class Main implements App {
 		commands.draw(0, 3, 1);
 	}
 
-	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
+	public function draw(tick:FrameTick, frame:SurfaceFrame):Void {
 		scoped var batch = renderer.batch()
 			.windowPass(tick.width, tick.height)
 			.commands(commands)
@@ -54,11 +39,6 @@ class Main implements App {
 		frame.submit([step]);
 	}
 
-	public function afterFrame():Void {}
-
-	public function shouldQuit():Bool
-		return !open;
-
 	public function dispose():Void
-		if (renderer != null) renderer.dispose();
+		renderer.dispose();
 }

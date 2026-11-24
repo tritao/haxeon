@@ -41,14 +41,10 @@ unavailable on the current backend.
 
 ## Examples
 
-[Triangle](examples/triangle/) is the smallest GPU app: one shader, one vertex
-buffer and one draw.
-
-[Particles](examples/particles/) moves 8,192 particles with a compute shader
-and draws them from the same storage buffer.
-
-[Viewport](examples/viewport/) puts GPU drawing in a UI layout: controls in a
-sidebar drive a compute fountain shown in a `GpuViewport`.
+The [GPU basics](../../docs/guides/06-gpu-basics.md) guide draws a triangle, a
+particle fountain moved by a compute shader, and that fountain in a
+`GpuViewport` beside UI controls. Its projects are in
+[docs/guides/examples/06-gpu-basics](../../docs/guides/examples/06-gpu-basics/).
 
 [Circuit Run](examples/circuit-run/) is a Linux and WebGL2 maze-chase sample
 that submits a GPU maze and a retained UI HUD to one platform surface.

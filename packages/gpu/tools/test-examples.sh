@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Builds each GPU example and runs it under a virtual display. An example that fails to start exits early; one that is still
-# drawing when the time runs out passes.
+# Builds the GPU package's examples and runs each under a virtual display; the GPU basics guide's projects run with the
+# guide test. An example that fails to start exits early; one that is still drawing when the time runs out passes.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 seconds=${GPU_EXAMPLE_SECONDS:-10}
 
-for example in triangle particles viewport circuit-run; do
+for example in circuit-run; do
 	project="$root/packages/gpu/examples/$example/haxeon.json"
 	"$root/scripts/haxeon" build --project "$project"
 	set +e

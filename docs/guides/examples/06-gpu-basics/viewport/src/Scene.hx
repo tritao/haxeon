@@ -1,44 +1,23 @@
 import haxeon.gpu.Renderer;
-import haxeon.gpu.SurfaceOptions;
-import haxeon.platform.App;
 import haxeon.platform.FrameTick;
 import haxeon.platform.GraphicsImageRef;
-import haxeon.platform.Runtime;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
-import haxeon.platform.WindowOptions;
 import haxeon.ui.Color;
 import haxeon.ui.GraphicsSurface;
 import haxeon.ui.core.GraphicsSurfaceViewportContent;
 import haxeon.ui.host.UiOverlay;
 import haxeon.ui.widgets.GpuViewport;
-import nativekit.ffi.NativeKitTypes;
 
-class Main implements App {
-	final surface:Surface;
-	final overlay:UiOverlay;
-	var renderer:Renderer;
-	var fountain:Fountain;
-	var picture:GraphicsImageRef;
-	var content:GraphicsSurfaceViewportContent;
-	var view:FountainView;
-	var open = true;
+/** The fountain's GPU work and the UI that shows it in a viewport beside its controls. */
+class Scene {
+	final renderer:Renderer;
+	final fountain:Fountain;
+	final picture:GraphicsImageRef;
+	final content:GraphicsSurfaceViewportContent;
+	final view:FountainView;
 
-	public static function main():Void
-		Runtime.launch(runtime -> new Main(runtime));
-
-	function new(runtime:Runtime) {
-		var options = new WindowOptions(960, 600);
-		options.title = "Viewport";
-		options.flags = WindowFlags.Resizable;
-		var window = runtime.createWindow(options);
-		window.onClose(() -> open = false);
-		surface = window.createSurface(SurfaceOptions.forGpu(960, 600));
-		overlay = UiOverlay.attach(window, surface, runtime.events);
-		runtime.drive(surface);
-	}
-
-	public function ready():Void {
+	public function new(surface:Surface) {
 		renderer = Renderer.create(surface);
 		if (!renderer.features().compute)
 			throw "Viewport needs compute shaders: OpenGL 4.3, Direct3D 11 or Metal";
@@ -50,7 +29,8 @@ class Main implements App {
 		view = new FountainView(fountain, viewport);
 	}
 
-	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
+	/** Draws the fountain into its image, then the UI that composites it. */
+	public function draw(tick:FrameTick, frame:SurfaceFrame, overlay:UiOverlay):Void {
 		scoped var batch = fountain.record(tick.deltaSeconds);
 		var gpu = batch.frameStep();
 		defer gpu.dispose();
@@ -61,14 +41,8 @@ class Main implements App {
 		frame.submit([gpu, ui]);
 	}
 
-	public function afterFrame():Void {}
-
-	public function shouldQuit():Bool
-		return !open;
-
 	public function dispose():Void {
-		overlay.dispose();
-		if (picture != null) picture.dispose();
-		if (renderer != null) renderer.dispose();
+		picture.dispose();
+		renderer.dispose();
 	}
 }
