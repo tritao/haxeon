@@ -1873,8 +1873,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				continue;
 			var requestedValue = classDecl.isStruct == true || hasMetadata(classDecl.metadata, "value"),
 				isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue);
-			if (!requestedValue && !isNativeValue)
+			if (!requestedValue && !isNativeValue) {
+				if (hasMetadata(classDecl.metadata, "assertLayout"))
+					BodyTyper.fail("E1022", "@:assertLayout requires a native layout", classDecl.span);
 				continue;
+			}
 			for (field in classDecl.fields)
 				if (!field.isStatic && field.type == null)
 					BodyTyper.fail("E1022",
@@ -1916,6 +1919,50 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					span: classDecl.span});
 		}
 		layoutNativeClasses(records);
+		for (entry in valueClasses) {
+			var declaration = entry.declaration;
+			for (metadata in declaration.metadata)
+				if (metadata.name == "assertLayout")
+					validateLayoutAssertion(declaration.name, metadata);
+		}
+	}
+
+	function validateLayoutAssertion(name:String, metadata:compiler.syntax.Ast.AstMetadata):Void {
+		var layout = session.nativeLayoutsByName.get(name);
+		if (layout == null)
+			BodyTyper.fail("E1022", "@:assertLayout requires a native layout", metadata.span);
+		var args = metadata.arguments;
+		if (args.length == 0 || args.length % 2 == 0)
+			BodyTyper.fail("E1022", "@:assertLayout expects a size followed by field names and offsets", metadata.span);
+
+		function expected(index:Int):Int {
+			return switch args[index] {
+				case IntegerLiteral(value, _) if (value >= 0): value;
+				case _:
+					BodyTyper.fail("E1022", "@:assertLayout expects a non-negative integer", metadata.span);
+					0;
+			}
+		}
+
+		var size = expected(0);
+		if (layout.size != size)
+			BodyTyper.fail("E1022", 'sizeof<$name>() is ${layout.size}, expected $size', metadata.span);
+		for (index in 0...Std.int(args.length / 2)) {
+			var argument = 1 + index * 2;
+			var field = switch args[argument] {
+				case StringLiteral(value, _): value;
+				case _:
+					BodyTyper.fail("E1022", "@:assertLayout expects a field name string", metadata.span);
+					"";
+			}
+			var actual = Lambda.find(layout.fields, candidate -> candidate.name == field);
+			if (actual == null)
+				BodyTyper.fail("E1022", 'Record "$name" has no field "$field"', metadata.span);
+			var offset = expected(argument + 1);
+			if (actual.offset != offset)
+				BodyTyper.fail("E1022", 'offsetof<$name>("$field") is ${actual.offset}, expected $offset',
+					metadata.span);
+		}
 	}
 
 	static function requiredNativeLayout(layoutsByTarget:Map<String, Map<String, TypedNativeLayout>>, target:String,

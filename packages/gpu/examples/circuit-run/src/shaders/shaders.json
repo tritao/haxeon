@@ -3,7 +3,7 @@
   "embed_sources": true,
   "sources": [
     {
-      "file": "maze.glsl",
+      "file": "Maze.glsl",
       "programs": [
         "maze"
       ]

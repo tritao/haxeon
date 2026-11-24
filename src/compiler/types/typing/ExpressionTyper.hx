@@ -851,7 +851,8 @@ class ExpressionTyper {
 
 	static function isBuiltInMetadata(name:String):Bool
 		return switch name {
-			case "access" | "allow" | "annotation" | "arrayAccess" | "cNative" | "discoverMethods" | "expose" | "flat"
+			case "access" | "allow" | "annotation" | "arrayAccess" | "assertLayout" | "cNative" | "discoverMethods"
+				| "expose" | "flat"
 				| "forward" | "from" | "hiddenUnless" | "hlNative" | "hlType" | "id" | "isVar" | "keep" | "metadata"
 				| "noCompletion" | "noInline" | "op" | "optional" | "portable" | "privateAccess" | "pure"
 				| "renamedFrom" | "repr" | "value" | "wire": true;

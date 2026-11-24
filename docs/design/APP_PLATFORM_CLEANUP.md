@@ -70,19 +70,14 @@ sources carry the `#version` and precision lines.
 
 ### Where it stands
 
-The shared NativeKit generator produces C tables and versioned reflection.
-The UI uses the C tables and keeps its shader source header byte-identical.
-Circuit Run declares the maze once in `maze.glsl`; `generate-shader-haxe.py`
-turns its reflection into a checked-in `MazeShader.hx`, and CI checks both
-regenerations.
-
-That works, but it is a script pipeline, not something an app author uses:
-the app checks in three generated files (`MazeShader.hx`,
-`maze.reflection.json`, `maze.shader.h`) and a manifest, the GPU package's
-`check-shaders.sh` names Circuit Run, every target embeds every backend's
-source, and the generated `switch renderer.backend()` repeats the variant
-choice that `nkgpu_shader_create_from_table` already makes in C.
-`Renderer.backend()` also returns the FFI enum.
+NativeKit generates normalized reflection and C tables. The UI uses the tables
+and keeps its original shader source header byte-identical. Circuit Run's
+generated `shaders.Maze` module provides the program and vertex layout.
+`Shader.create(renderer, program)` passes the table through HXI, and NativeKit
+selects the target. The Haxe generator also emits checked native uniform layouts. Generated
+record names include their module name to keep declarations such as
+`vs_params` independent across shaders. Generated files and manifests remain checked in until build
+integration is in place.
 
 ### End state
 
@@ -151,7 +146,7 @@ running anything clever:
   we need do we carry that patch on the pinned commit and build `sokol-shdc`
   in CI.
 
-### Remaining work, in order
+### Implementation order
 
 1. **NativeKit driver.** The reflection becomes a NativeKit-defined schema
    (attributes with format and HLSL semantic, uniform blocks with std140

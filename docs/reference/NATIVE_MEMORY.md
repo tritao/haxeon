@@ -95,6 +95,11 @@ alignof<Vec2>();
 offsetof<Vec2>("y");
 ```
 
+Use `@:assertLayout(size, "field", offset, ...)` on a native record to
+check its size and selected field offsets during type checking. It uses the
+same target ABI as `sizeof` and `offsetof`. This is useful when a generated
+record must match a shader block or a layout defined outside Haxeon.
+
 The CLI uses a registered HXI target when present. Otherwise `wasm32` and
 `wasmgc` select the 32-bit profile, while `hl` selects the 64-bit profile
 (`wasm64` is rejected until it is implemented). `native-abi-target` selects an

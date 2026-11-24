@@ -1,0 +1,10 @@
+{
+  "embed_sources": true,
+  "reflection": "fixture.reflection.json",
+  "sources": [
+    {
+      "file": "Fixture.glsl",
+      "programs": ["fixture"]
+    }
+  ]
+}

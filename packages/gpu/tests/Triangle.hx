@@ -27,6 +27,7 @@ import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
 import haxeon.gpu.SurfaceOptions as GpuSurfaceOptions;
 import haxeon.gpu.Timestamp;
+import haxeon.gpu.VertexLayout;
 import haxeon.platform.App;
 import haxeon.platform.AppLoop;
 import haxeon.platform.FrameRecorder;
@@ -41,8 +42,14 @@ import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
+import shaders.Fixture;
 
 class Triangle {
+	static final vertexLayout = new VertexLayout(28, [
+		{slot: 0, bufferIndex: 0, offset: 0, format: VertexFormat.Float2},
+		{slot: 1, bufferIndex: 0, offset: 8, format: VertexFormat.Float3},
+		{slot: 2, bufferIndex: 0, offset: 20, format: VertexFormat.Float2},
+	]);
 	@:access(haxeon.platform.AppLoop)
 	static function verifyFrameCompletionRecovery(runtime:Runtime, surface:Surface, app:App):Void {
 		surface.setFrameMode(SurfaceFrameMode.OnDemand);
@@ -144,10 +151,7 @@ class Triangle {
 	}
 
 	static function createPipeline(renderer:Renderer, shader:Shader):Pipeline
-		return Pipeline.begin(renderer, shader, 28)
-			.attribute(0, 0, 0, VertexFormat.Float2)
-			.attribute(1, 0, 8, VertexFormat.Float3)
-			.attribute(2, 0, 20, VertexFormat.Float2)
+		return Pipeline.begin(renderer, shader, vertexLayout)
 			.depthStencil(true)
 			.indexType(IndexType.UInt16)
 			.build();
@@ -397,6 +401,9 @@ class Triangle {
 			runtime.events.poll();
 			if (!ready && surfaceReady) {
 				renderer = Renderer.create(surface);
+				scoped var reflectedShader = Fixture.create(renderer);
+				if (Fixture.vsParams.slot != 0 || Fixture.vsParams.size != 48)
+					throw "Reflected uniform block slot or size changed";
 				commandBuffer = renderer.commandBuffer(64);
 
 				buffer = createVertexBuffer(renderer);
@@ -408,7 +415,8 @@ class Triangle {
 				pipeline = createPipeline(renderer, shader);
 				var peerRenderer = Renderer.create(surface);
 				var wrongShaderRendererRejected = false;
-				try Pipeline.begin(peerRenderer, shader, 28) catch (_:Dynamic) wrongShaderRendererRejected = true;
+				try Pipeline.begin(peerRenderer, shader,
+					vertexLayout) catch (_:Dynamic) wrongShaderRendererRejected = true;
 				if (!wrongShaderRendererRejected)
 					throw "GPU pipeline accepted a shader from another renderer";
 				peerRenderer.beginFrame();

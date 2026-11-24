@@ -102,18 +102,13 @@ Longer-term direction is in `ROADMAP.md`.
   (`plans/ASSETS.md` AS-D3). Bind the official C implementation, with its
   SIMD paths, through HXI: one-shot and streaming hashing, checked against
   the official test vectors.
-- **Finish native shader interfaces for Haxe.** The generator in
-  `packages/gpu/tools` reads NativeKit reflection and emits Haxe bindings
-  with typed uniform values and packing at the reflected std140 offsets.
-  Circuit Run uses it and CI checks the generated output. Still open:
-  uniform records with `@:repr("C")` and compile-time `sizeof` and
-  `offsetof` assertions and an FFI path for
-  resolving and creating programs directly from their compiled C tables
-  by ID. The end state, with shaders compiled by `haxeon build`, and the
-  order of work are in
+- **Integrate shader generation into app builds.** Circuit Run uses the
+  shared generator, typed vertex layouts and NativeKit shader tables.
+  Discovery, caching and per-target embedding are tracked in
   [docs/design/APP_PLATFORM_CLEANUP.md](docs/design/APP_PLATFORM_CLEANUP.md)
   step 7. Writing shaders in Haxeon itself is deferred to
   [docs/design/SHADERS.md](docs/design/SHADERS.md).
+
 
 ## Compiler follow-ups
 

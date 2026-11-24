@@ -9,6 +9,7 @@ import haxeon.gpu.Renderer;
 import haxeon.platform.Surface;
 
 import Circuit.Position;
+import shaders.Maze;
 
 class CircuitRenderer {
 	static inline var tileSize = 36;
@@ -16,10 +17,6 @@ class CircuitRenderer {
 	public static inline var height = Circuit.height * tileSize;
 	public static inline var surfaceHeight = height + CircuitHud.height;
 	static inline var floatBytes = 4;
-	static inline var positionComponents = 2;
-	static inline var colorComponents = 3;
-	static inline var colorOffset = positionComponents * floatBytes;
-	static inline var stride = colorOffset + colorComponents * floatBytes;
 	static inline var wallInset = 1;
 	static inline var wallHighlightInset = 4;
 	static inline var wallHighlightHeight = 3;
@@ -33,7 +30,7 @@ class CircuitRenderer {
 	static inline var rectanglesPerActor = 3;
 
 	final vertices = Bytes.alloc((backgroundRectangles + Circuit.width * Circuit.height * maxRectanglesPerTile
-		+ actorCount * rectanglesPerActor) * verticesPerRectangle * stride);
+		+ actorCount * rectanglesPerActor) * verticesPerRectangle * Maze.Vertex.stride);
 	var writeOffset = 0;
 	var hudFraction = 0.0;
 
@@ -45,11 +42,8 @@ class CircuitRenderer {
 	public function new(surface:Surface) {
 		renderer = Renderer.create(surface);
 		commands = renderer.commandBuffer(64);
-		var shader = MazeShader.create(renderer);
-		pipeline = Pipeline.begin(renderer, shader, stride)
-			.attribute(MazeShader.position, 0, 0, VertexFormat.Float2)
-			.attribute(MazeShader.rgb, 0, colorOffset, VertexFormat.Float3)
-			.build();
+		var shader = Maze.create(renderer);
+		pipeline = Pipeline.begin(renderer, shader, Maze.Vertex.layout).build();
 		var desc = new BufferDesc(vertices.length, BufferUsage.Vertex);
 		desc.dynamicUpdate = true;
 		buffer = Buffer.create(renderer, desc);
@@ -61,7 +55,7 @@ class CircuitRenderer {
 		commands.reset();
 		commands.applyPipeline(pipeline);
 		commands.applyVertexBuffer(0, buffer, 0);
-		commands.draw(0, Std.int(writeOffset / stride), 1);
+		commands.draw(0, Std.int(writeOffset / Maze.Vertex.stride), 1);
 		return renderer.batch().windowPass(width, height).commands(commands).seal();
 	}
 
@@ -117,11 +111,12 @@ class CircuitRenderer {
 	}
 
 	function vertex(x:Float, y:Float, color:Int):Void {
-		vertices.setFloat(writeOffset, 2.0 * x / width - 1.0);
-		vertices.setFloat(writeOffset + floatBytes, 1.0 - 2.0 * (hudFraction + y / height * (1.0 - hudFraction)));
-		vertices.setFloat(writeOffset + colorOffset, ((color >> 16) & 255) / 255.0);
-		vertices.setFloat(writeOffset + colorOffset + floatBytes, ((color >> 8) & 255) / 255.0);
-		vertices.setFloat(writeOffset + colorOffset + 2 * floatBytes, (color & 255) / 255.0);
-		writeOffset += stride;
+		vertices.setFloat(writeOffset + Maze.Vertex.positionOffset, 2.0 * x / width - 1.0);
+		vertices.setFloat(writeOffset + Maze.Vertex.positionOffset + floatBytes,
+			1.0 - 2.0 * (hudFraction + y / height * (1.0 - hudFraction)));
+		vertices.setFloat(writeOffset + Maze.Vertex.rgbOffset, ((color >> 16) & 255) / 255.0);
+		vertices.setFloat(writeOffset + Maze.Vertex.rgbOffset + floatBytes, ((color >> 8) & 255) / 255.0);
+		vertices.setFloat(writeOffset + Maze.Vertex.rgbOffset + 2 * floatBytes, (color & 255) / 255.0);
+		writeOffset += Maze.Vertex.stride;
 	}
 }

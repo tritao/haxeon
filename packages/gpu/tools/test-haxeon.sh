@@ -39,6 +39,8 @@ fi
     --ffi-projection="$platform_dir/bindings/nativekit-net.hxmap" \
     --ffi-interface="$gpu_dir/bindings/nativekit-gpu.hxi" \
     --ffi-projection="$gpu_dir/bindings/nativekit-gpu.hxmap" \
+    "$gpu_dir/tests/shaders/Fixture.hx" \
+    "$gpu_dir/src/haxeon/gpu/ShaderUniformBlock.hx" \
     "$gpu_dir/tests/Triangle.hx" \
     "$gpu_dir/src/haxeon/gpu/Buffer.hx" \
     "$gpu_dir/src/haxeon/gpu/BufferDesc.hx" \
@@ -54,6 +56,8 @@ fi
     "$gpu_dir/src/haxeon/gpu/Readback.hx" \
     "$gpu_dir/src/haxeon/gpu/Renderer.hx" \
     "$gpu_dir/src/haxeon/gpu/Sampler.hx" \
+    "$gpu_dir/src/haxeon/gpu/ShaderProgram.hx" \
+    "$gpu_dir/src/haxeon/gpu/VertexLayout.hx" \
     "$gpu_dir/src/haxeon/gpu/Shader.hx" \
     "$platform_dir/src/haxeon/platform/Surface.hx" \
     "$platform_dir/src/haxeon/platform/SurfaceFrame.hx" \

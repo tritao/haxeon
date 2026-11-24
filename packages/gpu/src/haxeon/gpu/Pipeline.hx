@@ -28,7 +28,7 @@ class Pipeline implements Disposable {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
-	public static function begin(renderer:Renderer, shader:Shader, stride:Int):PipelineBuilder {
+	static function beginWithStride(renderer:Renderer, shader:Shader, stride:Int):PipelineBuilder {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
 			throw BindingError.invalidArgument("Pipeline.begin", "GPU pipeline shader belongs to a different renderer");
@@ -38,6 +38,9 @@ class Pipeline implements Disposable {
 		GpuResult.check(made.status, "pipeline.begin");
 		return new PipelineBuilder(renderer, made.out_builder);
 	}
+
+	public static function begin(renderer:Renderer, shader:Shader, layout:VertexLayout):PipelineBuilder
+		return layout.apply(beginWithStride(renderer, shader, layout.stride));
 
 	/** Begins a compute-only pipeline builder. */
 	public static function beginCompute(renderer:Renderer, shader:Shader):PipelineBuilder {
