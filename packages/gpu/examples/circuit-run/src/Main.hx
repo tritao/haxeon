@@ -1,4 +1,3 @@
-import haxeon.gpu.Batch;
 import haxeon.gpu.SurfaceOptions;
 import haxeon.platform.Surface;
 import haxeon.platform.App;
@@ -7,8 +6,6 @@ import haxeon.platform.FrameTick;
 import haxeon.platform.FrameRecorder;
 import haxeon.platform.SurfaceFrame;
 import haxeon.ui.FontCollection;
-import haxeon.ui.FrameInfo;
-import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.host.UiSurfaceBinding;
@@ -30,15 +27,6 @@ class Main implements App {
 	var hudRenderer:Renderer;
 	var hudFonts:FontCollection;
 	var hudBinding:UiSurfaceBinding;
-	final hudLayout = new LayoutFrame(CircuitRenderer.width, CircuitRenderer.surfaceHeight);
-	final frameInfo = new FrameInfo(CircuitRenderer.width, CircuitRenderer.surfaceHeight,
-		CircuitRenderer.width, CircuitRenderer.surfaceHeight, 1.0);
-	var hudDirty = true;
-	var inFlight:Null<Batch>;
-	var frameToken:haxe.Int64;
-	var submittedFrame = false;
-	var lastWidth = 0;
-	var lastHeight = 0;
 	final runtime:Runtime;
 
 	var running = true;
@@ -78,16 +66,14 @@ class Main implements App {
 			shutdown();
 			return -1;
 		}
-		return app.submittedFrame ? 1 : 0;
+		return loop.firstFramePresented ? 1 : 0;
 	}
 
 	public static function shutdown():Void {
 		if (app == null)
 			return;
-		if (app.inFlight != null) {
-			app.running = false;
+		if (loop != null && !loop.stop())
 			return;
-		}
 		var stopped = app;
 		app = null;
 		defer stopped.runtime.dispose();
@@ -132,13 +118,8 @@ class Main implements App {
 		hudRenderer = Renderer.create();
 		hudContext = new UiContext(null, hudFonts);
 		hudBinding = UiSurfaceBinding.attach(hudContext, window, surface, runtime.events);
-		hudContext.onAnimationFrameRequested = function() hudDirty = true;
+		hudBinding.setFrameWidth(CircuitRenderer.width);
 		hud = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
-		surface.onResize(function(width, _, _, _) {
-			if (width > 0)
-				hudBinding.setCoordinateScale(width / CircuitRenderer.width);
-		});
-		surface.onFrameComplete(finishFrame);
 		window.onClose(function() running = false);
 		window.onKey(handleKey);
 		snapshotPositions();
@@ -160,16 +141,6 @@ class Main implements App {
 
 	public function ready():Void
 		renderer = new CircuitRenderer(surface);
-
-	function finishFrame(token:haxe.Int64, result:Result):Void {
-		var batch = inFlight;
-		if (batch == null || token != frameToken)
-			return;
-		inFlight = null;
-		batch.dispose();
-		if (result == Result.Ok)
-			submittedFrame = true;
-	}
 
 	function handleKey(key:Key, scancode:Int, action:InputAction, modifiers:Modifiers):Bool {
 		if (action != InputAction.Press)
@@ -193,12 +164,12 @@ class Main implements App {
 		snapshotPositions();
 		accumulator = 0.0;
 		lastFrame = 0.0;
-		hudDirty = true;
+		hudBinding.invalidateFrame();
 	}
 
 	function toggleSound():Void {
 		sounds.toggleMute();
-		hudDirty = true;
+		hudBinding.invalidateFrame();
 	}
 
 	function onGameEvent(event:CircuitEvent):Void {
@@ -207,42 +178,23 @@ class Main implements App {
 			case RoundFinished(Captured): Caught;
 			case RoundFinished(Cleared): Clear;
 		});
-		hudDirty = true;
+		hudBinding.invalidateFrame();
 	}
 
 	public function frame(tick:FrameTick, frame:SurfaceFrame):Void {
 		var width = tick.width;
 		var height = tick.height;
 		var now = tick.timeSeconds;
-		var delta = lastFrame == 0.0 ? 0.0 : Math.min(now - lastFrame, 0.1);
 		advanceSimulation(now);
 		var progress = accumulator / stepSeconds;
 		var player = lerp(previousPlayer, game.playerPosition(), progress);
 		var drone = lerp(previousDrone, game.dronePosition(), progress);
-		var batch = renderer.record(game, player, drone, width, height);
-		var queued = false;
-		defer if (!queued) batch.dispose();
+		scoped var batch = renderer.record(game, player, drone, width, height);
 		var gpuStep = batch.frameStep();
 		defer gpuStep.dispose();
-
-		var scale = width / CircuitRenderer.width;
-		var logicalHeight = height / scale;
-		if (hudDirty || hudContext.isDirty() || hudContext.needsAnimationFrame
-			|| width != lastWidth || height != lastHeight) {
-			hudLayout.setViewport(CircuitRenderer.width, logicalHeight);
-			hudLayout.deltaSeconds = delta;
-			hudContext.submit(hud, hudLayout);
-			hudDirty = false;
-			lastWidth = width;
-			lastHeight = height;
-		}
-		frameInfo.set(CircuitRenderer.width, logicalHeight, width, height, scale);
-		var uiStep = hudContext.frameStep(hudRenderer, frame, frameInfo);
+		var uiStep = hudBinding.frameStep(hud, hudRenderer, frame, tick);
 		defer uiStep.dispose();
 		frame.submit([gpuStep, uiStep]);
-		frameToken = frame.token();
-		inFlight = batch;
-		queued = true;
 	}
 
 	function advanceSimulation(now:Float):Void {

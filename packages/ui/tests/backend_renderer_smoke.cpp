@@ -1060,6 +1060,21 @@ int main() {
     }
 
     if (nk::core::render_executor_physical()) {
+        nkui_renderer scheduler_renderers[2]{};
+        struct SchedulerRenderers {
+            nkui_renderer *renderers;
+            ~SchedulerRenderers() {
+                for (size_t index = 0; index < 2; ++index)
+                    if (renderers[index].id) (void)nkui_renderer_destroy(renderers[index]);
+            }
+        } scheduler_cleanup{scheduler_renderers};
+        for (auto &scheduler_renderer : scheduler_renderers) {
+            if (!check(nkui_renderer_create(&scheduler_renderer) == NKUI_OK,
+                       "create scheduler renderer")) {
+                result = 26;
+                goto cleanup;
+            }
+        }
         int32_t scheduler_width[2]{};
         int32_t scheduler_height[2]{};
         nk_window_options scheduler_window_options = window_options;
@@ -1196,26 +1211,13 @@ int main() {
         nk::core::reset_render_surface_api_violations();
         nk::core::set_render_surface_api_guard(true);
         nkgpu_test_forbid_surface_target_queries();
-        nkui_renderer_stats before_scheduler_stats{};
-        if (!check(nkui_renderer_get_stats(renderer, &before_scheduler_stats) == NKUI_OK,
-                   "read pre-scheduler stats")) {
-            result = 27;
-            {
-                std::lock_guard lock(blocker.mutex);
-                blocker.release = true;
-            }
-            blocker.condition.notify_one();
-            goto cleanup;
-        }
-        const nkui_frame_info scheduler_frame{sizeof(scheduler_frame),
-                                              static_cast<float>(scheduler_width[0]),
-                                              static_cast<float>(scheduler_height[0]),
-                                              scheduler_width[0],
-                                              scheduler_height[0],
-                                              1.0f};
         for (size_t index = 0; index < 2 && !result; ++index) {
+            const nkui_frame_info scheduler_frame{sizeof(scheduler_frame),
+                                                  static_cast<float>(scheduler_width[index]),
+                                                  static_cast<float>(scheduler_height[index]),
+                                                  scheduler_width[index], scheduler_height[index], 1.0f};
             const nkui_result submitted = nkui_renderer_render_frame(
-                renderer, scheduler_list, scheduler_surfaces[index], &scheduler_frame);
+                scheduler_renderers[index], scheduler_list, scheduler_surfaces[index], &scheduler_frame);
             if (submitted != NKUI_OK) {
                 std::fprintf(stderr,
                              "backend renderer smoke: scheduler submission %zu failed: %d\n", index,
@@ -1246,78 +1248,25 @@ int main() {
         if (!result && !check(scheduler_surface_call_violations == 0,
                               "scheduler render surface API ownership"))
             result = 29;
-        nkui_renderer_stats scheduler_stats{};
         const bool shared_native_device =
             scheduler_targets[0].native_device != 0 &&
             scheduler_targets[0].native_device == scheduler_targets[1].native_device;
-        if (!result &&
-            (!check(nkui_renderer_get_stats(renderer, &scheduler_stats) == NKUI_OK,
-                    "read scheduler stats") ||
-             scheduler_stats.render_submissions < 2 ||
-             scheduler_stats.render_submission_replacements < 1 ||
-             scheduler_stats.render_submission_cancellations < 1 ||
-             scheduler_stats.render_submissions != before_scheduler_stats.render_submissions + 2 ||
-             scheduler_stats.render_submission_replacements !=
-                 before_scheduler_stats.render_submission_replacements + 1 ||
-             scheduler_stats.render_submission_cancellations <
-                 before_scheduler_stats.render_submission_cancellations + 1 ||
-             scheduler_stats.render_submission_cancellations >
-                 before_scheduler_stats.render_submission_cancellations + 2 ||
-             (shared_native_device && scheduler_stats.render_submission_failures !=
-                                          before_scheduler_stats.render_submission_failures) ||
-             (shared_native_device &&
-              scheduler_stats.gpu_frames != before_scheduler_stats.gpu_frames + 1) ||
-             (shared_native_device &&
-              scheduler_stats.resource_creations < before_scheduler_stats.resource_creations) ||
-             (shared_native_device &&
-              scheduler_stats.surface_recreations != before_scheduler_stats.surface_recreations) ||
-             (!shared_native_device && scheduler_stats.render_submission_failures <
-                                           before_scheduler_stats.render_submission_failures + 1) ||
-             scheduler_stats.render_submission_build_ns <=
-                 before_scheduler_stats.render_submission_build_ns ||
-             scheduler_stats.render_submission_queue_latency_ns <=
-                 before_scheduler_stats.render_submission_queue_latency_ns ||
-             scheduler_stats.render_submission_execution_ns <=
-                 before_scheduler_stats.render_submission_execution_ns ||
-             scheduler_stats.render_submission_acquire_to_present_ns <=
-                 before_scheduler_stats.render_submission_acquire_to_present_ns ||
-             scheduler_stats.render_submission_executions !=
-                 before_scheduler_stats.render_submission_executions + 1)) {
-            std::fprintf(
-                stderr,
-                "backend renderer smoke: scheduler counters unexpected: submitted=%llu "
-                "replaced=%llu cancelled=%llu failed=%llu executions=%llu (before submitted=%llu "
-                "replaced=%llu cancelled=%llu failed=%llu executions=%llu)\n",
-                static_cast<unsigned long long>(scheduler_stats.render_submissions),
-                static_cast<unsigned long long>(scheduler_stats.render_submission_replacements),
-                static_cast<unsigned long long>(scheduler_stats.render_submission_cancellations),
-                static_cast<unsigned long long>(scheduler_stats.render_submission_failures),
-                static_cast<unsigned long long>(scheduler_stats.render_submission_executions),
-                static_cast<unsigned long long>(before_scheduler_stats.render_submissions),
-                static_cast<unsigned long long>(
-                    before_scheduler_stats.render_submission_replacements),
-                static_cast<unsigned long long>(
-                    before_scheduler_stats.render_submission_cancellations),
-                static_cast<unsigned long long>(before_scheduler_stats.render_submission_failures),
-                static_cast<unsigned long long>(
-                    before_scheduler_stats.render_submission_executions));
-            std::fprintf(
-                stderr,
-                "backend renderer smoke: scheduler GPU counters before=(frames=%llu passes=%llu "
-                "draws=%llu resources=%llu recreations=%llu) after=(frames=%llu passes=%llu "
-                "draws=%llu resources=%llu recreations=%llu)\n",
-                static_cast<unsigned long long>(before_scheduler_stats.gpu_frames),
-                static_cast<unsigned long long>(before_scheduler_stats.gpu_passes),
-                static_cast<unsigned long long>(before_scheduler_stats.gpu_draw_calls),
-                static_cast<unsigned long long>(before_scheduler_stats.resource_creations),
-                static_cast<unsigned long long>(before_scheduler_stats.surface_recreations),
-                static_cast<unsigned long long>(scheduler_stats.gpu_frames),
-                static_cast<unsigned long long>(scheduler_stats.gpu_passes),
-                static_cast<unsigned long long>(scheduler_stats.gpu_draw_calls),
-                static_cast<unsigned long long>(scheduler_stats.resource_creations),
-                static_cast<unsigned long long>(scheduler_stats.surface_recreations));
-            result = 30;
+        for (auto scheduler_renderer : scheduler_renderers) {
+            nkui_renderer_stats stats{};
+            if (!result && !check(nkui_renderer_get_stats(scheduler_renderer, &stats) == NKUI_OK &&
+                                      stats.render_submissions == 1 &&
+                                      stats.render_submission_executions == 1 &&
+                                      stats.render_submission_replacements == 0 &&
+                                      stats.render_submission_cancellations == 0 &&
+                                      stats.render_submission_failures == 0 &&
+                                      stats.gpu_frames == 1,
+                                  "both queued surfaces independently render and present"))
+                result = 30;
         }
+        const nkui_frame_info scheduler_frame{sizeof(scheduler_frame),
+                                              static_cast<float>(scheduler_width[0]),
+                                              static_cast<float>(scheduler_height[0]),
+                                              scheduler_width[0], scheduler_height[0], 1.0f};
 
         /* Resize a surface while its ticket is owned by RENDER.  The backend
            must defer swapchain/drawable mutation until the frame finishes, so

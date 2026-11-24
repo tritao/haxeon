@@ -2,6 +2,14 @@ package haxeon.ui.host;
 
 import haxeon.platform.DisposalRegistration;
 import haxeon.platform.Surface;
+import haxeon.platform.FrameTick;
+import haxeon.platform.SurfaceFrame;
+import haxeon.platform.SurfaceFrameStep;
+import haxeon.platform.event.EventSubscription;
+import haxeon.ui.LayoutFrame;
+import haxeon.ui.FrameInfo;
+import haxeon.ui.Renderer;
+import haxeon.ui.core.View;
 import haxeon.platform.Window;
 import haxeon.platform.event.EventPump;
 import haxeon.ui.core.NativeInputAdapter;
@@ -16,6 +24,17 @@ class UiSurfaceBinding implements Disposable {
 	var windowAttached = false;
 	var owner:Null<DisposalRegistration>;
 	var disposed = false;
+	var fixedWidth = 0.0;
+	var layout:LayoutFrame;
+	var info:FrameInfo;
+	var resizeSubscription:Null<EventSubscription>;
+	var previousFrameRequest:Null<Void->Void>;
+	var overlayFrameRequest:Null<Void->Void>;
+	var lastView:View;
+	var lastFrameAt = 0.0;
+	var lastWidth = 0;
+	var lastHeight = 0;
+	var frameDirty = true;
 
 	public static function attach(context:UiContext, window:Window, surface:Surface,
 			events:EventPump, redrawOnInput:Bool = false):UiSurfaceBinding {
@@ -59,10 +78,62 @@ class UiSurfaceBinding implements Disposable {
 		context.platformCoordinateScale = value;
 	}
 
+	/** Configures the logical width of UI drawn into frames owned by the application. */
+	public function setFrameWidth(width:Float):Void {
+		if (!Math.isFinite(width) || width <= 0)
+			throw "UI frame width must be positive";
+		if (resizeSubscription == null) {
+			resizeSubscription = surface.onResize(function(width, _, _, _) {
+				if (width > 0) setCoordinateScale(width / fixedWidth);
+			});
+			previousFrameRequest = context.onAnimationFrameRequested;
+			overlayFrameRequest = function() {
+				if (previousFrameRequest != null) previousFrameRequest();
+				surface.requestFrame();
+			};
+			context.onAnimationFrameRequested = overlayFrameRequest;
+		}
+		fixedWidth = width;
+		layout = new LayoutFrame(width, 1.0);
+		info = new FrameInfo(width, 1.0, 1, 1, 1.0);
+		frameDirty = true;
+	}
+
+	/** Marks application state read during the next view build as changed. */
+	public function invalidateFrame():Void {
+		frameDirty = true;
+		surface.requestFrame();
+	}
+
+	/** Builds the view on demand and records its overlay into the acquired frame. */
+	public function frameStep(view:View, renderer:Renderer, frame:SurfaceFrame, tick:FrameTick):SurfaceFrameStep {
+		if (layout == null)
+			throw "Set the UI frame width before recording an overlay";
+		var scale = tick.width / fixedWidth;
+		var height = tick.height / scale;
+		var delta = lastFrameAt == 0.0 ? 0.0 : Math.min(tick.timeSeconds - lastFrameAt, 0.1);
+		lastFrameAt = tick.timeSeconds;
+		if (frameDirty || lastView != view || context.isDirty() || context.needsAnimationFrame
+			|| tick.width != lastWidth || tick.height != lastHeight) {
+			layout.setViewport(fixedWidth, height);
+			layout.deltaSeconds = delta;
+			frameDirty = false;
+			context.submit(view, layout);
+			lastView = view;
+			lastWidth = tick.width;
+			lastHeight = tick.height;
+		}
+		info.set(fixedWidth, height, tick.width, tick.height, scale);
+		return context.frameStep(renderer, frame, info);
+	}
+
 	public function dispose():Void {
 		if (disposed)
 			return;
 		disposed = true;
+		if (overlayFrameRequest != null && context.onAnimationFrameRequested == overlayFrameRequest)
+			context.onAnimationFrameRequested = previousFrameRequest;
+		defer if (resizeSubscription != null) resizeSubscription.dispose();
 		defer if (owner != null) owner.detach();
 		defer context.detachPlatformSurface(surface);
 		defer if (windowAttached) context.detachPlatformWindow();

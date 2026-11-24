@@ -744,7 +744,6 @@ nkui_result register_ui_frame_step(std::unique_ptr<RenderSubmission> submission,
 }
 
 bool submit_standalone_frame(std::unique_ptr<RenderSubmission> submission) {
-    static const int replacement_key = 0;
     const auto renderer = submission->renderer;
     const auto frame = submission->frame;
     submission->enqueued_at_ns = nk_time_now_ns();
@@ -756,21 +755,25 @@ bool submit_standalone_frame(std::unique_ptr<RenderSubmission> submission) {
         submission.render_failed = !render_sealed_submission(submission, true);
         return submission.render_failed ? NK_ERROR_UNKNOWN : NK_OK;
     };
-    auto complete = [](void *data, nk_result result, bool replaced) noexcept {
+    auto complete = [](void *data, nk_result result) noexcept {
         const auto &submission = *static_cast<const RenderSubmission *>(data);
-        if (replaced)
-            record_render_submission_stat(submission.renderer, &nkui_renderer_stats::render_submission_replacements);
         if (result != NK_OK) {
             record_render_submission_stat(submission.renderer, &nkui_renderer_stats::render_submission_cancellations);
-            if (!replaced && result != NK_ERROR_CANCELLED && !submission.render_failed)
+            if (result != NK_ERROR_CANCELLED && !submission.render_failed)
                 record_render_submission_stat(submission.renderer, &nkui_renderer_stats::render_submission_failures);
         }
         record_render_submission_value(submission.renderer,
             &nkui_renderer_stats::render_submission_acquire_to_present_ns,
             elapsed_ns(submission.acquired_at_ns, nk_time_now_ns()));
     };
-    const auto status = nk::core::submit_latest_frame(frame,
-        {std::shared_ptr<RenderSubmission>(std::move(submission)), execute, complete}, &replacement_key);
+    nk_surface_frame_step step = NK_INVALID_HANDLE;
+    auto status = nk::core::register_frame_step(
+        {std::shared_ptr<RenderSubmission>(std::move(submission)), execute, complete}, &step);
+    if (status == NK_OK) {
+        status = nk_surface_frame_submit(frame, &step, 1);
+        if (status != NK_OK)
+            (void)nk_surface_frame_step_destroy(step);
+    }
     if (status != NK_OK)
         record_render_submission_stat(renderer, &nkui_renderer_stats::render_submission_failures);
     return status == NK_OK;

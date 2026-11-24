@@ -457,6 +457,7 @@ class Triangle {
 				var windowStep = sealedBatch.frameStep();
 				defer windowStep.dispose();
 				queuedWindowFrame.submit([windowStep]);
+				sealedBatch.dispose();
 				var deadline = Sys.monotonicTime() + 5.0;
 				while (queuedResult == null && Sys.monotonicTime() < deadline) {
 					if (!runtime.events.poll())
@@ -464,7 +465,6 @@ class Triangle {
 				}
 				if (queuedResult != Result.Ok)
 					throw "Queued GPU window frame failed: " + Std.string(queuedResult);
-				sealedBatch.dispose();
 				targetColor.dispose();
 				targetDepth.dispose();
 				ready = true;

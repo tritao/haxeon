@@ -18,8 +18,16 @@ class AppLoop implements Disposable {
 	var submittedTiming:Null<SurfaceFrameTiming>;
 	var frameRan = false;
 	var stopped = false;
+	public var firstFramePresented(default, null) = false;
+
+	/** Requests shutdown and reports whether all submitted work has completed. */
+	public function stop():Bool {
+		stopped = true;
+		return pending == null;
+	}
 	var disposed = false;
-	var failure:Dynamic;
+	var disposalRequested = false;
+	var failure:Null<haxe.Exception>;
 
 	@:allow(haxeon.platform.Runtime)
 	private function new(events:EventPump, surface:Surface, app:App, recorder:Null<FrameRecorder>) {
@@ -32,11 +40,13 @@ class AppLoop implements Disposable {
 			completionSubscription = surface.onFrameComplete(function(token, result) {
 				if (pending != null && token == pending) {
 					pending = null;
-					if (result != Result.Ok)
+					if (result == Result.Ok)
+						firstFramePresented = true;
+					else
 						fail(new NativeKitError(result, "AppLoop.frame", "Rendering or presentation failed"));
 				}
 			});
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			readySubscription.dispose();
 			throw error;
 		}
@@ -70,11 +80,13 @@ class AppLoop implements Disposable {
 					app.afterFrame();
 			}
 			stopped = stopped || app.shouldQuit();
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			fail(error);
 		}
 		if (!stopped || pending != null)
 			return true;
+		if (disposalRequested)
+			detach();
 		if (failure != null)
 			throw failure;
 		return false;
@@ -88,7 +100,7 @@ class AppLoop implements Disposable {
 				return;
 			app.ready();
 			frameSubscription = surface.onFrameTick(draw);
-		} catch (error:Dynamic) fail(error);
+		} catch (error:haxe.Exception) fail(error);
 	}
 
 	function draw(tick:FrameTick):Void {
@@ -102,6 +114,8 @@ class AppLoop implements Disposable {
 			defer {
 				if (frame.wasSubmitted())
 					pending = frame.token();
+				else if (frame.wasPresented())
+					firstFramePresented = true;
 				else if (!frame.isFinished())
 					frame.cancel();
 				if (timing != null && (frame.wasSubmitted() || frame.wasPresented())) {
@@ -111,20 +125,30 @@ class AppLoop implements Disposable {
 			}
 			frameRan = true;
 			app.frame(tick, frame);
-		} catch (error:Dynamic) fail(error);
+		} catch (error:haxe.Exception) fail(error);
 	}
 
-	function fail(error:Dynamic):Void {
+	function fail(error:haxe.Exception):Void {
 		if (failure == null)
 			failure = error;
 		stopped = true;
 	}
 
+	/** Stops the loop. A browser host continues ticking until any pending frame completes. */
 	public function dispose():Void {
 		if (disposed)
 			return;
-		if (pending != null)
-			throw BindingError.invalidState("AppLoop.dispose", "Advance the loop until its submitted frame completes");
+		disposalRequested = true;
+		if (stop()) {
+			detach();
+			return;
+		}
+		#if !wasm
+		run();
+		#end
+	}
+
+	function detach():Void {
 		defer readySubscription.dispose();
 		defer completionSubscription.dispose();
 		if (frameSubscription != null)
