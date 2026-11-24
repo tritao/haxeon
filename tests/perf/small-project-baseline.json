@@ -51,9 +51,10 @@
 			"raise_reason": "41a2453b8 seeds every module typing can call (haxeon.DynamicOps, Reflect, Std, runtime.FloatBits, haxe.Int64) into the graph instead of restarting the frontend, so a cold server parses and types them for every program; 48c1b7aee brings the stdlib modules of the Bytes platform methods with haxe.io.Bytes the same way; 540848a15 (recorded reads) took part of it back (48c1b7aee measured +0.53 MB ahead of time)"
 		},
 		"aot_build_empty_store_instructions": {
-			"value": 5190685279,
+			"value": 6651895150,
 			"tolerance": 0.03,
-			"why": "As build_instructions, with the digest store emptied first: the build that reads and hashes every input, the pinned Haxe and the compiler's sources among them. A regression guard."
+			"why": "As build_instructions, with the digest store emptied first: the build that reads and hashes every input, the pinned Haxe and the compiler's sources among them. A regression guard.",
+			"raise_reason": "an empty digest store now hashes the installed compiler executable, so a replaced binary with the same source stamp selects a new compile worker"
 		}
 	}
 }

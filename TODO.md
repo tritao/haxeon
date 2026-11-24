@@ -522,10 +522,9 @@ typer's drain order) and 5 (live pruning).
   helpers and the encode.
 - **After a live patch, the server writes the whole module and its build id
   before replying,** which delays the next edit; write them after the reply.
-- **AOT small-project build instructions doubled** (`aot_build_instructions`
-  about 3.0G against a 1.51G baseline; `aot_build_empty_store_instructions`
-  +30%), while the VM's build and check went down and the AOT check is at its
-  baseline. Not yet investigated.
+- **The small project's VM build and check allocate about 4% more** than
+  their baseline (`vm_build_allocated_bytes`, `vm_check_allocated_bytes`);
+  their instructions are at it. Not yet investigated.
 
 The 2026-11-18 profile of a self-compile (Haxeon-built release compiler,
 29 s on one thread) is flat: compiler code 48%, string-keyed maps 18.5%,

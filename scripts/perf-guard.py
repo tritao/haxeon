@@ -676,6 +676,10 @@ def measure_small_project(hl, out):
     finally:
         if aside:
             os.rename(executable + AOT_ASIDE_SUFFIX, executable)
+    if aside:
+        # The rename changes ctime. Let it settle before warm-up so the digest store can keep the executable's hash
+        # (ContentDigestCache.racyMarginSeconds).
+        time.sleep(3)
     metrics.update(measure_small_project_mode(out, "aot", "haxeon-aot"))
     return metrics
 
