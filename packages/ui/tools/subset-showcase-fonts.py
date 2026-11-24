@@ -25,7 +25,6 @@ except ModuleNotFoundError as error:
 
 
 FONT_NAMES = (
-    "IBMPlexSans-Regular.ttf",
     "IBMPlexSansArabic-Regular.ttf",
     "IBMPlexSansHebrew-Regular.ttf",
     "IBMPlexSansJP-Regular.ttf",

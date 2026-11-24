@@ -34,19 +34,11 @@ surfaces can clear the flag or create their own platform surface options.
 
 ## 4. Default fonts on every target
 
-`UiHost` already defaults browser fonts to the SDK's IBM Plex Sans
-(`BrowserUiHost`, `UiHostOptions.fonts`, `UiFontAsset`), fetched as resources
-before the app starts. `FontCollection` and `UiOverlay` have no such default,
-which is why Circuit Run loads its own font file.
-
-- Move the SDK font list and its loading out of `BrowserUiHost` into one place
-  in the UI package that every host and `UiOverlay` use.
-- Rename `FontCollection.addSystemFallbacks()` to `addDefaultFonts()`, with no
-  alias: system fonts on desktop, the SDK fonts on web (browsers do not expose
-  system font bytes without a permission prompt).
-- On web the fonts arrive asynchronously, so the app loop loads them before the
-  app's `ready`, as `BrowserUiHost` does now. One loading path replaces the
-  `nativekit_bundle_web_fonts` split.
+Implemented. `FontCollection.addDefaultFonts()` enables system fallback
+discovery on desktop and installs IBM Plex Sans on web. The browser receives
+the default font with the native UI Wasm module before app startup. Hosts and
+overlays use the same API. The showcase still fetches its extra script and
+emoji fonts before it starts.
 
 ## 5. One app loop: `Runtime.launch` under `UiHost.run`
 

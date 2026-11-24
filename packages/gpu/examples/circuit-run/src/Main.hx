@@ -5,9 +5,6 @@ import haxeon.platform.FrameRecorder;
 import haxeon.platform.FrameTick;
 import haxeon.platform.Surface;
 import haxeon.platform.SurfaceFrame;
-#if circuit_run_web
-import haxeon.ui.FontCollection;
-#end
 import Circuit.CircuitEvent;
 import Circuit.Position;
 import haxeon.platform.Runtime;
@@ -105,16 +102,7 @@ class Main implements App {
 		options.flags = WindowFlags.Resizable;
 		var window = runtime.createWindow(options);
 		surface = window.createSurface(SurfaceOptions.forGpu(CircuitRenderer.width, CircuitRenderer.surfaceHeight));
-		#if circuit_run_web
-		var fonts = FontCollection.create();
-		try fonts.add("/assets/IBMPlexSans-Regular.ttf") catch (error:haxe.Exception) {
-			fonts.dispose();
-			throw error;
-		}
-		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width, fonts);
-		#else
 		hud = UiOverlay.attach(window, surface, runtime.events, CircuitRenderer.width);
-		#end
 		hudView = new CircuitHud(game, sounds.soundEnabled, restart, toggleSound);
 
 		window.onClose(function() running = false);

@@ -30,7 +30,7 @@ class FocusFeedbackTests {
 	public static function main():Int {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		var ui = new UiContext(null, fonts), open = new Signal(false);
 		var frame = new LayoutFrame(400, 300);
 		var build = function():View {

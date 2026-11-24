@@ -180,14 +180,15 @@ showcase and framework tests live under `examples/ui_haxeon` and
 `tests/haxeon`; generated bindings are regenerated with
 `tools/update-haxeon-hxi.sh` and verified with its `--check` option.
 
-`FontCollection.addSystemFallbacks()` installs both script and missing-character
-lookup. On Linux, Fontconfig is queried for the actual missing Unicode scalar,
+`FontCollection.addDefaultFonts()` enables script and missing-character
+lookup on desktop. On Linux, Fontconfig is queried for the actual missing Unicode scalar,
 with a monospace preference for terminal text. Loaded glyph coverage is checked
 before accepting a fallback. Common-script symbols can use that font even when
 the surrounding run resolves to Latin or another script. Each collection caches
 successful lookups, misses, and loaded font handles. macOS queries Core Text for
 the missing character; Windows verifies coverage in its registry candidates.
-Browser hosts still supply their own font assets. The native
+Web builds include IBM Plex Sans in the native UI Wasm module. Applications
+can load additional fonts as assets. The native
 `nativekit_ui_system_fonts` test checks the callback and platform discovery.
 
 Code editors opt into `TextField.codeWordBoundaries` (also available on `TextArea`
@@ -450,14 +451,10 @@ Set up Emscripten, then build and test with:
 python3 -m http.server --directory build-web 8080
 ```
 
-The Haxeon showcase fetches five compact, separately generated TTF assets by
-default, so the initial WASM host is not accompanied by a font `.data` payload.
-The subsetter collects characters from the showcase sources; set
-`NKUI_HAXEON_SUBSET_FONTS=OFF` when the showcase needs the complete source
-fonts. The subset build requires the Python `fonttools` package. For an offline
-or deterministic bundle, build with
-`NKUI_HAXEON_BUNDLE_FONTS=ON`; this puts the selected fonts back into
-`nativekit_ui_haxeon.data`.
+The Haxeon showcase fetches four additional TTF assets for Arabic, Hebrew,
+Japanese and emoji. The subsetter collects characters from the showcase
+sources. Set `NKUI_HAXEON_SUBSET_FONTS=OFF` to serve the complete source fonts.
+The subset build requires the Python `fonttools` package.
 
 NativeKit currently accepts TTF/OTF data directly. Configure the web server to
 apply Brotli or gzip content encoding to these assets for transfer compression;

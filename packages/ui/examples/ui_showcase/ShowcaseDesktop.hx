@@ -157,7 +157,7 @@ class ShowcaseDesktop {
 			if (graphicsMode) {
 				var fonts = FontCollection.create();
 				try {
-					fonts.addSystemFallbacks();
+					fonts.addDefaultFonts();
 					graphics = new Showcase(fonts);
 				} catch (error:Dynamic) {
 					fonts.dispose();
@@ -167,7 +167,7 @@ class ShowcaseDesktop {
 			} else {
 				var fonts = FontCollection.create();
 				try {
-					fonts.addSystemFallbacks();
+					fonts.addDefaultFonts();
 					explorer = new UiExplorer(fonts,
 						'${platformName()} · ${graphicsApiName(graphicsApi)}', function() {
 							if (frameState.graphicsMode)
@@ -177,7 +177,7 @@ class ShowcaseDesktop {
 								explorerInput.detach();
 							var graphicsFonts = FontCollection.create();
 							try {
-								graphicsFonts.addSystemFallbacks();
+								graphicsFonts.addDefaultFonts();
 								graphics = new Showcase(graphicsFonts);
 							} catch (error:Dynamic) {
 								graphicsFonts.dispose();

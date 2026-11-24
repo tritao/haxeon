@@ -647,9 +647,9 @@ interface NativeKitUI @target("portable-abi32") @library("nativekit_ui") @depend
 		family: nkui_font_family
 	) -> nkui_result;
 	/**
-	 * Enables best-effort platform system-font fallback discovery for new layouts.
+	 * Installs the bundled browser font or enables platform system-font fallback discovery.
 	 */
-	extern fn nkui_font_collection_add_system_fallbacks(fonts: nkui_resource) -> nkui_result;
+	extern fn nkui_font_collection_add_default_fonts(fonts: nkui_resource) -> nkui_result;
 	/**
 	 * Creates an empty font collection and writes its resource handle.
 	 */

@@ -11,7 +11,6 @@ memory_stats=${NKUI_HAXEON_MEMORY_STATS:-OFF}
 wasm_gc_allocation_count=${NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT:-OFF}
 haxeon_target=${NKUI_HAXEON_TARGET:-wasm32}
 exception_mode=${NATIVEKIT_HAXEON_EXCEPTION_MODE:-legacy}
-bundle_fonts=${NKUI_HAXEON_BUNDLE_FONTS:-OFF}
 subset_fonts=${NKUI_HAXEON_SUBSET_FONTS:-ON}
 self_hosted=${NATIVEKIT_HAXEON_SELF_HOSTED:-OFF}
 compiler_module=${NATIVEKIT_HAXEON_COMPILER_MODULE:-"$haxeon_dir/bootstrap/compiler.hl"}
@@ -35,7 +34,6 @@ emcmake cmake -S "$repo_dir" -B "$build_dir" -G Ninja \
     -DNKUI_HAXEON_EXCEPTION_MODE="$exception_mode" \
     -DNKUI_HAXEON_MEMORY_STATS="$memory_stats" \
     -DNKUI_HAXEON_WASM_GC_ALLOCATION_COUNT="$wasm_gc_allocation_count" \
-    -DNKUI_HAXEON_BUNDLE_FONTS="$bundle_fonts" \
     -DNKUI_HAXEON_SUBSET_FONTS="$subset_fonts" \
     -DNK_SOKOL_BACKEND=gles3
 
@@ -68,9 +66,5 @@ echo "  $build_dir/nativekit/tests/nativekit_platform_parity.html"
 echo "  $build_dir/nativekit/tests/nativekit_web_accessibility.html"
 echo "  $build_dir/nativekit/tests/nativekit_web_system_equivalents.html"
 echo
-if [[ "$haxeon_available" == 1 && ("$bundle_fonts" == "ON" || "$bundle_fonts" == "1") ]]; then
-    echo "Serve it over HTTP (fonts are bundled in nativekit_ui_haxeon.data; browser tests use the build root):"
-else
-    echo "Serve it over HTTP (required for the external font assets and browser tests):"
-fi
+echo "Serve it over HTTP (required for the external font assets and browser tests):"
 echo "  python3 -m http.server --directory \"$build_dir\" 8080"

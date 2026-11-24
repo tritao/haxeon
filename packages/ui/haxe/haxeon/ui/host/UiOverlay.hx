@@ -46,7 +46,7 @@ class UiOverlay implements Disposable {
 		var overlay = new UiOverlay(surface, logicalWidth, fonts == null ? FontCollection.create() : fonts);
 		var attached = false;
 		defer if (!attached) overlay.dispose();
-		if (fonts == null) overlay.fonts.addSystemFallbacks();
+		if (fonts == null) overlay.fonts.addDefaultFonts();
 		overlay.renderer = Renderer.create();
 		overlay.context = new UiContext(null, overlay.fonts);
 		overlay.binding = UiSurfaceBinding.attach(overlay.context, window, surface, events);

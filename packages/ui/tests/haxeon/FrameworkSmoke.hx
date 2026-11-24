@@ -4981,7 +4981,7 @@ class FrameworkSmoke {
 			rejected = error.kind == BindingErrorKind.InvalidArgument && error.operation == "UiOverlay.attach";
 		}
 		if (!rejected) throw "UiOverlay did not reject an invalid logical width";
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 
 		scoped var runtime = Runtime.start();
 		var options = new WindowOptions(320, 192);

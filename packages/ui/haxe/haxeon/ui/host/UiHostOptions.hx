@@ -9,7 +9,7 @@ class UiHostOptions {
 	public var height:Int = 800;
 	public var eventQueueCapacity:Int = 256;
 
-	/** Browser fonts, with the SDK default used when omitted. */
+	/** Additional browser fonts loaded before the application starts. */
 	public var fonts:Null<Array<UiFontAsset>> = null;
 	/** Called after a successful frame render. */
 	public var onFrameRendered:Null<Void->Void> = null;
@@ -31,8 +31,7 @@ class UiHostOptions {
 		if (fonts != null)
 			for (font in fonts)
 				if (font == null || font.name == null || font.name.length == 0 || font.uri == null
-					|| font.uri.length == 0
-					|| font.bundledPath == null || font.bundledPath.length == 0)
+					|| font.uri.length == 0)
 					throw "UI font asset is invalid";
 	}
 }

@@ -202,9 +202,6 @@ fi
 if [[ ${NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT:-0} == 1 ]]; then
 	compiler_args+=(--wasm-gc-allocation-count)
 fi
-if [[ ${NATIVEKIT_HAXEON_BUNDLE_FONTS:-0} == 1 ]]; then
-	compiler_args+=(--define=nativekit_bundle_web_fonts)
-fi
 
 if [[ -n ${NATIVEKIT_HAXEON_TIME_FILE:-} ]]; then
 	(cd "$haxeon_dir" && /usr/bin/time -f 'wall=%e user=%U sys=%S maxrss_kb=%M' \

@@ -1971,7 +1971,10 @@ extern "C" nkui_result nkui_font_collection_add_data(nkui_resource fonts, const 
     return NKUI_OK;
 }
 
-extern "C" nkui_result nkui_font_collection_add_system_fallbacks(nkui_resource fonts) {
+extern "C" nkui_result nkui_font_collection_add_default_fonts(nkui_resource fonts) {
+#if defined(__EMSCRIPTEN__)
+    return nkui_font_collection_add(fonts, "/ui/fonts/IBMPlexSans-Regular.ttf", NKUI_FONT_FAMILY_DEFAULT);
+#else
     std::lock_guard<std::mutex> lock(resources_mutex);
     auto *slot = resolve(fonts, nkui::ResourceKind::FontCollection);
     if (!slot || !slot->font_collection)
@@ -1983,6 +1986,7 @@ extern "C" nkui_result nkui_font_collection_add_system_fallbacks(nkui_resource f
         return NKUI_ERROR_INVALID_ARGUMENT;
     slot->system_fallbacks = true;
     return NKUI_OK;
+#endif
 }
 
 extern "C" nkui_result nkui_layout_session_create(nkui_layout_session *out_session) {

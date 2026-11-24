@@ -52,7 +52,7 @@ class TreeHoverTests {
 	public static function main():Int {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		var ui = new UiContext(null, fonts);
 		ui.buildContext.environment.reducedMotion = true;
 		var style = new LayoutStyle();

@@ -32,7 +32,7 @@ class Main {
 
 			scoped var lab = new AudioLabEngine(true);
 			scoped var fonts = FontCollection.create();
-			fonts.addSystemFallbacks();
+			fonts.addDefaultFonts();
 			scoped var renderer = Renderer.create();
 			scoped var context = new UiContext(null, fonts);
 

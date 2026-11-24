@@ -118,7 +118,7 @@ class WindowChromeDemo implements Disposable {
 		nativeSurface = Surface.borrowNativeHandle(surface);
 
 		fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		context = new UiContext(null, fonts, theme == null ? new Theme() : theme);
 		context.attachPlatformSurface(nativeSurface);
 		context.attachPlatformWindow(window);

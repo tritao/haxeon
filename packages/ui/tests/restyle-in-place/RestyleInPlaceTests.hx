@@ -1780,7 +1780,7 @@ private class UpdatingResources implements View {
 		inlineLocalSnapshots();
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		retainedVariants(fonts);
 		buttonIdentityOwnership(fonts);
 		hoverRouting(fonts);

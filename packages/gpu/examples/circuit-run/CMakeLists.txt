@@ -72,15 +72,13 @@ if(EMSCRIPTEN)
 
     add_executable(circuit_run "${circuit_run_web_dir}/host.c")
     add_dependencies(circuit_run circuit_run_guest)
-    set(plex_font "${HAXEON_ROOT}/packages/ui/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf")
-    set_property(TARGET circuit_run APPEND PROPERTY LINK_DEPENDS "${host_exports}" "${plex_font}")
+    set_property(TARGET circuit_run APPEND PROPERTY LINK_DEPENDS "${host_exports}")
     target_link_libraries(circuit_run PRIVATE NativeKit::ui NativeKit::nativekit NativeKit::audio
         NativeKit::wasm_host_allocator)
     target_link_options(circuit_run PRIVATE
         "-sINITIAL_MEMORY=${NKUI_HAXEON_MEMORY_LIMIT}" "-sALLOW_MEMORY_GROWTH=0"
         "-sEXPORTED_FUNCTIONS=@${host_exports}" "-sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction"
-        "-sALLOW_TABLE_GROWTH=1" "-sNO_EXIT_RUNTIME=1"
-        "--preload-file=${plex_font}@/assets/IBMPlexSans-Regular.ttf")
+        "-sALLOW_TABLE_GROWTH=1" "-sNO_EXIT_RUNTIME=1")
     add_custom_target(circuit_run_site ALL
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${circuit_run_web_dir}/index.html"
             "${CMAKE_CURRENT_BINARY_DIR}/index.html"

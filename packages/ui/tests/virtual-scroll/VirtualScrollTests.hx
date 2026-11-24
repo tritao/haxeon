@@ -107,7 +107,7 @@ class VirtualScrollTests {
 	public static function main():Int {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.fixed(240);
 		style.height = LayoutAxis.fixed(240);

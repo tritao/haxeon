@@ -68,6 +68,15 @@ add_library(nativekit_ui ${NK_LIBRARY_TYPE}
     src/render/render_plan_executor.cpp
     src/render/sealed_render_plan.cpp
     src/render/ui_renderer.cpp)
+if(EMSCRIPTEN)
+    set(NKUI_DEFAULT_FONT "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/IBMPlexSans-Regular.ttf")
+    set(NKUI_DEFAULT_FONT_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts/IBM-Plex-OFL.txt")
+    target_link_options(nativekit_ui INTERFACE
+        "--embed-file=${NKUI_DEFAULT_FONT}@/ui/fonts/IBMPlexSans-Regular.ttf"
+        "--embed-file=${NKUI_DEFAULT_FONT_LICENSE}@/ui/fonts/IBM-Plex-OFL.txt")
+    set_property(TARGET nativekit_ui APPEND PROPERTY INTERFACE_LINK_DEPENDS
+        "${NKUI_DEFAULT_FONT}" "${NKUI_DEFAULT_FONT_LICENSE}")
+endif()
 add_library(NativeKit::ui ALIAS nativekit_ui)
 target_compile_features(nativekit_ui PRIVATE cxx_std_20)
 if(NK_ENABLE_NO_EXCEPTIONS)
@@ -636,9 +645,6 @@ if(NK_BUILD_EXAMPLES)
                 set(NKUI_HAXEON_SELF_HOSTED_VALUE 1)
                 set(NKUI_HAXEON_COMPILER_DEPS "${NKUI_HAXEON_COMPILER_MODULE}")
             endif()
-            option(NKUI_HAXEON_BUNDLE_FONTS
-                "Bundle Haxeon showcase fonts into the Emscripten data file"
-                OFF)
             option(NKUI_HAXEON_SUBSET_FONTS
                 "Subset Haxeon showcase fonts to glyphs used by the showcase"
                 ON)
@@ -704,10 +710,6 @@ if(NK_BUILD_EXAMPLES)
             if(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT)
                 set(NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT_VALUE 1)
             endif()
-            set(NKUI_HAXEON_BUNDLE_FONTS_VALUE 0)
-            if(NKUI_HAXEON_BUNDLE_FONTS)
-                set(NKUI_HAXEON_BUNDLE_FONTS_VALUE 1)
-            endif()
             add_custom_command(OUTPUT "${NKUI_HAXEON_GUEST_WASM}"
                 COMMAND ${CMAKE_COMMAND} -E env
                     "NATIVEKIT_WASM_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
@@ -720,7 +722,6 @@ if(NK_BUILD_EXAMPLES)
                     "NATIVEKIT_HAXEON_MEMORY_CONTRACT=${NKUI_HAXEON_MEMORY_CONTRACT}"
                     "NATIVEKIT_HAXEON_MEMORY_STATS=${NKUI_HAXEON_MEMORY_STATS_VALUE}"
                     "NATIVEKIT_HAXEON_WASM_GC_ALLOCATION_COUNT=${NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT_VALUE}"
-                    "NATIVEKIT_HAXEON_BUNDLE_FONTS=${NKUI_HAXEON_BUNDLE_FONTS_VALUE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase-wasm.sh"
                 DEPENDS
                     "${CMAKE_CURRENT_SOURCE_DIR}/tools/showcase-wasm.sh"
@@ -752,7 +753,6 @@ if(NK_BUILD_EXAMPLES)
                 NativeKit::wasm_host_allocator)
             set(NKUI_HAXEON_FONT_DIR "${NKUI_VENDOR_DIR}/skribidi/example/data")
             set(NKUI_HAXEON_FONT_PATHS
-                "${NKUI_HAXEON_FONT_DIR}/IBMPlexSans-Regular.ttf"
                 "${NKUI_HAXEON_FONT_DIR}/IBMPlexSansArabic-Regular.ttf"
                 "${NKUI_HAXEON_FONT_DIR}/IBMPlexSansHebrew-Regular.ttf"
                 "${NKUI_HAXEON_FONT_DIR}/IBMPlexSansJP-Regular.ttf"
@@ -824,14 +824,6 @@ if(NK_BUILD_EXAMPLES)
                 "-sEXPORTED_RUNTIME_METHODS=addFunction,removeFunction"
                 "-sALLOW_TABLE_GROWTH=1"
                 "-sNO_EXIT_RUNTIME=1")
-            if(NKUI_HAXEON_BUNDLE_FONTS)
-                foreach(NKUI_HAXEON_FONT_PATH IN LISTS NKUI_HAXEON_FONT_ASSET_PATHS)
-                    get_filename_component(NKUI_HAXEON_FONT_NAME
-                        "${NKUI_HAXEON_FONT_PATH}" NAME)
-                    target_link_options(nativekit_ui_haxeon PRIVATE
-                        "--preload-file=${NKUI_HAXEON_FONT_PATH}@/assets/${NKUI_HAXEON_FONT_NAME}")
-                endforeach()
-            endif()
             if(NOT NKUI_HAXEON_SDK_HOST)
                 set(NKUI_HAXEON_ASSET_COMMANDS
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -844,16 +836,12 @@ if(NK_BUILD_EXAMPLES)
                         "${NKUI_HAXEON_DIR}/stdlib/haxeon/wasm/haxeon-host.js"
                         "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/haxeon-host.js")
             endif()
-            if(NOT NKUI_HAXEON_BUNDLE_FONTS)
-                list(APPEND NKUI_HAXEON_ASSET_COMMANDS
-                    COMMAND ${CMAKE_COMMAND} -E rm -f
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/nativekit_ui_haxeon.data"
-                    COMMAND ${CMAKE_COMMAND} -E make_directory
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets"
-                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                        ${NKUI_HAXEON_FONT_ASSET_PATHS}
-                        "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets")
-            endif()
+            list(APPEND NKUI_HAXEON_ASSET_COMMANDS
+                COMMAND ${CMAKE_COMMAND} -E make_directory
+                    "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets"
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${NKUI_HAXEON_FONT_ASSET_PATHS}
+                    "$<TARGET_FILE_DIR:nativekit_ui_haxeon>/assets")
             add_custom_target(nativekit_ui_haxeon_assets
                 ${NKUI_HAXEON_ASSET_COMMANDS}
                 DEPENDS

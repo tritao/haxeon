@@ -9,7 +9,6 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxe.io.Bytes;
 import haxeon.ui.FontCollection;
-import haxeon.ui.FontFamily;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
@@ -57,11 +56,7 @@ class BrowserUiHost {
 	function new(options:UiHostOptions, create:UiHostContext->UiApplication) {
 		this.options = options;
 		this.create = create;
-		fontAssets = options.fonts ?? [
-			new UiFontAsset("IBMPlexSans-Regular", "ui/assets/IBMPlexSans-Regular.ttf",
-				"/assets/IBMPlexSans-Regular.ttf",
-				FontFamily.Default)
-		];
+		fontAssets = options.fonts ?? [];
 		logicalWidth = options.width;
 		logicalHeight = options.height;
 		session = new BrowserUiHostSession();
@@ -103,6 +98,7 @@ class BrowserUiHost {
 			eventLoop = new EventLoop(events);
 			eventSubscription = events.listen(handleEvent);
 			fonts = FontCollection.create();
+			fonts.addDefaultFonts();
 			if (fontAssets.length == 0) finishResources();
 			else loadFonts();
 		} catch (error:Dynamic) {
@@ -112,12 +108,6 @@ class BrowserUiHost {
 
 	function loadFonts():Void {
 		session.transition(UiHostLifecycle.LoadingResources);
-		#if nativekit_bundle_web_fonts
-		try {
-			for (font in fontAssets) fonts.add(font.bundledPath, font.family);
-			finishResources();
-		} catch (error:Dynamic) fail("font-load", error);
-		#else
 		pending = new UiHostPendingResources();
 		loaded = new Map();
 		for (font in fontAssets) {
@@ -131,19 +121,16 @@ class BrowserUiHost {
 			pending.add(Std.string(request), font);
 			pendingCount++;
 		}
-		#end
 	}
 
 	function finishResources():Void {
 		if (stopped || session.state == UiHostLifecycle.Stopping || session.state == UiHostLifecycle.Stopped) return;
-		#if !nativekit_bundle_web_fonts
 		if (loaded != null)
 			for (font in fontAssets) {
 				var bytes = loaded.get(font.name);
 				if (bytes == null) throw "Missing downloaded browser font " + font.name;
 				fonts.addData(font.name, bytes, font.family);
 			}
-		#end
 		var activeEvents:EventPump = cast events;
 		var activeFonts:FontCollection = cast fonts;
 		// The page's canvas is this host's window and surface, so applications written against the desktop

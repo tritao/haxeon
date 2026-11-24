@@ -76,7 +76,7 @@ class KeyChordTests {
 	public static function main():Int {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		var command = #if (mac || ios) UiModifier.Super #else UiModifier.Control #end;
 		check(selectAll(fonts, command) == "x", "Select-all did not replace the text");
 		check(selectAll(fonts, command | UiModifier.Shift) != "x",

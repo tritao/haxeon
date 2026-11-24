@@ -44,7 +44,6 @@ private class ShowcaseExplorerApplication implements UiApplication {
 typedef ShowcaseWebFont = {
 	var name:String;
 	var uri:String;
-	var bundledPath:String;
 	var family:FontFamily;
 };
 
@@ -166,11 +165,7 @@ class ShowcaseWeb {
 			eventSubscription = activePump.listen(handleEvent);
 			running = true;
 			try {
-				#if nativekit_bundle_web_fonts
-				createShowcase(createWebFonts());
-				#else
 				startWebFontLoads();
-				#end
 			} catch (error:Dynamic) {
 				failureStage = 91;
 				reportException(error, "ShowcaseWeb.main > load-showcase-fonts");
@@ -344,7 +339,7 @@ class ShowcaseWeb {
 			options.height = requestedHeight;
 			options.eventQueueCapacity = 64;
 			options.fonts = [for (font in webFontSpecs())
-				new UiFontAsset(font.name, font.uri, font.bundledPath, font.family)];
+				new UiFontAsset(font.name, font.uri, font.family)];
 			var startedSession = BrowserUiHost.start(options, function(context) {
 				explorer = new UiExplorer(context.fonts, "WEBGL2 · WASM", function() {
 					openGraphicsRequested = true;
@@ -371,17 +366,14 @@ class ShowcaseWeb {
 	static function createWebFonts():FontCollection {
 		var fonts = FontCollection.create();
 		try {
+			fonts.addDefaultFonts();
+			if (webFontBytes == null)
+				throw "Web fonts have not finished loading";
 			for (font in webFontSpecs()) {
-				#if nativekit_bundle_web_fonts
-				fonts.add(font.bundledPath, font.family);
-				#else
-				if (webFontBytes == null)
-					throw "Web fonts have not finished loading";
 				var data = webFontBytes.get(font.name);
 				if (data == null)
 					throw "Missing downloaded web font " + font.name;
 				fonts.addData(font.name, data, font.family);
-				#end
 			}
 			return fonts;
 		} catch (error:Dynamic) {
@@ -392,33 +384,23 @@ class ShowcaseWeb {
 
 	static function webFontSpecs():Array<ShowcaseWebFont> return [
 		{
-			name: "IBMPlexSans-Regular",
-			uri: "assets/IBMPlexSans-Regular.ttf",
-			bundledPath: "/assets/IBMPlexSans-Regular.ttf",
-			family: FontFamily.Default
-		},
-		{
 			name: "IBMPlexSansArabic-Regular",
 			uri: "assets/IBMPlexSansArabic-Regular.ttf",
-			bundledPath: "/assets/IBMPlexSansArabic-Regular.ttf",
 			family: FontFamily.Default
 		},
 		{
 			name: "IBMPlexSansHebrew-Regular",
 			uri: "assets/IBMPlexSansHebrew-Regular.ttf",
-			bundledPath: "/assets/IBMPlexSansHebrew-Regular.ttf",
 			family: FontFamily.Default
 		},
 		{
 			name: "IBMPlexSansJP-Regular",
 			uri: "assets/IBMPlexSansJP-Regular.ttf",
-			bundledPath: "/assets/IBMPlexSansJP-Regular.ttf",
 			family: FontFamily.Default
 		},
 		{
 			name: "NotoEmoji-Regular",
 			uri: "assets/NotoEmoji-Regular.ttf",
-			bundledPath: "/assets/NotoEmoji-Regular.ttf",
 			family: FontFamily.Emoji
 		}
 	];

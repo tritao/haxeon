@@ -90,7 +90,7 @@ class ActivationTests {
 	static function main():Int {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		var calls = 0;
 		exercise(fonts, new Button("Button", style(), function() calls++), "Button", function() return calls);
 		calls = 0;

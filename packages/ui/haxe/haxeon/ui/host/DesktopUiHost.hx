@@ -248,7 +248,7 @@ class DesktopUiHost {
 				});
 			}
 			fonts = FontCollection.create();
-			fonts.addSystemFallbacks();
+			fonts.addDefaultFonts();
 			var active = true;
 			var surfaceAvailable = false;
 			var framePending = false;

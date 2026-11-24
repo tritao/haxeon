@@ -87,7 +87,7 @@ class SearchPickerTests {
 		check(390 + placement.x + placement.width + 20 <= 394, "Shared tooltip escaped its bounds");
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create();
-		fonts.addSystemFallbacks();
+		fonts.addDefaultFonts();
 		var ui = new UiContext(null, fonts);
 		var model = new Results(), built = 0, rowBuildPasses = 0, previousBuildPass = -1;
 		var picker = new SearchPicker("results", model, function(context, index, selected, hovered, revision) {
