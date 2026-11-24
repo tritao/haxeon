@@ -44,8 +44,10 @@ class IrStaticNullChecks implements IrFunctionPass {
 
 	static inline final OF_VALUE = 1;
 
-	/** A function's summary: it reads a static. */
+	// Summary bits: the function reads a static; it stores something the walk of what initialization calls follows.
 	static inline final READS_STATIC = 1;
+
+	static inline final STORES = 2;
 
 	final objects:Null<Array<IrObject>>;
 	final valueTypes:Map<String, Bool> = [];
@@ -81,22 +83,27 @@ class IrStaticNullChecks implements IrFunctionPass {
 			functions);
 
 	public function summarize(fn:IrFunction):Int {
-		var body = fn.bodyIn(types, builder);
+		var body = fn.bodyIn(types, builder),
+			flags = IrInitCalls.stores(fn, types, builder, lineage).relevant ? STORES : 0;
 		for (block in 0...body.blockCount()) {
 			var row = body.firstRow(block);
 			while (row >= 0) {
 				if (body.opcode(row) == IrOpcode.GlobalGet)
-					return READS_STATIC;
+					return flags | READS_STATIC;
 				row = body.nextRow(row);
 			}
 		}
-		return 0;
+		return flags;
 	}
 
+	/** The functions initialization may call, from what the functions that store something give (`STORES`). */
 	public function prepare(functions:Array<IrFunction>, summaries:Array<Int>, names:IrFunctionIndex):Void {
-		var calls = new IrInitializationCalls(functions,
-			[for (fn in functions) IrInitCalls.stores(fn, types, builder, lineage)],
-			fn -> IrInitCalls.calls(fn, types, builder, lineage), objects);
+		var stores:Array<Null<IrInitCalls>> = [
+			for (index in 0...functions.length)
+				summaries[index] & STORES != 0 ? IrInitCalls.stores(functions[index], types, builder, lineage) : null
+		];
+		var calls = new IrInitializationCalls(functions, stores, fn -> IrInitCalls.calls(fn, types, builder, lineage),
+			names.get, objects);
 		reached = calls.reachable("__init", names.exists);
 	}
 
@@ -107,7 +114,7 @@ class IrStaticNullChecks implements IrFunctionPass {
 		};
 
 	public function transform(fn:IrFunction, summary:Int, reader:IrFactReader):IrFunction {
-		if (summary != READS_STATIC || reader.read(REACHED, fn.name) == 0)
+		if (summary & READS_STATIC == 0 || reader.read(REACHED, fn.name) == 0)
 			return fn;
 		var body = fn.bodyIn(types, builder);
 		var origins = staticOrigins(body);

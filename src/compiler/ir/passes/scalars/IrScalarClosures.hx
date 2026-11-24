@@ -41,6 +41,11 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	/** The fact of an object name: the inline enum stored as that object, interned; 0 for none. */
 	static inline final INLINE_ENUM = 1;
 
+	// Summary bits: the function does something with closures; it is not only reachable, so its signature is seen outside.
+	static inline final USES_CLOSURES = 1;
+
+	static inline final EXPOSED = 2;
+
 	// Helper kinds (`request`): each is made for a closure type.
 	static inline final ERASURE = 0;
 	static inline final RESTORATION = 1;
@@ -52,7 +57,6 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 	final layouts:IrInlineValueLayout;
 	final candidates:Map<String, IrType> = [];
 	final excluded:Map<String, Bool> = [];
-	final functions:Map<String, IrFunction>;
 	final erasures:Map<String, {maker:String, environment:String}> = [];
 	final restorations:Map<String, String> = [];
 	final signatureChecks:Map<String, String> = [];
@@ -109,7 +113,6 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 			if (declaration.inlineStorage != null)
 				inlineEnums.set(declaration.inlineStorage, declaration.name);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
-		functions = [for (fn in program.functions) fn.name => fn];
 	}
 
 	/** `fn`'s body, encoded when it has none; in a compile that keeps no session its objects go. */
@@ -118,10 +121,12 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 		return body;
 	}
 
+	/** What the choice reads of a function: what it does with closures (`USES`), and its signature when it is not only reachable (`EXPOSED`). */
 	public function summarize(fn:IrFunction):Int
-		return 0;
+		return (IrClosureUses.of(fn, types, scratch, useCounts, lineage).events.length > 0 ? USES_CLOSURES : 0)
+			| (fn.retention != Reachable ? EXPOSED : 0);
 
-	/** The candidate closure types: what each function does with closures, decided against the program. */
+	/** The candidate closure types: what each function does with closures (by its summary), decided against the program. */
 	public function prepare(inputs:Array<IrFunction>, summaries:Array<Int>,
 			names:compiler.ir.pipeline.IrFunctionIndex):Void {
 		for (native in program.natives) {
@@ -134,12 +139,15 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				excludeNested(type);
 			excludeNested(native.result);
 		}
-		for (fn in inputs) {
-			if (fn.name == program.entryPoint || fn.retention != Reachable) {
-				for (argument in fn.arguments)
-					excludeNested(argument.type);
-				excludeNested(fn.result);
-			}
+		var entry = names.get(program.entryPoint);
+		if (entry != null)
+			excludeSignature(entry);
+		for (position in 0...inputs.length) {
+			var fn = inputs[position], summary = summaries[position];
+			if (summary & EXPOSED != 0)
+				excludeSignature(fn);
+			if (summary & USES_CLOSURES == 0)
+				continue;
 			var uses = IrClosureUses.of(fn, types, scratch, useCounts, lineage), events = uses.events, index = 0;
 			while (index < events.length) {
 				var type = types.type(events[index + 1]);
@@ -149,12 +157,12 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 					case IrClosureUses.EXCLUDE:
 						excludeNested(type);
 					case IrClosureUses.STATIC:
-						if (note(type) && !functions.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]]))
+						if (note(type) && !names.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]]))
 							excluded.set(key(type), true);
 					default:
 						if (note(type)
 							&& (isValue(types.type(events[index + 3]))
-							|| !functions.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]])))
+							|| !names.exists(IrScalarArguments.PREFIX + uses.names[events[index + 2]])))
 							excluded.set(key(type), true);
 				}
 				index += events[index] == IrClosureUses.INSTANCE ? 4 : events[index] == IrClosureUses.STATIC ? 3 : 2;
@@ -296,6 +304,13 @@ class IrScalarClosures implements compiler.ir.pipeline.IrFunctionPass {
 				found && valid;
 			default: false;
 		};
+	}
+
+	/** Excludes the closure types of `fn`'s signature, which callers outside the program may see. */
+	function excludeSignature(fn:IrFunction):Void {
+		for (argument in fn.arguments)
+			excludeNested(argument.type);
+		excludeNested(fn.result);
 	}
 
 	function excludeNested(type:IrType):Void {

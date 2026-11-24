@@ -23,7 +23,10 @@ class IrInitializationCalls {
 	@:processWide("a contribution memo's key, only ever read")
 	public static final STORES = new compiler.ir.reuse.IrStageMemo.IrContributionKey<IrInitCalls>("init-stores");
 
-	final byName:Map<String, IrFunction>;
+	/** The program's functions, in program order, and the one of a name. */
+	final functions:Array<IrFunction>;
+
+	final find:String->Null<IrFunction>;
 	final summaries:Map<String, IrInitCalls> = [];
 	final detail:IrFunction->IrInitCalls;
 	final objects:Map<String, IrObject>;
@@ -34,29 +37,36 @@ class IrInitializationCalls {
 	/** By method name, the program's functions of that name, for a receiver that is no object; made when first asked. */
 	var methods:Null<Map<String, Array<String>>> = null;
 
-	final names:Array<String>;
 	final invoked:Map<String, Bool> = [];
 	final resolvedMethods:Map<String, Array<String>> = [];
 	final globals:Map<String, Array<String>> = [];
 	final returns:Map<String, Array<String>> = [];
 
 	/**
-	 * The program from its functions, in program order, what each stores (`IrInitCalls.stores`) and how to read what one calls
-	 * (`detail`, `IrInitCalls.calls`), asked only for the functions the walk reaches or asks about.
+	 * The program from its functions, in program order, what each stores (`IrInitCalls.stores`; null for one that stores nothing
+	 * the walk follows), how to find a function by name (`find`) and how to read what one calls (`detail`, `IrInitCalls.calls`),
+	 * asked only for the functions the walk reaches or asks about.
 	 */
-	public function new(functions:Array<IrFunction>, stores:Array<IrInitCalls>, detail:IrFunction->IrInitCalls,
-			?objects:Array<IrObject>) {
-		names = [for (fn in functions) fn.name];
-		byName = [for (fn in functions) fn.name => fn];
+	public function new(functions:Array<IrFunction>, stores:Array<Null<IrInitCalls>>, detail:IrFunction->IrInitCalls,
+			find:String->Null<IrFunction>, ?objects:Array<IrObject>) {
+		this.functions = functions;
+		this.find = find;
 		this.detail = detail;
 		this.objects = objects == null ? [] : [for (object in objects) object.name => object];
 		objectList = objects == null ? [] : objects;
-		var relevant = [for (index in 0...names.length) if (stores[index].relevant) index];
+		var relevant:Array<Int> = [], flows:Array<Array<IrInitFlow>> = [];
+		for (index in 0...functions.length) {
+			var stored = stores[index];
+			if (stored != null && stored.relevant) {
+				relevant.push(index);
+				flows.push(stored.flows);
+			}
+		}
 		var changed = true;
 		while (changed) {
 			changed = false;
-			for (index in relevant)
-				for (flow in stores[index].flows) {
+			for (position in 0...relevant.length)
+				for (flow in flows[position]) {
 					var target = switch flow.kind {
 						case IrInitFlow.GLOBAL_SET: globals;
 						case IrInitFlow.RETURN: returns;
@@ -66,7 +76,9 @@ class IrInitializationCalls {
 						continue;
 					var stored = closures(flow.sources);
 					if (stored != null
-						&& merge(target, flow.kind == IrInitFlow.RETURN ? names[index] : flow.name, stored))
+						&& merge(target,
+						flow.kind == IrInitFlow.RETURN ? functions[relevant[position]].name : flow.name,
+						stored))
 						changed = true;
 				}
 		}
@@ -134,7 +146,7 @@ class IrInitializationCalls {
 		var known = summaries.get(name);
 		if (known != null)
 			return known;
-		var fn = byName.get(name);
+		var fn = find(name);
 		if (fn == null)
 			return null;
 		var made = detail(fn);
@@ -219,8 +231,8 @@ class IrInitializationCalls {
 		if (known != null)
 			return known;
 		var made:Map<String, Array<String>> = [];
-		for (name in names) {
-			var dot = name.lastIndexOf(".");
+		for (fn in functions) {
+			var name = fn.name, dot = name.lastIndexOf(".");
 			if (dot < 0)
 				continue;
 			var method = name.substr(dot + 1), named = made.get(method);
