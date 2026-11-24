@@ -2,7 +2,9 @@
 
 Put a GLSL shader under a project source root's `shaders/` directory, for
 example `src/shaders/Quad.glsl`. Use an uppercase filename for the Haxe
-module. Subdirectories become packages. Files without an `@program` are
+module. Subdirectories become packages. Dependency packages can provide
+shader modules the same way. Use distinct module paths across packages,
+for example `shaders/lighting/Quad.glsl` for a lighting library. Files without an `@program` are
 available to `@include` and are excluded from module discovery.
 
 Use the sokol-shdc dialect. Start stages with `@vs` and `@fs`, end them

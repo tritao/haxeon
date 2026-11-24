@@ -9,10 +9,13 @@ import sys.FileSystem;
 class ShaderInputs {
 	public static function roots(project:ResolvedProject):Array<String> {
 		var roots = [];
-		for (sourceRoot in project.rootPackage.sourceRoots) {
-			var path = Path.join([sourceRoot, "shaders"]);
-			if (FileSystem.exists(path) && FileSystem.isDirectory(path))
-				roots.push(path);
+		for (item in project.packages.packages) {
+			for (sourceRoot in item.sourceRoots) {
+				var path = Path.join([sourceRoot, "shaders"]);
+				if (FileSystem.exists(path) && FileSystem.isDirectory(path))
+					if (roots.indexOf(path) < 0)
+						roots.push(path);
+			}
 		}
 		return roots;
 	}

@@ -138,6 +138,31 @@ class NativeMemoryMain {
 			"address-only and cannot be stored by value");
 		expectCompileError('import runtime.memory.RawPtr; @:value @:repr("C") class Pair { public var value:Int32; } function bad(pointer:RawPtr<Pair>):Int return pointer.ref.value; function main():Int return 0;',
 			"RawPtr.ref requires a Flat struct pointee");
+		var layoutCompiler = new Compiler();
+		CompilerIntrinsics.register(layoutCompiler);
+		layoutCompiler.addStandardLibrarySourceRoot("stdlib");
+		var validLayout =
+			'@:value @:repr("C") @:assertLayout(4, "x", 0) class Pair { public var x:Int; } function main():Int return 0;';
+		layoutCompiler.update("Layout.hx", validLayout);
+		layoutCompiler.compile("Layout");
+		layoutCompiler.update("Layout.hx", StringTools.replace(validLayout, '"x", 0', '"x", 4'));
+		try {
+			layoutCompiler.compile("Layout");
+			throw "Expected an edited layout assertion to be checked again";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1022"
+				|| error.diagnostic.message.indexOf('offsetof<Pair>("x") is 0, expected 4') < 0)
+				throw error;
+		}
+
+		expectCompileError('@:value @:repr("C") @:assertLayout(8) class Pair { public var x:Int; } function main():Int return 0;',
+			"sizeof<Pair>() is 4, expected 8");
+		expectCompileError('@:value @:repr("C") @:assertLayout(4, "missing", 0) class Pair { public var x:Int; } function main():Int return 0;',
+			'Record "Pair" has no field "missing"');
+		expectCompileError('@:value @:repr("C") @:assertLayout(4, "x", 4) class Pair { public var x:Int; } function main():Int return 0;',
+			'offsetof<Pair>("x") is 0, expected 4');
+		expectCompileError('@:assertLayout(4) class Pair { public var x:Int; } function main():Int return 0;',
+			"@:assertLayout requires a native layout");
 	}
 
 	static function expectCompileError(source:String, expected:String):Void {

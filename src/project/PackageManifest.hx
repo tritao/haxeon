@@ -668,24 +668,26 @@ class PackageManifest {
 		if (data == null)
 			return result;
 		if (!isObject(data))
-			throw new InternalError('$path "shaderVariants" must be a table keyed by shader module');
+			throw new UsageError('$path "shaderVariants" must be a table keyed by shader module');
 		for (module in Reflect.fields(data)) {
 			var value:Dynamic = Reflect.field(data, module);
 			if (!~/^shaders(\.[A-Za-z_][A-Za-z0-9_]*)+$/.match(module) || !isObject(value))
-				throw new InternalError('$path invalid shaderVariants module "$module"');
+				throw new UsageError('$path invalid shaderVariants module "$module"');
 			var variants:Map<String, Array<String>> = [];
 			for (name in Reflect.fields(value)) {
 				var context = '$path shaderVariants.$module';
 				if (!~/^[A-Za-z][A-Za-z0-9_]*$/.match(name) || Reflect.field(value, name) == null)
-					throw new InternalError('$context invalid variant "$name"');
-				var defines = stringArray(value, name, context, []);
+					throw new UsageError('$context invalid variant "$name"');
+				var defines = try stringArray(value, name, context, []) catch (error:InternalError) {
+					throw new UsageError(error.message);
+				};
 				for (define in defines)
 					if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(define))
-						throw new InternalError('$context invalid shader define "$define"');
+						throw new UsageError('$context invalid shader define "$define"');
 				variants.set(name, defines);
 			}
 			if (!variants.iterator().hasNext())
-				throw new InternalError('$path shaderVariants.$module must declare a variant');
+				throw new UsageError('$path shaderVariants.$module must declare a variant');
 			result.set(module, variants);
 		}
 		return result;

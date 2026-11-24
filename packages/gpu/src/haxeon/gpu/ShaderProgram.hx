@@ -3,7 +3,13 @@ package haxeon.gpu;
 import haxeon.gpu.Enums;
 import nativekit.ffi.NativeKitGpu;
 
-typedef ShaderTarget = NativeShaderTarget;
+enum ShaderTarget {
+	Glsl410;
+	Glsl300Es;
+	Hlsl5;
+	MetalMacos;
+	MetalIos;
+}
 
 typedef ShaderAttribute = {
 	final slot:Int;
@@ -65,7 +71,13 @@ class ShaderProgram {
 		}];
 		return [for (target in targets) {
 			var entry = new nkgpu_shader_table_entry();
-			entry.target = target.target;
+			entry.target = switch target.target {
+				case Glsl410: NativeShaderTarget.Glsl410;
+				case Glsl300Es: NativeShaderTarget.Glsl300Es;
+				case Hlsl5: NativeShaderTarget.Hlsl5;
+				case MetalMacos: NativeShaderTarget.MetalMacos;
+				case MetalIos: NativeShaderTarget.MetalIos;
+			};
 			entry.vertex = target.vertex;
 			entry.fragment = target.fragment;
 			entry.set_attributes(nativeAttributes);

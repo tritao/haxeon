@@ -20,9 +20,9 @@ class ShaderProvider {
 
 	public static function action(project:ResolvedProject, context:LoweringContext,
 			output:String):Null<ExecutionAction> {
-		var roots = ShaderInputs.roots(project), variants = project.manifest.shaderVariants;
+		var roots = ShaderInputs.roots(project), variants = projectVariants(project);
 		var manifest = ShaderInputs.sources(output);
-		if (roots.length == 0 && !variants.iterator().hasNext()
+		if (roots.length == 0 && Reflect.fields(variants).length == 0
 			&& (!FileSystem.exists(manifest) || File.getContent(manifest) == ""))
 			return null;
 		var target = switch context.environment.target.os {
@@ -30,6 +30,7 @@ class ShaderProvider {
 			case Wasm | Android: "glsl300es";
 			case Windows: "hlsl5";
 			case MacOS: "metal_macos";
+			case Other("ios"): "metal_ios";
 			case Other(name): throw new UsageError('Shader generation does not support $name');
 		};
 		var tools = HaxeonSdk.shaderTools(context.compilerHome);
@@ -41,7 +42,7 @@ class ShaderProvider {
 			"--project", project.root,
 			"--target", target,
 			"--diagnostics", Std.string(context.reportStyle.diagnosticFormat),
-			"--variants", variantsJson(variants)
+			"--variants", Json.stringify(variants)
 		].concat(roots);
 		var python = Sys.getEnv("HAXEON_SHADER_PYTHON");
 		if (python == null || python == "")
@@ -54,14 +55,18 @@ class ShaderProvider {
 			Process(python, args, project.root, []), false, true);
 	}
 
-	static function variantsJson(variants:Map<String, Map<String, Array<String>>>):String {
+	static function projectVariants(project:ResolvedProject):Dynamic {
 		var value = {};
-		for (module => entries in variants) {
-			var rows = {};
-			for (name => defines in entries)
-				Reflect.setField(rows, name, defines);
-			Reflect.setField(value, module, rows);
+		for (item in project.packages.packages) {
+			for (module => entries in item.manifest.shaderVariants) {
+				var rows = {};
+				for (name => defines in entries)
+					Reflect.setField(rows, name, defines);
+				if (Reflect.hasField(value, module))
+					throw new UsageError('Multiple packages declare shader variants for $module');
+				Reflect.setField(value, module, rows);
+			}
 		}
-		return Json.stringify(value);
+		return value;
 	}
 }
