@@ -247,6 +247,113 @@ class HlSymbolTable {
 			globals: globals.length
 		};
 
+	public static function sameLengths(left:HlTableLengths, right:HlTableLengths):Bool
+		return left.ints == right.ints && left.floats == right.floats && left.strings == right.strings
+			&& left.types == right.types && left.globals == right.globals;
+
+	/**
+	 * Whether this table starts with the entries of `prefix`. Each key a table maps is answered by its entry, so a table that starts
+	 * with the same entries answers every request of `prefix` the same; the keys that only name another entry (a nullable class as
+	 * `Dynamic`) add nothing either way.
+	 */
+	public function startsWith(prefix:HlSymbolTable):Bool {
+		if (ints.length < prefix.ints.length || floats.length < prefix.floats.length
+			|| strings.length < prefix.strings.length || types.length < prefix.types.length
+			|| globals.length < prefix.globals.length)
+			return false;
+		for (index in 0...prefix.ints.length)
+			if (ints[index] != prefix.ints[index])
+				return false;
+		for (index in 0...prefix.floats.length)
+			if (!sameFloat(floats[index], prefix.floats[index]))
+				return false;
+		for (index in 0...prefix.strings.length)
+			if (strings[index] != prefix.strings[index])
+				return false;
+		for (index in 0...prefix.globals.length)
+			if (globals[index] != prefix.globals[index])
+				return false;
+		for (index in 0...prefix.types.length)
+			if (!sameType(types[index], prefix.types[index]))
+				return false;
+		return true;
+	}
+
+	static function sameType(left:HlTypeDef, right:HlTypeDef):Bool
+		return switch [left, right] {
+			case [Simple(a), Simple(b)]: a == b;
+			case [EnumTag(a, aGlobals), EnumTag(b, bGlobals)]: a == b && sameInts(aGlobals, bGlobals);
+			case [Parameterized(a, aParameter), Parameterized(b, bParameter)]: a == b && aParameter == bParameter;
+			case [Abstract(a), Abstract(b)]: a == b;
+			case [Function(aArguments, a), Function(bArguments, b)] | [Method(aArguments, a), Method(bArguments, b)]:
+				a == b && sameInts(aArguments, bArguments);
+			case [
+				Object(aName, aBase, aGlobal, aFields, aMethods, aBindings),
+				Object(bName, bBase, bGlobal, bFields, bMethods, bBindings)
+			]:
+				aName == bName && aBase == bBase && aGlobal == bGlobal && sameFields(aFields, bFields)
+					&& sameMethods(aMethods, bMethods) && sameInts(aBindings, bBindings);
+			case [
+				Structure(aName, aGlobal, aFields, aMethods, aBindings),
+				Structure(bName, bGlobal, bFields, bMethods, bBindings)
+			]:
+				aName == bName && aGlobal == bGlobal && sameFields(aFields, bFields) && sameMethods(aMethods, bMethods)
+					&& sameInts(aBindings, bBindings);
+			case [Virtual(aName, aFields), Virtual(bName, bFields)]:
+				if (aName != bName || aFields.length != bFields.length) false;
+				else {
+					var same = true;
+					for (index in 0...aFields.length)
+						if (aFields[index].name != bFields[index].name || aFields[index].type != bFields[index].type)
+							same = false;
+					same;
+				}
+			case [Enum(aName, aGlobal, aConstructors), Enum(bName, bGlobal, bConstructors)]:
+				if (aName != bName || aGlobal != bGlobal || aConstructors.length != bConstructors.length) false;
+				else {
+					var same = true;
+					for (index in 0...aConstructors.length)
+						if (aConstructors[index].name != bConstructors[index].name
+							|| !sameInts(aConstructors[index].params, bConstructors[index].params))
+							same = false;
+					same;
+				}
+			default: false;
+		};
+
+	/** The table pools floats by their bits: a NaN is never taken for another, nor 0 for -0. */
+	static function sameFloat(left:Float, right:Float):Bool
+		return left == right && (left != 0 || 1 / left == 1 / right);
+
+	static function sameInts(left:Array<Int>, right:Array<Int>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index] != right[index])
+				return false;
+		return true;
+	}
+
+	static function sameFields(left:Array<HlObjectField>, right:Array<HlObjectField>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length)
+			if (left[index].name != right[index].name || left[index].type != right[index].type)
+				return false;
+		return true;
+	}
+
+	static function sameMethods(left:Array<HlObjectMethod>, right:Array<HlObjectMethod>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length) {
+			var a = left[index], b = right[index];
+			if (a.name != b.name || a.functionIndex != b.functionIndex || a.prototype != b.prototype)
+				return false;
+		}
+		return true;
+	}
+
 	/** Whether a type names string `index` (as its name or a field's), so that string is not a leaf. */
 	public function typesName(index:Int):Bool {
 		for (type in types)
