@@ -1,0 +1,16 @@
+{
+  "name": "sokol-shdc",
+  "displayName": "GLSL (sokol-shdc)",
+  "scopeName": "source.glsl.sokol-shdc",
+  "embeddedLangs": ["glsl"],
+  "patterns": [
+    {
+      "match": "^\\s*(@(?:vs|fs|cs|end|program|block|end_block|include|include_block|module|ctype|header|glsl_options|hlsl_options|msl_options|image_sample_type|sampler_type))\\b(.*)$",
+      "captures": {
+        "1": { "name": "keyword.control.directive.sokol-shdc" },
+        "2": { "name": "entity.name.directive-argument.sokol-shdc" }
+      }
+    },
+    { "include": "source.glsl" }
+  ]
+}

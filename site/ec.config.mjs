@@ -1,6 +1,8 @@
 import { defineEcConfig, ExpressiveCodeTheme } from '@astrojs/starlight/expressive-code';
 import haxe from '../extensions/vscode/syntaxes/haxe.tmLanguage.json' with { type: 'json' };
 import hxi from '../extensions/vscode/syntaxes/hxi.tmLanguage.json' with { type: 'json' };
+import sokolShdc from './src/syntaxes/sokol-shdc.tmLanguage.json' with { type: 'json' };
+import { bundledLanguages } from 'shiki/langs';
 import tokens from './src/styles/tokens.json' with { type: 'json' };
 
 // Shell fences are commands by convention. Scripts and explicit frames keep their normal treatment.
@@ -13,6 +15,9 @@ const shellPrompts = new Map([
   ['ps1', 'PS>'],
   ['pwsh', 'PS>'],
 ]);
+// sokol-shdc embeds GLSL, which Shiki loads only when the embedding grammar brings it along.
+const { default: glsl } = await bundledLanguages.glsl();
+
 const commandBlocks = new WeakSet();
 const commandStrip = {
   name: 'Haxeon command strip',
@@ -70,11 +75,15 @@ export default defineEcConfig({
         { scope: ['keyword.operator'], settings: { foreground: colors['code-fg'] } },
         { scope: ['string'], settings: { foreground: colors['code-string'] } },
         { scope: ['comment'], settings: { foreground: colors['code-comment'] } },
+        {
+          scope: ['keyword.control.directive.sokol-shdc'],
+          settings: { foreground: colors['code-string'], fontStyle: 'bold' },
+        },
       ],
     });
   }),
   plugins: [commandStrip],
-  shiki: { langs: [haxe, hxi] },
+  shiki: { langs: [haxe, hxi, ...glsl, sokolShdc] },
   defaultProps: { wrap: true, preserveIndent: true, hangingIndent: 4 },
   styleOverrides: {
     codeFontFamily: 'var(--sl-font-mono)',
