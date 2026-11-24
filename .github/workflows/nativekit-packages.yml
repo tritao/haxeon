@@ -37,7 +37,7 @@ jobs:
         run: >-
           sudo apt-get update && sudo apt-get install -y
           libffi-dev libfontconfig1-dev libgl1-mesa-dev libgles2-mesa-dev
-          libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build xvfb
+          libgtk-3-dev libwebkit2gtk-4.1-dev ninja-build python3-fonttools xvfb
       - run: ./scripts/bootstrap-tools.sh
       - name: Configure the UI native runtime
         run: >-
@@ -46,6 +46,28 @@ jobs:
           -DNK_BUILD_TESTS=OFF -DNK_BUILD_EXAMPLES=OFF
       - name: Run managed UI framework coverage
         run: ./packages/ui/tools/test-haxeon-framework.sh
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: '148.0.7778.97'
+          install-dependencies: true
+      - name: Set up Emscripten
+        run: ./vendor/nativekit/tools/setup-web.sh
+      - name: Build the Web UI showcase
+        env:
+          NKUI_HAXEON_SUBSET_FONTS: 'ON'
+        run: ./packages/ui/tools/build-web.sh
+      - name: Run the Web UI visual suite
+        id: web-visual
+        env:
+          NK_WEB_BROWSER: ${{ steps.chrome.outputs.chrome-path }}
+        run: ./packages/ui/tools/test-web-visual.sh
+      - name: Upload Web UI visual diffs
+        if: failure() && steps.web-visual.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nativekit-ui-web-visual-diffs
+          path: packages/ui/build-web/visual-diffs/*.png
 
   audio:
     runs-on: ubuntu-latest

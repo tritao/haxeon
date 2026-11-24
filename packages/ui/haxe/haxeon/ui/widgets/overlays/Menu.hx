@@ -97,7 +97,7 @@ class Menu implements View {
 				null);
 			var itemStyle = computed.toLayoutStyle();
 			var typography = context.resolveTextRole(TextRole.Button,
-				TextStyleOverride.combine(TextStyleOverride.text(13), TextStyleOverride.paragraph(TextWrap.None)));
+				TextStyleOverride.paragraph(TextWrap.None));
 			var fontSource = computed.source(StyleProperty.FontSize);
 			var letterSource = computed.source(StyleProperty.LetterSpacing);
 			typography = typography.merge(new TextStyleOverride(null,
@@ -140,7 +140,8 @@ class Menu implements View {
 				item.shortcut != null && item.shortcut.length > 0 ? new Text(item.shortcut,
 				null,
 				context.theme.tokens.textSecondary,
-				TextStyleOverride.text(13)) : null, label, null, null, null, null, itemSemantics);
+				TextStyleOverride.fromTextStyle(typography.textStyle)) : null, label, null, null, null, null,
+				itemSemantics);
 			var tooltip = new Tooltip("menu-label-tooltip", button, new Text(item.label), 0.0, 28.0);
 			tooltip.fillAnchor = true;
 			tooltip.showWhen = function() return label.truncated;
@@ -183,25 +184,29 @@ class Menu implements View {
 		// Keep the modal keyboard owner independent of the highlighted action.
 		root.focusable = true;
 		if (selectFirstOnOpen) root.tabIndex = -1;
-		var initialFocusPending = context.state(root.id, true);
+		var focusState:MenuFocusState = context.resourceState(root.id, function() return new MenuFocusState(),
+			function(_) {}).value;
 		root.onResolved(function(_) {
-			if (!initialFocusPending.value) return;
-			initialFocusPending.update(false);
+			if (!focusState.initialFocusPending) return;
+			focusState.initialFocusPending = false;
 			var initial = selectFirstOnOpen && focusableItems.length > 0 ? focusableItems[0] : root;
 			context.requestFocusAfterLayout(initial.id);
 		});
 		root.on(UiEventKind.PointerMove, function(event) {
 			var node = root.find(event.target);
-			var focusTarget = root;
-			while (node != null && node != root) {
+			while (node != null && !node.id.equals(root.id)) {
 				if (node.enabled && node.semantics != null && node.semantics.role == AccessibilityRole.MenuItem) {
-					focusTarget = node;
-					break;
+					focusState.pointerSelection = true;
+					context.requestFocus(node.id);
+					return;
 				}
 				node = node.parent;
 			}
-			// The backdrop and blank menu space clear the previous hover selection.
-			context.requestFocus(focusTarget.id);
+			// Blank space clears a pointer selection. Keyboard selection survives movement outside the items.
+			if (focusState.pointerSelection) {
+				focusState.pointerSelection = false;
+				context.requestFocus(root.id);
+			}
 		}, UiEventPhase.Capture);
 		var navigate = function(event:haxeon.ui.core.UiEvent) {
 			if (event.target.equals(root.id) && (event.key == UiKey.Enter || event.key == UiKey.Space)) {
@@ -218,6 +223,7 @@ class Menu implements View {
 				var next = event.key == UiKey.Down ? current + 1 : current - 1;
 				if (next < 0) next = focusableItems.length - 1;
 				if (next >= focusableItems.length) next = 0;
+				focusState.pointerSelection = false;
 				var target = focusableItems[next];
 				var viewport = menuViewport;
 				var targetGeometry = target.resolved;
@@ -250,4 +256,12 @@ class Menu implements View {
 		});
 		return root;
 	}
+}
+
+
+private class MenuFocusState {
+	public var initialFocusPending:Bool = true;
+	public var pointerSelection:Bool = false;
+
+	public function new() {}
 }

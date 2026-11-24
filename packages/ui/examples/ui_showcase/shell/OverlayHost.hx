@@ -69,6 +69,7 @@ class OverlayHost {
 				anchorTop = 159.0;
 				anchorBottom = 159.0;
 			}
+			var openedWithoutPointer = explorer.state.overlays.menuAnchorX < 0.0;
 			var menuX = clamp(anchorX, edge,
 				Math.max(edge, explorer.width - edge - menuWidth));
 			var belowY = anchorBottom + 6.0;
@@ -83,6 +84,7 @@ class OverlayHost {
 				new MenuItem("menu-disabled", "Unavailable action", null, false)], menuX, menuY, function() {
 				explorer.state.overlays.menuOpen = false;
 			});
+			menu.selectFirstOnOpen = openedWithoutPointer;
 			layers.push(new StackChild("menu-layer", menu, 0.0, 0.0, 20));
 		}
 	}

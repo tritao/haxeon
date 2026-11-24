@@ -72,6 +72,13 @@ class MenuInteractionTests {
 		pointerMenu.selectFirstOnOpen = true;
 		context.submit(pointerMenu, dialogFrame);
 		if (menuFocusLabel() != "First") throw "Keyboard invocation must select the first enabled action";
+		context.pointerMove(1.0, 1.0);
+		var backdropFocus = menuFocusLabel();
+		if (backdropFocus != "First")
+			throw 'Moving over the backdrop must preserve keyboard selection. Focus: $backdropFocus';
+		context.pointerMove(firstBounds.x + firstBounds.width / 2, firstBounds.y + firstBounds.height / 2);
+		context.pointerMove(1.0, 1.0);
+		if (menuFocusLabel() != "Menu") throw "Moving from an item to the backdrop must clear pointer selection";
 		context.submit(returnFocusView, dialogFrame);
 		var emptyDismissals = 0;
 		var emptyMenuRoot = context.submit(new Menu("empty-menu-smoke", [], 16.0, 16.0, function() {

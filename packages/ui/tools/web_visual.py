@@ -238,13 +238,13 @@ def main():
             args.output.write_bytes(png)
             print(f"captured visual: {args.output}")
             return
-        exact_match = (not args.update and args.reference.exists() and
-                       png == args.reference.read_bytes())
-        if args.update or not args.reference.exists():
+        if args.update:
             args.reference.parent.mkdir(parents=True, exist_ok=True)
             args.reference.write_bytes(png)
             print(f"updated visual baseline: {args.reference}")
-        elif exact_match:
+        elif not args.reference.is_file():
+            raise RuntimeError(f"missing visual baseline: {args.reference}")
+        elif png == args.reference.read_bytes():
             print(
                 f"visual match: {args.reference.name}: 0 pixels (0.000%), "
                 f"largest delta 0; caret {caret}"

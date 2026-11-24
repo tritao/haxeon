@@ -3,9 +3,11 @@ package pages;
 
 
 import UiExplorer;
+import haxeon.ui.Insets;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.TabItem;
 import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.overlays.Tooltip;
 
@@ -18,10 +20,15 @@ class OverlaysPage {
 			explorer.panel("tabs-card", [explorer.keyed("heading", explorer.heading("Tabs")),
 			explorer.keyed("tabs", new Tabs("demo-tabs", [
 				new TabItem("preview", "Preview",
-					explorer.caption("Selected content is built lazily and keeps a stable keyed identity.")),
+					new Padding("preview-caption",
+					explorer.caption("Selected content is built lazily and keeps a stable keyed identity."),
+					new Insets(0.0, 8.0, 0.0, 0.0))),
 				new TabItem("details", "Details",
-					explorer.caption("Tab navigation supports arrow keys and visible focus.")),
-				new TabItem("disabled", "Disabled", explorer.caption("This tab is not enabled."), false)
+					new Padding("details-caption",
+					explorer.caption("Tab navigation supports arrow keys and visible focus."),
+					new Insets(0.0, 8.0, 0.0, 0.0))),
+				new TabItem("disabled", "Disabled", new Padding("disabled-caption",
+					explorer.caption("This tab is not enabled."), new Insets(0.0, 8.0, 0.0, 0.0)), false)
 			], explorer.state.controls.selectedTab, function(value) {
 				explorer.state.controls.selectedTab = value;
 			}))])));

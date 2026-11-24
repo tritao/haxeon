@@ -177,7 +177,6 @@ http_pid=""
 browser_pid=""
 cleanup_suite() {
     [[ -z "$browser_pid" ]] || kill "$browser_pid" 2>/dev/null || true
-    pkill -TERM -f -- "--user-data-dir=$temp_dir/profile" 2>/dev/null || true
     [[ -z "$http_pid" ]] || kill "$http_pid" 2>/dev/null || true
     [[ -z "$browser_pid" ]] || wait "$browser_pid" 2>/dev/null || true
     [[ -z "$http_pid" ]] || wait "$http_pid" 2>/dev/null || true
@@ -191,6 +190,7 @@ python3 -m http.server "$http_port" --bind 127.0.0.1 --directory "$artifact_dir"
     >"$temp_dir/http.log" 2>&1 &
 http_pid=$!
 
+status=0
 for visual_case in "${cases[@]}"; do
     IFS='|' read -r case_name size extra_query click caret device_scale <<<"$visual_case"
     if [[ -n "$case_filter" && "$case_name" != "$case_filter" ]]; then
@@ -213,6 +213,7 @@ for visual_case in "${cases[@]}"; do
     debug_port=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
     "$browser" --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu \
         --enable-unsafe-swiftshader --no-first-run --window-size="$width,$height" \
+        --force-device-scale-factor=1 --force-color-profile=srgb \
         --user-data-dir="$temp_dir/profile-$case_name" --remote-debugging-port="$debug_port" \
         --remote-allow-origins='*' "$page_url" >"$temp_dir/browser-$case_name.log" 2>&1 &
     browser_pid=$!
@@ -242,9 +243,13 @@ for visual_case in "${cases[@]}"; do
             --expect-direction "$caret_direction")
     fi
     [[ "$update" == false ]] || arguments+=(--update)
-    PYTHONPATH="$nativekit_dir/tools${PYTHONPATH:+:$PYTHONPATH}" \
-        python3 "$repo_dir/tools/web_visual.py" "${arguments[@]}"
+    if ! PYTHONPATH="$nativekit_dir/tools${PYTHONPATH:+:$PYTHONPATH}" \
+        python3 "$repo_dir/tools/web_visual.py" "${arguments[@]}"; then
+        echo "Visual case failed: $case_name" >&2
+        status=1
+    fi
     kill "$browser_pid" 2>/dev/null || true
     wait "$browser_pid" 2>/dev/null || true
     browser_pid=""
 done
+exit "$status"

@@ -190,24 +190,23 @@ class Tabs implements View {
 				var panelStyle = new LayoutStyle();
 				panelStyle.width = LayoutAxis.stretch();
 				panelStyle.height = LayoutAxis.grow();
+				panelStyle.direction = LayoutDirection.TopToBottom;
 				var node = context.createNode(context.rootId("tab-panel"), LayoutVisualKind.Box, panelStyle);
 				node.semantics = new Semantics(AccessibilityRole.TabPanel, item.label);
 				var content = context.withStyleParent(rootComputed, function() {
 					return context.withScope(new Key("content"), function() return item.content.build(context));
 				});
 				content.layout.style.width = LayoutAxis.stretch();
-				node.add(content);
 				// A quiet content boundary is independent of the active-tab accent.
 				var dividerStyle = new LayoutStyle();
 				dividerStyle.width = LayoutAxis.stretch();
 				dividerStyle.height = LayoutAxis.fixed(1.0);
-				dividerStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
-				dividerStyle.zIndex = 1;
 				dividerStyle.background = context.theme.tokens.border;
 				var divider = context.createNode(context.rootId("tab-content-divider"), LayoutVisualKind.Box,
 					dividerStyle);
 				divider.hitTestSelf = false;
 				node.add(divider);
+				node.add(content);
 				return node;
 			});
 			root.add(panel);
