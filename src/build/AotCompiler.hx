@@ -77,14 +77,14 @@ class AotCompiler {
 	 */
 	public static function current(home:String, ?compilerSource:String, ?digests:ContentDigestCache):Null<String> {
 		var digest = new LazyDigest(home, compilerSource, digests);
-		return digest.matches(executable(home), stamp(home)) ? executable(home) : null;
+		return digest.matchingDigest(executable(home), stamp(home)) != null ? executable(home) : null;
 	}
 
 	/** The program `name` beside the VM (`shipped`) when it was built from those sources, else null. */
 	public static function currentShipped(home:String, name:String, ?compilerSource:String,
 			?digests:ContentDigestCache):Null<String> {
 		var digest = new LazyDigest(home, compilerSource, digests), path = shipped(home, name);
-		return digest.matches(path, stampOf(path)) ? path : null;
+		return digest.matchingDigest(path, stampOf(path)) != null ? path : null;
 	}
 
 	/**
@@ -94,17 +94,20 @@ class AotCompiler {
 	 */
 	public static function program(home:String, ?compilerSource:String,
 			?digests:ContentDigestCache):Null<CompilerProgram> {
-		var digest = new LazyDigest(home, compilerSource, digests), native = executable(home);
-		if (digest.matches(native, stamp(home)))
-			return {command: [native], native: true};
+		var digest = new LazyDigest(home, compilerSource, digests),
+			native = executable(home),
+			nativeDigest = digest.matchingDigest(native, stamp(home));
+		if (nativeDigest != null)
+			return {command: [native], native: true, sourceDigest: nativeDigest};
 		if (announceStale && !staleAnnounced && FileSystem.exists(native)) {
 			staleAnnounced = true;
 			BuildOutput.error(staleNotice());
 		}
-		var code = bytecode(home);
-		return digest.matches(code, stampOf(code)) ? {
+		var code = bytecode(home), bytecodeDigest = digest.matchingDigest(code, stampOf(code));
+		return bytecodeDigest != null ? {
 			command: [HashLinkPath.executable(home), code],
-			native: false
+			native: false,
+			sourceDigest: bytecodeDigest
 		} : null;
 	}
 
@@ -162,19 +165,19 @@ private class LazyDigest {
 		this.digests = digests;
 	}
 
-	/** Whether `path` and its stamp `stampPath` exist and the stamp holds the sources' digest. */
-	public function matches(path:String, stampPath:String):Bool {
+	/** The sources' digest when the program exists and its stamp matches. */
+	public function matchingDigest(path:String, stampPath:String):Null<String> {
 		try {
 			if (!FileSystem.exists(path) || !FileSystem.exists(stampPath))
-				return false;
+				return null;
 			if (digest == null) {
 				var sources = compilerSource;
 				digest = sources == null ? HaxeonSdk.field(home,
 					HaxeonSdk.COMPILER_SOURCES) : AotCompiler.sourcesDigest(home, sources, digests);
 			}
-			return digest != null && StringTools.trim(File.getContent(stampPath)) == digest;
+			return digest != null && StringTools.trim(File.getContent(stampPath)) == digest ? digest : null;
 		} catch (_:Dynamic) {
-			return false;
+			return null;
 		}
 	}
 }
@@ -186,4 +189,7 @@ typedef CompilerProgram = {
 
 	/** The executable built ahead of time, rather than the VM running bytecode. */
 	final native:Bool;
+
+	/** The compiler and standard library sources verified against the program's stamp. */
+	final sourceDigest:String;
 }

@@ -23,7 +23,7 @@ private typedef Connection = {
 class CompilerClient {
 	/**
 	 * The compiler build that names a worker program. A watch memoizes its choice to keep the same compiler across edits.
-	 * Fingerprint installed programs as well as source inputs so replacing an executable selects a new worker.
+	 * Replacing a prebuilt program or changing the sources it was built from selects a new worker.
 	 */
 	public static function workerVersion(command:String, compilerSource:Null<String>, home:String, buildRoot:String,
 			profilePort:Null<String>,
@@ -31,13 +31,17 @@ class CompilerClient {
 		// A request states its passes and checks (`CompileOptions`), so one worker serves every combination of them.
 		var roots = compilerRoots(compilerSource),
 			programFiles = program == null ? [build.HashLinkPath.executable(home)] : program.command,
-			identity = new ExecutionAction(new ActionId("compiler-session-v10"
-				+ (profilePort == null ? "" : ":profile:" + profilePort)
-				+ (program != null && program.native ? ":aot" : "")), [],
-				roots.concat([build.HaxeonSdk.stdlib(home)]).concat(programFiles), [], "",
-				ExecutionAction.ActionKind.Process(command, roots, home, new Map()));
+			inputs = (program == null ? roots : []).concat(programFiles),
+			dependencies:Array<Null<String>> = program == null ? [] : [program.sourceDigest];
+		// A checkout's stamp check already walked the stdlib. A release's stamp is checked against its manifest.
+		if (program == null || compilerSource == null)
+			inputs.push(build.HaxeonSdk.stdlib(home));
+		var identity = new ExecutionAction(new ActionId("compiler-session-v10"
+			+ (profilePort == null ? "" : ":profile:" + profilePort)
+			+ (program != null && program.native ? ":aot" : "")), [], inputs, [], "",
+			ExecutionAction.ActionKind.Process(command, roots, home, new Map()));
 		if (session == null)
-			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
+			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), dependencies);
 		var memoKey = Json.stringify([
 			identity.id.key(),
 			command,
@@ -48,7 +52,8 @@ class CompilerClient {
 			programFiles
 		]);
 		return session.workerVersion(memoKey, () -> {
-			var version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), [], session.digests);
+			var version = ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), dependencies,
+				session.digests);
 			Sys.println('haxeon: compiler worker version $version (kept for this watch session)');
 			return version;
 		});

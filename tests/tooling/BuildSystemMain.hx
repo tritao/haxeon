@@ -934,6 +934,25 @@ class BuildSystemMain {
 			"without a session the version follows the sources");
 		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one,
 			"a profile port selects a different worker");
+
+		var executable = build.AotCompiler.executable(home), stamp = build.AotCompiler.stamp(home);
+		FileSystem.createDirectory(Path.directory(executable));
+		File.saveContent(executable, "first compiler binary");
+		function prebuiltVersion():String {
+			File.saveContent(stamp, build.AotCompiler.sourcesDigest(home, source) + "\n");
+			var program = build.AotCompiler.program(home, source);
+			if (program == null)
+				throw "expected a current prebuilt compiler";
+			return CompilerClient.workerVersion("haxe", source, home, root, null, null, program);
+		}
+		var prebuilt = prebuiltVersion();
+		File.saveContent(Path.join([home, "stdlib", "Library.hx"]), "class Library {}\n");
+		var newLibrary = prebuiltVersion();
+		expect(newLibrary != prebuilt,
+			"a prebuilt worker follows a changed standard library even if its binary is identical");
+		File.saveContent(executable, "replacement compiler binary");
+		expect(prebuiltVersion() != newLibrary,
+			"a replacement binary selects a new worker even with the same source stamp");
 		FileTree.remove(root);
 	}
 

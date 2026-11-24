@@ -1,6 +1,7 @@
 package sys.io;
 
 import haxe.io.Bytes;
+import haxe.io.BytesBuffer;
 import haxe.io.Eof;
 
 #if wasm
@@ -74,11 +75,31 @@ private class ProcessOutput extends haxe.io.Input {
 			throw haxe.io.Error.OutsideBounds;
 		if (len == 0)
 			return 0;
-		var count = error ? processStderrRead(process, s, pos, len) : processStdoutRead(process, s, pos, len);
+		var count = readChunk(s, pos, len);
 		if (count < 0)
 			throw new Eof();
 		return count;
 	}
+
+	/** EOF is the normal stop condition here, so there is no exception stack to capture. */
+	override public function readAll(?bufsize:Int):Bytes {
+		var size = bufsize == null ? 1 << 14 : bufsize,
+			buffer = Bytes.alloc(size),
+			total = new BytesBuffer();
+		if (size == 0)
+			throw haxe.io.Error.Blocked;
+		while (true) {
+			var count = readChunk(buffer, 0, size);
+			if (count < 0)
+				return total.getBytes();
+			if (count == 0)
+				throw haxe.io.Error.Blocked;
+			total.addBytes(buffer, 0, count);
+		}
+	}
+
+	inline function readChunk(bytes:Bytes, pos:Int, len:Int):Int
+		return error ? processStderrRead(process, bytes, pos, len) : processStdoutRead(process, bytes, pos, len);
 }
 
 /** What the program writes to the child's standard input. */
