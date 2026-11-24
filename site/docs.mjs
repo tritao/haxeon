@@ -1,4 +1,4 @@
-import { existsSync, globSync } from 'node:fs';
+import { existsSync, globSync, readFileSync } from 'node:fs';
 import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { visit } from 'unist-util-visit';
@@ -14,7 +14,7 @@ export function docsSlug(path) {
     .replace(/^guides\/\d+-/, 'guides/')
     .replaceAll('_', '-')
     .toLowerCase()
-    .replace(/^(guides|reference)\/readme$/, '$1')
+    .replace(/^([\w-]+)\/readme$/, '$1')
     .replace(/\/index$/, '');
 }
 
@@ -35,10 +35,21 @@ export function repositorySource(path) {
   return `${projectRepo}/tree/${encodeURIComponent(sourceRef)}/${path}`;
 }
 
+// A section's README lists its pages in reading order; the README comes first, as the section's overview.
+function readmeOrder(directory) {
+  const readme = directory + 'README.md';
+  if (!publishedDocs.has(readme)) return [];
+  const text = readFileSync(new URL(readme, docsRoot), 'utf8');
+  const linked = [...text.matchAll(/\]\(([^)#?\s]+\.md)\)/g)]
+    .map(([, target]) => posix.join(directory, target))
+    .filter((path) => path.startsWith(directory) && publishedDocs.has(path));
+  return [readme, ...new Set(linked)];
+}
+
 // A group lists its pages, or a directory whose unlisted pages follow, or nested groups.
 const groups = [
   ['Start here', ['guides/00-get-started.md', 'guides/01-first-app.md']],
-  ['Learn the language', 'learn/'],
+  ['Learn the language', readmeOrder('learn/'), 'learn/'],
   ['Build guides', ['guides/README.md'], 'guides/'],
   [
     'C and C++ interop',
@@ -74,7 +85,7 @@ const groups = [
       ['Other', [], 'reference/'],
     ],
   ],
-  ['Coming from', 'coming-from/'],
+  ['Coming from', readmeOrder('coming-from/'), 'coming-from/'],
 ];
 
 const isNested = (pages) => Array.isArray(pages) && Array.isArray(pages[0]);
@@ -89,12 +100,6 @@ function sidebarGroups(entries) {
       // The overview page stands as the first link rather than a group of one.
       if (items[0]?.label === 'Overview') items.splice(0, 1, ...items[0].items);
       return [{ label, items }];
-    }
-    if (pages === 'learn/' || pages === 'coming-from/') {
-      // Starlight orders these sections by the authors' sidebar metadata.
-      return [...publishedDocs].some((path) => path.startsWith(pages))
-        ? [{ label, items: [{ autogenerate: { directory: '../docs/' + pages.slice(0, -1) } }] }]
-        : [];
     }
     const prefix = typeof pages === 'string' ? pages : directory;
     const paths = [
