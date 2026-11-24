@@ -14,6 +14,10 @@ npm run check:links
 npm run check:examples
 ```
 
+`npm run build:gpu-modules`, before `npm run build`, generates the shader module the GPU page
+quotes from the Triangle example into the git-ignored `generated/`. It needs the native Haxeon
+CLI from `scripts/build-native.sh`; without it the page build stops and names this step.
+
 `npm run build:showcase`, after `npm run build`, builds the live WebGL2 UI Showcase on /ui/ from
 source with CMake, Ninja, the pinned Emscripten toolchain and Python FontTools, into `dist/`. It
 installs Emscripten on its first run and reuses the build directory under `out/site-showcase`

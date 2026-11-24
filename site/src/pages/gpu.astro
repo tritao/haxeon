@@ -34,6 +34,47 @@ const frame = method(triangleMain, 'frame');
 const computeFrame = method(particlesMain, 'frame');
 const viewportExample = 'packages/gpu/examples/viewport/';
 const viewportBuild = method(fountainView, 'build');
+
+// The build generates shaders.Triangle; scripts/build-gpu-modules.sh copies it here before the site builds.
+const generatedModules = import.meta.glob<string>('../../generated/gpu/Triangle.hx', { query: '?raw', import: 'default', eager: true });
+const generatedTriangle = Object.values(generatedModules)[0];
+if (!generatedTriangle) throw new Error('Missing the generated Triangle module: run npm run build:gpu-modules');
+/** Splits an object or array literal's body at its top-level commas. */
+const topLevel = (text: string) => {
+  const parts: string[] = [];
+  let depth = 0, start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if ('{[('.includes(c)) depth++;
+    else if ('}])'.includes(c)) depth--;
+    else if (c === ',' && depth === 0) { parts.push(text.slice(start, i).trim()); start = i + 1; }
+  }
+  parts.push(text.slice(start).trim());
+  return parts;
+};
+const generatedLine = (pattern: RegExp) => {
+  const line = generatedTriangle.split('\n').find((row) => pattern.test(row));
+  if (!line) throw new Error(`The generated Triangle module has no line matching ${pattern}`);
+  return line.trim();
+};
+const vertexRecord = generatedLine(/^\tpublic static final Vertex = \{/).match(/^public static final Vertex = \{(.*)\};$/)![1];
+const vertexFields = topLevel(vertexRecord).map((field) => {
+  const layout = field.match(/^layout: new VertexLayout\((\d+), \[(.*)\]\)$/);
+  if (!layout) return `\t\t${field}`;
+  const attributes = topLevel(layout[2]).map((attribute) => `\t\t\t${attribute}`).join(',\n');
+  return `\t\tlayout: new VertexLayout(${layout[1]}, [\n${attributes}\n\t\t])`;
+});
+const programName = generatedLine(/^\tpublic static final \w+ = new ShaderProgram\(/).match(/^public static final (\w+)/)![1];
+const generatedExcerpt = [
+  'class Triangle {',
+  '\tpublic static final Vertex = {',
+  vertexFields.join(',\n'),
+  '\t};',
+  '\t// Compiled sources per backend.',
+  `\tpublic static final ${programName} = new ShaderProgram(...);`,
+  `\t${generatedLine(/^\tpublic static function create\(/)}`,
+  '}',
+].join('\n').replace(/\t/g, '  ');
 const appLines = triangleMain.trimEnd().split('\n').length;
 ---
 
@@ -159,12 +200,13 @@ const appLines = triangleMain.trimEnd().split('\n').length;
           <li><span>GLSL 4.1 · GLSL ES 3.0 · HLSL 5 · Metal</span></li>
           <li><span>shaders.Triangle</span></li>
         </ol>
-        <div class="grid">
+        <div class="grid first-frame">
           <CodeCard code={triangleShader} lang="sokol-shdc" title="src/shaders/Triangle.glsl" />
           <div class="stack">
+            <CodeCard code={generatedExcerpt} lang="haxe" title="Generated · shaders/Triangle.hx" />
             <Card compact>
               <h3>Typed layouts and uniforms</h3>
-              <p><code>Triangle.create</code> builds the shader and <code>Triangle.Vertex</code> gives its vertex layout, offsets and stride. Each uniform block becomes a record with checked std140 offsets.</p>
+              <p>Offsets, strides and the vertex layout come from the shader, so they cannot drift from it. Each uniform block becomes a record with checked std140 offsets.</p>
             </Card>
             <Card compact>
               <h3>Rebuilt while you work</h3>
