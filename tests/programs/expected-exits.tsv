@@ -34,10 +34,15 @@ enum-abstract	42
 enum-argument-string	42
 enum-reflection	42
 concise-try	42
+try-unbraced-catches	42
+try-untyped-catch	42
 switch-expression-block	42
 switch-expression-throw-arm	42
 member-range	42
 trailing-object-comma	42
+quoted-object-field	42
+object-literal-empty-branch	42
+path-extension	42
 block-comprehension	42
 transparent-abstract	42
 computed-field-assignment	42
@@ -699,3 +704,4 @@ rpc-wire-named-method	42
 map-to-string	42
 pattern-capture-names	42
 dynamic-method-owners	42
+if-empty-block-branch	42
