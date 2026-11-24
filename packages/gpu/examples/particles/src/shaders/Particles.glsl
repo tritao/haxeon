@@ -5,19 +5,7 @@ struct particle {
 };
 @end
 
-@cs step_cs
-@include_block particle
-layout(local_size_x=64) in;
-
-layout(binding=0) buffer particles {
-    particle items[];
-};
-
-layout(std140, binding=0) uniform step_params {
-    float dt;
-    float time;
-};
-
+@block launch
 const float gravity = 1.5;
 
 float hash(float n) {
@@ -32,12 +20,27 @@ particle launch(float seed, float age) {
     p.velocity = velocity - vec2(0.0, gravity * age);
     return p;
 }
+@end
+
+@cs step_cs
+@include_block particle
+@include_block launch
+layout(local_size_x=64) in;
+
+layout(binding=0) buffer particles {
+    particle items[];
+};
+
+layout(std140, binding=0) uniform step_params {
+    float dt;
+    float time;
+};
 
 void main() {
     uint index = gl_GlobalInvocationID.x;
     particle p = items[index];
     float seed = float(index) * 0.618 + time;
-    // The buffer starts zeroed: spread the first launches along the arc instead of firing them at once.
+    // The buffer starts zeroed: spread the first launches along the arc.
     if (p.velocity == vec2(0.0)) {
         p = launch(seed, 2.4 * hash(float(index)));
     } else if (p.position.y < -1.0) {
