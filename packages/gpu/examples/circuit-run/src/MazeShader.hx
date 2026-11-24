@@ -2,55 +2,74 @@
 import haxeon.gpu.Enums;
 import haxeon.gpu.Renderer;
 import haxeon.gpu.Shader;
+import haxeon.gpu.ShaderProgram;
 import haxeon.platform.BindingError;
 
 class MazeShader {
 	public static inline var position = 0;
 	public static inline var rgb = 1;
 
-	public static function create(renderer:Renderer):Shader {
-		return switch renderer.backend() {
-			case Glcore:
-				var shader = Shader.begin(renderer, ShaderLanguage.Glsl,
-					"#version 410\n\nlayout(location = 0) out vec3 color;\nlayout(location = 1) in vec3 rgb;\nlayout(location = 0) in vec2 position;\n\nvoid main()\n{\n    color = rgb;\n    gl_Position = vec4(position, 0.0, 1.0);\n}\n\n",
-					"#version 410\n\nlayout(location = 0) out vec4 pixel;\nlayout(location = 0) in vec3 color;\n\nvoid main()\n{\n    pixel = vec4(color, 1.0);\n}\n\n");
-				shader.attribute(0, "position", "TEXCOORD", 0);
-				shader.attribute(1, "rgb", "TEXCOORD", 1);
-				shader.build();
-			case Gles3:
-				var shader = Shader.begin(renderer, ShaderLanguage.Glsl,
-					"#version 300 es\n\nout vec3 color;\nlayout(location = 1) in vec3 rgb;\nlayout(location = 0) in vec2 position;\n\nvoid main()\n{\n    color = rgb;\n    gl_Position = vec4(position, 0.0, 1.0);\n}\n\n",
-					"#version 300 es\nprecision mediump float;\nprecision highp int;\n\nlayout(location = 0) out highp vec4 pixel;\nin highp vec3 color;\n\nvoid main()\n{\n    pixel = vec4(color, 1.0);\n}\n\n");
-				shader.attribute(0, "position", "TEXCOORD", 0);
-				shader.attribute(1, "rgb", "TEXCOORD", 1);
-				shader.build();
-			case D3d11:
-				var shader = Shader.begin(renderer, ShaderLanguage.Hlsl5,
-					"static float4 gl_Position;\nstatic float3 color;\nstatic float3 rgb;\nstatic float2 position;\n\nstruct SPIRV_Cross_Input\n{\n    float2 position : TEXCOORD0;\n    float3 rgb : TEXCOORD1;\n};\n\nstruct SPIRV_Cross_Output\n{\n    float3 color : TEXCOORD0;\n    float4 gl_Position : SV_Position;\n};\n\nvoid vert_main()\n{\n    color = rgb;\n    gl_Position = float4(position, 0.0f, 1.0f);\n}\n\nSPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)\n{\n    rgb = stage_input.rgb;\n    position = stage_input.position;\n    vert_main();\n    SPIRV_Cross_Output stage_output;\n    stage_output.gl_Position = gl_Position;\n    stage_output.color = color;\n    return stage_output;\n}\n",
-					"static float4 pixel;\nstatic float3 color;\n\nstruct SPIRV_Cross_Input\n{\n    float3 color : TEXCOORD0;\n};\n\nstruct SPIRV_Cross_Output\n{\n    float4 pixel : SV_Target0;\n};\n\nvoid frag_main()\n{\n    pixel = float4(color, 1.0f);\n}\n\nSPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)\n{\n    color = stage_input.color;\n    frag_main();\n    SPIRV_Cross_Output stage_output;\n    stage_output.pixel = pixel;\n    return stage_output;\n}\n");
-				shader.attribute(0, "position", "TEXCOORD", 0);
-				shader.attribute(1, "rgb", "TEXCOORD", 1);
-				shader.build();
-				#if !ios
-			case Metal:
-				var shader = Shader.begin(renderer, ShaderLanguage.Msl,
-					"#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float3 color [[user(locn0)]];\n    float4 gl_Position [[position]];\n};\n\nstruct main0_in\n{\n    float2 position [[attribute(0)]];\n    float3 rgb [[attribute(1)]];\n};\n\nvertex main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.color = in.rgb;\n    out.gl_Position = float4(in.position, 0.0, 1.0);\n    return out;\n}\n\n",
-					"#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float4 pixel [[color(0)]];\n};\n\nstruct main0_in\n{\n    float3 color [[user(locn0)]];\n};\n\nfragment main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.pixel = float4(in.color, 1.0);\n    return out;\n}\n\n");
-				shader.attribute(0, "position", "TEXCOORD", 0);
-				shader.attribute(1, "rgb", "TEXCOORD", 1);
-				shader.build();
-				#end
-				#if ios
-			case Metal:
-				var shader = Shader.begin(renderer, ShaderLanguage.Msl,
-					"#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float3 color [[user(locn0)]];\n    float4 gl_Position [[position]];\n};\n\nstruct main0_in\n{\n    float2 position [[attribute(0)]];\n    float3 rgb [[attribute(1)]];\n};\n\nvertex main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.color = in.rgb;\n    out.gl_Position = float4(in.position, 0.0, 1.0);\n    return out;\n}\n\n",
-					"#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float4 pixel [[color(0)]];\n};\n\nstruct main0_in\n{\n    float3 color [[user(locn0)]];\n};\n\nfragment main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.pixel = float4(in.color, 1.0);\n    return out;\n}\n\n");
-				shader.attribute(0, "position", "TEXCOORD", 0);
-				shader.attribute(1, "rgb", "TEXCOORD", 1);
-				shader.build();
-				#end
-			case _:
-				throw BindingError.invalidArgument("MazeShader.create", "Shader backend is unavailable");
-		}
-	}
+	public static final program = new ShaderProgram([
+		{slot: 0, name: "position", semantic: "TEXCOORD", semanticIndex: 0},
+		{slot: 1, name: "rgb", semantic: "TEXCOORD", semanticIndex: 1},
+	], [
+		{
+			target: ShaderTarget.Glsl300Es,
+			vertex: "#version 300 es\n\nout vec3 color;\nlayout(location = 1) in vec3 rgb;\nlayout(location = 0) in vec2 position;\n\nvoid main()\n{\n    color = rgb;\n    gl_Position = vec4(position, 0.0, 1.0);\n}\n\n",
+			fragment: "#version 300 es\nprecision mediump float;\nprecision highp int;\n\nlayout(location = 0) out highp vec4 pixel;\nin highp vec3 color;\n\nvoid main()\n{\n    pixel = vec4(color, 1.0);\n}\n\n",
+			blocks: [
+			],
+			uniforms: [
+			],
+			textures: [
+			]
+		},
+		{
+			target: ShaderTarget.Glsl410,
+			vertex: "#version 410\n\nlayout(location = 0) out vec3 color;\nlayout(location = 1) in vec3 rgb;\nlayout(location = 0) in vec2 position;\n\nvoid main()\n{\n    color = rgb;\n    gl_Position = vec4(position, 0.0, 1.0);\n}\n\n",
+			fragment: "#version 410\n\nlayout(location = 0) out vec4 pixel;\nlayout(location = 0) in vec3 color;\n\nvoid main()\n{\n    pixel = vec4(color, 1.0);\n}\n\n",
+			blocks: [
+			],
+			uniforms: [
+			],
+			textures: [
+			]
+		},
+		{
+			target: ShaderTarget.Hlsl5,
+			vertex: "static float4 gl_Position;\nstatic float3 color;\nstatic float3 rgb;\nstatic float2 position;\n\nstruct SPIRV_Cross_Input\n{\n    float2 position : TEXCOORD0;\n    float3 rgb : TEXCOORD1;\n};\n\nstruct SPIRV_Cross_Output\n{\n    float3 color : TEXCOORD0;\n    float4 gl_Position : SV_Position;\n};\n\nvoid vert_main()\n{\n    color = rgb;\n    gl_Position = float4(position, 0.0f, 1.0f);\n}\n\nSPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)\n{\n    rgb = stage_input.rgb;\n    position = stage_input.position;\n    vert_main();\n    SPIRV_Cross_Output stage_output;\n    stage_output.gl_Position = gl_Position;\n    stage_output.color = color;\n    return stage_output;\n}\n",
+			fragment: "static float4 pixel;\nstatic float3 color;\n\nstruct SPIRV_Cross_Input\n{\n    float3 color : TEXCOORD0;\n};\n\nstruct SPIRV_Cross_Output\n{\n    float4 pixel : SV_Target0;\n};\n\nvoid frag_main()\n{\n    pixel = float4(color, 1.0f);\n}\n\nSPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)\n{\n    color = stage_input.color;\n    frag_main();\n    SPIRV_Cross_Output stage_output;\n    stage_output.pixel = pixel;\n    return stage_output;\n}\n",
+			blocks: [
+			],
+			uniforms: [
+			],
+			textures: [
+			]
+		},
+		{
+			target: ShaderTarget.MetalIos,
+			vertex: "#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float3 color [[user(locn0)]];\n    float4 gl_Position [[position]];\n};\n\nstruct main0_in\n{\n    float2 position [[attribute(0)]];\n    float3 rgb [[attribute(1)]];\n};\n\nvertex main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.color = in.rgb;\n    out.gl_Position = float4(in.position, 0.0, 1.0);\n    return out;\n}\n\n",
+			fragment: "#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float4 pixel [[color(0)]];\n};\n\nstruct main0_in\n{\n    float3 color [[user(locn0)]];\n};\n\nfragment main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.pixel = float4(in.color, 1.0);\n    return out;\n}\n\n",
+			blocks: [
+			],
+			uniforms: [
+			],
+			textures: [
+			]
+		},
+		{
+			target: ShaderTarget.MetalMacos,
+			vertex: "#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float3 color [[user(locn0)]];\n    float4 gl_Position [[position]];\n};\n\nstruct main0_in\n{\n    float2 position [[attribute(0)]];\n    float3 rgb [[attribute(1)]];\n};\n\nvertex main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.color = in.rgb;\n    out.gl_Position = float4(in.position, 0.0, 1.0);\n    return out;\n}\n\n",
+			fragment: "#include <metal_stdlib>\n#include <simd/simd.h>\n\nusing namespace metal;\n\nstruct main0_out\n{\n    float4 pixel [[color(0)]];\n};\n\nstruct main0_in\n{\n    float3 color [[user(locn0)]];\n};\n\nfragment main0_out main0(main0_in in [[stage_in]])\n{\n    main0_out out = {};\n    out.pixel = float4(in.color, 1.0);\n    return out;\n}\n\n",
+			blocks: [
+			],
+			uniforms: [
+			],
+			textures: [
+			]
+		},
+	]);
+
+	public static function create(renderer:Renderer):Shader
+		return Shader.create(renderer, program);
 }

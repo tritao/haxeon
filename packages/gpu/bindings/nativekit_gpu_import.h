@@ -1,6 +1,6 @@
 #ifndef NATIVEKIT_GPU_IMPORT_H
 #define NATIVEKIT_GPU_IMPORT_H
 
-#include "nativekit_gpu.h"
+#include "nativekit_gpu_shader_table.h"
 
 #endif

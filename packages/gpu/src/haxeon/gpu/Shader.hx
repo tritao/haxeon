@@ -30,11 +30,9 @@ class Shader implements Disposable {
 		registration = renderer.registerResource(rendererClosed);
 	}
 
-	public static function create(renderer:Renderer, language:ShaderLanguage,
-			vertexSource:String, fragmentSource:String):Shader {
+	public static function create(renderer:Renderer, program:ShaderProgram):Shader {
 		renderer.ensureResourceOperation();
-		var made = NativeKitGpu.nkgpu_shader_create(renderer.nativeHandle(), language,
-			vertexSource, fragmentSource);
+		var made = NativeKitGpu.nkgpu_shader_create_from_table(renderer.nativeHandle(), program.table());
 		GpuResult.check(made.status, "shader.create");
 		return new Shader(renderer, made.out_shader);
 	}

@@ -432,6 +432,13 @@ interface NativeKitGpu @target("portable-abi32") @library("nativekit_gpu") @depe
 		 */
 		NKGPU_SHADERSTAGE_COMPUTE = 3;
 	}
+	enum nkgpu_shader_target : c_int {
+		NKGPU_SHADER_TARGET_GLSL410 = 1;
+		NKGPU_SHADER_TARGET_GLSL300ES = 2;
+		NKGPU_SHADER_TARGET_HLSL5 = 3;
+		NKGPU_SHADER_TARGET_METAL_MACOS = 4;
+		NKGPU_SHADER_TARGET_METAL_IOS = 5;
+	}
 	/**
 	 * Stencil operation used when a fragment passes or fails a test.
 	 */
@@ -1369,6 +1376,15 @@ interface NativeKitGpu @target("portable-abi32") @library("nativekit_gpu") @depe
 		out_shader: ptr<nkgpu_shader> @out
 	) -> nkgpu_result;
 	/**
+	 * Creates the program variant for the renderer's backend. Source and metadata are copied.
+	 */
+	extern fn nkgpu_shader_create_from_table(
+		renderer: nkgpu_renderer,
+		entries: ptr<const<nkgpu_shader_table_entry>> @in_array("count"),
+		count: u32,
+		out_shader: ptr<nkgpu_shader> @out
+	) -> nkgpu_result;
+	/**
 	 * Destroys a shader owned by `renderer`; the handle becomes invalid.
 	 */
 	extern fn nkgpu_shader_destroy(renderer: nkgpu_renderer, shader: nkgpu_shader) -> nkgpu_result;
@@ -1926,6 +1942,44 @@ interface NativeKitGpu @target("portable-abi32") @library("nativekit_gpu") @depe
 		 * Image shape for NKGPU_SHADERBINDING_SAMPLED_IMAGE; NKGPU_IMAGETYPE_AUTO means 2D.
 		 */
 		image_type: nkgpu_image_type @offset(40);
+	}
+	struct nkgpu_shader_table_attribute @layout(16, 4) {
+		slot: u32 @offset(0);
+		glsl_name: utf8 @offset(4);
+		hlsl_semantic: utf8 @offset(8);
+		semantic_index: u32 @offset(12);
+	}
+	struct nkgpu_shader_table_block @layout(12, 4) {
+		slot: u32 @offset(0);
+		stage: nkgpu_shader_stage @offset(4);
+		size: u32 @offset(8);
+	}
+	struct nkgpu_shader_table_entry @layout(44, 4) {
+		target: nkgpu_shader_target @offset(0);
+		vertex: utf8 @offset(4);
+		fragment: utf8 @offset(8);
+		attributes: ptr<const<nkgpu_shader_table_attribute>> @offset(12) @borrowed @length_field("attribute_count");
+		attribute_count: u32 @offset(16);
+		blocks: ptr<const<nkgpu_shader_table_block>> @offset(20) @borrowed @length_field("block_count");
+		block_count: u32 @offset(24);
+		uniforms: ptr<const<nkgpu_shader_table_uniform>> @offset(28) @borrowed @length_field("uniform_count");
+		uniform_count: u32 @offset(32);
+		textures: ptr<const<nkgpu_shader_table_texture>> @offset(36) @borrowed @length_field("texture_count");
+		texture_count: u32 @offset(40);
+	}
+	struct nkgpu_shader_table_texture @layout(20, 4) {
+		view: u32 @offset(0);
+		sampler: u32 @offset(4);
+		stage: nkgpu_shader_stage @offset(8);
+		type: nkgpu_image_type @offset(12);
+		name: utf8 @offset(16);
+	}
+	struct nkgpu_shader_table_uniform @layout(20, 4) {
+		block: u32 @offset(0);
+		member: u32 @offset(4);
+		name: utf8 @offset(8);
+		type: nkgpu_uniform_type @offset(12);
+		count: u32 @offset(16);
 	}
 	/**
 	 * Operations applied to one stencil face.

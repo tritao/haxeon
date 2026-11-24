@@ -32,6 +32,7 @@
 		"nkgpu_face_winding": "FaceWinding",
 		"nkgpu_color_write_mask": "ColorWriteMask",
 		"nkgpu_image_format": "GpuImageFormat",
+		"nkgpu_shader_target": "NativeShaderTarget",
 		"nkgpu_shader_stage": "NativeShaderStage",
 		"nkgpu_shader_language": "NativeShaderLanguage",
 		"nkgpu_uniform_type": "NativeUniformType",
@@ -39,8 +40,15 @@
 		"nkgpu_wrap": "NativeWrap",
 		"nkgpu_command": "GpuCommandOpcode"
 	},
-	"enumValuePrefixes": ["NKGPU_BLENDOP_", "NKGPU_SHADERLANGUAGE_"],
+	"enumValuePrefixes": ["NKGPU_BLENDOP_", "NKGPU_SHADER_TARGET_", "NKGPU_SHADERLANGUAGE_"],
 	"enumValueNames": {
+		"nkgpu_shader_target": {
+			"NKGPU_SHADER_TARGET_GLSL410": "Glsl410",
+			"NKGPU_SHADER_TARGET_GLSL300ES": "Glsl300Es",
+			"NKGPU_SHADER_TARGET_HLSL5": "Hlsl5",
+			"NKGPU_SHADER_TARGET_METAL_MACOS": "MetalMacos",
+			"NKGPU_SHADER_TARGET_METAL_IOS": "MetalIos"
+		},
 		"nkgpu_index_type": {
 			"NKGPU_INDEXTYPE_UINT16": "UInt16",
 			"NKGPU_INDEXTYPE_UINT32": "UInt32"
