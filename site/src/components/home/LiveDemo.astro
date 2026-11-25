@@ -1,30 +1,47 @@
 ---
 import { Code } from '@astrojs/starlight/components';
+import initial from '../../../../docs/guides/examples/02-live-editing/my_app/src/Main.hx?raw';
+import edited from '../../../../docs/guides/examples/02-live-editing/steps/1-logic-patch/Main.hx?raw';
+import { methodSource } from '../../excerpts';
 
-const tasks = [
-  { title: 'Buy milk', done: true },
-  { title: 'Write the report', done: false },
-  { title: 'Call the plumber', done: false },
+// The first edit of the live editing guide, which its test applies to a running app as a patch.
+const example = 'docs/guides/examples/02-live-editing/';
+const before = methodSource(initial, 'view', example + 'my_app/src/Main.hx').split('\n');
+const after = methodSource(edited, 'view', example + 'steps/1-logic-patch/Main.hx').split('\n');
+
+/** The lines of `a` and `b` in order, each kept, deleted or added, from their longest common subsequence. */
+function lineDiff(a: string[], b: string[]): ['' | 'del' | 'add', string][] {
+  const common = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      common[i][j] = a[i] === b[j] ? common[i + 1][j + 1] + 1 : Math.max(common[i + 1][j], common[i][j + 1]);
+  const lines: ['' | 'del' | 'add', string][] = [];
+  let i = 0, j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      lines.push(['', a[i++]]);
+      j++;
+    } else if (j === b.length || (i < a.length && common[i + 1][j] >= common[i][j + 1])) lines.push(['del', a[i++]]);
+    else lines.push(['add', b[j++]]);
+  }
+  return lines;
+}
+const diff = lineDiff(before, after);
+if (!diff.some(([change]) => change)) throw new Error(`steps/1-logic-patch no longer changes view() in ${example}`);
+
+// The mock window below shows these; a guide edit that changes them must update the demo too.
+const shown: [string, string[]][] = [
+  [initial, ['options.title = "My App"', 'new Text("My first app")', 'You clicked ${Main.count.value} times', '"Click me"', 'Main.count.value + 1', '"Reset"']],
+  [edited, ['Count: ${Main.count.value}', '"Add 2"', 'Main.count.value + 2']],
 ];
-const diff = [
-  ['', 'function view():View'],
-  ['', '\treturn column(['],
-  ['del', '\t\ttext("Tasks", Title),'],
-  ['add', "\t\ttext('Tasks · ${remaining()} left', Title),"],
-  ['', '\t\tfor (task in tasks) taskRow(task),'],
-  ['', '\t\taddRow(draft)'],
-  ['', '\t]);'],
-  ['', ''],
-  ['', 'function taskRow(task:Task):View'],
-  ['del', '\treturn row([checkbox(task.done), text(task.title)]);'],
-  ['add', '\treturn row([checkbox(task.done),'],
-  ['add', '\t\ttext(task.title, task.done ? Done : Body)]);'],
-];
+for (const [source, texts] of shown)
+  for (const text of texts)
+    if (!source.includes(text)) throw new Error(`The live demo shows ${text}, which ${example} no longer has`);
 ---
 
 <live-edit-demo class="demo">
   <div class="editor">
-    <div class="bar"><span>src/App.hx</span><span data-version>version 1</span></div>
+    <div class="bar"><span>src/Main.hx</span><span data-version>version 1</span></div>
     {
       [1, 2].map((version) => {
         const lines = diff.filter(([change]) => version === 2 || change !== 'add');
@@ -34,16 +51,10 @@ const diff = [
               code={lines.map(([, text]) => text).join('\n')}
               lang="haxe"
               frame="none"
-              ins={
-                version === 2
-                  ? lines.flatMap(([change], i) => (change === 'add' ? [i + 1] : []))
-                  : []
-              }
-              del={
-                version === 2
-                  ? lines.flatMap(([change], i) => (change === 'del' ? [i + 1] : []))
-                  : []
-              }
+              wrap
+              preserveIndent
+              ins={version === 2 ? lines.flatMap(([change], i) => (change === 'add' ? [i + 1] : [])) : []}
+              del={version === 2 ? lines.flatMap(([change], i) => (change === 'del' ? [i + 1] : [])) : []}
             />
           </div>
         );
@@ -53,30 +64,13 @@ const diff = [
   <div class="app">
     <div class="window">
       <div class="tb">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span
-          >Task List</span
-        >
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span>My App</span>
       </div>
       <div class="body">
-        <h3 data-title>Tasks</h3>
-        <div class="tasks">
-          {
-            tasks.map(({ title, done }) => (
-              <div class:list={['task', { done }]}>
-                <label>
-                  <>
-                    <input type="checkbox" checked={done} />
-                    <span>{title}</span>
-                  </>
-                </label>
-              </div>
-            ))
-          }
-        </div>
-        <form class="addrow">
-          <input name="draft" type="text" placeholder="New task" aria-label="New task" />
-          <button type="submit">Add</button>
-        </form>
+        <p>My first app</p>
+        <p data-count>You clicked 0 times</p>
+        <button type="button" data-add>Click me</button>
+        <button type="button" data-reset>Reset</button>
       </div>
     </div>
     <div class="controls">
@@ -92,54 +86,34 @@ const diff = [
   class LiveEditDemo extends HTMLElement {
     connectedCallback() {
       const windowPanel = this.querySelector('.window')!;
-      const form = this.querySelector('form')!;
-      const draft = form.querySelector('input')!;
-      const title = this.querySelector('[data-title]')!;
+      const label = this.querySelector('[data-count]')!;
+      const add = this.querySelector<HTMLButtonElement>('[data-add]')!;
       const versionLabel = this.querySelector('[data-version]')!;
-      const list = this.querySelector('.tasks')!;
       const status = this.querySelector('[role="status"]')!;
       const apply = this.querySelector<HTMLButtonElement>('[data-apply]')!;
       const code = [...this.querySelectorAll<HTMLElement>('[data-code]')];
+      // The running app's state, which an edit keeps.
+      let count = 0;
       let version = 1;
 
-      const countDone = () => list.querySelectorAll('input:checked').length;
-      const updateTitle = () => {
-        title.textContent =
-          version === 1 ? 'Tasks' : `Tasks · ${list.children.length - countDone()} left`;
+      const render = () => {
+        label.textContent = version === 1 ? `You clicked ${count} times` : `Count: ${count}`;
+        add.textContent = version === 1 ? 'Click me' : 'Add 2';
       };
 
-      list.addEventListener('change', (event) => {
-        const checkbox = event.target;
-        if (!(checkbox instanceof HTMLInputElement)) return;
-        checkbox.closest('.task')?.classList.toggle('done', checkbox.checked);
-        updateTitle();
+      add.addEventListener('click', () => {
+        count += version === 1 ? 1 : 2;
+        render();
       });
-
-      form.addEventListener('submit', (event) => {
-        event.preventDefault();
-        const task = draft.value.trim();
-        if (!task) return;
-        const row = document.createElement('div');
-        row.className = 'task';
-        const label = document.createElement('label');
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        const text = document.createElement('span');
-        text.textContent = task;
-        label.append(checkbox, text);
-        row.append(label);
-        list.append(row);
-        draft.value = '';
-        draft.focus();
-        updateTitle();
+      this.querySelector('[data-reset]')!.addEventListener('click', () => {
+        count = 0;
+        render();
       });
 
       const announce = (message: string) => {
         const kept = document.createElement('span');
         kept.className = 'kept';
-        kept.textContent =
-          `kept: ${list.children.length} tasks, ${countDone()} done` +
-          (draft.value.trim() ? `, draft "${draft.value}"` : '');
+        kept.textContent = `kept: count ${count}`;
         status.replaceChildren(message + ' ', kept);
       };
 
@@ -148,14 +122,11 @@ const diff = [
         code.forEach((panel) => {
           panel.hidden = Number(panel.dataset.code) !== version;
         });
-        list.classList.toggle('v2', version === 2);
-        updateTitle();
+        render();
         versionLabel.textContent = `version ${version}`;
         apply.textContent = version === 1 ? 'Apply the edit' : 'Undo the edit';
         windowPanel.classList.remove('flash');
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => windowPanel.classList.add('flash')),
-        );
+        requestAnimationFrame(() => requestAnimationFrame(() => windowPanel.classList.add('flash')));
         announce(`Patched to version ${version}.`);
       });
 
@@ -232,44 +203,12 @@ const diff = [
     padding: var(--hx-space-4);
     display: grid;
     gap: 10px;
+    justify-items: start;
   }
-  .window h3 {
+  .window .body p {
     margin: 0;
-    font: 600 1.05rem var(--hx-font-display);
   }
-  .task {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: var(--hx-space-2) 10px;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: var(--hx-radius-s);
-  }
-  .task input {
-    width: 17px;
-    height: 17px;
-    accent-color: var(--sl-color-accent);
-    flex: none;
-  }
-  .tasks.v2 .task.done label span {
-    text-decoration: line-through;
-    color: var(--sl-color-gray-3);
-  }
-  .addrow {
-    display: flex;
-    gap: var(--hx-space-2);
-  }
-  .addrow input {
-    flex: 1;
-    min-width: 0;
-    padding: var(--hx-space-2) 10px;
-    border: 1px solid var(--sl-color-gray-5);
-    border-radius: var(--hx-radius-s);
-    background: var(--sl-color-bg-sidebar);
-    color: var(--sl-color-white);
-    font: inherit;
-  }
-  .addrow button {
+  .window .body button {
     padding: var(--hx-space-2) 12px;
     border-radius: var(--hx-radius-s);
     border: 1px solid var(--sl-color-gray-5);
@@ -311,10 +250,6 @@ const diff = [
       }
     }
   }
-  .tasks {
-    display: grid;
-    gap: var(--hx-space-2);
-  }
   .controls .reject {
     padding: var(--hx-space-1);
     border: 0;
@@ -327,14 +262,6 @@ const diff = [
   .demo-note {
     color: var(--sl-color-gray-3);
     font-size: 0.85rem;
-  }
-  .task label {
-    display: flex;
-    align-items: center;
-    gap: var(--hx-space-2);
-    width: 100%;
-    cursor: pointer;
-    overflow-wrap: anywhere;
   }
 
   .demo :global(.expressive-code pre) {
