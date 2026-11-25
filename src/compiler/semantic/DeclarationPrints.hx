@@ -65,7 +65,7 @@ class DeclarationPrints {
 	}
 
 	function declarations(before:Null<CanonicalContribution>, after:CanonicalContribution):Void {
-		compare(before == null ? [] : before.aliases, after.aliases, alias -> alias.name, (left, right) -> {
+		compareTypes(before == null ? [] : before.aliases, after.aliases, alias -> alias.name, (left, right) -> {
 			facts.markExpanded(facts.id(FactAspect.Shape, either(left, right).name));
 			var name = either(left, right).name;
 			var changed = left == null || right == null
@@ -76,15 +76,15 @@ class DeclarationPrints {
 				facts.changed(wireId);
 			facts.setDependencies(wireId, through);
 		});
-		compare(before == null ? [] : before.enums, after.enums, decl -> decl.name,
+		compareTypes(before == null ? [] : before.enums, after.enums, decl -> decl.name,
 			(left, right) -> enumFacts(left, right));
-		compare(before == null ? [] : before.interfaces, after.interfaces, decl -> decl.name, (left, right) -> {
+		compareTypes(before == null ? [] : before.interfaces, after.interfaces, decl -> decl.name, (left, right) -> {
 			shape(left, right, DeclarationFacts.KIND_INTERFACES,
 				(left, right) -> CanonicalComparison.interfaces(left, right, PositionsCount.Ignored), decl -> decl.name,
 				decl -> decl.bases.concat([for (field in decl.fields) if (field.type != null) field.type])
 				.concat(signatureTypes(decl.methods)));
 		});
-		compare(before == null ? [] : before.abstracts, after.abstracts, decl -> decl.name, (left, right) -> {
+		compareTypes(before == null ? [] : before.abstracts, after.abstracts, decl -> decl.name, (left, right) -> {
 			facts.markExpanded(facts.id(FactAspect.Shape, either(left, right).name));
 			var same = left != null && right != null
 				&& CanonicalComparison.abstracts(left, right, PositionsCount.Ignored, ABSTRACT_SHAPE_PARTS)
@@ -102,7 +102,7 @@ class DeclarationPrints {
 				facts.changed(wireId);
 			facts.setDependencies(wireId, right == null ? null : shapesOf([right.underlying]));
 		});
-		compare(before == null ? [] : before.classes, after.classes, decl -> decl.name,
+		compareTypes(before == null ? [] : before.classes, after.classes, decl -> decl.name,
 			(left, right) -> classFacts(left, right));
 		compare(before == null ? [] : before.functions, after.functions, fn -> fn.name,
 			(left, right) -> functionFacts(left, right));
@@ -119,6 +119,17 @@ class DeclarationPrints {
 		for (decl in previous)
 			each(decl, null);
 	}
+
+	/**
+	 * `compare` for the declarations of types. A name one side declares and the other does not may be of another kind now (an
+	 * interface made a class), which the declarations that name it go through (`DeclarationFacts.kindChanged`).
+	 */
+	function compareTypes<T>(before:Array<T>, after:Array<T>, name:T->String, each:(Null<T>, Null<T>) -> Void):Void
+		compare(before, after, name, (left, right) -> {
+			if (left == null || right == null)
+				facts.kindChanged(facts.id(FactAspect.Shape, name(either(left, right))));
+			each(left, right);
+		});
 
 	function shape<T>(left:Null<T>, right:Null<T>, kind:String, same:(T, T) -> Bool, name:T->String,
 			types:T->Array<AstType>):Void {

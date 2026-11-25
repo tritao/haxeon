@@ -99,6 +99,14 @@ class DeclarationFacts {
 	var aspects:Array<Int> = [];
 	var names:Array<String> = [];
 	var changedAt:Array<Int> = [];
+
+	/**
+	 * By a type's `Shape` fact, the revision at which the name last became or stopped being a declaration of some kind. A
+	 * declaration that names the type without expanding it still goes through its kind, which decides how the type is held (an
+	 * interface as a virtual, a class as an object).
+	 */
+	var kindChangedAt:Array<Int> = [];
+
 	var dependencies:Array<Null<Array<Int>>> = [];
 
 	/** The module whose state holds a `Unit` fact's reads, by fact. */
@@ -125,6 +133,7 @@ class DeclarationFacts {
 		aspects = [];
 		names = [];
 		changedAt = [];
+		kindChangedAt = [];
 		dependencies = [];
 		unitModules = [];
 		effective = [];
@@ -158,6 +167,7 @@ class DeclarationFacts {
 		aspects.push(aspect);
 		names.push(name);
 		changedAt.push(0);
+		kindChangedAt.push(0);
 		dependencies.push(null);
 		effective.push(0);
 		effectiveIn.push(0);
@@ -183,6 +193,12 @@ class DeclarationFacts {
 	/** Records that fact `id`'s print changed in this build. */
 	public function changed(id:Int):Void {
 		changedAt[id] = revision;
+		lastChange = revision;
+	}
+
+	/** Records that the type whose `Shape` fact is `id` may be of another kind from this build on (`kindChangedAt`). */
+	public function kindChanged(id:Int):Void {
+		kindChangedAt[id] = revision;
 		lastChange = revision;
 	}
 
@@ -261,9 +277,13 @@ class DeclarationFacts {
 			if (through != null && position < through.length && latest[fact] < revision) {
 				next[top] = position + 1;
 				var successor = through[position];
-				// What a declaration names goes through only the types it expands; what a unit read counts whatever it is.
-				if (named[top] && aspects[successor] == (FactAspect.Shape:Int) && !isExpanded(successor))
+				// What a declaration names goes through only the types it expands, and the kinds of the others; what a unit read
+				// counts whatever it is.
+				if (named[top] && aspects[successor] == (FactAspect.Shape:Int) && !isExpanded(successor)) {
+					if (kindChangedAt[successor] > latest[fact])
+						latest[fact] = kindChangedAt[successor];
 					continue;
+				}
 				if (effectiveIn[successor] == revision) {
 					if (effective[successor] > latest[fact])
 						latest[fact] = effective[successor];

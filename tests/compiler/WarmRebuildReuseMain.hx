@@ -56,6 +56,28 @@ class WarmRebuildReuseMain {
 	/** The only caller of a specialization (`Ops.first` for `Array<Int>`), in a module that can leave the program and come back. */
 	static final pairsSource = "class Pairs { public static function count():Int return Ops.first([[1, 2]]).length; }";
 
+	/**
+	 * Interfaces that become classes (`Source`, a type of the module `Pass`): a reader that only holds a `Source` and passes it on
+	 * names the type without reading its members, yet holds it as another representation once it is a class.
+	 */
+	static final passSource =
+		"interface Pass extends Source { function run():Int; } interface Source { function fact(kind:Int):Int; }";
+
+	static final passClassSource =
+		"class Pass extends Source { public function run():Int throw \"no run\"; } class Source { public function fact(kind:Int):Int throw \"no fact\"; }";
+
+	static final factsSource =
+		"import Pass; class Facts { public static function print(id:Int, source:Source):Int return source.fact(id) + 1; }";
+
+	static final readerSource =
+		"import Pass; class Reader { final source:Source; public function new(pass:Null<Pass>, ?given:Source) { var from:Null<Source> = given != null ? given : pass; if (from == null) throw \"no source\"; source = from; } public function read(kind:Int):Int return Facts.print(kind, source); }";
+
+	static final stageSource =
+		"import Pass; class Stage implements Pass { public function new() {} public function fact(kind:Int):Int return kind * 2; public function run():Int return new Reader(this).read(3); }";
+
+	static final stageClassSource =
+		"import Pass; class Stage extends Pass { public function new() {} override public function fact(kind:Int):Int return kind * 2; override public function run():Int return new Reader(this).read(3); }";
+
 	/** A function whose result is a structure named through typedefs another module declares, and a caller that names none of them. */
 	static final reportSource =
 		"typedef Metrics = { final count:Int; final notes:Array<String>; } typedef Report = { final metrics:Metrics; final ok:Bool; }";
@@ -74,7 +96,7 @@ class WarmRebuildReuseMain {
 		"class Failure extends haxe.Exception { public function new(message:String, ?previous:haxe.Exception) super(message, previous); }";
 
 	static final mainSource =
-		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Config.ratio > 0 && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && new Holder(Square(1)).shape != null && Pairs.count() == 2 && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Config.ratio > 0 && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 && new Holder(Square(1)).shape != null && Pairs.count() == 2 && new Stage().run() == 7 && run() ? 42 : 1; } static function run():Bool { Driver.report(); return true; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -88,6 +110,10 @@ class WarmRebuildReuseMain {
 			"Trail.hx" => trailSource,
 			"Ops.hx" => opsSource,
 			"Pairs.hx" => pairsSource,
+			"Pass.hx" => passSource,
+			"Facts.hx" => factsSource,
+			"Reader.hx" => readerSource,
+			"Stage.hx" => stageSource,
 			"Report.hx" => reportSource,
 			"Driver.hx" => driverSource,
 			"Holder.hx" => holderSource,
@@ -160,6 +186,11 @@ class WarmRebuildReuseMain {
 		edit(failures, "after a module that calls a specialization comes back to the program",
 			files -> files.set("Main.hx", mainSource), false,
 			files -> files.set("Main.hx", StringTools.replace(mainSource, " && Pairs.count() == 2", "")));
+		// Built as the command line builds, without the semantic index, whose refresh would type the reader's module again.
+		edit(failures, "after interfaces become classes, which a reader names without reading their members", files -> {
+			files.set("Pass.hx", passClassSource);
+			files.set("Stage.hx", stageClassSource);
+		}, false, null, false);
 		edit(failures, "after an edit of a private generic function a generic function calls",
 			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return xs[0];", "return xs[xs.length - 1];")));
 		edit(failures,
@@ -184,24 +215,24 @@ class WarmRebuildReuseMain {
 
 	/**
 	 * An edit is built in a warm session twice: as it is, and checking its reuse, which also lowers every function afresh and compares.
-	 * `before` is an edit built in the session first.
+	 * `before` is an edit built in the session first. `indexSemantics` is the builds' (`Compiler.compile`).
 	 */
 	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void,
-			shifts:Bool = false, ?before:Map<String, String>->Void):Void {
-		attempt(failures, label, false, change, false, shifts, before);
-		attempt(failures, label + ", checked", false, change, true, shifts, before);
+			shifts:Bool = false, ?before:Map<String, String>->Void, indexSemantics:Bool = true):Void {
+		attempt(failures, label, false, change, false, shifts, before, indexSemantics);
+		attempt(failures, label + ", checked", false, change, true, shifts, before, indexSemantics);
 	}
 
 	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void,
 			?check:Bool = false,
-			?shifts:Bool = false, ?before:Map<String, String>->Void):Void {
+			?shifts:Bool = false, ?before:Map<String, String>->Void, indexSemantics:Bool = true):Void {
 		try {
 			var files = initialSources(), compiler = newCompiler(files);
 			compiler.options = new CompileOptions({checkReuse: check});
-			var first = compiler.compile("Main");
+			var first = compiler.compile("Main", null, indexSemantics);
 			if (before != null)
-				first = rebuild(compiler, files, before);
-			var warm = rebuild(compiler, files, change),
+				first = rebuild(compiler, files, before, indexSemantics);
+			var warm = rebuild(compiler, files, change, indexSemantics),
 				freshCompiler = newCompiler(files),
 				fresh = freshCompiler.compile("Main");
 			var reuse = warm.metrics.reuse;
@@ -231,8 +262,8 @@ class WarmRebuildReuseMain {
 	}
 
 	/** Applies `change` to `files` and to `compiler`'s session, and builds again. */
-	static function rebuild(compiler:Compiler, files:Map<String, String>,
-			change:Map<String, String>->Void):CompileResult {
+	static function rebuild(compiler:Compiler, files:Map<String, String>, change:Map<String, String>->Void,
+			indexSemantics:Bool = true):CompileResult {
 		var before = [for (path in files.keys()) path];
 		change(files);
 		for (path => text in files)
@@ -243,7 +274,7 @@ class WarmRebuildReuseMain {
 		// A session that is asked to build again registers its source roots again, which is what makes the compiler build rather than
 		// return its last result.
 		compiler.addSourceRoot("stdlib");
-		return compiler.compile("Main");
+		return compiler.compile("Main", null, indexSemantics);
 	}
 
 	/**
