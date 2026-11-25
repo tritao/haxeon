@@ -1,5 +1,7 @@
 /* Global pieces the header and footer use as well. */
-.paper {
+/* The dotted paper: behind every product page's intro, and wherever else a page puts it (diagrams). */
+.paper,
+:where(.page-intro) {
   background-color: var(--sl-color-bg);
   background-image: radial-gradient(var(--hx-grid) 1px, transparent 1.2px);
   background-size: var(--hx-space-5) var(--hx-space-5);
@@ -174,16 +176,16 @@
   font-weight: 800;
   letter-spacing: -0.035em;
 }
-:where(.page-intro .prose) {
+:where(.landing-content .prose) {
   max-width: 65ch;
 }
-:where(.page-intro .prose > * + *) {
+:where(.landing-content .prose > * + *) {
   margin-top: var(--hx-space-4);
 }
-:where(.page-intro .prose h2) {
+:where(.landing-content .prose > h2:not(:first-child)) {
   margin-top: var(--hx-space-6);
 }
-:where(.page-intro .prose h2[id]) {
+:where(.landing-content .prose h2[id]) {
   scroll-margin-top: calc(var(--sl-nav-height) + var(--hx-space-3));
 }
 @media (max-width: 34rem) {
