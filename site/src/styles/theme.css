@@ -44,7 +44,8 @@
   --sl-color-text-invert: token(dark.indigo-ink);
   --sl-color-green-high: token(dark.live);
   --sl-color-green-low: token(dark.live-soft);
-  --sl-color-bg-inline-code: token(dark.code-bg);
+  --hx-code-bg: token(dark.code-bg);
+  --sl-color-bg-inline-code: token(dark.sunk);
   --hx-code-fg: token(dark.code-fg);
   --hx-code-muted: token(dark.code-comment);
   --hx-code-line: token(dark.code-line);
@@ -66,7 +67,8 @@
   --sl-color-text-invert: token(light.indigo-ink);
   --sl-color-green-high: token(light.live);
   --sl-color-green-low: token(light.live-soft);
-  --sl-color-bg-inline-code: token(light.code-bg);
+  --hx-code-bg: token(light.code-bg);
+  --sl-color-bg-inline-code: token(light.sunk);
   --hx-code-fg: token(light.code-fg);
   --hx-code-muted: token(light.code-comment);
   --hx-code-line: token(light.code-line);
@@ -97,8 +99,11 @@ samp {
     'calt' 0;
 }
 
+/* Code inside prose: a recessed tint of the page, not a block's dark surface, so it does not break the reading line. */
 .sl-markdown-content :not(pre) > code {
-  color: var(--hx-code-fg);
+  color: var(--sl-color-white);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--sl-color-gray-5);
 }
 
 :focus-visible {
@@ -120,7 +125,7 @@ samp {
   display: flex;
   align-items: center;
   gap: var(--hx-space-2);
-  background: var(--sl-color-bg-inline-code);
+  background: var(--hx-code-bg);
   border: 1px solid var(--hx-code-border);
   border-radius: var(--hx-radius-s);
   padding: var(--hx-space-2) 10px;
@@ -191,7 +196,7 @@ samp {
 
 /* A dark code surface with an optional title bar: code cards and the live edit demo's editor. */
 .code-panel {
-  background: var(--sl-color-bg-inline-code);
+  background: var(--hx-code-bg);
   color: var(--hx-code-fg);
   border: 1px solid var(--hx-code-border);
 }
@@ -216,7 +221,7 @@ samp {
 .expressive-code .frame > pre[data-language='text'],
 pre.output-pane {
   padding: var(--hx-space-4) var(--hx-space-5);
-  background: var(--sl-color-bg-inline-code);
+  background: var(--hx-code-bg);
   color: var(--hx-code-fg);
   border: 0;
   font: var(--hx-output-size, var(--sl-text-code)) / 1.65 var(--sl-font-mono);
@@ -254,7 +259,7 @@ pre.output-pane,
 .expressive-code.output-block {
   border-radius: var(--hx-radius-m);
   overflow: hidden;
-  background: var(--sl-color-bg-inline-code);
+  background: var(--hx-code-bg);
 }
 
 .expressive-code:has(pre[data-language='text']) {
