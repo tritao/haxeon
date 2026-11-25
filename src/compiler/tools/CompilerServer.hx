@@ -200,7 +200,6 @@ class CompilerServer {
 		var stagingSuffix = ".request-" + Std.string(Std.random(0x3fffffff));
 		for (field in [
 			"output",
-			"xmlOutput",
 			"apiJsonOutput",
 			"irOutput",
 			"inputsOutput",

@@ -450,18 +450,16 @@ Markdown and `@param`, `@return`/`@returns`, `@deprecated`, `@see`, `@throws`,
 `@exception`, and `@since` tags are shared by editor hover, completion, and
 signature help.
 
-The compiler can also emit deterministic Haxe type-description XML for tools
-such as [dox](https://github.com/HaxeFoundation/dox):
+The compiler writes a program's public API, with those comments, as the JSON of the API model
+([API_MODEL.md](design/API_MODEL.md)), from the typed program:
 
 ```sh
-compiler.hl --xml=docs/api.xml --output=out/app.hl \
+compiler.hl --api-json=out/api.json --output=out/app.hl \
   --entry=my.app.Main --root=src src/my/app/Main.hx
-haxelib run dox -i docs -o docs/html
 ```
 
-Both `--xml=docs/api.xml` and the standard two-argument form
-`--xml docs/api.xml` are accepted. Documentation generation does not change
-runtime fingerprints or hot-reload compatibility.
+Writing it changes neither the compiled module nor runtime fingerprints. `tests/integration/test-api-model.sh` checks a
+fixture of every declaration kind against expected JSON.
 
 ## Performance rules for compiler code
 

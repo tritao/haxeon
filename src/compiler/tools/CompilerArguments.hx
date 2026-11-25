@@ -26,7 +26,6 @@ class CompilerArguments {
 		var target = "hl",
 			buildMode = "development",
 			output = "out/main.hl",
-			xmlOutput:Null<String> = null,
 			apiJsonOutput:Null<String> = null,
 			irOutput:Null<String> = null,
 			inputsOutput:Null<String> = null,
@@ -73,15 +72,7 @@ class CompilerArguments {
 				buildMode = value(argument, "--build-mode=");
 				buildModeExplicit = true;
 			}
-				else if (StringTools.startsWith(argument, "--xml="))
-				xmlOutput = value(argument, "--xml=");
-			else if (argument == "--xml") {
-				if (index >= arguments.length)
-					throw new UsageError('Compiler option "--xml" requires a value');
-				xmlOutput = arguments[index++];
-				if (xmlOutput.length == 0)
-					throw new UsageError('Compiler option "--xml" requires a value');
-			} else if (StringTools.startsWith(argument, "--api-json="))
+				else if (StringTools.startsWith(argument, "--api-json="))
 				apiJsonOutput = value(argument, "--api-json=");
 			else if (StringTools.startsWith(argument, "--entry="))
 				entry = value(argument, "--entry=");
@@ -191,7 +182,7 @@ class CompilerArguments {
 		if (live && backend != HashLink)
 			throw new UsageError("--live requires --target=hl");
 		if (noOutput
-			&& (live || baselineOutput != null || entryIdOutput != null || xmlOutput != null || apiJsonOutput != null
+			&& (live || baselineOutput != null || entryIdOutput != null || apiJsonOutput != null
 			|| irOutput != null
 			|| inputsOutput != null || ffiHeader != null))
 			throw new UsageError("--no-output writes nothing, so it takes no option that writes a file or a live publication");
@@ -222,16 +213,12 @@ class CompilerArguments {
 			throw new UsageError("--wasm-memory-contract requires --wasm-import-memory");
 		if (memoryContract != null && memoryBase != 0)
 			throw new UsageError("--wasm-memory-contract and --wasm-memory-base are mutually exclusive");
-		// XML is emitted after compilation and still needs the parsed declarations.
-		if (xmlOutput != null)
-			optionFlags = optionFlags.filter(flag -> flag != compiler.CompileOptions.NO_KEEP_SESSION);
 		var options = compiler.CompileOptions.fromArguments(optionFlags);
 		return {
 			target: target,
 			buildMode: buildMode,
 			defines: defines,
 			output: output,
-			xmlOutput: xmlOutput,
 			apiJsonOutput: apiJsonOutput,
 			irOutput: irOutput,
 			inputsOutput: inputsOutput,

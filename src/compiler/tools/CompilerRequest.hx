@@ -20,8 +20,8 @@ typedef CompilerRequest = {
 	final buildMode:String;
 	final defines:Array<String>;
 	final output:String;
-	final xmlOutput:Null<String>;
-	final ?apiJsonOutput:String;
+	/** Where to write the program's API model (docs/design/API_MODEL.md) as JSON. */
+	final apiJsonOutput:Null<String>;
 	final irOutput:Null<String>;
 	/** Where to write the modules this compile read: one `[name, path, sha256 of its text]` per module, sorted by name. */
 	final inputsOutput:Null<String>;

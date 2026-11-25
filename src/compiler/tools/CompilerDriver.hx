@@ -13,7 +13,6 @@ import compiler.core.InternalError;
 import compiler.core.PeakProbe;
 import compiler.documentation.ApiJsonWriter;
 import compiler.documentation.ApiModelBuilder;
-import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;
 import compiler.ir.codec.CanonicalIrCodec;
@@ -201,8 +200,6 @@ class CompilerDriver {
 				|| isWasm ? build.execution.ContentDigest.makeHex(File.getBytes(request.output))
 				: session.hashLinkBuildId(BackendArtifacts.hashLink(result.artifact).module);
 			File.saveContent(request.output + ".build-id", buildId);
-			if (request.xmlOutput != null)
-				File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 			if (request.irOutput != null)
 				File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
 			if (request.inputsOutput != null)
