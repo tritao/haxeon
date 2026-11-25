@@ -220,6 +220,68 @@ typedef TypeMentions = {
 	final enums:Array<String>;
 }
 
+/**
+ * The names of the functions the last assembly started from, in name order (`FrontendCompilation.collectCachedIr`): a build whose
+ * functions have the same names takes the order instead of sorting them, which was most of what collecting them cost. It is a
+ * function of the names alone, so every copy of the session state shares it (`SessionState.assemblyOrder`).
+ */
+class AssemblyOrder {
+	/** The names in order, and their symbols' ids. */
+	public var names(default, null):Array<String> = [];
+
+	var ids:Array<Int> = [];
+
+	/** By symbol id, the name's place in `names` plus one; 0 for a name it does not have. */
+	final places:Array<Int> = [];
+
+	/** By symbol id, the last `arranged` that met the name. */
+	final met:Array<Int> = [];
+
+	var round = 0;
+
+	public function new() {}
+
+	/**
+	 * `functions` in the kept order, one per name, when they have its names; else null. A name two modules hold (a helper the
+	 * module that asked for it first held before) is the function `owned` gives it.
+	 */
+	public function arranged(functions:Array<IrFunction>, owned:String->IrFunction):Null<Array<IrFunction>> {
+		if (functions.length < names.length)
+			return null;
+		var mark = ++round, distinct = 0, result:Array<IrFunction> = [];
+		result.resize(names.length);
+		for (fn in functions) {
+			var id = fn.symbol.id, place = id < places.length ? places[id] : 0;
+			if (place == 0)
+				return null;
+			if (met[id] == mark)
+				result[place - 1] = owned(fn.name);
+			else {
+				met[id] = mark;
+				result[place - 1] = fn;
+				distinct++;
+			}
+		}
+		return distinct == names.length ? result : null;
+	}
+
+	/** Keeps the order of `functions`, which are in name order, each name once. */
+	public function keep(functions:Array<IrFunction>):Void {
+		for (id in ids)
+			places[id] = 0;
+		names = [for (fn in functions) fn.name];
+		ids = [for (fn in functions) fn.symbol.id];
+		for (index in 0...ids.length) {
+			var id = ids[index];
+			while (places.length <= id) {
+				places.push(0);
+				met.push(0);
+			}
+			places[id] = index + 1;
+		}
+	}
+}
+
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
 	/**
@@ -1400,37 +1462,51 @@ class FrontendCompilation {
 		build.allocationPhases = allocationPhases;
 	}
 
-	/** The IR bodies the program is assembled from, one per cached function name. */
+	/**
+	 * The IR bodies the program is assembled from, one per cached function name, in name order: the order of the last build's
+	 * when the program has the same names (`AssemblyOrder`).
+	 */
 	static function collectCachedIr(build:FrontendBuild):Void {
 		var context = build.context,
 			modules = context.state.modules,
 			names = build.names,
-			owners = build.semanticAssembly.owners;
-		var cachedNames:Array<String> = [];
+			order = context.state.assemblyOrder;
+		var held:Array<IrFunction> = [];
 		for (moduleName in names) {
-			if (!modules.exists(moduleName))
-				continue;
 			var state = modules.get(moduleName);
-			for (functionName in state.irFunctions.keys())
-				cachedNames.push(functionName);
+			if (state != null)
+				for (fn in state.irFunctions)
+					held.push(fn);
 		}
+		var arranged = order.arranged(held, name -> ownedFunction(build, name));
+		if (arranged != null) {
+			build.cachedNames = order.names;
+			build.cached = arranged;
+			dropUnusedKeyPathFields(build.typed(), arranged);
+			return;
+		}
+		var cachedNames = [for (fn in held) fn.name];
 		cachedNames.sort(Reflect.compare);
 		cachedNames = uniqueSorted(cachedNames);
 		build.cachedNames = cachedNames;
-		var cached:Array<IrFunction> = [];
-		for (functionName in cachedNames) {
-			if (!owners.exists(functionName))
-				throw new InternalError('Cached function "$functionName" has no source owner');
-			var owner = owners.get(functionName);
-			if (!modules.exists(owner))
-				throw new InternalError('Cached function "$functionName" has no source module');
-			var functions = modules.get(owner).irFunctions;
-			if (!functions.exists(functionName))
-				throw new InternalError('Cached function "$functionName" has no IR body');
-			cached.push(functions.get(functionName));
-		}
+		var cached = [for (functionName in cachedNames) ownedFunction(build, functionName)];
+		order.keep(cached);
 		build.cached = cached;
 		dropUnusedKeyPathFields(build.typed(), cached);
+	}
+
+	/** The IR of function `name` in the module that owns it. */
+	static function ownedFunction(build:FrontendBuild, name:String):IrFunction {
+		var owner = build.semanticAssembly.owners.get(name);
+		if (owner == null)
+			throw new InternalError('Cached function "$name" has no source owner');
+		var state = build.context.state.modules.get(owner);
+		if (state == null)
+			throw new InternalError('Cached function "$name" has no source module');
+		var fn = state.irFunctions.get(name);
+		if (fn == null)
+			throw new InternalError('Cached function "$name" has no IR body');
+		return fn;
 	}
 
 	/**

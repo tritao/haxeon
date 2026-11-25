@@ -52,6 +52,9 @@ class SessionState {
 	 */
 	public var objects(default, null):Map<String, IrObject> = [];
 
+	/** The order of the functions the last assembly started from; every copy shares it, as it is a function of their names. */
+	public final assemblyOrder:FrontendCompilation.AssemblyOrder;
+
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
@@ -281,6 +284,7 @@ class SessionState {
 			irCalls = sharing.irCalls;
 			staticReferences = sharing.staticReferences;
 		}
+		assemblyOrder = sharing == null ? new FrontendCompilation.AssemblyOrder() : sharing.assemblyOrder;
 		stageMemos = new compiler.ir.reuse.IrStageMemo.IrStageMemos(queries, irGeneration);
 		this.types = types;
 		this.genericSpecializations = genericSpecializations;
