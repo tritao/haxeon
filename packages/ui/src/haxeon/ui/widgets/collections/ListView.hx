@@ -446,7 +446,7 @@ private class ListViewRow implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.fixed(extent);
-			style.background = selected ? context.theme.tokens.selectionHighlight : Color.rgba(0.0, 0.0, 0.0, 0.0);
+			style.background = selected ? context.theme.tokens.selection : Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var node = context.createNode(context.rootId("list-item"), LayoutVisualKind.Box, style);
 			node.focusable = enabled;
 			node.enabled = enabled;

@@ -355,7 +355,7 @@ class GraphicsPage {
 					geometry.width * 0.34, height - 4.0), Color.rgba(0.16, 0.70, 0.46, 1.0));
 			});
 			var clip = new Rect(geometry.width * 0.68, top, geometry.width * 0.24, height);
-			var border = explorer.context.buildContext.theme.tokens.mutedText;
+			var border = explorer.context.buildContext.theme.tokens.textSecondary;
 			canvas.fillRectIfPositive(new Rect(clip.x - 1.0, clip.y - 1.0,
 				clip.width + 2.0, clip.height + 2.0), border);
 			canvas.withClip(clip, function(clipped) {

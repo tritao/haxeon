@@ -137,7 +137,7 @@ class SearchPicker implements View {
 		inputStyle.width = LayoutAxis.grow();
 		inputStyle.height = LayoutAxis.fixed(34);
 		inputStyle.padding = new Insets(8, 4, 8, 4);
-		inputStyle.background = tokens.selectionField;
+		inputStyle.background = tokens.surfaceSunken;
 		var input:TextField = null;
 		// The field reads its selection provider again right after an edit, before the next build: drop it at once,
 		// or the first typed character is selected and replaced by the second ("builds" became "uilds").

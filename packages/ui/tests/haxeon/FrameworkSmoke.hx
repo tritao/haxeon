@@ -3101,25 +3101,17 @@ class FrameworkSmoke {
 		}
 
 		var theme = new Theme();
-		if (theme.tokens.textPrimary != theme.tokens.text
-			|| theme.tokens.textSecondary != theme.tokens.mutedText
-			|| theme.tokens.surface != theme.tokens.panelBackground
-			|| theme.tokens.focusRing != theme.tokens.buttonFocused
-			|| theme.tokens.navigationFocused != theme.tokens.surfaceRaised
-			|| theme.tokens.radiusMedium != 6.0 || theme.tokens.spacingMedium != 8.0) return 225;
-		var originalButton = theme.tokens.buttonBackground;
-		var originalControl = theme.tokens.controlUnselected;
-		theme.tokens.surfaceRaised = Color.rgba(0.31, 0.32, 0.33, 1.0);
-		theme.tokens.border = Color.rgba(0.41, 0.42, 0.43, 1.0);
-		if (theme.tokens.buttonBackground != originalButton
-			|| theme.tokens.controlUnselected != originalControl) return 225;
-		var customFocusRing = Color.rgba(0.51, 0.52, 0.53, 1.0);
-		theme.tokens.focusRing = customFocusRing;
-		theme.tokens.deriveComponents();
-		if (theme.tokens.navigationBackground != theme.tokens.surfaceRaised || theme.tokens.navigationFocused
-			!= theme.tokens.surfaceRaised || theme.tokens.buttonFocused != theme.tokens.focusRing
-			|| theme.tokens.focusRing != customFocusRing
-			|| theme.tokens.selectionBorder != theme.tokens.border) return 225;
+		if (theme.tokens.radiusMedium != 6.0 || theme.tokens.spacingMedium != 8.0) return 225;
+		// The built-in rules read the palette when they are built, so a palette change shows after refreshStyles.
+		var customHover = Color.rgba(0.51, 0.52, 0.53, 1.0);
+		theme.tokens.accentHover = customHover;
+		theme.refreshStyles();
+		var hoverRules = [
+			for (rule in theme.styles.rules)
+				if (rule.selector.widgetType == "button" && rule.selector.classNames.length == 0
+				&& rule.selector.stateMask == StyleState.Hovered) rule
+		];
+		if (hoverRules.length != 1 || StyleValue.colorOf(hoverRules[0].declarations[0]) != customHover) return 225;
 		theme.body.color = Color.rgba(0.10, 0.14, 0.21, 1.0);
 		theme.button.color = Color.rgba(1.0, 1.0, 1.0, 1.0);
 		var styleTheme = new StyleSheet("StyleTheme");
@@ -3583,12 +3575,12 @@ class FrameworkSmoke {
 			lightNeutral,
 			theme.body.color) != theme.body.color || theme.buttonLabelColor(true,
 			accentButton) != theme.button.color || theme.buttonLabelColor(false,
-			accentButton) != theme.tokens.disabledButtonText)
+			accentButton) != theme.tokens.textDisabled)
 			throw "Button labels must retain readable preferences, choose contrasting defaults and honor disabled colors";
-		theme.tokens.buttonHover = Color.rgba(0.8, 0.1, 0.1, 1.0);
-		theme.tokens.buttonPressed = Color.rgba(0.7, 0.05, 0.05, 1.0);
-		theme.tokens.buttonFocused = Color.rgba(0.4, 0.2, 0.8, 1.0);
-		theme.tokens.buttonDisabled = Color.rgba(0.2, 0.2, 0.2, 1.0);
+		theme.tokens.accentHover = Color.rgba(0.8, 0.1, 0.1, 1.0);
+		theme.tokens.accentPressed = Color.rgba(0.7, 0.05, 0.05, 1.0);
+		theme.tokens.focusRing = Color.rgba(0.4, 0.2, 0.8, 1.0);
+		theme.tokens.surfaceSunken = Color.rgba(0.2, 0.2, 0.2, 1.0);
 		theme.body.textStyle = new TextStyle(17.0, FontFamily.Default, -0.25);
 		theme.body.paragraphStyle = new ParagraphStyle(TextWrap.Word, TextAlignment.Start, 21.0, TextDirection.Ltr);
 		theme.heading.textStyle = new TextStyle(26.0);
@@ -3923,7 +3915,7 @@ class FrameworkSmoke {
 		if (!frameMetricsValid(context, false)) return 236;
 		if (!context.focusWidget(themedRoot.id)) return 80;
 		themedRoot = context.submit(themedButton, themedFrame);
-		if (themedRoot.layout.style.background != theme.tokens.buttonBackground
+		if (themedRoot.layout.style.background != theme.tokens.accent
 			|| themedRoot.computedStyle.getColor(StyleProperty.BorderColor) != theme.tokens.textOnAccent
 			|| themedRoot.computedStyle.getNumber(StyleProperty.BorderWidth)
 			!= 1.0) throw "Focused primary buttons must retain their fill and show a contrasting border";
@@ -3983,8 +3975,8 @@ class FrameworkSmoke {
 		unnamedSemantics.label = "";
 		if (AccessibilityAudit.isValid(themedRoot)) return 100;
 		var navigationTokens = new ThemeTokens();
-		navigationTokens.navigationBackground = Color.rgba(0.11, 0.12, 0.13, 1.0);
-		navigationTokens.navigationHover = Color.rgba(0.31, 0.32, 0.33, 1.0);
+		navigationTokens.surfaceRaised = Color.rgba(0.11, 0.12, 0.13, 1.0);
+		navigationTokens.surfaceHover = Color.rgba(0.31, 0.32, 0.33, 1.0);
 		context.setTheme(new Theme(navigationTokens));
 		context.pointerLeave();
 		var navigationButton = new Button("Navigation", null, null, null, null, ButtonVariant.Navigation);
@@ -4580,7 +4572,7 @@ class FrameworkSmoke {
 			var entry = root.children[0], barNode = entry.children[0];
 			if (root.layout.style.background != theme.tokens.surface
 				|| entry.layout.style.background != theme.tokens.surface
-				|| barNode.layout.style.background != theme.tokens.navigationBackground
+				|| barNode.layout.style.background != theme.tokens.surfaceRaised
 				|| barNode.children[0].layout.style.background != theme.tokens.border)
 				throw "Navigation surfaces did not follow the active theme";
 		}
@@ -5568,7 +5560,7 @@ class FrameworkSmoke {
 		});
 		var firstItemNode = firstItem;
 		if (firstItemNode == null || firstItemNode.computedStyle.getColor(StyleProperty.Background).red
-			!= uiContext.buildContext.theme.tokens.selectionHover.red) return false;
+			!= uiContext.buildContext.theme.tokens.surfaceHover.red) return false;
 		var settledMenu = uiContext.submit(commandMenu, new LayoutFrame(480.0, 320.0));
 		var settledFirst:Null<RenderNode> = settledMenu.find(firstItemNode.id);
 		if (settledFirst == null || settledFirst.computedStyle.getColor(StyleProperty.Background).red

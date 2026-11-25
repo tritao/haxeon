@@ -58,13 +58,13 @@ class Theme {
 		textSelection = Color.rgba(0.2, 0.43, 0.82, 0.55);
 		textSelectionInactive = Color.rgba(0.2, 0.43, 0.82, 0.30);
 		textCaret = Color.rgba(0.96, 0.97, 0.99, 1.0);
-		body = new TextRoleStyle(new TextStyle(), new ParagraphStyle(), this.tokens.text);
-		heading = new TextRoleStyle(new TextStyle(24.0), new ParagraphStyle(), this.tokens.text);
+		body = new TextRoleStyle(new TextStyle(), new ParagraphStyle(), this.tokens.textPrimary);
+		heading = new TextRoleStyle(new TextStyle(24.0), new ParagraphStyle(), this.tokens.textPrimary);
 		label = new TextRoleStyle(new TextStyle(14.0),
-			new ParagraphStyle(TextWrap.None), this.tokens.text);
-		caption = new TextRoleStyle(new TextStyle(12.0), new ParagraphStyle(), this.tokens.mutedText);
+			new ParagraphStyle(TextWrap.None), this.tokens.textPrimary);
+		caption = new TextRoleStyle(new TextStyle(12.0), new ParagraphStyle(), this.tokens.textSecondary);
 		button = new TextRoleStyle(new TextStyle(),
-			new ParagraphStyle(TextWrap.None), this.tokens.buttonText);
+			new ParagraphStyle(TextWrap.None), this.tokens.textOnAccent);
 		refreshStyles();
 	}
 
@@ -77,57 +77,28 @@ class Theme {
 	static function palette(light:Bool):Theme {
 		var tokens = new ThemeTokens();
 		tokens.accent = light ? rgba(0.12, 0.37, 0.72) : rgba(0.25, 0.61, 0.89);
-		tokens.text = light ? rgba(0.10, 0.14, 0.21) : rgba(0.91, 0.94, 0.98);
-		tokens.mutedText = light ? rgba(0.32, 0.38, 0.47) : rgba(0.62, 0.68, 0.77);
-		tokens.disabledText = light ? rgba(0.38, 0.42, 0.49) : rgba(0.53, 0.55, 0.59);
-		tokens.buttonText = rgba(1.0, 1.0, 1.0);
-		tokens.disabledButtonText = light ? rgba(0.28, 0.31, 0.36) : rgba(0.62, 0.65, 0.70);
-		tokens.buttonBackground = light ? rgba(0.18, 0.39, 0.70) : rgba(0.16, 0.38, 0.70);
-		tokens.buttonHover = light ? rgba(0.16, 0.38, 0.69) : rgba(0.22, 0.48, 0.82);
-		tokens.buttonPressed = light ? rgba(0.11, 0.29, 0.54) : rgba(0.13, 0.34, 0.67);
-		tokens.buttonFocused = light ? rgba(0.22, 0.43, 0.73) : rgba(0.27, 0.52, 0.91);
-		tokens.buttonSelected = light ? rgba(0.16, 0.36, 0.65) : rgba(0.17, 0.37, 0.68);
-		tokens.buttonDisabled = light ? rgba(0.82, 0.84, 0.88) : rgba(0.22, 0.24, 0.28);
-		tokens.controlSelected = tokens.accent;
-		tokens.controlUnselected = light ? rgba(0.78, 0.81, 0.86) : rgba(0.45, 0.50, 0.58);
-		tokens.controlDisabled = light ? rgba(0.82, 0.84, 0.88) : rgba(0.20, 0.21, 0.24);
-		tokens.progressTrack = light ? rgba(0.78, 0.84, 0.92) : rgba(0.20, 0.25, 0.33);
-		tokens.progressFill = tokens.accent;
-		tokens.selectionField = light ? rgba(0.93, 0.95, 0.98) : rgba(0.12, 0.15, 0.20);
-		tokens.selectionHover = light ? rgba(0.91, 0.94, 0.98) : rgba(0.18, 0.23, 0.31);
-		tokens.selectionPressed = light ? rgba(0.85, 0.90, 0.97) : rgba(0.15, 0.20, 0.28);
-		tokens.selectionHighlight = light ? rgba(0.82, 0.89, 0.98) : rgba(0.16, 0.29, 0.50);
-		tokens.selectionBorder = light ? rgba(0.67, 0.72, 0.80) : rgba(0.32, 0.38, 0.48);
-		tokens.selectionPopupShadow = rgba(0.0, 0.0, 0.0, light ? 0.20 : 0.42);
-		tokens.panelBackground = light ? rgba(0.98, 0.98, 1.0) : rgba(0.14, 0.16, 0.20);
-		tokens.overlayBackdrop = rgba(0.0, 0.0, 0.0, 0.54);
-		tokens.tooltipBackground = light ? rgba(0.13, 0.17, 0.23) : rgba(0.08, 0.09, 0.11);
-		tokens.navigationBackground = light ? rgba(0.87, 0.90, 0.95) : rgba(0.075, 0.10, 0.16);
-		tokens.navigationHover = light ? rgba(0.79, 0.85, 0.94) : rgba(0.12, 0.18, 0.28);
-		tokens.navigationPressed = light ? rgba(0.72, 0.81, 0.92) : rgba(0.15, 0.23, 0.36);
-		tokens.navigationFocused = light ? rgba(0.76, 0.84, 0.94) : rgba(0.14, 0.25, 0.41);
-		tokens.navigationSelected = light ? rgba(0.74, 0.83, 0.95) : rgba(0.16, 0.29, 0.50);
-		tokens.navigationDisabled = light ? rgba(0.89, 0.90, 0.92) : rgba(0.10, 0.12, 0.16);
-		tokens.accentHover = tokens.buttonHover;
-		tokens.accentPressed = tokens.buttonPressed;
-		tokens.textPrimary = tokens.text;
-		tokens.textSecondary = tokens.mutedText;
-		tokens.textDisabled = tokens.disabledText;
-		tokens.textOnAccent = tokens.buttonText;
-		tokens.surface = tokens.panelBackground;
-		tokens.surfaceRaised = tokens.navigationBackground;
-		tokens.surfaceSunken = tokens.selectionField;
-		tokens.surfaceHover = tokens.navigationHover;
-		tokens.border = tokens.selectionBorder;
-		tokens.borderStrong = tokens.controlUnselected;
-		tokens.focusRing = tokens.buttonFocused;
-		tokens.selection = tokens.selectionHighlight;
+		tokens.accentHover = light ? rgba(0.16, 0.38, 0.69) : rgba(0.22, 0.48, 0.82);
+		tokens.accentPressed = light ? rgba(0.11, 0.29, 0.54) : rgba(0.13, 0.34, 0.67);
+		tokens.textPrimary = light ? rgba(0.10, 0.14, 0.21) : rgba(0.91, 0.94, 0.98);
+		tokens.textSecondary = light ? rgba(0.32, 0.38, 0.47) : rgba(0.62, 0.68, 0.77);
+		tokens.textDisabled = light ? rgba(0.38, 0.42, 0.49) : rgba(0.53, 0.55, 0.59);
+		tokens.textOnAccent = rgba(1.0, 1.0, 1.0);
+		tokens.surface = light ? rgba(0.98, 0.98, 1.0) : rgba(0.14, 0.16, 0.20);
+		tokens.surfaceRaised = light ? rgba(0.87, 0.90, 0.95) : rgba(0.075, 0.10, 0.16);
+		tokens.surfaceSunken = light ? rgba(0.93, 0.95, 0.98) : rgba(0.12, 0.15, 0.20);
+		tokens.surfaceHover = light ? rgba(0.79, 0.85, 0.94) : rgba(0.12, 0.18, 0.28);
+		tokens.border = light ? rgba(0.67, 0.72, 0.80) : rgba(0.32, 0.38, 0.48);
+		tokens.borderStrong = light ? rgba(0.78, 0.81, 0.86) : rgba(0.45, 0.50, 0.58);
+		tokens.focusRing = light ? rgba(0.22, 0.43, 0.73) : rgba(0.27, 0.52, 0.91);
+		tokens.selection = light ? rgba(0.82, 0.89, 0.98) : rgba(0.16, 0.29, 0.50);
 		tokens.info = tokens.accent;
 		tokens.success = light ? rgba(0.09, 0.47, 0.29) : rgba(0.35, 0.85, 0.69);
 		tokens.warning = light ? rgba(0.68, 0.34, 0.03) : rgba(0.96, 0.58, 0.31);
-		tokens.deriveComponents();
+		tokens.overlayBackdrop = rgba(0.0, 0.0, 0.0, 0.54);
+		tokens.tooltipBackground = light ? rgba(0.13, 0.17, 0.23) : rgba(0.08, 0.09, 0.11);
+		tokens.selectionPopupShadow = rgba(0.0, 0.0, 0.0, light ? 0.20 : 0.42);
 		var theme = new Theme(tokens);
-		theme.textCaret = tokens.text;
+		theme.textCaret = tokens.textPrimary;
 		return theme;
 	}
 
@@ -138,7 +109,7 @@ class Theme {
 	public function refreshStyles():Void {
 		styles.clear();
 		styles.rule(StyleSelector.widget("button"), [
-			StyleValue.background(tokens.buttonBackground),
+			StyleValue.background(tokens.accent),
 			StyleValue.paddingSymmetric(tokens.spacingLarge, tokens.spacingMedium),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusMedium),
 			StyleValue.radius(StyleProperty.RadiusTopRight, tokens.radiusMedium),
@@ -146,33 +117,33 @@ class Theme {
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, tokens.radiusMedium)
 		]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Selected),
-			[StyleValue.background(tokens.buttonSelected)]);
+			[StyleValue.background(tokens.accentPressed)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Focused),
 			[
 				StyleValue.borderColor(tokens.textOnAccent),
 				StyleValue.borderWidth(1.0)
 			]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Hovered),
-			[StyleValue.background(tokens.buttonHover)]);
+			[StyleValue.background(tokens.accentHover)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Pressed),
-			[StyleValue.background(tokens.buttonPressed)]);
+			[StyleValue.background(tokens.accentPressed)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Disabled),
-			[StyleValue.background(tokens.buttonDisabled)]);
+			[StyleValue.background(tokens.surfaceSunken)]);
 		styles.rule(StyleSelector.widget("button").className("navigation"),
-			[StyleValue.background(tokens.navigationBackground)]);
+			[StyleValue.background(tokens.surfaceRaised)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Hovered),
-			[StyleValue.background(tokens.navigationHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Pressed),
-			[StyleValue.background(tokens.navigationPressed)]);
+			[StyleValue.background(tokens.surfaceSunken)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Focused),
 			[
 				StyleValue.borderColor(tokens.focusRing),
 				StyleValue.borderWidth(1.0)
 			]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Selected),
-			[StyleValue.background(tokens.navigationSelected)]);
+			[StyleValue.background(tokens.selection)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Disabled),
-			[StyleValue.background(tokens.navigationDisabled)]);
+			[StyleValue.background(tokens.surface)]);
 		styles.rule(StyleSelector.widget("button").className("secondary"), [
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0)
@@ -226,11 +197,11 @@ class Theme {
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, 0.0)
 		]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Hovered),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Pressed),
-			[StyleValue.background(tokens.selectionPressed)]);
+			[StyleValue.background(tokens.surfaceRaised)]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Selected),
-			[StyleValue.background(tokens.selectionHighlight)]);
+			[StyleValue.background(tokens.selection)]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Focused),
 			[
 				StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
@@ -239,7 +210,7 @@ class Theme {
 			]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool")
 			.state(StyleState.Selected).state(StyleState.Focused),
-			[StyleValue.background(tokens.selectionHighlight)]);
+			[StyleValue.background(tokens.selection)]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Disabled),
 			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0))]);
 		styles.rule(StyleSelector.widget("button").className("inspector-section-header"), [
@@ -266,22 +237,22 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Disabled),
 			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0))]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Hovered),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Focused),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("menu-item").state(StyleState.Pressed),
-			[StyleValue.background(tokens.selectionPressed)]);
+			[StyleValue.background(tokens.surfaceRaised)]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger"), [
-			StyleValue.background(tokens.selectionField),
+			StyleValue.background(tokens.surfaceSunken),
 			StyleValue.padding(new Insets(12.0, 8.0, 34.0, 8.0)),
-			StyleValue.borderColor(tokens.selectionBorder), StyleValue.borderWidth(1.0)
+			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0)
 		]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger").state(StyleState.Hovered),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger").state(StyleState.Pressed),
-			[StyleValue.background(tokens.selectionPressed)]);
+			[StyleValue.background(tokens.surfaceRaised)]);
 		styles.rule(StyleSelector.widget("button").className("select-trigger").state(StyleState.Focused), [
-			StyleValue.background(tokens.selectionField), StyleValue.borderColor(tokens.accent),
+			StyleValue.background(tokens.surfaceSunken), StyleValue.borderColor(tokens.accent),
 			StyleValue.borderWidth(2.0)
 		]);
 		styles.rule(StyleSelector.widget("button").className("selection-option"), [
@@ -289,17 +260,17 @@ class Theme {
 			StyleValue.padding(new Insets(28.0, 5.0, 10.0, 5.0))
 		]);
 		styles.rule(StyleSelector.widget("button").className("selection-option").state(StyleState.Hovered),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("selection-option").state(StyleState.Focused),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("selection-option").state(StyleState.Selected),
-			[StyleValue.background(tokens.selectionHighlight)]);
+			[StyleValue.background(tokens.selection)]);
 		styles.rule(StyleSelector.widget("text-field"), [
-			StyleValue.textColor(tokens.text), StyleValue.background(tokens.surfaceSunken),
+			StyleValue.textColor(tokens.textPrimary), StyleValue.background(tokens.surfaceSunken),
 			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0)
 		]);
 		styles.rule(StyleSelector.widget("text-field").state(StyleState.Disabled),
-			[StyleValue.textColor(tokens.disabledText)]);
+			[StyleValue.textColor(tokens.textDisabled)]);
 		styles.rule(StyleSelector.widget("text-field").state(StyleState.Focused),
 			[StyleValue.borderColor(tokens.focusRing)]);
 		styles.rule(StyleSelector.widget("text-field").className("search-input"), [
@@ -322,67 +293,67 @@ class Theme {
 		styles.rule(StyleSelector.widget("text-field").className("property-input").state(StyleState.Focused),
 			[StyleValue.borderColor(tokens.focusRing)]);
 		styles.rule(StyleSelector.widget("text-field").className("combo-trigger"), [
-			StyleValue.background(tokens.selectionField),
+			StyleValue.background(tokens.surfaceSunken),
 			StyleValue.padding(new Insets(34.0, 8.0, 34.0, 8.0)),
-			StyleValue.borderColor(tokens.selectionBorder), StyleValue.borderWidth(1.0)
+			StyleValue.borderColor(tokens.border), StyleValue.borderWidth(1.0)
 		]);
 		styles.rule(StyleSelector.widget("text-field").className("combo-trigger").state(StyleState.Hovered),
-			[StyleValue.background(tokens.selectionHover)]);
+			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("text-field").className("combo-trigger").state(StyleState.Focused), [
-			StyleValue.background(tokens.selectionField), StyleValue.borderColor(tokens.accent),
+			StyleValue.background(tokens.surfaceSunken), StyleValue.borderColor(tokens.accent),
 			StyleValue.borderWidth(2.0)
 		]);
-		styles.rule(StyleSelector.widget("checkbox"), [StyleValue.textColor(tokens.text)]);
+		styles.rule(StyleSelector.widget("checkbox"), [StyleValue.textColor(tokens.textPrimary)]);
 		styles.rule(StyleSelector.widget("checkbox").state(StyleState.Disabled),
-			[StyleValue.textColor(tokens.disabledText)]);
-		styles.rule(StyleSelector.widget("toggle"), [StyleValue.textColor(tokens.text)]);
+			[StyleValue.textColor(tokens.textDisabled)]);
+		styles.rule(StyleSelector.widget("toggle"), [StyleValue.textColor(tokens.textPrimary)]);
 		styles.rule(StyleSelector.widget("toggle").state(StyleState.Disabled),
-			[StyleValue.textColor(tokens.disabledText)]);
-		styles.rule(StyleSelector.widget("radio"), [StyleValue.textColor(tokens.text)]);
+			[StyleValue.textColor(tokens.textDisabled)]);
+		styles.rule(StyleSelector.widget("radio"), [StyleValue.textColor(tokens.textPrimary)]);
 		styles.rule(StyleSelector.widget("radio").state(StyleState.Disabled),
-			[StyleValue.textColor(tokens.disabledText)]);
+			[StyleValue.textColor(tokens.textDisabled)]);
 
 		styles.rule(StyleSelector.widget("checkbox-indicator"),
-			[StyleValue.background(tokens.controlUnselected)]);
+			[StyleValue.background(tokens.borderStrong)]);
 		styles.rule(StyleSelector.widget("checkbox-indicator").state(StyleState.Checked),
-			[StyleValue.background(tokens.controlSelected)]);
+			[StyleValue.background(tokens.accent)]);
 		styles.rule(StyleSelector.widget("checkbox-indicator").state(StyleState.Disabled),
-			[StyleValue.background(tokens.controlDisabled)]);
+			[StyleValue.background(tokens.border)]);
 
 		styles.rule(StyleSelector.widget("toggle-indicator"), [
-			StyleValue.background(tokens.controlUnselected), StyleValue.alignX(LayoutAlignmentX.Start)
+			StyleValue.background(tokens.borderStrong), StyleValue.alignX(LayoutAlignmentX.Start)
 		]);
 		styles.rule(StyleSelector.widget("toggle-indicator").state(StyleState.Checked), [
-			StyleValue.background(tokens.controlSelected), StyleValue.alignX(LayoutAlignmentX.End)
+			StyleValue.background(tokens.accent), StyleValue.alignX(LayoutAlignmentX.End)
 		]);
 		styles.rule(StyleSelector.widget("toggle-indicator").state(StyleState.Disabled),
-			[StyleValue.background(tokens.controlDisabled)]);
+			[StyleValue.background(tokens.border)]);
 		styles.rule(StyleSelector.widget("toggle-thumb"),
 			[StyleValue.background(Color.rgba(0.98, 0.98, 0.99, 1.0))]);
 
-		styles.rule(StyleSelector.widget("radio-indicator"), [StyleValue.background(tokens.controlUnselected)]);
+		styles.rule(StyleSelector.widget("radio-indicator"), [StyleValue.background(tokens.borderStrong)]);
 		styles.rule(StyleSelector.widget("radio-indicator").state(StyleState.Selected),
-			[StyleValue.background(tokens.controlSelected)]);
+			[StyleValue.background(tokens.accent)]);
 		styles.rule(StyleSelector.widget("radio-indicator").state(StyleState.Disabled),
-			[StyleValue.background(tokens.controlDisabled)]);
+			[StyleValue.background(tokens.border)]);
 		styles.rule(StyleSelector.widget("radio-dot"),
-			[StyleValue.background(tokens.panelBackground)]);
+			[StyleValue.background(tokens.surface)]);
 		styles.rule(StyleSelector.widget("radio-mark"),
 			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0))]);
 		styles.rule(StyleSelector.widget("radio-mark").state(StyleState.Selected),
-			[StyleValue.background(tokens.controlSelected)]);
+			[StyleValue.background(tokens.accent)]);
 		styles.rule(StyleSelector.widget("radio-mark").state(StyleState.Selected).state(StyleState.Disabled),
-			[StyleValue.background(tokens.controlDisabled)]);
+			[StyleValue.background(tokens.border)]);
 
 		styles.rule(StyleSelector.widget("slider"), [
-			StyleValue.sliderTrackColor(tokens.controlUnselected),
+			StyleValue.sliderTrackColor(tokens.borderStrong),
 			StyleValue.sliderFillColor(tokens.accent),
-			StyleValue.sliderThumbColor(tokens.text)
+			StyleValue.sliderThumbColor(tokens.textPrimary)
 		]);
 		styles.rule(StyleSelector.widget("slider").state(StyleState.Disabled), [
-			StyleValue.sliderTrackColor(tokens.controlDisabled),
-			StyleValue.sliderFillColor(tokens.controlDisabled),
-			StyleValue.sliderThumbColor(tokens.disabledText)
+			StyleValue.sliderTrackColor(tokens.border),
+			StyleValue.sliderFillColor(tokens.border),
+			StyleValue.sliderThumbColor(tokens.textDisabled)
 		]);
 		styles.rule(StyleSelector.widget("split-divider"),
 			[StyleValue.background(Color.rgba(tokens.textPrimary.red, tokens.textPrimary.green, tokens.textPrimary.blue,
@@ -394,19 +365,19 @@ class Theme {
 		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Pressed),
 			[StyleValue.background(tokens.accentPressed)]);
 		styles.rule(StyleSelector.widget("progress-bar"), [
-			StyleValue.progressTrackColor(tokens.progressTrack),
-			StyleValue.progressFillColor(tokens.progressFill)
+			StyleValue.progressTrackColor(tokens.surfaceSunken),
+			StyleValue.progressFillColor(tokens.accent)
 		]);
 		styles.rule(StyleSelector.widget("popup-content"), [
 			StyleValue.padding(new Insets(8.0, 8.0, 8.0, 8.0)),
-			StyleValue.background(tokens.panelBackground),
+			StyleValue.background(tokens.surface),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 5.0),
 			StyleValue.radius(StyleProperty.RadiusTopRight, 5.0),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, 5.0),
 			StyleValue.radius(StyleProperty.RadiusBottomLeft, 5.0)
 		]);
 		styles.rule(StyleSelector.widget("selection-popup"), [
-			StyleValue.background(tokens.panelBackground), StyleValue.borderColor(tokens.selectionBorder),
+			StyleValue.background(tokens.surface), StyleValue.borderColor(tokens.border),
 			StyleValue.borderWidth(1.0), StyleValue.shadowColor(tokens.selectionPopupShadow),
 			StyleValue.number(StyleProperty.ShadowOffsetY, 3.0), StyleValue.shadowBlur(8.0),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusMedium),
@@ -420,7 +391,7 @@ class Theme {
 			[StyleValue.background(tokens.overlayBackdrop)]);
 		styles.rule(StyleSelector.widget("dialog-panel"), [
 			StyleValue.padding(new Insets(24.0, 24.0, 24.0, 24.0)),
-			StyleValue.background(tokens.panelBackground),
+			StyleValue.background(tokens.surface),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, 8.0),
 			StyleValue.radius(StyleProperty.RadiusTopRight, 8.0),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, 8.0),
@@ -428,7 +399,7 @@ class Theme {
 			StyleValue.number(StyleProperty.ChildGap, 16.0)
 		]);
 		styles.rule(StyleSelector.widget("dialog-heading"),
-			[StyleValue.textColor(tokens.text)]);
+			[StyleValue.textColor(tokens.textPrimary)]);
 		styles.rule(StyleSelector.widget("tooltip"), [
 			StyleValue.fontSize(tokens.tooltipFontSize),
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
@@ -451,11 +422,11 @@ class Theme {
 
 	/** Resolves a role's normal color while applying the shared disabled state. */
 	public function textRoleColor(role:TextRole, enabled:Bool):Color
-		return enabled ? textRole(role).color : tokens.disabledText;
+		return enabled ? textRole(role).color : tokens.textDisabled;
 
 	/** Resolve the foreground against the actual state background, including custom fills. */
 	public function buttonLabelColor(enabled:Bool, background:Null<Color>, ?preferred:Color):Color {
-		if (!enabled) return tokens.disabledButtonText;
+		if (!enabled) return tokens.textDisabled;
 		var fill = background == null ? tokens.surface
 			: Color.rgba(background.red * background.alpha + tokens.surface.red * (1 - background.alpha),
 			background.green * background.alpha + tokens.surface.green * (1 - background.alpha),
@@ -519,8 +490,8 @@ class Theme {
 	/** The fill of a check box, toggle or radio indicator in the given state. */
 	public function controlColor(selected:Bool, enabled:Bool):Color {
 		if (!enabled)
-			return tokens.controlDisabled;
-		return selected ? tokens.controlSelected : tokens.controlUnselected;
+			return tokens.border;
+		return selected ? tokens.accent : tokens.borderStrong;
 	}
 
 }

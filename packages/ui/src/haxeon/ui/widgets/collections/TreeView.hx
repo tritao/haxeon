@@ -1123,8 +1123,8 @@ private class TreeViewRow implements View {
 			var node = context.createNode(id, LayoutVisualKind.Custom, style);
 			node.states = flags;
 			// Hover is read as the row paints, so a hover change repaints it (UiContext) without rebuilding anything.
-			var normalHover = context.theme.tokens.selectionHover;
-			var selectedColor = context.theme.tokens.selectionHighlight;
+			var normalHover = context.theme.tokens.surfaceHover;
+			var selectedColor = context.theme.tokens.selection;
 			node.onPaint(function(canvas, geometry) {
 				var hovered = (context.interactionStates.get(id)).contains(StyleState.Hovered);
 				if (selected

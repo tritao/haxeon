@@ -46,7 +46,7 @@ class App implements UiApplication implements UiDiagnosticsProvider {
 		style.height = LayoutAxis.grow();
 		style.padding = new Insets(16, 16, 16, 16);
 		style.childGap = 12;
-		style.background = theme.tokens.panelBackground;
+		style.background = theme.tokens.surface;
 		return new Column("root", [
 			new KeyedView("title", new Text("Tasks", null, null, null, TextRole.Heading)),
 			new KeyedView("tabs", tabs())

@@ -193,8 +193,8 @@ internal class SelectionPopup {
 				new StyleSource("framework", "selection-popup", -1, "default"));
 		dropdown.onPaint(function(canvas, geometry) {
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, geometry.height),
-				context.theme.tokens.panelBackground);
-			var border = context.theme.tokens.selectionBorder;
+				context.theme.tokens.surface);
+			var border = context.theme.tokens.border;
 			canvas.fillRectIfPositive(new Rect(0.0, 0.0, geometry.width, 1.0), border);
 			canvas.fillRectIfPositive(new Rect(0.0, geometry.height - 1.0, geometry.width, 1.0), border);
 			canvas.fillRectIfPositive(new Rect(0.0, 1.0, 1.0, geometry.height - 2.0), border);
@@ -284,7 +284,7 @@ internal class SelectionPopup {
 			}, option.key, optionEnabled, ButtonVariant.Navigation,
 				optionSelected, ["selection-option"], null, null, null,
 				optionSelected ? SelectionIndicator.check("option-check-" + originalIndex,
-				context.theme.tokens.text) : null, null, true, null, null, null, optionSemantics);
+				context.theme.tokens.textPrimary) : null, null, true, null, null, null, optionSemantics);
 			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
 				function() return optionButton.build(context));
 			optionNodes.push(optionNode);

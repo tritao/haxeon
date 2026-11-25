@@ -373,7 +373,7 @@ class TextField implements View {
 				var visible = geometry.visibleLocalBounds();
 				var selections = additionalSelections.copy();
 				selections.push(new TextSelection(editor.selectionAnchor, editor.selectionFocus));
-				var normal = whitespaceColor == null ? context.theme.tokens.mutedText : whitespaceColor;
+				var normal = whitespaceColor == null ? context.theme.tokens.textSecondary : whitespaceColor;
 				var editorBackground = fieldBackground.compositeOver(context.theme.tokens.surface);
 				var selectionFill = context.textInput.isOwner(id)
 					? context.theme.textSelection : context.theme.textSelectionInactive;
@@ -419,7 +419,7 @@ class TextField implements View {
 		if (textStyle == null && letterSource != null && letterSource.layer != "framework") textNodeTextStyle =
 			textNodeTextStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
 		var colorSource = computed.source(StyleProperty.TextColor);
-		var textNodeColor = showsPlaceholder ? context.theme.tokens.mutedText : (colorSource != null
+		var textNodeColor = showsPlaceholder ? context.theme.tokens.textSecondary : (colorSource != null
 			&& colorSource.layer != "framework" ? computed.getColor(StyleProperty.TextColor) : resolvedTextColor);
 		if (showEllipsis) textNode = new MiddleEllipsisText("inactive-value",
 			editor.text,

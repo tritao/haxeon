@@ -75,7 +75,7 @@ class BottomBar implements ScopeView {
 		var rootStyle = style.copy();
 		rootStyle.direction = LayoutDirection.TopToBottom;
 		rootStyle.width = LayoutAxis.grow();
-		rootStyle.background = context.theme.tokens.navigationBackground;
+		rootStyle.background = context.theme.tokens.surfaceRaised;
 		var root = NavUi.box(context, id, "bottom-bar", key, rootStyle, ["bottom-bar"]);
 		var tabs = new Semantics(AccessibilityRole.TabList, "Navigation");
 		tabs.orientation = AccessibilityOrientation.Horizontal;

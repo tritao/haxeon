@@ -37,7 +37,7 @@ class App implements UiApplication implements UiDiagnosticsProvider {
 		var style = new LayoutStyle();
 		style.width = LayoutAxis.grow();
 		style.height = LayoutAxis.grow();
-		style.background = theme.tokens.panelBackground;
+		style.background = theme.tokens.surface;
 		style.padding = new Insets(24, 24, 24, 24);
 		style.childGap = 12;
 		return new Column("root", [

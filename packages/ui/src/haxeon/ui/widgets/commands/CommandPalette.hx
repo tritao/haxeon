@@ -200,7 +200,7 @@ private class CommandPaletteItem implements View {
 		rowStyle.padding = new Insets(12.0, 0.0, 12.0, 0.0);
 		rowStyle.childGap = 8.0;
 		rowStyle.background = selected ? context.theme.tokens.accent : hovered
-			? context.theme.tokens.navigationHover : context.theme.tokens.navigationBackground;
+			? context.theme.tokens.surfaceHover : context.theme.tokens.surfaceRaised;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
 		var children:Array<KeyedView> = [
 			new KeyedView("label", new Text(label, null, color))

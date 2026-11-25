@@ -393,7 +393,7 @@ private class TableHeaderCell implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(column.width);
 			style.height = LayoutAxis.fixed(headerHeight);
-			style.background = context.theme.tokens.controlUnselected;
+			style.background = context.theme.tokens.borderStrong;
 			var node = context.createNode(context.rootId("table-header-cell"), LayoutVisualKind.Box, style);
 			node.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.ColumnHeader, column.label);
@@ -461,7 +461,7 @@ private class TableSelectionCell implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.grow();
-			style.background = selected ? context.theme.tokens.selectionHighlight : Color.rgba(0.0, 0.0, 0.0, 0.0);
+			style.background = selected ? context.theme.tokens.selection : Color.rgba(0.0, 0.0, 0.0, 0.0);
 			var node = context.createNode(context.rootId("table-selection"), LayoutVisualKind.Box, style);
 			node.add(context.withScope(new Key("content"), function() return child.build(context)));
 			return node;

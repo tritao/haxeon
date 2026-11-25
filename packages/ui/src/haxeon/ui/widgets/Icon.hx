@@ -90,7 +90,7 @@ class Icon implements View {
 		return context.withScope(new Key(key), function() {
 			var node = context.createNode(context.rootId("icon"), LayoutVisualKind.Custom, style);
 			node.hitTestSelf = false;
-			var paintColor = color == null ? context.theme.tokens.text : color;
+			var paintColor = color == null ? context.theme.tokens.textPrimary : color;
 			var paintKey = namePrefix(name) + colorKey(paintColor);
 			node.onPaint(function(canvas, geometry:ResolvedLayoutItem) {
 				if (geometry.width <= 0.0 || geometry.height <= 0.0) return;

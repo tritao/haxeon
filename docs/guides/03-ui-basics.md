@@ -112,7 +112,7 @@ function view():View {
 	style.height = LayoutAxis.grow();
 	style.padding = new Insets(16, 16, 16, 16);
 	style.childGap = 12;
-	style.background = theme.tokens.panelBackground;
+	style.background = theme.tokens.surface;
 	return new Column("root", [
 		new KeyedView("title", new Text("Tasks", null, null, null, TextRole.Heading)),
 		new KeyedView("tabs", tabs())
@@ -288,7 +288,7 @@ function setDark(value:Bool):Void {
 ```
 
 `ui.setTheme` restyles every control on the next frame. Colours you set yourself, like the window's background, read
-the theme's tokens (`theme.tokens.panelBackground`), so they change with it. `Theme` and `ThemeTokens` in
+the theme's tokens (`theme.tokens.surface`), so they change with it. `Theme` and `ThemeTokens` in
 `haxeon.ui.theme` list every colour and text style a theme has.
 
 ## Run it
