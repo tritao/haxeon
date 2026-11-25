@@ -71,6 +71,16 @@ class IrGeneratedFunctions<T> {
 		round++;
 	}
 
+	/**
+	 * Drops every function, in place: a compile that keeps no session lets them go before its passes, and the state it was copied
+	 * from shares this one (`SessionState.initializerFunctions`).
+	 */
+	public function clear():Void {
+		functions.clear();
+		inputs.clear();
+		used.clear();
+	}
+
 	/** A copy with the same entries, which `keep` on either does not change in the other. */
 	public function copy():IrGeneratedFunctions<T> {
 		var result = new IrGeneratedFunctions<T>();

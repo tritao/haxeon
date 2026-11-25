@@ -166,8 +166,8 @@ class SessionState {
 		irCalls.clear();
 		irSources.clear();
 		staticReferences.clear();
-		structurePrinters = new compiler.ir.reuse.IrGeneratedFunctions<IrObject>();
-		initializerFunctions = new compiler.ir.reuse.IrGeneratedFunctions<compiler.types.TypedAst.TypedField>();
+		structurePrinters.clear();
+		initializerFunctions.clear();
 	}
 
 	/**
