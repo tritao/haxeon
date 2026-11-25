@@ -22,7 +22,7 @@ class Frontend {
 			throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic(DiagnosticCode.SYNTAX_ERROR,
 				"Module-level variables need a module: compile them with compiler.Compiler", ast.fields[0].span));
 		// The convenience frontend has no target; keep its IR portable.
-		return IrProgramAssembler.generate(Typer.type(compiler.semantic.AbstractStatics.fold(ast)),
+		return IrProgramAssembler.generate(Typer.type(compiler.semantic.TypeStatics.fold(ast)),
 			TargetProfile.portable);
 	}
 }

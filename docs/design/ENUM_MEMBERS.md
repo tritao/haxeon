@@ -1,6 +1,6 @@
 # Enum members and per-case constants
 
-Status: decided (2026-11-25), not implemented. Haxeon's `enum` becomes the one construct for a closed set of values:
+Status: decided (2026-11-25). Members (stage 1) are implemented; per-case constants are next. Haxeon's `enum` becomes the one construct for a closed set of values:
 cases with optional payloads (as today), any methods and static members, and immutable per-case constants. This is a
 Haxeon extension; stock Haxe rejects it, so the compiler's own source does not use it (it still builds with stock
 Haxe).

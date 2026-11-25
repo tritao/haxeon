@@ -61,7 +61,7 @@ class FinalFieldRules {
 		for (field in declaration.fields)
 			if (field.name == name && field.isStatic && field.isFinal)
 				fail(DiagnosticCode.READ_ONLY_BINDING,
-					'Final static field "${compiler.semantic.AbstractStatics.displayOwner(owner)}.$name" cannot be assigned',
+					'Final static field "${compiler.semantic.TypeStatics.displayOwner(owner)}.$name" cannot be assigned',
 					span);
 	}
 

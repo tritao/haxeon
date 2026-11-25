@@ -14,7 +14,7 @@ import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
-import compiler.semantic.AbstractStatics;
+import compiler.semantic.TypeStatics;
 import compiler.semantic.InterfaceFieldAccessors;
 import compiler.semantic.ModuleFields;
 import compiler.semantic.SemanticProgram;
@@ -173,7 +173,7 @@ class ApiModelBuilder {
 		return callable(fn, semantic.signatures.get(fn.name) ?? fn, name, "function", true, fn.name, new Map());
 
 	function classDeclaration(decl:AstClass):Null<ApiDeclaration> {
-		if (decl.visibility == AstVisibility.Private || AbstractStatics.abstractOf(decl.name) != null)
+		if (decl.visibility == AstVisibility.Private || TypeStatics.ownerOf(decl.name) != null)
 			return null;
 		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints,
 			decl.visibility.isInternal()),
@@ -223,7 +223,12 @@ class ApiModelBuilder {
 				result: result,
 				typeParameters: []
 			}];
-		addMethods(members, owner, decl.methods ?? [], true);
+		// Its static variables are kept in a storage class (`TypeStatics`); its members are private unless written public.
+		var storage = semantic.declarations.classes.get(TypeStatics.storageName(decl.name));
+		if (storage != null)
+			members = members.concat(fields(ownerInfo(storage.name, storage.span, storage.typeParameters,
+				storage.typeConstraints), storage.fields, false));
+		addMethods(members, owner, decl.methods ?? [], false);
 		return declaration(owner, "enum", decl.metadata, false, members, null, decl.conformances);
 	}
 
@@ -233,8 +238,8 @@ class ApiModelBuilder {
 			isExtern = decl.isExtern == true,
 			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
 			members = fields(owner, decl.fields, publicByDefault),
-			storage = semantic.declarations.classes.exists(AbstractStatics.storageName(decl.name))
-				? semantic.declarations.classes.get(AbstractStatics.storageName(decl.name)) : null;
+			storage = semantic.declarations.classes.exists(TypeStatics.storageName(decl.name))
+				? semantic.declarations.classes.get(TypeStatics.storageName(decl.name)) : null;
 		if (storage != null)
 			members = members.concat(fields(ownerInfo(storage.name, storage.span, storage.typeParameters,
 				storage.typeConstraints),

@@ -91,7 +91,9 @@ class ModuleChangeAnalyzer {
 							].join(",") + ")"
 					].join(";") + "}";
 			if (enumDecl.methods != null) for (method in enumDecl.methods)
-				signature += ";method:" + method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
+				signature += ";method:" + method.visibility.modifier() + (method.isStatic ? ":static:" : ":")
+				+ method.name
+				+ ":" + SemanticSignature.parsedFunction(method, ast.aliases)
 				+ ":" + sourceFingerprint(state, method.span);
 			enums.set(enumName, signature);
 			if (state.enumFingerprints.get(enumName) != signature)

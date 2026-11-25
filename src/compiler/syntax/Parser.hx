@@ -686,7 +686,8 @@ class Parser {
 			typeParameters = parseTypeParameters(typeConstraints),
 			cases = [],
 			conformances = [],
-			methods = [];
+			methods = [],
+			fields:Array<compiler.syntax.Ast.AstField> = [];
 		if (match(TokenKind.Colon))
 			fail(previous(), 'Enum "$name": use "implements" to declare conformance');
 		while (match(TokenKind.Implements)) {
@@ -695,23 +696,42 @@ class Parser {
 		}
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
-			var caseMetadata = parseMetadata(), isStatic = false, isInline = false, isPublic:Null<Bool> = null;
-			while (true) switch kindOf(current()) {
-				case TokenKind.Public, TokenKind.Private: isPublic = kindOf(current()) == TokenKind.Public;
+			var caseMetadata = parseMetadata(),
+				memberStart = spanOf(current()),
+				isStatic = false,
+				isInline = false,
+				isFinal = false,
+				isInternalMember = false,
+				isPublic:Null<Bool> = null;
+			while (true) {
+				if (isInternalModifier()) {
+					isInternalMember = true;
 					advance();
-				case TokenKind.Static: isStatic = true;
-					advance();
-				case TokenKind.Inline: isInline = true;
-					advance();
-				default: break;
+				} else switch kindOf(current()) {
+					case TokenKind.Public, TokenKind.Private: isPublic = kindOf(advance()) == TokenKind.Public;
+					case TokenKind.Static: isStatic = true;
+						advance();
+					case TokenKind.Inline: isInline = true;
+						advance();
+					case TokenKind.Final: isFinal = true;
+						advance();
+					default: break;
+				}
 			}
+			var memberVisibility = writtenVisibility(isInternalMember, isPublic, memberStart);
 			if (match(TokenKind.Function)) {
 				var functionStart = spanOf(previous()), methodName = textOf(consume(TokenKind.Identifier));
+				if (isFinal) fail(previous(), 'Method "$name.$methodName" cannot be final');
 				methods.push(parseFunctionBody(functionStart, methodName, false, isStatic, false, caseMetadata,
-					isInline, writtenVisibility(false, isPublic, functionStart)));
+					isInline, memberVisibility));
 				continue;
 			}
-			if (isStatic || isInline || isPublic != null) fail(current(),
+			if (isFinal || check(TokenKind.Var)) {
+				if (!isStatic) fail(current(), 'Enum "$name": per-case constants are not supported yet');
+				fields.push(parseField(caseMetadata, memberVisibility, true, isInline, isFinal, memberStart));
+				continue;
+			}
+			if (isStatic || isInline || isPublic != null || isInternalMember) fail(current(),
 				"Enum constructor cannot have method modifiers");
 			var caseToken = consumeName(),
 				params:Array<compiler.syntax.Ast.AstEnumParameter> = [];
@@ -750,6 +770,7 @@ class Parser {
 			typeConstraints: typeConstraints,
 			conformances: conformances,
 			methods: methods,
+			fields: fields,
 			metadata: metadata,
 			cases: cases,
 			visibility: visibility,

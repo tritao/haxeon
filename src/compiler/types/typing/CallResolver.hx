@@ -1068,6 +1068,15 @@ class CallResolver {
 		}
 		var enumMethod = EnumConformanceMethods.method(session, receiver.type, name);
 		if (enumMethod != null) {
+			switch receiver.type {
+				case TInstance(NominalKind.Enum, owner, _):
+					if (enumMethod.isStatic)
+						fail(DiagnosticCode.NAME_OR_MEMBER,
+							'Static method "$owner.$name" is called on the enum, not a value',
+							span);
+					MemberAccess.enumMethod(session, owner, enumMethod, span);
+				default:
+			}
 			if (name == "equals") {
 				if (arguments.length != 1)
 					fail(DiagnosticCode.CALL_FORM, 'Method "equals" expects 1 argument, got ${arguments.length}', span);
@@ -1825,6 +1834,13 @@ class CallResolver {
 						.boundaryCast(typeExpressionValue(Variable("this", span), scope),
 						scope.receiverType()), name, arguments, span,
 						scope);
+		// So is an enum's own instance method, where `this` is the value; its static method needs no receiver.
+		var enumMethod = declaredEnumMethod(owner, name);
+		if (enumMethod != null && enumMethod.isStatic)
+			return typeEnumStaticCall(owner, enumMethod, arguments, span, scope);
+		if (enumMethod != null && scope.receiverType() != null)
+			return typeMethodCall(typeExpressionValue(Variable("this", span), scope), name, arguments, span, scope,
+				expectedType);
 		var methodInfo = findMethod(owner, name);
 		if (methodInfo == null)
 			return null;
@@ -2036,6 +2052,12 @@ class CallResolver {
 			if (abstractValue != null)
 				return typeMethodCall(abstractValue, methodName, arguments, span, scope, expectedType, false, false);
 		}
+		if (lastDot > 0) {
+			var enumOwner = enumTypeNamed(name.substring(0, lastDot)),
+				enumMethod = enumOwner == null ? null : declaredEnumMethod(enumOwner, name.substring(lastDot + 1));
+			if (enumMethod != null && enumMethod.isStatic)
+				return typeEnumStaticCall(enumOwner, enumMethod, arguments, span, scope);
+		}
 		var method = session.signatures.get(name);
 		if (method != null && method.isStatic) {
 			var generated = typeWireCall(name, method, arguments, span, scope, expectedType);
@@ -2043,6 +2065,44 @@ class CallResolver {
 				return generated;
 		}
 		return resolveFunctionCall(name, arguments, span, scope, expectedType);
+	}
+
+	/**
+	 * The method `name` the enum `owner` declares, or null when it is no enum or declares none: a read of that method's
+	 * signature, so code that names it is typed again when it is added, removed or changed, and only then.
+	 */
+	function declaredEnumMethod(owner:String, name:String):Null<AstFunction> {
+		var declaration = session.enumDecls.header(owner);
+		if (declaration == null)
+			return null;
+		session.readSignature(owner + "." + name);
+		if (declaration.methods == null)
+			return null;
+		for (candidate in declaration.methods)
+			if (candidate.name == name)
+				return candidate;
+		return null;
+	}
+
+	/** The enum a written type name denotes, or null. */
+	function enumTypeNamed(written:String):Null<String> {
+		if (session.enumDecls.exists(written))
+			return written;
+		var referenced = typeReference(written);
+		return referenced != null && session.enumDecls.exists(referenced) ? referenced : null;
+	}
+
+	/** A call of the enum `owner`'s static `method`: a helper function over the arguments alone. */
+	function typeEnumStaticCall(owner:String, method:AstFunction, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope):TypedExpression {
+		MemberAccess.enumMethod(session, owner, method, span);
+		var type = TInstance(NominalKind.Enum, owner, []),
+			substitutions:Map<String, CompilerType> = [],
+			typed = typeDeclaredCallArguments(arguments, method, scope, owner + "." + method.name, span, substitutions),
+			result = session.declarations.types.resultType(method, substitutions),
+			keyed = EnumConformanceMethods.request(session, type, method.name, session.currentContext.name, span);
+		session.invalidateUnknownCall(scope);
+		return new TypedExpression(TCall(EnumConformanceMethods.name(keyed, method.name), typed), result, span);
 	}
 
 	function typeEnumConstructor(name:String, arguments:Array<AstExpression>, expectedType:Null<CompilerType>,

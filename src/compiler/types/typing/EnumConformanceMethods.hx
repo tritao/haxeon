@@ -13,7 +13,10 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.typing.HelperRequests.HelperRequest;
 
-/** Handwritten enum conformance methods lower to statically dispatched functions over the enum value. */
+/**
+ * An enum's methods lower to statically dispatched functions: an instance method takes the enum value first, a static one
+ * takes only its arguments.
+ */
 class EnumConformanceMethods {
 	public static function method(session:TypingSession, type:CompilerType, name:String):Null<AstFunction> {
 		return switch type {
@@ -80,7 +83,9 @@ class EnumConformanceMethods {
 				for (index in 0...declaration.typeParameters.length)
 					substitutions.set(declaration.typeParameters[index], index < arguments.length ? arguments[index]
 						: TTypeParameter(owner, declaration.typeParameters[index]));
-				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name), type);
+				// A static method has no value to take: it is typed like a class's static.
+				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name),
+					method.isStatic ? null : type);
 				{
 					name:typed.name, role:ProviderFunction(type,
 						ProviderOperations.detailed(ProviderOperation.CustomMethod, method.name)), origin:origin,

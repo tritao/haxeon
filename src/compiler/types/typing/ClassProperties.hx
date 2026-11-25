@@ -5,7 +5,7 @@ import compiler.types.typing.NullSafety.NullSafetyUse;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
-import compiler.semantic.AbstractStatics;
+import compiler.semantic.TypeStatics;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFieldAccess;
@@ -18,7 +18,7 @@ import compiler.types.typing.MemberAccess.DeclaredField;
 
 /**
  * Properties of a class, static (`static var count(get, set):Int`, of a class or of an abstract, whose statics its storage class
- * keeps, `AbstractStatics`) or instance (`var label(get, set):String`). As in Haxe (field access in its typer, typeloadFields):
+ * keeps, `TypeStatics`) or instance (`var label(get, set):String`). As in Haxe (field access in its typer, typeloadFields):
  *
  * - a `get`, `set` or `dynamic` side is a call of its accessor, `get_x` or `set_x`, wherever source names the property (`c.x`,
  *   `Counter.count`, a bare name in its class, `x += 1`, `x++`); an instance accessor is a method, so an override is called;
@@ -50,7 +50,7 @@ class ClassProperties {
 		var field = staticField(session, owner, name);
 		if (field == null || !callsAccessor(accessOf(field, read)))
 			return null;
-		var accessor = (AbstractStatics.abstractOf(owner) ?? owner) + "." + accessorName(name, read);
+		var accessor = (TypeStatics.ownerOf(owner) ?? owner) + "." + accessorName(name, read);
 		return accessor == session.currentContext.functionName ? null : accessor;
 	}
 
@@ -65,7 +65,7 @@ class ClassProperties {
 			return;
 		var access = accessOf(found.field, read);
 		if (access == NeverAccess) {
-			var accessorOwner = (AbstractStatics.abstractOf(found.declaration.name) ?? found.declaration.name) + ".",
+			var accessorOwner = (TypeStatics.ownerOf(found.declaration.name) ?? found.declaration.name) + ".",
 				functionName = session.currentContext.functionName;
 			if (functionName != accessorOwner + "get_" + name && functionName != accessorOwner + "set_" + name)
 				inaccessible(read, name, span);
@@ -150,7 +150,7 @@ class ClassProperties {
 	 * static method of its type, an instance property's as a method of its class or a base class.
 	 */
 	public static function validate(session:TypingSession, declaration:AstClass):Void {
-		var abstractName = AbstractStatics.abstractOf(declaration.name),
+		var abstractName = TypeStatics.ownerOf(declaration.name),
 			abstractDeclaration = abstractName == null ? null : session.declarations.abstracts.get(abstractName),
 			staticMethods = abstractDeclaration != null ? abstractDeclaration.methods : declaration.methods;
 		for (field in declaration.fields)

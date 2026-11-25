@@ -916,7 +916,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				continue;
 			fields.push(DynamicMethods.field(session, classDecl.name, method, erasedSubstitutions));
 		}
-		var abstractOwner = compiler.semantic.AbstractStatics.abstractOf(classDecl.name),
+		var abstractOwner = compiler.semantic.TypeStatics.ownerOf(classDecl.name),
 			abstractDecl = abstractOwner == null ? null : session.declarations.abstracts.get(abstractOwner);
 		if (abstractDecl != null)
 			for (method in abstractDecl.methods)
@@ -1073,8 +1073,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	}
 
 	function validateEnumInterface(declaration:compiler.syntax.Ast.AstEnum, interfaceType:CompilerType,
-			enumSubstitutions:Map<String, CompilerType>,
-			requiredMethods:Map<String, Bool>):Void {
+			enumSubstitutions:Map<String, CompilerType>):Void {
 		var interfaceName = switch interfaceType {
 			case TInstance(NominalKind.Interface, name, _): name;
 			default:
@@ -1090,9 +1089,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceType);
 		for (base in contract.bases)
 			validateEnumInterface(declaration, session.declarations.resolve(base, contract.span,
-				interfaceSubstitutions), enumSubstitutions, requiredMethods);
+				interfaceSubstitutions), enumSubstitutions);
 		for (method in contract.methods) {
-			requiredMethods.set(method.name, true);
 			var implementation:Null<AstFunction> = null;
 			if (declaration.methods != null)
 				for (candidate in declaration.methods)
@@ -1115,11 +1113,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var substitutions:Map<String, CompilerType> = [];
 		for (parameter in declaration.typeParameters)
 			substitutions.set(parameter, TTypeParameter(declaration.name, parameter));
-		var requiredMethods:Map<String, Bool> = [];
 		if (declaration.conformances != null)
 			for (conformance in declaration.conformances) {
 				var resolved = session.declarations.resolve(conformance, declaration.span, substitutions);
-				validateEnumInterface(declaration, resolved, substitutions, requiredMethods);
+				validateEnumInterface(declaration, resolved, substitutions);
 			}
 		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name,
 			[for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
@@ -1142,13 +1139,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					BodyTyper.fail(DiagnosticCode.CONFORMANCE,
 						'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash',
 						method.span);
-				if (method.name != "equals" && method.name != "hash") {
-					if (!requiredMethods.exists(method.name))
-						BodyTyper.fail(DiagnosticCode.CONFORMANCE,
-							'Enum method "${declaration.name}.${method.name}" must implement a declared interface method',
+				for (constructor in declaration.cases)
+					if (constructor.name == method.name)
+						BodyTyper.fail(DiagnosticCode.DECLARATION_CONFLICT,
+							'Enum "${declaration.name}" declares both a case and a method named "${method.name}"',
 							method.span);
+				if (method.name != "equals" && method.name != "hash")
 					continue;
-				}
 				if (method.name == "equals") {
 					hasEquals = true;
 					if (!equatable)

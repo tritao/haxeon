@@ -5,7 +5,7 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
-import compiler.semantic.AbstractStatics;
+import compiler.semantic.TypeStatics;
 import compiler.semantic.ModuleFields;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.types.InternalAccess;
@@ -53,9 +53,9 @@ class MemberAccess {
 	 */
 	public static function classField(session:TypingSession, className:String, name:String,
 			isStatic:Bool):Null<DeclaredField> {
-		// An abstract's static variables are its storage class's (`AbstractStatics`).
-		if (isStatic && session.declarations.abstracts.exists(className))
-			className = AbstractStatics.storageName(className);
+		// An abstract's or enum's static variables are its storage class's (`TypeStatics`).
+		if (isStatic && (session.declarations.abstracts.exists(className) || session.enumDecls.exists(className)))
+			className = TypeStatics.storageName(className);
 		// A cycle is found without remembering the walk: a second walker at half the speed meets the first only on one.
 		var owner:Null<String> = className, slow:Null<String> = className, steps = 0;
 		while (owner != null) {
@@ -136,7 +136,7 @@ class MemberAccess {
 			span:SourceSpan):Void
 		require(session, {
 		// An abstract's static is reached as the abstract's member, where its storage class keeps it.
-		owner: AbstractStatics.abstractOf(declaration.name) ?? declaration.name,
+		owner: TypeStatics.ownerOf(declaration.name) ?? declaration.name,
 			name: field.name,
 			visibility: field.visibility,
 			declaredIn: field.span,
@@ -171,6 +171,18 @@ class MemberAccess {
 	 * Source names the method `name` that `owner` declares (`owner.new` for a constructor): a call, a method value or `super`.
 	 * `owner` is the declaring class, interface or abstract, as the method's lookup found it.
 	 */
+	/** Requires that the code being typed may reach `method`, which the enum `owner` declares. */
+	public static function enumMethod(session:TypingSession, owner:String, method:compiler.syntax.Ast.AstFunction,
+			span:SourceSpan):Void
+		require(session, {
+			owner: owner,
+			name: method.name,
+			visibility: method.visibility,
+			declaredIn: method.span,
+			ownerMetadata: ownerMetadata(session, owner),
+			metadata: method.metadata
+		}, span);
+
 	public static function method(session:TypingSession, owner:String, name:String, span:SourceSpan):Void {
 		var member = declaredMethod(session, owner, name);
 		if (member != null)
@@ -304,6 +316,9 @@ class MemberAccess {
 		var classDecl = session.classDecls.get(owner);
 		if (classDecl != null)
 			return classDecl.metadata;
+		var enumDecl = session.enumDecls.get(owner);
+		if (enumDecl != null)
+			return enumDecl.metadata;
 		var abstractDecl = session.declarations.abstractDeclaration(owner);
 		return abstractDecl != null && abstractDecl.metadata != null ? abstractDecl.metadata : [];
 	}

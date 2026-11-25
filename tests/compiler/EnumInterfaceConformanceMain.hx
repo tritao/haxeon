@@ -20,10 +20,10 @@ class EnumInterfaceConformanceMain {
 		checkError('wrong method type',
 			contract + 'enum E implements Step { Case; public function step(value:String):Int return 0; } '
 			+ 'function main():Int return 0;', 'E1003');
-		checkError('undeclared method',
-			'enum E { Case; public function step(value:Int):Int return value; } function main():Int return 0;',
-			'E1025');
+		// A method no interface asks for is an ordinary member (docs/design/ENUM_MEMBERS.md).
+		Frontend.compile('enum E { Case; public function step(value:Int):Int return value; } '
+			+ 'function main():Int { var e:E = Case; return e.step(42); }');
 		checkError('non-interface', 'class C {} enum E implements C { Case; } function main():Int return 0;', 'E1007');
-		Sys.println('PASS: enum interface methods require matching declared contracts');
+		Sys.println('PASS: enum interface methods require matching declared contracts, and other methods are members');
 	}
 }

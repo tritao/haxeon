@@ -14,7 +14,7 @@ import compiler.syntax.Ast.AstProgram;
 /** What holds the static functions a `using` makes extensions: a class, an abstract, or a module's own functions. */
 enum StaticExtensionOwnerKind {
 	ClassStatics;
-	AbstractStatics;
+	TypeStatics;
 	ModuleFunctions;
 }
 
@@ -224,7 +224,7 @@ class StaticExtensionTable {
 	static function declarationsOf(ast:AstProgram):Array<ModuleDeclaration> {
 		var result:Array<ModuleDeclaration> = [];
 		for (declaration in ast.classes)
-			// The classes ModuleFields and AbstractStatics generate (`Mod$fields`, `A$statics`) hold variables, not extensions.
+			// The classes ModuleFields and TypeStatics generate (`Mod$fields`, `A$statics`) hold variables, not extensions.
 			if (declaration.name.indexOf("$") < 0)
 				result.push({
 					name: declaration.name,
@@ -240,7 +240,7 @@ class StaticExtensionTable {
 				isPrivate: false,
 				metadata: declaration.metadata == null ? [] : declaration.metadata,
 				start: declaration.span.start,
-				kind: AbstractStatics,
+				kind: TypeStatics,
 				statics: [for (method in declaration.methods) if (method.isStatic) method]
 			});
 		for (declaration in ast.enums)

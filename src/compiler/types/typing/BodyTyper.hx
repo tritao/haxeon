@@ -3,7 +3,7 @@ package compiler.types.typing;
 import compiler.core.DiagnosticCode;
 import compiler.core.InternalError;
 import compiler.runtime.RuntimeType;
-import compiler.semantic.AbstractStatics;
+import compiler.semantic.TypeStatics;
 import compiler.syntax.Ast.AstArgument;
 import compiler.types.TypeRelations;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
@@ -2054,9 +2054,9 @@ class BodyTyper implements BodyTyping {
 				new TypedExpression(TClassRef(abstractName), TInstance(NominalKind.Class, abstractName, []), span);
 			} else if (session.classDecls.exists(name) || PlatformAbi.isType(name))
 				new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
-			else if (session.classDecls.exists(AbstractStatics.storageName(name))) {
+			else if (session.classDecls.exists(TypeStatics.storageName(name))) {
 				// An abstract's statics, read through it (`Counter.count`), are its storage class's.
-				var storage = AbstractStatics.storageName(name);
+				var storage = TypeStatics.storageName(name);
 				new TypedExpression(TClassRef(storage), TInstance(NominalKind.Class, storage, []), span);
 			} else {
 				var owner = context.lexicalOwner,
@@ -2132,6 +2132,10 @@ class BodyTyper implements BodyTyping {
 						resolvedEnumName = BodyTyper.enumName(qualifiedEnum),
 						qualifierName = enumName,
 						isEnumAlias = resolvedEnumName != null && resolvedEnumName != enumName;
+					// A name that is no case of an enum with statics is one of them, read below through its storage class.
+					if (resolvedEnumName != null && !enumDeclaresCase(resolvedEnumName, enumCaseName)
+						&& session.classDecls.exists(TypeStatics.storageName(resolvedEnumName)))
+						resolvedEnumName = null;
 					if (resolvedEnumName != null) {
 						enumName = resolvedEnumName;
 						var enumDecl = session.enumConstructorDeclaration(enumName, enumCaseName);
@@ -2155,8 +2159,8 @@ class BodyTyper implements BodyTyping {
 						var abstractName = session.enumAbstractName(className);
 						if (abstractName != null)
 							className = abstractName;
-						else if (session.classDecls.exists(AbstractStatics.storageName(className)))
-							className = AbstractStatics.storageName(className);
+						else if (session.classDecls.exists(TypeStatics.storageName(className)))
+							className = TypeStatics.storageName(className);
 						if (session.classDecls.exists(className) || abstractName != null
 							|| PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className),
@@ -2177,6 +2181,14 @@ class BodyTyper implements BodyTyping {
 				}
 			}
 		};
+	}
+
+	/** Whether the enum declares the case `caseName`: a read of that case alone, as naming it is. */
+	function enumDeclaresCase(enumName:String, caseName:String):Bool {
+		for (constructor in session.enumConstructorDeclaration(enumName, caseName).cases)
+			if (constructor.name == caseName)
+				return true;
+		return false;
 	}
 
 	/** `statements` without the local `name`: its declaration goes, and each assignment to it only evaluates the value. */
@@ -2718,7 +2730,7 @@ class BodyTyper implements BodyTyping {
 		if (result != null)
 			return result;
 		throw new CompileError(new Diagnostic(DiagnosticCode.NAME_OR_MEMBER,
-			'Unknown static field "${AbstractStatics.displayOwner(className)}.$name"', span));
+			'Unknown static field "${TypeStatics.displayOwner(className)}.$name"', span));
 	}
 
 	public function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
@@ -2978,7 +2990,7 @@ class BodyTyper implements BodyTyping {
 	function findBareEnumAbstract(name:String, span:SourceSpan):Null<compiler.syntax.Ast.AstAbstract> {
 		var lexicalOwner = context.lexicalOwner,
 			own = lexicalOwner == null
-				? null : session.enumAbstractDecls.get(AbstractStatics.displayOwner(lexicalOwner));
+				? null : session.enumAbstractDecls.get(TypeStatics.displayOwner(lexicalOwner));
 		if (own != null)
 			for (value in own.values)
 				if (value.name == name)

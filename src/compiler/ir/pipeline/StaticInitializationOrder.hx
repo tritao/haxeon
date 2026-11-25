@@ -4,9 +4,9 @@ import compiler.core.Diagnostic;
 import compiler.core.DiagnosticCode;
 import compiler.ir.model.IrFunction;
 import compiler.ir.model.IrOpcode;
-import compiler.semantic.AbstractStatics;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleFields;
+import compiler.semantic.TypeStatics;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedExpression;
 
@@ -51,7 +51,7 @@ class StaticInitializationOrder {
 	 */
 	public static function loopWarning(classDecl:TypedClass):Diagnostic
 		return new Diagnostic(DiagnosticCode.STATIC_INIT_CYCLE,
-			"maybe loop in static generation of " + AbstractStatics.displayOwner(classDecl.name),
+			"maybe loop in static generation of " + TypeStatics.displayOwner(classDecl.name),
 			classDecl.span, Warning);
 
 	/** The name of the `__init__` function of `className`. */
@@ -206,7 +206,7 @@ class StaticInitializationOrder {
 			// an abstract's static method (`pack.Counter.total`) of the abstract, whose statics its storage class keeps.
 			var dot = callee.lastIndexOf(".");
 			if (dot > 0) {
-				var prefix = callee.substr(0, dot), statics = AbstractStatics.storageName(prefix);
+				var prefix = callee.substr(0, dot), statics = TypeStatics.storageName(prefix);
 				owner = classes.exists(statics) ? statics : ModuleFields.storageName(prefix);
 			}
 		}

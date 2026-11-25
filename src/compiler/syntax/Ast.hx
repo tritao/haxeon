@@ -223,6 +223,10 @@ typedef AstEnum = {
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final ?conformances:Array<AstType>;
 	final ?methods:Array<AstFunction>;
+
+	/** Its static variables; the module keeps them in a hidden class (`TypeStatics`). */
+	final ?fields:Array<AstField>;
+
 	final metadata:Array<AstMetadata>;
 	final cases:Array<AstEnumCase>;
 	final span:SourceSpan;

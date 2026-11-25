@@ -1005,9 +1005,9 @@ class TypingSession {
 			defaultArgumentDepth--;
 	}
 
-	/** The declaration whose code a body of `owner` is: an abstract's, for its statics' storage class (`AbstractStatics`). */
+	/** The declaration whose code a body of `owner` is: an abstract's, for its statics' storage class (`TypeStatics`). */
 	static function codeOwner(owner:Null<String>):Null<String>
-		return compiler.semantic.AbstractStatics.abstractOf(owner) ?? owner;
+		return compiler.semantic.TypeStatics.ownerOf(owner) ?? owner;
 
 	static inline function parentPath(path:String):Null<String>
 		return compiler.core.QualifiedName.parent(path);

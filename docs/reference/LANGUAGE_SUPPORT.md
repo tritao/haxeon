@@ -17,6 +17,10 @@ The current subset includes:
 - `Int`, `Bool`, `Float`, `String`, nullable values, and dynamic values
 - Local variables, functions, methods, recursion, and expression statements
 - Classes, interfaces, anonymous structures, enums, and enum abstracts
+- An enum declares methods and static members as a class does (a Haxeon extension, so stock Haxe rejects it): instance
+  methods take the value as `this`, named or implicit (`switch this`, `components()`), static methods and `static var` or
+  `final` fields belong to the enum (`Kind.parse("pair")`, `Kind.ALL`), and members are private unless written `public` or
+  `internal`. A member cannot share a name with a case. See [ENUM_MEMBERS.md](../design/ENUM_MEMBERS.md).
 - An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
   prints as `Kind(9)`, and a nullable one as `null`).
@@ -175,7 +179,7 @@ The current subset includes:
   length is missing`, in Haxe's words).
 - Static variables and finals on an abstract (`static var count = 0`, `static final step = 2`, `static inline var`), read and
   written through the abstract (`Counter.count`, `pack.Counter.count`) and bare in its methods. Haxe keeps them in the
-  abstract's implementation class; Haxeon in a hidden class of the module (`AbstractStatics`), which goes where the abstract
+  abstract's implementation class; Haxeon in a hidden class of the module (`TypeStatics`), which goes where the abstract
   is declared among the module's classes, so they initialize in Haxe's order (below), and a class whose initializers
   reach one of the abstract's statics or static methods initializes after them.
 - Properties of a class, static or instance, and static properties of an abstract (`var label(get, set):String`,

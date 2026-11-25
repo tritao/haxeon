@@ -2,8 +2,8 @@ package compiler.types.typing;
 
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
-import compiler.semantic.AbstractStatics;
 import compiler.semantic.InterfaceFieldAccessors;
+import compiler.semantic.TypeStatics;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.FunctionTypes;
@@ -16,7 +16,7 @@ import compiler.types.TypedAst.TypedField;
 class DynamicMethods {
 	public static function declaration(session:TypingSession, owner:String, name:String,
 			isStatic:Bool):Null<AstFunction> {
-		var method = MemberAccess.methodInfo(session, isStatic ? AbstractStatics.displayOwner(owner) : owner, name);
+		var method = MemberAccess.methodInfo(session, isStatic ? TypeStatics.displayOwner(owner) : owner, name);
 		return method == null || method.isStatic != isStatic || method.isConstructor
 			? null : session.signatures.get(method.owner + "." + name);
 	}
@@ -121,7 +121,7 @@ class DynamicMethods {
 		if (owner == null)
 			return null;
 		var isStatic = receiver.expression.match(TClassRef(_)),
-			info = MemberAccess.methodInfo(session, isStatic ? AbstractStatics.displayOwner(owner) : owner, name);
+			info = MemberAccess.methodInfo(session, isStatic ? TypeStatics.displayOwner(owner) : owner, name);
 		if (info == null || info.isStatic != isStatic || info.isConstructor)
 			return null;
 		var method = session.signatures.required(info.owner + "." + name);
@@ -174,5 +174,5 @@ class DynamicMethods {
 	}
 
 	public static function staticOwner(session:TypingSession, owner:String):String
-		return session.declarations.abstracts.exists(owner) ? AbstractStatics.storageName(owner) : owner;
+		return session.declarations.abstracts.exists(owner) ? TypeStatics.storageName(owner) : owner;
 }

@@ -18,7 +18,7 @@ typedef AbstractProperty = {
 /**
  * An abstract's properties, `var length(get, never):Int`: an abstract stores nothing but its underlying value, so, as in Haxe, a
  * property is only its accessors. A read calls `get_length` and a write `set_length` on the abstract value; `never` forbids the
- * access. A static variable or property is its storage class's (`AbstractStatics`, `ClassProperties`).
+ * access. A static variable or property is its storage class's (`TypeStatics`, `ClassProperties`).
  */
 class AbstractProperties {
 	/** The instance property `name` of the abstract `type` is a value of, or null. */
@@ -79,7 +79,7 @@ class AbstractProperties {
 	/** Haxe's checks of an abstract's variables (typeloadFields), in Haxe's words. */
 	public static function validate(session:TypingSession, declaration:AstAbstract):Void {
 		for (field in declaration.fields) {
-			// A static is its storage class's (`AbstractStatics`).
+			// A static is its storage class's (`TypeStatics`).
 			if (field.isStatic)
 				continue;
 			if (field.readAccess == null)

@@ -1971,6 +1971,18 @@ class TestMain {
 		for (use in ['trace(Button);', 'var type:Dynamic = Button;', 'var all:Array<Dynamic> = [Button];'])
 			expectCompileError('class Button { public function new() {} } function main():Int { $use return 0; }',
 				"A class used as a value (Class<Button>) is not supported yet", true);
+		// An enum's members follow a class's rules (docs/design/ENUM_MEMBERS.md).
+		expectCompileError('enum Kind { A; B; public function A():Int return 1; } function main():Int return 0;',
+			'Enum "Kind" declares both a case and a method named "A"');
+		expectCompileError('enum Kind { A; static function hidden():Int return 1; } function main():Int return Kind.hidden();',
+			"Cannot access private field hidden");
+		expectCompileError('enum Kind { A; private function hidden():Int return 1; } function main():Int { var k:Kind = A; '
+			+ 'return k.hidden(); }', "Cannot access private field hidden");
+		expectCompileError('enum Kind { A; public static function make():Kind return A; } function main():Int { var k:Kind = A; '
+			+ 'k.make(); return 0; }', 'Static method "Kind.make" is called on the enum, not a value');
+		expectCompileError('enum Kind { A; public final function f():Int return 1; } function main():Int return 0;',
+			'Method "Kind.f" cannot be final');
+		Sys.println("PASS: enum members are checked as a class's are");
 		Sys.println("PASS: a class used as a value is reported as unsupported, not a crash");
 		// A type's visibility is part of its declaration: making it internal is checked again in a session that analyzed it
 		// public, not taken for an edit of bodies alone.

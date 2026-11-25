@@ -170,7 +170,7 @@ class StaticExtensions {
 		var info = session.methodInfoOf(key);
 		return switch owner.kind {
 			case ClassStatics: info != null && info.isStatic && info.owner == owner.name;
-			case AbstractStatics: fn.isStatic && fn.name != "new";
+			case TypeStatics: fn.isStatic && fn.name != "new";
 			// A module-level function has no method info; a static of a class named like the module, which would share the key,
 			// has.
 			case ModuleFunctions: info == null;
@@ -215,7 +215,7 @@ class StaticExtensions {
 	static function kindName(kind:compiler.semantic.StaticExtensionTable.StaticExtensionOwnerKind):String
 		return switch kind {
 			case ClassStatics: "class";
-			case AbstractStatics: "abstract";
+			case TypeStatics: "abstract";
 			case ModuleFunctions: "module";
 		};
 
