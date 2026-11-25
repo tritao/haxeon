@@ -140,8 +140,20 @@ samp {
   padding: 0;
 }
 
+/* The command wraps within the strip: its code may shrink below its text's width, as the pre around it does. */
+.command-strip .frame > pre > code {
+  min-width: 0;
+}
 .command-strip .ec-line {
   column-gap: 1ch;
+}
+/*
+ * Expressive Code keeps room at each line's end for a copy button over the code, and keeps wrapped lines at least about
+ * 20 characters wide; the strip's copy button sits beside the code, and the strip's own width is the limit.
+ */
+.command-strip .ec-line .code {
+  min-width: 0;
+  padding-inline-end: 0;
 }
 
 .command-strip [data-command-prompt] {
