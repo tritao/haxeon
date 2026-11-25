@@ -2349,6 +2349,10 @@ class Parser {
 			var start = spanOf(previous()), value = parseExpression();
 			return ThrowExpression(value, start.merge(expressionSpan(value)));
 		}
+		if (match(TokenKind.Break))
+			return BreakExpression(spanOf(previous()));
+		if (match(TokenKind.Continue))
+			return ContinueExpression(spanOf(previous()));
 		if (check(TokenKind.Identifier) && textOf(current()) == "cast") {
 			var start = spanOf(advance());
 			if (check(TokenKind.LeftParen) && parenthesesHoldTypedCast()) {
@@ -2801,6 +2805,13 @@ class Parser {
 		return ArrayComprehension(name, null, yielded, null, Variable(name, span), true, span);
 	}
 
+	/** `value` as the one element a filtered comprehension's arm yields, or, for `break` or `continue`, the jump itself. */
+	static function yieldedValue(value:AstExpression, span:SourceSpan):AstExpression
+		return switch value {
+			case BreakExpression(_), ContinueExpression(_): value;
+			case _: ArrayLiteral([value], span);
+		};
+
 	/** The block's values as an array of zero or one elements, or null when a path yields nothing expressible. */
 	static function yieldedValues(statements:Array<AstStatement>, span:SourceSpan):Null<AstExpression> {
 		if (statements.length == 0)
@@ -2808,7 +2819,10 @@ class Parser {
 		var last = statements[statements.length - 1],
 			prefix = statements.slice(0, statements.length - 1);
 		var result:Null<AstExpression> = switch last {
-			case AstStatement.Expression(value, valueSpan): ArrayLiteral([value], valueSpan);
+			case AstStatement.Expression(value, valueSpan): yieldedValue(value, valueSpan);
+			// A jump yields nothing: it is the branch itself.
+			case AstStatement.Break(jumpSpan): BreakExpression(jumpSpan);
+			case AstStatement.Continue(jumpSpan): ContinueExpression(jumpSpan);
 			case AstStatement.If(predicate, whenTrue, whenFalse, ifSpan): var yes = yieldedValues(whenTrue,
 				ifSpan);
 				var no = whenFalse.length == 0 ? ArrayLiteral([],
@@ -2854,7 +2868,7 @@ class Parser {
 		var yielded:AstExpression = ArrayLiteral([], span);
 		while (index > 0) {
 			index--;
-			yielded = Conditional(arms[index].condition, ArrayLiteral([arms[index].value], span), yielded, span);
+			yielded = Conditional(arms[index].condition, yieldedValue(arms[index].value, span), yielded, span);
 		}
 		var name = "__haxeon_yield";
 		return ArrayComprehension(name, null, yielded, null, Variable(name, span), true, span);
@@ -3765,7 +3779,8 @@ class Parser {
 				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), AssignmentValue(_, span), Lambda(_, _, _, span), And(_, _, span),
 				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
-				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
+				ThrowExpression(_, span), BreakExpression(span), ContinueExpression(span),
+				SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
 				Capture(_, _, span), Extractor(_, _, span), Spread(_, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),
 				ArrayComprehension(_, _, _, _, _, _, span),

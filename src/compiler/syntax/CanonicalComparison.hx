@@ -255,6 +255,14 @@ class CanonicalComparison {
 					case NullLiteral(r0): span(l0, r0);
 					default: false;
 				};
+			case BreakExpression(l0): switch right {
+					case BreakExpression(r0): span(l0, r0);
+					default: false;
+				};
+			case ContinueExpression(l0): switch right {
+					case ContinueExpression(r0): span(l0, r0);
+					default: false;
+				};
 			case Unreachable(l0): switch right {
 					case Unreachable(r0): span(l0, r0);
 					default: false;

@@ -15,7 +15,7 @@ class AstChildren {
 			case AnnotatedExpression(_, inner, _):
 				visitor.visitChild(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
-				Unreachable(_), EmptyExpression(_),
+				Unreachable(_), EmptyExpression(_), BreakExpression(_), ContinueExpression(_),
 				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
 				NativeLayoutQuery(_, _, _, _),
 				KeyPathLiteral(_, _, _),
@@ -114,7 +114,7 @@ class AstChildren {
 		return switch expression {
 			case AnnotatedExpression(_, inner, _): [inner];
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
-				Unreachable(_), EmptyExpression(_),
+				Unreachable(_), EmptyExpression(_), BreakExpression(_), ContinueExpression(_),
 				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
 				NativeLayoutQuery(_, _, _, _),
 				KeyPathLiteral(_, _, _),

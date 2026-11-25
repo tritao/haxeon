@@ -574,7 +574,7 @@ class ModuleCanonicalizer {
 			case AnnotatedExpression(metadata, inner,
 				span): AnnotatedExpression(metadata, canonicalExpression(inner, module, entry, locals, aliases), span);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
-				Unreachable(_), EmptyExpression(_),
+				Unreachable(_), EmptyExpression(_), BreakExpression(_), ContinueExpression(_),
 				ErrorExpression(_), TemporaryVariable(_, _), DeclaredVariable(_, _, _): e;
 			case Variable(name, span):
 				var imported = importedReference(name, locals, aliases),

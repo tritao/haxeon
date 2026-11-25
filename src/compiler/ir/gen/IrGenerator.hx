@@ -2781,6 +2781,10 @@ class IrGenerator {
 				// block nothing reaches, with a value of the throw's type standing for the one it never gives.
 				builder.select(builder.createBlock());
 				unreachableValue(lowerType(expression.type), builder);
+			case TBreakExpression:
+				lowerJumpExpression(TBreak(expression.span), expression, builder, localTypes);
+			case TContinueExpression:
+				lowerJumpExpression(TContinue(expression.span), expression, builder, localTypes);
 			case TCast(value), TAbiCast(value):
 				var source = lowerExpression(value, builder, localTypes),
 					target = lowerType(expression.type);
@@ -3268,15 +3272,21 @@ class IrGenerator {
 					case TArrayComprehension(_, _, _, _, _, true): true;
 					case _: false;
 				};
+				// A body that can `break` or `continue` gives fewer values than the input has: they are appended.
+				var jumps = ControlFlow.containsLoopJump(value)
+					|| (condition != null && ControlFlow.containsLoopJump(condition));
 				var capacity = !iterator
 					&& condition == null
-					&& !flattened ? (rangeBounds != null ? builder.load(rangeLengthName,
+					&& !flattened
+					&& !jumps ? (rangeBounds != null ? builder.load(rangeLengthName,
 					I32) : builder.arraySize(builder.load(inputName, inputType))) : builder.constInt(0);
 				builder.store(resultName, lowerArrayAllocation(builder, resultElement, capacity));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createOpenBlock(),
 					bodyBlock = builder.createBlock(),
 					afterBlock = builder.createBlock();
+				var loop = jumps ? comprehensionLoop('$' + 'comprehension-break:${expression.span.start}', afterBlock,
+					builder, localTypes) : null;
 				builder.jump(conditionBlock);
 				builder.select(conditionBlock);
 				var index = builder.load(indexName, I32);
@@ -3302,11 +3312,19 @@ class IrGenerator {
 						lowerMapGet(builder, localTypes, builder.load(mapName, lowerType(iterable.type)),
 						builder.load(keyName, lowerType(keyType)),
 						mapTypes.key, mapTypes.value));
+				if (loop != null)
+					builder.loopContexts.push(loop);
 				var conditionValue = condition;
 				if (conditionValue == null) {
 					if (flattened)
 						appendFlattenedComprehension(value, resultName, resultType, resultElement, builder, localTypes);
-					else {
+					else if (jumps) {
+						var loweredValue = lowerExpression(value, builder, localTypes);
+						lowerArrayNativeCall(builder, resultElement, "push", [
+							builder.load(resultName, resultType),
+							loweredValue
+						], I32);
+					} else {
 						var loweredValue = lowerExpression(value, builder, localTypes);
 						builder.arraySet(builder.load(resultName, resultType), builder.load(indexName, I32),
 							loweredValue);
@@ -3331,6 +3349,8 @@ class IrGenerator {
 					builder.jump(nextBlock);
 					builder.select(nextBlock);
 				}
+				if (loop != null)
+					endComprehensionLoop(loop, builder);
 				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 				builder.jump(conditionBlock);
 				builder.select(afterBlock);
@@ -3377,6 +3397,10 @@ class IrGenerator {
 				var conditionBlock = builder.createOpenBlock(),
 					bodyBlock = builder.createBlock(),
 					afterBlock = builder.createBlock();
+				var loop = ControlFlow.containsLoopJump(key) || ControlFlow.containsLoopJump(value)
+					|| (condition != null && ControlFlow.containsLoopJump(condition))
+					? comprehensionLoop('$' + 'map-comprehension-break:${expression.span.start}', afterBlock, builder,
+					localTypes) : null;
 				builder.jump(conditionBlock);
 				builder.select(conditionBlock);
 				if (iterator)
@@ -3396,6 +3420,8 @@ class IrGenerator {
 						lowerMapGet(builder, localTypes, builder.load(sourceMapName, lowerType(iterable.type)),
 						builder.load(keyName, lowerType(itemType)),
 						sourceMapTypes.key, sourceMapTypes.value));
+				if (loop != null)
+					builder.loopContexts.push(loop);
 				var conditionValue = condition;
 				if (conditionValue == null) {
 					setComprehensionMapEntry(builder, localTypes, resultTypes, resultName, resultType, key, value);
@@ -3411,6 +3437,8 @@ class IrGenerator {
 					builder.jump(nextBlock);
 					builder.select(nextBlock);
 				}
+				if (loop != null)
+					endComprehensionLoop(loop, builder);
 				builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
 				builder.jump(conditionBlock);
 				builder.select(afterBlock);
@@ -4962,6 +4990,44 @@ class IrGenerator {
 			&& !IrTypeTools.isDynamic(elementType))
 			return builder.call(IrArrayFactory.NAME, [length], arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
+	}
+
+	/**
+	 * `break` or `continue` as an expression: the jump its statement makes, then, as after a throw, the rest of the expression
+	 * around it lowered on in a block nothing reaches, with a value of its type standing for the one it never gives.
+	 */
+	function lowerJumpExpression(jump:TypedStatement, expression:TypedExpression, builder:IrLocalsBuilder,
+			localTypes:Map<String, IrType>):IrValue {
+		lowerStatements([jump], builder, localTypes, expression.span.end);
+		builder.select(builder.createBlock());
+		return unreachableValue(lowerType(expression.type), builder);
+	}
+
+	/**
+	 * The loop a comprehension whose body can `break` or `continue` is to them: a round's end is a block of its own,
+	 * `continueBlock`, which `endComprehensionLoop` closes; the comprehension goes on with its step from there.
+	 */
+	function comprehensionLoop(breakFlag:String, afterBlock:IrBlock, builder:IrLocalsBuilder,
+			localTypes:Map<String, IrType>):IrLoopContext {
+		localTypes.set(breakFlag, Bool);
+		builder.store(breakFlag, builder.constBool(false));
+		return {
+			breakBlock: afterBlock,
+			continueBlock: builder.createBlock(),
+			breakFlag: breakFlag,
+			trapDepth: builder.trapDepth(),
+			breakUsed: false
+		};
+	}
+
+	/** Ends a round of `loop`'s body: on to its end block, which leaves after a `break` and otherwise takes the step. */
+	function endComprehensionLoop(loop:IrLoopContext, builder:IrLocalsBuilder):Void {
+		builder.loopContexts.pop();
+		if (!builder.isTerminated())
+			builder.jump(loop.continueBlock);
+		var step = builder.createBlock();
+		lowerLoopHeader(builder, loop.continueBlock, step, loop.breakBlock, loop);
+		builder.select(step);
 	}
 
 	/**

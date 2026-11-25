@@ -829,7 +829,7 @@ private class PurityWalker {
 		return switch value {
 			case AnnotatedExpression(_, inner, _): expression(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
-				Unreachable(_), EmptyExpression(_),
+				Unreachable(_), EmptyExpression(_), BreakExpression(_), ContinueExpression(_),
 				NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _):
 				true;
 			case Lambda(_, _, _, _): freshReceiver == null;

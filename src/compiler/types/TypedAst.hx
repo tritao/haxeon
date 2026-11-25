@@ -134,6 +134,10 @@ enum TypedExpressionKind {
 	TConditional(condition:TypedExpression, whenTrue:TypedExpression, whenFalse:TypedExpression);
 	TBlockExpression(statements:Array<TypedStatement>, result:TypedExpression);
 	TThrowExpression(expression:TypedExpression);
+
+	/** `break` or `continue` where a value is expected: it leaves the innermost loop or goes on to its next round. */
+	TBreakExpression;
+	TContinueExpression;
 	TNoReturn(expression:TypedExpression);
 	TCast(expression:TypedExpression);
 	TAbiCast(expression:TypedExpression);

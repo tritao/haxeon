@@ -375,6 +375,7 @@ string-substr-negative	42
 string-substring-reversed	42
 array-iterator-typed	42
 loop-break-array-bounds	42
+loop-jump-expressions	42
 array-compound-call	42
 condition-branches	42
 string-buffer-chars	42

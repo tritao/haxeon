@@ -145,6 +145,8 @@ class ExpressionTyper {
 				scope,
 				expectedType);
 			case ThrowExpression(value, span): throwExpression(value, span, scope);
+			case BreakExpression(span): loopJump(true, span);
+			case ContinueExpression(span): loopJump(false, span);
 			case Capture(_, _, span):
 				fail(DiagnosticCode.PATTERN_OR_DEFER,
 					"A capture `name = pattern` binds only where the pattern itself is matched", span);
@@ -1549,6 +1551,8 @@ class ExpressionTyper {
 					}
 			}
 		}
+		// The condition and value are a loop's body, whose `break` and `continue` are the comprehension's own.
+		session.currentContext.loopDepth++;
 		var typedCondition = predicate == null
 			? null : plain(bodyTyper.typeExpression(predicate, loopScope, TBool), Condition("if"));
 		if (typedCondition != null && (switch (typedCondition.type) {
@@ -1576,6 +1580,7 @@ class ExpressionTyper {
 		},
 			elementType = expectedElement == null
 			? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
+		session.currentContext.loopDepth--;
 		// A comprehension of nulls is an array of `Null<?>`, as an array literal of nulls is.
 		if (expectedElement == null && flattenedElement == null && typedValue.type.match(TNull)) {
 			var variable = session.monomorphs.create("the element type of this array of nulls", span);
@@ -1679,6 +1684,8 @@ class ExpressionTyper {
 					valueBinding = loopScope.define(valueName, mapValue, span);
 				default:
 			}
+		// The condition, key and value are a loop's body, whose `break` and `continue` are the comprehension's own.
+		session.currentContext.loopDepth++;
 		var typedCondition = predicate == null
 			? null : plain(bodyTyper.typeExpression(predicate, loopScope, TBool), Condition("if"));
 		if (typedCondition != null && (switch (typedCondition.type) {
@@ -1694,6 +1701,7 @@ class ExpressionTyper {
 			typedValue = bodyTyper.typeExpression(value, entryScope, expected == null ? null : expected.value),
 			resultKey = expected == null ? typedKey.type : expected.key,
 			resultValue = expected == null ? typedValue.type : expected.value;
+		session.currentContext.loopDepth--;
 		typedKey = bodyTyper.coerce(typedKey, resultKey, "map comprehension key", DiagnosticCode.TYPE_CONSTRAINT,
 			NamedArgument("set", "k"));
 		typedValue = bodyTyper.coerce(typedValue, resultValue, "map comprehension value",
@@ -2233,6 +2241,13 @@ class ExpressionTyper {
 			bodyTyper.typeExpression(value, scope), span)),
 			TNever,
 			span);
+
+	/** `break` (`leaves`) or `continue` as an expression, which gives no value: as in Haxe, only inside a loop. */
+	function loopJump(leaves:Bool, span:SourceSpan):TypedExpression {
+		if (session.currentContext.loopDepth == 0)
+			fail(DiagnosticCode.LOOP_CONTROL, '${leaves ? "break" : "continue"} is only valid inside a loop', span);
+		return new TypedExpression(leaves ? TBreakExpression : TContinueExpression, TNever, span);
+	}
 
 	public function postfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		// A static property is read and written through its accessors.

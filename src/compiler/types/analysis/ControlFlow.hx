@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedChildren;
 
 /** Structural exit analysis for typed statement bodies. */
 class ControlFlow {
@@ -112,28 +113,50 @@ class ControlFlow {
 		};
 
 	static function canBreakCurrentLoop(statements:Array<TypedStatement>):Bool {
+		var breaks = false;
 		for (statement in statements)
 			switch statement {
 				case TBreak(_):
 					return true;
-				case TIf(_, yes, no, _):
-					if (canBreakCurrentLoop(yes) || canBreakCurrentLoop(no))
-						return true;
-				case TTry(tryBranch, catches, _):
-					if (canBreakCurrentLoop(tryBranch))
-						return true;
-					for (catchClause in catches)
-						if (canBreakCurrentLoop(catchClause.statements))
-							return true;
-				case TSwitch(_, cases, fallback, _, _):
-					for (switchCase in cases)
-						if (canBreakCurrentLoop(switchCase.statements))
-							return true;
-					if (canBreakCurrentLoop(fallback))
-						return true;
+				// A nested loop's breaks are its own.
 				case TWhile(_, _, _), TDoWhile(_, _, _), TForIn(_, _, _, _, _):
 				default:
+					// Branches' statements, and `break` as an expression, as in `var x = if (done) break else next()`.
+					TypedChildren.ofStatement(statement,
+						expression -> if (!breaks && containsLoopJump(expression)) breaks = true,
+						nested -> if (!breaks && canBreakCurrentLoop(nested)) breaks = true);
+					if (breaks)
+						return true;
 			}
 		return false;
+	}
+
+	/**
+	 * Whether `expression` holds a `break` or `continue`, as a statement or an expression, outside any lambda: one of a loop
+	 * nested in it counts too, so a caller that needs certainty only learns that the expression may jump.
+	 */
+	public static function containsLoopJump(expression:TypedExpression):Bool {
+		var found = false;
+		var statements:Array<TypedStatement>->Void = null;
+		function visit(child:TypedExpression):Void {
+			if (found)
+				return;
+			switch child.expression {
+				case TBreakExpression, TContinueExpression: found = true;
+				case kind: TypedChildren.ofExpression(kind, visit, statements);
+			}
+		}
+		statements = function(list:Array<TypedStatement>):Void {
+			for (statement in list) {
+				if (found)
+					return;
+				switch statement {
+					case TBreak(_), TContinue(_): found = true;
+					case _: TypedChildren.ofStatement(statement, visit, statements);
+				}
+			}
+		};
+		visit(expression);
+		return found;
 	}
 }

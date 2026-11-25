@@ -770,6 +770,21 @@ class BodyTyper implements BodyTyping {
 				validateDeferredControl(statements, loopDepth);
 				validateDeferredExpression(result, loopDepth);
 				return;
+			case BreakExpression(span), ContinueExpression(span) if (loopDepth == 0):
+				fail(DiagnosticCode.PATTERN_OR_DEFER, "Cannot leave a deferred statement with break or continue", span);
+			// A comprehension's body is a loop's: its own jumps stay inside it.
+			case ArrayComprehension(_, _, iterable, predicate, value, _, _):
+				validateDeferredExpression(iterable, loopDepth);
+				for (inner in [predicate, value])
+					if (inner != null)
+						validateDeferredExpression(inner, loopDepth + 1);
+				return;
+			case MapComprehension(_, _, iterable, predicate, key, value, _):
+				validateDeferredExpression(iterable, loopDepth);
+				for (inner in [predicate, key, value])
+					if (inner != null)
+						validateDeferredExpression(inner, loopDepth + 1);
+				return;
 			default:
 		}
 		for (child in AstChildren.expressions(expression))

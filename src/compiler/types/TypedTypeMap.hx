@@ -169,7 +169,8 @@ class TypedTypeMap {
 		return switch item {
 			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_),
 				TEnumLiteral(_, _),
-				TNullLiteral, TUnreachable, TVoidLiteral, TLocal(_), TCaptured(_),
+				TNullLiteral, TUnreachable, TBreakExpression, TContinueExpression, TVoidLiteral, TLocal(_),
+				TCaptured(_),
 				TClassRef(_), TStaticField(_, _), TFunctionRef(_), TPostfixLocal(_, _), TPostfixCaptured(_, _),
 				TPostfixStaticField(_, _, _): item;
 			case TEnumConstruct(name, index, arguments): TEnumConstruct(name, index, expressions(arguments));

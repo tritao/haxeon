@@ -74,6 +74,9 @@ class AstScan {
 		return jumpsOut(statements, statement -> switch statement {
 			case Break(_): true;
 			default: false;
+		}, expression -> switch expression {
+			case BreakExpression(_): true;
+			default: false;
 		});
 
 	/** Whether a `continue` in these statements restarts the loop they are the body of; continues of nested loops are theirs. */
@@ -81,37 +84,42 @@ class AstScan {
 		return jumpsOut(statements, statement -> switch statement {
 			case Continue(_): true;
 			default: false;
+		}, expression -> switch expression {
+			case ContinueExpression(_): true;
+			default: false;
 		});
 
-	static function jumpsOut(statements:Array<AstStatement>, isJump:AstStatement->Bool):Bool {
+	static function jumpsOut(statements:Array<AstStatement>, isJump:AstStatement->Bool,
+			isJumpExpression:AstExpression->Bool):Bool {
 		for (statement in statements) {
 			if (isJump(statement))
 				return true;
 			switch statement {
 				case AnnotatedStatement(_, inner, _):
-					if (jumpsOut([inner], isJump))
+					if (jumpsOut([inner], isJump, isJumpExpression))
 						return true;
 				case If(_, yes, no, _):
-					if (jumpsOut(yes, isJump) || jumpsOut(no, isJump))
+					if (jumpsOut(yes, isJump, isJumpExpression) || jumpsOut(no, isJump, isJumpExpression))
 						return true;
 				case Try(tryBranch, catches, _):
-					if (jumpsOut(tryBranch, isJump))
+					if (jumpsOut(tryBranch, isJump, isJumpExpression))
 						return true;
 					for (caught in catches)
-						if (jumpsOut(caught.statements, isJump))
+						if (jumpsOut(caught.statements, isJump, isJumpExpression))
 							return true;
 				case Switch(_, cases, defaultBranch, _, _):
 					for (entry in cases)
-						if (jumpsOut(entry.statements, isJump))
+						if (jumpsOut(entry.statements, isJump, isJumpExpression))
 							return true;
-					if (jumpsOut(defaultBranch, isJump))
+					if (jumpsOut(defaultBranch, isJump, isJumpExpression))
 						return true;
 				default:
 			}
 		}
-		// A block expression is a statement list too; look for the jump anywhere inside one to stay on the safe side.
-		return anyExpression(statements, expression -> switch expression {
-			case BlockExpression(inner, _, _): jumpsOut(inner, isJump);
+		// A block expression is a statement list too, and a jump can be an expression (`if (done) break else next()`); look
+		// for one anywhere inside to stay on the safe side.
+		return anyExpression(statements, expression -> isJumpExpression(expression) || switch expression {
+			case BlockExpression(inner, _, _): jumpsOut(inner, isJump, isJumpExpression);
 			default: false;
 		});
 	}

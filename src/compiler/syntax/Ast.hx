@@ -310,6 +310,10 @@ enum AstExpression {
 	Spread(expression:AstExpression, span:SourceSpan);
 
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
+
+	/** `break` or `continue` where a value is expected, as in `if (skip) continue else value`: it gives no value. */
+	BreakExpression(span:SourceSpan);
+	ContinueExpression(span:SourceSpan);
 	Cast(expression:AstExpression, target:Null<AstType>, span:SourceSpan);
 
 	/** `(expression : type)`: the value as a `type`, as an assignment to one converts it (an abstract's `@:to`, `@:from`). */
