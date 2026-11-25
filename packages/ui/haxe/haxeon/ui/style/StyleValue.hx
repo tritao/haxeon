@@ -173,10 +173,6 @@ class StyleValue {
 			StyleProperty.BorderColor.defaultValue);
 		result[StyleProperty.BorderWidth.slot] = number(StyleProperty.BorderWidth,
 			StyleProperty.BorderWidth.defaultValue);
-		result[StyleProperty.OutlineColor.slot] = color(StyleProperty.OutlineColor,
-			StyleProperty.OutlineColor.defaultValue);
-		result[StyleProperty.OutlineWidth.slot] = number(StyleProperty.OutlineWidth,
-			StyleProperty.OutlineWidth.defaultValue);
 		result[StyleProperty.ShadowColor.slot] = color(StyleProperty.ShadowColor,
 			StyleProperty.ShadowColor.defaultValue);
 		result[StyleProperty.ShadowOffsetX.slot] = number(StyleProperty.ShadowOffsetX,
@@ -300,12 +296,6 @@ class StyleValue {
 
 	public static function borderWidth(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.BorderWidth, value);
-
-	public static function outlineColor(value:Color):StyleValue
-		return new StyleColorValue(StyleProperty.OutlineColor, value);
-
-	public static function outlineWidth(value:Float):StyleValue
-		return new StyleFloatValue(StyleProperty.OutlineWidth, value);
 
 	public static function shadowColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.ShadowColor, value);

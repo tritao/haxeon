@@ -16,7 +16,6 @@ class EventPump {
 
 	@:allow(haxeon.platform.Runtime)
 	@:allow(ShowcaseDesktop)
-	@:allow(haxeon.ui.host.DesktopUiHost)
 	@:allow(AndroidUiHost)
 	private function new() {
 		requests = new Requests();
@@ -85,7 +84,6 @@ class EventPump {
 	/** Stops the pump after its owning runtime shuts down. */
 	@:allow(haxeon.platform.Runtime)
 	@:allow(ShowcaseDesktop)
-	@:allow(haxeon.ui.host.DesktopUiHost)
 	private function runtimeShutdown():Void {
 		disposed = true;
 		listeners.resize(0);

@@ -125,10 +125,6 @@ class StyleProperty<T> extends StylePropertyBase {
 		Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
 	public static final BorderWidth:StyleProperty<Float> = new StyleInterpolatedProperty("borderWidth", 0.0, false,
 		StyleImpact.Paint, floatInterpolate);
-	public static final OutlineColor:StyleColorProperty = new StyleColorProperty("outlineColor",
-		Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
-	public static final OutlineWidth:StyleProperty<Float> = new StyleInterpolatedProperty("outlineWidth", 0.0, false,
-		StyleImpact.Paint, floatInterpolate);
 	public static final ShadowColor:StyleColorProperty = new StyleColorProperty("shadowColor",
 		Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
 	public static final ShadowOffsetX:StyleProperty<Float> = new StyleInterpolatedProperty("shadowOffsetX", 0.0, false,
@@ -203,7 +199,7 @@ class StyleProperty<T> extends StylePropertyBase {
 				baseProperty(Transform), baseProperty(TransformOriginX), baseProperty(TransformOriginY),
 				baseProperty(TextColor), baseProperty(FontSize),
 				baseProperty(LetterSpacing), baseProperty(BorderColor), baseProperty(BorderWidth),
-				baseProperty(OutlineColor), baseProperty(OutlineWidth), baseProperty(ShadowColor),
+				baseProperty(ShadowColor),
 				baseProperty(ShadowOffsetX), baseProperty(ShadowOffsetY), baseProperty(ShadowBlur),
 				baseProperty(ShadowSpread),
 				baseProperty(Decorations),

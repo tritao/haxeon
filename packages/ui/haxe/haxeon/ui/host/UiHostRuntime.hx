@@ -384,7 +384,6 @@ class UiHostSession implements Disposable {
 	public function new(stopCallback:Void->Void) this.stopCallback = stopCallback;
 
 	@:allow(haxeon.ui.host.UiHostRuntime)
-	@:allow(haxeon.ui.host.DesktopUiHost)
 	@:allow(haxeon.ui.host.HostedUiApp)
 	function transition(next:UiHostLifecycle):Void {
 		if (state == next) return;
@@ -405,14 +404,12 @@ class UiHostSession implements Disposable {
 	}
 
 	@:allow(haxeon.ui.host.UiHostRuntime)
-	@:allow(haxeon.ui.host.DesktopUiHost)
 	function fail(stage:String, cause:Dynamic):Void {
 		if (error == null) error = new UiHostError(stage, cause);
 		if (state != UiHostLifecycle.Stopped) state = UiHostLifecycle.Failed;
 	}
 
 	@:allow(haxeon.ui.host.UiHostRuntime)
-	@:allow(haxeon.ui.host.DesktopUiHost)
 	function cleanupFailed(stage:String, cause:Dynamic):Void
 		cleanupErrors.push(new UiHostError(stage, cause));
 

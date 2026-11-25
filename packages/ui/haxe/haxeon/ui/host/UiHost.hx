@@ -72,6 +72,7 @@ class HostedUiApp implements App {
 	var captureToken:Null<haxe.Int64>;
 	var captureSubscription:EventSubscription;
 	var traceSubscription:EventSubscription;
+	final frameGc = FrameGcScheduler.fromEnvironment();
 	#end
 
 	public function new(runtime:Runtime, options:UiHostOptions, create:UiHostContext->UiApplication) {
@@ -187,11 +188,16 @@ class HostedUiApp implements App {
 		#if !wasm
 		recorder.begin(surface, tick.timeSeconds, 0, -1, -1, 0);
 		ui.measureFrameTimings = recorder.enabled;
-		#end
-		var rendered = ui.render(tick.timeSeconds, false, acquired);
-		#if !wasm
+		var rendered = false;
+		{
+			frameGc.beginFrame();
+			defer frameGc.endFrame();
+			rendered = ui.render(tick.timeSeconds, false, acquired);
+		}
 		recorder.submitted(rendered);
 		recorder.endRender();
+		#else
+		var rendered = ui.render(tick.timeSeconds, false, acquired);
 		#end
 		if (!rendered) return;
 		var onFrameRendered = options.onFrameRendered;
@@ -243,6 +249,9 @@ class HostedUiApp implements App {
 		var wake = onPoll != null ? 1.0 / 60.0 : 0.1;
 		if (nextInput != null) wake = Math.min(wake, nextInput);
 		if (nextFrame >= 0.0) wake = Math.min(wake, Math.max(0.0, nextFrame - now));
+		#if !wasm
+		if (nextFrame < 0.0 && nextInput == null && !recorder.needsFrames()) frameGc.idle();
+		#end
 		return wake;
 	}
 

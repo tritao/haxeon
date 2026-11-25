@@ -42,7 +42,7 @@ class UiHostOptions {
 	}
 }
 
-/** Window, pacing, and deterministic-capture policy for DesktopUiHost. */
+/** Window, pacing, and deterministic-capture policy for the desktop UI host. */
 class DesktopUiHostOptions extends UiHostOptions {
 	public var customTitlebar:Bool = false;
 	/** Where to put the window before it is first shown, such as where it was on the last run; null lets the system choose. */

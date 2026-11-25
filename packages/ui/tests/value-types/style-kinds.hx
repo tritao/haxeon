@@ -35,11 +35,10 @@ private class StyleKindsProbe {
 			DecorationKind.Image,
 			DecorationKind.NineSlice,
 			DecorationKind.Border,
-			DecorationKind.Outline,
 			DecorationKind.Shadow,
 			DecorationKind.Custom
 		];
-		var names = ["background", "gradient", "image", "nine-slice", "border", "outline", "shadow", "custom"];
+		var names = ["background", "gradient", "image", "nine-slice", "border", "shadow", "custom"];
 		for (index in 0...decorations.length)
 			if (new Decoration(decorations[index]).describe() != names[index]) return 2;
 		var types = [

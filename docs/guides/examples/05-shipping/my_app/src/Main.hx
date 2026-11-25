@@ -1,3 +1,4 @@
+import haxeon.platform.AppLaunch;
 import haxeon.reactive.Signal;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutFrame;
@@ -5,8 +6,8 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.host.DesktopUiHost;
 import haxeon.ui.host.UiApplication;
+import haxeon.ui.host.UiHost;
 import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostOptions;
 import haxeon.ui.widgets.KeyedView;
@@ -17,9 +18,9 @@ import haxeon.ui.widgets.text.Text;
 /** The window's content. Change `view` while `haxeon run --watch` runs: the window updates and keeps the count. */
 class App implements UiApplication implements UiDiagnosticsProvider {
 	final ui:UiContext;
-	final host:DesktopUiHostContext;
+	final host:UiHostContext;
 
-	public function new(host:DesktopUiHostContext) {
+	public function new(host:UiHostContext) {
 		this.host = host;
 		ui = new UiContext(null, host.fonts);
 	}
@@ -60,37 +61,41 @@ class Main {
 	/** The app's state: a live edit keeps it, and a reload carries it through `saveState` and `restoreState`. */
 	public static final count = new Signal(0);
 
-	static var session:Null<DesktopUiHostSession> = null;
 	static var app:Null<App> = null;
 
-	static function options():DesktopUiHostOptions {
-		var options = new DesktopUiHostOptions();
+	static function options():UiHostOptions {
+		var options = new UiHostOptions();
 		options.title = "My App";
 		options.width = 480;
 		options.height = 320;
-		return options.withArguments(Sys.args());
+		return options;
 	}
 
-	static function create(host:DesktopUiHostContext):App {
+	static function create(host:UiHostContext):App {
 		var created = new App(host);
 		app = created;
 		return created;
 	}
 
 	/** `haxeon run`: open the window and run until it closes. */
-	static function main():Int
-		return DesktopUiHost.run(options(), create);
+	static function main():Void
+		UiHost.run(create, options());
 
 	// `haxeon run --watch` sees these, keeps one process and calls them instead of `main`, so edits apply to the running app.
 
+	static var launch:Null<AppLaunch>;
+
 	public static function start(arguments:String):Void
-		session = DesktopUiHost.open(options(), create);
+		launch = UiHost.open(create, options());
 
 	public static function tick():Int
-		return session != null && session.tick() ? 1 : 0;
+		return launch != null && launch.tick() ? 1 : 0;
 
-	public static function close():Int
-		return session == null ? 0 : session.close();
+	public static function close():Int {
+		if (launch != null) launch.dispose();
+		launch = null;
+		return 0;
+	}
 
 	public static function saveState():String
 		return Std.string(count.value);
