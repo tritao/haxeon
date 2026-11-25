@@ -1,6 +1,7 @@
 package compiler;
 
 import compiler.NullSafetyRule.NullSafetyMode;
+import compiler.SourcePackages.SourcePackage;
 
 /** The options a request sets, each left out for its default. */
 typedef CompileOptionsInit = {
@@ -19,6 +20,7 @@ typedef CompileOptionsInit = {
 	final ?phaseCollections:Bool;
 	final ?inlineAllocation:Bool;
 	final ?nullSafety:Array<NullSafetyRule>;
+	final ?sourcePackages:Array<SourcePackage>;
 	final ?scriptModule:String;
 }
 
@@ -113,6 +115,13 @@ class CompileOptions {
 	 */
 	public final nullSafety:Array<NullSafetyRule>;
 
+	/**
+	 * The packages the sources belong to (`--source-package=NAME=DIRECTORY`), which decide where an `internal` declaration may
+	 * be used and how the API model gives each source. A build states every package of its project. They change what a compile
+	 * reports, so `key` keeps them.
+	 */
+	public final sourcePackages:Array<SourcePackage>;
+
 	/** The single module compiled with script grammar, when invoked as a script. */
 	public final scriptModule:Null<String>;
 
@@ -133,17 +142,22 @@ class CompileOptions {
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
 		inlineAllocation = init != null && init.inlineAllocation == true;
 		nullSafety = init == null || init.nullSafety == null ? [] : init.nullSafety;
+		sourcePackages = init == null || init.sourcePackages == null ? [] : init.sourcePackages;
 	}
 
 	/** These options with `inlining` set, the others kept. */
 	public function withInlining(value:Bool):CompileOptions
-		return copy(value, nullSafety);
+		return copy(value, nullSafety, sourcePackages);
 
 	/** These options with the null-safety rules `rules`, the others kept: what a language server takes from the project. */
 	public function withNullSafety(rules:Array<NullSafetyRule>):CompileOptions
-		return copy(inlining, rules);
+		return copy(inlining, rules, sourcePackages);
 
-	function copy(inlining:Bool, nullSafety:Array<NullSafetyRule>):CompileOptions
+	/** These options with the packages `packages`, the others kept: what a language server takes from the project. */
+	public function withSourcePackages(packages:Array<SourcePackage>):CompileOptions
+		return copy(inlining, nullSafety, packages);
+
+	function copy(inlining:Bool, nullSafety:Array<NullSafetyRule>, sourcePackages:Array<SourcePackage>):CompileOptions
 		return new CompileOptions({
 			inlining: inlining,
 			loadStoreForwarding: loadStoreForwarding,
@@ -160,6 +174,7 @@ class CompileOptions {
 			phaseCollections: phaseCollections,
 			inlineAllocation: inlineAllocation,
 			nullSafety: nullSafety,
+			sourcePackages: sourcePackages,
 			scriptModule: scriptModule
 		});
 
@@ -200,6 +215,8 @@ class CompileOptions {
 			flags.push(SCRIPT_MODULE + scriptModule);
 		for (rule in nullSafety)
 			flags.push(NULL_SAFETY + rule.argument());
+		for (entry in sourcePackages)
+			flags.push(SOURCE_PACKAGE + entry.argument());
 		return flags;
 	}
 
@@ -212,6 +229,9 @@ class CompileOptions {
 
 	/** One null-safety rule (`nullSafety`). */
 	public static inline final NULL_SAFETY = "--null-safety=";
+
+	/** One package and its directory (`sourcePackages`). */
+	public static inline final SOURCE_PACKAGE = "--source-package=";
 
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 	public static inline final NO_VERIFY_IR = "--no-verify-ir";
@@ -248,7 +268,7 @@ class CompileOptions {
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS,
 				INLINE_ALLOCATION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, NULL_SAFETY)
-				|| StringTools.startsWith(argument, SCRIPT_MODULE);
+				|| StringTools.startsWith(argument, SOURCE_PACKAGE) || StringTools.startsWith(argument, SCRIPT_MODULE);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -270,8 +290,23 @@ class CompileOptions {
 				>= 0 ? false : null,
 			inlineAllocation: arguments.indexOf(INLINE_ALLOCATION) >= 0,
 			nullSafety: nullSafetyFrom(arguments),
+			sourcePackages: sourcePackagesFrom(arguments),
 			scriptModule: scriptModuleFrom(arguments)
 		});
+
+	/** The packages of the `--source-package=` flags among `arguments`, in order. A malformed one is a usage error. */
+	static function sourcePackagesFrom(arguments:Array<String>):Array<SourcePackage> {
+		var packages:Array<SourcePackage> = [];
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, SOURCE_PACKAGE)) {
+				var value = argument.substr(SOURCE_PACKAGE.length), entry = SourcePackage.parse(value);
+				if (entry == null)
+					throw new compiler.core
+						.UsageError('Compiler option "$SOURCE_PACKAGE" takes NAME=DIRECTORY, not "$value"');
+				packages.push(entry);
+			}
+		return packages;
+	}
 
 	static function scriptModuleFrom(arguments:Array<String>):Null<String> {
 		for (argument in arguments)

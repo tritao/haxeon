@@ -141,6 +141,21 @@ The current subset includes:
   loop over a class whose `iterator()` is private. An override written without a modifier keeps the overridden method's
   visibility, and a class without a constructor of its own is constructed through its base's, as in Haxe. A private
   module-level variable is visible in its own module.
+- `internal`, a Haxeon access level for what a package shares among its own modules but does not offer its users. An
+  `internal` type, or an `internal` field, property, method or module-level function or variable, can be used by any code
+  of the package that declares it, and nowhere else: naming it, constructing it or reaching one of its members from
+  another package is `E1031`. A package is a [manifest](MANIFEST.md) package, its source roots together; a project's own
+  sources are its package. Every member of an internal type is internal. `@:allow`, `@:access` and `@:privateAccess`
+  open `private`, not `internal`. Internal declarations are left out of a package's API reference (`haxeon doc`). It is
+  a modifier only where one is written, so `internal` stays usable as a name, a package included.
+
+  ```haxe
+  internal class LayoutCache { ... }    // the package's own helper
+
+  class Panel {
+  	internal function invalidate():Void { ... }    // for the package's other widgets
+  }
+  ```
 - Static members belong to the class that declares them, as in Haxe: a subclass does not inherit them, so its code names a
   base class's static through that class (`Base.count`, `Base.make()`), and `Derived.count` or a bare `count` in Derived
   does not reach it.

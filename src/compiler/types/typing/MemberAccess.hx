@@ -8,6 +8,7 @@ import compiler.core.Source.SourceSpan;
 import compiler.semantic.AbstractStatics;
 import compiler.semantic.ModuleFields;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
+import compiler.types.InternalAccess;
 import compiler.syntax.Ast;
 
 /** A class's field, with the class that declares it. */
@@ -25,6 +26,9 @@ typedef DeclaredMember = {
 
 	/** Its visibility as written: true for `public`, false for `private`, null with no modifier. */
 	final isPublic:Null<Bool>;
+
+	/** Written `internal`: public to its own package's code only (`InternalAccess`). */
+	final isInternal:Bool;
 
 	/** Where it is declared: a module-level variable is visible to its whole module, which is its source file. */
 	final declaredIn:SourceSpan;
@@ -135,6 +139,7 @@ class MemberAccess {
 		owner: AbstractStatics.abstractOf(declaration.name) ?? declaration.name,
 			name: field.name,
 			isPublic: field.isPublic,
+			isInternal: field.isInternal == true,
 			declaredIn: field.span,
 			ownerMetadata: declaration.metadata,
 			metadata: field.metadata}, span);
@@ -146,6 +151,7 @@ class MemberAccess {
 			owner: declaration.name,
 			name: field.name,
 			isPublic: field.isPublic,
+			isInternal: field.isInternal == true,
 			declaredIn: field.span,
 			ownerMetadata: declaration.metadata == null ? [] : declaration.metadata,
 			metadata: field.metadata
@@ -158,6 +164,7 @@ class MemberAccess {
 			owner: declaration.name,
 			name: field.name,
 			isPublic: field.isPublic,
+			isInternal: field.isInternal == true,
 			declaredIn: field.span,
 			ownerMetadata: [],
 			metadata: field.metadata
@@ -179,7 +186,22 @@ class MemberAccess {
 	 */
 	public static function mayReachMethod(session:TypingSession, owner:String, name:String, span:SourceSpan):Bool {
 		var member = declaredMethod(session, owner, name);
-		return member == null || reachable(session, member, span);
+		return member == null || reachable(session, member, span) && (internalName(session, member) == null
+			|| InternalAccess.allows(session.declarations.sourcePackages, member.declaredIn, span));
+	}
+
+	/**
+	 * The name an `E1031` reports when `member` is internal, written so itself or a member of an internal type (`owner`), or null
+	 * when it may be named from any package. A module-level variable is named by its module.
+	 */
+	static function internalName(session:TypingSession, member:DeclaredMember):Null<String> {
+		if (session.declarations.isInternalType(member.owner))
+			return member.owner;
+		if (!member.isInternal)
+			return null;
+		var storage = ModuleFields.storageName("");
+		return StringTools.endsWith(member.owner, storage) ? member.owner.substr(0,
+			member.owner.length - storage.length) + "." + member.name : member.owner + "." + member.name;
 	}
 
 	public static function isPublicMethod(session:TypingSession, owner:String, name:String):Bool {
@@ -194,6 +216,7 @@ class MemberAccess {
 			name: name,
 			isPublic: declared.isPublic == null && declared.isOverride == true ? overriddenVisibility(session, owner,
 				name) : declared.isPublic,
+			isInternal: declared.isInternal == true,
 			declaredIn: declared.span,
 			ownerMetadata: ownerMetadata(session, owner),
 			metadata: declared.metadata
@@ -205,8 +228,12 @@ class MemberAccess {
 	 * may reach a private member of its owner (`canAccess`), or it is a module-level variable read in its own module.
 	 */
 	static function require(session:TypingSession, member:DeclaredMember, span:SourceSpan):Void {
-		if (reachable(session, member, span))
+		if (reachable(session, member, span)) {
+			var internal = internalName(session, member);
+			if (internal != null)
+				InternalAccess.require(session.declarations.sourcePackages, internal, member.declaredIn, span);
 			return;
+		}
 		throw new CompileError(new Diagnostic(DiagnosticCode.PRIVATE_ACCESS, member.name == "new"
 			? 'Cannot access private constructor of ${member.owner}' : 'Cannot access private field ${member.name}',
 			span));

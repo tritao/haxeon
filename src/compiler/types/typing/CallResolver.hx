@@ -1727,6 +1727,12 @@ class CallResolver {
 		if (calledMethod != null)
 			MemberAccess.method(session, calledMethod.owner, name.substr(name.lastIndexOf(".") + 1), span);
 		var hasSignature = session.signatures.exists(name);
+		if (calledMethod == null && hasSignature) {
+			// A module-level function: written `internal`, it is called from its own package only.
+			var called = session.signatures.required(name);
+			if (called.isInternal == true)
+				compiler.types.InternalAccess.require(session.declarations.sourcePackages, name, called.span, span);
+		}
 		if (hasSignature && session.signatures.required(name).isDynamic == true) {
 			var method = session.signatures.required(name);
 			if (BodyTyper.functionTypeParameters(method).length == 0)

@@ -96,6 +96,7 @@ class AbstractStatics {
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
 			conformances: declaration.conformances,
+			isInternal: declaration.isInternal,
 			underlying: declaration.underlying,
 			fromTypes: declaration.fromTypes,
 			toTypes: declaration.toTypes,

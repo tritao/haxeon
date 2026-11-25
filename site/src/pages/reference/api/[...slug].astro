@@ -101,7 +101,8 @@ const headings = current
     model && !current && (
       <>
         <p>
-          The public API of <code>{packageName}</code>: its modules except those of a package named <code>internal</code>.
+          The public API of <code>{packageName}</code>: its declarations except those written <code>internal</code>, and the
+          modules of a package named <code>internal</code>.
           A declaration without a doc comment is listed with its signature only.
         </p>
         <table>

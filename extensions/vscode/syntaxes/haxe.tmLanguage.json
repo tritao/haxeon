@@ -199,6 +199,10 @@
           "match": "\\b(?:scoped)\\b(?=(?:\\s|/\\*.*?\\*/)+var\\b)"
         },
         {
+          "name": "storage.modifier.haxe",
+          "match": "\\b(?:internal)\\b(?=\\s+(?:class|struct|interface|enum|typedef|abstract|function|var|final|static|inline|extern|override|dynamic)\\b)"
+        },
+        {
           "name": "keyword.control.import.haxe",
           "match": "\\b(?:using)\\b(?=\\s+[A-Za-z_]\\w*)"
         },

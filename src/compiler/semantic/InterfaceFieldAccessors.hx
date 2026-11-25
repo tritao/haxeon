@@ -110,6 +110,7 @@ class InterfaceFieldAccessors {
 					typeConstraints: declaration.typeConstraints,
 					bases: declaration.bases,
 					documentationMetadata: declaration.documentationMetadata,
+					isInternal: declaration.isInternal,
 					fields: declaration.fields,
 					methods: declaration.methods.concat(implied),
 					span: declaration.span
@@ -289,6 +290,7 @@ class InterfaceFieldAccessors {
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
 			isPrivate: declaration.isPrivate,
+			isInternal: declaration.isInternal,
 			metadata: declaration.metadata,
 			base: declaration.base,
 			interfaces: declaration.interfaces,

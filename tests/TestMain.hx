@@ -1682,12 +1682,12 @@ class TestMain {
 		var packagedRequest = CompilerArguments.parse([
 			"--no-output",
 			"--api-json=out/api.json",
-			"--api-package=haxeon-ui=/work/packages/ui",
+			"--source-package=haxeon-ui=/work/packages/ui",
 			"source/Main.hx"
 		]);
-		if (packagedRequest.apiPackages.length != 1 || packagedRequest.apiPackages[0].name != "haxeon-ui"
-			|| packagedRequest.apiPackages[0].root != "/work/packages/ui")
-			throw "Compiler CLI did not read --api-package NAME=DIRECTORY";
+		var packages = packagedRequest.options.sourcePackages;
+		if (packages.length != 1 || packages[0].name != "haxeon-ui" || packages[0].root != "/work/packages/ui")
+			throw "Compiler CLI did not read --source-package NAME=DIRECTORY";
 		if (apiRequest.apiJsonOutput != "out/api.json" || apiRequest.entry != ModuleReachability.NO_ENTRY
 			|| equalsApiRequest.apiJsonOutput != "out/equals.json" || equalsApiRequest.entry != "app.Main")
 			throw "Compiler CLI did not read --api-json, with or without an entry";

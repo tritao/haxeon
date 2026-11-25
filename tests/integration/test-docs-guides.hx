@@ -538,21 +538,30 @@ function checkErrorExample(project:String, code:String):Void {
 		Script.fail('FAIL: $code expected one diagnostic ($expected) and a failed build; exit $status, log:\n${content(log)}');
 }
 
-/** Each project under a section's `examples` directory, grouped by page. */
+/** Each project under a section's `examples` directory, grouped by page; a project's local dependencies are its own. */
 function exampleProjects(section:String, examples:String, ?only:String):Array<Example> {
 	var result:Array<Example> = [];
 	var slugs = [for (name in FileSystem.readDirectory(examples))
 		if ((only == null || name == only) && FileSystem.isDirectory(Path.join([examples, name]))) name];
 	slugs.sort(Reflect.compare);
-	for (slug in slugs)
-		for (file in exampleFiles(Path.join([examples, slug]), ""))
-			if (Path.withoutDirectory(file) == "haxeon.toml")
+	for (slug in slugs) {
+		var manifests = [
+			for (file in exampleFiles(Path.join([examples, slug]), ""))
+				if (Path.withoutDirectory(file) == "haxeon.toml") Path.directory(file)
+		];
+		for (directory in manifests) {
+			// A manifest inside another example's directory is that example's local dependency, not an example of its own.
+			var nested = Lambda.exists(manifests, outer -> outer != directory
+				&& StringTools.startsWith(directory, outer == "" ? "" : outer + "/"));
+			if (!nested)
 				result.push({
 					section: section,
 					slug: slug,
-					source: Path.join([examples, slug, Path.directory(file)]),
-					relative: Path.directory(file)
+					source: Path.join([examples, slug, directory]),
+					relative: directory
 				});
+		}
+	}
 	return result;
 }
 

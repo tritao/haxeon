@@ -306,6 +306,7 @@ class SemanticProgram {
 			replacement == null ? field : {
 				name: field.name,
 				isPublic: field.isPublic,
+				isInternal: field.isInternal,
 				metadata: replacement.metadata,
 				type: field.type,
 				initializer: replacement.initializer,

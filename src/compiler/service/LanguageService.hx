@@ -276,12 +276,13 @@ class LanguageService {
 	}
 
 	/**
-	 * Selects the compiler of a project configuration and gives it the configuration's defines and null-safety rules, the ones the
-	 * project's build passes (`project.CompilerInputs`), so the editor reports what a build reports.
+	 * Selects the compiler of a project configuration and gives it the configuration's defines, null-safety rules and packages, the
+	 * ones the project's build passes (`project.CompilerInputs`), so the editor reports what a build reports.
 	 */
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>,
 			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration,
-			ffiIdentity:String = "", ?nullSafety:Array<compiler.NullSafetyRule>):Void {
+			ffiIdentity:String = "", ?nullSafety:Array<compiler.NullSafetyRule>,
+			?sourcePackages:Array<compiler.SourcePackages.SourcePackage>):Void {
 		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
 		if (activeConfiguration != key) {
 			// Typed declarations and frozen FFI models belong to one configuration.
@@ -307,7 +308,8 @@ class LanguageService {
 		documentationIndex.clear();
 		structuralIndex.clear();
 		compiler.configure(identity, scopeIdentity, defines);
-		compiler.options = compiler.options.withNullSafety(nullSafety == null ? [] : nullSafety);
+		compiler.options = compiler.options.withNullSafety(nullSafety == null ? [] : nullSafety)
+			.withSourcePackages(sourcePackages == null ? [] : sourcePackages);
 	}
 
 	public function compile(entryModule:String, ?token:CancellationToken):CompileResult

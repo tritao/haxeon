@@ -22,6 +22,8 @@ const contextualExamples = [
   '#extern class Native {}',
   '#macro function expand() {}',
   '#override function run() {}',
+  '#internal class Helper {}',
+  '#internal static function helper() {}',
   '#scoped var owned = #cast #null;',
   '#scoped /* ownership */ var other;',
   'var property(#get, #set);',

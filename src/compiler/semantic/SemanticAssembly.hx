@@ -437,6 +437,7 @@ class SemanticAssembly {
 					canonicalFields.push({
 						name: field.name,
 						isPublic: field.isPublic,
+						isInternal: field.isInternal,
 						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals,
 							classAliases),
 						// An unannotated field's type is its initializer's, typed on demand (`DeclarationTypeTable`).
@@ -459,6 +460,7 @@ class SemanticAssembly {
 					typeParameters: classDecl.typeParameters,
 					typeConstraints: classDecl.typeConstraints,
 					isPrivate: classDecl.isPrivate,
+					isInternal: classDecl.isInternal,
 					metadata: ModuleCanonicalizer.canonicalMetadata(classDecl.metadata, name, entryModule, locals,
 						classAliases),
 					base: canonicalBase,

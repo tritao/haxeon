@@ -154,6 +154,7 @@ class ModuleCanonicalizer {
 			typeConstraints: canonicalConstraints(alias.typeConstraints, aliases, alias.typeParameters),
 			type: canonicalType(alias.type, aliases, alias.typeParameters),
 			isPrivate: alias.isPrivate,
+			isInternal: alias.isInternal,
 			span: alias.span
 		};
 
@@ -171,6 +172,7 @@ class ModuleCanonicalizer {
 			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module,
 				entry, locals, method.name, enumAliases)],
 			metadata: enumDecl.metadata,
+			isInternal: enumDecl.isInternal,
 			cases: [for (caseDecl in enumDecl.cases)
 				{
 					name: caseDecl.name,
@@ -209,6 +211,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			isExtern: decl.isExtern,
+			isInternal: decl.isInternal,
 			metadata: decl.metadata == null ? null : canonicalMetadata(decl.metadata, module, entry, locals, aliases),
 			typeParameters: decl.typeParameters,
 			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
@@ -245,6 +248,7 @@ class ModuleCanonicalizer {
 		return {
 			name: field.name,
 			isPublic: field.isPublic,
+			isInternal: field.isInternal,
 			metadata: canonicalMetadata(field.metadata, module, entry, locals, aliases),
 			type: field.type == null ? null : canonicalType(field.type, aliases, ownerTypeParameters),
 			initializer: canonicalOptionalExpression(field.initializer, module, entry, locals, aliases),
@@ -298,6 +302,7 @@ class ModuleCanonicalizer {
 			typeParameters: interfaceDecl.typeParameters,
 			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
 			documentationMetadata: interfaceDecl.documentationMetadata,
+			isInternal: interfaceDecl.isInternal,
 			bases: [
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
@@ -319,6 +324,7 @@ class ModuleCanonicalizer {
 			typeConstraints: canonical.typeConstraints,
 			bases: canonical.bases,
 			documentationMetadata: canonical.documentationMetadata,
+			isInternal: canonical.isInternal,
 			fields: canonical.fields,
 			methods: canonical.methods.concat(implied),
 			span: canonical.span

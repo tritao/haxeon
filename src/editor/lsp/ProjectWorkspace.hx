@@ -34,9 +34,13 @@ class HaxeProjectConfiguration {
 	/** The project's null-safety rules, as its build passes them (`CompilerInputs.nullSafety`). */
 	public final nullSafety:ReadOnlyArray<compiler.NullSafetyRule>;
 
+	/** The project's packages and their directories, as its build passes them (`CompilerInputs.sourcePackages`). */
+	public final sourcePackages:ReadOnlyArray<compiler.SourcePackages.SourcePackage>;
+
 	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>,
 			libraries:Array<String>,
-			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration, ?nullSafety:Array<compiler.NullSafetyRule>) {
+			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration, ?nullSafety:Array<compiler.NullSafetyRule>,
+			?sourcePackages:Array<compiler.SourcePackages.SourcePackage>) {
 		this.ffi = ffi == null ? new compiler.ffi.FfiRegistry.FfiConfiguration() : ffi;
 		ffiIdentity = TextDigest.sha256(haxe.Json.stringify({
 			interfaces: this.ffi.interfaceSources(),
@@ -48,6 +52,7 @@ class HaxeProjectConfiguration {
 		this.defines = sortedCopy(defines);
 		this.libraries = sortedCopy(libraries);
 		this.nullSafety = nullSafety == null ? [] : nullSafety.copy();
+		this.sourcePackages = sourcePackages == null ? [] : sourcePackages.copy();
 		scopeId = TextDigest.sha256([
 			file,
 			this.classPaths.join("|"),
@@ -56,7 +61,8 @@ class HaxeProjectConfiguration {
 			ffiIdentity
 		].join("\n"));
 		id = TextDigest.sha256(scopeId + "\n" + this.defines.join("|") + "\n"
-			+ [for (rule in this.nullSafety) rule.argument()].join("|"));
+			+ [for (rule in this.nullSafety) rule.argument()].join("|") + "\n"
+			+ [for (entry in this.sourcePackages) entry.argument()].join("|"));
 	}
 
 	public function owns(path:String):Bool {
@@ -530,7 +536,7 @@ class ProjectWorkspace {
 				}]);
 			var defines = inputs.defines.concat(compiler.tools.CompilerDriver.targetDefines(inputs.target));
 			return new HaxeProjectConfiguration(file, roots, inputs.entry == null ? [] : [inputs.entry], defines, [],
-				ffi, inputs.nullSafety);
+				ffi, inputs.nullSafety, inputs.sourcePackages);
 		}
 		var value:Dynamic = Json.parse(File.getContent(file)),
 			base = Path.directory(file),

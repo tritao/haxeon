@@ -73,13 +73,14 @@ class CompilerProvider {
 		}
 		// A check writes nothing, so it has no outputs and always runs; its compiler session makes a repeat cheap.
 		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
+		// The package each source belongs to: where its `internal` declarations may be used, and, in an API description, what its
+		// sources are given relative to, never as this machine's path.
+		for (entry in compilerInputs.sourcePackages)
+			arguments.push(compiler.CompileOptions.SOURCE_PACKAGE + entry.argument());
 		if (describe) {
 			arguments.push("--api-json=" + context.apiJson);
 			for (root in project.rootPackage.sourceRoots)
 				arguments.push("--api-source=" + root);
-			// Each source is given relative to its package's root, never as this machine's path.
-			for (resolvedPackage in project.packages.packages)
-				arguments.push('--api-package=${resolvedPackage.name}=${resolvedPackage.root}');
 		}
 		for (sourceRoot in compilerInputs.roots)
 			arguments.push("--root=" + sourceRoot);

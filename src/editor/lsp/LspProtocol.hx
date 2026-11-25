@@ -1341,7 +1341,7 @@ class LspProtocol {
 
 	function configure(configuration:editor.lsp.ProjectWorkspace.HaxeProjectConfiguration):Void
 		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi,
-			configuration.ffiIdentity, configuration.nullSafety.copy());
+			configuration.ffiIdentity, configuration.nullSafety.copy(), configuration.sourcePackages.copy());
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");

@@ -1,5 +1,6 @@
 package compiler.documentation;
 
+import compiler.SourcePackages;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
 import compiler.documentation.ApiModel.ApiDeclaration;
@@ -29,6 +30,9 @@ private typedef ApiOwner = {
 	final span:SourceSpan;
 	final typeParameters:Array<String>;
 	final typeConstraints:Null<Array<AstTypeConstraint>>;
+
+	/** Written `internal`: described with its visibility, which the reference leaves out. */
+	final isInternal:Bool;
 }
 
 /** Projects the semantic program and its source-bearing declarations into the public API. */
@@ -38,29 +42,25 @@ class ApiModelBuilder {
 	final comments = new ObjectMap<SourceFile, Array<DocumentationComment>>();
 	final roots:Array<String>;
 
-	/** The packages sources belong to, with their roots as absolute directories, the innermost first. */
-	final packages:Array<{name:String, root:String}>;
+	/** The packages sources belong to. */
+	final packages:SourcePackages;
 
 	/**
 	 * The model of `semantic`, whose `described` modules are the API. A source in one of `packages` is given relative to that
 	 * package's root; any other (the standard library's) relative to the source root of `roots` that holds it.
 	 */
 	public static function build(semantic:SemanticProgram, modules:Map<String, ModuleState>, roots:Array<String>,
-			described:Array<String>, ?packages:Array<{name:String, root:String}>):ApiModel
-		return new ApiModelBuilder(semantic, modules, roots, packages ?? []).model(described);
+			described:Array<String>, ?packages:SourcePackages):ApiModel
+		return new ApiModelBuilder(semantic, modules, roots, packages ?? new SourcePackages([])).model(described);
 
 	function new(semantic:SemanticProgram, states:Map<String, ModuleState>, roots:Array<String>,
-			packages:Array<{name:String, root:String}>) {
+			packages:SourcePackages) {
 		this.semantic = semantic;
 		for (state in states)
 			modules.set(state.source.path, state.name);
-		this.roots = [for (root in roots) Path.addTrailingSlash(absolute(root))];
+		this.roots = [for (root in roots) Path.addTrailingSlash(SourcePackages.absolute(root))];
 		this.roots.sort((left, right) -> right.length - left.length);
-		// A package inside another's directory (a checkout's packages/ under its root) owns what it holds.
-		this.packages = [for (entry in packages) {
-			name: entry.name, root: Path.addTrailingSlash(absolute(entry.root))
-		}];
-		this.packages.sort((left, right) -> right.root.length - left.root.length);
+		this.packages = packages;
 	}
 
 	function model(described:Array<String>):ApiModel {
@@ -159,7 +159,7 @@ class ApiModelBuilder {
 
 	/** A builder for describing declarations one at a time, from the semantic program an analysis keeps. */
 	public static function of(semantic:SemanticProgram, modules:Map<String, ModuleState>):ApiModelBuilder
-		return new ApiModelBuilder(semantic, modules, [], []);
+		return new ApiModelBuilder(semantic, modules, [], new SourcePackages([]));
 
 	function moduleVariables(storage:AstClass):Array<ApiMember>
 		return fields(ownerInfo(storage.name, storage.span, storage.typeParameters, storage.typeConstraints),
@@ -172,7 +172,7 @@ class ApiModelBuilder {
 	function classDeclaration(decl:AstClass):Null<ApiDeclaration> {
 		if (decl.isPrivate || AbstractStatics.abstractOf(decl.name) != null)
 			return null;
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
 			isExtern = decl.isExtern == true,
 			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
 			members = fields(owner, decl.fields, publicByDefault);
@@ -182,19 +182,20 @@ class ApiModelBuilder {
 	}
 
 	function interfaceDeclaration(decl:AstInterface):ApiDeclaration {
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
 			members = fields(owner, decl.fields, true);
 		addMethods(members, owner, decl.methods, true);
 		return declaration(owner, "interface", decl.documentationMetadata, false, members, decl.bases);
 	}
 
 	function aliasDeclaration(decl:AstTypeAlias):ApiDeclaration
-		return declaration(ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints), "typedef",
+		return declaration(ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
+			"typedef",
 			decl.metadata,
 			false, [], null, null, decl.type);
 
 	function enumDeclaration(decl:AstEnum):ApiDeclaration {
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
 			scope = parametersIn(decl.name, decl.typeParameters),
 			result = ApiTypeEncoder.encode(TInstance(compiler.types.Type.NominalKind.Enum, decl.name,
 				[for (parameter in decl.typeParameters) scope.get(parameter)])),
@@ -220,7 +221,7 @@ class ApiModelBuilder {
 	}
 
 	function abstractDeclaration(decl:AstAbstract):ApiDeclaration {
-		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints),
+		var owner = ownerInfo(decl.name, decl.span, decl.typeParameters, decl.typeConstraints, decl.isInternal),
 			isExtern = decl.isExtern == true,
 			publicByDefault = isExtern || has(decl.metadata, "publicFields"),
 			members = fields(owner, decl.fields, publicByDefault),
@@ -253,8 +254,14 @@ class ApiModelBuilder {
 	}
 
 	static function ownerInfo(name:String, span:SourceSpan, typeParameters:Array<String>,
-			typeConstraints:Null<Array<AstTypeConstraint>>):ApiOwner
-		return {name: name, span: span, typeParameters: typeParameters, typeConstraints: typeConstraints};
+			typeConstraints:Null<Array<AstTypeConstraint>>, isInternal:Null<Bool> = false):ApiOwner
+		return {
+			name: name,
+			span: span,
+			typeParameters: typeParameters,
+			typeConstraints: typeConstraints,
+			isInternal: isInternal == true
+		};
 
 	function declaration(owner:ApiOwner, kind:String, metadata:Null<Array<AstMetadata>>, isExtern:Bool,
 			members:Array<ApiMember>, ?supertypes:Array<AstType>, ?interfaces:Array<AstType>, ?underlying:AstType,
@@ -262,7 +269,7 @@ class ApiModelBuilder {
 		// Members stay in the order the source declares them, which is how their author grouped them.
 		var scope = parametersIn(owner.name, owner.typeParameters);
 		return {
-			source: source(owner.span, metadata),
+			source: source(owner.span, metadata, owner.isInternal),
 			path: owner.name,
 			module: moduleName(owner.span),
 			packageName: locate(owner.span.file, moduleName(owner.span)).name,
@@ -288,7 +295,7 @@ class ApiModelBuilder {
 					scope);
 			if (field.readAccess == null && field.writeAccess == null)
 				members.push({
-					source: source(span, field.metadata),
+					source: source(span, field.metadata, field.isInternal),
 					kind: "field",
 					name: field.name,
 					isStatic: field.isStatic,
@@ -298,7 +305,7 @@ class ApiModelBuilder {
 				});
 			else
 				members.push({
-					source: source(span, field.metadata),
+					source: source(span, field.metadata, field.isInternal),
 					kind: "property",
 					name: field.name,
 					isStatic: field.isStatic,
@@ -357,7 +364,7 @@ class ApiModelBuilder {
 			scope.set(parameter, TTypeParameter(qualified, parameter));
 		var types = semantic.declarations.types,
 			argumentTypes = types.argumentTypes(signature, scope);
-		return {source: source(method.span, method.metadata),
+		return {source: source(method.span, method.metadata, method.isInternal),
 			kind: kind,
 			name: name,
 			isStatic: isStatic,
@@ -576,7 +583,7 @@ class ApiModelBuilder {
 		return doc;
 	}
 
-	function source(span:SourceSpan, metadata:Null<Array<AstMetadata>>):ApiSource {
+	function source(span:SourceSpan, metadata:Null<Array<AstMetadata>>, isInternal:Null<Bool> = false):ApiSource {
 		var file = span.file, doc = commentAt(span, metadata), annotations:Array<ApiModel.ApiAnnotation> = [];
 		for (entry in metadata ?? []) {
 			switch entry.name {
@@ -591,7 +598,7 @@ class ApiModelBuilder {
 			}
 		}
 		return {
-			visibility: "public",
+			visibility: isInternal == true ? "internal" : "public",
 			position: {file: locate(file, moduleName(span)).file, line: file.lineAt(span.start)},
 			documentation: doc.lines.length == 0 ? null : DocumentationTools.forApi(doc),
 			metadata: annotations
@@ -600,11 +607,11 @@ class ApiModelBuilder {
 
 	/** The package `file` belongs to, if any, and its path relative to that package's root, or else to its source root. */
 	function locate(file:SourceFile, module:String):{name:Null<String>, file:String} {
-		var path = absolute(file.physicalPath);
-		for (entry in packages)
-			if (StringTools.startsWith(path, entry.root))
-				return {name: entry.name, file: path.substr(entry.root.length)};
-		return {name: null, file: relativeFile(path, module)};
+		var found = packages.locate(file.physicalPath);
+		return found != null ? {name: found.name, file: found.file} : {
+			name: null,
+			file: relativeFile(SourcePackages.absolute(file.physicalPath), module)
+		};
 	}
 
 	function relativeFile(path:String, module:String):String {
@@ -617,9 +624,6 @@ class ApiModelBuilder {
 
 	function moduleName(span:SourceSpan):String
 		return modules.get(span.file.path) ?? ModulePath.fromFile(Path.withoutDirectory(span.file.path));
-
-	static function absolute(path:String):String
-		return Path.normalize(Path.isAbsolute(path) ? path : Path.join([Sys.getCwd(), path]));
 
 	static function expressionText(expression:AstExpression):String {
 		return sourceText(Parser.expressionSpan(expression));

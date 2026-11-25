@@ -8,17 +8,34 @@ export { apiBase, apiPackages };
 const haxePackageOf = (modulePath) => modulePath.split('.').slice(0, -1).join('.');
 const shortName = (path) => path.slice(path.lastIndexOf('.') + 1);
 
+/** Whether a declaration is part of its package's API: not written `internal` (docs/design/API_MODEL.md). */
+export const isApi = (declaration) => declaration.source.visibility !== 'internal';
+
+/**
+ * A package's API: its described types and modules, without what is internal, each type and module with only its API
+ * members.
+ */
+export function apiDeclarations(model) {
+  const described = new Set(model.described);
+  const types = model.types
+    .filter((type) => described.has(type.module) && isApi(type))
+    .map((type) => ({ ...type, members: type.members.filter(isApi) }));
+  const modules = model.modules
+    .filter((module) => described.has(module.path))
+    .map((module) => ({ ...module, members: module.members.filter(isApi) }));
+  return { types, modules };
+}
+
 /** The Haxe packages of a package's API, each with its types and its modules' own functions and variables. */
 export function haxePackages(model) {
-  const described = new Set(model.described);
   const groups = new Map();
   const group = (name) => {
     if (!groups.has(name)) groups.set(name, { name, types: [], modules: [] });
     return groups.get(name);
   };
-  for (const type of model.types) if (described.has(type.module)) group(haxePackageOf(type.module)).types.push(type);
-  for (const module of model.modules)
-    if (described.has(module.path) && module.members.length > 0) group(haxePackageOf(module.path)).modules.push(module);
+  const { types, modules } = apiDeclarations(model);
+  for (const type of types) group(haxePackageOf(type.module)).types.push(type);
+  for (const module of modules) if (module.members.length > 0) group(haxePackageOf(module.path)).modules.push(module);
   return [...groups.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -40,7 +57,7 @@ export function apiIndex(entries) {
     const described = new Set(model.described);
     for (const type of model.types) {
       if (!declarations.has(type.path) || described.has(type.module)) declarations.set(type.path, type);
-      if (!described.has(type.module)) continue;
+      if (!described.has(type.module) || !isApi(type)) continue;
       types.set(type.path, `${haxePackageUrl(directory, haxePackageOf(type.module))}#${typeAnchor(type.path)}`);
       if (type.package) directories.set(type.package, directory);
     }

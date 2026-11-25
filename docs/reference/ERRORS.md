@@ -250,6 +250,22 @@ More than one import supplies the name used at this location. Qualify the refere
 
 The code cannot access the constructor or member under its visibility rules. Use an accessible API or change visibility if the member is intended to be public.
 
+## E1031: Internal declaration used outside its package
+
+An `internal` type or member belongs to the package that declares it: only that package's code can name it, construct it or
+reach its members. Use the package's public API instead, or make the declaration public if it is meant for other packages.
+Here the `widgets` package declares `internal class LayoutCache`, and an application that depends on it uses it:
+
+```haxe
+import widgets.LayoutCache;
+
+class Main {
+	static function main():Void {
+		var cache = new LayoutCache(); // widgets.LayoutCache is internal to package widgets
+	}
+}
+```
+
 ## E2001: Missing module or type
 
 A module dependency or a type within a module could not be resolved. Check its spelling, package path, module contents, and project source roots or dependencies.

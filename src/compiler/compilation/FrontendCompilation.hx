@@ -468,6 +468,7 @@ class FrontendCompilation {
 			var reads = new compiler.semantic.DeclarationReads(context.state.declarationFacts);
 			build.reads = reads;
 			semantic.declarations.bindReads(reads);
+			semantic.declarations.bindSourcePackages(new compiler.SourcePackages(context.options.sourcePackages));
 			build.allocationAfterAnalysis = AllocationMeter.sample();
 			build.analysisDoneAt = now();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.natives.signatures(),

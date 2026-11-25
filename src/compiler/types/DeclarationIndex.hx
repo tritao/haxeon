@@ -245,6 +245,15 @@ class DeclarationIndex {
 	/** Where a diagnostic about the program as a whole is reported: its first declaration. */
 	public final fallbackSpan:SourceSpan;
 
+	/** The types written `internal`, with where each is declared: a reference to one is checked (`requireVisible`). */
+	final internalTypes:Map<String, SourceSpan> = [];
+
+	/** The packages the sources belong to, which decide where an `internal` declaration may be named; bound per compile. */
+	public var sourcePackages(default, null):compiler.SourcePackages = new compiler.SourcePackages([]);
+
+	public function bindSourcePackages(packages:compiler.SourcePackages):Void
+		sourcePackages = packages;
+
 	public static function validated(program:AstProgram):DeclarationIndex
 		return registered(program).validate(program);
 
@@ -263,16 +272,22 @@ class DeclarationIndex {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias);
 			aliasSpans.set(alias.name, alias.span);
+			if (alias.isInternal == true)
+				internalTypes.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
 			declareType(decl.name, DeclarationKind.Enum, decl.span);
 			enums.set(decl.name, decl);
+			if (decl.isInternal == true)
+				internalTypes.set(decl.name, decl.span);
 			for (enumCase in decl.cases)
 				declare(DeclarationKind.EnumCase, decl.name + "." + enumCase.name, enumCase.span);
 		}
 		for (decl in program.abstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			abstracts.set(decl.name, decl);
+			if (decl.isInternal == true)
+				internalTypes.set(decl.name, decl.span);
 			if (decl.values != null) {
 				enumAbstracts.set(decl.name, decl);
 				enumAbstractList.push(decl);
@@ -285,6 +300,8 @@ class DeclarationIndex {
 		for (decl in program.interfaces) {
 			declareType(decl.name, DeclarationKind.Interface, decl.span);
 			interfaces.set(decl.name, decl);
+			if (decl.isInternal == true)
+				internalTypes.set(decl.name, decl.span);
 			for (field in decl.fields)
 				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
 			for (method in decl.methods)
@@ -293,6 +310,8 @@ class DeclarationIndex {
 		for (decl in program.classes) {
 			declareType(decl.name, DeclarationKind.Class, decl.span);
 			classes.set(decl.name, decl);
+			if (decl.isInternal == true)
+				internalTypes.set(decl.name, decl.span);
 			for (field in decl.fields)
 				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
 			for (method in decl.methods)
@@ -561,6 +580,7 @@ class DeclarationIndex {
 					default: resolveNamedType(name, span, resolving, substitutions);
 				}
 			case AppliedType(name, arguments):
+				requireVisible(name, span);
 				if (name == "KeyPath" || name == "WritableKeyPath") {
 					if (arguments.length != 2)
 						fail('Type "$name" expects 2 type arguments, got ${arguments.length}', span);
@@ -725,6 +745,7 @@ class DeclarationIndex {
 		var substituted = substitutions.get(name);
 		if (substituted != null)
 			return substituted;
+		requireVisible(name, span);
 		var alias = aliases.get(name);
 		if (alias != null) {
 			if (alias.typeParameters.length != 0)
@@ -754,6 +775,20 @@ class DeclarationIndex {
 		throw new CompileError(Diagnostic.unresolved(DiagnosticCode.LOOKUP_OR_DECLARATION,
 			UnresolvedNameKind.WantedType, name, span));
 	}
+
+	/**
+	 * Requires that the source at `span`, where the type `name` is written, may name it: a type written `internal` is named
+	 * only in its own package (`InternalAccess`). A type the compiler resolves for the program as a whole is not checked.
+	 */
+	public function requireVisible(name:String, span:SourceSpan):Void {
+		var declared = internalTypes.get(name);
+		if (declared != null && span != fallbackSpan)
+			InternalAccess.require(sourcePackages, name, declared, span);
+	}
+
+	/** Whether the type `name` is written `internal`. */
+	public function isInternalType(name:String):Bool
+		return internalTypes.exists(name);
 
 	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int,
 			span:SourceSpan):CompilerType {

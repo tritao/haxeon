@@ -2020,6 +2020,9 @@ class BodyTyper implements BodyTyping {
 				var fn = session.signatures.required(functionName),
 					methodInfo = session.methodInfoOf(functionName);
 				// A static method value of a class or abstract (`C.m`); a module function has no method info.
+				if (methodInfo == null && fn.isInternal == true)
+					compiler.types.InternalAccess.require(session.declarations.sourcePackages, functionName, fn.span,
+						span);
 				if (methodInfo != null) {
 					var member = compiler.core.QualifiedName.last(functionName);
 					MemberAccess.method(session, methodInfo.owner, member, span);

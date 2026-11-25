@@ -140,6 +140,7 @@ class ImplicitConstructors {
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
 			isPrivate: declaration.isPrivate,
+			isInternal: declaration.isInternal,
 			metadata: declaration.metadata,
 			base: declaration.base,
 			interfaces: declaration.interfaces,

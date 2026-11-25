@@ -77,6 +77,9 @@ enum AstFieldAccess {
 /** Parsed class field before annotation inference and accessor validation. */
 typedef AstField = {
 	final name:String;
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 	/** Source visibility retained for checked field references such as key paths. */
 	final ?isPublic:Bool;
 	final metadata:Array<AstMetadata>;
@@ -106,6 +109,9 @@ typedef AstField = {
 /** Parsed class declaration and its unresolved inheritance relationships. */
 typedef AstClass = {
 	final name:String;
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 
 	/** Set when this declaration used the `struct` keyword. */
 	final ?isStruct:Bool;
@@ -133,6 +139,9 @@ typedef AstMetadata = {
 typedef AstInterface = {
 	final ?documentationMetadata:Array<AstMetadata>;
 	final name:String;
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final bases:Array<AstType>;
@@ -151,6 +160,9 @@ typedef AstInterface = {
 /** Source typedef that the declaration index expands during type resolution. */
 typedef AstTypeAlias = {
 	final name:String;
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 	final metadata:Array<AstMetadata>;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
@@ -178,6 +190,9 @@ typedef AstEnumCase = {
 /** Parsed algebraic enum declaration. */
 typedef AstEnum = {
 	final name:String;
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final ?conformances:Array<AstType>;
@@ -202,6 +217,9 @@ typedef AstEnumAbstractValue = {
  */
 typedef AstAbstract = {
 	final name:String;
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 	final ?isExtern:Bool;
 	final ?metadata:Array<AstMetadata>;
 	final typeParameters:Array<String>;
@@ -445,6 +463,9 @@ typedef AstSwitchCase = {
 
 /** Parsed function or method declaration with an unresolved signature and body. */
 typedef AstFunction = {
+	/** Written `internal`: usable by the code of the package that declares it, and by no other package's. */
+	final ?isInternal:Bool;
+
 	/** Explicit override modifier, checked against inherited instance methods. */
 	final ?isOverride:Bool;
 	final ?isDynamic:Bool;

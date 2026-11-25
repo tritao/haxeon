@@ -24,6 +24,15 @@ class Base {
 	}
 }
 
+/** Shared by the package's own modules: described as internal. */
+internal class Cache {
+	internal static var size = 0;
+
+	public static function clear():Void {
+		size = 0;
+	}
+}
+
 class Special extends Base {
 	override public function describe():String {
 		return "special";

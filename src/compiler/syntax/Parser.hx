@@ -303,29 +303,34 @@ class Parser {
 					skipMacroFunction();
 					continue;
 				}
+				var isInternal = isInternalModifier();
+				if (isInternal)
+					advance();
 				var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
+				if (isInternal && visibility != null)
+					fail(visibility, "internal cannot be combined with public or private");
 				var externDeclaration = check(TokenKind.Identifier) && textOf(current()) == "extern";
 				if (externDeclaration)
 					advance();
 				if (match(TokenKind.Typedef))
 					aliases.push(parseTypeAlias(visibility == null ? spanOf(previous()) : spanOf(visibility),
-						visibility != null && kindOf(visibility) == TokenKind.Private, metadata));
+						visibility != null && kindOf(visibility) == TokenKind.Private, metadata, isInternal));
 				else if (match(TokenKind.Enum)) {
 					var start = spanOf(previous());
 					if (check(TokenKind.Identifier) && textOf(current()) == "abstract") {
 						advance();
-						abstracts.push(parseAbstract(start, false, metadata, true));
+						abstracts.push(parseAbstract(start, false, metadata, true, isInternal));
 					} else
-						enums.push(parseEnum(start, metadata));
+						enums.push(parseEnum(start, metadata, isInternal));
 				} else if (check(TokenKind.Interface))
-					interfaces.push(parseInterface(metadata));
+					interfaces.push(parseInterface(metadata, isInternal));
 				else if (check(TokenKind.Class) || check(TokenKind.Struct)) {
 					var isStruct = check(TokenKind.Struct);
 					if (isStruct && externDeclaration)
 						fail(current(), "A struct cannot be declared extern");
 					classes.push(parseClass(visibility != null && kindOf(visibility) == TokenKind.Private, metadata,
-						externDeclaration, isStruct));
-				} else if (variables != null && visibility == null && !externDeclaration
+						externDeclaration, isStruct, isInternal));
+				} else if (variables != null && visibility == null && !externDeclaration && !isInternal
 					&& (check(TokenKind.Var) || check(TokenKind.Final))) {
 					parseScriptVariables(metadata, variables, fields, statements);
 				} else if (check(TokenKind.Var) || check(TokenKind.Final)
@@ -337,13 +342,13 @@ class Parser {
 						isPublic = visibility == null || kindOf(visibility) == TokenKind.Public,
 						isInline = match(TokenKind.Inline),
 						isFinal = match(TokenKind.Final);
-					fields.push(parseField(metadata, isPublic, true, isInline, isFinal, start));
+					fields.push(parseField(metadata, isPublic, true, isInline, isFinal, start, null, isInternal));
 				} else if (visibility != null)
 					fail(current(), "Top-level visibility modifier is not supported for this declaration");
 				else if (check(TokenKind.Identifier) && textOf(current()) == "abstract") {
 					var start = spanOf(advance());
-					abstracts.push(parseAbstract(start, externDeclaration, metadata));
-				} else if (script && !externDeclaration && !check(TokenKind.Function)
+					abstracts.push(parseAbstract(start, externDeclaration, metadata, false, isInternal));
+				} else if (script && !externDeclaration && !isInternal && !check(TokenKind.Function)
 					&& !(check(TokenKind.Inline) && peekKind(1) == TokenKind.Function)) {
 					hasOtherStatements = true;
 					var first = statements.length;
@@ -351,7 +356,7 @@ class Parser {
 					applyStatementMetadata(statements, first, metadata);
 				} else {
 					var inlineFunction = match(TokenKind.Inline);
-					functions.push(parseFunction(false, externDeclaration, metadata, inlineFunction));
+					functions.push(parseFunction(false, externDeclaration, metadata, inlineFunction, isInternal));
 				}
 			} catch (error:CompileError) {
 				if (!recovering)
@@ -481,7 +486,7 @@ class Parser {
 
 	/** An abstract, or with `isEnum` an enum abstract: the same members, plus its values and `implements`. */
 	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
-			isEnum:Bool = false):AstAbstract {
+			isEnum:Bool = false, isInternal:Bool = false):AstAbstract {
 		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
@@ -522,10 +527,15 @@ class Parser {
 				isPublic:Null<Bool> = null,
 				isExternMember = false,
 				isDynamic = false;
+			var isInternalMember = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline)
-				|| check(TokenKind.Static) || check(TokenKind.Final) || isExternModifier() || isDynamicModifier()) {
+				|| check(TokenKind.Static) || check(TokenKind.Final) || isExternModifier() || isDynamicModifier()
+				|| isInternalModifier()) {
 				if (isDynamicModifier()) {
 					isDynamic = true;
+					advance();
+				} else if (isInternalModifier()) {
+					isInternalMember = true;
 					advance();
 				} else if (match(TokenKind.Static))
 					isStatic = true;
@@ -539,6 +549,7 @@ class Parser {
 				} else
 					isPublic = kindOf(advance()) == TokenKind.Public;
 			}
+			isPublic = internalVisibility(isInternalMember, isPublic, memberStart);
 			if (values != null && !isStatic && isEnumAbstractValue(isFinal)) {
 				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt, methodMetadata, isPublic);
 				nextImplicitInt = switch value.value {
@@ -550,7 +561,8 @@ class Parser {
 			}
 			if (!check(TokenKind.Function)) {
 				// A property: what it may be is checked with its type (`AbstractProperties`), as Haxe does.
-				var field = parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart);
+				var field = parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart, null,
+					isInternalMember);
 				rejectDynamicVariable(isDynamic, field.name, memberStart);
 				fields.push(field);
 				continue;
@@ -558,7 +570,8 @@ class Parser {
 			var functionStart = spanOf(consume(TokenKind.Function)),
 				methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 			var method = parseFunctionBody(functionStart, methodName, true, isStatic,
-				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic, false, isDynamic);
+				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic, false, isDynamic,
+				isInternalMember);
 			if (isDynamic && !isStatic)
 				throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
 					"Invalid modifier: dynamic on method of abstract",
@@ -572,6 +585,7 @@ class Parser {
 		var end = spanOf(consume(TokenKind.RightBrace));
 		return {
 			name: name,
+			isInternal: isInternal,
 			isExtern: isExtern,
 			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
@@ -638,7 +652,7 @@ class Parser {
 	}
 
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool,
-			metadata:Array<compiler.syntax.Ast.AstMetadata>):AstTypeAlias {
+			metadata:Array<compiler.syntax.Ast.AstMetadata>, isInternal:Bool = false):AstTypeAlias {
 		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
@@ -658,11 +672,13 @@ class Parser {
 			typeConstraints: typeConstraints,
 			type: type,
 			isPrivate: isPrivate,
+			isInternal: isInternal,
 			span: start.merge(end)
 		};
 	}
 
-	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
+	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>,
+			isInternal:Bool = false):AstEnum {
 		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
@@ -734,6 +750,7 @@ class Parser {
 			methods: methods,
 			metadata: metadata,
 			cases: cases,
+			isInternal: isInternal,
 			span: start.merge(end)
 		};
 	}
@@ -918,22 +935,24 @@ class Parser {
 
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>,
-			isInline:Bool = false):AstFunction {
+			isInline:Bool = false, isInternal:Bool = false):AstFunction {
 		var start = spanOf(consume(TokenKind.Function)),
 			name = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
-		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata, isInline);
+		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata, isInline, null, false,
+			false,
+			isInternal);
 	}
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false,
 			isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false, ?isPublic:Bool,
-			isOverride:Bool = false, isDynamic:Bool = false):AstFunction {
+			isOverride:Bool = false, isDynamic:Bool = false, isInternal:Bool = false):AstFunction {
 		var outer = enterLambdaMember(name);
 		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
 		var parsed:AstFunction;
 		try {
 			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline,
-				isPublic, isOverride, isDynamic);
+				isPublic, isOverride, isDynamic, isInternal);
 		} catch (error:CompileError) {
 			leaveLambdaMember(outer);
 			throw error;
@@ -945,7 +964,7 @@ class Parser {
 	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool,
 			isExtern:Bool,
 			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>,
-			isOverride:Bool, isDynamic:Bool):AstFunction {
+			isOverride:Bool, isDynamic:Bool, isInternal:Bool):AstFunction {
 		var typeConstraints:Array<AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -1004,6 +1023,7 @@ class Parser {
 			name: name,
 			isStatic: isStatic,
 			isPublic: isPublic,
+			isInternal: isInternal,
 			isOverride: isOverride,
 			isDynamic: isDynamic,
 			// A function with `@:hlNative` is the native, as Haxe compiles it on HashLink: an extern one, whose body (if it has one)
@@ -1102,7 +1122,7 @@ class Parser {
 	}
 
 	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>, isExtern:Bool = false,
-			isStruct:Bool = false):AstClass {
+			isStruct:Bool = false, isInternal:Bool = false):AstClass {
 		var start = spanOf(consume(isStruct ? TokenKind.Struct : TokenKind.Class)),
 			name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
@@ -1136,10 +1156,15 @@ class Parser {
 					isOverride = false,
 					isExternMember = false,
 					isDynamic = false;
-				var isPublic:Null<Bool> = null;
+				var isPublic:Null<Bool> = null, isInternalMember = false;
 				while (true) {
 					if (isDynamicModifier()) {
 						isDynamic = true;
+						advance();
+						continue;
+					}
+					if (isInternalModifier()) {
+						isInternalMember = true;
 						advance();
 						continue;
 					}
@@ -1170,14 +1195,16 @@ class Parser {
 							break;
 					}
 				}
+				isPublic = internalVisibility(isInternalMember, isPublic, modifierStart);
 				if (match(TokenKind.Function)) {
 					var functionStart = spanOf(previous()),
 						methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
 						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, isPublic,
-						isOverride, isDynamic));
+						isOverride, isDynamic, isInternalMember));
 				} else {
-					var field = parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart);
+					var field = parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart,
+						isInternalMember);
 					rejectDynamicVariable(isDynamic, field.name, modifierStart);
 					fields.push(field);
 				}
@@ -1196,6 +1223,7 @@ class Parser {
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			isPrivate: isPrivate,
+			isInternal: isInternal,
 			metadata: metadata,
 			base: base,
 			interfaces: interfaces,
@@ -1210,7 +1238,8 @@ class Parser {
 	 * and the initializer, at least one of the last two.
 	 */
 	function parseField(memberMetadata:Array<compiler.syntax.Ast.AstMetadata>, isPublic:Null<Bool>, isStatic:Bool,
-			isInline:Bool, isFinal:Bool, ?start:SourceSpan, ?declarationStart:SourceSpan):AstField {
+			isInline:Bool, isFinal:Bool, ?start:SourceSpan, ?declarationStart:SourceSpan,
+			isInternal:Bool = false):AstField {
 		var fieldStart = start == null ? spanOf(current()) : start;
 		match(TokenKind.Var);
 		var name = textOf(consume(TokenKind.Identifier)),
@@ -1221,15 +1250,17 @@ class Parser {
 			fail(current(), 'Field "$name" requires a type or initializer');
 		var end = variableEnd(initializer);
 		return variableField(name, memberMetadata, type, initializer, property, isPublic, isStatic, isInline, isFinal,
-			fieldStart.merge(end), declarationStart == null ? null : declarationStart.merge(end));
+			fieldStart.merge(end), declarationStart == null ? null : declarationStart.merge(end), isInternal);
 	}
 
 	static function variableField(name:String, metadata:Array<Ast.AstMetadata>, type:Null<AstType>,
 			initializer:Null<AstExpression>, property:Null<FieldProperty>, isPublic:Null<Bool>, isStatic:Bool,
-			isInline:Bool, isFinal:Bool, span:SourceSpan, declarationSpan:Null<SourceSpan>):AstField {
+			isInline:Bool, isFinal:Bool, span:SourceSpan, declarationSpan:Null<SourceSpan>,
+			isInternal:Bool = false):AstField {
 		return {
 			name: name,
 			isPublic: isPublic,
+			isInternal: isInternal,
 			metadata: metadata,
 			type: type,
 			initializer: initializer,
@@ -1430,6 +1461,36 @@ class Parser {
 		return access;
 	}
 
+	/**
+	 * Whether `internal` starts a declaration here: a modifier only before what declares something, so `internal` stays a name
+	 * (a variable, a package) everywhere else.
+	 */
+	function isInternalModifier():Bool {
+		if (kindOf(current()) != TokenKind.Identifier || textOf(current()) != "internal")
+			return false;
+		return switch peekKind(1) {
+			case TokenKind.Class, TokenKind.Struct, TokenKind.Interface, TokenKind.Enum, TokenKind.Typedef,
+				TokenKind.Function, TokenKind.Var, TokenKind.Final, TokenKind.Static, TokenKind.Inline:
+				true;
+			case TokenKind.Identifier:
+				switch textOf(ahead(1)) {
+					case "abstract", "extern", "override", "dynamic": true;
+					case _: false;
+				}
+			case _: false;
+		};
+	}
+
+	/** A member's visibility with `internal`: public, for the package's own code, and never written beside `public` or `private`. */
+	function internalVisibility(isInternal:Bool, isPublic:Null<Bool>, span:SourceSpan):Null<Bool> {
+		if (!isInternal)
+			return isPublic;
+		if (isPublic != null)
+			throw new CompileError(new Diagnostic(DiagnosticCode.DECLARATION_OR_MODIFIER,
+				"internal cannot be combined with public or private", span));
+		return true;
+	}
+
 	function isDynamicModifier():Bool
 		return kindOf(current()) == TokenKind.Identifier && textOf(current()) == "dynamic";
 
@@ -1439,7 +1500,7 @@ class Parser {
 				"Invalid accessor 'dynamic' for variable " + name, span));
 	}
 
-	function parseInterface(metadata:Array<compiler.syntax.Ast.AstMetadata>):AstInterface {
+	function parseInterface(metadata:Array<compiler.syntax.Ast.AstMetadata>, isInternal:Bool = false):AstInterface {
 		var start = spanOf(consume(TokenKind.Interface)),
 			name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<AstTypeConstraint> = [],
@@ -1536,6 +1597,7 @@ class Parser {
 			typeConstraints: typeConstraints,
 			bases: bases,
 			documentationMetadata: metadata,
+			isInternal: isInternal,
 			fields: fields,
 			methods: methods,
 			span: start.merge(end)

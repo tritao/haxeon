@@ -50,6 +50,7 @@ class AccessorSignatures {
 			typeParameters: classDecl.typeParameters,
 			typeConstraints: classDecl.typeConstraints,
 			isPrivate: classDecl.isPrivate,
+			isInternal: classDecl.isInternal,
 			metadata: classDecl.metadata,
 			base: classDecl.base,
 			interfaces: classDecl.interfaces,

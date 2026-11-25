@@ -61,10 +61,13 @@ class CompilerInputs {
 	 */
 	public final nullSafety:Array<NullSafetyRule>;
 
+	/** Each package and its directory, which owns its sources (`CompileOptions.sourcePackages`). */
+	public final sourcePackages:Array<compiler.SourcePackages.SourcePackage>;
+
 	function new(target:String, entry:Null<String>, roots:Array<String>, packageRoots:Array<PackageSourceRoot>,
 			sources:Array<String>, ffiInterfaces:Array<String>, ffiProjections:Array<String>,
 			generatedFfi:Array<GeneratedFfiInputs>, defines:Array<String>, inlineEnabled:Bool,
-			nullSafety:Array<NullSafetyRule>) {
+			nullSafety:Array<NullSafetyRule>, sourcePackages:Array<compiler.SourcePackages.SourcePackage>) {
 		this.target = target;
 		this.entry = entry;
 		this.roots = roots;
@@ -76,6 +79,7 @@ class CompilerInputs {
 		this.defines = defines;
 		this.inlineEnabled = inlineEnabled;
 		this.nullSafety = nullSafety;
+		this.sourcePackages = sourcePackages;
 	}
 
 	/** The compiler inputs of `project` built for `layout`'s target, with generated files at `layout`'s paths. */
@@ -130,7 +134,10 @@ class CompilerInputs {
 		for (define in project.manifest.defines)
 			defines.push(define);
 		return new CompilerInputs(compilerTarget(buildTarget), entry, roots, packageRoots, sources, ffiInterfaces,
-			ffiProjections, generatedFfi, defines, project.manifest.inlineEnabled != false, nullSafety);
+			ffiProjections, generatedFfi, defines, project.manifest.inlineEnabled != false, nullSafety, [
+				for (resolvedPackage in project.packages.packages)
+					new compiler.SourcePackages.SourcePackage(resolvedPackage.name, resolvedPackage.root)
+			]);
 	}
 
 	/**
