@@ -210,6 +210,8 @@ grep -q '"kind":"patch-applied"' "$live/build/host/main.hl.watch-events.jsonl" |
 touch "$live/stop"
 wait "$watch" || { cat "$work/live.log" >&2; fail "haxeon run --watch exited with status $?"; }
 
+# Empty where there is no xvfb-run, as on macOS, whose bash 3.2 calls an empty "${headless[@]}" unbound under set -u: the
+# uses below expand it as ${headless[@]+"${headless[@]}"}.
 headless=()
 if command -v xvfb-run >/dev/null; then
 	headless=(xvfb-run -a)
@@ -239,7 +241,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	fi
 
 	(cd "$app" && "$haxeon" build) || fail "haxeon build of the app"
-	(cd "$app" && "${headless[@]}" "$haxeon" run -- --frames=3 "--capture=$work/capture") || fail "haxeon run of the app"
+	(cd "$app" && ${headless[@]+"${headless[@]}"} "$haxeon" run -- --frames=3 "--capture=$work/capture") || fail "haxeon run of the app"
 	captured "$work/capture" || fail "the app captured no rendered frame"
 	(cd "$app" && "$haxeon" install >/dev/null) || fail "haxeon install of the app"
 	grep -q '"checksum"' "$app/haxeon.lock" || fail "the release wrote no checksums into the app's haxeon.lock"
@@ -248,7 +250,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	# Where the runner puts the executable in its directory is the platform's (a bundle on macOS).
 	executable=$(find "$app/build/$platform/app" -name "hello-app$suffix" -type f | head -1)
 	[[ -n $executable ]] || fail "the release build made no hello-app$suffix under $app/build/$platform/app"
-	"${headless[@]}" "$executable" --frames=3 "--capture=$work/capture-release" || fail "the app compiled ahead of time"
+	${headless[@]+"${headless[@]}"} "$executable" --frames=3 "--capture=$work/capture-release" || fail "the app compiled ahead of time"
 	captured "$work/capture-release" || fail "the app compiled ahead of time captured no rendered frame"
 
 	# The live host in the app's runner. The app runs until its window closes, so the test stops it once a patch applied. An
@@ -256,7 +258,7 @@ if [[ -d $root/templates/app/$platform ]]; then
 	# no patch but the module it loads, so it edits until one applies.
 	if [[ $windows == 0 ]]; then
 		echo "== haxeon run --watch of the app: an edit patches the running app"
-		(cd "$app" && exec "${headless[@]}" "$haxeon" run --watch) >"$work/live.log" 2>&1 &
+		(cd "$app" && exec ${headless[@]+"${headless[@]}"} "$haxeon" run --watch) >"$work/live.log" 2>&1 &
 		watch=$!
 		events=$app/build/host/main.hl.watch-events.jsonl
 		wait_for "$watch" "$events" '' 300
