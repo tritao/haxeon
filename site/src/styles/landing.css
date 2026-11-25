@@ -167,6 +167,69 @@
   scroll-margin-top: calc(var(--sl-nav-height) + var(--hx-space-3));
 }
 
+/* A page intro with its copy beside a sample or picture; a page may set --hero-columns. */
+:where(.page-intro) .hero {
+  display: grid;
+  grid-template-columns: var(--hero-columns, minmax(0, 1fr) minmax(0, 1.1fr));
+  gap: var(--hx-space-6);
+  align-items: start;
+}
+.page-intro .head .ctas {
+  margin-top: 0;
+}
+
+/* Layout for the product pages: card grids, a wide column beside a narrow one, and stacked cards. */
+:where(.landing-content) .grid {
+  display: grid;
+  gap: var(--hx-space-5);
+}
+:where(.landing-content) .two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+:where(.landing-content) .three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+:where(.landing-content) .four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+:where(.landing-content) .split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--hx-space-5);
+  align-items: stretch;
+}
+:where(.landing-content) .split:where(.wide-end) {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+}
+:where(.landing-content) .split > .figure {
+  display: grid;
+  align-content: center;
+}
+:where(.landing-content) .stack {
+  display: grid;
+  gap: var(--hx-space-5);
+  align-content: start;
+}
+:where(.landing-content) :is(.grid, .stack) p {
+  margin: 0;
+}
+@media (max-width: 62rem) {
+  :where(.landing-content) .four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 55rem) {
+  :where(.page-intro) .hero,
+  :where(.landing-content) :is(.two, .three, .split) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 34rem) {
+  :where(.landing-content) .four {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Splash content supplies its own title and full-bleed sections. */
 main:has(.landing-content) {
   padding: 0;

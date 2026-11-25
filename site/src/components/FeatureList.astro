@@ -1,0 +1,48 @@
+---
+export interface Feature {
+  title: string;
+  text: string;
+  href?: string;
+  /** The inside of a 24×24 outline icon, drawn in the accent colour. */
+  icon?: string;
+}
+interface Props {
+  features: Feature[];
+}
+const { features } = Astro.props;
+---
+
+<ul class="features">
+  {features.map(({ title, text, href, icon }) => (
+    <li class:list={{ marked: !icon }}>
+      {icon && <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" set:html={icon} />}
+      <h3>{href ? <a href={href}>{title}</a> : title}</h3>
+      <p>{text}</p>
+    </li>
+  ))}
+</ul>
+
+<style>
+  .features {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--hx-space-6) var(--hx-space-5);
+  }
+  .features li { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--hx-space-3); align-content: start; }
+  .features li > :not(.icon) { grid-column: 2; }
+  .features li.marked { grid-template-columns: minmax(0, 1fr); border-left: 2px solid var(--sl-color-accent); padding-left: var(--hx-space-4); }
+  .features li.marked > * { grid-column: 1; }
+  .features h3 { margin: 0 0 var(--hx-space-1); font-size: 1.05rem; }
+  .features p { margin: 0; color: var(--sl-color-gray-2); }
+  .icon { grid-row: span 2; width: 1.5rem; height: 1.5rem; color: var(--sl-color-accent); }
+  .icon :global(*) { fill: none; stroke: currentColor; stroke-width: var(--hx-stroke-icon); stroke-linecap: round; stroke-linejoin: round; }
+  @media (max-width: 55rem) {
+    .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 34rem) {
+    .features { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>

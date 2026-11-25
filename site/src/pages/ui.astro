@@ -2,17 +2,34 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
-import Diagram from '../components/home/Diagram.astro';
+import FeatureList, { type Feature } from '../components/FeatureList.astro';
+import LayerDiagram from '../components/LayerDiagram.astro';
 import PlatformTable from '../components/PlatformTable.astro';
 import counter from '../../../docs/guides/examples/01-first-app/my_app/src/Main.hx?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
+import { methodSource } from '../excerpts';
 
 const basics = docsUrl('guides/03-ui-basics.md');
 const firstApp = docsUrl('guides/01-first-app.md');
 const packageDocs = repositorySource('packages/ui/README.md');
 const showcase = repositorySource('packages/ui/examples/ui_showcase/README.md');
-const source = counter.match(/^\tfunction view\(\):View \{[\s\S]*?^\t\}/m)![0];
-const view = source.replace(/^\t/gm, '');
+const view = methodSource(counter, 'view', 'docs/guides/examples/01-first-app/my_app/src/Main.hx');
+const essentials: Feature[] = [
+  { title: 'Layout and text', text: 'Rows, columns and scrolling; multilingual text with wrapping and editing.', icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/>' },
+  { title: 'Widgets and data', text: 'Buttons, toggles, sliders and fields; virtualized lists, trees and grids.', icon: '<rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="15" cy="12" r="2.5"/>' },
+  { title: 'Overlays and navigation', text: 'Dialogs, menus, popups and tooltips; tabs and sidebars.', icon: '<rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V4h13v13h-5"/>' },
+  { title: 'Style and themes', text: 'Light and dark themes or your own tokens; borders, blurs and colour effects.', icon: '<path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/>' },
+  { title: 'Input and motion', text: 'Pointer, keyboard and focus; gestures from taps to pinches; tweens and springs.', icon: '<path d="M5 3l6 16 2.5-6.5L20 10z"/>' },
+  { title: 'Accessibility', text: 'Roles, labels, values and actions in a semantic tree, with an audit.', icon: '<circle cx="12" cy="4.5" r="1.8"/><path d="M5 8l7 1.5L19 8M12 9.5V14l-3 6M12 14l3 6"/>' },
+];
+const tools: Feature[] = [
+  { title: 'Docking workspaces', text: 'Panels that split, tab and dock, with layouts saved between sessions.' },
+  { title: 'Property inspectors', text: 'Typed editors for an object’s properties, with undoable edits.' },
+  { title: 'Commands and undo', text: 'Menus, toolbars and a command palette share commands, shortcuts and an edit history.' },
+  { title: 'Settings', text: 'Typed settings stored for you, with rebindable keyboard shortcuts.' },
+  { title: 'Plots and viewports', text: 'Series of data, and your own GPU drawing in a viewport that pans and zooms.' },
+  { title: 'Inspector and diagnostics', text: 'Inspect any view’s layout, style and semantics while the app runs.' },
+];
 ---
 
 <StarlightPage
@@ -51,25 +68,18 @@ const view = source.replace(/^\t/gm, '');
           <h2>How it works</h2>
           <p class="lede">You describe the window in code. A native core lays it out, shapes its text and draws it on the GPU.</p>
         </div>
-        <div class="split">
-          <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 344" role="img" aria-labelledby="ui-design-title">
-              <title id="ui-design-title">Your views feed the UI framework, which hands them to the native core for layout, text and the render plan; the GPU layer draws them through the platform graphics API.</title>
-              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
-              <rect class="box" x="55" y="156" width="250" height="54" rx="6" />
-              <rect class="box" x="55" y="242" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="306" width="250" height="36" rx="6" />
-              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 210v30m-4-5 4 5 4-5M180 278v26m-4-5 4 5 4-5" />
-              <text class="ttl" x="180" y="25" text-anchor="middle">Your views</text>
-              <text class="ttl" x="180" y="93" text-anchor="middle">UI framework</text>
-              <text x="180" y="113" text-anchor="middle">State · Events · Semantics</text>
-              <text class="ttl" x="180" y="179" text-anchor="middle">Native core</text>
-              <text x="180" y="199" text-anchor="middle">Layout · Text · Render plan</text>
-              <text class="ttl" x="180" y="265" text-anchor="middle"><a href="/gpu/"><tspan class="lnk">GPU layer</tspan></a></text>
-              <text class="ttl" x="180" y="329" text-anchor="middle">Platform graphics API</text>
-            </svg>
-          </Diagram>
+        <div class="split wide-end">
+          <LayerDiagram
+            id="ui-design"
+            label="Your views feed the UI framework, which hands them to the native core for layout, text and the render plan; the GPU layer draws them through the platform graphics API."
+            layers={[
+              { title: 'Your views' },
+              { title: 'UI framework', detail: 'State · Events · Semantics' },
+              { title: 'Native core', detail: 'Layout · Text · Render plan' },
+              { title: { text: 'GPU layer', href: '/gpu/' } },
+              { title: 'Platform graphics API' },
+            ]}
+          />
           <div class="stack">
             <Card compact>
               <h3>Views from state</h3>
@@ -94,14 +104,7 @@ const view = source.replace(/^\t/gm, '');
           <h2>Every app gets</h2>
           <p class="lede">The building blocks of an interface, ready to compose.</p>
         </div>
-        <ul class="features">
-          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/></svg><h3>Layout and text</h3><p>Rows, columns and scrolling; multilingual text with wrapping and editing.</p></li>
-          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/><circle cx="15" cy="12" r="2.5"/></svg><h3>Widgets and data</h3><p>Buttons, toggles, sliders and fields; virtualized lists, trees and grids.</p></li>
-          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M8 7V4h13v13h-5"/></svg><h3>Overlays and navigation</h3><p>Dialogs, menus, popups and tooltips; tabs and sidebars.</p></li>
-          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg><h3>Style and themes</h3><p>Light and dark themes or your own tokens; borders, blurs and colour effects.</p></li>
-          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l6 16 2.5-6.5L20 10z"/></svg><h3>Input and motion</h3><p>Pointer, keyboard and focus; gestures from taps to pinches; tweens and springs.</p></li>
-          <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4.5" r="1.8"/><path d="M5 8l7 1.5L19 8M12 9.5V14l-3 6M12 14l3 6"/></svg><h3>Accessibility</h3><p>Roles, labels, values and actions in a semantic tree, with an audit.</p></li>
-        </ul>
+        <FeatureList features={essentials} />
         <p class="note"><a href={basics}>Build a small app with them in UI basics</a></p>
       </div>
     </section>
@@ -112,14 +115,7 @@ const view = source.replace(/^\t/gm, '');
           <h2>Built for tools and editors</h2>
           <p class="lede">The parts that editors, inspectors and other tools are made of, so you build the tool instead of its framework.</p>
         </div>
-        <ul class="features tools">
-          <li><h3>Docking workspaces</h3><p>Panels that split, tab and dock, with layouts saved between sessions.</p></li>
-          <li><h3>Property inspectors</h3><p>Typed editors for an object’s properties, with undoable edits.</p></li>
-          <li><h3>Commands and undo</h3><p>Menus, toolbars and a command palette share commands, shortcuts and an edit history.</p></li>
-          <li><h3>Settings</h3><p>Typed settings stored for you, with rebindable keyboard shortcuts.</p></li>
-          <li><h3>Plots and viewports</h3><p>Series of data, and your own GPU drawing in a viewport that pans and zooms.</p></li>
-          <li><h3>Inspector and diagnostics</h3><p>Inspect any view’s layout, style and semantics while the app runs.</p></li>
-        </ul>
+        <FeatureList features={tools} />
         <p class="note"><a href={packageDocs}>Read the UI package documentation</a></p>
       </div>
     </section>
@@ -154,48 +150,14 @@ const view = source.replace(/^\t/gm, '');
 </StarlightPage>
 
 <style>
-  .page-intro .head .ctas { margin-top: 0; }
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--hx-space-6); align-items: start; }
+  .hero { --hero-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
   .sample { display: grid; gap: var(--hx-space-4); justify-items: start; }
-  .split {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
-    gap: var(--hx-space-5);
-    align-items: stretch;
-  }
-  .split > :global(.figure) { display: grid; align-content: center; }
-  .stack { display: grid; gap: var(--hx-space-5); align-content: start; }
-  .stack p { margin: 0; }
   figure { margin: 0; }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
   .window img { width: auto; max-width: 100%; }
   figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
-  .features {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--hx-space-6) var(--hx-space-5);
-  }
-  .features li { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--hx-space-3); align-content: start; }
-  .features li > :not(.icon) { grid-column: 2; }
-  .tools li { grid-template-columns: minmax(0, 1fr); border-left: 2px solid var(--sl-color-accent); padding-left: var(--hx-space-4); }
-  .tools li > * { grid-column: 1; }
-  .features h3 { margin: 0 0 var(--hx-space-1); font-size: 1.05rem; }
-  .features p { margin: 0; color: var(--sl-color-gray-2); }
-  .icon { grid-row: span 2; width: 1.5rem; height: 1.5rem; color: var(--sl-color-accent); }
-  .icon :global(*) { fill: none; stroke: currentColor; stroke-width: var(--hx-stroke-icon); stroke-linecap: round; stroke-linejoin: round; }
   .showcase-light, :global([data-theme='light']) .showcase-dark { display: none; }
   :global([data-theme='light']) .showcase-light { display: block; }
-  .drawing .lnk { fill: var(--sl-color-text-accent); text-decoration: underline; }
-  @media (max-width: 55rem) {
-    .hero, .split { grid-template-columns: minmax(0, 1fr); }
-    .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 34rem) {
-    .features { grid-template-columns: minmax(0, 1fr); }
-  }
 </style>
 
 <script>

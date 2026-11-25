@@ -1,0 +1,65 @@
+---
+import Diagram from './home/Diagram.astro';
+
+/** Plain text, or a link drawn in the accent colour. */
+export type Segment = string | { text: string; href: string };
+export interface Layer {
+  title: Segment | Segment[];
+  /** A second, quieter line under the title. */
+  detail?: Segment | Segment[];
+}
+interface Props {
+  /** Ties the diagram to its accessible description. */
+  id: string;
+  /** What the diagram shows, for assistive technology. */
+  label: string;
+  layers: Layer[];
+  /** Words beside each arrow, from the first layer down. */
+  edges?: string[];
+}
+const { id, label, layers, edges = [] } = Astro.props;
+
+const width = 360, boxX = 55, boxWidth = 250, centre = boxX + boxWidth / 2;
+const singleHeight = 36, doubleHeight = 54, gap = 32, top = 2;
+const segments = (value: Segment | Segment[]) => (Array.isArray(value) ? value : [value]);
+
+let cursor = top;
+const boxes = layers.map((layer) => {
+  const height = layer.detail ? doubleHeight : singleHeight;
+  const box = { layer, y: cursor, height };
+  cursor += height + gap;
+  return box;
+});
+const height = cursor - gap + top;
+const arrows = boxes.slice(0, -1).map(({ y, height: boxHeight }, index) => ({
+  from: y + boxHeight,
+  length: gap - 2,
+  edge: edges[index],
+}));
+const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5 4 5 4-5`).join('');
+---
+
+<Diagram spaced>
+  <svg class="drawing" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`}>
+    <title id={`${id}-title`}>{label}</title>
+    {boxes.map(({ y, height: boxHeight }) => <rect class="box" x={boxX} {y} width={boxWidth} height={boxHeight} rx="6" />)}
+    <path class="acc" d={path} />
+    {arrows.map(({ from, edge }) => edge && <text x={centre + 12} y={from + 21}>{edge}</text>)}
+    {boxes.map(({ layer, y }) => (
+      <>
+        <text class="ttl" x={centre} y={y + 23} text-anchor="middle">
+          {segments(layer.title).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="lnk">{part.text}</tspan></a>)}
+        </text>
+        {layer.detail && (
+          <text x={centre} y={y + 43} text-anchor="middle">
+            {segments(layer.detail).map((part) => typeof part === 'string' ? part : <a href={part.href}><tspan class="lnk">{part.text}</tspan></a>)}
+          </text>
+        )}
+      </>
+    ))}
+  </svg>
+</Diagram>
+
+<style>
+  .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
+</style>

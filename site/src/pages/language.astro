@@ -2,6 +2,7 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
+import FeatureList, { type Feature } from '../components/FeatureList.astro';
 import LanguageTour from '../components/home/LanguageTour.astro';
 import { docsUrl } from '../../docs.mjs';
 
@@ -34,13 +35,13 @@ Sys.println(area(Rect(new Size(2, 3))));
 Sys.println(area(null));
 Sys.println(new Size(2, 3) == new Size(2, 3));`;
 
-const beyond = [
-  ['Iteration', 'Loop over ranges, arrays, maps and any type with hasNext() and next().', reference('ITERATION.md')],
-  ['Key paths', 'Compiler-checked references to stored fields, for bindings and inspectors.', reference('KEY_PATHS.md')],
-  ['Futures', 'A Future holds one eventual outcome, for work that finishes later.', reference('ASYNC.md')],
-  ['Wire formats and RPC', 'JSON and MessagePack codecs from your types, and typed RPC services from interfaces.', learn('wire-and-rpc.md')],
-  ['C and C++', 'Import a header and call the library; structs keep their C layout.', docsUrl('guides/04-calling-c-and-cpp.md')],
-  ['Live edits', 'What an edit can change while the program runs, and what needs a restart.', reference('LIVE_PATCHING.md')],
+const beyond: Feature[] = [
+  { title: 'Iteration', text: 'Loop over ranges, arrays, maps and any type with hasNext() and next().', href: reference('ITERATION.md') },
+  { title: 'Key paths', text: 'Compiler-checked references to stored fields, for bindings and inspectors.', href: reference('KEY_PATHS.md') },
+  { title: 'Futures', text: 'A Future holds one eventual outcome, for work that finishes later.', href: reference('ASYNC.md') },
+  { title: 'Wire formats and RPC', text: 'JSON and MessagePack codecs from your types, and typed RPC services from interfaces.', href: learn('wire-and-rpc.md') },
+  { title: 'C and C++', text: 'Import a header and call the library; structs keep their C layout.', href: docsUrl('guides/04-calling-c-and-cpp.md') },
+  { title: 'Live edits', text: 'What an edit can change while the program runs, and what needs a restart.', href: reference('LIVE_PATCHING.md') },
 ];
 
 const lessons = [
@@ -118,11 +119,7 @@ const comingFrom = [
           <h2>Beyond the basics</h2>
           <p class="lede">The parts you reach for once a program grows.</p>
         </div>
-        <ul class="features">
-          {beyond.map(([title, text, href]) => (
-            <li><h3><a href={href}>{title}</a></h3><p>{text}</p></li>
-          ))}
-        </ul>
+        <FeatureList features={beyond} />
       </div>
     </section>
 
@@ -160,23 +157,6 @@ const comingFrom = [
 </StarlightPage>
 
 <style>
-  .page-intro .head .ctas { margin-top: 0; }
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: var(--hx-space-6); align-items: start; }
-  .grid { display: grid; gap: var(--hx-space-5); }
-  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .grid p { margin: 0; }
-  .features {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--hx-space-6) var(--hx-space-5);
-  }
-  .features li { margin: 0; border-left: 2px solid var(--sl-color-accent); padding-left: var(--hx-space-4); }
-  .features h3 { margin: 0 0 var(--hx-space-1); font-size: 1.05rem; }
-  .features p { margin: 0; color: var(--sl-color-gray-2); }
   .lessons {
     margin: 0;
     padding: 0;
@@ -210,13 +190,9 @@ const comingFrom = [
   .lessons .title { font-weight: 600; color: var(--sl-color-white); }
   .lessons .text { color: var(--sl-color-gray-3); font-size: 0.92rem; }
   @media (max-width: 62rem) {
-    .four, .lessons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
-  @media (max-width: 55rem) {
-    .hero, .three { grid-template-columns: minmax(0, 1fr); }
-    .features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lessons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 34rem) {
-    .features, .four, .lessons { grid-template-columns: minmax(0, 1fr); }
+    .lessons { grid-template-columns: minmax(0, 1fr); }
   }
 </style>

@@ -2,12 +2,13 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import Card from '../components/Card.astro';
 import CodeCard from '../components/CodeCard.astro';
-import Diagram from '../components/home/Diagram.astro';
+import LayerDiagram from '../components/LayerDiagram.astro';
 import StatusBadge, { type Status } from '../components/StatusBadge.astro';
 import triangleScene from '../../../docs/guides/examples/06-gpu-basics/triangle/src/Scene.hx?raw';
 import triangleShader from '../../../docs/guides/examples/06-gpu-basics/triangle/src/shaders/Triangle.glsl?raw';
 import particlesShader from '../../../docs/guides/examples/06-gpu-basics/particles/src/shaders/Particles.glsl?raw';
 import { docsUrl, repositorySource } from '../../docs.mjs';
+import { methodSource } from '../excerpts';
 
 const gpu = (file: string) => repositorySource('packages/gpu/src/haxeon/gpu/' + file + '.hx');
 const circuit = 'packages/gpu/examples/circuit-run/';
@@ -23,13 +24,8 @@ const available = backends.filter(({ status }) => status !== 'Planned');
 const triangle = 'docs/guides/examples/06-gpu-basics/triangle/';
 const guide = docsUrl('guides/06-gpu-basics.md');
 const particles = 'docs/guides/examples/06-gpu-basics/particles/';
-const method = (source: string, name: string) => {
-  const found = source.match(new RegExp(`^\\tpublic function ${name}\\([\\s\\S]*?^\\t\\}`, 'm'));
-  if (!found) throw new Error(`Missing Main.${name} in a GPU example`);
-  return found[0].replace(/^\t/gm, '');
-};
-const ready = method(triangleScene, 'new');
-const frame = method(triangleScene, 'draw');
+const ready = methodSource(triangleScene, 'new', triangle + 'src/Scene.hx');
+const frame = methodSource(triangleScene, 'draw', triangle + 'src/Scene.hx');
 const computeStage = particlesShader.match(/^@cs step_cs\n[\s\S]*?^@end$/m);
 if (!computeStage) throw new Error('Missing the compute stage in the Particles shader');
 
@@ -111,7 +107,7 @@ const generatedExcerpt = [
           <h2>Draw your first frame</h2>
           <p class="lede">The triangle from the GPU basics guide sets up once when its surface is ready, then submits the same draw each frame.</p>
         </div>
-        <div class="grid first-frame">
+        <div class="grid two first-frame">
           <CodeCard code={ready} lang="haxe" title="Once · src/Scene.hx" />
           <div class="stack">
             <CodeCard code={frame} lang="haxe" title="Each frame · src/Scene.hx" />
@@ -127,28 +123,22 @@ const generatedExcerpt = [
     <section>
       <div class="wrap">
         <div class="head"><h2>How the API fits together</h2></div>
-        <div class="split api">
-          <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 330" role="img" aria-labelledby="gpu-api-title">
-              <title id="gpu-api-title">A Renderer creates buffers, images, samplers, shaders and pipelines. They are bound in a CommandBuffer, sealed into a Batch and submitted to a surface frame.</title>
-              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
-              <rect class="box" x="55" y="156" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="224" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="292" width="250" height="36" rx="6" />
-              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 192v30m-4-5 4 5 4-5M180 260v30m-4-5 4 5 4-5" />
-              <text x="192" y="59">creates</text>
-              <text x="192" y="145">bound in</text>
-              <text x="192" y="213">sealed in</text>
-              <text x="192" y="281">submitted to</text>
-              <a href={gpu('Renderer')}><text class="lnk" x="180" y="25" text-anchor="middle">Renderer</text></a>
-              <text x="180" y="93" text-anchor="middle"><a href={gpu('Buffer')}><tspan class="lnk">Buffer</tspan></a> · <a href={gpu('Image')}><tspan class="lnk">Image</tspan></a> · <a href={gpu('Sampler')}><tspan class="lnk">Sampler</tspan></a></text>
-              <text x="180" y="113" text-anchor="middle"><a href={gpu('Shader')}><tspan class="lnk">Shader</tspan></a> → <a href={gpu('Pipeline')}><tspan class="lnk">Pipeline</tspan></a></text>
-              <a href={gpu('CommandBuffer')}><text class="lnk" x="180" y="179" text-anchor="middle">CommandBuffer</text></a>
-              <a href={gpu('Batch')}><text class="lnk" x="180" y="247" text-anchor="middle">Batch</text></a>
-              <text class="ttl" x="180" y="315" text-anchor="middle">Surface frame</text>
-            </svg>
-          </Diagram>
+        <div class="split wide-end">
+          <LayerDiagram
+            id="gpu-api"
+            label="A Renderer creates buffers, images, samplers, shaders and pipelines. They are bound in a CommandBuffer, sealed into a Batch and submitted to a surface frame."
+            layers={[
+              { title: { text: 'Renderer', href: gpu('Renderer') } },
+              {
+                title: [{ text: 'Buffer', href: gpu('Buffer') }, ' · ', { text: 'Image', href: gpu('Image') }, ' · ', { text: 'Sampler', href: gpu('Sampler') }],
+                detail: [{ text: 'Shader', href: gpu('Shader') }, ' → ', { text: 'Pipeline', href: gpu('Pipeline') }],
+              },
+              { title: { text: 'CommandBuffer', href: gpu('CommandBuffer') } },
+              { title: { text: 'Batch', href: gpu('Batch') } },
+              { title: 'Surface frame' },
+            ]}
+            edges={['creates', 'bound in', 'sealed in', 'submitted to']}
+          />
           <div class="stack">
             <Card compact>
               <h3>Frames only when needed</h3>
@@ -179,7 +169,7 @@ const generatedExcerpt = [
           <li><span>GLSL 4.1 · GLSL ES 3.0 · HLSL 5 · Metal</span></li>
           <li><span>shaders.Triangle</span></li>
         </ol>
-        <div class="grid first-frame">
+        <div class="grid two first-frame">
           <CodeCard code={triangleShader} lang="sokol-shdc" title="src/shaders/Triangle.glsl" />
           <div class="stack">
             <CodeCard code={generatedExcerpt} lang="haxe" title="Generated · shaders/Triangle.hx" />
@@ -202,7 +192,7 @@ const generatedExcerpt = [
           <h2>Compute</h2>
           <p class="lede">A compute shader moves 8,192 particles in a storage buffer. The draw reads the same buffer, so nothing goes back to the CPU.</p>
         </div>
-        <div class="grid first-frame">
+        <div class="grid two first-frame">
           <figure>
             <img src="/gpu/particles.webp" width="640" height="640" loading="lazy" alt="A fountain of small square particles, pink and fast near the spout, green and slow near the top." />
           </figure>
@@ -218,7 +208,7 @@ const generatedExcerpt = [
           <h2>Backends</h2>
           <p class="lede">Rendering goes through <a href="https://github.com/floooh/sokol">sokol_gfx</a>, a small C library that targets each platform’s native graphics API. It also has WebGPU and Vulkan backends, which are planned here.</p>
         </div>
-        <div class="split backends">
+        <div class="split">
           <div class="tables">
             <table aria-label="GPU backends">
               <thead><tr><th scope="col">Platform</th><th scope="col">Status</th><th scope="col">Compute</th><th scope="col">Timestamps</th></tr></thead>
@@ -230,21 +220,16 @@ const generatedExcerpt = [
             </table>
             <p class="note">Image and buffer readback work on every backend.</p>
           </div>
-          <Diagram spaced>
-            <svg class="drawing" viewBox="0 0 360 262" role="img" aria-labelledby="gpu-stack-title">
-              <title id="gpu-stack-title">Your draw code calls the GPU layer, which runs on sokol_gfx and the platform graphics API.</title>
-              <rect class="box" x="55" y="2" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="70" width="250" height="54" rx="6" />
-              <rect class="box" x="55" y="156" width="250" height="36" rx="6" />
-              <rect class="box" x="55" y="224" width="250" height="36" rx="6" />
-              <path class="acc" d="M180 38v30m-4-5 4 5 4-5M180 124v30m-4-5 4 5 4-5M180 192v30m-4-5 4 5 4-5" />
-              <text class="ttl" x="180" y="25" text-anchor="middle">Your draw code</text>
-              <text class="ttl" x="180" y="93" text-anchor="middle">GPU layer</text>
-              <text x="180" y="113" text-anchor="middle">Buffers · Pipelines · Passes</text>
-              <text class="ttl" x="180" y="179" text-anchor="middle">sokol_gfx</text>
-              <text class="ttl" x="180" y="247" text-anchor="middle">OpenGL · WebGL2 · Metal · D3D11</text>
-            </svg>
-          </Diagram>
+          <LayerDiagram
+            id="gpu-stack"
+            label="Your draw code calls the GPU layer, which runs on sokol_gfx and the platform graphics API."
+            layers={[
+              { title: 'Your draw code' },
+              { title: 'GPU layer', detail: 'Buffers · Pipelines · Passes' },
+              { title: 'sokol_gfx' },
+              { title: 'OpenGL · WebGL2 · Metal · D3D11' },
+            ]}
+          />
         </div>
       </div>
     </section>
@@ -252,7 +237,7 @@ const generatedExcerpt = [
     <section>
       <div class="wrap">
         <div class="head"><h2>Going lower</h2></div>
-        <div class="grid">
+        <div class="grid two">
           <Card compact>
             <h3>Native handles</h3>
             <p>Pass renderer, shader and pipeline handles to <a href={repositorySource('packages/gpu/bindings/nativekit-gpu.hxi')}>NativeKit’s C GPU API</a>, or borrow the underlying device and context where available.</p>
@@ -268,20 +253,6 @@ const generatedExcerpt = [
 </StarlightPage>
 
 <style>
-  .page-intro .head .ctas { margin-top: 0; }
-  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 34rem); gap: var(--hx-space-6); align-items: start; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--hx-space-5);
-  }
-  .three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .split {
-    display: grid;
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    gap: var(--hx-space-5);
-    align-items: start;
-  }
   .shader-flow {
     display: flex;
     flex-wrap: wrap;
@@ -297,15 +268,10 @@ const generatedExcerpt = [
   .shader-flow span { padding: 4px 10px; border: 1px solid var(--sl-color-gray-5); border-radius: var(--hx-radius-s); background: var(--sl-color-bg-sidebar); }
   .nowrap { white-space: nowrap; }
   .first-frame { align-items: start; }
-  .stack { display: grid; gap: var(--hx-space-5); align-content: start; }
   .api-name { display: block; font-weight: 400; font-size: 0.85rem; color: var(--sl-color-gray-3); }
-  .api { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); align-items: stretch; }
-  .api > :global(.figure) { display: grid; align-content: center; }
   .tables { display: grid; gap: var(--hx-space-3); align-content: start; }
-  .backends { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: stretch; }
-  .backends > :global(.figure) { display: grid; align-content: center; }
-  .drawing .lnk { fill: var(--sl-color-text-accent); font-weight: 600; text-decoration: underline; }
-  figure, .grid p, .stack p { margin: 0; }
+  figure { margin: 0; }
+  .hero { --hero-columns: minmax(0, 1fr) minmax(0, 34rem); }
   img { display: block; width: 100%; height: auto; border-radius: var(--hx-radius-m); border: 1px solid var(--sl-color-gray-5); }
   figcaption { margin-top: var(--hx-space-2); color: var(--sl-color-gray-3); }
   li + li { margin-top: var(--hx-space-2); }
@@ -321,9 +287,6 @@ const generatedExcerpt = [
   .circuit-preview :global(iframe) { width: 100%; aspect-ratio: 540 / 510; height: auto; border: 0; border-radius: var(--hx-radius-m); }
   .circuit-preview:not([data-running]) :global(iframe) { position: absolute; visibility: hidden; }
   .circuit-preview[data-running] img { display: none; }
-  @media (max-width: 55rem) {
-    .grid, .split, .hero { grid-template-columns: minmax(0, 1fr); }
-  }
   @media (max-width: 30rem) {
     th, td { padding-inline: 4px; font-size: 0.8rem; }
   }
