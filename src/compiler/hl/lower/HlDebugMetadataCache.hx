@@ -13,8 +13,8 @@ import haxe.ds.ObjectMap;
  */
 @:nullSafety(Strict)
 class HlDebugMetadataCache {
-	var entries:ObjectMap<IrFunction, HlIdentityEntry> = new ObjectMap();
-	var nextEntries:ObjectMap<IrFunction, HlIdentityEntry> = new ObjectMap();
+	var entries:ObjectMap<IrFunction, HlFunctionPlace> = new ObjectMap();
+	var nextEntries:ObjectMap<IrFunction, HlFunctionPlace> = new ObjectMap();
 
 	public function new() {}
 
@@ -24,18 +24,18 @@ class HlDebugMetadataCache {
 	 */
 	public function identity(fn:IrFunction, body:IrBody, functionIndex:Int, stableId:Int,
 			sources:SourceAnchors):HlFunctionIdentity {
-		var entry = nextEntries.get(fn);
-		if (entry == null) {
-			entry = entries.get(fn);
-			if (entry == null)
-				entry = new HlIdentityEntry(HlFunctionPlace.of(body));
-			nextEntries.set(fn, entry);
+		var place = nextEntries.get(fn);
+		if (place == null) {
+			place = entries.get(fn);
+			if (place == null)
+				place = HlFunctionPlace.of(body);
+			nextEntries.set(fn, place);
 		}
-		var place = entry.place, known = entry.identity;
+		var known = place.lastIdentity;
 		if (known == null || known.functionIndex != functionIndex || known.stableId != stableId
 			|| !place.reads(known, sources)) {
 			known = place.identity(fn.name, functionIndex, stableId, sources);
-			entry.identity = known;
+			place.lastIdentity = known;
 		}
 		return known;
 	}
@@ -76,14 +76,6 @@ class HlDebugMetadataCache {
 	}
 }
 
-private class HlIdentityEntry {
-	public final place:HlFunctionPlace;
-	public var identity:Null<HlFunctionIdentity> = null;
-
-	public function new(place:HlFunctionPlace)
-		this.place = place;
-}
-
 /**
  * Where a function's code is, per anchor its instructions name (terminators aside): the least start, the greatest end and the
  * least line, counted from the anchor, and the anchor of its first location; in one array of rows of four. The identity takes the
@@ -93,6 +85,9 @@ private class HlIdentityEntry {
 class HlFunctionPlace {
 	final first:Int;
 	final rows:Array<Int> = [];
+
+	/** The identity a cache made from this place last (`HlDebugMetadataCache.identity`). */
+	public var lastIdentity:Null<HlFunctionIdentity> = null;
 
 	function new(first:Int)
 		this.first = first;
