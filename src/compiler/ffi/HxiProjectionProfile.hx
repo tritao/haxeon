@@ -78,17 +78,25 @@ class HxiProjectionProfile {
 	public static function empty():HxiProjectionProfile
 		return new HxiProjectionProfile();
 
-	/** Parses the stable, Haxe-specific projection manifest format. */
-	public static function parse(path:String, source:String):HxiProjectionProfile {
+	/** The interface the projection manifest in `source` projects, without reading the rest of it. */
+	public static function interfaceOf(path:String, source:String):String
+		return requiredString(object(path, source), "interface", path);
+
+	static function object(path:String, source:String):Dynamic {
 		var value:Dynamic;
 		try {
 			value = Json.parse(source);
 		} catch (error:Dynamic) {
 			throw new InternalError('Invalid Haxe projection profile "$path": ${Std.string(error)}');
 		}
-
 		if (value == null || !Reflect.isObject(value) || Std.isOfType(value, Array))
 			throw new InternalError('Invalid Haxe projection profile "$path": expected a JSON object');
+		return value;
+	}
+
+	/** Parses the stable, Haxe-specific projection manifest format. */
+	public static function parse(path:String, source:String):HxiProjectionProfile {
+		var value = object(path, source);
 
 		var interfaceName = requiredString(value, "interface", path),
 			packageName = optionalString(value, "package", path),

@@ -10,12 +10,14 @@
   "ffi": {
     "interfaces": [
       "bindings/nativekit.hxi",
-      "bindings/nativekit-net.hxi"
+      "bindings/nativekit-net.hxi",
+      "bindings/nativekit-vulkan.hxi"
     ],
     "wasmInterfaces": ["bindings/nativekit-wasm.hxi", "bindings/nativekit-net-wasm.hxi"],
     "projections": [
       "bindings/nativekit.hxmap",
-      "bindings/nativekit-net.hxmap"
+      "bindings/nativekit-net.hxmap",
+      "bindings/nativekit-vulkan.hxmap"
     ]
   },
   "publish": {

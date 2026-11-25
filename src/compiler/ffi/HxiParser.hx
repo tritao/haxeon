@@ -1,6 +1,7 @@
 package compiler.ffi;
 
 import compiler.core.DiagnosticCode;
+import compiler.core.InternalError;
 import haxe.Int64;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -62,6 +63,17 @@ class HxiParser {
 
 	public static function parse(path:String, text:String):HxiInterface
 		return new HxiParser(new SourceFile(path, text)).parseInterface();
+
+	/**
+	 * The name the interface in `text` declares, read from its header alone (`interface Name ...`, after comments), for what
+	 * needs only that: which projections belong to which interfaces (`project.PackageResolver`).
+	 */
+	public static function interfaceOf(path:String, text:String):String {
+		var header = ~/^(?:\s+|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*interface\s+([A-Za-z_][A-Za-z0-9_]*)/;
+		if (!header.match(text))
+			throw new InternalError('Invalid FFI interface "$path": it does not start with "interface NAME"');
+		return header.matched(1);
+	}
 
 	function new(source:SourceFile) {
 		this.source = source;
