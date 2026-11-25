@@ -3,6 +3,10 @@ package compiler.documentation;
 /** Public declarations in a successfully typed source graph (docs/design/API_MODEL.md). */
 typedef ApiModel = {
 	final version:Int;
+
+	/** The modules described, by path: the API itself. The other declarations are there because the API refers to them. */
+	final described:Array<String>;
+
 	final modules:Array<ApiModule>;
 	final types:Array<ApiDeclaration>;
 }

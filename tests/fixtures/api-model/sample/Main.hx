@@ -155,6 +155,11 @@ class Service {
 		return sum;
 	}
 
+	/** An internal type in a public signature is referenced, not described. */
+	public function detail():sample.internal.Detail {
+		return new sample.internal.Detail();
+	}
+
 	/** A private type in a public signature stays a named reference. */
 	public function helper():Helper {
 		return new Helper();

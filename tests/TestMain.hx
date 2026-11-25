@@ -1684,7 +1684,8 @@ class TestMain {
 			throw "Compiler CLI did not read --api-json, with or without an entry";
 		for (rejected in [
 			["source/Main.hx", "--no-output", "--api-json"],
-			["--api-json=out/api.json", "source/Main.hx"]
+			["--api-json=out/api.json", "source/Main.hx"],
+			["--no-output", "--api-source=src", "source/Main.hx"]
 		]) {
 			var refused = false;
 			try {
@@ -1693,7 +1694,7 @@ class TestMain {
 				refused = true;
 			}
 			if (!refused)
-				throw 'Compiler CLI accepted ${rejected.join(" ")}: --api-json needs a path and --no-output';
+				throw 'Compiler CLI accepted ${rejected.join(" ")}: --api-json needs a path and --no-output, --api-source needs --api-json';
 		}
 		var normalizedDocumentation =
 			DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");

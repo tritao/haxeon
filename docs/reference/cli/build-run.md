@@ -141,6 +141,20 @@ Checking my-app (host)…
 ✔ No errors (0.3 s)
 ```
 
+## doc
+
+`haxeon doc` types the project as `haxeon check` does and writes a description of its public API to `build/api.json`, or
+to `--output`: every public type, member, and module-level function and variable, with its signature, its doc comment and
+where it is declared. A package's API is its own modules except those of a package named `internal`, at any depth, as in
+Go; it reaches what they use, so a type the API refers to is in the description as well, and the file lists which modules
+are the API (`described`). A library needs no `entry`. Types are written as the source writes them, so a signature keeps
+the names of the typedefs it uses. The format is Haxeon's own JSON, versioned.
+
+```sh
+haxeon doc
+haxeon doc --output docs/ui-api.json
+```
+
 ## run
 
 `haxeon run` runs the app executable, or a console project's module on the VM, and `--watch` runs the module it rebuilds

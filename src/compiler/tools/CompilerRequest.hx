@@ -22,6 +22,9 @@ typedef CompilerRequest = {
 	final output:String;
 	/** Where to write the program's API model (docs/design/API_MODEL.md) as JSON. */
 	final apiJsonOutput:Null<String>;
+
+	/** The source roots whose modules the API model describes; every loaded module but the standard library's when empty. */
+	final apiSources:Array<String>;
 	final irOutput:Null<String>;
 	/** Where to write the modules this compile read: one `[name, path, sha256 of its text]` per module, sorted by name. */
 	final inputsOutput:Null<String>;

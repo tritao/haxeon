@@ -1,5 +1,5 @@
-Status: Phase 1 implemented: the model and its JSON (`--no-output --api-json=FILE` on the direct compiler); `--xml` is
-deleted. The rest of phase 2 is planned below.
+Status: Implemented: the model, its JSON, `haxeon doc`, and the deletion of `--xml`. Editor hover reading it and the
+website's pages are planned below.
 
 # Haxeon API model
 
@@ -13,9 +13,16 @@ deleted.
 ## Built from the semantic program
 
 The model is built by an analysis, not a build: `--api-json` takes `--no-output`, so the sources are typed and nothing is
-generated. Every module the request loads, except the standard library's, is typed as a root of that analysis, so the
-model describes all of them rather than what an entry reaches, and `--entry` is optional: a library has none. The roots
-belong to the one analysis, so a compile server's later builds are unchanged. The model is read from the semantic program
+generated. The modules it describes are the roots of that analysis, so the model covers all of them rather than what an
+entry reaches, and `--entry` is optional: a library has none. They are the modules loaded from the source roots given with
+`--api-source` (every module but the standard library's without it), except a package's internals: a module under a
+package named `internal`, at any depth, is not described, as in Go. The roots belong to the one analysis, so a compile
+server's later builds are unchanged. The model also holds every declaration the described ones refer to, from
+dependencies and the standard library included, and lists the described modules (`described`), so a reader can tell the
+API from what it uses.
+
+`haxeon doc` runs this analysis for a project with the arguments its build uses, describing the root package's source
+roots, and writes `build/api.json` (or `--output`). The model is read from the semantic program
 the analysis keeps, not from the syntax tree, which cannot give resolved types, caller-visible nullability or inferred
 signatures.
 
@@ -54,7 +61,7 @@ kind has them (`ApiJsonWriter` writes them field by field, so the output is this
 
 | Record | Fields |
 | --- | --- |
-| Root | `version` (integer, `1`), `modules`, `types` |
+| Root | `version` (integer, `1`), `described` (the module paths described), `modules`, `types` |
 | Module | `path`, `file` (its source, relative to its source root), `members` (its public top-level variables and functions) |
 | Declaration | `path`, `module`, `kind` (`class`, `interface`, `enum`, `abstract`, `typedef`, `extern`), `isExtern`, `source`, `typeParameters`, `supertypes`, `interfaces`, `underlying` (type or null), `from`, `to`, `members` |
 | Source | `visibility` (`public`), `position` (`file`, with `/` separators, and one-based `line`), `metadata` (`{name, arguments}`, arguments as source text), `documentation` (null or `{markdown, tags}`) |
@@ -94,10 +101,8 @@ declares them (a module's variables and functions by line), which is how their a
 constraints and annotations keep their declaration order; and the JSON is written field by field. A description is the
 same with or without an entry.
 
-## Phase 2
+## Next
 
-- `haxeon doc` writes the model for a project, with the arguments its build uses, and records each package's exposed Haxe
-  packages from its manifest, so consumers do not guess what is internal.
 - Editor hover and signature help read it. `LanguageService.hover` renders the member's type or signature from the model,
   `hoverDocumentation` its comment and tags, and `signatureHelp` the callable, with each `@param` for the active argument;
   the position, symbol and active-argument lookups stay. Locals, incomplete edits and declarations not in the model keep the

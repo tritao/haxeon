@@ -20,6 +20,7 @@ class ApiJsonWriter {
 		var output = new JsonOutput();
 		output.open();
 		output.number("version", model.version);
+		output.list("described", model.described, text);
 		output.list("modules", model.modules, module, true);
 		output.list("types", model.types, declaration, true);
 		output.close();
@@ -165,6 +166,9 @@ class ApiJsonWriter {
 	}
 
 	static function flag(output:JsonOutput, value:Bool):Void
+		output.scalar(value);
+
+	static function text(output:JsonOutput, value:String):Void
 		output.scalar(value);
 
 	/** A field the schema gives every record of `kind`: the builder always sets it, so its absence is a builder bug. */

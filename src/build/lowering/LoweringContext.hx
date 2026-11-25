@@ -52,12 +52,16 @@ class LoweringContext {
 
 	public final webHost:Null<String>;
 
+	/** Where a check also writes the root package's API model (`haxeon doc`). */
+	public final apiJson:Null<String>;
+
 	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
 			developmentMetadata:Bool = true, ?baseline:String, ?reportStyle:compiler.tools.ReportStyle,
-			?checkOnly:Bool, ?scriptModule:String, ?webHost:String) {
+			?checkOnly:Bool, ?scriptModule:String, ?webHost:String, ?apiJson:String) {
+		this.apiJson = apiJson;
 		this.webHost = webHost;
 		this.scriptModule = scriptModule;
 		this.checkOnly = checkOnly == true;

@@ -50,7 +50,7 @@ class HaxeonProjectBuild {
 			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String,
 			?style:ReportStyle, aheadOfTime:Bool = false, ?scriptModule:String, ?webHost:String,
-			consoleProgram:Bool = false):Int {
+			consoleProgram:Bool = false, ?apiJson:String):Int {
 		var shown = style == null ? ReportStyle.DEFAULT : style;
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
@@ -86,7 +86,8 @@ class HaxeonProjectBuild {
 					timingsEnabled ? shown.withVerbosity(Verbosity.Diagnostic) : shown,
 					scope == Check,
 					scriptModule,
-					webHost
+					webHost,
+					apiJson
 				));
 		switch scope {
 			case Full:

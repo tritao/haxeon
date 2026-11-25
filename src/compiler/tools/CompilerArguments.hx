@@ -12,7 +12,8 @@ import sys.io.File;
 class CompilerArguments {
 	/** The options that take a value, as `--name=value` or `--name value`. */
 	static final VALUED = [
-		"--output", "--api-json", "--target", "--build-mode", "--entry", "--ir-output", "--inputs-output", "--baseline",
+		"--output", "--api-json", "--api-source", "--target", "--build-mode", "--entry", "--ir-output",
+		"--inputs-output", "--baseline",
 		"--baseline-output",
 		"--entry-id-output", "--root", "--sources-file", "--package-root", "--ffi-header", "--ffi-library",
 		"--ffi-interface",
@@ -27,6 +28,7 @@ class CompilerArguments {
 			buildMode = "development",
 			output = "out/main.hl",
 			apiJsonOutput:Null<String> = null,
+			apiSources:Array<String> = [],
 			irOutput:Null<String> = null,
 			inputsOutput:Null<String> = null,
 			baseline:Null<String> = null,
@@ -75,6 +77,8 @@ class CompilerArguments {
 			}
 				else if (StringTools.startsWith(argument, "--api-json="))
 				apiJsonOutput = value(argument, "--api-json=");
+			else if (StringTools.startsWith(argument, "--api-source="))
+				apiSources.push(value(argument, "--api-source="));
 			else if (StringTools.startsWith(argument, "--entry=")) {
 				entry = value(argument, "--entry=");
 				entryGiven = true;
@@ -192,6 +196,8 @@ class CompilerArguments {
 		// A description of the sources is an analysis: it types them and builds nothing, and needs no entry.
 		if (apiJsonOutput != null && !noOutput)
 			throw new UsageError("--api-json describes the sources without building them: use it with --no-output");
+		if (apiSources.length > 0 && apiJsonOutput == null)
+			throw new UsageError("--api-source chooses what --api-json describes: use it with --api-json");
 		if (apiJsonOutput != null && !entryGiven)
 			entry = compiler.modules.ModuleReachability.NO_ENTRY;
 		if (baseline != null && !live)
@@ -228,6 +234,7 @@ class CompilerArguments {
 			defines: defines,
 			output: output,
 			apiJsonOutput: apiJsonOutput,
+			apiSources: apiSources,
 			irOutput: irOutput,
 			inputsOutput: inputsOutput,
 			baseline: baseline,

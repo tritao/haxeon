@@ -37,9 +37,10 @@ class ApiModelBuilder {
 	final comments = new ObjectMap<SourceFile, Array<DocumentationComment>>();
 	final roots:Array<String>;
 
-	public static function build(semantic:SemanticProgram, modules:Map<String, ModuleState>,
-			roots:Array<String>):ApiModel
-		return new ApiModelBuilder(semantic, modules, roots).model();
+	/** The model of `semantic`, whose `described` modules are the API; `roots` are the source roots paths are relative to. */
+	public static function build(semantic:SemanticProgram, modules:Map<String, ModuleState>, roots:Array<String>,
+			described:Array<String>):ApiModel
+		return new ApiModelBuilder(semantic, modules, roots).model(described);
 
 	function new(semantic:SemanticProgram, states:Map<String, ModuleState>, roots:Array<String>) {
 		this.semantic = semantic;
@@ -49,7 +50,7 @@ class ApiModelBuilder {
 		this.roots.sort((left, right) -> right.length - left.length);
 	}
 
-	function model():ApiModel {
+	function model(described:Array<String>):ApiModel {
 		var types:Array<ApiDeclaration> = [],
 			program = semantic.program,
 			modules = new Map<String, ApiModule>();
@@ -161,7 +162,7 @@ class ApiModelBuilder {
 			haxe.ds.ArraySort.sort(module.members,
 				(left, right) -> left.source.position.line - right.source.position.line);
 		records.sort((left, right) -> Reflect.compare(left.path, right.path));
-		return {version: 1, modules: records, types: types};
+		return {version: 1, described: described.copy(), modules: records, types: types};
 	}
 
 	static function ownerInfo(name:String, span:SourceSpan, typeParameters:Array<String>,

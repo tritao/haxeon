@@ -304,9 +304,13 @@ class CompilerServer {
 		CompilerMemoryLog.record(request.output, session);
 		if (Sys.getEnv("HAXEON_COMPILER_CENSUS") != null)
 			sys.thread.Thread.create(function() CompilerMemoryCensus.run(session));
-		// A check wrote nothing to publish.
-		if (request.noOutput)
+		// A check builds nothing: what it can publish is its API description (`--api-json`).
+		if (request.noOutput) {
+			var description = request.apiJsonOutput;
+			if (description != null && FileSystem.exists(description + stagingSuffix))
+				CompilerDriver.replaceFile(description + stagingSuffix, description);
 			return retyped;
+		}
 		var markerDestination = request.output + ".live.full";
 		if (request.output != null && FileSystem.exists(markerDestination))
 			FileSystem.deleteFile(markerDestination);

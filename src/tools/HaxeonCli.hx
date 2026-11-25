@@ -141,6 +141,9 @@ private enum BuildCommand {
 
 	/** Type the program without writing a module. */
 	Check;
+
+	/** Describe the project's public API, as `Check` types it (docs/design/API_MODEL.md). */
+	Doc;
 }
 
 private typedef CommandCapture = {
@@ -206,6 +209,7 @@ class HaxeonCli {
 						(rule, files) -> runCompilerRole("lint", "LintMain", ['--stdlib=$stdlib', rule].concat(files)));
 				case "build": build(arguments, Build);
 				case "check": build(arguments, Check);
+				case "doc": build(arguments, Doc);
 				case "test": build(arguments, Test);
 				case "clean": clean(arguments);
 				case "run" if (arguments.length > 0 && ScriptRun.isScript(arguments[0])):
@@ -875,10 +879,10 @@ class HaxeonCli {
 			resolutionMs = Sys.time() * 1000.0 - resolveStarted,
 			target = options.target == null ? project.manifest.target : options.target,
 			targetInfo = requestedTarget == null ? Target.parse(target) : requestedTarget;
-		if (command == Check) {
+		if (command == Check || command == Doc) {
 			if (options.debugPort != null || options.launchPlan != null)
 				throw new UsageError('"--debug-port" and "--launch-plan" require "haxeon run"');
-			return check(options, project, targetInfo, resolutionMs);
+			return check(options, project, targetInfo, resolutionMs, command == Doc);
 		}
 		if (launch && targetInfo.isWasm())
 			throw new InternalError('Use "haxeon build --target $target" to build for WebAssembly.');
@@ -1241,12 +1245,22 @@ class HaxeonCli {
 	 * module. Only the compile runs, with the FFI imports it reads; it shares the build's compiler session, so a check after a
 	 * build, or a build after a check, reuses what the other typed.
 	 */
-	static function check(options:BuildOptions, project:ResolvedProject, target:Target, resolutionMs:Float):Int {
+	/**
+	 * `haxeon check`, or with `describe` `haxeon doc`: the same typing, which also writes the project's API model to `--output`
+	 * (default `build/api.json`). A package's API is its own modules except those of a package named `internal`.
+	 */
+	static function check(options:BuildOptions, project:ResolvedProject, target:Target, resolutionMs:Float,
+			describe:Bool = false):Int {
+		var name = describe ? "doc" : "check";
 		if (options.plan || options.explain || options.compilerOnly || options.watch || options.restart
 			|| options.patchable || options.strictLive
-			|| options.profile || options.quiet || options.output != null || options.device != null
+			|| options.profile || options.quiet || (options.output != null && !describe) || options.device != null
 			|| options.gradleInputs != null || options.runtimeArguments.length > 0)
-			throw new UsageError("haxeon check takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color and --diagnostic-format. See 'haxeon check --help'.");
+			throw new UsageError('haxeon $name takes only --project, --target, --build-mode, --define, --jobs, --timings, -v, --color'
+				+ (describe ? ', --diagnostic-format and --output' : ' and --diagnostic-format')
+				+ '. See \'haxeon $name --help\'.');
+		var apiJson = !describe ? null : options.output != null ? resolvePath(options.output, invokedFrom)
+			: Path.join([HaxeonProjectBuild.outputDirectory(project, false), "api.json"]);
 		var home = haxeonHome(),
 			webHost = target.isWasm() && project.manifest.app != null ? AppRunner.webHost(project, home) : null;
 		NativeTargetSupport.validate(project, target, webHost != null);
@@ -1254,13 +1268,13 @@ class HaxeonCli {
 			target.isWasm() ? target.toString() : (target.isAndroid() ? "android" : "host"),
 			options.buildMode, true),
 			// Nothing is written there: it names the check's source list, beside the build's, in the build's directory.
-			output = Path.join([HaxeonProjectBuild.outputDirectory(project, false), "check", "main"]),
+			output = Path.join([HaxeonProjectBuild.outputDirectory(project, false), name, "main"]),
 			status = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, false,
 				false,
 				options.timings, resolutionMs, false, Check, false, false, null, options.buildMode == "development",
 				target,
-				null, options.style, false, null, webHost);
-		reportBuilt(options, null, status, started, "No errors");
+				null, options.style, false, null, webHost, false, apiJson);
+		reportBuilt(options, apiJson, status, started, describe ? null : "No errors");
 		return status;
 	}
 

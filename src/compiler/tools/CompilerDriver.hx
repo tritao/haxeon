@@ -22,6 +22,7 @@ import compiler.types.NativeTypeDescriptorCodec;
 import haxe.Json;
 import haxe.crypto.Base64;
 import haxe.io.Bytes;
+import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -245,11 +246,7 @@ class CompilerDriver {
 			apiJsonOutput = request.apiJsonOutput;
 		// A description covers every source it was given, not only what an entry reaches: each loaded module but the standard
 		// library's is typed as a root. Without an entry, those roots are the whole program.
-		var roots = apiJsonOutput == null ? [] : [
-			for (name => state in compiler.modules)
-				if (!state.source.isStandardLibrarySource) name
-		];
-		roots.sort(Reflect.compare);
+		var roots = apiJsonOutput == null ? [] : describedModules(compiler, request.apiSources);
 		var hasEntry = request.entry != ModuleReachability.NO_ENTRY;
 		progressReport(hasEntry ? "checking entry " + request.entry : "checking " + roots.length + " modules");
 		var result = compiler.analyze(request.entry, cancellation, hasEntry, roots),
@@ -265,11 +262,35 @@ class CompilerDriver {
 			var sourceRoots = request.roots.concat([request.stdlib]);
 			for (root in request.packageRoots)
 				sourceRoots.push(root.path);
+			sys.FileSystem.createDirectory(Path.directory(absolutePath(apiJsonOutput)));
 			File.saveContent(apiJsonOutput,
-				ApiJsonWriter.emit(ApiModelBuilder.build(semantic, compiler.modules, sourceRoots)));
+				ApiJsonWriter.emit(ApiModelBuilder.build(semantic, compiler.modules, sourceRoots, roots)));
 		}
 		return result;
 	}
+
+	/**
+	 * The modules an API description covers, typed as the roots of its analysis: those loaded from `sources` (every module but
+	 * the standard library's when it is empty), except a package's internals: a module under a package named `internal`, at any
+	 * depth, is not part of its API, as in Go.
+	 */
+	static function describedModules(compiler:compiler.Compiler, sources:Array<String>):Array<String> {
+		var directories = [for (source in sources) Path.addTrailingSlash(absolutePath(source))],
+			result:Array<String> = [];
+		for (name => state in compiler.modules) {
+			if (state.source.isStandardLibrarySource || name.split(".").slice(0, -1).indexOf("internal") >= 0)
+				continue;
+			var file = absolutePath(state.source.physicalPath);
+			if (directories.length == 0
+				|| [for (directory in directories) if (StringTools.startsWith(file, directory)) directory].length > 0)
+				result.push(name);
+		}
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	static function absolutePath(path:String):String
+		return Path.normalize(Path.isAbsolute(path) ? path : Path.join([Sys.getCwd(), path]));
 
 	/** The `diagnostic` reports: where the request's time and allocations went, phase by phase and pass by pass. */
 	static function reportCosts(report:String->Void, result:CompileResult, requestStartedAt:Float, preparedAt:Float,

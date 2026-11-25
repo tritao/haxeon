@@ -134,6 +134,20 @@ class CliHelp {
 						.concat(["  --timings                    Print where the check's time went, and the compiler's reports"])
 				},
 				{
+					name: "doc",
+					summary: "Describe the project's public API as JSON",
+					details: [
+						"Usage: haxeon doc [options]",
+						"",
+						"Types the project as haxeon check does and writes its API: each public type, member and module-level",
+						"function and variable, with its doc comment. A package's API is its own modules, except those of a",
+						"package named internal; a library needs no entry. The JSON format is versioned.",
+						""
+					].concat(BUILD_OPTIONS.filter(line -> line.indexOf("--output") < 0
+						&& line.indexOf("--self-hosted") < 0))
+						.concat(["  --output PATH                Write the description to PATH (default: build/api.json)"])
+				},
+				{
 					name: "run",
 					summary: "Build, then launch the program (host or Android)",
 					details: [

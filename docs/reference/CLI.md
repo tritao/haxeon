@@ -18,7 +18,7 @@ A command line that starts with an `.hxml` file or one of Haxe's options (`-cp`,
 ## Command groups
 
 - [Project](cli/project.md) — Create, migrate and clean projects, check the installation, and list platforms and devices.
-- [Build & run](cli/build-run.md) — Build, check and run projects, scripts, Haxe command lines and workspaces.
+- [Build & run](cli/build-run.md) — Build, check, describe and run projects, scripts, Haxe command lines and workspaces.
 - [Test & quality](cli/test-quality.md) — Run tests, format sources and check lint rules.
 - [Packages](cli/packages.md) — Add, resolve, inspect, publish and validate packages.
 - [Tools](cli/tools.md) — Use the language server, FFI tools, diagnostics and checkout commands.

@@ -24,7 +24,9 @@ class CompilerProvider {
 			output:String, aheadOfTime:Bool = false, ?shaderRoot:String):ExecutionAction {
 		if (project == null)
 			throw new InternalError("CompilerProvider requires a resolved project");
-		if (project.manifest.entry == null)
+		// A description of a library's API has no program to start: it types the package's modules themselves.
+		var describe = context.checkOnly && context.apiJson != null, entry = project.manifest.entry;
+		if (entry == null && !describe)
 			throw new InternalError('Root package "${project.rootPackage.name}" must declare an "entry" for a build');
 		// The compiler is built from the sources of the SDK's checkout (or `HAXEON_COMPILER_SOURCE`), with its pinned Haxe; a
 		// release has neither and runs the compiler it ships (`AotCompiler.program`).
@@ -46,9 +48,8 @@ class CompilerProvider {
 				// A program compiled ahead of time is C, which the native build compiles (`ArtifactKind.CModule`).
 					"--target=" + target,
 					"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
-					"--output=" + output,
-					"--entry=" + project.manifest.entry
-				],
+					"--output=" + output
+				].concat(entry == null ? [] : ["--entry=" + entry]),
 			inputs:Array<String> = [];
 		if (context.webHost != null) {
 			arguments.push("--export=haxeon.platform.BrowserHost.tick");
@@ -72,6 +73,11 @@ class CompilerProvider {
 		}
 		// A check writes nothing, so it has no outputs and always runs; its compiler session makes a repeat cheap.
 		arguments.push(context.checkOnly ? "--no-output" : "--inputs-output=" + output + ".inputs.json");
+		if (describe) {
+			arguments.push("--api-json=" + context.apiJson);
+			for (root in project.rootPackage.sourceRoots)
+				arguments.push("--api-source=" + root);
+		}
 		for (sourceRoot in compilerInputs.roots)
 			arguments.push("--root=" + sourceRoot);
 		if (shaderRoot != null) {
