@@ -101,9 +101,28 @@ grow, which is right inside a build and wrong for a server that stays up for day
 - **Compaction at a quiet request boundary:** the server already collects there.
 - **Keying generated names stably:** names stop changing on edits, so growth is bounded by the program.
 
-The third removes the cause and matches WARM_REBUILD_REUSE.md's rule against process-kept counters in names. Measure the
-growth per edit on a long replay before choosing. This should be settled before the bodies-only session work
+**Measured** on 2026-11-25 over 40 real commits replayed in one server (07b95ac10's tree):
+- **Only two tables grow:** `IrSymbol` and `IrTypeIds`. The other `@:processWide` tables are per thread, bounded, or
+  unused.
+- **No-op builds, body edits and undone edits add nothing.** No generated name carries a counter kept across builds.
+- **Growth follows distinct declaration states:** about 51 symbols and 61 types per commit. After 40 commits the final
+  tree used 97% of the symbols and 90% of the types. That is about 40 KB of dead entries per commit, and about 2–10 MB
+  for a working day, against about 800 MB of live data.
+- **What dies is content that really changed:** anonymous-type spellings, specialization keys that spell types in full,
+  removed functions, and lambdas whose captures changed. The text dominates: dead names average about 740 characters.
+
+So stable names do not bound the growth. The choice is **compaction at a quiet request boundary**, run only once the
+table passes a size trigger (for example 1.5× the last build's live set). It keeps the id slots and releases only the
+name text and the by-name entry, which frees about 95% of the bytes. It needs one rule: a released id is never given to
+another name. It is not urgent at these sizes; settle it with the bodies-only session work
 ([TODO.md](../../TODO.md)), since both decide what the server holds.
+
+Two naming fixes are worth doing regardless, since they cut bytes and needless work:
+- **`$try` cells:** they are named by their absolute file offset (`Parser.parseTryExpression`). An edit above a `try`
+  renames its cell and lowers that function again. Number them within their function instead.
+- **Names that spell whole types:** a fixed-length digest would cut the dead bytes by about 80%. The generators are
+  `SemanticSignature.anonymousTypeName`, `GeneratedNames.specializationKey`, the shared array helpers and
+  `$iteration-adapter`.
 
 ## 5. Gates in CI
 
