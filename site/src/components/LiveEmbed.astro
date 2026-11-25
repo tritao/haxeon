@@ -94,8 +94,9 @@ const built = existsSync(join(__SITE_ROOT__, 'public', new URL(src, 'file:').pat
           }
         };
 
-        // Generous enough for the larger embeds on a slow connection.
-        const timeout = window.setTimeout(fail, 60000);
+        // A failed download or start reports itself at once; this only catches an app that never reports. The Showcase's
+        // few megabytes, one file of them its Wasm, take over a minute on a slow connection, so the wait allows three.
+        const timeout = window.setTimeout(fail, 180_000);
         window.addEventListener('message', receive);
         this.prepend(frame);
       });

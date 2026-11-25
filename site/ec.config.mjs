@@ -66,6 +66,13 @@ export default defineEcConfig({
         'editor.background': colors['code-bg'],
         'editor.foreground': colors['code-fg'],
         'editorLineNumber.foreground': colors['code-comment'],
+        // The code surface is dark in both site themes, so frame titles and tabs take its colours, not the theme type's.
+        'editorGroupHeader.tabsBackground': colors['code-bg'],
+        'tab.activeBackground': colors['code-bg'],
+        'tab.activeForeground': colors['code-fg'],
+        'tab.inactiveForeground': colors['code-comment'],
+        'titleBar.activeBackground': colors['code-bg'],
+        'titleBar.activeForeground': colors['code-comment'],
       },
       tokenColors: [
         {

@@ -11,10 +11,10 @@ import Start from '../components/sections/Start.astro';
 
 const title = 'A language and runtime for cross-platform apps and tools.';
 const description =
-  "Develop on a live VM that keeps your program's state as you edit, ship one codebase as native executables or WebAssembly, and call C and C++ directly.";
+  "Develop on a live VM that patches your running program as you edit, ship one codebase as native executables or WebAssembly, and call C and C++ directly.";
 ---
 
-<SplashPage {title} {description}>
+<SplashPage {title} {description} documentTitle="Haxeon: a language and runtime for cross-platform apps and tools">
   <Hero {title} {description} />
   <Apps />
   <LanguageTour eyebrow="The language" />

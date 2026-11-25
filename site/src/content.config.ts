@@ -24,8 +24,32 @@ const checkoutHaxe = new URL(
 );
 const cliPrinter = fileURLToPath(new URL('../scripts/PrintCliHelp.hx', import.meta.url));
 const exec = promisify(execFile);
-// Rendered pages depend on docs.mjs too: it decides slugs and rewrites links.
-const docsConfig = readFileSync(new URL('../docs.mjs', import.meta.url), 'utf8');
+// Rendered pages depend on more than their Markdown: docs.mjs decides slugs and rewrites links, and the code block
+// configuration and the design tokens it reads name and fill the code blocks' stylesheet.
+const renderInputs = ['../docs.mjs', '../ec.config.mjs', './styles/tokens.json']
+  .map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+  .join('\n');
+
+/**
+ * A page's description for search results and link previews: its first paragraph of prose, without Markdown, cut at a
+ * sentence or word boundary to fit.
+ */
+function summary(markdown: string): string | undefined {
+  const paragraph = markdown
+    .split(/\r?\n\s*\r?\n/)
+    .map((block) => block.trim())
+    .find((block) => block && !/^(#|```|\||<|>|-\s|\*\s|\d+\.\s|!\[)/.test(block));
+  if (!paragraph) return undefined;
+  const text = paragraph
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[`*_]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= 160) return text;
+  const sentence = text.slice(0, 160).match(/^.*[.!?](?=\s)/);
+  if (sentence && sentence[0].length >= 60) return sentence[0];
+  return text.slice(0, 157).replace(/\s+\S*$/, '') + '…';
+}
 
 type CliHelp = {
   overview: string;
@@ -130,7 +154,7 @@ const docs = defineCollection({
           const content = heading ? body.slice(heading[0].length) : body;
           return {
             ...entry,
-            data: { title: heading?.[1], ...data },
+            data: { title: heading?.[1], description: summary(content), ...data },
             body: generatedPages.get(input.fileUrl.href)?.(content) ?? content,
           };
         },
@@ -139,8 +163,8 @@ const docs = defineCollection({
       await files.load({
         ...context,
         entryTypes,
-        // Repository links depend on the source revision. Generated help and docs.mjs can change without Markdown edits.
-        generateDigest: (source) => context.generateDigest(`${sourceRef}\n${docsConfig}\n${cliHelp}\n${source}`),
+        // Repository links depend on the source revision. Generated help and the render inputs change without Markdown edits.
+        generateDigest: (source) => context.generateDigest(`${sourceRef}\n${renderInputs}\n${cliHelp}\n${source}`),
       });
     },
   },

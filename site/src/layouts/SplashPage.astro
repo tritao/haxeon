@@ -8,11 +8,23 @@ import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 interface Props {
   title: string;
   description: string;
+  /** The browser tab's and link previews' title, where "title | Haxeon" would not read well, as on the homepage. */
+  documentTitle?: string;
 }
-const { title, description } = Astro.props;
+const { title, description, documentTitle } = Astro.props;
+// Product pages are pages of the site, not articles; Starlight replaces its own head tags with these.
+const head = [
+  { tag: 'meta' as const, attrs: { property: 'og:type', content: 'website' } },
+  ...(documentTitle
+    ? [
+        { tag: 'title' as const, content: documentTitle },
+        { tag: 'meta' as const, attrs: { property: 'og:title', content: documentTitle } },
+      ]
+    : []),
+];
 ---
 
-<StarlightPage frontmatter={{ title, description, template: 'splash', prev: false, next: false }}>
+<StarlightPage frontmatter={{ title, description, head, template: 'splash', prev: false, next: false }}>
   <div class="landing-content">
     <slot />
   </div>

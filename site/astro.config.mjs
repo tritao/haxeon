@@ -1,5 +1,5 @@
 import tokens from './src/styles/tokens.json' with { type: 'json' };
-import { defineConfig } from 'astro/config';
+import { defineConfig, fontProviders } from 'astro/config';
 import { unified } from '@astrojs/markdown-remark';
 import starlight from '@astrojs/starlight';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +25,20 @@ export default defineConfig({
     ],
   },
   trailingSlash: 'always',
+  // Downloaded at build time and served from the site, with fallback fonts sized to match so text does not jump when
+  // they arrive. The tokens' font stacks use these variables; src/components/Head.astro renders and preloads them.
+  fonts: [
+    {
+      name: 'Bricolage Grotesque',
+      cssVariable: '--font-display',
+      weights: [400, 600, 800],
+      fallbacks: ['sans-serif'],
+      // Its optical size axis tightens the letterforms of large headings.
+      options: { experimental: { variableAxis: { opsz: [['12', '96']] } } },
+    },
+    { name: 'IBM Plex Sans', cssVariable: '--font-body', weights: [400, 500, 600], fallbacks: ['sans-serif'] },
+    { name: 'JetBrains Mono', cssVariable: '--font-mono', weights: [400, 600], fallbacks: ['monospace'] },
+  ].map((font) => ({ ...font, provider: fontProviders.google(), subsets: ['latin'] })),
   markdown: { processor: unified({ remarkPlugins: [repositoryLinks] }) },
   integrations: [
     starlight({
@@ -33,21 +47,8 @@ export default defineConfig({
       favicon: '/favicon.svg',
       customCss: ['./src/styles/theme.css'],
       sidebar,
-      head: [
-        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
-        {
-          tag: 'link',
-          attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
-        },
-        {
-          tag: 'link',
-          attrs: {
-            rel: 'stylesheet',
-            href: 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap',
-          },
-        },
-      ],
       components: {
+        Head: './src/components/Head.astro',
         Header: './src/components/SiteHeader.astro',
         Footer: './src/components/SiteFooter.astro',
         MarkdownContent: './src/components/MarkdownContent.astro',

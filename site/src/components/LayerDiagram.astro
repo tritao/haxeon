@@ -41,11 +41,15 @@ const lines = boxes.flatMap(({ layer, y }) => [
   { parts: layer.title, y: y + 23, className: 'title' },
   ...(layer.detail ? [{ parts: layer.detail, y: y + 43, className: undefined }] : []),
 ]);
+// A diagram with links is a labelled group, so assistive technology reaches the links; one without is a single image.
+const linked = layers.some(({ title, detail }) =>
+  [title, detail].some((value) => value !== undefined && segments(value).some((part) => typeof part !== 'string')),
+);
 const path = arrows.map(({ from, length }) => `M${centre} ${from}v${length}m-4-5 4 5 4-5`).join('');
 ---
 
 <Diagram>
-  <svg class="drawing" viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={`${id}-title`}>
+  <svg class="drawing" viewBox={`0 0 ${width} ${height}`} role={linked ? 'group' : 'img'} aria-labelledby={`${id}-title`}>
     <title id={`${id}-title`}>{label}</title>
     {boxes.map(({ y, height: boxHeight }) => <rect class="box" x={boxX} {y} width={boxWidth} height={boxHeight} rx="6" />)}
     <path class="accent" d={path} />

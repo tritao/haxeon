@@ -1,0 +1,11 @@
+---
+// Starlight's head, plus the site's self-hosted fonts (the `fonts` setting in astro.config.mjs). The display and body
+// fonts draw the first screen, so they preload; the monospace font loads when a page uses it.
+import { Font } from 'astro:assets';
+import Default from '@astrojs/starlight/components/Head.astro';
+---
+
+<Default />
+<Font cssVariable="--font-display" preload={[{ weight: 800 }]} />
+<Font cssVariable="--font-body" preload={[{ weight: 400 }]} />
+<Font cssVariable="--font-mono" />
