@@ -1,7 +1,8 @@
 ---
 import Search from '@astrojs/starlight/components/Search.astro';
 import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
-import { docsUrl, sourceRef } from '../../docs.mjs';
+import { Icon } from '@astrojs/starlight/components';
+import { docsUrl, projectRepo, sourceRef } from '../../docs.mjs';
 
 const version =
   process.env.HAXEON_SITE_MAIN_URL && sourceRef !== 'main'
@@ -57,6 +58,7 @@ const getStarted = docsUrl('guides/00-get-started.md');
         )
       }
     </span>
+    <a class="github" href={projectRepo} aria-label="Haxeon on GitHub" title="GitHub"><Icon name="github" size="1.25rem" /></a>
     <ThemeSelect />
     <a class="btn primary get-started" href={getStarted}>Get started</a>
   </div>
@@ -103,6 +105,13 @@ const getStarted = docsUrl('guides/00-get-started.md');
     font-size: var(--sl-text-xs);
     white-space: nowrap;
   }
+  .github {
+    display: flex;
+    color: var(--sl-color-gray-2);
+  }
+  .github:hover {
+    color: var(--sl-color-white);
+  }
   .get-started {
     border: 0;
     padding: 0.5rem 1rem;
@@ -128,7 +137,7 @@ const getStarted = docsUrl('guides/00-get-started.md');
   summary {
     cursor: pointer;
   }
-  @media (max-width: 66rem) {
+  @media (max-width: 70rem) {
     .wide-nav {
       display: none;
     }
