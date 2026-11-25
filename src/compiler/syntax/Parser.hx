@@ -994,6 +994,9 @@ class Parser {
 			// `@:hlNative` there (the Wasm runtime provides `haxeon_runtime`'s natives).
 			isExtern: isExtern || hasMetadataNamed(metadata, "hlNative"),
 			isInline: isInline,
+			// Written although absent: built with stock Haxe for HashLink, a literal that leaves out a field of AstFunction has a
+			// type of its own, and becomes an AstFunction through a dynamic object.
+			sourcePrivate: null,
 			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
