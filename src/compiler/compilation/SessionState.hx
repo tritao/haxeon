@@ -63,10 +63,18 @@ class SessionState {
 	public var programFacts:Null<compiler.semantic.ProgramFacts.InferredProgramFacts> = null;
 
 	/**
-	 * The session's query database (`docs/design/QUERY_ENGINE.md`): the build inputs and the facts typed units read. Every copy
-	 * shares it, as an input is set outside builds and a print only moves forward.
+	 * The session's query database (`docs/design/QUERY_ENGINE.md`): the build inputs, the facts typed units read and what each
+	 * unit read. Every copy shares it, as an input is set outside builds and a print only moves forward; the units' records are
+	 * written in a transaction the state taken from the build commits (`committed`).
 	 */
 	public var queries(default, null):compiler.query.QueryDatabase;
+
+	/**
+	 * The database commit this state was taken at (`Compiler.adoptCandidate`): the units' records that go with its modules. A
+	 * build started from it rolls the records back to it first, undoing what a build that was not taken, or a state the session
+	 * left (a rejected publication), wrote.
+	 */
+	public var committed = 0;
 
 	/** The facts typed units read (`DeclarationFacts`), the database's first kind. */
 	public var declarationFacts(default, null):compiler.semantic.DeclarationFacts;
@@ -220,7 +228,6 @@ class SessionState {
 			state.declarationTypeDigests = [];
 			state.inferredSignatures = [];
 			state.keyPathUses = [];
-			state.unitReads = [];
 		}
 	}
 
@@ -249,6 +256,8 @@ class SessionState {
 	 * the build takes as its own (`BackendSession.forCandidate`).
 	 */
 	public function copyForCandidate(?startingBackend:BackendSession):SessionState {
+		// A build starts from the records this state was taken with: what a build that was not taken wrote is undone.
+		queries.rollBack(committed);
 		var result = new SessionState(types.copy(), genericSpecializations.copy(),
 			(startingBackend == null ? backend : startingBackend).forCandidate(), this);
 		for (name => state in modules)
@@ -262,6 +271,7 @@ class SessionState {
 		result.programFacts = programFacts;
 		result.publishedAbi = publishedAbi;
 		result.compiledOnce = compiledOnce;
+		result.committed = committed;
 		result.rehydrationBaseline = rehydrationBaseline;
 		result.inlineCache = inlineCache.copy();
 		result.irVersions = irVersions;

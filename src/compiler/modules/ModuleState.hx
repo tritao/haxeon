@@ -81,12 +81,6 @@ class ModuleState {
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var typedSourceRevisions:Map<String, Int> = [];
 
-	/**
-	 * What each unit of this module read when it was last typed (`DeclarationFacts`), by unit: a function, a field initializer
-	 * (`Class.__init.x`) or a shared unit. A unit is typed again when a fact it read changed after it was typed.
-	 */
-	public var unitReads:Map<String, compiler.semantic.DeclarationFacts.UnitReads> = [];
-
 	/** The key path literals each typed function uses; a literal's helpers stay only while one is used. */
 	public var keyPathUses:Map<String, Map<String, Bool>> = [];
 
@@ -211,7 +205,6 @@ class ModuleState {
 		result.inferredSignatures = copyMap(inferredSignatures);
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
-		result.unitReads = copyMap(unitReads);
 		result.keyPathUses = copyNestedMap(keyPathUses);
 		result.pendingIrFunctions = copyMap(pendingIrFunctions);
 		result.irFunctions = copyMap(irFunctions);

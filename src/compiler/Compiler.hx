@@ -352,9 +352,8 @@ class Compiler {
 	public function acknowledgePublication(revision:Int):Void
 		publication.acknowledge(revision, livePatching);
 
-	public function rejectPublication(revision:Int):Void {
-		state = publication.reject(revision).snapshot;
-	}
+	public function rejectPublication(revision:Int):Void
+		restore(publication.reject(revision).snapshot);
 
 	/**
 	 * Returns to the state the module had at `revision`, which the live host still runs after refusing the revisions published
@@ -369,7 +368,7 @@ class Compiler {
 			candidate = publication.retract(revision);
 		if (candidate == null)
 			return false;
-		state = candidate.snapshot;
+		restore(candidate.snapshot);
 		var retracted = state.backend.hashLink();
 		if (retracted == null)
 			return false;
@@ -784,8 +783,20 @@ class Compiler {
 		cachedCompileResult = result;
 	}
 
-	/** Takes the state a successful build left (see `SessionState.copyForCandidate`). */
+	/** Returns to a state the compiler held before, with the query database's results as that state was taken with. */
+	function restore(snapshot:SessionState):Void {
+		state = snapshot;
+		state.queries.rollBack(state.committed);
+	}
+
+	/**
+	 * Takes the state a successful build left (see `SessionState.copyForCandidate`), committing what the build wrote to the query
+	 * database. The records stay ready to return to the state it replaced, and to every publication's snapshot.
+	 */
 	function adoptCandidate(candidate:SessionState):Void {
+		var oldest = publication.oldestSnapshot();
+		candidate.committed = candidate.queries.commit();
+		candidate.queries.keepRollbackTo(oldest == null ? state.committed : oldest.committed);
 		state = candidate;
 		graph.rebuild(modules);
 	}

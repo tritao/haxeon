@@ -585,42 +585,34 @@ class SemanticAssembly {
 				invalidate(invalid, invalidationReasons, fn.name, SourceRevision, owners.get(fn.name));
 		} else if (facts.changedInBuild()) {
 			// A unit is typed again when a fact it read, or one that fact goes through, changed after it was typed. When no fact
-			// changed in this build, every unit is current.
-			function unitReads(id:Int):Null<UnitReads> {
-				var module = facts.unitModule(id), state = module == null ? null : modules.get(module);
-				return state == null ? null : state.unitReads.get(facts.name(id));
-			}
-			for (moduleName in names) {
-				var state = modules.get(moduleName);
+			// changed in this build, every unit is current. Only the build's modules' units are checked: another module's bodies are
+			// not part of this program, and are checked when a build has it again.
+			var inBuild:Map<String, Bool> = [for (moduleName in names) moduleName => true];
+			for (id in 0...facts.resultLimit) {
+				var record = facts.unitRecord(id);
+				if (record == null || !inBuild.exists(record.module))
+					continue;
+				var state = modules.get(record.module);
 				if (state == null)
 					continue;
-				var gone:Null<Array<String>> = null;
-				for (unit => record in state.unitReads) {
-					var changed = facts.firstChanged(record, unitReads);
-					if (changed < 0)
-						continue;
-					if (!unitExists(unit, owners, state)) {
-						if (gone == null)
-							gone = [];
-						gone.push(unit);
-						continue;
-					}
-					var reason = readReason(unit, facts.aspect(changed), facts.name(changed));
-					invalidate(invalid, invalidationReasons, unit, reason.kind, facts.name(changed), null, reason.via);
-				}
+				var changed = facts.firstChanged(record);
+				if (changed < 0)
+					continue;
+				var unit = facts.name(id);
 				// A unit the program no longer has keeps no record.
-				if (gone != null) {
-					var writable = context.state.writableState(moduleName, rollbackModules);
-					for (unit in gone)
-						writable.unitReads.remove(unit);
+				if (!unitExists(unit, owners, state)) {
+					facts.removeUnit(id);
+					continue;
 				}
+				var reason = readReason(unit, facts.aspect(changed), facts.name(changed));
+				invalidate(invalid, invalidationReasons, unit, reason.kind, facts.name(changed), null, reason.via);
 			}
 			// A function a change to another declaration made (an implicit constructor, an interface variable's accessor) and
 			// never typed has nothing to be current with. Any other function is new only in a module that changed, which is typed
 			// again as a whole (below).
 			for (name in derived) {
 				var owner = owners.get(name), state = owner == null ? null : modules.get(owner);
-				if (state != null && !state.unitReads.exists(name) && !state.typedFunctions.exists(name)
+				if (state != null && !hasUnitRecord(facts, name, owner) && !state.typedFunctions.exists(name)
 					&& !invalid.exists(name))
 					invalidate(invalid, invalidationReasons, name, SourceRevision, owner, null, "new");
 			}
@@ -856,6 +848,12 @@ class SemanticAssembly {
 	}
 
 	/** Whether the program still has unit `unit`, whose reads `state` holds: a function, a field initializer or an inline constant. */
+	/** Whether `module`'s state holds a record of what unit `unit` read. */
+	static function hasUnitRecord(facts:DeclarationFacts, unit:String, module:String):Bool {
+		var record = facts.unitRecord(facts.existing(FactAspect.Unit, unit));
+		return record != null && record.module == module;
+	}
+
 	static function unitExists(unit:String, owners:Map<String, String>, state:ModuleState):Bool {
 		if (owners.exists(unit) || state.typedFunctions.exists(unit))
 			return true;

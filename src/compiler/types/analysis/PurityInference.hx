@@ -2,16 +2,14 @@ package compiler.types.analysis;
 
 import compiler.semantic.DeclarationFacts;
 import compiler.semantic.DeclarationFacts.FactAspect;
-import compiler.semantic.DeclarationFacts.UnitReads;
 import compiler.syntax.Ast;
 
 /** What one inference found a function (or a constructor) depends on, with the facts it read to find it (`PurityDependencies`). */
-class PurityDependencyEntry {
-	public final reads:UnitReads;
+class PurityDependencyEntry extends compiler.query.RecordedQueryKind.RecordedResult {
 	public final dependencies:Null<Map<String, Bool>>;
 
-	public function new(reads:UnitReads, dependencies:Null<Map<String, Bool>>) {
-		this.reads = reads;
+	public function new(revision:Int, reads:Array<Int>, dependencies:Null<Map<String, Bool>>) {
+		super(revision, reads);
 		this.dependencies = dependencies;
 	}
 }
@@ -75,9 +73,6 @@ class PurityInference {
 			note(FactAspect.Shape, owner);
 	}
 
-	static function noUnits(unit:Int):Null<UnitReads>
-		return null;
-
 	/**
 	 * What `compute` finds for `key`, a function or a constructor fact: last inference's (`previous`) while every fact it read is
 	 * unchanged, else computed with its reads recorded, from the facts of `own` (pairs of an aspect and a name) on. Kept in `next`.
@@ -87,7 +82,8 @@ class PurityInference {
 		if (next == null)
 			return compute();
 		var table = next.facts, prior = previous == null ? null : previous.entries.get(key);
-		if (prior != null && previous != null && previous.facts == table && table.current(prior.reads, noUnits)) {
+		if (prior != null && previous != null && previous.facts == table
+			&& table.currentSince(prior.reads, prior.revision)) {
 			next.entries.set(key, prior);
 			return prior.dependencies;
 		}
@@ -108,7 +104,7 @@ class PurityInference {
 		}
 		var list = table.database.endRecording();
 		recordedFacts = outer;
-		next.entries.set(key, new PurityDependencyEntry(new UnitReads(table.revision, list), found));
+		next.entries.set(key, new PurityDependencyEntry(table.revision, list, found));
 		return found;
 	}
 

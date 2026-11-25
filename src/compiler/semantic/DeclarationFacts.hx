@@ -48,20 +48,23 @@ enum abstract FactAspect(Int) to Int {
 	var WireAliases = 12;
 }
 
-/** What one typed unit read, and the revision it was typed at (`DeclarationFacts`). */
-class UnitReads {
-	public final typedAt:Int;
-	public final facts:Array<Int>;
+/**
+ * What one typed unit read, and the revision it was typed at: a `Unit` fact's result in the session's database
+ * (`DeclarationFacts.recordUnit`).
+ */
+class UnitReads extends compiler.query.RecordedQueryKind.RecordedResult {
+	/** The module whose state holds what the unit was typed to (its typed body, for a function). */
+	public final module:String;
 
 	/**
-	 * Of `facts`, the units of the generic specializations the unit asks for, or null for none: what keeps a specialization that is
-	 * not typed again, found without reading every fact of every unit.
+	 * Of the reads, the units of the generic specializations the unit asks for, or null for none: what keeps a specialization that
+	 * is not typed again, found without reading every fact of every unit.
 	 */
 	public final specializations:Null<Array<Int>>;
 
-	public function new(typedAt:Int, facts:Array<Int>, ?specializations:Array<Int>) {
-		this.typedAt = typedAt;
-		this.facts = facts;
+	public function new(revision:Int, reads:Array<Int>, module:String, ?specializations:Array<Int>) {
+		super(revision, reads);
+		this.module = module;
 		this.specializations = specializations;
 	}
 }
@@ -70,8 +73,9 @@ class UnitReads {
  * The facts typed units read, for a session (`WARM_REBUILD_REUSE.md`, "Typing: recorded reads"), as a kind of the session's query
  * database (`RecordedQueryKind`). A fact is an aspect of a declaration or of the program, by name, interned to a dense id, which is
  * its key and, the kind being the database's first, its read. It keeps the revision its print last changed at and the facts its
- * meaning goes through; a unit is a `Unit` fact whose reads are the facts it read, kept with the revision it was typed at
- * (`UnitReads`), and is current while none of them, or of what they go through, changed after that.
+ * meaning goes through; a unit is a `Unit` fact whose result is what it read, with the revision it was typed at (`UnitReads`),
+ * and is current while none of those facts, or of what they go through, changed after that. A build writes the units it typed in
+ * its transaction, which the build that is taken commits (`RecordedQueryKind.write`).
  *
  * Prints only move forward: a build that fails after moving one leaves it moved, so the units typed before are typed again.
  * The copies of the session state share the table, as they share the IR facts.
@@ -113,12 +117,6 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 
 	var dependencies:Array<Null<Array<Int>>> = [];
 
-	/** The module whose state holds a `Unit` fact's reads, by fact. */
-	var unitModules:Map<Int, String> = [];
-
-	/** Where a walk finds the reads of a `Unit` fact (`current`, `latestChange`), while one runs. */
-	var units:Null<(unit:Int) -> Null<UnitReads>> = null;
-
 	/** Registers the table as `database`'s first kind, so that a fact's id is its read. */
 	public function new(database:compiler.query.QueryDatabase) {
 		super("fact", database);
@@ -138,7 +136,6 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 		printChangedAt = [];
 		kindChangedAt = [];
 		dependencies = [];
-		unitModules = [];
 		expanded = [];
 		clearKeys();
 	}
@@ -219,27 +216,27 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 	inline function isExpanded(id:Int):Bool
 		return id < expanded.length && expanded[id];
 
-	/** Records that the reads of unit fact `id` are held by `module`'s state (`ModuleState.unitReads`). */
-	public function placeUnit(id:Int, module:String):Void
-		unitModules.set(id, module);
+	/** Records what unit fact `id` read when this build typed it, in the build's transaction. */
+	public inline function recordUnit(id:Int, reads:UnitReads):Void
+		write(id, reads);
 
-	public function unitModule(id:Int):Null<String>
-		return unitModules.get(id);
+	/** Drops the record of unit fact `id`, whose unit is gone, in the build's transaction. */
+	public inline function removeUnit(id:Int):Void
+		write(id, null);
+
+	/** What unit fact `id` read when it was last typed, or null when no unit with a record has that fact. */
+	public inline function unitRecord(id:Int):Null<UnitReads>
+		return id < 0 ? null : cast result(id);
 
 	override function ownChange(key:Int):Int
 		return printChangedAt[key];
 
 	/**
-	 * A unit's reads are what it read, found through `units`; one no module holds reads (a generic body typed for its errors alone)
-	 * gives its readers nothing: a reader of a unit always reads the declaration it is typed from too, whose own facts change when
-	 * it is edited or removed.
+	 * A unit's reads are its record's; a unit without one (a generic body typed for its errors alone) gives its readers nothing: a
+	 * reader of a unit always reads the declaration it is typed from too, whose own facts change when it is edited or removed.
 	 */
-	override function readsOf(key:Int):Null<Array<Int>> {
-		if (aspects[key] != (FactAspect.Unit:Int))
-			return dependencies[key];
-		var find = units, record = find == null ? null : find(key);
-		return record == null ? null : record.facts;
-	}
+	override function readsOf(key:Int):Null<Array<Int>>
+		return aspects[key] != (FactAspect.Unit:Int) ? dependencies[key] : super.readsOf(key);
 
 	/** What a declaration names goes through only the types it expands, and the kinds of the others; what a unit read counts whatever it is. */
 	override function partialChange(source:Int, target:Int):Int
@@ -247,40 +244,17 @@ class DeclarationFacts extends compiler.query.RecordedQueryKind {
 			&& !isExpanded(target) ? kindChangedAt[target] : -1;
 
 	/**
-	 * The latest revision at which fact `id`, or a fact it goes through, changed. A unit fact goes through the reads `reads` finds
-	 * for it. Memoized for the build; the facts that go through each other (an inferred declaration that reads another that reads
-	 * it) get the latest change of all of them.
-	 */
-	public function latestChangeOf(id:Int, reads:(unit:Int) -> Null<UnitReads>):Int {
-		// Each entry sets where units are found, so one an exception left behind is never read; a try costs on this path.
-		units = reads;
-		var change = latestChange(id);
-		units = null;
-		return change;
-	}
-
-	/** Whether a unit typed at `typedAt` that read `facts` is current: nothing it read changed after it was typed. */
-	public function current(record:UnitReads, reads:(unit:Int) -> Null<UnitReads>):Bool {
-		units = reads;
-		var result = currentSince(record.facts, record.typedAt);
-		units = null;
-		return result;
-	}
-
-	/**
 	 * A fact of `record` that changed after it was typed, for the invalidation report: one that changed itself when there is one,
-	 * else one that goes through a change; -1 when the unit is current.
+	 * else one that goes through a change; -1 when the unit is current. The facts that go through each other (an inferred
+	 * declaration that reads another that reads it) get the latest change of all of them.
 	 */
-	public function firstChanged(record:UnitReads, reads:(unit:Int) -> Null<UnitReads>):Int {
+	public function firstChanged(record:UnitReads):Int {
 		var through = -1;
-		units = reads;
-		for (fact in record.facts)
-			if (printChangedAt[fact] > record.typedAt) {
+		for (fact in record.reads)
+			if (printChangedAt[fact] > record.revision)
+				return fact;
+			else if (through < 0 && latestChange(fact) > record.revision)
 				through = fact;
-				break;
-			} else if (through < 0 && latestChange(fact) > record.typedAt)
-				through = fact;
-		units = null;
 		return through;
 	}
 

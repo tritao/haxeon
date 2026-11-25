@@ -30,8 +30,9 @@ class ModuleMain {
 			|| noOp.changedFunctions.length != 0
 			|| noOp.artifact.hashLink().patchBytes != null)
 			throw "Unchanged compilation did not reuse the last successful build";
-		var facts = compiler.state.declarationFacts, mainReads = compiler.modules.get("Main").unitReads.get("main");
-		if (mainReads == null || mainReads.facts.indexOf(facts.existing(FactAspect.Signature, "Math.add")) < 0)
+		var facts = compiler.state.declarationFacts,
+			mainReads = facts.unitRecord(facts.existing(FactAspect.Unit, "main"));
+		if (mainReads == null || mainReads.reads.indexOf(facts.existing(FactAspect.Signature, "Math.add")) < 0)
 			throw "Typing did not record that main read the signature of the function it calls";
 		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1
 			|| first.metrics.elapsedMs < 0.0)
@@ -407,13 +408,20 @@ class ModuleMain {
 				@:privateAccess specializationCompiler.state.genericSpecializations.exportState();
 		specializationCompiler.update("Main.hx",
 			"function first<T>(values:Array<T>):T { return values[0]; } function main():Int { return first([1.5]) > 1.0 ? first([40]) : 0; }");
+		var specializationFacts = specializationCompiler.state.declarationFacts,
+			mainUnit = specializationFacts.existing(FactAspect.Unit, "main"),
+			acknowledgedMain = specializationFacts.unitRecord(mainUnit);
 		var specializedBuild = specializationCompiler.compile("Main");
+		if (acknowledgedMain == null || specializationFacts.unitRecord(mainUnit) == acknowledgedMain)
+			throw "The edited main was not recorded again";
 		if (@:privateAccess specializationCompiler.state.genericSpecializations.exportState()
 			.compare(acknowledgedSpecializations) == 0)
 			throw "The edit that calls a generic function with another type named no new specialization";
 		specializationCompiler.rejectPublication(specializedBuild.revision);
 		if (specializationCompiler.exportIdentityState().compare(acknowledgedIdentity) != 0)
 			throw "Rejecting a build kept its types or generic specializations";
+		if (specializationFacts.unitRecord(mainUnit) != acknowledgedMain)
+			throw "Rejecting a build kept what its units read";
 		var structuralCompiler = new Compiler();
 		structuralCompiler.update("Main.hx",
 			"class Editor { public var value:Int; public function new():Void { this.value = 42; } } function main():Int { var editor = new Editor(); return editor.value; }");

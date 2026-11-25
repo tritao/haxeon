@@ -4,6 +4,7 @@ import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
+import compiler.semantic.DeclarationFacts.FactAspect;
 
 /**
  * A plain build in a reused compiler session gives the bytes of a fresh build of the same sources, and when nothing the IR pipeline
@@ -209,6 +210,7 @@ class WarmRebuildReuseMain {
 			files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
 		liveFieldInitializer(failures);
 		tryAfterEditAbove(failures);
+		afterValidation(failures);
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
@@ -347,6 +349,41 @@ class WarmRebuildReuseMain {
 			} catch (error:Dynamic) {
 				failures.push('an edit above a function with try expressions${live ? ", live" : ""}: ${Std.string(error)}');
 			}
+	}
+
+	/**
+	 * A validation types an unsaved edit on a copy of the state and drops it (`Compiler.validate`): what its units read is written
+	 * to the session's database but never committed, so the next build starts from the records the last taken build left, and
+	 * equals a fresh one.
+	 */
+	static function afterValidation(failures:Array<String>):Void {
+		try {
+			var files = initialSources(), compiler = newCompiler(files);
+			compiler.compile("Main");
+			var facts = compiler.state.declarationFacts,
+				unit = facts.existing(FactAspect.Unit, "Lib.add"),
+				kept = facts.unitRecord(unit);
+			if (kept == null)
+				throw "Lib.add has no record";
+			var validation = compiler.validate("Lib.hx",
+				StringTools.replace(libSource, "return a + b;", "return a + b + 0;"),
+				"Main");
+			if (!validation.valid)
+				throw "the validated edit does not type";
+			var validated = facts.unitRecord(unit);
+			if (validated == kept)
+				throw "the validation did not record what the edited Lib.add read";
+			var warm = rebuild(compiler, files, files -> files.set("Area.hx", areaSource + "\n")),
+				fresh = newCompiler(files).compile("Main");
+			if (facts.unitRecord(unit) == validated)
+				throw "a build kept what a validation that was not taken recorded";
+			var warmBytes = HlWriter.encode(warm.artifact.hashLink().module).flatten(),
+				freshBytes = HlWriter.encode(fresh.artifact.hashLink().module).flatten();
+			if (warmBytes.compare(freshBytes) != 0)
+				throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
+		} catch (error:Dynamic) {
+			failures.push('after a validation of an unsaved edit: ${Std.string(error)}');
+		}
 	}
 
 	/** The names of the anonymous types of the last typed program, sorted: a warm program lists what a fresh one does. */

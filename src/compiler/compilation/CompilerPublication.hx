@@ -153,6 +153,16 @@ class CompilerPublication {
 		return candidate;
 	}
 
+	/** The oldest state a rejection or a retraction can return to, or null for none. */
+	public function oldestSnapshot():Null<SessionState> {
+		if (acknowledged.length > 0)
+			return acknowledged[0].snapshot;
+		return switch state {
+			case Pending(candidate): candidate.snapshot;
+			case Untracked, Ready(_): null;
+		};
+	}
+
 	public function status():PublicationStatus
 		return switch state {
 			case Untracked: {

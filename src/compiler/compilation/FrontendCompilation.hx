@@ -875,8 +875,9 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * Keeps what each unit typed in this build read in the state of the module that holds it (`ModuleState.unitReads`), as of this
-	 * build's revision: the next build types it again only when one of those facts changed after that.
+	 * Records what each unit typed in this build read, as of this build's revision, with the module whose state holds it: the next
+	 * build types it again only when one of those facts changed after that. The records are written in the build's transaction,
+	 * which taking the build commits (`DeclarationFacts.recordUnit`).
 	 */
 	static function publishUnitReads(build:FrontendBuild):Void {
 		var reads = build.reads;
@@ -898,9 +899,8 @@ class FrontendCompilation {
 						specializations = [];
 					specializations.push(fact);
 				}
-			context.state.writableState(module, build.rollbackModules).unitReads.set(unit,
-				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read, specializations));
-			facts.placeUnit(facts.id(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit), module);
+			facts.recordUnit(facts.id(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit),
+				new compiler.semantic.DeclarationFacts.UnitReads(facts.revision, read, module, specializations));
 		}
 	}
 
@@ -964,14 +964,14 @@ class FrontendCompilation {
 			var fact = facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit, unit);
 			if (fact < 0)
 				continue;
-			for (module in build.names) {
-				var state = context.state.modules.get(module);
-				if (state == null)
+			for (id in 0...facts.resultLimit) {
+				var record = facts.unitRecord(id);
+				if (record == null || build.names.indexOf(record.module) < 0 || record.reads.indexOf(fact) < 0)
 					continue;
-				for (reader => record in state.unitReads)
-					if (record.facts.indexOf(fact) >= 0 && (reads == null || !reads.units.exists(reader)))
-						throw new InternalError('--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
-							+ 'but "$reader", which read it, kept the body typed against the old one');
+				var reader = facts.name(id);
+				if (reads == null || !reads.units.exists(reader))
+					throw new InternalError('--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
+						+ 'but "$reader", which read it, kept the body typed against the old one');
 			}
 		}
 	}
@@ -1077,7 +1077,7 @@ class FrontendCompilation {
 		// Shared generated helpers have one origin, but every retained caller needs their dependencies.
 		var calledGeneratedHelpers = generatedHelpersStillCalled(modules, names, build.typedByName, owners,
 			build.semanticAssembly.invalidated, context.state.irCalls);
-		var readSpecializations = specializationsStillRead(build);
+		var readSpecializations = reachedSpecializations(build);
 		for (name in names) {
 			checkCancelled(build.token);
 			if (!modules.exists(name))
@@ -1092,56 +1092,52 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * The specializations of generic functions that a unit this build keeps or typed still asks for, by name. A unit that calls one
-	 * reads it (`TypingSession.useSharedUnit`), so the reads recorded for the units (`ModuleState.unitReads`) name them. A
-	 * specialization typed in an earlier build and not again counts only while such a unit reads it: once the last of its callers
-	 * is typed without it, a fresh build would not make it.
+	 * The specializations of generic functions that the build's roots reach, by name: the units of the build's modules it typed or
+	 * keeps ask for them, and so do the specializations they reach. A unit that calls one reads it (`TypingSession.useSharedUnit`),
+	 * so the units' records name them. A specialization typed in an earlier build and not again stays only while it is reached:
+	 * once the last of its callers is typed without it, a fresh build would not make it, and the prune sweeps its body and record.
 	 */
-	static function specializationsStillRead(build:FrontendBuild):Map<String, Bool> {
+	static function reachedSpecializations(build:FrontendBuild):Map<String, Bool> {
 		var modules = build.context.state.modules,
 			facts = build.context.state.declarationFacts,
 			typedByName = build.typedByName,
 			currentSpecializedOwners = build.currentSpecializedOwners;
-		// Whether `unit` was typed earlier and stays only while something asks for it: a generic function's specialization, or a
+		// Whether `unit` was typed earlier and stays only while something reaches it: a generic function's specialization, or a
 		// member of a specialized owner this build no longer has.
-		function askedFor(state:ModuleState, unit:String):Bool {
+		function reachedOnly(record:compiler.semantic.DeclarationFacts.UnitReads, unit:String):Bool {
 			if (typedByName.exists(unit))
 				return false;
-			var fn = state.typedFunctions.get(unit);
+			var state = modules.get(record.module), fn = state == null ? null : state.typedFunctions.get(unit);
 			return fn != null && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization
 				&& (fn.physicalOwner == null || !currentSpecializedOwners.exists(fn.physicalOwner));
 		}
-		var read:Map<String, Bool> = [],
+		var reached:Map<String, Bool> = [],
 			pending:Array<compiler.semantic.DeclarationFacts.UnitReads> = [];
-		function readBy(record:compiler.semantic.DeclarationFacts.UnitReads):Void {
+		function reach(record:compiler.semantic.DeclarationFacts.UnitReads):Void {
 			var asked = record.specializations;
 			if (asked != null)
 				for (fact in asked) {
 					var unit = facts.name(fact);
-					if (read.exists(unit))
+					if (reached.exists(unit))
 						continue;
-					read.set(unit, true);
+					reached.set(unit, true);
 					// A specialization that stays asks for the ones its own body calls.
-					var module = facts.unitModule(fact),
-						state = module == null ? null : modules.get(module);
-					if (state != null) {
-						var kept = state.unitReads.get(unit);
-						if (kept != null && askedFor(state, unit))
-							pending.push(kept);
-					}
+					var kept = facts.unitRecord(fact);
+					if (kept != null && reachedOnly(kept, unit))
+						pending.push(kept);
 				}
 		}
-		for (name in build.names) {
-			var state = modules.get(name);
-			if (state != null)
-				for (unit => record in state.unitReads)
-					if (record.specializations != null && !askedFor(state, unit))
-						readBy(record);
+		var inBuild:Map<String, Bool> = [for (name in build.names) name => true];
+		for (id in 0...facts.resultLimit) {
+			var record = facts.unitRecord(id);
+			if (record != null && record.specializations != null && inBuild.exists(record.module)
+				&& !reachedOnly(record, facts.name(id)))
+				reach(record);
 		}
 		var next = 0;
 		while (next < pending.length)
-			readBy(pending[next++]);
-		return read;
+			reach(pending[next++]);
+		return reached;
 	}
 
 	/** Drops the cached functions of one module that neither this typing nor a retained owner still accounts for. */
@@ -1294,7 +1290,8 @@ class FrontendCompilation {
 			}
 		}
 		if (removed.length > 0)
-			removeCachedFunctions(build.context.state.writableState(name, build.rollbackModules), removed);
+			removeCachedFunctions(build.context.state, build.context.state.writableState(name, build.rollbackModules),
+				removed);
 	}
 
 	/** Lowers the functions an earlier check-only build typed but did not lower, when this build lowers. */
@@ -1832,11 +1829,16 @@ class FrontendCompilation {
 				context.rootModules.push(module);
 		}
 
-	static function removeCachedFunctions(state:ModuleState, names:Array<String>):Void
+	/** Drops functions of module `state` with what they were typed and lowered to, and the records of what they read. */
+	static function removeCachedFunctions(session:SessionState, state:ModuleState, names:Array<String>):Void
 		for (cached in names) {
 			state.typedFunctions.remove(cached);
 			state.typedSourceRevisions.remove(cached);
-			state.unitReads.remove(cached);
+			var facts = session.declarationFacts,
+				unit = facts.existing(compiler.semantic.DeclarationFacts.FactAspect.Unit, cached),
+				record = facts.unitRecord(unit);
+			if (record != null && record.module == state.name)
+				facts.removeUnit(unit);
 			state.keyPathUses.remove(cached);
 			state.pendingIrFunctions.remove(cached);
 			state.irFunctions.remove(cached);
@@ -1869,7 +1871,7 @@ class FrontendCompilation {
 					&& !used.exists(keyPathLiteralOf(cached))) cached
 			];
 			if (unused.length > 0)
-				removeCachedFunctions(context.state.writableState(name, rollbackModules), unused);
+				removeCachedFunctions(context.state, context.state.writableState(name, rollbackModules), unused);
 		}
 	}
 
